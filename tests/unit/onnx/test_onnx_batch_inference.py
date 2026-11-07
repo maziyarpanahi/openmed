@@ -188,26 +188,30 @@ def test_trimmed_bytelevel_whitespace_tokens_retain_complete_coverage(
     assert spans(model.predict(source)) == spans(result.entities)
 
 
-@pytest.mark.parametrize("stride", [0, 1, 3])
-def test_identifier_across_windows_and_tail_are_complete(tmp_path, stride):
-    model, session = model_fixture(tmp_path)
-    text = "Befund " * 4 + "Anna Maria Müller " + "Befund " * 20 + "Meier"
-    result = model.predict_batch_detailed(
-        [text],
-        max_length=8,
-        stride=stride,
-        batch_size=4,
-        max_batch_tokens=24,
-    )[0]
-    assert spans(result.entities) == [
-        ("PERSON", 28, 45, "Anna Maria Müller"),
-        ("PERSON", len(text) - 5, len(text), "Meier"),
-    ]
-    assert result.complete
-    assert result.token_count == result.processed_tokens == 28
-    assert result.window_count > 1
-    assert all(feed["input_ids"].size <= 24 for feed in session.calls)
-    assert all(feed["input_ids"].shape[1] <= 8 for feed in session.calls)
+def test_identifier_across_windows_and_tail_are_complete(subtests, tmp_path):
+    case_root = tmp_path
+    for stride in [0, 1, 3]:
+        with subtests.test(stride=stride):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            model, session = model_fixture(tmp_path)
+            text = "Befund " * 4 + "Anna Maria Müller " + "Befund " * 20 + "Meier"
+            result = model.predict_batch_detailed(
+                [text],
+                max_length=8,
+                stride=stride,
+                batch_size=4,
+                max_batch_tokens=24,
+            )[0]
+            assert spans(result.entities) == [
+                ("PERSON", 28, 45, "Anna Maria Müller"),
+                ("PERSON", len(text) - 5, len(text), "Meier"),
+            ]
+            assert result.complete
+            assert result.token_count == result.processed_tokens == 28
+            assert result.window_count > 1
+            assert all(feed["input_ids"].size <= 24 for feed in session.calls)
+            assert all(feed["input_ids"].shape[1] <= 8 for feed in session.calls)
 
 
 def test_unicode_offsets_and_concurrent_window_settings(tmp_path):
@@ -234,35 +238,38 @@ def test_static_axes_use_safe_single_batches_and_padding(tmp_path):
     assert [feed["input_ids"].shape for feed in session.calls] == [(1, 8), (1, 8)]
 
 
-@pytest.mark.parametrize(
-    "options, message",
-    [
+def test_invalid_budgets_cannot_produce_partial_success(subtests, tmp_path):
+    case_root = tmp_path
+    for options, message in [
         ({"max_length": 513}, "model token limit"),
         ({"batch_size": True}, "positive integer"),
         ({"stride": 6, "max_length": 8}, "content window"),
         ({"max_batch_tokens": 2}, "max_batch_tokens"),
         ({"max_windows": 1, "max_length": 4, "stride": 0}, "max_windows"),
-    ],
-)
-def test_invalid_budgets_cannot_produce_partial_success(tmp_path, options, message):
-    model, _ = model_fixture(tmp_path)
-    with pytest.raises(ValueError, match=message):
-        model.predict_batch_detailed(["Befund Anna Maria Müller"], **options)
+    ]:
+        with subtests.test(options=options, message=message):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            model, _ = model_fixture(tmp_path)
+            with pytest.raises(ValueError, match=message):
+                model.predict_batch_detailed(["Befund Anna Maria Müller"], **options)
 
 
-@pytest.mark.parametrize(
-    "bad_output",
-    [
+def test_bad_runtime_output_fails_closed(subtests, tmp_path):
+    case_root = tmp_path
+    for bad_output in [
         np.zeros((1, 3, 4)),
         np.full((1, 3, 3), np.nan),
         np.zeros((1, 2, 3)),
-    ],
-)
-def test_bad_runtime_output_fails_closed(tmp_path, monkeypatch, bad_output):
-    model, session = model_fixture(tmp_path)
-    monkeypatch.setattr(session, "run", lambda *args: [bad_output])
-    with pytest.raises(RuntimeError, match="invalid shape or non-finite"):
-        model.predict("Meier")
+    ]:
+        with subtests.test(bad_output=bad_output):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                model, session = model_fixture(tmp_path)
+                monkeypatch.setattr(session, "run", lambda *args: [bad_output])
+                with pytest.raises(RuntimeError, match="invalid shape or non-finite"):
+                    model.predict("Meier")
 
 
 def test_backend_passes_batch_limits_to_runtime_once(tmp_path):

@@ -192,56 +192,55 @@ def test_wrong_reviewer_role_fails_closed_and_consumes_token() -> None:
         )
 
 
-@pytest.mark.parametrize("now", [EXPIRES_AT, EXPIRES_AT + 1])
-def test_expiry_is_exclusive_and_does_not_dispatch(now: int) -> None:
-    calls = 0
+def test_expiry_is_exclusive_and_does_not_dispatch(subtests) -> None:
+    for now in [EXPIRES_AT, EXPIRES_AT + 1]:
+        with subtests.test(now=now):
+            calls = 0
 
-    def dispatch() -> None:
-        nonlocal calls
-        calls += 1
+            def dispatch() -> None:
+                nonlocal calls
+                calls += 1
 
-    with pytest.raises(ApprovalExpiredError, match="token: expired"):
-        dispatch_with_approval_token(
-            _token(),
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-            verifier=_verifier(),
-            dispatch=dispatch,
-            now=now,
-        )
+            with pytest.raises(ApprovalExpiredError, match="token: expired"):
+                dispatch_with_approval_token(
+                    _token(),
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    verifier=_verifier(),
+                    dispatch=dispatch,
+                    now=now,
+                )
 
-    assert calls == 0
+            assert calls == 0
 
 
-@pytest.mark.parametrize(
-    "field",
-    ["action_digest", "reviewer_role", "expires_at", "nonce"],
-)
-def test_changed_signed_claims_are_rejected_before_nonce_claim(field: str) -> None:
-    token = _token()
-    payload = token.to_dict()
-    replacements = {
-        "action_digest": CHANGED_ACTION_DIGEST,
-        "reviewer_role": OTHER_ROLE,
-        "expires_at": EXPIRES_AT + 1,
-        "nonce": "nonce_" + "2" * 32,
-    }
-    payload[field] = replacements[field]
-    verifier = _verifier()
+def test_changed_signed_claims_are_rejected_before_nonce_claim(subtests) -> None:
+    for field in ["action_digest", "reviewer_role", "expires_at", "nonce"]:
+        with subtests.test(field=field):
+            token = _token()
+            payload = token.to_dict()
+            replacements = {
+                "action_digest": CHANGED_ACTION_DIGEST,
+                "reviewer_role": OTHER_ROLE,
+                "expires_at": EXPIRES_AT + 1,
+                "nonce": "nonce_" + "2" * 32,
+            }
+            payload[field] = replacements[field]
+            verifier = _verifier()
 
-    with pytest.raises(ApprovalSignatureError, match="invalid_signature"):
-        verifier.consume(
-            payload,
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-            now=NOW,
-        )
-    assert verifier.consume(
-        token,
-        action_digest=ACTION_DIGEST,
-        reviewer_role=REVIEWER_ROLE,
-        now=NOW,
-    )
+            with pytest.raises(ApprovalSignatureError, match="invalid_signature"):
+                verifier.consume(
+                    payload,
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW,
+                )
+            assert verifier.consume(
+                token,
+                action_digest=ACTION_DIGEST,
+                reviewer_role=REVIEWER_ROLE,
+                now=NOW,
+            )
 
 
 def test_nonce_claim_is_atomic_under_concurrent_verification() -> None:
@@ -314,27 +313,23 @@ def test_unknown_duplicate_and_missing_fields_fail_closed() -> None:
         ApprovalToken.from_json(duplicate)
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "code"),
-    [
+def test_invalid_claims_use_value_free_errors(subtests) -> None:
+    for field, value, code in [
         ("action_digest", "sha256:not-a-digest", "invalid_digest"),
         ("reviewer_role", "synthetic-reviewer-name", "invalid_reviewer_role"),
         ("expires_at", True, "invalid_timestamp"),
         ("nonce", "nonce_too-short", "invalid_nonce"),
         ("schema_version", "openmed.agent.approval_token.v999", "unsupported"),
-    ],
-)
-def test_invalid_claims_use_value_free_errors(
-    field: str, value: Any, code: str
-) -> None:
-    payload = _token().to_dict()
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value, code=code):
+            payload = _token().to_dict()
+            payload[field] = value
 
-    with pytest.raises(ApprovalTokenValidationError) as caught:
-        ApprovalToken.from_dict(payload)
+            with pytest.raises(ApprovalTokenValidationError) as caught:
+                ApprovalToken.from_dict(payload)
 
-    assert code in caught.value.code
-    assert str(value) not in str(caught.value)
+            assert code in caught.value.code
+            assert str(value) not in str(caught.value)
 
 
 def test_diagnostics_reprs_and_receipts_do_not_expose_bearer_values() -> None:
@@ -513,111 +508,108 @@ def test_rotation_overlap_and_removal_fail_before_claim() -> None:
     )
 
 
-@pytest.mark.parametrize("field,value", [("key_id", "other"), ("issued_at", NOW + 1)])
-def test_new_claim_tampering_invalidates_signature(field: str, value: Any) -> None:
-    from openmed.agent.approvals import MappingApprovalKeyProvider
+def test_new_claim_tampering_invalidates_signature(subtests) -> None:
+    for field, value in [("key_id", "other"), ("issued_at", NOW + 1)]:
+        with subtests.test(field=field, value=value):
+            from openmed.agent.approvals import MappingApprovalKeyProvider
 
-    store = RecordingStore()
-    verifier = ApprovalTokenVerifier(
-        MappingApprovalKeyProvider({"default": KEY, "other": KEY}), store
-    )
-    payload = _token().to_dict()
-    payload[field] = value
-    with pytest.raises(ApprovalSignatureError, match="invalid_signature"):
-        verifier.consume(
-            payload, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
-        )
-    assert store.calls == []
+            store = RecordingStore()
+            verifier = ApprovalTokenVerifier(
+                MappingApprovalKeyProvider({"default": KEY, "other": KEY}), store
+            )
+            payload = _token().to_dict()
+            payload[field] = value
+            with pytest.raises(ApprovalSignatureError, match="invalid_signature"):
+                verifier.consume(
+                    payload,
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW,
+                )
+            assert store.calls == []
 
 
-@pytest.mark.parametrize(
-    "changes,code",
-    [
+def test_remote_signed_policy_failures_precede_nonce_claim(subtests) -> None:
+    for changes, code in [
         ({"expires_at": NOW + 901}, "lifetime_exceeded"),
         ({"expires_at": 4_000_000_000}, "lifetime_exceeded"),
         ({"issued_at": NOW + 31}, "not_yet_valid"),
         ({"issued_at": EXPIRES_AT}, "invalid_lifetime"),
-    ],
-)
-def test_remote_signed_policy_failures_precede_nonce_claim(
-    changes: dict, code: str
-) -> None:
-    from openmed.agent.approvals import ApprovalTokenError
+    ]:
+        with subtests.test(changes=changes, code=code):
+            from openmed.agent.approvals import ApprovalTokenError
 
-    store = RecordingStore()
-    verifier = ApprovalTokenVerifier(
-        KEY, store, clock=lambda: NOW, clock_skew_seconds=30
-    )
-    with pytest.raises(ApprovalTokenError) as caught:
-        verifier.consume(
-            _signed_payload(**changes),
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-        )
-    assert caught.value.code == code
-    assert store.calls == []
+            store = RecordingStore()
+            verifier = ApprovalTokenVerifier(
+                KEY, store, clock=lambda: NOW, clock_skew_seconds=30
+            )
+            with pytest.raises(ApprovalTokenError) as caught:
+                verifier.consume(
+                    _signed_payload(**changes),
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                )
+            assert caught.value.code == code
+            assert store.calls == []
 
 
-@pytest.mark.parametrize(
-    "issued,expires,code",
-    [
+def test_issuance_enforces_window_before_nonce_generation(subtests) -> None:
+    for issued, expires, code in [
         (NOW, NOW + 901, "lifetime_exceeded"),
         (NOW + 31, EXPIRES_AT, "not_yet_valid"),
         (NOW, NOW, "invalid_lifetime"),
         (NOW - 100, NOW - 30, "expired"),
-    ],
-)
-def test_issuance_enforces_window_before_nonce_generation(
-    issued: int, expires: int, code: str
-) -> None:
-    from openmed.agent.approvals import ApprovalTokenError
+    ]:
+        with subtests.test(issued=issued, expires=expires, code=code):
+            from openmed.agent.approvals import ApprovalTokenError
 
-    generated = []
-    signer = ApprovalTokenSigner(KEY, clock=lambda: NOW, clock_skew_seconds=30)
-    with pytest.raises(ApprovalTokenError) as caught:
-        signer.issue(
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-            issued_at=issued,
-            expires_at=expires,
-            nonce_source=lambda size: generated.append(size) or bytes(size),
-        )
-    assert caught.value.code == code
-    assert generated == []
+            generated = []
+            signer = ApprovalTokenSigner(KEY, clock=lambda: NOW, clock_skew_seconds=30)
+            with pytest.raises(ApprovalTokenError) as caught:
+                signer.issue(
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    issued_at=issued,
+                    expires_at=expires,
+                    nonce_source=lambda size: generated.append(size) or bytes(size),
+                )
+            assert caught.value.code == code
+            assert generated == []
 
 
-@pytest.mark.parametrize(
-    "now,accepted",
-    [
+def test_skew_edges_are_bounded_and_expiry_is_exclusive(subtests) -> None:
+    for now, accepted in [
         (NOW - 31, False),
         (NOW - 30, True),
         (EXPIRES_AT + 29, True),
         (EXPIRES_AT + 30, False),
-    ],
-)
-def test_skew_edges_are_bounded_and_expiry_is_exclusive(
-    now: int, accepted: bool
-) -> None:
-    from openmed.agent.approvals import ApprovalTokenError
+    ]:
+        with subtests.test(now=now, accepted=accepted):
+            from openmed.agent.approvals import ApprovalTokenError
 
-    store = RecordingStore()
-    verifier = ApprovalTokenVerifier(KEY, store, clock_skew_seconds=30)
-    if accepted:
-        receipt = verifier.consume(
-            _token(), action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=now
-        )
-        assert receipt.code == "approved"
-        assert store.calls[0][1] == EXPIRES_AT + 30
-    else:
-        with pytest.raises(ApprovalTokenError) as caught:
-            verifier.consume(
-                _token(),
-                action_digest=ACTION_DIGEST,
-                reviewer_role=REVIEWER_ROLE,
-                now=now,
-            )
-        assert caught.value.code == ("not_yet_valid" if now < NOW else "expired")
-        assert store.calls == []
+            store = RecordingStore()
+            verifier = ApprovalTokenVerifier(KEY, store, clock_skew_seconds=30)
+            if accepted:
+                receipt = verifier.consume(
+                    _token(),
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=now,
+                )
+                assert receipt.code == "approved"
+                assert store.calls[0][1] == EXPIRES_AT + 30
+            else:
+                with pytest.raises(ApprovalTokenError) as caught:
+                    verifier.consume(
+                        _token(),
+                        action_digest=ACTION_DIGEST,
+                        reviewer_role=REVIEWER_ROLE,
+                        now=now,
+                    )
+                assert caught.value.code == (
+                    "not_yet_valid" if now < NOW else "expired"
+                )
+                assert store.calls == []
 
 
 def test_nonce_is_retained_through_expiry_skew_window() -> None:
@@ -638,83 +630,100 @@ def test_nonce_is_retained_through_expiry_skew_window() -> None:
             )
 
 
-@pytest.mark.parametrize("representation", ["dict", "json", "object"])
 def test_v1_requires_explicit_compatibility_and_exact_legacy_signature(
-    representation: str,
+    subtests,
 ) -> None:
-    from openmed.agent.approvals import LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
+    for representation in ["dict", "json", "object"]:
+        with subtests.test(representation=representation):
+            from openmed.agent.approvals import LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
 
-    payload = _signed_payload(schema_version=LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION)
-    payload.pop("key_id")
-    payload.pop("issued_at")
-    # Sign the actual historical five-claim representation, not a v2 projection.
-    import hashlib
-    import hmac
+            payload = _signed_payload(
+                schema_version=LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
+            )
+            payload.pop("key_id")
+            payload.pop("issued_at")
+            # Sign the actual historical five-claim representation, not a v2 projection.
+            import hashlib
+            import hmac
 
-    payload.pop("signature")
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    payload["signature"] = (
-        "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
-    )
-    candidate = payload
-    if representation == "json":
-        candidate = json.dumps(payload)
-    elif representation == "object":
-        candidate = ApprovalToken.from_dict(payload, allow_v1=True)
-    store = RecordingStore()
-    with pytest.raises(ApprovalTokenValidationError, match="legacy_token_disabled"):
-        ApprovalTokenVerifier(KEY, store).consume(
-            candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
-        )
-    assert store.calls == []
-    verifier = ApprovalTokenVerifier(KEY, store, allow_v1=True)
-    receipt = verifier.consume(
-        candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
-    )
-    assert set(receipt.to_dict()) == {
-        "schema_version",
-        "code",
-        "action_digest",
-        "token_digest",
-    }
-    with pytest.raises(ApprovalReplayError):
-        verifier.consume(
-            candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
-        )
-    with pytest.raises(ApprovalTokenValidationError, match="legacy_token_disabled"):
-        ApprovalToken.from_json(json.dumps(payload))
-    assert (
-        ApprovalToken.from_json(json.dumps(payload), allow_v1=True).to_dict() == payload
-    )
-    store = RecordingStore()
-    with pytest.raises(ApprovalLifetimeError, match="lifetime_exceeded"):
-        ApprovalTokenVerifier(KEY, store, allow_v1=True).consume(
-            candidate,
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-            now=NOW - 901,
-        )
-    assert store.calls == []
+            payload.pop("signature")
+            encoded = json.dumps(
+                payload, sort_keys=True, separators=(",", ":")
+            ).encode()
+            payload["signature"] = (
+                "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
+            )
+            candidate = payload
+            if representation == "json":
+                candidate = json.dumps(payload)
+            elif representation == "object":
+                candidate = ApprovalToken.from_dict(payload, allow_v1=True)
+            store = RecordingStore()
+            with pytest.raises(
+                ApprovalTokenValidationError, match="legacy_token_disabled"
+            ):
+                ApprovalTokenVerifier(KEY, store).consume(
+                    candidate,
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW,
+                )
+            assert store.calls == []
+            verifier = ApprovalTokenVerifier(KEY, store, allow_v1=True)
+            receipt = verifier.consume(
+                candidate,
+                action_digest=ACTION_DIGEST,
+                reviewer_role=REVIEWER_ROLE,
+                now=NOW,
+            )
+            assert set(receipt.to_dict()) == {
+                "schema_version",
+                "code",
+                "action_digest",
+                "token_digest",
+            }
+            with pytest.raises(ApprovalReplayError):
+                verifier.consume(
+                    candidate,
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW,
+                )
+            with pytest.raises(
+                ApprovalTokenValidationError, match="legacy_token_disabled"
+            ):
+                ApprovalToken.from_json(json.dumps(payload))
+            assert (
+                ApprovalToken.from_json(json.dumps(payload), allow_v1=True).to_dict()
+                == payload
+            )
+            store = RecordingStore()
+            with pytest.raises(ApprovalLifetimeError, match="lifetime_exceeded"):
+                ApprovalTokenVerifier(KEY, store, allow_v1=True).consume(
+                    candidate,
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW - 901,
+                )
+            assert store.calls == []
 
 
-@pytest.mark.parametrize(
-    "setting,value",
-    [
+def test_policy_settings_fail_closed(subtests) -> None:
+    for setting, value in [
         ("clock_skew_seconds", -1),
         ("clock_skew_seconds", 301),
         ("clock_skew_seconds", True),
         ("max_lifetime_seconds", 0),
         ("max_lifetime_seconds", 86401),
         ("max_lifetime_seconds", 1.5),
-    ],
-)
-def test_policy_settings_fail_closed(setting: str, value: Any) -> None:
-    for constructor, args in [
-        (ApprovalTokenSigner, (KEY,)),
-        (ApprovalTokenVerifier, (KEY, InMemoryApprovalNonceStore())),
     ]:
-        with pytest.raises(ApprovalTokenValidationError):
-            constructor(*args, **{setting: value})
+        with subtests.test(setting=setting, value=value):
+            for constructor, args in [
+                (ApprovalTokenSigner, (KEY,)),
+                (ApprovalTokenVerifier, (KEY, InMemoryApprovalNonceStore())),
+            ]:
+                with pytest.raises(ApprovalTokenValidationError):
+                    constructor(*args, **{setting: value})
 
 
 def test_provider_and_clock_failures_never_expose_source_values() -> None:
@@ -746,30 +755,26 @@ def test_provider_and_clock_failures_never_expose_source_values() -> None:
         assert store.calls == []
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_v2_malformed_metadata_is_value_free_and_unclaimed(subtests) -> None:
+    for field, value in [
         ("issued_at", True),
         ("issued_at", -1),
         ("issued_at", 1.5),
         ("issued_at", "synthetic-private-text"),
         ("key_id", "synthetic/private/path"),
         ("key_id", 12),
-    ],
-)
-def test_v2_malformed_metadata_is_value_free_and_unclaimed(
-    field: str, value: Any
-) -> None:
-    store = RecordingStore()
-    with pytest.raises(ApprovalTokenValidationError) as caught:
-        ApprovalTokenVerifier(KEY, store).consume(
-            _signed_payload(**{field: value}),
-            action_digest=ACTION_DIGEST,
-            reviewer_role=REVIEWER_ROLE,
-            now=NOW,
-        )
-    assert str(value) not in str(caught.value)
-    assert store.calls == []
+    ]:
+        with subtests.test(field=field, value=value):
+            store = RecordingStore()
+            with pytest.raises(ApprovalTokenValidationError) as caught:
+                ApprovalTokenVerifier(KEY, store).consume(
+                    _signed_payload(**{field: value}),
+                    action_digest=ACTION_DIGEST,
+                    reviewer_role=REVIEWER_ROLE,
+                    now=NOW,
+                )
+            assert str(value) not in str(caught.value)
+            assert store.calls == []
 
 
 def test_configurable_lifetime_ceiling_is_inclusive() -> None:

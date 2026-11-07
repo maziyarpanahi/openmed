@@ -66,23 +66,24 @@ def test_interleaved_actions_and_rejection(tmp_path):
         record(ledger, ActionState.COMMITTED)
 
 
-@pytest.mark.parametrize(
-    "states,code",
-    [
+def test_invalid_transitions_fail_closed(subtests, tmp_path):
+    case_root = tmp_path
+    for states, code in [
         ([ActionState.COMMITTED], "missing_proposal"),
         ([ActionState.PROPOSED, ActionState.COMMITTED], "invalid_transition"),
         (
             [ActionState.PROPOSED, ActionState.APPROVED, ActionState.APPROVED],
             "invalid_transition",
         ),
-    ],
-)
-def test_invalid_transitions_fail_closed(tmp_path, states, code):
-    ledger = ActionLedger(tmp_path / "ledger")
-    for state in states[:-1]:
-        record(ledger, state)
-    with pytest.raises(ActionLedgerError, match=code):
-        record(ledger, states[-1])
+    ]:
+        with subtests.test(states=states, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            ledger = ActionLedger(tmp_path / "ledger")
+            for state in states[:-1]:
+                record(ledger, state)
+            with pytest.raises(ActionLedgerError, match=code):
+                record(ledger, states[-1])
 
 
 def test_action_binding_and_run_binding(tmp_path):

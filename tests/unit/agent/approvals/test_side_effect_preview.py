@@ -74,45 +74,49 @@ def test_deterministic_redacted_preview_and_matching_fresh_state() -> None:
     _check(intent, preview.digest, (dict(intent.writes[0].before), None))
 
 
-@pytest.mark.parametrize(
-    "change",
-    ["before", "after", "action", "workflow", "order", "key"],
-)
-def test_preview_commitment_rejects_every_material_change(change: str) -> None:
-    intent = _intent()
-    preview = render_side_effect_preview(intent, secret=_SECRET)
-    before = dict(intent.writes[0].before)
-    if change == "before":
-        before["status"] = "amended"
-    elif change == "after":
-        write = intent.writes[0]
-        intent = dataclasses.replace(
-            intent,
-            writes=(
-                dataclasses.replace(write, after={"status": "cancelled"}),
-                intent.writes[1],
-            ),
-        )
-    elif change == "action":
-        intent = dataclasses.replace(
-            intent, action_id="22222222-2222-4222-8222-222222222222"
-        )
-    elif change == "workflow":
-        intent = dataclasses.replace(intent, workflow_after=WorkflowState.CANCELLED)
-    elif change == "order":
-        intent = dataclasses.replace(intent, writes=tuple(reversed(intent.writes)))
-    secret = (
-        _SECRET if change != "key" else b"another-local-review-key-at-least-32-bytes"
-    )
-    observed = (before, None) if change != "order" else (None, before)
-    with pytest.raises(PreviewError, match="stale_preview"):
-        require_current_preview(
-            intent,
-            observed_before=observed,
-            observed_workflow_state=WorkflowState.AWAITING_REVIEW,
-            approved_digest=preview.digest,
-            secret=secret,
-        )
+def test_preview_commitment_rejects_every_material_change(subtests) -> None:
+    for change in ["before", "after", "action", "workflow", "order", "key"]:
+        with subtests.test(change=change):
+            intent = _intent()
+            preview = render_side_effect_preview(intent, secret=_SECRET)
+            before = dict(intent.writes[0].before)
+            if change == "before":
+                before["status"] = "amended"
+            elif change == "after":
+                write = intent.writes[0]
+                intent = dataclasses.replace(
+                    intent,
+                    writes=(
+                        dataclasses.replace(write, after={"status": "cancelled"}),
+                        intent.writes[1],
+                    ),
+                )
+            elif change == "action":
+                intent = dataclasses.replace(
+                    intent, action_id="22222222-2222-4222-8222-222222222222"
+                )
+            elif change == "workflow":
+                intent = dataclasses.replace(
+                    intent, workflow_after=WorkflowState.CANCELLED
+                )
+            elif change == "order":
+                intent = dataclasses.replace(
+                    intent, writes=tuple(reversed(intent.writes))
+                )
+            secret = (
+                _SECRET
+                if change != "key"
+                else b"another-local-review-key-at-least-32-bytes"
+            )
+            observed = (before, None) if change != "order" else (None, before)
+            with pytest.raises(PreviewError, match="stale_preview"):
+                require_current_preview(
+                    intent,
+                    observed_before=observed,
+                    observed_workflow_state=WorkflowState.AWAITING_REVIEW,
+                    approved_digest=preview.digest,
+                    secret=secret,
+                )
 
 
 def test_changed_workflow_state_forces_fresh_review() -> None:
@@ -210,26 +214,27 @@ def test_finite_decimal_resource_values_can_be_reviewed() -> None:
     _check(intent, preview.digest, ({"valueQuantity.value": 1.25},))
 
 
-@pytest.mark.parametrize("malformed", ["nonfinite", "surrogate", "deep"])
-def test_malformed_json_values_fail_with_value_free_preview_errors(
-    malformed: str,
-) -> None:
-    value = (
-        float("nan") if malformed == "nonfinite" else "synthetic-private-" + chr(0xD800)
-    )
-    if malformed == "deep":
-        value = "synthetic-private-sentinel"
-        for _ in range(100):
-            value = [value]
-    with pytest.raises(PreviewError) as excinfo:
-        write = ResourceWrite(
-            WriteKind.CREATE,
-            "Observation",
-            "res_" + "e" * 32,
-            None,
-            {"valueString": value},
-        )
-        render_side_effect_preview(
-            dataclasses.replace(_intent(), writes=(write,)), secret=_SECRET
-        )
-    assert "synthetic-private" not in str(excinfo.value)
+def test_malformed_json_values_fail_with_value_free_preview_errors(subtests) -> None:
+    for malformed in ["nonfinite", "surrogate", "deep"]:
+        with subtests.test(malformed=malformed):
+            value = (
+                float("nan")
+                if malformed == "nonfinite"
+                else "synthetic-private-" + chr(0xD800)
+            )
+            if malformed == "deep":
+                value = "synthetic-private-sentinel"
+                for _ in range(100):
+                    value = [value]
+            with pytest.raises(PreviewError) as excinfo:
+                write = ResourceWrite(
+                    WriteKind.CREATE,
+                    "Observation",
+                    "res_" + "e" * 32,
+                    None,
+                    {"valueString": value},
+                )
+                render_side_effect_preview(
+                    dataclasses.replace(_intent(), writes=(write,)), secret=_SECRET
+                )
+            assert "synthetic-private" not in str(excinfo.value)

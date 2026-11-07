@@ -1,5 +1,6 @@
 """Pytest configuration and fixtures for OpenMed tests."""
 
+import contextlib
 import hashlib
 import json
 import os
@@ -16,6 +17,26 @@ import pytest
 import openmed
 from openmed.core.config import OpenMedConfig
 from openmed.processing.tokenizer_cache import clear_tokenizer_cache
+
+try:  # pytest >= 9 provides the ``subtests`` fixture.
+    import _pytest.subtests  # noqa: F401
+except ImportError:  # pragma: no cover - older pytest, e.g. some dev shells
+
+    class _FallbackSubtests:
+        """Run each subtest inline and name the failing case."""
+
+        @contextlib.contextmanager
+        def test(self, msg: str | None = None, **params: Any):
+            try:
+                yield
+            except AssertionError as error:
+                case = ", ".join(f"{key}={value!r}" for key, value in params.items())
+                raise AssertionError(f"[{msg or case}] {error}") from error
+
+    @pytest.fixture
+    def subtests() -> _FallbackSubtests:
+        return _FallbackSubtests()
+
 
 _PAGED_KV_SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET",

@@ -33,6 +33,7 @@ from openmed.service.client import (
     PIILanguage,
     PrivacyGatewayRequest,
     ProfileRequest,
+    SystemOneRequest,
 )
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
@@ -138,6 +139,7 @@ def rest_client(monkeypatch: pytest.MonkeyPatch):
         yield client
 
 
+@pytest.mark.slow
 def test_client_calls_service_endpoints_with_asgi_transport(
     rest_client: OpenMedClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -253,6 +255,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "deidentify": PIIDeidentifyRequest,
         "privacy_gateway": PrivacyGatewayRequest,
         "decision": FixedOptionDecisionRequest,
+        "system_one": SystemOneRequest,
         "unload_model": ModelUnloadRequest,
         "unload_all_models": ModelUnloadRequest,
     }
@@ -275,6 +278,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "loaded_models",
         "journey_resources",
         "decision",
+        "system_one",
         "unload_model",
         "unload_all_models",
     }

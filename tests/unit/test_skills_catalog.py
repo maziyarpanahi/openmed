@@ -102,6 +102,7 @@ def _skill_names() -> set[str]:
     return {path.parent.name for path in SKILLS_DIR.glob("*/SKILL.md")}
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     os.name == "nt",
     reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",
@@ -129,6 +130,7 @@ def test_installer_default_links_every_supported_target(tmp_path: Path) -> None:
     assert "skip " not in repeated.stderr
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     os.name == "nt",
     reason="The Bash symlink installer requires Git Bash and Windows Developer Mode.",

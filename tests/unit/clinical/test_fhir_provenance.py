@@ -221,32 +221,30 @@ def _attempt(**overrides: Any) -> GovernedWriteAuditAttempt:
     return GovernedWriteAuditAttempt(**fields)
 
 
-@pytest.mark.parametrize(
-    "action,action_code",
-    [(GovernedWriteAction.CREATE, "C"), (GovernedWriteAction.UPDATE, "U")],
-)
-@pytest.mark.parametrize(
-    "outcome,outcome_code",
-    [
-        (GovernedWriteOutcome.SUCCESS, "0"),
-        (GovernedWriteOutcome.SERVER_REJECTED, "4"),
-        (GovernedWriteOutcome.COMMIT_UNKNOWN, "8"),
-        (GovernedWriteOutcome.POLICY_DENIED, "4"),
-        (GovernedWriteOutcome.ADMISSION_REFUSED, "4"),
-    ],
-)
-def test_governed_audit_action_and_outcome_mapping(
-    action: GovernedWriteAction,
-    action_code: str,
-    outcome: GovernedWriteOutcome,
-    outcome_code: str,
-) -> None:
-    event = to_governed_write_audit_event(
-        _attempt(action=action, outcome=outcome), clock=lambda: _INSTANT
-    )
-    assert event["action"] == action_code
-    assert event["outcome"] == outcome_code
-    assert event["subtype"][0]["code"] == outcome.value
+def test_governed_audit_action_and_outcome_mapping(subtests) -> None:
+    for action, action_code in [
+        (GovernedWriteAction.CREATE, "C"),
+        (GovernedWriteAction.UPDATE, "U"),
+    ]:
+        for outcome, outcome_code in [
+            (GovernedWriteOutcome.SUCCESS, "0"),
+            (GovernedWriteOutcome.SERVER_REJECTED, "4"),
+            (GovernedWriteOutcome.COMMIT_UNKNOWN, "8"),
+            (GovernedWriteOutcome.POLICY_DENIED, "4"),
+            (GovernedWriteOutcome.ADMISSION_REFUSED, "4"),
+        ]:
+            with subtests.test(
+                action=action,
+                action_code=action_code,
+                outcome=outcome,
+                outcome_code=outcome_code,
+            ):
+                event = to_governed_write_audit_event(
+                    _attempt(action=action, outcome=outcome), clock=lambda: _INSTANT
+                )
+                assert event["action"] == action_code
+                assert event["outcome"] == outcome_code
+                assert event["subtype"][0]["code"] == outcome.value
 
 
 def test_governed_unknown_commit_preserves_uncertainty_explicitly() -> None:
@@ -260,26 +258,28 @@ def test_governed_unknown_commit_preserves_uncertainty_explicitly() -> None:
     assert "write_failed" not in json.dumps(event)
 
 
-@pytest.mark.parametrize(
-    "outcome",
-    [GovernedWriteOutcome.POLICY_DENIED, GovernedWriteOutcome.ADMISSION_REFUSED],
-)
 def test_governed_refusal_needs_no_materialized_target_or_invented_review(
-    outcome: GovernedWriteOutcome, monkeypatch: pytest.MonkeyPatch
+    subtests,
 ) -> None:
-    import socket
+    for outcome in [
+        GovernedWriteOutcome.POLICY_DENIED,
+        GovernedWriteOutcome.ADMISSION_REFUSED,
+    ]:
+        with subtests.test(outcome=outcome):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import socket
 
-    def no_network(*args: Any, **kwargs: Any) -> Any:
-        pytest.fail("audit projection must never contact a server")
+                def no_network(*args: Any, **kwargs: Any) -> Any:
+                    pytest.fail("audit projection must never contact a server")
 
-    monkeypatch.setattr(socket, "create_connection", no_network)
-    monkeypatch.setattr(socket.socket, "connect", no_network)
-    attempt = GovernedWriteAuditAttempt("update", outcome, _SOFTWARE)
-    event = to_governed_write_audit_event(attempt, clock=lambda: _INSTANT)
-    assert event["action"] == "U" and event["outcome"] == "4"
-    assert len(event["agent"]) == 1
-    assert "entity" not in event
-    assert "role" not in event["agent"][0]
+                monkeypatch.setattr(socket, "create_connection", no_network)
+                monkeypatch.setattr(socket.socket, "connect", no_network)
+                attempt = GovernedWriteAuditAttempt("update", outcome, _SOFTWARE)
+                event = to_governed_write_audit_event(attempt, clock=lambda: _INSTANT)
+                assert event["action"] == "U" and event["outcome"] == "4"
+                assert len(event["agent"]) == 1
+                assert "entity" not in event
+                assert "role" not in event["agent"][0]
 
 
 def test_governed_audit_is_deterministic_for_fixed_clock_and_metadata() -> None:
@@ -313,29 +313,24 @@ def test_governed_clock_is_called_once_and_normalized_to_utc() -> None:
     assert event["recorded"] == "2026-01-02T03:04:05.123456Z"
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_governed_projection_revalidates_native_attempt_before_clock(subtests) -> None:
+    for field, value in [
         ("software_agent_ref", _PRIVATE_SENTINEL),
         ("target_refs", (_PRIVATE_SENTINEL,)),
         ("approval_receipt_digest", _PRIVATE_SENTINEL),
-    ],
-)
-def test_governed_projection_revalidates_native_attempt_before_clock(
-    field: str,
-    value: Any,
-) -> None:
-    attempt = _attempt()
-    object.__setattr__(attempt, field, value)
+    ]:
+        with subtests.test(field=field, value=value):
+            attempt = _attempt()
+            object.__setattr__(attempt, field, value)
 
-    def clock() -> datetime:
-        pytest.fail("invalid metadata must be refused before calling the clock")
+            def clock() -> datetime:
+                pytest.fail("invalid metadata must be refused before calling the clock")
 
-    with pytest.raises(GovernedWriteAuditError) as error:
-        to_governed_write_audit_event(attempt, clock=clock)
-    assert error.value.code == "invalid_attempt"
-    assert error.value.__context__ is None
-    assert _PRIVATE_SENTINEL not in repr(error.value)
+            with pytest.raises(GovernedWriteAuditError) as error:
+                to_governed_write_audit_event(attempt, clock=clock)
+            assert error.value.code == "invalid_attempt"
+            assert error.value.__context__ is None
+            assert _PRIVATE_SENTINEL not in repr(error.value)
 
 
 def test_governed_projection_snapshots_metadata_before_clock_callback() -> None:
@@ -350,15 +345,18 @@ def test_governed_projection_snapshots_metadata_before_clock_callback() -> None:
     assert _PRIVATE_SENTINEL not in json.dumps(event)
 
 
-@pytest.mark.parametrize(
-    "clock",
-    [None, lambda: datetime(2026, 1, 2), lambda: _PRIVATE_SENTINEL, lambda: None],
-)
-def test_governed_invalid_clock_is_controlled(clock: Any) -> None:
-    with pytest.raises(GovernedWriteAuditError) as error:
-        to_governed_write_audit_event(_attempt(), clock=clock)
-    assert error.value.code == "invalid_clock"
-    assert _PRIVATE_SENTINEL not in str(error.value)
+def test_governed_invalid_clock_is_controlled(subtests) -> None:
+    for clock in [
+        None,
+        lambda: datetime(2026, 1, 2),
+        lambda: _PRIVATE_SENTINEL,
+        lambda: None,
+    ]:
+        with subtests.test(clock=clock):
+            with pytest.raises(GovernedWriteAuditError) as error:
+                to_governed_write_audit_event(_attempt(), clock=clock)
+            assert error.value.code == "invalid_clock"
+            assert _PRIVATE_SENTINEL not in str(error.value)
 
 
 def test_governed_clock_failure_does_not_chain_private_exception() -> None:
@@ -372,9 +370,8 @@ def test_governed_clock_failure_does_not_chain_private_exception() -> None:
     assert _PRIVATE_SENTINEL not in repr(error.value)
 
 
-@pytest.mark.parametrize(
-    "fields,code",
-    [
+def test_governed_invalid_metadata_refuses_without_value_echo(subtests) -> None:
+    for fields, code in [
         ({"action": _PRIVATE_SENTINEL}, "invalid_action"),
         ({"outcome": _PRIVATE_SENTINEL}, "invalid_outcome"),
         (
@@ -410,17 +407,14 @@ def test_governed_clock_failure_does_not_chain_private_exception() -> None:
             "incomplete_dispatch_evidence",
         ),
         ({"target_refs": ()}, "incomplete_dispatch_evidence"),
-    ],
-)
-def test_governed_invalid_metadata_refuses_without_value_echo(
-    fields: dict[str, Any], code: str
-) -> None:
-    with pytest.raises(GovernedWriteAuditError) as error:
-        _attempt(**fields)
-    assert error.value.code == code
-    assert _PRIVATE_SENTINEL not in repr(error.value)
-    assert "Patient/0042" not in str(error.value)
-    assert error.value.__context__ is None
+    ]:
+        with subtests.test(fields=fields, code=code):
+            with pytest.raises(GovernedWriteAuditError) as error:
+                _attempt(**fields)
+            assert error.value.code == code
+            assert _PRIVATE_SENTINEL not in repr(error.value)
+            assert "Patient/0042" not in str(error.value)
+            assert error.value.__context__ is None
 
 
 def test_governed_resources_carry_only_controlled_metadata() -> None:
@@ -459,36 +453,34 @@ def test_governed_resources_carry_only_controlled_metadata() -> None:
         assert '"' + forbidden + '"' not in json.dumps(event)
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_governed_event_id_binds_classified_metadata(subtests) -> None:
+    for field in [
         "action",
         "outcome",
         "reviewer_role",
         "approval_receipt_digest",
         "target_refs",
         "software_agent_ref",
-    ],
-)
-def test_governed_event_id_binds_classified_metadata(field: str) -> None:
-    before = _attempt()
-    alternatives = {
-        "action": GovernedWriteAction.UPDATE,
-        "outcome": GovernedWriteOutcome.SERVER_REJECTED,
-        "reviewer_role": GovernedWriteReviewerRole.PRIVACY,
-        "approval_receipt_digest": "sha256:" + "b" * 64,
-        "target_refs": (_OTHER_TARGET,),
-        "software_agent_ref": _OTHER_TARGET,
-    }
-    original = to_governed_write_audit_event(before, clock=lambda: _INSTANT)
-    changed = to_governed_write_audit_event(
-        replace(before, **{field: alternatives[field]}), clock=lambda: _INSTANT
-    )
-    assert original["id"] != changed["id"]
-    later = to_governed_write_audit_event(
-        before, clock=lambda: _INSTANT + timedelta(microseconds=1)
-    )
-    assert original["id"] != later["id"]
+    ]:
+        with subtests.test(field=field):
+            before = _attempt()
+            alternatives = {
+                "action": GovernedWriteAction.UPDATE,
+                "outcome": GovernedWriteOutcome.SERVER_REJECTED,
+                "reviewer_role": GovernedWriteReviewerRole.PRIVACY,
+                "approval_receipt_digest": "sha256:" + "b" * 64,
+                "target_refs": (_OTHER_TARGET,),
+                "software_agent_ref": _OTHER_TARGET,
+            }
+            original = to_governed_write_audit_event(before, clock=lambda: _INSTANT)
+            changed = to_governed_write_audit_event(
+                replace(before, **{field: alternatives[field]}), clock=lambda: _INSTANT
+            )
+            assert original["id"] != changed["id"]
+            later = to_governed_write_audit_event(
+                before, clock=lambda: _INSTANT + timedelta(microseconds=1)
+            )
+            assert original["id"] != later["id"]
 
 
 @pytest.mark.integration

@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 @pytest.mark.parametrize(
     "name",
@@ -43,7 +44,9 @@ runpy.run_module(sys.argv[1], run_name='__main__')
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=5,
+            # Include cold interpreter/import startup on loaded Windows runners,
+            # matching the other offline clinical CLI smoke checks.
+            timeout=30,
             check=True,
         )
         assert completed.stderr == ""

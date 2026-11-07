@@ -311,13 +311,14 @@ def test_true_uses_configured_backend_and_missing_backend_is_typed(monkeypatch):
         )
 
 
-@pytest.mark.parametrize("option", [None, 0, 1, "https://private.invalid/payload"])
-def test_invalid_verify_option_is_not_silently_treated_as_off(option):
-    from openmed.clinical.nli_backends import LocalNLIError
+def test_invalid_verify_option_is_not_silently_treated_as_off(subtests):
+    for option in [None, 0, 1, "https://private.invalid/payload"]:
+        with subtests.test(option=option):
+            from openmed.clinical.nli_backends import LocalNLIError
 
-    with pytest.raises(LocalNLIError) as raised:
-        summarize(_nli_source(), model="extractive", verify=option)
-    assert "private.invalid" not in str(raised.value)
+            with pytest.raises(LocalNLIError) as raised:
+                summarize(_nli_source(), model="extractive", verify=option)
+            assert "private.invalid" not in str(raised.value)
 
 
 def test_verification_backend_cannot_use_network_and_error_is_value_free():

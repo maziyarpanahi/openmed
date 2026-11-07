@@ -264,6 +264,7 @@ def test_untrusted_operation_value_is_not_copied_to_structured_logs() -> None:
     assert failed_record["operation"] == "unknown"
 
 
+@pytest.mark.slow
 def test_frozen_binary_entrypoint_emits_only_structured_stderr() -> None:
     requests = "\n".join(
         (
@@ -293,6 +294,7 @@ def test_frozen_binary_entrypoint_emits_only_structured_stderr() -> None:
     assert log_records[-1]["event"] == "sidecar_stopped"
 
 
+@pytest.mark.slow
 def test_killing_sidecar_mid_request_returns_clean_host_error() -> None:
     child_code = textwrap.dedent(
         """

@@ -46,56 +46,72 @@ def _run(path: Path, request: object) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.parametrize("all_pass", [False, True])
-def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
-    all_pass: bool, tmp_path: Path
-) -> None:
-    path = DQD_FIXTURE
-    if all_pass:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        for row in payload["CheckResults"]:
-            row.update(
-                failed=0, passed=1, isError=0, notApplicable=0, numViolatedRows=0
+@pytest.mark.slow
+def test_dqd_file_to_signed_report_runs_without_dqd_or_r(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for all_pass in [False, True]:
+        with subtests.test(all_pass=all_pass):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = DQD_FIXTURE
+            if all_pass:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                for row in payload["CheckResults"]:
+                    row.update(
+                        failed=0,
+                        passed=1,
+                        isError=0,
+                        notApplicable=0,
+                        numViolatedRows=0,
+                    )
+                path = tmp_path / "all_pass.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+            fixture = load_frozen_omop_quality_fixture(
+                FIXTURES / "quality_reconciliation.json"
             )
-        path = tmp_path / "all_pass.json"
-        path.write_text(json.dumps(payload), encoding="utf-8")
-    fixture = load_frozen_omop_quality_fixture(FIXTURES / "quality_reconciliation.json")
-    signing_key = b"synthetic-dqd-integration-key"
-    environment = {"PYTHONPATH": os.environ.get("PYTHONPATH", "")}
-    probe = subprocess.run(
-        [sys.executable, "-m", "openmed.interop.omop.dqd", str(path)],
-        input=json.dumps(_request()).encode("utf-8"),
-        capture_output=True,
-        env=_safe_environment(environment),
-        check=False,
-        timeout=10,
-    )
-    assert probe.returncode == 0, probe.stderr.decode("utf-8", errors="replace")
-    result = run_omop_quality_subprocess(
-        fixture.quality_input,
-        command=(sys.executable, "-m", "openmed.interop.omop.dqd", str(path)),
-        reconciliation=fixture.reconcile(),
-        signing_key=signing_key,
-        timeout=10,
-        # The adapter strips ambient variables; provision only its import path.
-        environment=environment,
-    )
-    assert result.state is (StoreState.SUCCESS if all_pass else StoreState.FAILURE)
-    assert result.value is not None
-    assert result.value.quality_verdict == ("pass" if all_pass else "fail")
-    assert verify_omop_quality_report(result.value, signing_key)
-    expected = normalize_dqd_results_file(path, quality_input=fixture.quality_input)
-    assert result.value.source_output_digest == expected["output_digest"]
-    assert "SENTINEL" not in result.value.to_json()
-    command = _run(path, _request())
-    assert command.returncode == 0
-    assert command.stderr == ""
-    assert json.loads(command.stdout) == expected
+            signing_key = b"synthetic-dqd-integration-key"
+            environment = {"PYTHONPATH": os.environ.get("PYTHONPATH", "")}
+            probe = subprocess.run(
+                [sys.executable, "-m", "openmed.interop.omop.dqd", str(path)],
+                input=json.dumps(_request()).encode("utf-8"),
+                capture_output=True,
+                env=_safe_environment(environment),
+                check=False,
+                timeout=10,
+            )
+            assert probe.returncode == 0, probe.stderr.decode("utf-8", errors="replace")
+            result = run_omop_quality_subprocess(
+                fixture.quality_input,
+                command=(sys.executable, "-m", "openmed.interop.omop.dqd", str(path)),
+                reconciliation=fixture.reconcile(),
+                signing_key=signing_key,
+                timeout=10,
+                # The adapter strips ambient variables; provision only its import path.
+                environment=environment,
+            )
+            assert result.state is (
+                StoreState.SUCCESS if all_pass else StoreState.FAILURE
+            )
+            assert result.value is not None
+            assert result.value.quality_verdict == ("pass" if all_pass else "fail")
+            assert verify_omop_quality_report(result.value, signing_key)
+            expected = normalize_dqd_results_file(
+                path, quality_input=fixture.quality_input
+            )
+            assert result.value.source_output_digest == expected["output_digest"]
+            assert "SENTINEL" not in result.value.to_json()
+            command = _run(path, _request())
+            assert command.returncode == 0
+            assert command.stderr == ""
+            assert json.loads(command.stdout) == expected
 
 
-@pytest.mark.parametrize(
-    "case,state",
-    [
+@pytest.mark.slow
+def test_command_fails_closed_with_no_payload_or_private_path_in_diagnostics(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for case, state in [
         ("version", "unsupported"),
         ("category", "unsupported"),
         ("malformed", "failure"),
@@ -105,55 +121,59 @@ def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
         ("request_input", "failure"),
         ("request_shape", "failure"),
         ("request_size", "failure"),
-    ],
-)
-def test_command_fails_closed_with_no_payload_or_private_path_in_diagnostics(
-    case: str, state: str, tmp_path: Path
-) -> None:
-    payload = json.loads(DQD_FIXTURE.read_text(encoding="utf-8"))
-    request = _request()
-    path = tmp_path / "SYNTHETIC_PRIVATE_PATH.json"
-    if case == "version":
-        payload["Metadata"][0]["dqdVersion"] = "SYNTHETIC_VERSION_SENTINEL"
-    elif case == "category":
-        payload["CheckResults"][0]["category"] = "SYNTHETIC_CATEGORY_SENTINEL"
-    elif case == "digest":
-        request["input_digest"] = "sha256:" + "0" * 64
-    elif case == "request_version":
-        request["schema_version"] = "999.0.0"
-    elif case == "request_input":
-        request["input"] = "SYNTHETIC_INPUT_SENTINEL"
-    elif case == "request_shape":
-        request = {"privatePath": "SYNTHETIC_PATH_SENTINEL"}
-    elif case == "request_size":
-        request["input"] = "SYNTHETIC_INPUT_SENTINEL" * 10000
-    if case != "missing":
-        path.write_text(
-            "SYNTHETIC_MALFORMED_SENTINEL"
-            if case == "malformed"
-            else json.dumps(payload),
-            encoding="utf-8",
-        )
-    result = _run(path, request)
-    assert result.returncode == 2
-    assert result.stdout == ""
-    diagnostic = json.loads(result.stderr)
-    assert diagnostic["state"] == state
-    assert set(diagnostic) == {"state", "code"}
-    assert "SYNTHETIC" not in result.stderr
-    assert "Traceback" not in result.stderr
-    if case == "version":
-        fixture = load_frozen_omop_quality_fixture(
-            FIXTURES / "quality_reconciliation.json"
-        )
-        bridge = run_omop_quality_subprocess(
-            fixture.quality_input,
-            command=(sys.executable, "-m", "openmed.interop.omop.dqd", str(path)),
-            reconciliation=fixture.reconcile(),
-            signing_key=b"synthetic-dqd-key",
-            timeout=10,
-            environment={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
-        )
-        assert bridge.state is StoreState.FAILURE
-        assert bridge.code == "quality_adapter_failed"
-        assert bridge.value is None
+    ]:
+        with subtests.test(case=case, state=state):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = json.loads(DQD_FIXTURE.read_text(encoding="utf-8"))
+            request = _request()
+            path = tmp_path / "SYNTHETIC_PRIVATE_PATH.json"
+            if case == "version":
+                payload["Metadata"][0]["dqdVersion"] = "SYNTHETIC_VERSION_SENTINEL"
+            elif case == "category":
+                payload["CheckResults"][0]["category"] = "SYNTHETIC_CATEGORY_SENTINEL"
+            elif case == "digest":
+                request["input_digest"] = "sha256:" + "0" * 64
+            elif case == "request_version":
+                request["schema_version"] = "999.0.0"
+            elif case == "request_input":
+                request["input"] = "SYNTHETIC_INPUT_SENTINEL"
+            elif case == "request_shape":
+                request = {"privatePath": "SYNTHETIC_PATH_SENTINEL"}
+            elif case == "request_size":
+                request["input"] = "SYNTHETIC_INPUT_SENTINEL" * 10000
+            if case != "missing":
+                path.write_text(
+                    "SYNTHETIC_MALFORMED_SENTINEL"
+                    if case == "malformed"
+                    else json.dumps(payload),
+                    encoding="utf-8",
+                )
+            result = _run(path, request)
+            assert result.returncode == 2
+            assert result.stdout == ""
+            diagnostic = json.loads(result.stderr)
+            assert diagnostic["state"] == state
+            assert set(diagnostic) == {"state", "code"}
+            assert "SYNTHETIC" not in result.stderr
+            assert "Traceback" not in result.stderr
+            if case == "version":
+                fixture = load_frozen_omop_quality_fixture(
+                    FIXTURES / "quality_reconciliation.json"
+                )
+                bridge = run_omop_quality_subprocess(
+                    fixture.quality_input,
+                    command=(
+                        sys.executable,
+                        "-m",
+                        "openmed.interop.omop.dqd",
+                        str(path),
+                    ),
+                    reconciliation=fixture.reconcile(),
+                    signing_key=b"synthetic-dqd-key",
+                    timeout=10,
+                    environment={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
+                )
+                assert bridge.state is StoreState.FAILURE
+                assert bridge.code == "quality_adapter_failed"
+                assert bridge.value is None

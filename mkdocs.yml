@@ -12,6 +12,8 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 3.2.0 Release Notes: release/v3.2.0.md
+      - Migrate from 3.1 to 3.2: migration/3.1-to-3.2.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
@@ -322,6 +324,7 @@ nav:
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
+      - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
@@ -352,9 +355,40 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
-      - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic Data:
+          - Overview: training/synthetic/index.md
+          - Locale PHI Notes: training/synthetic/locale-phi.md
+          - Burned-in PHI Images: training/synthetic/burned-in.md
+          - Social-history Sections: training/synthetic/social-history.md
+          - Section-label Datasets: training/synthetic/section-labels.md
+          - Span Offset Projection: training/synthetic/offset-projection.md
+          - Translation Augmentation: training/synthetic/translation-augmentation.md
+          - SPDX License Identifiers: training/synthetic/license-identifiers.md
+          - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+          - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+          - Synthetic Split Planning: training/synthetic/split-planning.md
+          - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+          - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+          - Synthetic Release Capsules: training/synthetic/release-capsules.md
+          - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
+          - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
+          - Synthetic Medication Courses: training/synthetic/medication-courses.md
+          - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
+          - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Document Rendering: training/synthetic/document-rendering.md
+          - Synthetic DICOM Overlays: training/synthetic/dicom-overlays.md
+          - Synthetic Waveform Records: training/synthetic/waveform-records.md
+          - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+          - Synthetic FHIR Records: training/synthetic/fhir-records.md
+          - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+          - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+          - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
+          - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+          - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
+      - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -367,7 +401,10 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
@@ -376,28 +413,88 @@ nav:
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
+      - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
       - Synthetic Preflight Fixtures: multimodal/preflight-fixtures.md
+      - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
+      - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
+      - Local Edge VLM Provider: multimodal/edge-vlm-provider.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
+      - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
+      - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
+      - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
+      - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+      - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
+      - Whole-slide Aggregation Provenance: multimodal/vision/whole-slide-provenance.md
+      - Image Quality and Abstention: multimodal/vision/quality-abstention.md
+      - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
+      - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
+      - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
+      - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
+      - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
+      - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
+      - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
+      - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
+      - Transcript Language Routing: multimodal/transcript-language-routing.md
+      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
+      - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
+      - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
+      - Local Audio Retention: multimodal/streaming/audio-retention.md
+      - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Apple Audio Capture: multimodal/apple-audio-capture.md
+      - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
+      - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
+      - EDF and EDF+ Reader: multimodal/edf-reader.md
+      - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
+      - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
+      - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
+      - OpenMedKit Evidence Contracts: multimodal/openmedkit-contracts.md
+      - Local Multimodal Review: multimodal/local-review.md
+      - Cross-modal Clock Alignment: multimodal/cross-modal-clock-alignment.md
+      - Local Core ML Speech: multimodal/apple-speech.md
+      - Local Speaker Diarization: multimodal/streaming/local-diarization.md
+      - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
+      - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
+      - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
+      - HL7 aECG Reader: multimodal/aecg-reader.md
+      - Bounded WFDB ECG Reader: multimodal/wfdb-reader.md
       - ODT/ODF Text Extraction: multimodal/odt-extraction.md
       - PPTX Redaction: multimodal/pptx-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
+      - OpenPHI-Vision Fixed Fixtures: evaluation/openphi-vision-fixtures.md
+      - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
+      - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
+      - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
@@ -416,7 +513,11 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
+      - Transcript Accuracy: evaluation/transcript-accuracy.md
+      - Ambient Draft Evaluation: evaluation/ambient-drafts.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -428,6 +529,7 @@ nav:
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
+      - Language Adapter Distillation: languages/adapter-distillation.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
@@ -436,6 +538,9 @@ nav:
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
+      - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
+      - DICOM pixel provenance: multimodal/vision/dicom-pixel-provenance.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
@@ -443,6 +548,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md
@@ -459,11 +565,18 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
+      - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
+      - Multimodal Decoder Containment: security/multimodal-decoder-boundaries.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
@@ -609,6 +722,7 @@ nav:
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Policy-impact Digest: security/policy-impact.md
       - Dependency License Inventory: security/license-inventory.md
+      - Multimodal Dependency Licenses: compliance/multimodal-dependency-licenses.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Differential-Privacy Budget Migrations: security/budget-migrations.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md
