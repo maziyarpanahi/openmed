@@ -1,11 +1,27 @@
 package com.openmed.openmedkit.deid
 
+import com.openmed.openmedkit.secrets.OpenMedSecretException
+import com.openmed.openmedkit.secrets.OpenMedSecretFailure
+import com.openmed.openmedkit.secrets.OpenMedSecretPolicy
+import com.openmed.openmedkit.secrets.OpenMedSecretProvider
+import com.openmed.openmedkit.secrets.OpenMedSecretPurpose
+import com.openmed.openmedkit.secrets.OpenMedSecretReference
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.max
 import kotlin.math.min
+
+/** How a [DeidentifyEngine] treats the public, pre-4.0 default hash key. */
+enum class HashKeyPolicy {
+    /** Refuse the public default key however it is supplied (default). */
+    STRICT,
+
+    /** Accept the public default key only to reproduce pre-4.0 digests. */
+    ALLOW_LEGACY_PUBLIC_SALT,
+}
 
 /**
  * Rewrites detected identifier spans into de-identified text.
@@ -13,15 +29,58 @@ import kotlin.math.min
  * The engine accepts original-text offsets and applies replacements from
  * right to left, so each span is replaced at its original offsets even when
  * earlier spans expand or shrink the output.
+ *
+ * Hashing, meaning the [DeidentifyMethod.HASH] replacement and each applied
+ * span's `textHash`, is keyed through an [OpenMedSecretProvider] such as
+ * `AndroidKeystoreSecretProvider`, so the key never sits in app memory. An
+ * engine built without a provider omits span digests and refuses
+ * [DeidentifyMethod.HASH] with [OpenMedSecretException]
+ * ([OpenMedSecretFailure.MISSING]); it never falls back to a public key.
  */
-class DeidentifyEngine(
-    hashSalt: ByteArray = DEFAULT_HASH_SALT.toByteArray(StandardCharsets.UTF_8),
+class DeidentifyEngine private constructor(
+    private val hashKeys: HashKeySource?,
 ) {
-    private val hashKey = hashSalt.copyOf()
+    /** Keyless engine: masks, removes, and replaces; refuses hashing. */
+    constructor() : this(null)
 
-    init {
-        require(hashKey.isNotEmpty()) { "hashSalt must not be empty" }
-    }
+    /**
+     * Engine whose hashing runs inside [secretProvider].
+     *
+     * Each `deidentify` call resolves the newest key version, so a rotation
+     * takes effect on the next call. Provider failures surface as
+     * [OpenMedSecretException] before any output is produced.
+     *
+     * @param secretProvider Custody boundary that holds the hash key.
+     * @param hashKeyReference Reference with purpose
+     *   [OpenMedSecretPurpose.DEIDENTIFY_HASH].
+     * @param secretPolicy Protection the hash key must have.
+     * @param hashKeyPolicy [HashKeyPolicy.STRICT] refuses a provider key that
+     *   equals the public default salt.
+     */
+    constructor(
+        secretProvider: OpenMedSecretProvider,
+        hashKeyReference: OpenMedSecretReference = OpenMedSecretReference.DEIDENTIFY_HASH,
+        secretPolicy: OpenMedSecretPolicy = OpenMedSecretPolicy.DEFAULT,
+        hashKeyPolicy: HashKeyPolicy = HashKeyPolicy.STRICT,
+    ) : this(ProviderHashKeys(secretProvider, hashKeyReference, secretPolicy, hashKeyPolicy))
+
+    /**
+     * Engine keyed by raw salt bytes held in app memory.
+     *
+     * Under [HashKeyPolicy.STRICT] the public [LEGACY_PUBLIC_HASH_SALT] is
+     * refused with [OpenMedSecretFailure.PUBLIC_DEFAULT].
+     */
+    @Deprecated(
+        "Raw salts live in app memory. Hold the hash key in an OpenMedSecretProvider.",
+        ReplaceWith(
+            "DeidentifyEngine(AndroidKeystoreSecretProvider())",
+            "com.openmed.openmedkit.secrets.AndroidKeystoreSecretProvider",
+        ),
+    )
+    constructor(
+        hashSalt: ByteArray,
+        hashKeyPolicy: HashKeyPolicy = HashKeyPolicy.STRICT,
+    ) : this(RawSaltHashKeys(hashSalt, hashKeyPolicy))
 
     fun deidentify(
         text: String,
@@ -51,6 +110,7 @@ class DeidentifyEngine(
         }
 
         validateBounds(text, spans)
+        val mac = hashKeys?.open()
         val replacementState = ReplacementState()
         val orderedSpans = resolveOverlaps(spans)
         val actions = mutableListOf<DeidentifyAction>()
@@ -60,8 +120,8 @@ class DeidentifyEngine(
             val method = actionForSpan(span)
             val surface = text.substring(span.start, span.end)
             val label = normalizeLabel(span.canonicalLabel)
-            val textHash = hmacDigest(label, surface)
-            val replacement = replacementFor(method, label, surface, replacementState)
+            val textHash = mac?.let { hmacDigest(it, label, surface) }
+            val replacement = replacementFor(method, label, surface, replacementState, textHash)
             val outputStart = span.start + outputDelta
             val outputEnd = outputStart + replacement.length
             val appliedSpan = span.copy(
@@ -153,6 +213,7 @@ class DeidentifyEngine(
         label: String,
         surface: String,
         state: ReplacementState,
+        textHash: String?,
     ): String {
         return when (method) {
             DeidentifyMethod.MASK -> state.tokenFor(
@@ -168,7 +229,8 @@ class DeidentifyEngine(
                 surface = surface,
             ) { tokenLabel, index -> surrogateToken(tokenLabel, index) }
 
-            DeidentifyMethod.HASH -> hmacDigest(label, surface)
+            DeidentifyMethod.HASH ->
+                textHash ?: throw OpenMedSecretException(OpenMedSecretFailure.MISSING)
         }
     }
 
@@ -184,11 +246,13 @@ class DeidentifyEngine(
         }
     }
 
-    private fun hmacDigest(label: String, surface: String): String {
-        val mac = Mac.getInstance(HMAC_SHA256)
-        mac.init(SecretKeySpec(hashKey, HMAC_SHA256))
+    private fun hmacDigest(
+        mac: (ByteArray) -> ByteArray,
+        label: String,
+        surface: String,
+    ): String {
         val payload = "$label\u0000$surface".toByteArray(StandardCharsets.UTF_8)
-        return "hmac-sha256:${mac.doFinal(payload).toHex()}"
+        return "hmac-sha256:${mac(payload).toHex()}"
     }
 
     private data class ReplacementKey(
@@ -216,6 +280,56 @@ class DeidentifyEngine(
         }
     }
 
+    private interface HashKeySource {
+        /** Resolve the MAC used for one `deidentify` call. */
+        fun open(): (ByteArray) -> ByteArray
+    }
+
+    private class RawSaltHashKeys(salt: ByteArray, policy: HashKeyPolicy) : HashKeySource {
+        private val key = salt.copyOf()
+
+        init {
+            require(key.isNotEmpty()) { "hashSalt must not be empty" }
+            if (policy == HashKeyPolicy.STRICT && key.contentEquals(legacySalt())) {
+                throw OpenMedSecretException(OpenMedSecretFailure.PUBLIC_DEFAULT)
+            }
+        }
+
+        override fun open(): (ByteArray) -> ByteArray {
+            val mac = Mac.getInstance(HMAC_SHA256)
+            mac.init(SecretKeySpec(key, HMAC_SHA256))
+            return { payload -> mac.doFinal(payload) }
+        }
+    }
+
+    private class ProviderHashKeys(
+        private val provider: OpenMedSecretProvider,
+        private val reference: OpenMedSecretReference,
+        private val secretPolicy: OpenMedSecretPolicy,
+        private val hashKeyPolicy: HashKeyPolicy,
+    ) : HashKeySource {
+        init {
+            require(reference.purpose == OpenMedSecretPurpose.DEIDENTIFY_HASH) {
+                "hashKeyReference must have purpose DEIDENTIFY_HASH"
+            }
+        }
+
+        override fun open(): (ByteArray) -> ByteArray {
+            val handle = provider.get(reference, policy = secretPolicy).getOrThrow()
+            if (hashKeyPolicy == HashKeyPolicy.STRICT) {
+                val probe = handle.mac(PUBLIC_DEFAULT_PROBE).getOrThrow()
+                val legacy = Mac.getInstance(HMAC_SHA256).run {
+                    init(SecretKeySpec(legacySalt(), HMAC_SHA256))
+                    doFinal(PUBLIC_DEFAULT_PROBE)
+                }
+                if (MessageDigest.isEqual(probe, legacy)) {
+                    throw OpenMedSecretException(OpenMedSecretFailure.PUBLIC_DEFAULT)
+                }
+            }
+            return { payload -> handle.mac(payload).getOrThrow() }
+        }
+    }
+
     private fun ByteArray.toHex(): String {
         val chars = CharArray(size * 2)
         forEachIndexed { index, byte ->
@@ -227,8 +341,17 @@ class DeidentifyEngine(
     }
 
     companion object {
-        private const val DEFAULT_HASH_SALT = "openmed-android-deidentify-v1"
+        /**
+         * Public pre-4.0 default salt. It is not a secret; pass it only with
+         * [HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT] to reproduce old digests.
+         */
+        const val LEGACY_PUBLIC_HASH_SALT = "openmed-android-deidentify-v1"
         private const val HMAC_SHA256 = "HmacSHA256"
+        private val PUBLIC_DEFAULT_PROBE =
+            "openmed:deidentify:public-default-probe:v1".toByteArray(StandardCharsets.UTF_8)
+
+        private fun legacySalt(): ByteArray =
+            LEGACY_PUBLIC_HASH_SALT.toByteArray(StandardCharsets.UTF_8)
         private val HEX_CHARS = "0123456789abcdef".toCharArray()
 
         fun normalizeLabel(label: String): String {

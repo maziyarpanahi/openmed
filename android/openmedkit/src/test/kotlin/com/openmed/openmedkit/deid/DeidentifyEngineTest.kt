@@ -1,18 +1,170 @@
 package com.openmed.openmedkit.deid
 
+import com.openmed.openmedkit.secrets.AndroidKeystoreSecretProvider
+import com.openmed.openmedkit.secrets.FakeKeystore
+import com.openmed.openmedkit.secrets.OpenMedSecretException
+import com.openmed.openmedkit.secrets.OpenMedSecretFailure
+import com.openmed.openmedkit.secrets.OpenMedSecretPolicy
+import com.openmed.openmedkit.secrets.OpenMedSecretPurpose
+import com.openmed.openmedkit.secrets.OpenMedSecretReference
+import com.openmed.openmedkit.secrets.OpenMedUserAuthentication
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogRecord
 import java.util.logging.Logger
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33])
 class DeidentifyEngineTest {
-    private val engine = DeidentifyEngine("unit-test-salt".toByteArray())
+    private val keystore = FakeKeystore()
+    private val provider = AndroidKeystoreSecretProvider(keystore).also {
+        it.put(OpenMedSecretReference.DEIDENTIFY_HASH, SYNTHETIC_SALT).getOrThrow()
+    }
+    private val engine = DeidentifyEngine(provider)
+
+    @Test
+    fun providerHashesMatchTheSamePortableSaltHeldAsRawBytes() {
+        val text = "MRN 12345 matched."
+        val spans = listOf(spanOf(text, "12345", "medical_record_number"))
+
+        @Suppress("DEPRECATION")
+        val raw = DeidentifyEngine(SYNTHETIC_SALT).deidentify(text, spans, DeidentifyMethod.HASH)
+        val held = engine.deidentify(text, spans, DeidentifyMethod.HASH)
+
+        assertEquals(raw.redactedText, held.redactedText)
+        assertEquals(raw.actions[0].span.textHash, held.actions[0].span.textHash)
+        assertEquals(
+            expectedDigest(SYNTHETIC_SALT, "MEDICAL_RECORD_NUMBER", "12345"),
+            held.actions[0].replacement,
+        )
+        assertFalse(keystore.holdsMaterial("unrelated-material".toByteArray()))
+    }
+
+    @Test
+    fun keylessEngineMasksWithoutDigestsAndRefusesHashing() {
+        val text = "Call Jane Patient at 555-1212."
+        val spans = listOf(
+            spanOf(text, "Jane Patient", "name"),
+            spanOf(text, "555-1212", "phone"),
+        )
+        val keyless = DeidentifyEngine()
+
+        val masked = keyless.deidentify(text, spans, DeidentifyMethod.MASK)
+        val refused = runCatching { keyless.deidentify(text, spans, DeidentifyMethod.HASH) }
+            .exceptionOrNull()
+
+        assertEquals("Call [NAME] at [PHONE].", masked.redactedText)
+        assertTrue(masked.actions.all { it.span.textHash == null })
+        assertTrue(refused is OpenMedSecretException)
+        assertEquals(OpenMedSecretFailure.MISSING, (refused as OpenMedSecretException).failure)
+        assertEquals("secret_missing", refused.message)
+    }
+
+    @Test
+    fun strictPolicyRefusesThePublicDefaultSaltHoweverItIsSupplied() {
+        val text = "MRN 12345 matched."
+        val spans = listOf(spanOf(text, "12345", "medical_record_number"))
+        val publicSalt = DeidentifyEngine.LEGACY_PUBLIC_HASH_SALT.toByteArray()
+
+        @Suppress("DEPRECATION")
+        val raw = runCatching { DeidentifyEngine(publicSalt) }.exceptionOrNull()
+        assertEquals(OpenMedSecretFailure.PUBLIC_DEFAULT, (raw as OpenMedSecretException).failure)
+
+        val publicProvider = AndroidKeystoreSecretProvider(FakeKeystore()).also {
+            it.put(OpenMedSecretReference.DEIDENTIFY_HASH, publicSalt).getOrThrow()
+        }
+        val held = runCatching {
+            DeidentifyEngine(publicProvider).deidentify(text, spans, DeidentifyMethod.MASK)
+        }.exceptionOrNull()
+        assertEquals(OpenMedSecretFailure.PUBLIC_DEFAULT, (held as OpenMedSecretException).failure)
+    }
+
+    @Test
+    fun legacyPublicSaltReproducesPre40DigestsOnlyWhenExplicitlyAllowed() {
+        val text = "MRN 12345 matched."
+        val spans = listOf(spanOf(text, "12345", "medical_record_number"))
+        val publicSalt = DeidentifyEngine.LEGACY_PUBLIC_HASH_SALT.toByteArray()
+        val expected = expectedDigest(publicSalt, "MEDICAL_RECORD_NUMBER", "12345")
+
+        @Suppress("DEPRECATION")
+        val raw = DeidentifyEngine(publicSalt, HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT)
+        val publicProvider = AndroidKeystoreSecretProvider(FakeKeystore()).also {
+            it.put(OpenMedSecretReference.DEIDENTIFY_HASH, publicSalt).getOrThrow()
+        }
+        val held = DeidentifyEngine(
+            publicProvider,
+            hashKeyPolicy = HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT,
+        )
+
+        val rawResult = raw.deidentify(text, spans, DeidentifyMethod.HASH)
+        val heldResult = held.deidentify(text, spans, DeidentifyMethod.HASH)
+        assertEquals(expected, rawResult.actions[0].replacement)
+        assertEquals(expected, heldResult.actions[0].replacement)
+    }
+
+    @Test
+    fun providerFailuresFailClosedBeforeAnyOutput() {
+        val text = "Jane Patient called 555-1212."
+        val spans = listOf(spanOf(text, "Jane Patient", "name"))
+        val lockedStore = FakeKeystore()
+        val policy = OpenMedSecretPolicy(userAuthentication = OpenMedUserAuthentication(30))
+        val lockedProvider = AndroidKeystoreSecretProvider(lockedStore).also {
+            it.rotate(OpenMedSecretReference.DEIDENTIFY_HASH, policy).getOrThrow()
+        }
+        lockedStore.userAuthenticated = false
+
+        val locked = runCatching {
+            DeidentifyEngine(lockedProvider, secretPolicy = policy)
+                .deidentify(text, spans, DeidentifyMethod.MASK)
+        }.exceptionOrNull()
+        val missing = runCatching {
+            DeidentifyEngine(AndroidKeystoreSecretProvider(FakeKeystore()))
+                .deidentify(text, spans, DeidentifyMethod.HASH)
+        }.exceptionOrNull()
+
+        assertEquals(OpenMedSecretFailure.LOCKED, (locked as OpenMedSecretException).failure)
+        assertEquals("secret_locked", locked.message)
+        assertNull(locked.cause)
+        assertEquals(OpenMedSecretFailure.MISSING, (missing as OpenMedSecretException).failure)
+        assertFalse(locked.toString().contains("Jane Patient"))
+    }
+
+    @Test
+    fun rotationChangesDigestsOnTheNextCall() {
+        val text = "MRN 12345 matched."
+        val spans = listOf(spanOf(text, "12345", "medical_record_number"))
+
+        val before = engine.deidentify(text, spans, DeidentifyMethod.HASH).redactedText
+        provider.rotate(OpenMedSecretReference.DEIDENTIFY_HASH).getOrThrow()
+        val after = engine.deidentify(text, spans, DeidentifyMethod.HASH).redactedText
+
+        assertFalse(before == after)
+        assertFalse(after.contains("12345"))
+    }
+
+    @Test
+    fun hashKeyReferenceMustUseTheDeidentifyPurpose() {
+        val error = runCatching {
+            DeidentifyEngine(
+                provider,
+                OpenMedSecretReference(OpenMedSecretPurpose.POLICY_SECRET),
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is IllegalArgumentException)
+    }
 
     @Test
     fun maskUsesConsistentPlaceholdersForRepeatedIdentifiers() {
@@ -203,6 +355,18 @@ class DeidentifyEngineTest {
 
     private fun replacements(result: DeidentifyResult): List<String> {
         return result.actions.map { it.replacement }
+    }
+
+    private fun expectedDigest(salt: ByteArray, label: String, surface: String): String {
+        val digest = Mac.getInstance("HmacSHA256").run {
+            init(SecretKeySpec(salt, "HmacSHA256"))
+            doFinal("$label\u0000$surface".toByteArray())
+        }
+        return "hmac-sha256:" + digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private companion object {
+        val SYNTHETIC_SALT = "synthetic-unit-test-salt".toByteArray()
     }
 
     private class RecordingHandler : Handler() {

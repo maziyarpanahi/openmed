@@ -772,6 +772,7 @@ classification:
     - runtimes/android-accelerators.md
     - android-tokenization.md
     - android-parity.md
+    - android-keystore-secrets.md
     - on-device-segmenters.md
     - coreml-export.md
     - swift-openmedkit.md
