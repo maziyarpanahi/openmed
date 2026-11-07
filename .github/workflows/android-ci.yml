@@ -41,8 +41,41 @@ jobs:
           android/*.gradle*
           android/gradle.properties
           android/gradle/libs.versions.toml
+          android/gradle/verification-metadata.xml
           android/gradle/wrapper/gradle-wrapper.properties
           android/**/build.gradle*
+          android/**/gradle.lockfile
+
+    - name: Verify Gradle dependency locks
+      working-directory: android
+      run: ./gradlew verifyDependencyLocks --stacktrace
+
+    - name: Verify an unlocked dependency change fails the build
+      working-directory: android
+      run: |
+        # Negative control: add a dependency to the library's release classpath
+        # without updating its lockfile. org.json is already checksum-verified as
+        # a test dependency, so only the lock state can reject it.
+        init="$RUNNER_TEMP/unlocked-dependency.init.gradle"
+        log="$RUNNER_TEMP/unlocked-dependency.log"
+        cat > "$init" <<'GRADLE'
+        allprojects {
+            if (path == ':openmedkit') {
+                afterEvaluate {
+                    dependencies.add('implementation', 'org.json:json:20240303')
+                }
+            }
+        }
+        GRADLE
+        if ./gradlew :openmedkit:compileReleaseKotlin --init-script "$init" > "$log" 2>&1; then
+          echo "::error title=Unlocked dependency accepted::The Android build resolved a dependency missing from gradle.lockfile."
+          exit 1
+        fi
+        if ! grep -q "which is not part of the dependency lock state" "$log"; then
+          tail -n 40 "$log"
+          echo "::error title=Unexpected negative-control failure::The build failed for a reason other than the lock state."
+          exit 1
+        fi
 
     - name: Assemble OpenMedKit debug library
       working-directory: android

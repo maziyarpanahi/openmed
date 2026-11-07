@@ -159,12 +159,60 @@ does not inherit uv project overrides, so ordinary pip cannot resolve the
 `snowflake` extra until upstream lifts the cap. Use the frozen environment the
 [Snowflake guide](../snowflake-udf.md) shows.
 
+## Android dependency locking and verification
+
+Every Android Gradle module (the `:openmedkit` library and each demo app)
+locks its resolvable configurations in a committed `gradle.lockfile`.
+`android/gradle/dependency-locking.gradle.kts` applies this to every
+subproject in STRICT mode. A dependency added or upgraded without a lockfile
+update fails resolution, and so does a new module or configuration that has
+no lock state. Only configurations the build never resolves are left
+unlocked: Kotlin's IDE-only `*DependenciesMetadata` configurations and the
+legacy `default` and `archives` configurations.
+
+`android/gradle/verification-metadata.xml` records a SHA-256 checksum for every
+artifact and metadata file the build downloads, including the Android Gradle
+Plugin, Kotlin tooling and the `aapt2` binary for Linux, macOS and Windows
+hosts. Gradle fails the build when a downloaded file has no matching checksum.
+Only IDE-downloaded `-sources.jar` and `-javadoc.jar` files are trusted
+without one.
+
+Android CI runs `./gradlew verifyDependencyLocks`, which resolves every locked
+configuration in every module. It also runs a negative control: it adds one
+already-verified dependency to the library's release classpath through an init
+script and requires the build to fail on the lock state.
+
+After an intentional dependency change, regenerate both files on the same
+branch from `android/` with JDK 11 and the Android SDK:
+
+```bash
+./gradlew verifyDependencyLocks --write-locks
+./gradlew build :openmedkit:publishReleasePublicationToMavenLocal \
+  verifyDependencyLocks --continue --write-verification-metadata sha256
+```
+
+Review the lockfile and checksum diff like any other dependency change. Gradle
+records only the artifacts the build resolves on the current host. When the
+Android Gradle Plugin version changes, resolve the new `aapt2` version's
+`linux`, `osx` and `windows` classifiers in the same run so that every host
+keeps a checksum. `tests/unit/android/test_android_dependency_locking.py`
+checks that every locked module has a checksum entry and that the library lock
+matches the version catalog.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency
 updates are grouped into one pull request, and GitHub Actions updates are
 grouped into one pull request. Dependabot PRs are reviewed and tested manually;
 auto-merge is intentionally out of scope.
+
+Dependabot also checks the OpenMedKit platform kits weekly: npm (each package
+under `js/` and `clients/typescript`), Gradle (`android/`), Swift (the root and
+`swift/OpenMedKit` packages) and Cargo (the Tauri crate). For each of these
+ecosystems, minor and patch version updates are grouped into one pull request,
+while major updates and security updates open their own pull requests, as for
+GitHub Actions. A Gradle update must also refresh the lockfiles and
+verification metadata above before it can pass Android CI.
 
 ## GitHub Actions references and permissions
 
