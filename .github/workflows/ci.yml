@@ -79,6 +79,10 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+    - name: Enforce OpenMedKit dependency license inventory
+      run: |
+        python scripts/licenses/kit_inventory.py
+
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
         uv build --wheel --out-dir "$RUNNER_TEMP/openmed-wheel"
