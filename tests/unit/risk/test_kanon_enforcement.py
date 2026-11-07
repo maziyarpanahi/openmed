@@ -136,9 +136,10 @@ def _brute_force_best_loss(records: list[dict[str, object]]) -> float:
     return min(candidates)
 
 
-@pytest.mark.parametrize(
-    "records",
-    [
+def test_lattice_search_matches_exhaustive_optimum_on_synthetic_corpora(
+    subtests,
+) -> None:
+    for records in [
         _balanced_records(),
         [
             {"age": 31, "zip": "10001", "visit_date": "2024-01-01", "disease": "a"},
@@ -152,22 +153,19 @@ def _brute_force_best_loss(records: list[dict[str, object]]) -> float:
             {"age": 61, "zip": "60603", "visit_date": "2025-02-01", "disease": "x"},
             {"age": 62, "zip": "60604", "visit_date": "2025-02-11", "disease": "y"},
         ],
-    ],
-)
-def test_lattice_search_matches_exhaustive_optimum_on_synthetic_corpora(
-    records: list[dict[str, object]],
-) -> None:
-    enforced = enforce_kanon(
-        records,
-        quasi_identifiers=QIS,
-        sensitive_attributes=["disease"],
-        target_k=2,
-    )
+    ]:
+        with subtests.test(records=records):
+            enforced = enforce_kanon(
+                records,
+                quasi_identifiers=QIS,
+                sensitive_attributes=["disease"],
+                target_k=2,
+            )
 
-    assert enforced["generalization"]["optimality_tolerance"] == 0.0
-    assert enforced["generalization"]["information_loss"] == pytest.approx(
-        _brute_force_best_loss(records)
-    )
+            assert enforced["generalization"]["optimality_tolerance"] == 0.0
+            assert enforced["generalization"]["information_loss"] == pytest.approx(
+                _brute_force_best_loss(records)
+            )
 
 
 def test_k_anonymity_monotonicity_over_coarser_lattice_nodes() -> None:
@@ -282,27 +280,24 @@ def test_enforcement_rejects_unknown_l_diversity_variant() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_enforcement_rejects_ambiguous_or_nonfinite_policy_values(subtests) -> None:
+    for kwargs in [
         {"target_k": True},
         {"target_l": 1.5},
         {"target_t": float("nan")},
         {"suppression_rate": float("inf")},
-    ],
-)
-def test_enforcement_rejects_ambiguous_or_nonfinite_policy_values(kwargs) -> None:
-    with pytest.raises(ValueError):
-        enforce_kanon(
-            _balanced_records(),
-            quasi_identifiers=QIS,
-            **kwargs,
-        )
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError):
+                enforce_kanon(
+                    _balanced_records(),
+                    quasi_identifiers=QIS,
+                    **kwargs,
+                )
 
 
-@pytest.mark.parametrize(
-    "levels",
-    [
+def test_user_hierarchy_losses_must_be_finite_bounded_and_monotonic(subtests) -> None:
+    for levels in [
         [
             {"name": "exact", "loss": 0.0},
             {"name": "bad", "loss": float("nan")},
@@ -315,43 +310,37 @@ def test_enforcement_rejects_ambiguous_or_nonfinite_policy_values(kwargs) -> Non
             {"name": "exact", "loss": 0.0},
             {"name": "bad", "loss": 1.5},
         ],
-    ],
-)
-def test_user_hierarchy_losses_must_be_finite_bounded_and_monotonic(
-    levels,
+    ]:
+        with subtests.test(levels=levels):
+            with pytest.raises(ValueError, match="loss"):
+                enforce_kanon(
+                    _balanced_records(),
+                    quasi_identifiers=["age"],
+                    hierarchies={"age": levels},
+                )
+
+
+def test_user_hierarchy_requires_zero_loss_identity_then_positive_coarsening(
+    subtests,
 ) -> None:
-    with pytest.raises(ValueError, match="loss"):
-        enforce_kanon(
-            _balanced_records(),
-            quasi_identifiers=["age"],
-            hierarchies={"age": levels},
-        )
-
-
-@pytest.mark.parametrize(
-    "levels",
-    [
+    for levels in [
         [{"name": "collapsed", "loss": 0.0, "default": "*"}],
         [
             {"name": "exact", "loss": 0.0},
             {"name": "collapsed", "loss": 0.0, "default": "*"},
         ],
-    ],
-)
-def test_user_hierarchy_requires_zero_loss_identity_then_positive_coarsening(
-    levels,
-) -> None:
-    with pytest.raises(ValueError, match="identity|greater than 0"):
-        enforce_kanon(
-            _balanced_records(),
-            quasi_identifiers=["age"],
-            hierarchies={"age": levels},
-        )
+    ]:
+        with subtests.test(levels=levels):
+            with pytest.raises(ValueError, match="identity|greater than 0"):
+                enforce_kanon(
+                    _balanced_records(),
+                    quasi_identifiers=["age"],
+                    hierarchies={"age": levels},
+                )
 
 
-@pytest.mark.parametrize(
-    "coarsening",
-    [
+def test_user_hierarchy_cannot_emit_reserved_internal_values(subtests) -> None:
+    for coarsening in [
         {
             "name": "mapped",
             "loss": 0.5,
@@ -362,20 +351,19 @@ def test_user_hierarchy_requires_zero_loss_identity_then_positive_coarsening(
             "loss": 0.5,
             "default": "__OPENMED_INTERNAL_QI__:state:missing",
         },
-    ],
-)
-def test_user_hierarchy_cannot_emit_reserved_internal_values(coarsening) -> None:
-    with pytest.raises(ValueError, match="reserved internal namespace"):
-        enforce_kanon(
-            _balanced_records(),
-            quasi_identifiers=["age"],
-            hierarchies={
-                "age": [
-                    {"name": "exact", "loss": 0.0},
-                    coarsening,
-                ]
-            },
-        )
+    ]:
+        with subtests.test(coarsening=coarsening):
+            with pytest.raises(ValueError, match="reserved internal namespace"):
+                enforce_kanon(
+                    _balanced_records(),
+                    quasi_identifiers=["age"],
+                    hierarchies={
+                        "age": [
+                            {"name": "exact", "loss": 0.0},
+                            coarsening,
+                        ]
+                    },
+                )
 
 
 def test_user_hierarchy_rejects_keys_that_collide_after_string_coercion() -> None:

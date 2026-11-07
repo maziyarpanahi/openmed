@@ -99,6 +99,7 @@ def test_note_and_table_share_one_subject_surrogate_end_to_end(monkeypatch):
     assert SYNTHETIC_MRN not in deidentified_note.deidentified_text
 
 
+@pytest.mark.slow
 def test_large_synthetic_cohort_has_no_subject_surrogate_collisions():
     vault = SurrogateVault.in_memory(VAULT_SECRET)
 

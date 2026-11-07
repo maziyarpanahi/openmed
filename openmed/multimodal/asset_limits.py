@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 _MODALITIES: Final = frozenset(
-    {"image", "pdf", "dicom", "audio", "waveform", "dicom_non_pixel"}
+    {"image", "pdf", "dicom", "audio", "video", "waveform", "dicom_non_pixel"}
 )
 
 # The documented, deterministic order of findings.
@@ -79,6 +79,9 @@ _APPLICABLE_RULES: Final = {
     "image": frozenset({"byte_size", "pixels", "total_pixels"}),
     "pdf": frozenset({"byte_size", "pages", "pixels", "total_pixels"}),
     "dicom": frozenset({"byte_size", "pixels", "total_pixels", "frames"}),
+    "video": frozenset(
+        {"byte_size", "pixels", "total_pixels", "frames", "duration_seconds"}
+    ),
     "audio": frozenset({"byte_size", "duration_seconds"}),
     "waveform": frozenset(
         {
@@ -455,7 +458,7 @@ def _pixels(inputs: Mapping[str, Any], modality: str, *, total: bool) -> int | N
     width, height = inputs.get("width"), inputs.get("height")
     if width is None or height is None:
         return None
-    if modality == "dicom" and total:
+    if modality in {"dicom", "video"} and total:
         frames = inputs.get("frames")
         if frames is None:
             return None

@@ -75,20 +75,15 @@ def test_chinese_exam_alias_normalizes_to_lab_test() -> None:
     assert normalize_label("exam", lang="zh") == LAB_TEST
 
 
-@pytest.mark.parametrize(
-    ("source_label", "expected"),
-    [
+def test_cmeee_long_labels_normalize_for_chinese_locales(subtests) -> None:
+    for source_label, expected in [
         ("body_site", BODY_SITE),
         ("Body Site", BODY_SITE),
         ("lab_test", LAB_TEST),
         ("Lab-Test", LAB_TEST),
-    ],
-)
-def test_cmeee_long_labels_normalize_for_chinese_locales(
-    source_label: str,
-    expected: str,
-) -> None:
-    assert normalize_label(source_label, lang="zh_CN") == expected
+    ]:
+        with subtests.test(source_label=source_label, expected=expected):
+            assert normalize_label(source_label, lang="zh_CN") == expected
 
 
 def test_cmeee_real_loader_requires_an_explicit_external_path() -> None:
@@ -103,19 +98,23 @@ def _write_synthetic_cmeee_split(path: Path, record_id: str) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-@pytest.mark.parametrize("split", ["test", "dev", "validation", "holdout"])
-def test_cmeee_named_layout_rejects_missing_requested_split(
-    tmp_path: Path, split: str
-) -> None:
-    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
+def test_cmeee_named_layout_rejects_missing_requested_split(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for split in ["test", "dev", "validation", "holdout"]:
+        with subtests.test(split=split):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _write_synthetic_cmeee_split(
+                tmp_path / "CMeEE_train.json", "synthetic-train"
+            )
 
-    with pytest.raises(ValueError) as caught:
-        load_cmeee(tmp_path, split=split, allow_repo_path=True)
+            with pytest.raises(ValueError) as caught:
+                load_cmeee(tmp_path, split=split, allow_repo_path=True)
 
-    assert str(caught.value) == (
-        "CMeEE named split directory has no requested split source"
-    )
-    assert str(tmp_path) not in str(caught.value)
+            assert str(caught.value) == (
+                "CMeEE named split directory has no requested split source"
+            )
+            assert str(tmp_path) not in str(caught.value)
 
 
 def test_cmeee_missing_split_does_not_reach_generic_loader(
@@ -133,32 +132,42 @@ def test_cmeee_missing_split_does_not_reach_generic_loader(
         load_cmeee(tmp_path, split="test", allow_repo_path=True)
 
 
-@pytest.mark.parametrize("suffix", [".json", ".JSONL", ".ndjson"])
 def test_cmeee_selects_only_requested_nested_case_insensitive_split(
-    tmp_path: Path, suffix: str
+    subtests, tmp_path
 ) -> None:
-    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
-    _write_synthetic_cmeee_split(
-        tmp_path / f"nested/CMEEE-TEST{suffix}", "synthetic-test"
-    )
+    case_root = tmp_path
+    for suffix in [".json", ".JSONL", ".ndjson"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _write_synthetic_cmeee_split(
+                tmp_path / "CMeEE_train.json", "synthetic-train"
+            )
+            _write_synthetic_cmeee_split(
+                tmp_path / f"nested/CMEEE-TEST{suffix}", "synthetic-test"
+            )
 
-    result = load_cmeee(tmp_path, split="TEST", allow_repo_path=True)
+            result = load_cmeee(tmp_path, split="TEST", allow_repo_path=True)
 
-    assert [record.record_id for record in result.records] == ["synthetic-test"]
-    assert result.records[0].split == "TEST"
+            assert [record.record_id for record in result.records] == ["synthetic-test"]
+            assert result.records[0].split == "TEST"
 
 
-@pytest.mark.parametrize("requested", ["dev", "val", "validation"])
-@pytest.mark.parametrize("available", ["dev", "val", "validation"])
-def test_cmeee_validation_aliases_remain_interchangeable(
-    tmp_path: Path, requested: str, available: str
-) -> None:
-    _write_synthetic_cmeee_split(
-        tmp_path / f"CMeEE_{available}.json", "synthetic-validation"
-    )
-    result = load_cmeee(tmp_path, split=requested, allow_repo_path=True)
-    assert [record.record_id for record in result.records] == ["synthetic-validation"]
-    assert result.records[0].split == requested
+def test_cmeee_validation_aliases_remain_interchangeable(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for requested in ["dev", "val", "validation"]:
+        for available in ["dev", "val", "validation"]:
+            with subtests.test(requested=requested, available=available):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                _write_synthetic_cmeee_split(
+                    tmp_path / f"CMeEE_{available}.json", "synthetic-validation"
+                )
+                result = load_cmeee(tmp_path, split=requested, allow_repo_path=True)
+                assert [record.record_id for record in result.records] == [
+                    "synthetic-validation"
+                ]
+                assert result.records[0].split == requested
 
 
 def test_cmeee_duplicate_requested_splits_still_raise(tmp_path: Path) -> None:
@@ -244,16 +253,17 @@ def test_model_evidence_tracks_the_routed_chinese_default() -> None:
     )
 
 
-@pytest.mark.parametrize("threshold", [-0.01, 1.01, float("nan")])
-def test_suite_rejects_invalid_per_label_recall_threshold(threshold: float) -> None:
-    with pytest.raises(ValueError, match="min_per_label_recall"):
-        run_chinese_clinical_ner_suite(
-            load_chinese_clinical_ner_fixtures(),
-            model_name="synthetic-oracle",
-            runner=_identity_runner,
-            redactor=lambda fixture, predicted: "",
-            min_per_label_recall=threshold,
-        )
+def test_suite_rejects_invalid_per_label_recall_threshold(subtests) -> None:
+    for threshold in [-0.01, 1.01, float("nan")]:
+        with subtests.test(threshold=threshold):
+            with pytest.raises(ValueError, match="min_per_label_recall"):
+                run_chinese_clinical_ner_suite(
+                    load_chinese_clinical_ner_fixtures(),
+                    model_name="synthetic-oracle",
+                    runner=_identity_runner,
+                    redactor=lambda fixture, predicted: "",
+                    min_per_label_recall=threshold,
+                )
 
 
 def test_suite_raises_without_exposing_surviving_identifier_text() -> None:
@@ -345,38 +355,33 @@ def test_conformance_report_carries_per_label_latency_and_hashed_leakage() -> No
     assert "alice" not in serialized
 
 
-@pytest.mark.parametrize(
-    ("mutation", "expected_problem"),
-    [
+def test_conformance_enforces_the_span_and_label_contract(subtests) -> None:
+    for mutation, expected_problem in [
         ("out_of_bounds", "span_out_of_bounds"),
         ("inverted", "span_not_positive_length"),
         ("non_canonical_label", "label_not_canonical"),
         ("stale_text", "span_text_offset_mismatch"),
-    ],
-)
-def test_conformance_enforces_the_span_and_label_contract(
-    mutation: str,
-    expected_problem: str,
-) -> None:
-    fixtures = load_chinese_clinical_ner_fixtures()
+    ]:
+        with subtests.test(mutation=mutation, expected_problem=expected_problem):
+            fixtures = load_chinese_clinical_ner_fixtures()
 
-    with pytest.raises(ChineseClinicalNerContractError) as caught:
-        run_chinese_clinical_ner_conformance(
-            _ContractBreakingAdapter(fixtures, mutation),
-            fixtures=fixtures,
-            fail_on_leakage=False,
-            clock=_StepClock(),
-        )
+            with pytest.raises(ChineseClinicalNerContractError) as caught:
+                run_chinese_clinical_ner_conformance(
+                    _ContractBreakingAdapter(fixtures, mutation),
+                    fixtures=fixtures,
+                    fail_on_leakage=False,
+                    clock=_StepClock(),
+                )
 
-    findings = caught.value.findings
-    assert findings
-    assert any(expected_problem in finding["problems"] for finding in findings)
-    # Contract evidence is surface-free.
-    assert all(
-        set(finding) == {"fixture_id", "start", "end", "label", "problems"}
-        for finding in findings
-    )
-    assert "王芳" not in json.dumps(findings, ensure_ascii=False)
+            findings = caught.value.findings
+            assert findings
+            assert any(expected_problem in finding["problems"] for finding in findings)
+            # Contract evidence is surface-free.
+            assert all(
+                set(finding) == {"fixture_id", "start", "end", "label", "problems"}
+                for finding in findings
+            )
+            assert "王芳" not in json.dumps(findings, ensure_ascii=False)
 
 
 def test_conformance_allows_nested_and_overlapping_spans() -> None:
@@ -488,49 +493,52 @@ def test_unreadable_local_asset_skips_instead_of_raising_oserror(
     assert "permissions" in reason
 
 
-@pytest.mark.parametrize(
-    "weight_name",
-    ["tf_model.h5", "flax_model.msgpack", "model.pt", "weights.pth", "model.ckpt"],
-)
-def test_non_pytorch_checkpoint_formats_are_accepted(
-    tmp_path: Path,
-    weight_name: str,
+def test_non_pytorch_checkpoint_formats_are_accepted(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for weight_name in [
+        "tf_model.h5",
+        "flax_model.msgpack",
+        "model.pt",
+        "weights.pth",
+        "model.ckpt",
+    ]:
+        with subtests.test(weight_name=weight_name):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            checkpoint = tmp_path / weight_name.replace(".", "-")
+            checkpoint.mkdir()
+            (checkpoint / "config.json").write_text("{}", encoding="utf-8")
+            (checkpoint / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (checkpoint / weight_name).write_bytes(b"")
+
+            asset = resolve_chinese_local_model_asset(checkpoint)
+
+            assert asset.weight_file_suffixes == (Path(weight_name).suffix,)
+
+
+def test_incomplete_local_asset_names_the_env_var_and_the_gap(
+    subtests, tmp_path
 ) -> None:
-    checkpoint = tmp_path / weight_name.replace(".", "-")
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}", encoding="utf-8")
-    (checkpoint / "tokenizer.json").write_text("{}", encoding="utf-8")
-    (checkpoint / weight_name).write_bytes(b"")
-
-    asset = resolve_chinese_local_model_asset(checkpoint)
-
-    assert asset.weight_file_suffixes == (Path(weight_name).suffix,)
-
-
-@pytest.mark.parametrize(
-    ("present", "expected"),
-    [
+    case_root = tmp_path
+    for present, expected in [
         ((), "config.json"),
         (("config.json",), "tokenizer artifact"),
         (("config.json", "tokenizer.json"), "model weights"),
-    ],
-)
-def test_incomplete_local_asset_names_the_env_var_and_the_gap(
-    tmp_path: Path,
-    present: tuple[str, ...],
-    expected: str,
-) -> None:
-    checkpoint = tmp_path / "partial"
-    checkpoint.mkdir()
-    for name in present:
-        (checkpoint / name).write_text("{}", encoding="utf-8")
+    ]:
+        with subtests.test(present=present, expected=expected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            checkpoint = tmp_path / "partial"
+            checkpoint.mkdir()
+            for name in present:
+                (checkpoint / name).write_text("{}", encoding="utf-8")
 
-    with pytest.raises(ChineseClinicalNerAssetUnavailable) as caught:
-        resolve_chinese_local_model_asset(checkpoint)
+            with pytest.raises(ChineseClinicalNerAssetUnavailable) as caught:
+                resolve_chinese_local_model_asset(checkpoint)
 
-    message = str(caught.value)
-    assert CHINESE_CLINICAL_NER_MODEL_DIR_ENV in message
-    assert expected in message
+            message = str(caught.value)
+            assert CHINESE_CLINICAL_NER_MODEL_DIR_ENV in message
+            assert expected in message
 
 
 def test_absent_local_asset_directory_names_the_env_var(tmp_path: Path) -> None:

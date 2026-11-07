@@ -250,21 +250,20 @@ def test_explicit_offsets_must_belong_to_declared_item():
         )
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
+def test_conflicting_finding_declarations_are_rejected(subtests):
+    for extra in [
         {"id": "other"},
         {"source_start": 80, "start": 81, "source_end": 90},
         {"source_offsets": (80, 90), "provenance": {"start": 81, "end": 90}},
         {"template_id": "1502", "template_identifier": "1503"},
         {"template_id": "9999"},
-    ],
-)
-def test_conflicting_finding_declarations_are_rejected(extra):
-    with pytest.raises(DicomSrProvenanceError):
-        build_dicom_sr_provenance(
-            [{"finding_id": "f", "item_path": "1.3.1.3", **extra}], document=_document()
-        )
+    ]:
+        with subtests.test(extra=extra):
+            with pytest.raises(DicomSrProvenanceError):
+                build_dicom_sr_provenance(
+                    [{"finding_id": "f", "item_path": "1.3.1.3", **extra}],
+                    document=_document(),
+                )
 
 
 def test_document_and_explicit_spans_cannot_be_mixed():

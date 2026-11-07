@@ -334,12 +334,12 @@ def test_a_surrogate_that_is_only_a_fold_of_the_alias_is_a_leak(
     assert module._leaks_alias(UNRELATED_SYNTHETIC_PERSONA, "Aarav Sharma") is False
 
 
-@pytest.mark.parametrize("mode", ["transliteration-aware", "totally-bogus", ""])
-def test_unknown_matching_modes_are_rejected(mode: str) -> None:
+def test_unknown_matching_modes_are_rejected(subtests) -> None:
     """An unvalidated mode would stamp a green verdict with a bad label."""
-
-    with pytest.raises(ValueError, match="unknown_matching_mode"):
-        run_india_surrogate_consistency_gate(mode=mode)
+    for mode in ["transliteration-aware", "totally-bogus", ""]:
+        with subtests.test(mode=mode):
+            with pytest.raises(ValueError, match="unknown_matching_mode"):
+                run_india_surrogate_consistency_gate(mode=mode)
 
 
 def test_negative_identifier_validator_regression_fails_rather_than_crashes(

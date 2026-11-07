@@ -62,22 +62,17 @@ def test_low_confidence_and_conflicting_evidence_routes_with_sources() -> None:
     assert item.to_dict()["automated_decision_allowed"] is False
 
 
-@pytest.mark.parametrize(
-    ("outcome", "state"),
-    (
+def test_non_answer_outcomes_are_preserved_and_routed(subtests) -> None:
+    for outcome, state in (
         (SDOHOutcome.UNKNOWN, SDOHReviewState.UNKNOWN),
         (SDOHOutcome.DECLINED, SDOHReviewState.DECLINED),
         (SDOHOutcome.REFUSED, SDOHReviewState.REFUSED),
-    ),
-)
-def test_non_answer_outcomes_are_preserved_and_routed(
-    outcome: SDOHOutcome,
-    state: SDOHReviewState,
-) -> None:
-    item = route_sdoh_review((_evidence("evidence-1", outcome),)).items[0]
+    ):
+        with subtests.test(outcome=outcome, state=state):
+            item = route_sdoh_review((_evidence("evidence-1", outcome),)).items[0]
 
-    assert item.outcome is outcome
-    assert state in item.states
+            assert item.outcome is outcome
+            assert state in item.states
 
 
 def test_high_confidence_uncontested_evidence_is_not_queued() -> None:

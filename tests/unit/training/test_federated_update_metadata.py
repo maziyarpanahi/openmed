@@ -386,9 +386,8 @@ def test_parameter_collection_must_contain_metadata_records(
         FederatedUpdateMetadata.from_dict(payload, policy=policy)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
+def test_parameter_names_cannot_contain_paths_or_free_text(subtests):
+    for name in [
         "/tmp/private",
         "C:\\private",
         "https://example.invalid",
@@ -398,11 +397,10 @@ def test_parameter_collection_must_contain_metadata_records(
         "",
         "a" * 257,
         None,
-    ],
-)
-def test_parameter_names_cannot_contain_paths_or_free_text(name):
-    with pytest.raises(FederatedUpdateMetadataError, match="parameter name"):
-        FederatedParameterMetadata(name, (1,), "float32")
+    ]:
+        with subtests.test(name=name):
+            with pytest.raises(FederatedUpdateMetadataError, match="parameter name"):
+                FederatedParameterMetadata(name, (1,), "float32")
 
 
 def test_parameter_count_limit_is_enforced(payload, policy):

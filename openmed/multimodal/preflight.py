@@ -45,6 +45,7 @@ from .manifest_profiles import (
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    VIDEO_V1,
     WAVEFORM_V1,
     ManifestProfile,
     ManifestProfileError,
@@ -83,7 +84,7 @@ _FIXED_FINDINGS: Final = {
 }
 
 _MODALITIES: Final = frozenset(
-    {"image", "pdf", "dicom", "audio", "waveform", "dicom_non_pixel"}
+    {"image", "pdf", "dicom", "audio", "video", "waveform", "dicom_non_pixel"}
 )
 _DETECTED_MEDIA_TYPES: Final = frozenset(
     {
@@ -91,8 +92,12 @@ _DETECTED_MEDIA_TYPES: Final = frozenset(
         "image/png",
         "image/jpeg",
         "image/tiff",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
         "application/dicom",
         "audio/wav",
+        "video/mp4",
         "application/edf",
     }
 )
@@ -101,6 +106,7 @@ _METADATA_PROFILES: Final = {
     "pdf": PDF_V1,
     "dicom": DICOM_V1,
     "audio": AUDIO_V1,
+    "video": VIDEO_V1,
     "waveform": WAVEFORM_V1,
     "dicom_non_pixel": DICOM_NON_PIXEL_V1,
 }
@@ -506,6 +512,8 @@ def _modality_for(manifest: AssetManifest) -> str | None:
         return "dicom"
     if media_type.startswith("image/"):
         return "image"
+    if media_type == "video/mp4":
+        return "video"
     if media_type.startswith("audio/"):
         return "audio"
     # application/dicom+json is a valid manifest media type with no metadata

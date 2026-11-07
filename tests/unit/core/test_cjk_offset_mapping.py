@@ -154,6 +154,7 @@ _TOKEN_PARTS = st.sampled_from(
 _SPACE_PARTS = st.sampled_from([" ", "\u3000"])
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @settings(max_examples=2000, deadline=None)
 @given(

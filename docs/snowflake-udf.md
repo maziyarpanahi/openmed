@@ -5,11 +5,15 @@ Snowflake warehouse. The handler is a plain Python callable, while Snowpark is
 an optional dependency: importing `openmed` or `openmed.interop` does not
 import Snowpark.
 
-Install the optional extra in the environment that creates the registration:
+From the current OpenMed checkout, install the frozen registration environment:
 
 ```bash
-pip install "openmed[snowflake]"
+uv sync --frozen --extra snowflake --python 3.11
 ```
+
+Snowflake's filelock cap needs the repository's tested security override.
+Ordinary pip cannot resolve this extra on Python 3.11+; see the
+[dependency policy](security/dependency-policy.md#optional-storage-and-locking-dependencies).
 
 ## Register with Snowpark
 

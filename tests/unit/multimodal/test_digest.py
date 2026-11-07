@@ -27,12 +27,13 @@ class NonSeekableStream:
         return self._stream.read(size)
 
 
-@pytest.mark.parametrize("payload", [b"", b"openmed"])
-def test_digest_bytes_matches_hashlib(payload: bytes) -> None:
-    result = digest_asset(payload)
+def test_digest_bytes_matches_hashlib(subtests) -> None:
+    for payload in [b"", b"openmed"]:
+        with subtests.test(payload=payload):
+            result = digest_asset(payload)
 
-    assert result.sha256 == hashlib.sha256(payload).hexdigest()
-    assert result.byte_count == len(payload)
+            assert result.sha256 == hashlib.sha256(payload).hexdigest()
+            assert result.byte_count == len(payload)
 
 
 def test_digest_seekable_stream_restores_position_without_closing() -> None:
@@ -113,24 +114,20 @@ def test_seekable_stream_position_failure_is_categorical_and_prevents_read() -> 
     assert raised.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    ("sha256", "byte_count"),
-    [
+def test_asset_digest_rejects_inconsistent_public_values(subtests) -> None:
+    for sha256, byte_count in [
         ("A" * 64, 0),
         ("a" * 63, 0),
         ("a" * 64, -1),
         ("a" * 64, True),
-    ],
-)
-def test_asset_digest_rejects_inconsistent_public_values(
-    sha256: str,
-    byte_count: object,
-) -> None:
-    with pytest.raises(ValueError):
-        AssetDigest(sha256=sha256, byte_count=byte_count)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(sha256=sha256, byte_count=byte_count):
+            with pytest.raises(ValueError):
+                AssetDigest(sha256=sha256, byte_count=byte_count)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("max_bytes", [-1, True, 1.5])
-def test_digest_rejects_invalid_limits(max_bytes: object) -> None:
-    with pytest.raises(ValueError, match="max_bytes"):
-        digest_asset(b"", max_bytes=max_bytes)  # type: ignore[arg-type]
+def test_digest_rejects_invalid_limits(subtests) -> None:
+    for max_bytes in [-1, True, 1.5]:
+        with subtests.test(max_bytes=max_bytes):
+            with pytest.raises(ValueError, match="max_bytes"):
+                digest_asset(b"", max_bytes=max_bytes)  # type: ignore[arg-type]

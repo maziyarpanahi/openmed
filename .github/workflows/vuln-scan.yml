@@ -2,7 +2,7 @@ name: Vulnerability Scan
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -11,9 +11,11 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -22,6 +24,8 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   workflow_dispatch:
     inputs:
@@ -36,6 +40,10 @@ permissions:
 env:
   IMAGE_NAME: openmed:ci
   VULN_SCAN_SEVERITY_THRESHOLD: ${{ github.event.inputs.severity-threshold || 'HIGH' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   vulnerability-scan:
@@ -63,7 +71,23 @@ jobs:
           uv sync --frozen --python 3.11
 
       - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        env:
+          TRIVY_VERSION: "0.76.1"
+          TRIVY_SHA256: "c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0"
+        run: |
+          # Pin the scanner binary; vulnerability databases still refresh normally.
+          # Download from the release directly, without an extra redirect service.
+          trivy_dir="$(mktemp -d "$RUNNER_TEMP/openmed-trivy.XXXXXX")"
+          archive="$trivy_dir/trivy.tar.gz"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            --output "$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "$TRIVY_SHA256  $archive" | sha256sum --check --status
+          tar --extract --gzip --file "$archive" --directory "$trivy_dir" trivy
+          chmod 755 "$trivy_dir/trivy"
+          "$trivy_dir/trivy" --version
+          echo "$trivy_dir" >> "$GITHUB_PATH"
 
       - name: Build service image
         run: |
@@ -73,7 +97,7 @@ jobs:
         run: |
           mkdir -p vulnerability-reports
           set +e
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report tests/fixtures/security/trivy-high-vulnerability.json \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/seeded-high-summary.json
@@ -99,7 +123,7 @@ jobs:
               expires: 2099-12-31
               reason: Synthetic waiver used only to prove active waivers suppress matching seeded findings.
           YAML
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report "$RUNNER_TEMP/trivy-high-without-fix.json" \
             --allowlist "$RUNNER_TEMP/cve-allowlist-seeded.yaml" \
             --output vulnerability-reports/seeded-allowlisted-summary.json
@@ -124,9 +148,12 @@ jobs:
 
       - name: Enforce vulnerability gate
         run: |
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report vulnerability-reports/trivy-image.json \
             --report vulnerability-reports/trivy-lockfile.json \
+            --lock-report vulnerability-reports/trivy-lockfile.json \
+            --lockfile uv.lock \
+            --review-extra-only nltk=nltk \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/vulnerability-scan-summary.json
 
