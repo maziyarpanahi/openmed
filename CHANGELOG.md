@@ -275,6 +275,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixtures and public result registry checks. Structured vision results carry
   the fixed catalog notice (#3828).
 
+- Add deterministic Draft 2020-12 JSON Schema exports for the multimodal
+  preflight artifacts (asset manifests, asset batches, abstention records,
+  processing summaries and provider result envelopes) with offline resolution,
+  pinned rendering digests and drift tests binding each document to its Python
+  loader (#3051).
+
 ### Security
 
 - Enforce conservative, policy-selectable asset limits before Python image,

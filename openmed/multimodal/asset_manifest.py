@@ -19,6 +19,7 @@ MAX_MANIFEST_BYTE_SIZE = (1 << 63) - 1
 MAX_MANIFEST_COUNT = (1 << 31) - 1
 MAX_MANIFEST_DURATION_SECONDS = float(MAX_MANIFEST_COUNT)
 WAVEFORM_MEDIA_TYPES = frozenset({"application/edf", "application/wfdb"})
+_DICOM_SUBPROFILES = frozenset({"waveform", "non_pixel"})
 
 _ASSET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -125,7 +126,7 @@ class AssetManifest:
         if self.dicom_subprofile is not None:
             if (
                 type(self.dicom_subprofile) is not str
-                or self.dicom_subprofile not in {"waveform", "non_pixel"}
+                or self.dicom_subprofile not in _DICOM_SUBPROFILES
                 or self.media_type != "application/dicom"
             ):
                 raise AssetManifestError("dicom_subprofile is unsupported")

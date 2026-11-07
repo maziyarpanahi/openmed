@@ -472,6 +472,7 @@ classification:
     - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
+    - multimodal/json-schemas.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md

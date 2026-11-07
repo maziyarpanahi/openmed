@@ -55,4 +55,4 @@ Waveform declarations add `application/edf` and `application/wfdb`; DICOM can
 opt into a waveform or non-pixel sub-profile. See [manifest profiles](manifest-profiles.md)
 for required metadata, consistency checks, bounds and byte-preflight limitations.
 All new fields are omitted when unset, preserving existing manifest v1 JSON.
-This additive manifest contract does not update the pending JSON Schema catalog.
+See [JSON Schemas](json-schemas.md) for offline validation of these records.
