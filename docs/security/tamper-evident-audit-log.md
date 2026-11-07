@@ -83,6 +83,16 @@ detector evidence, mappings, free-form metadata, or residual-risk notes.
 Unknown fields are rejected when a chain is loaded so uncommitted data cannot
 be hidden alongside the verified payload.
 
+## Pruned chains
+
+`AuditChain.prune_through(sequence)` removes the oldest entries once a
+retention policy allows it. The pruned document uses chain version 2 and keeps
+`base_sequence` and `base_hash`, the hash of the last removed entry, so the
+remaining entries still link and verify. Unpruned chains keep the version 1
+layout. Use [audit continuity](audit-continuity.md) to record a signed,
+value-free tombstone for each pruned segment, so verification can prove that
+the missing prefix was removed by policy and not deleted silently.
+
 ## Security boundary
 
 A valid chain proves that its contents still match its retained count, head,

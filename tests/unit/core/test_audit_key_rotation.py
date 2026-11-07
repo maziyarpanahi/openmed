@@ -13,6 +13,7 @@ from openmed.core.audit_key_rotation import (
     AuditKeyRotationError,
     AuditKeyRotationSigner,
     AuditKeyRotationVerifier,
+    AuditKeyUnavailableError,
     sign_audit_report,
     verify_audit_report,
 )
@@ -182,3 +183,85 @@ def test_verifier_returns_false_for_invalid_runtime_input():
 
     assert not verifier.verify(None)  # type: ignore[arg-type]
     assert not verifier.verify([])  # type: ignore[arg-type]
+
+
+_DIGEST = "sha256:" + "ab" * 32
+
+
+def test_digest_signatures_bind_key_id_purpose_and_role():
+    signer = AuditKeyRotationSigner(key_id="audit-2026", key_provider=_KEYS)
+    verifier = AuditKeyRotationVerifier(key_provider=_KEYS)
+    value = signer.sign_digest(_DIGEST, purpose="audit-continuity")
+
+    assert len(value) == 64
+    assert signer.sign_digest(_DIGEST, purpose="audit-continuity") == value
+    assert verifier.verify_digest(
+        _DIGEST, value, key_id="audit-2026", purpose="audit-continuity"
+    )
+    assert not verifier.verify_digest(
+        _DIGEST, value, key_id="audit-2025", purpose="audit-continuity"
+    )
+    assert not verifier.verify_digest(
+        _DIGEST,
+        value,
+        key_id="audit-2026",
+        purpose="audit-continuity",
+        role="incoming",
+    )
+    assert not verifier.verify_digest(
+        "sha256:" + "cd" * 32, value, key_id="audit-2026", purpose="audit-continuity"
+    )
+    rotated = signer.sign_digest(
+        _DIGEST, purpose="audit-continuity", role="outgoing", key_id="audit-2025"
+    )
+    assert verifier.verify_digest(
+        _DIGEST,
+        rotated,
+        key_id="audit-2025",
+        purpose="audit-continuity",
+        role="outgoing",
+    )
+
+
+def test_digest_signatures_are_domain_separated_from_report_signatures():
+    signer = AuditKeyRotationSigner(key_id="audit-2026", key_provider=_KEYS)
+    report = signer.sign(_report())
+    assert report.signature is not None
+
+    digest_value = signer.sign_digest(report.repro_hash, purpose="audit-continuity")
+
+    assert digest_value != report.signature.value
+    assert not AuditKeyRotationVerifier(key_provider=_KEYS).verify_digest(
+        report.repro_hash,
+        report.signature.value,
+        key_id="audit-2026",
+        purpose="audit-continuity",
+    )
+
+
+def test_digest_signing_rejects_unknown_purposes_roles_and_digests(subtests):
+    signer = AuditKeyRotationSigner(key_id="audit-2026", key_provider=_KEYS)
+    cases = {
+        "purpose": (_DIGEST, {"purpose": "release"}),
+        "role": (_DIGEST, {"purpose": "audit-continuity", "role": "admin"}),
+        "digest": ("not-a-digest", {"purpose": "audit-continuity"}),
+    }
+    for name, (digest, kwargs) in cases.items():
+        with subtests.test(case=name):
+            with pytest.raises(AuditKeyRotationError):
+                signer.sign_digest(digest, **kwargs)
+
+
+def test_unavailable_digest_keys_fail_closed_without_echoing_material():
+    def provider(key_id: str) -> bytes:
+        raise RuntimeError("vault refused " + _KEYS["audit-2026"].decode("ascii"))
+
+    signer = AuditKeyRotationSigner(key_id="audit-2026", key_provider=provider)
+    with pytest.raises(AuditKeyUnavailableError) as error:
+        signer.sign_digest(_DIGEST, purpose="audit-continuity")
+
+    assert "synthetic-new-signing-key" not in str(error.value)
+    assert isinstance(error.value, AuditKeyRotationError)
+    assert not AuditKeyRotationVerifier(key_provider=provider).verify_digest(
+        _DIGEST, "0" * 64, key_id="audit-2026", purpose="audit-continuity"
+    )

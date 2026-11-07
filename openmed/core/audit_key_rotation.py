@@ -8,6 +8,11 @@ reports signed by either a current or retained former key.
 Key providers are deliberately callbacks or mappings supplied by the caller.
 The provider and the resolved key material are never copied into an audit
 report or included in an exception raised by this module.
+
+The same caller-owned keys can also sign value-free ``sha256:`` digests for a
+named purpose, such as the audit continuity manifest. Digest signatures use a
+separate per-purpose key derivation, so a report signature can never be
+replayed as a digest signature or the other way round.
 """
 
 from __future__ import annotations
@@ -15,18 +20,26 @@ from __future__ import annotations
 import hashlib
 import hmac
 import itertools
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final, Protocol, TypeAlias
+from typing import Any, Final, Literal, Protocol, TypeAlias
 
 from .audit import AuditReport
 
 AUDIT_SIGNATURE_ALGORITHM: Final = "HMAC-SHA256"
 MIN_AUDIT_HMAC_KEY_BYTES: Final = 32
 MAX_AUDIT_HMAC_KEY_BYTES: Final = 4_096
+AUDIT_DIGEST_PURPOSES: Final = frozenset({"audit-continuity"})
+AUDIT_DIGEST_ROLES: Final = frozenset({"signer", "outgoing", "incoming"})
 _KEY_ID_RE: Final = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+_DIGEST_RE: Final = re.compile(r"^sha256:[0-9a-f]{64}$")
+_SIGNATURE_VALUE_RE: Final = re.compile(r"^[0-9a-f]{64}$")
 _KEY_DERIVATION_CONTEXT: Final = b"openmed.audit-key-rotation.v1\x00"
+_DIGEST_DERIVATION_CONTEXT: Final = b"openmed.audit-digest-signature.v1\x00"
+
+DigestSignatureStatus: TypeAlias = Literal["valid", "invalid", "unavailable"]
 _AUDIT_REPORT_FIELDS: Final = frozenset(
     {
         "policy",
@@ -64,11 +77,33 @@ class AuditKeyRotationError(ValueError):
     """Raised when a rotation provider or report cannot satisfy the contract."""
 
 
+class AuditKeyUnavailableError(AuditKeyRotationError):
+    """Raised when a provider cannot resolve key material for a key ID."""
+
+
 def _require_key_id(value: Any) -> str:
     if type(value) is not str or not _KEY_ID_RE.fullmatch(value):
         raise AuditKeyRotationError(
             "key_id must be a safe, non-secret metadata identifier"
         )
+    return value
+
+
+def _require_signed_digest(value: Any) -> str:
+    if type(value) is not str or not _DIGEST_RE.fullmatch(value):
+        raise AuditKeyRotationError("signed digest must be a sha256:<hex> digest")
+    return value
+
+
+def _require_purpose(value: Any) -> str:
+    if type(value) is not str or value not in AUDIT_DIGEST_PURPOSES:
+        raise AuditKeyRotationError("digest signature purpose is not supported")
+    return value
+
+
+def _require_role(value: Any) -> str:
+    if type(value) is not str or value not in AUDIT_DIGEST_ROLES:
+        raise AuditKeyRotationError("digest signature role is not supported")
     return value
 
 
@@ -81,13 +116,13 @@ def _resolve_key(provider: KeyProvider, key_id: str) -> bytes:
     try:
         value = provider[key_id] if isinstance(provider, Mapping) else provider(key_id)
     except KeyError:
-        raise AuditKeyRotationError(
+        raise AuditKeyUnavailableError(
             "key provider has no key for the requested key_id"
         ) from None
     except Exception:
         # Provider exceptions are caller-owned and may contain sensitive
         # details.  Do not preserve or interpolate those messages.
-        raise AuditKeyRotationError(
+        raise AuditKeyUnavailableError(
             "key provider failed to resolve the requested key_id"
         ) from None
 
@@ -117,6 +152,86 @@ def _report_key(key: bytes, key_id: str) -> bytes:
         _KEY_DERIVATION_CONTEXT + key_id.encode("ascii"),
         hashlib.sha256,
     ).digest()
+
+
+def _digest_signature_value(
+    key: bytes,
+    *,
+    digest: str,
+    key_id: str,
+    purpose: str,
+    role: str,
+) -> str:
+    """Return the hex HMAC binding a digest to its key ID, purpose, and role."""
+
+    derived = hmac.new(
+        key,
+        _DIGEST_DERIVATION_CONTEXT
+        + purpose.encode("ascii")
+        + b"\x00"
+        + key_id.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    message = json.dumps(
+        {"digest": digest, "key_id": key_id, "purpose": purpose, "role": role},
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    return hmac.new(derived, message, hashlib.sha256).hexdigest()
+
+
+def _sign_digest(
+    provider: KeyProvider,
+    digest: str,
+    *,
+    key_id: str,
+    purpose: str,
+    role: str,
+) -> str:
+    _require_signed_digest(digest)
+    _require_key_id(key_id)
+    _require_purpose(purpose)
+    _require_role(role)
+    key = _resolve_key(provider, key_id)
+    return _digest_signature_value(
+        key, digest=digest, key_id=key_id, purpose=purpose, role=role
+    )
+
+
+def _digest_signature_status(
+    provider: KeyProvider,
+    digest: Any,
+    value: Any,
+    *,
+    key_id: Any,
+    purpose: str,
+    role: Any,
+) -> DigestSignatureStatus:
+    """Classify a digest signature without exposing provider or key details.
+
+    Returns ``"unavailable"`` when the provider cannot resolve usable key
+    material for ``key_id``, ``"invalid"`` for malformed input or a
+    signature mismatch, and ``"valid"`` only for an exact match.
+    """
+
+    try:
+        _require_signed_digest(digest)
+        _require_key_id(key_id)
+        _require_purpose(purpose)
+        _require_role(role)
+    except AuditKeyRotationError:
+        return "invalid"
+    if type(value) is not str or not _SIGNATURE_VALUE_RE.fullmatch(value):
+        return "invalid"
+    try:
+        key = _resolve_key(provider, key_id)
+    except AuditKeyRotationError:
+        return "unavailable"
+    expected = _digest_signature_value(
+        key, digest=digest, key_id=key_id, purpose=purpose, role=role
+    )
+    return "valid" if hmac.compare_digest(expected, value) else "invalid"
 
 
 def _snapshot_report_mapping(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -202,6 +317,41 @@ class AuditKeyRotationSigner:
         except Exception:
             raise AuditKeyRotationError("audit report could not be signed") from None
 
+    def sign_digest(
+        self,
+        digest: str,
+        *,
+        purpose: str,
+        role: str = "signer",
+        key_id: str | None = None,
+    ) -> str:
+        """Return a hex HMAC-SHA256 signature over a value-free digest.
+
+        Args:
+            digest: A ``sha256:<hex>`` digest to sign.
+            purpose: Signature purpose from :data:`AUDIT_DIGEST_PURPOSES`.
+            role: Signer role from :data:`AUDIT_DIGEST_ROLES`, for example
+                ``"outgoing"`` or ``"incoming"`` during a key rollover.
+            key_id: Optional key-ID override for this signing operation.
+
+        Returns:
+            The 64-character hex signature value. It never contains key
+            material.
+
+        Raises:
+            AuditKeyRotationError: If an argument is malformed or the provider
+                cannot resolve valid key material.
+        """
+
+        effective_key_id = self.key_id if key_id is None else _require_key_id(key_id)
+        return _sign_digest(
+            self.key_provider,
+            digest,
+            key_id=effective_key_id,
+            purpose=purpose,
+            role=role,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class AuditKeyRotationVerifier:
@@ -255,6 +405,41 @@ class AuditKeyRotationVerifier:
             # not surface caller-provider errors that could contain key data.
             return False
 
+    def verify_digest(
+        self,
+        digest: str,
+        signature: str,
+        *,
+        key_id: str,
+        purpose: str,
+        role: str = "signer",
+    ) -> bool:
+        """Return whether ``signature`` signs ``digest`` for the given key ID.
+
+        Verification fails closed for malformed input, an unknown or
+        unavailable key ID, provider failures, and signature mismatches.
+
+        Args:
+            digest: The ``sha256:<hex>`` digest that was signed.
+            signature: The hex signature value to check.
+            key_id: Non-secret key identifier the signature claims.
+            purpose: Signature purpose from :data:`AUDIT_DIGEST_PURPOSES`.
+            role: Signer role from :data:`AUDIT_DIGEST_ROLES`.
+        """
+
+        try:
+            status = _digest_signature_status(
+                self.key_provider,
+                digest,
+                signature,
+                key_id=key_id,
+                purpose=purpose,
+                role=role,
+            )
+        except Exception:
+            return False
+        return status == "valid"
+
 
 AuditReportSigner = AuditKeyRotationSigner
 AuditReportVerifier = AuditKeyRotationVerifier
@@ -288,11 +473,14 @@ def verify_audit_report(
 
 
 __all__ = [
+    "AUDIT_DIGEST_PURPOSES",
+    "AUDIT_DIGEST_ROLES",
     "AUDIT_SIGNATURE_ALGORITHM",
     "MAX_AUDIT_HMAC_KEY_BYTES",
     "MIN_AUDIT_HMAC_KEY_BYTES",
     "AuditKeyProvider",
     "AuditKeyRotationError",
+    "AuditKeyUnavailableError",
     "AuditKeyRotationSigner",
     "AuditKeyRotationVerifier",
     "AuditReportSigner",
