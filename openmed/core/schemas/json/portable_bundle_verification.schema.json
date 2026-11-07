@@ -1,0 +1,119 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/models/portable-bundle-verification.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable-bundle verification result",
+  "description": "Bounded, value-free verifier output: versions, digests, counts, indexes, decisions, and reason codes only.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "content_id",
+    "eligible_runtimes",
+    "files_checked",
+    "files_verified",
+    "ok",
+    "reason",
+    "schema",
+    "schema_version",
+    "valid_signatures"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.portable_bundle.verification"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "reason": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "manifest_too_large",
+            "envelope_too_large",
+            "envelope_malformed",
+            "envelope_version_unsupported",
+            "content_id_mismatch",
+            "bundle_revoked",
+            "signature_missing",
+            "signature_algorithm_unsupported",
+            "untrusted_key",
+            "key_revoked",
+            "key_not_yet_valid",
+            "key_expired",
+            "signature_invalid",
+            "signature_verifier_unavailable",
+            "signature_threshold_not_met",
+            "manifest_not_canonical",
+            "schema_unsupported",
+            "schema_version_unsupported",
+            "unknown_critical_field",
+            "manifest_malformed",
+            "path_unsafe",
+            "executable_file_forbidden",
+            "runtime_combination_unsupported",
+            "duplicate_path",
+            "path_conflict",
+            "file_order_invalid",
+            "file_reference_undeclared",
+            "fallback_invalid",
+            "unknown_critical_extension",
+            "size_limit_exceeded",
+            "bundle_not_yet_valid",
+            "bundle_expired",
+            "rollback_rejected",
+            "sdk_incompatible",
+            "policy_incompatible",
+            "platform_incompatible",
+            "file_missing",
+            "file_size_mismatch",
+            "file_digest_mismatch",
+            "file_undeclared",
+            "trust_policy_invalid",
+            "context_invalid",
+            "signing_key_invalid"
+          ]
+        }
+      ]
+    },
+    "content_id": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      ]
+    },
+    "valid_signatures": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16
+    },
+    "eligible_runtimes": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 31
+      }
+    },
+    "files_checked": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "files_verified": {
+      "type": "boolean"
+    }
+  }
+}
