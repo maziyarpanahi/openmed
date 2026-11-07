@@ -18,6 +18,7 @@ from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
 from .auth import AuthPrincipal, scopes_satisfy
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE, ServiceShuttingDownError
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
@@ -545,6 +546,10 @@ class Query:
             raise GraphQLError(
                 "Requested model is not served", extensions={"code": "model_not_served"}
             ) from None
+        except ServiceShuttingDownError:
+            raise GraphQLError(
+                SHUTTING_DOWN_MESSAGE, extensions={"code": SHUTTING_DOWN}
+            ) from None
         except Exception:
             raise GraphQLError(
                 SAFE_RESOLVER_ERROR,
@@ -565,6 +570,10 @@ class Query:
         except ModelNotServedError:
             raise GraphQLError(
                 "Requested model is not served", extensions={"code": "model_not_served"}
+            ) from None
+        except ServiceShuttingDownError:
+            raise GraphQLError(
+                SHUTTING_DOWN_MESSAGE, extensions={"code": SHUTTING_DOWN}
             ) from None
         except Exception:
             raise GraphQLError(

@@ -835,6 +835,11 @@ class SMARTBackendJobManager:
             await asyncio.gather(record.task, return_exceptions=True)
         return record.status
 
+    def active_count(self) -> int:
+        """Return background jobs whose task has not finished."""
+
+        return sum(1 for record in self._jobs.values() if not record.task.done())
+
     async def cancel_all(self) -> None:
         """Cancel any still-running background jobs during service shutdown."""
 

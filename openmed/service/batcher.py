@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Generic, Optional, Sequence, TypeVar, Union
 
 from .backpressure import AdmissionQueue, AdmissionSnapshot, BackpressureError
+from .drain import ServiceShuttingDownError
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -43,6 +44,14 @@ _PRIORITY_ALIASES = {
 }
 _PRIORITY_RANK = {priority: index for index, priority in enumerate(PRIORITY_CLASSES)}
 _ANY_BATCH_KEY = object()
+_DRAIN_POLL_SECONDS = 0.005
+
+
+class BatcherClosedError(ServiceShuttingDownError):
+    """Raised for submissions after close and for work left queued by a drain."""
+
+    def __init__(self) -> None:
+        super().__init__("batcher is closed")
 
 
 def normalize_priority(priority: object = PRIORITY_INTERACTIVE) -> str:
@@ -172,6 +181,7 @@ class DynamicBatcher(Generic[T, R]):
         self._active_batches = 0
         self._running_tasks: set[asyncio.Task[None]] = set()
         self._closed = False
+        self._draining = False
         self._queue_limits = _normalize_queue_limits(max_queue_size_per_priority)
         admission_high = (
             sum(self._queue_limits.values())
@@ -234,8 +244,8 @@ class DynamicBatcher(Generic[T, R]):
                 requested_priority = priority_handle.priority
 
             async with self._lock:
-                if self._closed:
-                    raise RuntimeError("batcher is closed")
+                if self._closed or self._draining:
+                    raise BatcherClosedError()
                 queue = self._queues[requested_priority]
                 queue_limit = self._queue_limits[requested_priority]
                 if len(queue) >= queue_limit:
@@ -361,6 +371,63 @@ class DynamicBatcher(Generic[T, R]):
             running = tuple(self._running_tasks)
         if running:
             await asyncio.gather(*running, return_exceptions=True)
+
+    def outstanding_count(self) -> int:
+        """Return queued jobs plus running batch dispatches (lock-free read)."""
+        return len(self._jobs) + len(self._running_tasks)
+
+    async def drain(self, timeout: Optional[float] = None) -> dict[str, int]:
+        """Stop admission, dispatch queued work, and wait for running batches.
+
+        Unlike :meth:`close`, queued jobs are dispatched rather than cancelled.
+        Jobs still queued when ``timeout`` elapses fail with
+        :class:`BatcherClosedError`, a typed retryable shutdown result. Running
+        dispatches keep their admission capacity until they finish.
+
+        Args:
+            timeout: Seconds to wait; ``None`` waits until the batcher is idle.
+
+        Returns:
+            Value-free counts: ``dispatched``, ``failed_queued``, ``running``.
+        """
+        loop = asyncio.get_running_loop()
+        async with self._lock:
+            self._draining = True
+            queued_at_start = len(self._jobs)
+            self._flush_locked(loop)
+        deadline = None if timeout is None else loop.time() + max(timeout, 0.0)
+        while self.outstanding_count():
+            if deadline is not None and loop.time() >= deadline:
+                break
+            async with self._lock:
+                self._flush_locked(loop)
+            await asyncio.sleep(_DRAIN_POLL_SECONDS)
+
+        failed = 0
+        async with self._lock:
+            self._closed = True
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+            for job in list(self._jobs.values()):
+                if job.wait_timeout is not None:
+                    job.wait_timeout.cancel()
+                if job.priority_handle is not None:
+                    job.priority_handle._clear(job.job_id)
+                self._release_admission_locked(job)
+                if not job.future.done():
+                    job.future.set_exception(BatcherClosedError())
+                    failed += 1
+            self._jobs.clear()
+            for priority, queue in self._queues.items():
+                queue.clear()
+                self._record_queue_depth(priority)
+            running = len(self._running_tasks)
+        return {
+            "dispatched": max(queued_at_start - failed, 0),
+            "failed_queued": failed,
+            "running": running,
+        }
 
     def _schedule_wait_timeout_locked(
         self,

@@ -474,17 +474,42 @@ model/backend. While a breaker is open, model-backed endpoints return `503`
 with error code `circuit_breaker_open` and a `Retry-After` header. See
 [`Serving Resilience`](serving/resilience.md) for the full set of knobs.
 
-Optional graceful-shutdown drain timeout:
+Optional graceful-shutdown drain budget:
 
 ```bash
-OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 python -m openmed.service.logging --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 \
+OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS=5 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
-`OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
-During shutdown, readiness is flipped off, new model-backed work is rejected,
-and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
-`/privacy-gateway/complete` requests to finish. The default is `30`.
+Shutdown (SIGTERM or the end of the ASGI lifespan) runs one coordinated drain
+in ordered phases, each bounded by the budget:
+
+1. Readiness drops first (`/readyz` returns `503`), then admission closes on
+   every surface. New model-backed REST and GraphQL requests, including
+   `/jobs` submissions, get `503 not_ready` with a `Retry-After` header and
+   `details.reason = "shutting_down"`. gRPC calls get `UNAVAILABLE` with
+   details `shutting_down` and a `grpc-retry-pushback-ms` trailer when the
+   server was built with `create_grpc_server` on the same runtime.
+   `/livez` stays `200` throughout.
+2. Accepted work may finish for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`
+   (default `30`). Near the end of that window, NDJSON streams stop at their
+   next event and end with one `{"type":"error","error":{"code":"shutting_down",...}}`
+   line; buffered text that was not yet emitted is discarded, never flushed.
+   gRPC streams end the same way with `UNAVAILABLE`. Async jobs stop at their
+   next document boundary. A job still queued or running at the deadline is
+   recorded as `cancelled` with `error.code = "shutting_down"` and
+   `error.retryable = true`; a worker that finishes later cannot overwrite it.
+   Terminal job callbacks sent during a drain make one bounded attempt.
+3. Within `OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS` (default `5`), batch queues
+   are flushed, the gRPC server stops, the model warm pool is closed and its
+   models are unloaded, and accelerator caches already in use are released.
+
+Both values are finite, non-negative seconds. Set the pod termination grace
+period above their sum. With `OPENMED_SERVICE_METRICS_ENABLED=true`,
+`openmed_service_draining`, `openmed_service_drain_participant_total`, and
+`openmed_service_drain_unfinished` report drain progress using only phase,
+participant-category, and outcome labels.
 
 Optional pull-only Prometheus metrics endpoint:
 
@@ -574,7 +599,7 @@ names, counts, labels, lengths, and durations. See
 - Model load and inference work uses bounded retry and an in-process circuit
   breaker. Open breakers fail fast with `503` and `Retry-After`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
-- Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+- Graceful shutdown drops readiness, refuses new work on REST, GraphQL and gRPC with a retryable `shutting_down` result, lets accepted requests, streams and jobs finish or end with a typed terminal result within `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`, then releases batchers, models and accelerators within `OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
 - Application endpoint errors and invalid Host headers use one JSON envelope
