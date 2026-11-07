@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Discover nested public multimodal packages in the API compatibility gate,
+  require committed baseline coverage, and document baseline updates for new
+  packages. Private packages and unavailable optional shims are skipped
+  without loading their runtimes during discovery (#3844).
+
 ### Added
 
 - Add an optional pinned Core ML English speech adapter for OpenMedKit, with bounded PCM ownership, incremental hypotheses, acoustic timing, explicit compute refusals and cancellation that fences late results (#3823).
@@ -19,7 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bind native Apple audio capture to explicit microphone permission and ambient consent, with interruption and cohort fences, bounded local PCM delivery, and owned-buffer cleanup accounting (#3680).
 
+- Add local fixed ambient-draft evaluation with separate omissions, unsupported
+  claims, contradictions, speaker/experiencer attribution and negation rates,
+  conservative small-slice suppression, descriptive confidence intervals and
+  revision-bound blinded review imports. Bundle hand-authored synthetic encounters;
+  no clinical validation or autonomous action is implied (#3822).
+
 - Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
+
+- Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
+  two-patient packet fixtures with verified pixel/gold digests, critical flags,
+  packet splits and value-free loader representations (#3829).
 
 - Add executed OpenPHI-Vision synthetic leakage controls and immutable EdgeHealthBench device profiles with separate privacy, quality, utility, abstention, parity and measured resource gates (#3205).
 
@@ -70,6 +87,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate sustained local VLM execution and speech PHI screening on measured latency, queue age, fresh thermal state and memory pressure, preserving fallback history and withholding stale outputs (#2820).
 
+- Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
+  integer/scaled samples, withheld identification/date/annotation text, explicit
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
 - Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
   separate rhythm and representative-beat signals, withheld identifying
   metadata, controlled rejection codes and mandatory review notices (#3839).
@@ -95,6 +116,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redact ECG fields and rendered annotations together, with source-bound review, cross-surface identifier matching, verified in-memory PNG export, unchanged waveforms and refusal on residual identifiers or unknown coverage (#2811).
 
 - Keep ambient speaker-role hypotheses separate from aliases and require exact-source reviewer decisions before role-sensitive extraction and note finalization, with explicit provisional drafts and stale-attribution rejection (#2817).
+
+- Opt-in BigTIFF pyramid metadata preflight in Python and OpenMedKit, with
+  declared tiled IFD-chain/SubIFD profiles, bounded directory and tile-table
+  traversal, value-free failures and shared synthetic geometry fixtures (#3683).
 
 - Verify complete whole-slide tile references, original source coordinates, transform history and tissue-selection evidence before computing protected feature aggregates with value-free provenance (#2802).
 
@@ -157,6 +182,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforce conservative, policy-selectable asset limits before Python image,
   PDF and DICOM pixel redaction decodes media, with bounded header reads,
   runtime page/frame guards and code-and-number-only admission errors (#3832).
+
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
 
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions

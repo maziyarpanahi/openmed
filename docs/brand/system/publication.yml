@@ -517,6 +517,7 @@ classification:
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
+    - multimodal/edf-reader.md
     - multimodal/streaming/transcript-revisions.md
     - multimodal/streaming/asr-window-stitching.md
     - multimodal/ecg-lead-layout.md
@@ -544,6 +545,7 @@ classification:
     - testing.md
     - eval-harness.md
     - evaluation/openphi-vision.md
+    - evaluation/openphi-vision-fixtures.md
     - evaluation/edge-health-bench.md
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
@@ -571,6 +573,7 @@ classification:
     - evaluation/reviewer-disagreement.md
     - evaluation/multimodal-clinical-validation.md
     - evaluation/transcript-accuracy.md
+    - evaluation/ambient-drafts.md
     - evaluation/local-guardrail-bypass.md
     - evaluation/synthetic-memorization.md
     - clinical-validation-protocol.md

@@ -229,7 +229,7 @@ def test_encrypted_epub_entries_raise(tmp_path: Path):
         payload[header + flag_offset] |= 0x1
     path.write_bytes(payload)
 
-    with pytest.raises(UnsupportedDocumentError, match="Encrypted EPUB"):
+    with pytest.raises(UnsupportedDocumentError, match="archive_encrypted"):
         extract_epub(path)
 
 
@@ -251,7 +251,7 @@ def test_corrupt_deflate_stream_raises_supported_error(tmp_path: Path):
     payload[compressed_data_offset] ^= 0x2
     path.write_bytes(payload)
 
-    with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
+    with pytest.raises(UnsupportedDocumentError, match="archive_invalid"):
         extract_epub(path)
 
 
@@ -279,5 +279,5 @@ def test_unsupported_zip_feature_raises_supported_error(tmp_path: Path):
         raise AssertionError("container.xml central-directory entry not found")
     path.write_bytes(payload)
 
-    with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
+    with pytest.raises(UnsupportedDocumentError, match="archive_invalid"):
         extract_epub(path)
