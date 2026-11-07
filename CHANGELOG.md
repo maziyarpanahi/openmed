@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Discover nested public multimodal packages in the API compatibility gate,
+  require committed baseline coverage, and document baseline updates for new
+  packages. Private packages and unavailable optional shims are skipped
+  without loading their runtimes during discovery (#3844).
+
 ### Added
 
 - Add an optional pinned Core ML English speech adapter for OpenMedKit, with bounded PCM ownership, incremental hypotheses, acoustic timing, explicit compute refusals and cancellation that fences late results (#3823).
