@@ -24,7 +24,12 @@ from .provenance.clock_alignment import (
     AlignmentState,
     ClockReview,
 )
-from .provider_result import ProviderResultEnvelope
+from .provider_result import (
+    PROVIDER_RESULT_SCHEMA_VERSION,
+    PROVIDER_RESULT_SCHEMA_VERSION_V2,
+    ProviderAbstentionCode,
+    ProviderResultEnvelope,
+)
 from .streaming.transcript.revision_ledger import (
     REVISION_SCHEMA_VERSION,
     RevisionLedger,
@@ -251,10 +256,18 @@ def _provider(payload: dict[str, Any]) -> None:
     )
     data = dict(payload)
     data["duration_ms"] = _number(data.pop("duration_f64"), maximum=86400000)
+    version = data["schema_version"]
     _check(
-        data["schema_version"] == "openmed.multimodal.provider_result.v1",
+        version in (PROVIDER_RESULT_SCHEMA_VERSION, PROVIDER_RESULT_SCHEMA_VERSION_V2),
         ContractRefusal.SCHEMA,
     )
+    code = data["abstention_code"]
+    expected_version = (
+        ProviderAbstentionCode(code)._wire_version
+        if type(code) is str
+        else PROVIDER_RESULT_SCHEMA_VERSION
+    )
+    _check(version == expected_version, ContractRefusal.SCHEMA)
     for name in ("input_digest", "output_digest"):
         if name == "input_digest" or data[name] is not None:
             _hex(data[name])

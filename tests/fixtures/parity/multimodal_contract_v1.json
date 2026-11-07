@@ -281,6 +281,66 @@
       }
     },
     {
+      "id": "provider_abstention_consent_unavailable",
+      "wire": "{\"evidence_digest\":\"07dc60da8aa6e2f290eaad764bce090600cacf628a8e18ea3f1a8434e1f9744b\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"consent_unavailable\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "07dc60da8aa6e2f290eaad764bce090600cacf628a8e18ea3f1a8434e1f9744b",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "consent_unavailable"
+      }
+    },
+    {
+      "id": "provider_abstention_consent_withdrawn",
+      "wire": "{\"evidence_digest\":\"2fe7e7d7a9eceb260e7c998588619405ed8c6d6b5069fa5240dd86d1c79737fa\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"consent_withdrawn\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "2fe7e7d7a9eceb260e7c998588619405ed8c6d6b5069fa5240dd86d1c79737fa",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "consent_withdrawn"
+      }
+    },
+    {
+      "id": "provider_abstention_capture_interrupted",
+      "wire": "{\"evidence_digest\":\"e46e2f80cce6b7d06398449e8166c5130939247b413a65336ee3398464bc90e8\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"capture_interrupted\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "e46e2f80cce6b7d06398449e8166c5130939247b413a65336ee3398464bc90e8",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "capture_interrupted"
+      }
+    },
+    {
+      "id": "provider_abstention_language_unsupported",
+      "wire": "{\"evidence_digest\":\"ab0c26e0e7377be5a591f309f53ae281ef4238783be14e54d8ecf9683cdf4ec4\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"language_unsupported\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "ab0c26e0e7377be5a591f309f53ae281ef4238783be14e54d8ecf9683cdf4ec4",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "language_unsupported"
+      }
+    },
+    {
+      "id": "provider_abstention_language_uncertain",
+      "wire": "{\"evidence_digest\":\"c2770567a866b2f12cdd49e76236a6f44f12946bbfe9cffeb7ffa6a3396d5a68\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"language_uncertain\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "c2770567a866b2f12cdd49e76236a6f44f12946bbfe9cffeb7ffa6a3396d5a68",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "language_uncertain"
+      }
+    },
+    {
+      "id": "provider_abstention_policy_refused",
+      "wire": "{\"evidence_digest\":\"01b72664ef274fe65aec4c493e0285785d465a21842ef319d17f746f287f48dc\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"policy_refused\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "01b72664ef274fe65aec4c493e0285785d465a21842ef319d17f746f287f48dc",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "policy_refused"
+      }
+    },
+    {
       "id": "provider_provider_unavailable_none",
       "wire": "{\"evidence_digest\":\"1e4f80b322ccb8f560a68c139e44f74258288baf5a1efb9077ed64464b3551c1\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":null,\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"provider_unavailable\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
       "digest": "1e4f80b322ccb8f560a68c139e44f74258288baf5a1efb9077ed64464b3551c1",
@@ -429,6 +489,16 @@
       "reason": "invalid_multimodal_transform"
     },
     {
+      "id": "provider_abstention_consent_withdrawn_wrong_version",
+      "wire": "{\"evidence_digest\":\"de8a2aa81b5c2e73925762aee76f2de0858bf41e7b4c6087400e6b3957ceb62c\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"consent_withdrawn\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "unsupported_multimodal_schema"
+    },
+    {
+      "id": "provider_abstention_resource_limit_wrong_version",
+      "wire": "{\"evidence_digest\":\"d5ae96d07d2b8d422ce95bdb3fb28288853d382241a9afef9b02aed3a9528395\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"resource_limit\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "unsupported_multimodal_schema"
+    },
+    {
       "id": "duplicate_key",
       "wire": "{\"kind\":\"asset\",\"evidence_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
       "reason": "invalid_multimodal_contract"
@@ -457,7 +527,13 @@
     "low_quality",
     "phi_uncertainty",
     "speaker_uncertainty",
-    "temporal_instability"
+    "temporal_instability",
+    "consent_unavailable",
+    "consent_withdrawn",
+    "capture_interrupted",
+    "language_unsupported",
+    "language_uncertain",
+    "policy_refused"
   ],
   "clock_reasons": [
     "insufficient-anchors",
