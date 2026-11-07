@@ -199,6 +199,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
 
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry checks. Structured vision results carry
+  the fixed catalog notice (#3828).
+
 ### Security
 
 - Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing

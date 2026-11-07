@@ -425,6 +425,7 @@ nav:
       - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
       - Local Edge VLM Provider: multimodal/edge-vlm-provider.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Mandatory Review Notices: multimodal/notices.md
       - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
