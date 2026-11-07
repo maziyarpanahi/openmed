@@ -41,15 +41,20 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
     numpy = pytest.importorskip("numpy")
     module = _convert_module()
     model_path = tmp_path / "model.onnx"
+    large = module.EXTERNAL_DATA_SIZE_THRESHOLD // 4 + 1
     first = onnx.numpy_helper.from_array(
-        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        numpy.arange(large, dtype=numpy.float32),
         name="first",
     )
     second = onnx.numpy_helper.from_array(
-        numpy.asarray([3.0, 4.0], dtype=numpy.float32),
+        numpy.arange(large, dtype=numpy.float32) * 2,
         name="second",
     )
-    graph = onnx.helper.make_graph([], "external", [], [], [first, second])
+    small = onnx.numpy_helper.from_array(
+        numpy.asarray([0, 2], dtype=numpy.int64),
+        name="small",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [first, second, small])
     model = onnx.helper.make_model(graph)
     onnx.save_model(
         model,
@@ -66,18 +71,24 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
         for item in tensor.external_data
         if item.key == "location"
     }
-    assert len(before) == 2
+    assert len(before) == 3
 
     module._consolidate_external_onnx_data(model_path)
 
     metadata = onnx.load(str(model_path), load_external_data=False)
     locations = {
-        item.value
+        tensor.name: item.value
         for tensor in metadata.graph.initializer
         for item in tensor.external_data
         if item.key == "location"
     }
-    assert locations == {"model.onnx.data"}
+    assert locations == {"first": "model.onnx.data", "second": "model.onnx.data"}
+    inline = {
+        tensor.name
+        for tensor in metadata.graph.initializer
+        if tensor.data_location != onnx.TensorProto.EXTERNAL
+    }
+    assert inline == {"small"}
     assert (tmp_path / "model.onnx.data").is_file()
     assert all(not (tmp_path / name).exists() for name in before)
     onnx.checker.check_model(str(model_path))
@@ -86,6 +97,81 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
 
     assert (tmp_path / "model.onnx.data").is_file()
     onnx.checker.check_model(str(model_path))
+
+
+def test_consolidation_inlines_a_model_without_large_tensors(tmp_path: Path) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    tensor = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="weights",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [tensor])
+    onnx.save_model(
+        onnx.helper.make_model(graph),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+
+    module._consolidate_external_onnx_data(model_path)
+
+    metadata = onnx.load(str(model_path), load_external_data=False)
+    assert all(
+        item.data_location != onnx.TensorProto.EXTERNAL
+        for item in metadata.graph.initializer
+    )
+    assert not (tmp_path / "model.onnx.data").exists()
+    onnx.checker.check_model(str(model_path))
+
+
+def test_consolidated_shape_constants_stay_loadable_by_onnxruntime(
+    tmp_path: Path,
+) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    ort = pytest.importorskip("onnxruntime")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    helper = onnx.helper
+    weights = numpy.arange(512, dtype=numpy.float32).reshape(2, 256)
+    initializers = [
+        onnx.numpy_helper.from_array(weights, name="weights"),
+        onnx.numpy_helper.from_array(numpy.asarray([0], dtype=numpy.int64), "starts"),
+        onnx.numpy_helper.from_array(numpy.asarray([1], dtype=numpy.int64), "ends"),
+        onnx.numpy_helper.from_array(numpy.asarray([1], dtype=numpy.int64), "axes"),
+    ]
+    graph = helper.make_graph(
+        [
+            helper.make_node("Add", ["features", "weights"], ["summed"]),
+            helper.make_node("Slice", ["summed", "starts", "ends", "axes"], ["logits"]),
+        ],
+        "slice-constants",
+        [helper.make_tensor_value_info("features", onnx.TensorProto.FLOAT, [2, 256])],
+        [helper.make_tensor_value_info("logits", onnx.TensorProto.FLOAT, [2, 1])],
+        initializers,
+    )
+    onnx.save_model(
+        helper.make_model(
+            graph, opset_imports=[helper.make_opsetid("", 18)], ir_version=10
+        ),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+
+    module._consolidate_external_onnx_data(model_path)
+
+    session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    features = numpy.ones((2, 256), dtype=numpy.float32)
+    (logits,) = session.run(["logits"], {"features": features})
+    assert logits.tolist() == [[1.0], [257.0]]
 
 
 def test_external_data_consolidation_failure_preserves_original_artifact(
