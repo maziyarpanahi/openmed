@@ -73,6 +73,7 @@ _KNOWN_SPDX_LICENSE_IDS: Final = frozenset(
         "ISC",
         "MIT",
         "MPL-2.0",
+        "PSF-2.0",
         "Unlicense",
         "Zlib",
     }
@@ -82,10 +83,16 @@ _KNOWN_SPDX_LICENSE_IDS: Final = frozenset(
 # policy.  A package record's explicit license value always takes precedence;
 # packages without either source remain explicitly marked NOASSERTION.
 KNOWN_LICENSES = {
+    "attrs": "MIT",
     "faker": "MIT",
     "jieba": "MIT",
+    "jsonschema": "MIT",
+    "jsonschema-specifications": "MIT",
     "pysbd": "MIT",
     "pyyaml": "MIT",
+    "referencing": "MIT",
+    "rpds-py": "MIT",
+    "typing-extensions": "PSF-2.0",
 }
 
 
@@ -579,8 +586,12 @@ def _record_hashes(record: PackageRecord) -> list[dict[str, str]]:
         elif artifacts is not None:
             raise SbomError("lockfile contains an invalid package artifact")
 
-    hashes = {_hash_value(value) for value in values if value is not None}
-    hashes.discard(None)
+    hashes: set[tuple[str, str]] = set()
+    for value in values:
+        if value is not None:
+            parsed = _hash_value(value)
+            if parsed is not None:
+                hashes.add(parsed)
     return [
         {"alg": algorithm, "content": content} for algorithm, content in sorted(hashes)
     ]

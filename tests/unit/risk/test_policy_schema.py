@@ -190,10 +190,11 @@ def test_unknown_top_level_fields_fail_closed() -> None:
         PrivacyPolicySchema.from_mapping({"not_a_policy_field": True})
 
 
-@pytest.mark.parametrize("version", [True, 1.0, "1"])
-def test_schema_version_requires_the_exact_integer_type(version: object) -> None:
-    with pytest.raises(ValueError, match="schema_version"):
-        PrivacyPolicySchema(schema_version=version)  # type: ignore[arg-type]
+def test_schema_version_requires_the_exact_integer_type(subtests) -> None:
+    for version in [True, 1.0, "1"]:
+        with subtests.test(version=version):
+            with pytest.raises(ValueError, match="schema_version"):
+                PrivacyPolicySchema(schema_version=version)  # type: ignore[arg-type]
 
 
 def test_duplicate_json_fields_and_aliases_fail_closed() -> None:

@@ -204,46 +204,48 @@ def _authorization(prepared):
     )
 
 
-@pytest.mark.parametrize(
-    "kind,method,path,header",
-    [
+def test_exact_wire_request_and_safe_authorization(subtests):
+    for kind, method, path, header in [
         ("create", "POST", "Observation", "If-None-Exist"),
         ("update", "PUT", "Observation?identifier=urn%3Asynthetic%7C123", "If-Match"),
-    ],
-)
-def test_exact_wire_request_and_safe_authorization(kind, method, path, header):
-    env = _setup()
-    proposed = _prepared(env, kind)
-    outcome = env.client.submit(proposed, _authorization(proposed))
-    assert outcome.status is FHIRWriteStatus.COMMITTED
-    request = env.requests[0]
-    assert request.method == method and request.url == AUDIENCE + "/" + path
-    assert dict(request.headers)[header] == (
-        'W/"1"' if kind == "update" else "identifier=urn%3Asynthetic%7C123"
-    )
-    assert dict(request.headers)["Idempotency-Key"] == KEY
-    assert dict(request.headers)["Authorization"] == "Bearer SyntheticPrivateToken"
-    assert request.body == proposed._body
-    assert request.retries == 0 and request.follow_redirects is False
-    assert request.timeout_seconds == 10 and request.max_response_bytes == 262144
-    assert env.calls == 3
-    rendered = (
-        repr(proposed)
-        + repr(request)
-        + repr(env.response)
-        + repr(outcome)
-        + json.dumps(outcome.to_dict())
-        + json.dumps(proposed.to_dict())
-    )
-    for private in (
-        PRIVATE,
-        "SyntheticPrivateToken",
-        AUDIENCE,
-        "urn%3Asynthetic",
-        HANDLE,
-        'W/"1"',
-    ):
-        assert private not in rendered
+    ]:
+        with subtests.test(kind=kind, method=method, path=path, header=header):
+            env = _setup()
+            proposed = _prepared(env, kind)
+            outcome = env.client.submit(proposed, _authorization(proposed))
+            assert outcome.status is FHIRWriteStatus.COMMITTED
+            request = env.requests[0]
+            assert request.method == method and request.url == AUDIENCE + "/" + path
+            assert dict(request.headers)[header] == (
+                'W/"1"' if kind == "update" else "identifier=urn%3Asynthetic%7C123"
+            )
+            assert dict(request.headers)["Idempotency-Key"] == KEY
+            assert (
+                dict(request.headers)["Authorization"] == "Bearer SyntheticPrivateToken"
+            )
+            assert request.body == proposed._body
+            assert request.retries == 0 and request.follow_redirects is False
+            assert (
+                request.timeout_seconds == 10 and request.max_response_bytes == 262144
+            )
+            assert env.calls == 3
+            rendered = (
+                repr(proposed)
+                + repr(request)
+                + repr(env.response)
+                + repr(outcome)
+                + json.dumps(outcome.to_dict())
+                + json.dumps(proposed.to_dict())
+            )
+            for private in (
+                PRIVATE,
+                "SyntheticPrivateToken",
+                AUDIENCE,
+                "urn%3Asynthetic",
+                HANDLE,
+                'W/"1"',
+            ):
+                assert private not in rendered
 
 
 def test_no_mutation_of_snapshot_or_detached_review_copy():
@@ -263,9 +265,8 @@ def test_no_mutation_of_snapshot_or_detached_review_copy():
     assert PRIVATE.encode() in env.requests[0].body
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_tampered_review_proposal_never_dispatches(subtests):
+    for field, value in [
         ("_body", b"{}"),
         ("_path", "Patient"),
         ("_method", "DELETE"),
@@ -277,34 +278,37 @@ def test_no_mutation_of_snapshot_or_detached_review_copy():
         ("resource_count", 2),
         ("idempotency_key", "fhir-cw-v1-" + "b" * 64),
         ("payload_digest", "sha256:" + "a" * 64),
-    ],
-)
-def test_tampered_review_proposal_never_dispatches(field, value):
-    env = _setup()
-    proposed = _prepared(env, "update")
-    with pytest.raises(FHIRWriteError, match="invalid_plan"):
-        env.client.submit(replace(proposed, **{field: value}), _authorization(proposed))
-    assert not env.requests and not env.ledger.claims
+    ]:
+        with subtests.test(field=field, value=value):
+            env = _setup()
+            proposed = _prepared(env, "update")
+            with pytest.raises(FHIRWriteError, match="invalid_plan"):
+                env.client.submit(
+                    replace(proposed, **{field: value}), _authorization(proposed)
+                )
+            assert not env.requests and not env.ledger.claims
 
 
-@pytest.mark.parametrize("allow", [False, None, 1, "yes", [], {}])
-def test_authorization_requires_exact_true(allow):
-    env = _setup()
-    env.allow = allow
-    proposed = _prepared(env)
-    result = env.client.submit(proposed, _authorization(proposed))
-    assert result.status is FHIRWriteStatus.REJECTED
-    assert result.reason_code == "authorization_rejected"
-    assert not env.requests and not env.ledger.claims
+def test_authorization_requires_exact_true(subtests):
+    for allow in [False, None, 1, "yes", [], {}]:
+        with subtests.test(allow=allow):
+            env = _setup()
+            env.allow = allow
+            proposed = _prepared(env)
+            result = env.client.submit(proposed, _authorization(proposed))
+            assert result.status is FHIRWriteStatus.REJECTED
+            assert result.reason_code == "authorization_rejected"
+            assert not env.requests and not env.ledger.claims
 
 
-@pytest.mark.parametrize("offset", [-1, 60, 61])
-def test_receipt_future_or_expired(offset):
-    env = _setup()
-    env.now += timedelta(seconds=offset)
-    proposed = _prepared(env)
-    result = env.client.submit(proposed, _authorization(proposed))
-    assert result.reason_code == "authorization_expired" and not env.requests
+def test_receipt_future_or_expired(subtests):
+    for offset in [-1, 60, 61]:
+        with subtests.test(offset=offset):
+            env = _setup()
+            env.now += timedelta(seconds=offset)
+            proposed = _prepared(env)
+            result = env.client.submit(proposed, _authorization(proposed))
+            assert result.reason_code == "authorization_expired" and not env.requests
 
 
 def test_expiry_during_lineage_verification_is_rechecked():
@@ -353,24 +357,30 @@ def test_credential_denial_and_out_of_band_sender_do_not_send():
     assert not env.requests
 
 
-@pytest.mark.parametrize(
-    "exception", [TimeoutError(PRIVATE), ConnectionError(PRIVATE), ValueError(PRIVATE)]
-)
-def test_post_submission_exception_is_unknown_without_retry(exception):
-    env = _setup()
-    proposed = _prepared(env)
+def test_post_submission_exception_is_unknown_without_retry(subtests):
+    for exception in [
+        TimeoutError(PRIVATE),
+        ConnectionError(PRIVATE),
+        ValueError(PRIVATE),
+    ]:
+        with subtests.test(exception=exception):
+            env = _setup()
+            proposed = _prepared(env)
 
-    def fail(request):
-        env.requests.append(request)
-        raise exception
+            def fail(request):
+                env.requests.append(request)
+                raise exception
 
-    env.client._transport = fail
-    receipt = _authorization(proposed)
-    first = env.client.submit(proposed, receipt)
-    assert first.status is FHIRWriteStatus.UNKNOWN and first.reconciliation_required
-    assert env.client.submit(proposed, receipt) == first
-    assert env.client.reconcile(proposed) == first
-    assert len(env.requests) == 1 and PRIVATE not in json.dumps(first.to_dict())
+            env.client._transport = fail
+            receipt = _authorization(proposed)
+            first = env.client.submit(proposed, receipt)
+            assert (
+                first.status is FHIRWriteStatus.UNKNOWN
+                and first.reconciliation_required
+            )
+            assert env.client.submit(proposed, receipt) == first
+            assert env.client.reconcile(proposed) == first
+            assert len(env.requests) == 1 and PRIVATE not in json.dumps(first.to_dict())
 
 
 def test_duplicate_and_changed_payload_same_key():
@@ -402,23 +412,24 @@ def test_reserved_key_after_crash_is_unknown_and_not_replayed():
     assert not env.requests
 
 
-@pytest.mark.parametrize("method", ["claim", "lookup", "finish"])
-def test_failed_storage_acknowledgements(method):
-    env = _setup()
-    proposed = _prepared(env)
+def test_failed_storage_acknowledgements(subtests):
+    for method in ["claim", "lookup", "finish"]:
+        with subtests.test(method=method):
+            env = _setup()
+            proposed = _prepared(env)
 
-    def fail(*_):
-        raise OSError(PRIVATE)
+            def fail(*_):
+                raise OSError(PRIVATE)
 
-    if method == "lookup":
-        env.ledger.claim(KEY, proposed.action_digest)
-    setattr(env.ledger, method, fail)
-    result = env.client.submit(proposed, _authorization(proposed))
-    assert result.reason_code == (
-        "receipt_uncertain" if method == "finish" else "ledger_unavailable"
-    )
-    assert len(env.requests) == (1 if method == "finish" else 0)
-    assert PRIVATE not in repr(result)
+            if method == "lookup":
+                env.ledger.claim(KEY, proposed.action_digest)
+            setattr(env.ledger, method, fail)
+            result = env.client.submit(proposed, _authorization(proposed))
+            assert result.reason_code == (
+                "receipt_uncertain" if method == "finish" else "ledger_unavailable"
+            )
+            assert len(env.requests) == (1 if method == "finish" else 0)
+            assert PRIVATE not in repr(result)
 
 
 def test_lost_finish_ack_preserves_durable_evidence_for_read_only_reconcile():
@@ -431,9 +442,8 @@ def test_lost_finish_ack_preserves_durable_evidence_for_read_only_reconcile():
     assert len(env.requests) == 1
 
 
-@pytest.mark.parametrize(
-    "status,expected,reason",
-    [
+def test_closed_status_classification(subtests):
+    for status, expected, reason in [
         (400, "rejected", "server_rejected"),
         (401, "rejected", "server_rejected"),
         (403, "rejected", "server_rejected"),
@@ -450,20 +460,18 @@ def test_lost_finish_ack_preserves_durable_evidence_for_read_only_reconcile():
         (500, "unknown_commit", "unexpected_response"),
         (503, "unknown_commit", "unexpected_response"),
         (202, "unknown_commit", "unexpected_response"),
-    ],
-)
-def test_closed_status_classification(status, expected, reason):
-    env = _setup()
-    proposed = _prepared(env)
-    env.response = _response(status)
-    result = env.client.submit(proposed, _authorization(proposed))
-    assert result.status.value == expected and result.reason_code == reason
-    assert len(env.requests) == 1
+    ]:
+        with subtests.test(status=status, expected=expected, reason=reason):
+            env = _setup()
+            proposed = _prepared(env)
+            env.response = _response(status)
+            result = env.client.submit(proposed, _authorization(proposed))
+            assert result.status.value == expected and result.reason_code == reason
+            assert len(env.requests) == 1
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
+def test_unexpected_resource_acknowledgements_are_unknown(subtests):
+    for body in [
         b"{}",
         b"[]",
         b"null",
@@ -478,21 +486,20 @@ def test_closed_status_classification(status, expected, reason):
             {"resourceType": "Patient", "id": "x", "meta": {"versionId": "1"}}
         ).encode(),
         json.dumps({"resourceType": "Observation", "id": "x"}).encode(),
-    ],
-)
-def test_unexpected_resource_acknowledgements_are_unknown(body):
-    env = _setup()
-    proposed = _prepared(env)
-    env.response = _response(body=body)
-    result = env.client.submit(proposed, _authorization(proposed))
-    assert (
-        result.reason_code == "unexpected_response" and result.reconciliation_required
-    )
+    ]:
+        with subtests.test(body=body):
+            env = _setup()
+            proposed = _prepared(env)
+            env.response = _response(body=body)
+            result = env.client.submit(proposed, _authorization(proposed))
+            assert (
+                result.reason_code == "unexpected_response"
+                and result.reconciliation_required
+            )
 
 
-@pytest.mark.parametrize(
-    "headers",
-    [
+def test_unexpected_headers_do_not_claim_commit(subtests):
+    for headers in [
         (),
         (("Content-Type", "text/html"),),
         (
@@ -502,57 +509,52 @@ def test_unexpected_resource_acknowledgements_are_unknown(body):
         (("Content-Type", "application/fhir+json\r\n"),),
         (("bad header", "private"),),
         (("X-Large", "x" * 32769),),
-    ],
-)
-def test_unexpected_headers_do_not_claim_commit(headers):
-    env = _setup()
-    proposed = _prepared(env)
-    env.response = _response(headers=headers)
-    assert (
-        env.client.submit(proposed, _authorization(proposed)).status
-        is FHIRWriteStatus.UNKNOWN
-    )
+    ]:
+        with subtests.test(headers=headers):
+            env = _setup()
+            proposed = _prepared(env)
+            env.response = _response(headers=headers)
+            assert (
+                env.client.submit(proposed, _authorization(proposed)).status
+                is FHIRWriteStatus.UNKNOWN
+            )
 
 
-@pytest.mark.parametrize(
-    "location,etag",
-    [
+def test_minimal_resource_acknowledgement(subtests):
+    for location, etag in [
         ("Observation/synthetic-1/_history/2", 'W/"2"'),
         (AUDIENCE + "/Observation/synthetic-1/_history/2", 'W/"2"'),
-    ],
-)
-def test_minimal_resource_acknowledgement(location, etag):
-    env = _setup()
-    proposed = _prepared(env)
-    env.response = FHIRHTTPResponse(
-        204, headers=(("Location", location), ("ETag", etag))
-    )
-    assert (
-        env.client.submit(proposed, _authorization(proposed)).status
-        is FHIRWriteStatus.COMMITTED
-    )
+    ]:
+        with subtests.test(location=location, etag=etag):
+            env = _setup()
+            proposed = _prepared(env)
+            env.response = FHIRHTTPResponse(
+                204, headers=(("Location", location), ("ETag", etag))
+            )
+            assert (
+                env.client.submit(proposed, _authorization(proposed)).status
+                is FHIRWriteStatus.COMMITTED
+            )
 
 
-@pytest.mark.parametrize(
-    "location,etag",
-    [
+def test_wrong_minimal_ack_is_unknown(subtests):
+    for location, etag in [
         ("https://untrusted.invalid/Observation/x/_history/2", 'W/"2"'),
         ("Observation/x", 'W/"2"'),
         ("Observation/x/_history/2", 'W/"3"'),
         ("Patient/x/_history/2", 'W/"2"'),
         ("Observation/x/_history/2", '"2"'),
-    ],
-)
-def test_wrong_minimal_ack_is_unknown(location, etag):
-    env = _setup()
-    proposed = _prepared(env)
-    env.response = FHIRHTTPResponse(
-        204, headers=(("Location", location), ("ETag", etag))
-    )
-    assert (
-        env.client.submit(proposed, _authorization(proposed)).status
-        is FHIRWriteStatus.UNKNOWN
-    )
+    ]:
+        with subtests.test(location=location, etag=etag):
+            env = _setup()
+            proposed = _prepared(env)
+            env.response = FHIRHTTPResponse(
+                204, headers=(("Location", location), ("ETag", etag))
+            )
+            assert (
+                env.client.submit(proposed, _authorization(proposed)).status
+                is FHIRWriteStatus.UNKNOWN
+            )
 
 
 def test_oversized_response_and_json_depth_are_bounded():
@@ -572,29 +574,26 @@ def test_oversized_response_and_json_depth_are_bounded():
     )
 
 
-@pytest.mark.parametrize(
-    "resource",
-    [
+def test_invalid_payload_never_reaches_sender(subtests):
+    for resource in [
         {},
         {"resourceType": "Patient"},
         {"resourceType": "Observation", "x": float("nan")},
         {"resourceType": "Observation", "x": object()},
         {"resourceType": "Observation", 1: "x"},
         {"resourceType": "Observation", "id": PRIVATE + "/unsafe"},
-    ],
-)
-def test_invalid_payload_never_reaches_sender(resource):
-    env = _setup()
-    with pytest.raises(FHIRWriteError):
-        env.client.prepare_conditional(
-            _plan(), resource, credential_handle=HANDLE, lineage=env.manifest
-        )
-    assert not env.requests
+    ]:
+        with subtests.test(resource=resource):
+            env = _setup()
+            with pytest.raises(FHIRWriteError):
+                env.client.prepare_conditional(
+                    _plan(), resource, credential_handle=HANDLE, lineage=env.manifest
+                )
+            assert not env.requests
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
+def test_invalid_predicate_is_value_free(subtests):
+    for query in [
         "",
         "?identifier=x",
         "identifier=x\r\nAuthorization:y",
@@ -603,45 +602,41 @@ def test_invalid_payload_never_reaches_sender(resource):
         "identifier=%0D",
         "=x",
         "identifier=" + "x" * 4097,
-    ],
-)
-def test_invalid_predicate_is_value_free(query):
-    env = _setup()
-    with pytest.raises(FHIRWriteError, match="invalid_plan") as caught:
-        env.client.prepare_conditional(
-            _plan(predicate=Vector(canonical_query=query)),
-            {"resourceType": "Observation"},
-            credential_handle=HANDLE,
-            lineage=env.manifest,
-        )
-    assert query not in str(caught.value) or query == ""
+    ]:
+        with subtests.test(query=query):
+            env = _setup()
+            with pytest.raises(FHIRWriteError, match="invalid_plan") as caught:
+                env.client.prepare_conditional(
+                    _plan(predicate=Vector(canonical_query=query)),
+                    {"resourceType": "Observation"},
+                    credential_handle=HANDLE,
+                    lineage=env.manifest,
+                )
+            assert query not in str(caught.value) or query == ""
 
 
-@pytest.mark.parametrize(
-    "precondition",
-    [
+def test_update_requires_atomic_version_header(subtests):
+    for precondition in [
         None,
         Vector(if_match='"1"'),
         Vector(if_match='W/"1"\r\nX:yes'),
         Vector(if_match=1),
         Vector(if_match='W/""'),
-    ],
-)
-def test_update_requires_atomic_version_header(precondition):
-    env = _setup()
-    with pytest.raises(FHIRWriteError, match="invalid_plan"):
-        env.client.prepare_conditional(
-            _plan("update"),
-            {"resourceType": "Observation"},
-            credential_handle=HANDLE,
-            lineage=env.manifest,
-            precondition=precondition,
-        )
+    ]:
+        with subtests.test(precondition=precondition):
+            env = _setup()
+            with pytest.raises(FHIRWriteError, match="invalid_plan"):
+                env.client.prepare_conditional(
+                    _plan("update"),
+                    {"resourceType": "Observation"},
+                    credential_handle=HANDLE,
+                    lineage=env.manifest,
+                    precondition=precondition,
+                )
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_incomplete_lineage_never_prepares(subtests):
+    for change in [
         {"policy_digest": PRIVATE},
         {"target_digest": PRIVATE},
         {"approval_receipt_digest": PRIVATE},
@@ -650,13 +645,12 @@ def test_update_requires_atomic_version_header(precondition):
         {"plan_key": "fhir-cw-v1-" + "b" * 64},
         {"evidence": ()},
         {"step_digests": ()},
-    ],
-)
-def test_incomplete_lineage_never_prepares(change):
-    env = _setup()
-    env.manifest = _manifest(**change)
-    with pytest.raises(FHIRWriteError, match="invalid_lineage"):
-        _prepared(env)
+    ]:
+        with subtests.test(change=change):
+            env = _setup()
+            env.manifest = _manifest(**change)
+            with pytest.raises(FHIRWriteError, match="invalid_lineage"):
+                _prepared(env)
 
 
 def test_changed_lineage_gate_refuses_before_claim():
@@ -670,9 +664,8 @@ def test_changed_lineage_gate_refuses_before_claim():
     assert not env.requests and not env.ledger.claims
 
 
-@pytest.mark.parametrize(
-    "audience",
-    [
+def test_invalid_operator_endpoint_is_sanitized(subtests):
+    for audience in [
         "http://synthetic.invalid/fhir",
         "https://x.invalid/fhir/",
         "https://u:p@x.invalid/fhir",
@@ -683,17 +676,15 @@ def test_changed_lineage_gate_refuses_before_claim():
         "https://x.invalid\r\n/fhir",
         "https://x.invalid:bad/fhir",
         "file:///tmp/fhir",
-    ],
-)
-def test_invalid_operator_endpoint_is_sanitized(audience):
-    with pytest.raises(FHIRWriteError, match="invalid_configuration") as caught:
-        _setup(audience=audience)
-    assert audience not in str(caught.value)
+    ]:
+        with subtests.test(audience=audience):
+            with pytest.raises(FHIRWriteError, match="invalid_configuration") as caught:
+                _setup(audience=audience)
+            assert audience not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_invalid_limits_are_closed(subtests):
+    for change in [
         {"max_request_bytes": 0},
         {"max_response_bytes": True},
         {"max_entries": 1001},
@@ -701,11 +692,10 @@ def test_invalid_operator_endpoint_is_sanitized(audience):
         {"max_json_nodes": 100001},
         {"timeout_seconds": float("inf")},
         {"timeout_seconds": True},
-    ],
-)
-def test_invalid_limits_are_closed(change):
-    with pytest.raises(FHIRWriteError, match="invalid_configuration"):
-        FHIRWriteLimits(**change)
+    ]:
+        with subtests.test(change=change):
+            with pytest.raises(FHIRWriteError, match="invalid_configuration"):
+                FHIRWriteLimits(**change)
 
 
 def test_capability_denial_and_different_audience_binding():
@@ -798,39 +788,44 @@ def test_transaction_preserves_exact_bytes_and_checks_all_scopes():
     assert scopes == ["user/Observation.u", "user/Provenance.c"]
 
 
-@pytest.mark.parametrize(
-    "problem",
-    ["digest", "count", "missing_version", "wrong_type", "extra_method", "batch"],
-)
-def test_malformed_transactions_refused(problem):
-    env = _setup()
-    transaction = _transaction()
-    payload = json.loads(transaction.serialized)
-    if problem == "digest":
-        transaction.bundle_digest = "sha256:" + "0" * 64
-    elif problem == "count":
-        transaction.entry_count = 3
-    else:
-        if problem == "missing_version":
-            del payload["entry"][0]["request"]["ifMatch"]
-        elif problem == "wrong_type":
-            payload["entry"][0]["request"]["url"] = "Patient/x"
-        elif problem == "extra_method":
-            payload["entry"][0]["request"]["method"] = "DELETE"
-        elif problem == "batch":
-            payload["type"] = "batch"
-        transaction.serialized = json.dumps(payload).encode()
-        transaction.bundle_digest = (
-            "sha256:" + hashlib.sha256(transaction.serialized).hexdigest()
-        )
-    with pytest.raises(FHIRWriteError):
-        env.client.prepare_transaction(
-            transaction,
-            idempotency_key=KEY,
-            credential_handle=HANDLE,
-            lineage=env.manifest,
-        )
-    assert not env.requests
+def test_malformed_transactions_refused(subtests):
+    for problem in [
+        "digest",
+        "count",
+        "missing_version",
+        "wrong_type",
+        "extra_method",
+        "batch",
+    ]:
+        with subtests.test(problem=problem):
+            env = _setup()
+            transaction = _transaction()
+            payload = json.loads(transaction.serialized)
+            if problem == "digest":
+                transaction.bundle_digest = "sha256:" + "0" * 64
+            elif problem == "count":
+                transaction.entry_count = 3
+            else:
+                if problem == "missing_version":
+                    del payload["entry"][0]["request"]["ifMatch"]
+                elif problem == "wrong_type":
+                    payload["entry"][0]["request"]["url"] = "Patient/x"
+                elif problem == "extra_method":
+                    payload["entry"][0]["request"]["method"] = "DELETE"
+                elif problem == "batch":
+                    payload["type"] = "batch"
+                transaction.serialized = json.dumps(payload).encode()
+                transaction.bundle_digest = (
+                    "sha256:" + hashlib.sha256(transaction.serialized).hexdigest()
+                )
+            with pytest.raises(FHIRWriteError):
+                env.client.prepare_transaction(
+                    transaction,
+                    idempotency_key=KEY,
+                    credential_handle=HANDLE,
+                    lineage=env.manifest,
+                )
+            assert not env.requests
 
 
 def test_transaction_mixed_or_incomplete_acknowledgement_is_unknown():
@@ -879,24 +874,22 @@ def test_invalid_response_objects_and_malformed_outcomes_are_closed():
         )
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
+def test_predicates_follow_existing_single_value_plan_contract(subtests):
+    for query in [
         "identifier=a&identifier=b",
         "identifier=a%2Cb",
         "_count=1",
         "identifier=" + "x" * 2049,
-    ],
-)
-def test_predicates_follow_existing_single_value_plan_contract(query):
-    env = _setup()
-    with pytest.raises(FHIRWriteError, match="invalid_plan"):
-        env.client.prepare_conditional(
-            _plan(predicate=Vector(canonical_query=query)),
-            {"resourceType": "Observation"},
-            credential_handle=HANDLE,
-            lineage=env.manifest,
-        )
+    ]:
+        with subtests.test(query=query):
+            env = _setup()
+            with pytest.raises(FHIRWriteError, match="invalid_plan"):
+                env.client.prepare_conditional(
+                    _plan(predicate=Vector(canonical_query=query)),
+                    {"resourceType": "Observation"},
+                    credential_handle=HANDLE,
+                    lineage=env.manifest,
+                )
 
 
 def test_acknowledgement_must_match_supplied_resource_id():
@@ -925,20 +918,21 @@ def test_package_exports_are_lazy_and_identical():
         assert getattr(fhir, name) is getattr(write_client, name)
 
 
-@pytest.mark.parametrize("proof", ["receipt", "mapping", "other_action"])
-def test_unverified_metadata_and_different_action_cannot_authorize_dispatch(proof):
-    env = _setup()
-    proposed = _prepared(env)
-    authority = _authorization(proposed)
-    if proof == "receipt":
-        candidate = authority.receipt
-    elif proof == "mapping":
-        candidate = authority.receipt.to_dict()
-    else:
-        changed = _prepared(
-            env, resource={"resourceType": "Observation", "status": "amended"}
-        )
-        candidate = _authorization(changed)
-    result = env.client.submit(proposed, candidate)
-    assert result.reason_code == "authorization_rejected"
-    assert not env.requests and not env.ledger.claims
+def test_unverified_metadata_and_different_action_cannot_authorize_dispatch(subtests):
+    for proof in ["receipt", "mapping", "other_action"]:
+        with subtests.test(proof=proof):
+            env = _setup()
+            proposed = _prepared(env)
+            authority = _authorization(proposed)
+            if proof == "receipt":
+                candidate = authority.receipt
+            elif proof == "mapping":
+                candidate = authority.receipt.to_dict()
+            else:
+                changed = _prepared(
+                    env, resource={"resourceType": "Observation", "status": "amended"}
+                )
+                candidate = _authorization(changed)
+            result = env.client.submit(proposed, candidate)
+            assert result.reason_code == "authorization_rejected"
+            assert not env.requests and not env.ledger.claims

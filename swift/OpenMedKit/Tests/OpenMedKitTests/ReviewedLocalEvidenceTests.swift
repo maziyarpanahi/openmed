@@ -113,6 +113,52 @@ final class ReviewedLocalEvidenceTests: XCTestCase {
         XCTAssertEqual(brief.summary, summary)
     }
 
+    func testReviewedLocalCancelledGenerationDoesNotReachEvaluation() async throws {
+        let (packet, source, summary, evaluation) = try fixture()
+        let task = Task {
+            try await ClinicalBrief.reviewedLocal(
+                evidence: packet, source: source, policyDigest: packet.policyDigest,
+                currentSource: Source(digest: packet.sourceDigest), authority: Authority(registered: packet.reviewReceipt),
+                originalIdentifiers: [], clock: { 1000 },
+                generate: { _ in
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    return summary
+                },
+                evaluate: { _, _ in
+                    XCTFail("Cancelled generation reached evaluation")
+                    return evaluation
+                }, privacyCheck: { _ in true })
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertEqual(error as? ClinicalBriefError, .cancelled)
+        }
+    }
+
+    func testReviewedLocalExpiredDeadlinePreventsGeneration() async throws {
+        let (packet, source, _, _) = try fixture()
+        do {
+            _ = try await ClinicalBrief.reviewedLocal(
+                evidence: packet, source: source, policyDigest: packet.policyDigest,
+                currentSource: Source(digest: packet.sourceDigest), authority: Authority(registered: packet.reviewReceipt),
+                originalIdentifiers: [], clock: { 1000 },
+                cancellation: ClinicalBriefCancellation(deadlineExpired: { true }),
+                generate: { _ in
+                    XCTFail("Expired deadline reached generation")
+                    return ""
+                },
+                evaluate: { _, _ in
+                    XCTFail("Expired deadline reached evaluation")
+                    return Data()
+                }, privacyCheck: { _ in true })
+            XCTFail("Expected deadline refusal")
+        } catch {
+            XCTAssertEqual(error as? ClinicalBriefError, .deadlineExceeded)
+        }
+    }
+
     func testAdapterRejectsCitationsOutsideReviewedEvidence() async throws {
         let (packet, source, summary, evaluation) = try fixture()
         var subset = try mutate(packet) {

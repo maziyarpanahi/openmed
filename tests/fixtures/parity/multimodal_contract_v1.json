@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "synthetic_only": true,
+  "cases": [
+    {
+      "id": "asset_image",
+      "wire": "{\"evidence_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762",
+      "expected": {
+        "kind": "asset",
+        "width": 100,
+        "height": 50
+      }
+    },
+    {
+      "id": "asset_audio",
+      "wire": "{\"evidence_digest\":\"7739aa11084a7f52ae6bd447c11b11c9d12bcf3aa9bf60990cd6d32ea6257a51\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"ef746a1a59afecba50d3ce36e3506ee5\",\"byte_size\":256,\"duration_f64\":\"3fb999999999999a\",\"frames\":null,\"height\":null,\"manifest_digest\":\"5c83261847b9bb7dbae3eb4594810bc89a3c12e3daf9b30dae0003bc16e37a25\",\"media_type\":\"audio/wav\",\"pages\":null,\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"source_schema\":1,\"width\":null},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "7739aa11084a7f52ae6bd447c11b11c9d12bcf3aa9bf60990cd6d32ea6257a51",
+      "expected": {
+        "kind": "asset",
+        "duration": 0.1
+      }
+    },
+    {
+      "id": "asset_large_integer",
+      "wire": "{\"evidence_digest\":\"34ac2e56184445f2973ac966d81235c24845a2998815c129704811b01c282b98\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"9620e2bc245112ba4c5153672dd0fee0\",\"byte_size\":9223372036854775807,\"duration_f64\":null,\"frames\":null,\"height\":null,\"manifest_digest\":\"51cc3c13bd844034dbe655cbdcd63216b21925298563699feae995b248c23c3a\",\"media_type\":\"application/dicom\",\"pages\":null,\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"source_schema\":1,\"width\":null},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "34ac2e56184445f2973ac966d81235c24845a2998815c129704811b01c282b98",
+      "expected": {
+        "kind": "asset",
+        "bytes": "9223372036854775807"
+      }
+    },
+    {
+      "id": "visual_0",
+      "wire": "{\"evidence_digest\":\"57b7ebb453dea6c8fe9d75a893dafd721634c5b553b0c60728f213a8aece60fc\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_height_f64\":\"4049000000000000\",\"display_width_f64\":\"4059000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":0,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "57b7ebb453dea6c8fe9d75a893dafd721634c5b553b0c60728f213a8aece60fc",
+      "expected": {
+        "kind": "visual",
+        "box": [
+          10,
+          5,
+          30,
+          20
+        ],
+        "scalar_span": [
+          1,
+          3
+        ],
+        "synthetic_text": "A\ud83d\ude00\u00e9B"
+      }
+    },
+    {
+      "id": "visual_90",
+      "wire": "{\"evidence_digest\":\"ff9bf24eae8e648e5be8fcbc656a4afadbe7426235791f143e111371e563f63c\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"403e000000000000\",\"4024000000000000\",\"4046800000000000\",\"403e000000000000\"],\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":90,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "ff9bf24eae8e648e5be8fcbc656a4afadbe7426235791f143e111371e563f63c",
+      "expected": {
+        "kind": "visual",
+        "box": [
+          30,
+          10,
+          45,
+          30
+        ],
+        "scalar_span": [
+          1,
+          3
+        ],
+        "synthetic_text": "A\ud83d\ude00\u00e9B"
+      }
+    },
+    {
+      "id": "visual_180",
+      "wire": "{\"evidence_digest\":\"59117aff47405786e3de88753531c204a7e79492a5e54e6cc949f74eaff921a6\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"4051800000000000\",\"403e000000000000\",\"4056800000000000\",\"4046800000000000\"],\"display_height_f64\":\"4049000000000000\",\"display_width_f64\":\"4059000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":180,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "59117aff47405786e3de88753531c204a7e79492a5e54e6cc949f74eaff921a6",
+      "expected": {
+        "kind": "visual",
+        "box": [
+          70,
+          30,
+          90,
+          45
+        ],
+        "scalar_span": [
+          1,
+          3
+        ],
+        "synthetic_text": "A\ud83d\ude00\u00e9B"
+      }
+    },
+    {
+      "id": "visual_270",
+      "wire": "{\"evidence_digest\":\"b342e31b704fc077af17b67186a96ab769b4de8b01a27497361b9cf2b824dba4\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"4014000000000000\",\"4051800000000000\",\"4034000000000000\",\"4056800000000000\"],\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":270,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "b342e31b704fc077af17b67186a96ab769b4de8b01a27497361b9cf2b824dba4",
+      "expected": {
+        "kind": "visual",
+        "box": [
+          5,
+          70,
+          20,
+          90
+        ],
+        "scalar_span": [
+          1,
+          3
+        ],
+        "synthetic_text": "A\ud83d\ude00\u00e9B"
+      }
+    },
+    {
+      "id": "visual_fractional",
+      "wire": "{\"evidence_digest\":\"9fcf23135e82c84b916bed882980205e618ecb07fb0984cdb090eb6c0fde8216\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"3fb999999999999a\",\"3fc999999999999a\",\"403e400000000000\",\"4034800000000000\"],\"display_box_f64\":[\"403e000000000000\",\"3fb999999999999a\",\"4049266666666666\",\"403e400000000000\"],\"display_height_f64\":\"4059100000000000\",\"display_width_f64\":\"4049400000000000\",\"height_f64\":\"4049400000000000\",\"kind\":\"pixels\",\"node_ref\":\"22222222222222222222222222222222\",\"page\":0,\"rotation\":90,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":null,\"unit\":\"point\",\"width_f64\":\"4059100000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "9fcf23135e82c84b916bed882980205e618ecb07fb0984cdb090eb6c0fde8216",
+      "expected": {
+        "kind": "visual",
+        "box": [
+          30.0,
+          0.1,
+          50.3,
+          30.25
+        ]
+      }
+    },
+    {
+      "id": "visual_page",
+      "wire": "{\"evidence_digest\":\"86430668ae731e3e3035e5ab6b5d7620e78eb34f58f871a0bbd9d64cefc7610a\",\"kind\":\"visual\",\"payload\":{\"box_f64\":null,\"display_box_f64\":null,\"display_height_f64\":\"4049000000000000\",\"display_width_f64\":\"4059000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"page_geometry\",\"node_ref\":\"33333333333333333333333333333333\",\"page\":0,\"rotation\":0,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":null,\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "86430668ae731e3e3035e5ab6b5d7620e78eb34f58f871a0bbd9d64cefc7610a",
+      "expected": {
+        "kind": "visual",
+        "box": null
+      }
+    },
+    {
+      "id": "transcript_partial",
+      "wire": "{\"evidence_digest\":\"0fbbc2a54d9746b7d399186606c7cb989dcfb2cef89fc73366a7ed0166d9eaef\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[1,3],\"finalized\":false,\"invalidation\":null,\"length\":4,\"original_revision\":0,\"original_span\":[1,3],\"revision\":0,\"sample_bounds\":[132,309],\"sample_rate_hz\":44100,\"segment_ref\":\"22222222222222222222222222222222\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"02adb6a407183f9639a45a9408540b0f2aefcfb9ece87c31fb84e59940f0297e\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"44444444444444444444444444444444\",\"time_ms\":[3,7],\"token_refs\":[\"33333333333333333333333333333333\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "0fbbc2a54d9746b7d399186606c7cb989dcfb2cef89fc73366a7ed0166d9eaef",
+      "expected": {
+        "kind": "transcript",
+        "current_span": [
+          1,
+          3
+        ],
+        "time_ms": [
+          3,
+          7
+        ],
+        "sample_bounds": [
+          132,
+          309
+        ],
+        "finalized": false
+      }
+    },
+    {
+      "id": "transcript_shifted",
+      "wire": "{\"evidence_digest\":\"6eb9db2373d64b5f6873e8de2490041a2290cd3e4caccf2480e86d2de6bc9ffb\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[3,5],\"finalized\":false,\"invalidation\":null,\"length\":6,\"original_revision\":0,\"original_span\":[1,3],\"revision\":1,\"sample_bounds\":[132,309],\"sample_rate_hz\":44100,\"segment_ref\":\"22222222222222222222222222222222\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"6d4ad13090acf31c6dc8c4d659a9594bf68084428b4f5fa0469bb9414226570d\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"44444444444444444444444444444444\",\"time_ms\":[3,7],\"token_refs\":[\"33333333333333333333333333333333\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "6eb9db2373d64b5f6873e8de2490041a2290cd3e4caccf2480e86d2de6bc9ffb",
+      "expected": {
+        "kind": "transcript",
+        "current_span": [
+          3,
+          5
+        ],
+        "time_ms": [
+          3,
+          7
+        ],
+        "sample_bounds": [
+          132,
+          309
+        ],
+        "finalized": false
+      }
+    },
+    {
+      "id": "transcript_final",
+      "wire": "{\"evidence_digest\":\"551f54132dfb3c0a8d85fa9d9d8551131be50facfc87289baf13b8c12fcdc217\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[3,5],\"finalized\":true,\"invalidation\":null,\"length\":6,\"original_revision\":0,\"original_span\":[1,3],\"revision\":2,\"sample_bounds\":[132,309],\"sample_rate_hz\":44100,\"segment_ref\":\"22222222222222222222222222222222\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"2f9b858c9de317f36a4f9312bd742601c6b414bf26b0b74fc1035956951d6b87\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"44444444444444444444444444444444\",\"time_ms\":[3,7],\"token_refs\":[\"33333333333333333333333333333333\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "551f54132dfb3c0a8d85fa9d9d8551131be50facfc87289baf13b8c12fcdc217",
+      "expected": {
+        "kind": "transcript",
+        "current_span": [
+          3,
+          5
+        ],
+        "sample_bounds": [
+          132,
+          309
+        ],
+        "finalized": true
+      }
+    },
+    {
+      "id": "transcript_invalidated",
+      "wire": "{\"evidence_digest\":\"e845c141f65ec5c373f2fa5ef777a0ec2b75ca7b9368811b8921230e2f358dfe\",\"kind\":\"transcript\",\"payload\":{\"current_span\":null,\"finalized\":false,\"invalidation\":\"cited_text_changed\",\"length\":2,\"original_revision\":0,\"original_span\":[1,3],\"revision\":1,\"sample_bounds\":null,\"sample_rate_hz\":16000,\"segment_ref\":\"55555555555555555555555555555555\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"66fed495d39bbf08db6f77170a2e6b4e7fec4a9c8588a0b71bd7568a9f3a1126\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"77777777777777777777777777777777\",\"time_ms\":null,\"token_refs\":[\"66666666666666666666666666666666\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "e845c141f65ec5c373f2fa5ef777a0ec2b75ca7b9368811b8921230e2f358dfe",
+      "expected": {
+        "kind": "transcript",
+        "invalidation": "cited_text_changed",
+        "current_span": null,
+        "sample_bounds": null,
+        "finalized": false
+      }
+    },
+    {
+      "id": "provider_success_none",
+      "wire": "{\"evidence_digest\":\"947137fe883ae3e023da51bd1befa88b786c0a011ce02afd505d85a450d085e8\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":null,\"count_metadata\":{\"input_items\":1,\"output_items\":1},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"success\",\"output_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "947137fe883ae3e023da51bd1befa88b786c0a011ce02afd505d85a450d085e8",
+      "expected": {
+        "kind": "provider",
+        "outcome": "success",
+        "reason": null
+      }
+    },
+    {
+      "id": "provider_abstention_unsupported_media",
+      "wire": "{\"evidence_digest\":\"ea28326c167cf746bd8b1d47042b801054460fbcadcb60f41d2c161f3f5de03b\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"unsupported_media\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "ea28326c167cf746bd8b1d47042b801054460fbcadcb60f41d2c161f3f5de03b",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "unsupported_media"
+      }
+    },
+    {
+      "id": "provider_abstention_malformed_media",
+      "wire": "{\"evidence_digest\":\"6c1a4550d4cc201fb90c0bef3a64440d8eacb422564b7225650363507a0d17a2\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"malformed_media\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "6c1a4550d4cc201fb90c0bef3a64440d8eacb422564b7225650363507a0d17a2",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "malformed_media"
+      }
+    },
+    {
+      "id": "provider_abstention_resource_limit",
+      "wire": "{\"evidence_digest\":\"94b5d32dda4db7cd9469ebf7f11feb74d45ba971e2142fb68df08f40d7a50bce\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"resource_limit\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "94b5d32dda4db7cd9469ebf7f11feb74d45ba971e2142fb68df08f40d7a50bce",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "resource_limit"
+      }
+    },
+    {
+      "id": "provider_abstention_low_quality",
+      "wire": "{\"evidence_digest\":\"b4e80829562feebd382d81c7e7cb31410b1113004e9d8c322c1f68e0f01232e9\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"low_quality\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "b4e80829562feebd382d81c7e7cb31410b1113004e9d8c322c1f68e0f01232e9",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "low_quality"
+      }
+    },
+    {
+      "id": "provider_abstention_phi_uncertainty",
+      "wire": "{\"evidence_digest\":\"055b0fffc9c4c571845300b220ca28b8360a122a3910909f1f7c6d737af511a1\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"phi_uncertainty\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "055b0fffc9c4c571845300b220ca28b8360a122a3910909f1f7c6d737af511a1",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "phi_uncertainty"
+      }
+    },
+    {
+      "id": "provider_abstention_speaker_uncertainty",
+      "wire": "{\"evidence_digest\":\"3ce34dbc7f7c53613a46cba83988d347585a103a6928b90e8ded85ea6e67003a\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"speaker_uncertainty\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "3ce34dbc7f7c53613a46cba83988d347585a103a6928b90e8ded85ea6e67003a",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "speaker_uncertainty"
+      }
+    },
+    {
+      "id": "provider_abstention_temporal_instability",
+      "wire": "{\"evidence_digest\":\"42e14b5098d86a2bb8fe1fe6f9154372e162ce6b23dfbc476a70bd530c3870d4\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":\"temporal_instability\",\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "42e14b5098d86a2bb8fe1fe6f9154372e162ce6b23dfbc476a70bd530c3870d4",
+      "expected": {
+        "kind": "provider",
+        "outcome": "abstention",
+        "reason": "temporal_instability"
+      }
+    },
+    {
+      "id": "provider_provider_unavailable_none",
+      "wire": "{\"evidence_digest\":\"1e4f80b322ccb8f560a68c139e44f74258288baf5a1efb9077ed64464b3551c1\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":null,\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"provider_unavailable\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "1e4f80b322ccb8f560a68c139e44f74258288baf5a1efb9077ed64464b3551c1",
+      "expected": {
+        "kind": "provider",
+        "outcome": "provider_unavailable",
+        "reason": null
+      }
+    },
+    {
+      "id": "provider_validation_failure_none",
+      "wire": "{\"evidence_digest\":\"89eda0c7e9561381d4b317d475aeb5b9cd217c15da5d0dbbf054242c2d18627c\",\"kind\":\"provider\",\"payload\":{\"abstention_code\":null,\"count_metadata\":{\"input_items\":1,\"output_items\":0},\"duration_f64\":\"3fb999999999999a\",\"input_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"model_id\":\"synthetic-model\",\"outcome\":\"validation_failure\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "89eda0c7e9561381d4b317d475aeb5b9cd217c15da5d0dbbf054242c2d18627c",
+      "expected": {
+        "kind": "provider",
+        "outcome": "validation_failure",
+        "reason": null
+      }
+    },
+    {
+      "id": "clock_aligned",
+      "wire": "{\"evidence_digest\":\"a84895f262f6ee1ed039f6d3ddb558addd46434d042de4d0dacf4288b0a3fcc1\",\"kind\":\"clock\",\"payload\":{\"guaranteed_overlap_ns\":[3000000000,4000000000],\"policy_digest\":\"3df93527e22ecd327ee6a1729a75a92b84711e095d7dc815eec00daa97113ab7\",\"reasons\":[],\"source_clock_digest\":\"b5c4586dc7bef5dffe18f5f0773b361c50ee02bd931534d26348e26ef5bbeff9\",\"source_reference_digest\":\"897baa590f1728040f7a16b9137f311d05c376c11aea1219fb66e7279a7b25b9\",\"source_result_digest\":\"41c9c60781b87a5e80fd4913e918681b4c60761c6b711d4f59a41b55a549a4b0\",\"source_schema\":\"openmed.multimodal.clock-alignment.v1\",\"state\":\"aligned-for-review\",\"target_clock_digest\":\"0e1c9dec729520737c4577bd25604a48a1b573e76830494070ad2bd50cff79bc\",\"target_end_ns\":{\"lower\":4000000000,\"upper\":4000000000},\"target_reference_digest\":\"5a04fe2fef0af8cad38da66ec0774b7ef168e2f0fb413870bf567ddff1eb8d0d\",\"target_start_ns\":{\"lower\":3000000000,\"upper\":3000000000},\"uncertainty_ns\":0},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "a84895f262f6ee1ed039f6d3ddb558addd46434d042de4d0dacf4288b0a3fcc1",
+      "expected": {
+        "kind": "clock",
+        "overlap": [
+          3000000000,
+          4000000000
+        ],
+        "state": "aligned-for-review"
+      }
+    },
+    {
+      "id": "clock_hold",
+      "wire": "{\"evidence_digest\":\"50e6e649e7e8180af2a2784b9bcfd505db4aaf2b8f547dde2d5e16562170528f\",\"kind\":\"clock\",\"payload\":{\"guaranteed_overlap_ns\":null,\"policy_digest\":\"3df93527e22ecd327ee6a1729a75a92b84711e095d7dc815eec00daa97113ab7\",\"reasons\":[\"source-timing-missing\"],\"source_clock_digest\":\"b5c4586dc7bef5dffe18f5f0773b361c50ee02bd931534d26348e26ef5bbeff9\",\"source_reference_digest\":\"897baa590f1728040f7a16b9137f311d05c376c11aea1219fb66e7279a7b25b9\",\"source_result_digest\":\"a4ef98c52b43b718dfa4c0f1e1ae2fb978cf877960f0cc240ff51855e68d77b2\",\"source_schema\":\"openmed.multimodal.clock-alignment.v1\",\"state\":\"review-required\",\"target_clock_digest\":\"0e1c9dec729520737c4577bd25604a48a1b573e76830494070ad2bd50cff79bc\",\"target_end_ns\":null,\"target_reference_digest\":\"420e68c5cdcfd5616d227f3fe7f6d3db97df1e3e153f6861e7f0a8a9dfd946eb\",\"target_start_ns\":null,\"uncertainty_ns\":null},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "50e6e649e7e8180af2a2784b9bcfd505db4aaf2b8f547dde2d5e16562170528f",
+      "expected": {
+        "kind": "clock",
+        "overlap": null,
+        "state": "review-required"
+      }
+    },
+    {
+      "id": "clock_large_integer",
+      "wire": "{\"evidence_digest\":\"eb44a01185449da7f3750f742db2cc9e7f1963d0e2c80d2628caa258f6c45d75\",\"kind\":\"clock\",\"payload\":{\"guaranteed_overlap_ns\":[4000000000000000001,4000000000000000101],\"policy_digest\":\"3df93527e22ecd327ee6a1729a75a92b84711e095d7dc815eec00daa97113ab7\",\"reasons\":[],\"source_clock_digest\":\"b5c4586dc7bef5dffe18f5f0773b361c50ee02bd931534d26348e26ef5bbeff9\",\"source_reference_digest\":\"897baa590f1728040f7a16b9137f311d05c376c11aea1219fb66e7279a7b25b9\",\"source_result_digest\":\"b5d77fd2becaa8a7811a753e96bb036a53f68032661a932aaa1b39ee72a610c9\",\"source_schema\":\"openmed.multimodal.clock-alignment.v1\",\"state\":\"aligned-for-review\",\"target_clock_digest\":\"0e1c9dec729520737c4577bd25604a48a1b573e76830494070ad2bd50cff79bc\",\"target_end_ns\":{\"lower\":4000000000000000101,\"upper\":4000000000000000101},\"target_reference_digest\":\"5a04fe2fef0af8cad38da66ec0774b7ef168e2f0fb413870bf567ddff1eb8d0d\",\"target_start_ns\":{\"lower\":4000000000000000001,\"upper\":4000000000000000001},\"uncertainty_ns\":0},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "digest": "eb44a01185449da7f3750f742db2cc9e7f1963d0e2c80d2628caa258f6c45d75",
+      "expected": {
+        "kind": "clock",
+        "overlap_strings": [
+          "4000000000000000001",
+          "4000000000000000101"
+        ],
+        "state": "aligned-for-review"
+      }
+    }
+  ],
+  "negative_cases": [
+    {
+      "id": "unknown_schema",
+      "wire": "{\"evidence_digest\":\"7a4163d3fe3d7b7cb1c3488b87f2740d598cdfdaebbb756a341a573dd351a515\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"future\"}",
+      "reason": "unsupported_multimodal_schema"
+    },
+    {
+      "id": "fractional_source_schema",
+      "wire": "{\"evidence_digest\":\"5570e437f2e2751f8c70b285aee7ddd2122c88a27cb3ed1b5ebbb545e91b36be\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1.5,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "unsupported_multimodal_schema"
+    },
+    {
+      "id": "unknown_capability",
+      "wire": "{\"evidence_digest\":\"8164ec29531f0916d894e120cacfd455df33c6fd826a2e660c066ff623fc920d\",\"kind\":\"remote\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "unsupported_multimodal_capability"
+    },
+    {
+      "id": "missing_digest",
+      "wire": "{\"evidence_digest\":\"7554e9529fae4406d7d38ae2de87140ad3da36526a211f15c52f3ae5887fc822\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":null,\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "incomplete_multimodal_provenance"
+    },
+    {
+      "id": "extra_field",
+      "wire": "{\"evidence_digest\":\"f0aeb597620ee40171817a1516e55db209323d745ba12501b59f2117d76e57e7\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"private_path\":\"synthetic\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "boolean_integer",
+      "wire": "{\"evidence_digest\":\"72664188ca2db0fbd96b8bef688b6fca027c6b0964832aa364747da33e6aebb3\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":true,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "floating_integer",
+      "wire": "{\"evidence_digest\":\"a0df264457dc133aea790c6988766dc7e3ec67af4bbd314e83e798abf48c366b\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":1.0,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "overflow_integer",
+      "wire": "{\"evidence_digest\":\"82f5c8b19e42987734fb25d3abcfdde548e47aa0dc9ebda22b96603e4b024860\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":9223372036854775808,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "newline_reference",
+      "wire": "{\"evidence_digest\":\"a4d2467d478b9b4d7050dea2a0066471154abcfced884efff08641e17679c620\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"1111111111111111111111111111111\\n\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "incomplete_multimodal_provenance"
+    },
+    {
+      "id": "nonfinite_float",
+      "wire": "{\"evidence_digest\":\"c91097c8b3e35f5d47099ff2c0609df048fdaff4ed70dbee4f28e823b3d71f45\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":\"7ff0000000000000\",\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "negative_zero",
+      "wire": "{\"evidence_digest\":\"bf7378ba58003e147ffe6a2f9f4ce5c47ca284d391565b72bf753e6bef2e5e69\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":\"8000000000000000\",\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "unsupported_rotation",
+      "wire": "{\"evidence_digest\":\"1315fcd950d5f151eb539e5cc2a5e97570719387f5e18c76a20ed7a3b693a85c\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"4014000000000000\",\"4051800000000000\",\"4034000000000000\",\"4056800000000000\"],\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":45,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_transform"
+    },
+    {
+      "id": "mismatched_display",
+      "wire": "{\"evidence_digest\":\"661afa724fb5b0c193972ac4117e0022b80b088c13e8cba3dd25daf0ed6a2e80\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":null,\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":270,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_transform"
+    },
+    {
+      "id": "nonfinite_coordinate",
+      "wire": "{\"evidence_digest\":\"66bc2ecc76dfb0c82ddb4cebbe58d0c33c126d1345df35d9d19b201d0b601467\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4024000000000000\",\"4014000000000000\",\"403e000000000000\",\"4034000000000000\"],\"display_box_f64\":[\"4014000000000000\",\"4051800000000000\",\"4034000000000000\",\"4056800000000000\"],\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":270,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"7ff8000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "wrong_sample_grid",
+      "wire": "{\"evidence_digest\":\"4847dc6092af9168793795e8cae617e6178eb2126a4bde9c7265e0ef4f99f4b5\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[1,3],\"finalized\":false,\"invalidation\":null,\"length\":4,\"original_revision\":0,\"original_span\":[1,3],\"revision\":0,\"sample_bounds\":[132,308],\"sample_rate_hz\":44100,\"segment_ref\":\"22222222222222222222222222222222\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"02adb6a407183f9639a45a9408540b0f2aefcfb9ece87c31fb84e59940f0297e\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"44444444444444444444444444444444\",\"time_ms\":[3,7],\"token_refs\":[\"33333333333333333333333333333333\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "invalidated_coords_visible",
+      "wire": "{\"evidence_digest\":\"e0ab07b7f2addae13051351ead049c9a39d4dad260cebea8abf4b8dad8a8f0a3\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[1,3],\"finalized\":false,\"invalidation\":\"cited_text_changed\",\"length\":2,\"original_revision\":0,\"original_span\":[1,3],\"revision\":1,\"sample_bounds\":null,\"sample_rate_hz\":16000,\"segment_ref\":\"55555555555555555555555555555555\",\"session_ref\":\"11111111111111111111111111111111\",\"snapshot_digest\":\"66fed495d39bbf08db6f77170a2e6b4e7fec4a9c8588a0b71bd7568a9f3a1126\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"77777777777777777777777777777777\",\"time_ms\":null,\"token_refs\":[\"66666666666666666666666666666666\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "clock_hold_leaks_time",
+      "wire": "{\"evidence_digest\":\"a7ec6642eaf5bd687a198229a07ed7f4b4bc816f15c04ffb08773311f001f75e\",\"kind\":\"clock\",\"payload\":{\"guaranteed_overlap_ns\":null,\"policy_digest\":\"3df93527e22ecd327ee6a1729a75a92b84711e095d7dc815eec00daa97113ab7\",\"reasons\":[\"source-timing-missing\"],\"source_clock_digest\":\"b5c4586dc7bef5dffe18f5f0773b361c50ee02bd931534d26348e26ef5bbeff9\",\"source_reference_digest\":\"897baa590f1728040f7a16b9137f311d05c376c11aea1219fb66e7279a7b25b9\",\"source_result_digest\":\"a4ef98c52b43b718dfa4c0f1e1ae2fb978cf877960f0cc240ff51855e68d77b2\",\"source_schema\":\"openmed.multimodal.clock-alignment.v1\",\"state\":\"review-required\",\"target_clock_digest\":\"0e1c9dec729520737c4577bd25604a48a1b573e76830494070ad2bd50cff79bc\",\"target_end_ns\":null,\"target_reference_digest\":\"420e68c5cdcfd5616d227f3fe7f6d3db97df1e3e153f6861e7f0a8a9dfd946eb\",\"target_start_ns\":null,\"uncertainty_ns\":0},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "visual_precision_collapse",
+      "wire": "{\"evidence_digest\":\"c8f1ecb635dbb6389d1e009e99e557fe32a5dc57a7f592c904ee092aae307fe3\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"0000000000000000\",\"4014000000000000\",\"01a56e1fc2f8f359\",\"4034000000000000\"],\"display_box_f64\":[\"4014000000000000\",\"4059000000000000\",\"4034000000000000\",\"4059000000000000\"],\"display_height_f64\":\"4059000000000000\",\"display_width_f64\":\"4049000000000000\",\"height_f64\":\"4049000000000000\",\"kind\":\"ocr_span\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":270,\"source_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":[1,3],\"unit\":\"pixel\",\"width_f64\":\"4059000000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_transform"
+    },
+    {
+      "id": "duplicate_key",
+      "wire": "{\"kind\":\"asset\",\"evidence_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "nonfinite_json",
+      "wire": "{\"evidence_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":NaN,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "reason": "invalid_multimodal_contract"
+    },
+    {
+      "id": "noncanonical",
+      "wire": "{\"evidence_digest\":\"a7403230ffaafe1565544e2caca5acde7bd72b36b28a1bf27408dd3121bb0762\",\"kind\":\"asset\",\"payload\":{\"asset_ref\":\"6f252e1d85c9df6308cbb574aa764fcb\",\"byte_size\":128,\"duration_f64\":null,\"frames\":null,\"height\":50,\"manifest_digest\":\"020a57cb4958a0fed7a2cc3d0acf023ef69f9ccbd287ca2d0fba11ab2bb8b7d0\",\"media_type\":\"image/png\",\"pages\":null,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_schema\":1,\"width\":100},\"schema_version\":\"openmed.multimodal.apple.v1\"}\n",
+      "reason": "invalid_multimodal_contract"
+    }
+  ],
+  "provider_outcomes": [
+    "success",
+    "abstention",
+    "provider_unavailable",
+    "validation_failure"
+  ],
+  "abstention_codes": [
+    "unsupported_media",
+    "malformed_media",
+    "resource_limit",
+    "low_quality",
+    "phi_uncertainty",
+    "speaker_uncertainty",
+    "temporal_instability"
+  ],
+  "clock_reasons": [
+    "insufficient-anchors",
+    "inconsistent-clock-anchors",
+    "clock-coverage-missing",
+    "clock-discontinuity",
+    "anchor-gap-exceeds-policy",
+    "clock-epoch-mismatch",
+    "clock-declaration-mismatch",
+    "wall-reference-mismatch",
+    "source-timing-missing",
+    "source-binding-mismatch",
+    "invalid-source-reference",
+    "transcript-not-finalized",
+    "source-requires-review",
+    "alignment-uncertainty-exceeds-policy",
+    "evidence-does-not-overlap",
+    "overlap-is-uncertain",
+    "source-changed-during-alignment"
+  ]
+}
