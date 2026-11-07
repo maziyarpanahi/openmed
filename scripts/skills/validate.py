@@ -702,7 +702,9 @@ def validate_repository(
     report = ValidationReport()
     requested_root = repo_root or REPO_ROOT
     try:
-        root = requested_root.resolve()
+        # Python 3.13 leaves symlink loops unresolved in non-strict mode.
+        # Require a real root on every supported interpreter before inspection.
+        root = requested_root.resolve(strict=True)
     except (OSError, RuntimeError):
         root = Path(os.path.abspath(os.fspath(requested_root)))
         _add_error(report, root, root, "repository root cannot be resolved")

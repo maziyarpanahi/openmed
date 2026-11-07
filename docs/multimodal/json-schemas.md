@@ -53,6 +53,11 @@ assert set(catalog) == {
 | `processing_summary` | `https://openmed.ai/schemas/multimodal/processing-summary-v1.schema.json` | `ProcessingSummary` |
 | `provider_result` | `https://openmed.ai/schemas/multimodal/provider-result-v1.schema.json` | `ProviderResultEnvelope` |
 
+The abstention and provider documents validate both supported wire versions.
+Version 2 is required for the consent, capture, language and policy reasons.
+Provider guard metadata validates the release decision and digest fields
+together with the outcome.
+
 The exported identifiers are stable and versioned. A contract change that alters
 any of these documents must introduce a new version suffix rather than mutate a
 published identifier.

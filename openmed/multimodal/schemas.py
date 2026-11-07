@@ -23,9 +23,16 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any, Final
 
-from .abstention import ABSTENTION_SCHEMA_VERSION, AbstentionReason, AbstentionStage
+from .abstention import (
+    _ALLOWED_REASONS,
+    ABSTENTION_SCHEMA_VERSION,
+    AbstentionReason,
+    AbstentionStage,
+)
 from .asset_batch import BATCH_VERSION, MAX_BATCH_ASSETS
 from .asset_manifest import (
+    _SUPPORTED_EXACT_MEDIA_TYPES,
+    _SUPPORTED_MEDIA_PREFIXES,
     MANIFEST_VERSION,
     MAX_MANIFEST_BYTE_SIZE,
     MAX_MANIFEST_COUNT,
@@ -34,6 +41,7 @@ from .asset_manifest import (
 from .processing_summary import PROCESSING_SUMMARY_SCHEMA_VERSION, ProcessingOutcome
 from .provider_result import (
     PROVIDER_RESULT_SCHEMA_VERSION,
+    PROVIDER_RESULT_SCHEMA_VERSION_V2,
     ProviderAbstentionCode,
     ProviderResultOutcome,
 )
@@ -82,15 +90,13 @@ MULTIMODAL_SCHEMA_NAMES: Final = (
 # ``tests/unit/multimodal/test_schemas.py`` binds every value below to its
 # source constant, so the exported schema cannot drift from the Python contract
 # without a failing test.
-_SUPPORTED_EXACT_MEDIA_TYPES: Final = frozenset(
-    {"application/dicom", "application/dicom+json", "application/pdf"}
-)
-_SUPPORTED_MEDIA_PREFIXES: Final = ("audio/", "image/")
-_OPAQUE_IDENTIFIER_PATTERN: Final = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+_OPAQUE_IDENTIFIER_PATTERN: Final = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}(?![\s\S])"
 _PATH_OR_URL_PATTERN: Final = r"://|(^|[A-Za-z]):[\\/]|[\\/]|~"
-_MEDIA_TYPE_PATTERN: Final = r"^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$"
-_SHA256_PATTERN: Final = r"^[0-9a-f]{64}$"
-_PROVIDER_IDENTIFIER_PATTERN: Final = r"^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$"
+_MEDIA_TYPE_PATTERN: Final = r"^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*(?![\s\S])"
+_SHA256_PATTERN: Final = r"^[0-9a-f]{64}(?![\s\S])"
+_PROVIDER_IDENTIFIER_PATTERN: Final = (
+    r"^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?(?![\s\S])"
+)
 _PROVIDER_FORBIDDEN_PART_PATTERN: Final = (
     r"(^|[._-])(?:bearer|credential|mrn|password|patient|prompt|secret|token)"
     r"([._-]|$)"
@@ -129,24 +135,20 @@ _SUMMARY_FIELDS: Final = (
     "asset_count_with_output_digest",
 )
 _REASONS_BY_STAGE: Final = {
-    "preflight": ("provider_unavailable", "resource_limit", "unsupported_media"),
-    "decode": ("low_quality", "malformed_media", "resource_limit"),
-    "inference": (
-        "low_quality",
-        "phi_uncertainty",
-        "provider_unavailable",
-        "resource_limit",
-        "speaker_uncertainty",
-        "temporal_instability",
-    ),
-    "post_process": (
-        "low_quality",
-        "phi_uncertainty",
-        "resource_limit",
-        "speaker_uncertainty",
-        "temporal_instability",
-    ),
+    stage.value: tuple(sorted(reason.value for reason in reasons))
+    for stage, reasons in _ALLOWED_REASONS.items()
 }
+_ABSTENTION_VERSIONS: Final = (ABSTENTION_SCHEMA_VERSION, 2)
+_PROVIDER_V2_CODES: Final = tuple(
+    code.value
+    for code in ProviderAbstentionCode
+    if AbstentionReason(code.value).schema_version == 2
+)
+_GUARD_DIGEST_FIELDS: Final = (
+    "detector_version_digest",
+    "policy_digest",
+    "report_digest",
+)
 
 
 def build_multimodal_schemas() -> dict[str, dict[str, Any]]:
@@ -242,7 +244,7 @@ def _shared_definitions() -> dict[str, Any]:
                 {"enum": sorted(_SUPPORTED_EXACT_MEDIA_TYPES)},
                 *(
                     {"pattern": f"^{re.escape(prefix)}"}
-                    for prefix in _SUPPORTED_MEDIA_PREFIXES
+                    for prefix in sorted(_SUPPORTED_MEDIA_PREFIXES)
                 ),
             ],
         },
@@ -377,11 +379,26 @@ def _build_abstention_record_schema() -> dict[str, Any]:
             "additionalProperties": False,
             "required": ["reason", "schema_version", "stage"],
             "properties": {
-                "schema_version": {"const": ABSTENTION_SCHEMA_VERSION},
+                "schema_version": {"enum": list(_ABSTENTION_VERSIONS)},
                 "stage": _enum(AbstentionStage),
                 "reason": _enum(AbstentionReason),
             },
-            "allOf": _stage_reason_constraints(),
+            "allOf": _stage_reason_constraints()
+            + [
+                {
+                    "if": {"properties": {"schema_version": {"const": version}}},
+                    "then": {
+                        "properties": {
+                            "reason": _enum(
+                                reason
+                                for reason in AbstentionReason
+                                if reason.schema_version == version
+                            )
+                        }
+                    },
+                }
+                for version in _ABSTENTION_VERSIONS
+            ],
         }
     }
     return _document(
@@ -548,6 +565,55 @@ def _provider_outcome_constraints() -> list[dict[str, Any]]:
             },
             "then": {"properties": {"abstention_code": {"type": "null"}}},
         },
+        {
+            "if": {
+                "properties": {
+                    "schema_version": {"const": PROVIDER_RESULT_SCHEMA_VERSION_V2}
+                }
+            },
+            "then": {
+                "required": ["abstention_code"],
+                "properties": {
+                    "outcome": {"const": ProviderResultOutcome.ABSTENTION.value},
+                    "abstention_code": {"enum": list(_PROVIDER_V2_CODES)},
+                },
+            },
+            "else": {
+                "properties": {
+                    "abstention_code": {"not": {"enum": list(_PROVIDER_V2_CODES)}}
+                }
+            },
+        },
+        {
+            "if": {
+                "required": ["guard_metadata"],
+                "properties": {
+                    "guard_metadata": {
+                        "required": ["decision"],
+                        "properties": {"decision": {"enum": ["pass", "redact"]}},
+                    }
+                },
+            },
+            "then": {"properties": {"outcome": {"const": "success"}}},
+        },
+        {
+            "if": {
+                "required": ["guard_metadata"],
+                "properties": {
+                    "guard_metadata": {
+                        "required": ["decision"],
+                        "properties": {"decision": {"enum": ["withhold", "abstain"]}},
+                    }
+                },
+            },
+            "then": {
+                "required": ["abstention_code"],
+                "properties": {
+                    "outcome": {"const": "abstention"},
+                    "abstention_code": {"const": "phi_uncertainty"},
+                },
+            },
+        },
     ]
 
 
@@ -565,7 +631,12 @@ def _build_provider_result_schema() -> dict[str, Any]:
             "additionalProperties": False,
             "required": list(_PROVIDER_REQUIRED_FIELDS),
             "properties": {
-                "schema_version": {"const": PROVIDER_RESULT_SCHEMA_VERSION},
+                "schema_version": {
+                    "enum": [
+                        PROVIDER_RESULT_SCHEMA_VERSION,
+                        PROVIDER_RESULT_SCHEMA_VERSION_V2,
+                    ]
+                },
                 "provider_id": {"$ref": "#/$defs/providerIdentifier"},
                 "model_id": {"$ref": "#/$defs/providerIdentifier"},
                 "input_digest": {"$ref": "#/$defs/sha256Digest"},
@@ -578,6 +649,18 @@ def _build_provider_result_schema() -> dict[str, Any]:
                     "type": "number",
                     "minimum": 0,
                     "maximum": _PROVIDER_MAX_DURATION_MS,
+                },
+                "guard_metadata": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "decision": {"enum": ["pass", "redact", "withhold", "abstain"]},
+                        **{
+                            key: {"$ref": "#/$defs/sha256Digest"}
+                            for key in _GUARD_DIGEST_FIELDS
+                        },
+                    },
+                    "anyOf": [{"maxProperties": 0}, {"minProperties": 4}],
                 },
                 "count_metadata": {
                     "type": "object",

@@ -238,6 +238,10 @@ class FeedbackBudgetLedger:
             raise FeedbackBudgetError("epoch_digest: unknown")
         return policy
 
+    def policy(self, epoch_digest: str) -> FeedbackBudgetPolicy:
+        """Return the immutable epoch policy for orchestrator digest binding."""
+        return self._policy(epoch_digest)
+
     @staticmethod
     def _validate_score(score: Any) -> float:
         if (

@@ -145,22 +145,18 @@ def test_clinical_phi_manifest_registers_dedicated_india_source() -> None:
     assert resolved.records
 
 
-@pytest.mark.parametrize(
-    ("changes", "message"),
-    (
+def test_india_manifest_rejects_unsafe_declarations(subtests) -> None:
+    for changes, message in (
         ({"synthetic_only": False}, "synthetic-only"),
         ({"contains_real_phi": True}, "contains_real_phi=false"),
         ({"contains_dua_data": True}, "contains_dua_data=false"),
         ({"disclaimer": "Evaluation fixture."}, "assist-only and non-decisional"),
-    ),
-)
-def test_india_manifest_rejects_unsafe_declarations(
-    changes: dict[str, object], message: str
-) -> None:
-    manifest = load_india_clinical_phi_corpus().manifest
+    ):
+        with subtests.test(changes=changes, message=message):
+            manifest = load_india_clinical_phi_corpus().manifest
 
-    with pytest.raises(ValueError, match=message):
-        validate_india_clinical_phi_manifest(replace(manifest, **changes))
+            with pytest.raises(ValueError, match=message):
+                validate_india_clinical_phi_manifest(replace(manifest, **changes))
 
 
 def test_india_loader_rejects_missing_safety_declaration(tmp_path: Path) -> None:
@@ -173,33 +169,32 @@ def test_india_loader_rejects_missing_safety_declaration(tmp_path: Path) -> None
         load_india_clinical_phi_corpus(manifest_path, FIXTURE_PATH)
 
 
-@pytest.mark.parametrize(
-    ("mutation", "message"),
-    (
+def test_india_loader_rejects_malformed_or_unsafe_spans(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for mutation, message in (
         ("offset", "span text does not match offsets"),
         ("synthetic", "span must be marked synthetic"),
-    ),
-)
-def test_india_loader_rejects_malformed_or_unsafe_spans(
-    tmp_path: Path, mutation: str, message: str
-) -> None:
-    rows = [
-        json.loads(line)
-        for line in FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    if mutation == "offset":
-        rows[0]["gold_spans"][0]["end"] += 1
-    else:
-        rows[0]["gold_spans"][0]["metadata"]["synthetic"] = False
-    fixture_path = tmp_path / FIXTURE_PATH.name
-    fixture_path.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
-        encoding="utf-8",
-    )
+    ):
+        with subtests.test(mutation=mutation, message=message):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            rows = [
+                json.loads(line)
+                for line in FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            if mutation == "offset":
+                rows[0]["gold_spans"][0]["end"] += 1
+            else:
+                rows[0]["gold_spans"][0]["metadata"]["synthetic"] = False
+            fixture_path = tmp_path / FIXTURE_PATH.name
+            fixture_path.write_text(
+                "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+                encoding="utf-8",
+            )
 
-    with pytest.raises(ValueError, match=message):
-        load_india_clinical_phi_corpus(MANIFEST_PATH, fixture_path)
+            with pytest.raises(ValueError, match=message):
+                load_india_clinical_phi_corpus(MANIFEST_PATH, fixture_path)
 
 
 def test_india_specialized_fixture_is_not_loaded_as_generic_golden_data() -> None:

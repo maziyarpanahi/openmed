@@ -51,6 +51,7 @@ from openmed.multimodal.provider_result import (
     _MAX_DURATION_MS,
     _REQUIRED_FIELDS,
     PROVIDER_RESULT_SCHEMA_VERSION,
+    PROVIDER_RESULT_SCHEMA_VERSION_V2,
     ProviderAbstentionCode,
     ProviderResultEnvelope,
     ProviderResultError,
@@ -59,21 +60,13 @@ from openmed.multimodal.provider_result import (
 
 _SCHEMA_ID_PREFIX = "https://openmed.ai/schemas/multimodal/"
 _RENDERED_SCHEMA_DIGESTS = {
-    "asset_manifest": (
-        "ee7e6dd106af9be4bd293b746b9e0cfe9122e33827889ae4e7a4885ec63a7797"
-    ),
-    "asset_batch": ("bbb4c7c8c72c1ef9ceb542ab965e753d2675b99e716c138599ed4b822b982684"),
-    "abstention_record": (
-        "eabe10c1f72b14283d97455ef3d8ad4205168b5711026a31a92495308f941175"
-    ),
-    "processing_summary": (
-        "b825bd84dbb6e0c6b91a8908f78df7fa0b9e0e451879cb46f86b1f3dbc60efb9"
-    ),
-    "provider_result": (
-        "e5565619893dac402564612cb31301d9116a3243ae8da09a488f7df0a9184337"
-    ),
+    "asset_manifest": "1e3ba4a5ef91291405709c4ec7f616e30bf82982ad0a01e8fa37bf772b70af02",
+    "asset_batch": "4782390ce56bb1a842c7cb5c2f5c997003d2126953710c0a93239e8de1052988",
+    "abstention_record": "359f03f98bd66188afb0516294a424e4b4434945ab045fd6b6eeed944591566d",
+    "processing_summary": "67ae7cdb5820d03f18cf6e01c271c56119af17989304621595e4deebe1325ff6",
+    "provider_result": "aa0189b46e498b6b4c1ff67bd481ecd696e24b5651428c6b0f68da347db6e6fd",
 }
-_CATALOG_DIGEST = "20eb4c8cb74858b42d82014825bcaca5a8420b8b2ce760cd8fa8f78553deaaae"
+_CATALOG_DIGEST = "c66f1dfd6b58e831ab833a5eaa6590c1dab24cd12d5c7af7838105c71275eaa8"
 
 
 def _validator(name: str) -> Draft202012Validator:
@@ -386,7 +379,7 @@ def test_manifest_media_type_families_match_the_python_constants() -> None:
         {"pattern": f"^{prefix}"} for prefix in sorted(_SUPPORTED_MEDIA_PREFIXES)
     ]
     assert schemas._SUPPORTED_EXACT_MEDIA_TYPES == _SUPPORTED_EXACT_MEDIA_TYPES
-    assert schemas._SUPPORTED_MEDIA_PREFIXES == tuple(sorted(_SUPPORTED_MEDIA_PREFIXES))
+    assert schemas._SUPPORTED_MEDIA_PREFIXES == _SUPPORTED_MEDIA_PREFIXES
     for exact in sorted(_SUPPORTED_EXACT_MEDIA_TYPES):
         assert validator.is_valid(_manifest_payload(media_type=exact))
     for prefix in _SUPPORTED_MEDIA_PREFIXES:
@@ -581,7 +574,7 @@ def test_abstention_schema_matches_the_python_contract() -> None:
     assert set(record["required"]) == {"schema_version", "stage", "reason"}
     assert set(record["properties"]) == {"schema_version", "stage", "reason"}
     assert record["properties"]["schema_version"] == {
-        "const": ABSTENTION_SCHEMA_VERSION
+        "enum": [ABSTENTION_SCHEMA_VERSION, 2]
     }
     assert record["properties"]["stage"]["enum"] == [
         stage.value for stage in AbstentionStage
@@ -600,10 +593,18 @@ def test_abstention_schema_accepts_every_allowed_stage_reason_pair() -> None:
 
     for stage, reasons in _ALLOWED_REASONS.items():
         for reason in sorted(reasons, key=lambda item: item.value):
-            payload = _abstention_payload(stage=stage.value, reason=reason.value)
+            payload = _abstention_payload(
+                stage=stage.value,
+                reason=reason.value,
+                schema_version=reason.schema_version,
+            )
 
             assert validator.is_valid(payload)
             assert AbstentionRecord.from_dict(payload).to_dict() == payload
+            wrong_version = {**payload, "schema_version": 3 - reason.schema_version}
+            assert not validator.is_valid(wrong_version)
+            with pytest.raises(AbstentionValidationError):
+                AbstentionRecord.from_dict(wrong_version)
 
 
 def test_abstention_schema_rejects_every_disallowed_stage_reason_pair() -> None:
@@ -613,7 +614,11 @@ def test_abstention_schema_rejects_every_disallowed_stage_reason_pair() -> None:
         for reason in AbstentionReason:
             if reason in reasons:
                 continue
-            payload = _abstention_payload(stage=stage.value, reason=reason.value)
+            payload = _abstention_payload(
+                stage=stage.value,
+                reason=reason.value,
+                schema_version=reason.schema_version,
+            )
 
             assert not validator.is_valid(payload)
             with pytest.raises(AbstentionValidationError):
@@ -782,8 +787,11 @@ def test_provider_result_schema_matches_the_python_contract() -> None:
         "output_digest",
         "abstention_code",
         "count_metadata",
+        "guard_metadata",
     }
-    assert properties["schema_version"] == {"const": PROVIDER_RESULT_SCHEMA_VERSION}
+    assert properties["schema_version"] == {
+        "enum": [PROVIDER_RESULT_SCHEMA_VERSION, PROVIDER_RESULT_SCHEMA_VERSION_V2]
+    }
     assert properties["provider_id"] == {"$ref": "#/$defs/providerIdentifier"}
     assert properties["model_id"] == {"$ref": "#/$defs/providerIdentifier"}
     assert properties["input_digest"] == {"$ref": "#/$defs/sha256Digest"}
@@ -818,6 +826,47 @@ def test_provider_result_schema_accepts_serialized_envelopes() -> None:
     for payload in _provider_payloads():
         assert validator.is_valid(payload)
         assert ProviderResultEnvelope.from_dict(payload).to_dict() == payload
+
+
+def test_provider_versions_and_generated_text_guard_match_loader() -> None:
+    validator = _validator("provider_result")
+    for reason in ProviderAbstentionCode:
+        envelope = ProviderResultEnvelope(
+            provider_id="local-ocr",
+            model_id="offline-fixture",
+            input_digest="a" * 64,
+            outcome=ProviderResultOutcome.ABSTENTION,
+            abstention_code=reason,
+            duration_ms=1.0,
+        )
+        payload = envelope.to_dict()
+        assert validator.is_valid(payload)
+        versions = [PROVIDER_RESULT_SCHEMA_VERSION, PROVIDER_RESULT_SCHEMA_VERSION_V2]
+        versions.remove(envelope.schema_version)
+        wrong_version = {**payload, "schema_version": versions[0]}
+        assert not validator.is_valid(wrong_version)
+        with pytest.raises(ProviderResultError):
+            ProviderResultEnvelope.from_dict(wrong_version)
+
+    guard = {
+        "decision": "redact",
+        "detector_version_digest": "a" * 64,
+        "policy_digest": "b" * 64,
+        "report_digest": "c" * 64,
+    }
+    valid = _provider_payload(guard_metadata=guard)
+    assert validator.is_valid(valid)
+    assert ProviderResultEnvelope.from_dict(valid).to_dict()["guard_metadata"] == guard
+    for bad_guard in (
+        {**guard, "decision": "withhold"},
+        _without(guard, "report_digest"),
+        {**guard, "text": "synthetic private"},
+        {**guard, "policy_digest": "not-a-digest"},
+    ):
+        payload = {**valid, "guard_metadata": bad_guard}
+        assert not validator.is_valid(payload)
+        with pytest.raises(ProviderResultError):
+            ProviderResultEnvelope.from_dict(payload)
 
 
 def test_provider_result_schema_binds_outcome_to_optional_fields() -> None:
@@ -939,3 +988,12 @@ def test_non_finite_numbers_stay_outside_the_exported_contract() -> None:
     assert not _validator("provider_result").is_valid(
         _provider_payload(duration_ms=float("inf"))
     )
+
+
+@pytest.mark.parametrize("field", ["asset_id", "media_type", "sha256"])
+def test_manifest_schema_rejects_trailing_newlines(field: str) -> None:
+    payload = _manifest_payload()
+    payload[field] += "\n"
+    assert not _validator("asset_manifest").is_valid(payload)
+    with pytest.raises(AssetManifestError):
+        AssetManifest.from_dict(payload)

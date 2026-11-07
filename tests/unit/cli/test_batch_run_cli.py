@@ -132,6 +132,7 @@ def test_start_output_and_manifest_contain_no_phi(
     assert [n for n in PHI_SUBSTRINGS if n in planted] == [PHI_NAME]
 
 
+@pytest.mark.slow
 def test_resume_recomputes_only_the_failed_shards(
     tmp_path: Path, notes: Path, capsys
 ) -> None:

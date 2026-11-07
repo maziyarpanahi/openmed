@@ -24,7 +24,7 @@ from typing import Any, Final, cast, overload
 from urllib.parse import urlsplit
 
 SCHEMA_VERSION: Final[int] = 1
-SUPPORTED_PYTHON: Final[str] = ">=3.10"
+SUPPORTED_PYTHON: Final[str] = ">=3.11"
 MATRIX_DOCUMENTATION_PATH: Final[str] = "docs/integrations/matrix.md"
 MAX_CAPABILITIES: Final[int] = 256
 
@@ -603,7 +603,7 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         "GLiNER-BioMed",
         "openmed.interop.gliner_biomed",
         extra="gliner",
-        dependencies=("gliner[tokenizers]>=0.2.0", "torch>=2.0"),
+        dependencies=("gliner[tokenizers]>=0.2.0", "torch>=2.13.0"),
         documentation=("docs/zero-shot-ner.md",),
         tests=("tests/unit/interop/test_gliner_biomed_adapter.py",),
         description="Optional zero-shot biomedical entity adapter.",

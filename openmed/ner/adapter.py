@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 
@@ -62,7 +63,11 @@ def to_token_classification(
     tokenizer: Any = None,
     scheme: str = "BIO",
 ) -> TokenClassificationResult:
-    """Project entity spans onto token-level labels using ``scheme``."""
+    """Project entity spans onto token-level labels using ``scheme``.
+
+    Tokenizers may return any mapping with an ``offset_mapping`` field. Missing
+    or empty offsets retain the whitespace-token fallback.
+    """
 
     scheme_upper = scheme.upper()
     if scheme_upper not in {"BIO", "BILOU"}:
@@ -130,7 +135,7 @@ def _tokenize(text: str, tokenizer: Any) -> List[Tuple[str, int, int]]:
         # Some tokenizers require positional arguments only.
         encoded = resolved(text)
 
-    offsets = encoded.get("offset_mapping") if isinstance(encoded, dict) else None
+    offsets = encoded.get("offset_mapping") if isinstance(encoded, Mapping) else None
     if not offsets:
         return _simple_tokenize(text)
 

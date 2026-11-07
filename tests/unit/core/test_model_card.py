@@ -121,23 +121,21 @@ def test_render_v2_model_card_contains_release_decision_sections():
     assert "Declared license: `apache-2.0`." in card
 
 
-@pytest.mark.parametrize(
-    "repo_id",
-    (
+def test_committed_v2_entries_render_release_decision_sections(subtests):
+    for repo_id in (
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
-    ),
-)
-def test_committed_v2_entries_render_release_decision_sections(repo_id):
-    row = next(row for row in load_manifest_rows() if row["repo_id"] == repo_id)
+    ):
+        with subtests.test(repo_id=repo_id):
+            row = next(row for row in load_manifest_rows() if row["repo_id"] == repo_id)
 
-    card = render_model_card(row)
+            card = render_model_card(row)
 
-    assert "## Per-Script Evaluation" in card
-    assert "## Download Size by Format" in card
-    assert "## Tokenizer Script Coverage" in card
-    assert "## License" in card
-    assert "Declared license: `apache-2.0`." in card
+            assert "## Per-Script Evaluation" in card
+            assert "## Download Size by Format" in card
+            assert "## Tokenizer Script Coverage" in card
+            assert "## License" in card
+            assert "Declared license: `apache-2.0`." in card
 
 
 def test_render_model_card_contains_manifest_release_fields():
@@ -267,7 +265,7 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "## OpenMedKit for Android" in card
     assert 'url = uri("https://jitpack.io")' in card
     assert f'implementation("com.github.maziyarpanahi:openmed:v{__version__}")' in card
-    assert "2,000+ medical models" in card
+    assert "2,200+ medical models" in card
     assert "master-SNAPSHOT" not in card
     assert "OpenMedKit.fromDirectory(modelDirectory)" in card
     assert "suspend fun analyzeModel()" in card

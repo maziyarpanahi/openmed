@@ -248,6 +248,15 @@
         {"path": "protocolApplied", "min": 0, "max": "*", "types": ["BackboneElement"]}
       ]
     },
+    "FamilyMemberHistory": {
+      "elements": [
+        {"path": "status", "min": 1, "max": 1, "types": ["code"], "binding": "family-history-status"},
+        {"path": "patient", "min": 1, "max": 1, "types": ["Reference"]},
+        {"path": "relationship", "min": 1, "max": 1, "types": ["CodeableConcept"]},
+        {"path": "condition", "min": 0, "max": "*", "types": ["BackboneElement"]},
+        {"path": "condition.code", "min": 1, "max": 1, "types": ["CodeableConcept"]}
+      ]
+    },
     "Encounter": {
       "elements": [
         {"path": "identifier", "min": 0, "max": "*", "types": ["Identifier"]},
@@ -277,6 +286,9 @@
     }
   },
   "valueSets": {
+    "family-history-status": {
+      "codes": ["partial", "completed", "entered-in-error", "health-unknown"]
+    },
     "condition-clinical": {
       "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
       "codes": ["active", "recurrence", "relapse", "inactive", "remission", "resolved"]

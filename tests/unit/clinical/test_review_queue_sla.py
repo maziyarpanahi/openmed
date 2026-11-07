@@ -241,9 +241,8 @@ def test_direct_report_requires_timestamp_and_consistent_counts():
         replace(report, total_cases=1)
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_direct_record_rejects_raw_metadata(subtests):
+    for field in [
         "opaque_case_key",
         "priority",
         "age_bucket",
@@ -251,11 +250,10 @@ def test_direct_report_requires_timestamp_and_consistent_counts():
         "overdue_bucket",
         "queued_at",
         "expires_at",
-    ],
-)
-def test_direct_record_rejects_raw_metadata(field):
-    record = compute_review_sla(
-        [{"case_key": "synthetic-safe", "queued_at": AS_OF}], now=AS_OF
-    )[0]
-    with pytest.raises(ValueError):
-        replace(record, **{field: "synthetic_private_marker"})
+    ]:
+        with subtests.test(field=field):
+            record = compute_review_sla(
+                [{"case_key": "synthetic-safe", "queued_at": AS_OF}], now=AS_OF
+            )[0]
+            with pytest.raises(ValueError):
+                replace(record, **{field: "synthetic_private_marker"})

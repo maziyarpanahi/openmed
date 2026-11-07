@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 from .review_transitions import (
     CLINICAL_REVIEW_COMPATIBILITY_POLICY,
     CLINICAL_REVIEW_PACKET_SCHEMA_VERSION,
@@ -156,7 +158,7 @@ def _sla_hours(values: Mapping[str, float]) -> dict[str, float]:
 
 
 def _parse(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return parse_iso_datetime(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _age_bucket(hours: float) -> str:

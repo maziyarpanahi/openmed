@@ -244,19 +244,17 @@ def test_critical_leakage_rate_is_not_misreported_as_a_count():
     assert card.per_language["en"]["critical_leakage_count"] is None
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
+def test_invalid_rate_denominators_do_not_invent_support(subtests):
+    for evidence in [
         {"numerator": -1, "denominator": 0, "rate": 0.8},
         {"numerator": 1, "denominator": -1, "rate": 0.8},
         {"numerator": 0, "denominator": 0, "rate": 1.0},
-    ],
-)
-def test_invalid_rate_denominators_do_not_invent_support(evidence):
-    card = build_crosslingual_scorecard(
-        [{"language": "en", "metrics": {"recall": evidence}}]
-    )
-    assert card.per_language["en"]["recall"] is None
+    ]:
+        with subtests.test(evidence=evidence):
+            card = build_crosslingual_scorecard(
+                [{"language": "en", "metrics": {"recall": evidence}}]
+            )
+            assert card.per_language["en"]["recall"] is None
 
 
 def test_huge_numeric_values_are_sanitized_without_overflow():

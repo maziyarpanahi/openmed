@@ -67,6 +67,12 @@ class CalibrationSample:
         *,
         default_model_id: str | None = None,
     ) -> "CalibrationSample":
+        """Parse a sample whose target is a boolean or a numeric zero/one.
+
+        Target aliases retain their precedence and the absent-target default
+        is positive. Other types and numeric values raise a value-free error.
+        """
+
         model_id = (
             data.get("model_id")
             or data.get("model")
@@ -96,6 +102,11 @@ class CalibrationSample:
         target_value = data.get(
             "target", data.get("is_true", data.get("matched", True))
         )
+        if not isinstance(target_value, (bool, int, float)) or target_value not in (
+            0,
+            1,
+        ):
+            raise ValueError("calibration target must be a boolean or 0/1")
         target = bool(target_value)
 
         raw_weight = (
