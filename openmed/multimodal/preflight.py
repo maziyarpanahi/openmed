@@ -90,8 +90,13 @@ _DETECTED_MEDIA_TYPES: Final = frozenset(
         "image/gif",
         "image/webp",
         "image/bmp",
+        "image/heic",
+        "image/heic-sequence",
+        "image/heif",
+        "image/heif-sequence",
         "application/dicom",
         "audio/wav",
+        "audio/mp4",
         "video/mp4",
     }
 )

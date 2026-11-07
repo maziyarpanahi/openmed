@@ -1,5 +1,6 @@
 """Hand-built offline ISO BMFF fixtures and negative controls."""
 
+import hashlib
 import json
 import struct
 from dataclasses import asdict
@@ -7,7 +8,8 @@ from dataclasses import asdict
 import pytest
 
 from openmed.multimodal.iso_bmff import BmffPreflightError, preflight_iso_bmff
-from openmed.multimodal.media_type import detect_media_type
+from openmed.multimodal.media_type import MediaTypeStatus, detect_media_type
+from openmed.multimodal.preflight import PreflightStatus, preflight_asset
 
 
 def box(kind, payload=b"", *, extended=False, to_end=False):
@@ -136,6 +138,24 @@ def test_detection_complete_file_type_box(brand, mime, extended):
     prefix = ftyp(brand, b"isom", extended=extended)
     assert detect_media_type(prefix) == mime
     assert detect_media_type(prefix[:-1]) is None
+    metadata = (
+        {"duration_seconds": 1.5}
+        if mime == "audio/mp4"
+        else {"width": 16, "height": 16}
+    )
+    report = preflight_asset(
+        {
+            "asset_id": "synthetic-bmff",
+            "media_type": mime,
+            "sha256": hashlib.sha256(prefix).hexdigest(),
+            "byte_size": len(prefix),
+            **metadata,
+        },
+        prefix,
+    )
+    assert report.status is PreflightStatus.ACCEPT
+    assert report.media_type_status is MediaTypeStatus.MATCH
+    assert report.detected_media_type == mime
 
 
 @pytest.mark.parametrize(

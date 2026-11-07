@@ -16,7 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document multimodal dependency licenses through the existing offline inventory,
+  with separate guidance for the Tesseract binary and TCIA collection terms (#257).
+
 - Add an optional pinned Core ML English speech adapter for OpenMedKit, with bounded PCM ownership, incremental hypotheses, acoustic timing, explicit compute refusals and cancellation that fences late results (#3823).
+
+- Session-scoped opaque voice embedding handles in Python and OpenMedKit, with
+  same-session similarity, value-free evidence, retention erasure callbacks and
+  buffer destruction on pause, withdrawal, cancellation and finalization.
+  Serialization, persistence and cross-session comparison are refused.
 
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
 
@@ -46,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate local OpenMedKit multimodal work on Apple thermal notifications, measured queue age and rolling latency, with explicit cadence/window limits, sustained cooling before recovery and value-free evidence (#3836).
 
+- Shared consent, capture interruption, language and policy abstention codes with
+  strict stage gates and code-specific v2 wire versions. Legacy abstention and
+  provider-result records retain byte-identical v1 serialization (#3834).
+
 - Gate ambient capture on unanimous consent in Python and OpenMedKit, with explicit interruption/resume, non-renewable retention, revocable owned-memory references and draft-only review exports with conservative deletion accounting (#3208).
 
 - Add an isolated local MLX Whisper streaming provider with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
@@ -66,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
+
+- Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
+  16, 212 and 80 with windowed integer outputs, streamed checksum verification,
+  value-safe metadata
+  and MIT annotation summaries, synthetic privacy fixtures and explicit human
+  review boundaries.
 
 - Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
 
@@ -183,6 +201,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
 
 ### Security
+
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
 
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
