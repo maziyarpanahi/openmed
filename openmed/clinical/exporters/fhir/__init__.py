@@ -7,6 +7,13 @@ from .allergy_intolerance import (
     ALLERGY_VERIFICATION_STATUS_SYSTEM,
     to_allergy_intolerance,
 )
+from .brief_document import (
+    BRIEF_DOCUMENT_SUBSET,
+    BriefDocumentError,
+    BriefFHIRDocument,
+    export_brief_document,
+    import_brief_document,
+)
 from .bundle import to_bundle
 from .codeable_concept import (
     GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
@@ -93,7 +100,16 @@ from .profile_declarations import (
     check_profile_declarations,
     validate_profile_declarations,
 )
-from .provenance import to_audit_event, to_provenance
+from .provenance import (
+    GovernedWriteAction,
+    GovernedWriteAuditAttempt,
+    GovernedWriteAuditError,
+    GovernedWriteOutcome,
+    GovernedWriteReviewerRole,
+    to_audit_event,
+    to_governed_write_audit_event,
+    to_provenance,
+)
 from .reference_types import (
     FHIR_R4_REFERENCE_TARGETS,
     FHIR_R5_REFERENCE_TARGETS,
@@ -106,6 +122,25 @@ from .reference_types import (
     validate_reference_types,
 )
 from .references import deterministic_fullurl
+from .reviewed_relations import (
+    DEFAULT_RELATION_CODE_SYSTEMS,
+    RelationFHIRExport,
+    RelationFHIRExportError,
+    RelationFHIRLoss,
+    ReviewedFHIRRelation,
+    export_reviewed_relations,
+    relation_fhir_review_fingerprint,
+)
+from .sdoh_observation import (
+    SDOH_FHIR_IG_VERSION,
+    SDOH_FHIR_US_CORE_VERSION,
+    SDOHFHIRCode,
+    SDOHFHIRExportError,
+    SDOHFHIRExportResult,
+    SDOHFHIRRecord,
+    SDOHObservationBinding,
+    to_sdoh_observations,
+)
 from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
 from .validate import (
     BASE_R4_RESOURCE_TYPES,
@@ -116,6 +151,32 @@ from .validate import (
 )
 
 __all__ = [
+    "DEFAULT_RELATION_CODE_SYSTEMS",
+    "RelationFHIRExport",
+    "RelationFHIRExportError",
+    "RelationFHIRLoss",
+    "ReviewedFHIRRelation",
+    "export_reviewed_relations",
+    "relation_fhir_review_fingerprint",
+    "GovernedWriteAction",
+    "GovernedWriteAuditAttempt",
+    "GovernedWriteAuditError",
+    "GovernedWriteOutcome",
+    "GovernedWriteReviewerRole",
+    "to_governed_write_audit_event",
+    "SDOH_FHIR_IG_VERSION",
+    "SDOH_FHIR_US_CORE_VERSION",
+    "SDOHFHIRCode",
+    "SDOHFHIRExportError",
+    "SDOHFHIRExportResult",
+    "SDOHFHIRRecord",
+    "SDOHObservationBinding",
+    "to_sdoh_observations",
+    "BRIEF_DOCUMENT_SUBSET",
+    "BriefDocumentError",
+    "BriefFHIRDocument",
+    "export_brief_document",
+    "import_brief_document",
     "ALLERGY_CLINICAL_STATUS_SYSTEM",
     "ALLERGY_VERIFICATION_STATUS_SYSTEM",
     "CONDITION_CLINICAL_SYSTEM",

@@ -43,6 +43,7 @@ from .manifest_profiles import (
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    VIDEO_V1,
     ManifestProfile,
     ManifestProfileError,
     ValidationFinding,
@@ -79,15 +80,19 @@ _FIXED_FINDINGS: Final = {
     ("digest", "not_evaluated"): (None, False),
 }
 
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio", "video"})
 _DETECTED_MEDIA_TYPES: Final = frozenset(
     {
         "application/pdf",
         "image/png",
         "image/jpeg",
         "image/tiff",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
         "application/dicom",
         "audio/wav",
+        "video/mp4",
     }
 )
 _METADATA_PROFILES: Final = {
@@ -95,6 +100,7 @@ _METADATA_PROFILES: Final = {
     "pdf": PDF_V1,
     "dicom": DICOM_V1,
     "audio": AUDIO_V1,
+    "video": VIDEO_V1,
 }
 
 
@@ -482,6 +488,8 @@ def _modality_for(media_type: str) -> str | None:
         return "dicom"
     if media_type.startswith("image/"):
         return "image"
+    if media_type == "video/mp4":
+        return "video"
     if media_type.startswith("audio/"):
         return "audio"
     # application/dicom+json is a valid manifest media type with no metadata

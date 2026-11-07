@@ -28,6 +28,7 @@ from openmed.agent.approvals.tokens import (
     ApprovalNonceStoreError,
     _claim_nonce,
 )
+from openmed.agent.outcomes import _bounded_governance_json
 
 CONSENT_RECEIPT_SCHEMA_VERSION = "openmed.mcp.consent_receipt.v1"
 CONSENT_RECEIPT_EVENT = "mcp.consent_receipt"
@@ -381,12 +382,12 @@ class ConsentReceipt:
         if not isinstance(serialized, (str, bytes)):
             raise ConsentReceiptValidationError("serialized receipt must be JSON text")
         try:
-            payload = json.loads(serialized)
-        except (TypeError, ValueError, UnicodeError) as exc:
-            raise ConsentReceiptValidationError(
-                "serialized receipt is not valid JSON"
-            ) from exc
-        return cls.from_dict(payload)
+            payload = _bounded_governance_json(serialized)
+        except (TypeError, ValueError, UnicodeError, RecursionError):
+            pass
+        else:
+            return cls.from_dict(payload)
+        raise ConsentReceiptValidationError("serialized receipt is not valid JSON")
 
 
 class ConsentReceiptIssuer:

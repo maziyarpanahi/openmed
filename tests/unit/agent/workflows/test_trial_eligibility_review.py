@@ -270,9 +270,8 @@ def test_unknown_and_duplicate_model_assessments_fail_closed() -> None:
     assert caught.value.code == "duplicate_model_assessment"
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
+def test_validation_errors_never_echo_sensitive_values(subtests) -> None:
+    for factory in [
         lambda value: EligibilityCitation(value, 0, 4, EVIDENCE_A),
         lambda value: ModelCriterionAssessment(
             value,
@@ -288,16 +287,15 @@ def test_unknown_and_duplicate_model_assessments_fail_closed() -> None:
             0.1,
             value,
         ),
-    ],
-)
-def test_validation_errors_never_echo_sensitive_values(factory: Any) -> None:
-    sentinel = "Synthetic Person / record-123 / protected-note"
+    ]:
+        with subtests.test(factory=factory):
+            sentinel = "Synthetic Person / record-123 / protected-note"
 
-    with pytest.raises(TrialEligibilityReviewError) as caught:
-        factory(sentinel)
+            with pytest.raises(TrialEligibilityReviewError) as caught:
+                factory(sentinel)
 
-    assert sentinel not in str(caught.value)
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
+            assert sentinel not in str(caught.value)
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
 
 
 def test_packet_repr_omits_sensitive_digest_metadata() -> None:

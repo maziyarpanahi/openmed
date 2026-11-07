@@ -88,6 +88,7 @@ def _write(
     )
 
 
+@pytest.mark.slow
 def test_pipeline_import_and_projection_exports_work_in_fresh_process() -> None:
     result = subprocess.run(
         [
