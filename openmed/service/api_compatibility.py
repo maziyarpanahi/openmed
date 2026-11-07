@@ -53,6 +53,8 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "internal_error",
     "invalid_credentials",
     "model_not_served",
+    "mtls_certificate_invalid",
+    "mtls_certificate_required",
     "not_ready",
     "offline_snapshot_unavailable",
     "payload_too_large",
@@ -77,6 +79,8 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "replacement_state_error",
     "replacement_state_limit",
     "replacement_state_not_found",
+    "request_size_exceeded",
+    "request_size_invalid",
     "restricted_terminology_unconfigured",
     "service_busy",
     "snapshot_invalid",
@@ -720,7 +724,11 @@ def _error_categories_from_ast(tree: ast.AST) -> set[str]:
             if isinstance(function, ast.Name)
             else None
         )
-        if function_name == "_error_response" and len(node.args) > 1:
+        # ``_limit_response`` is the operational request-size envelope; it takes
+        # the same ``(status_code, code)`` leading arguments as ``_error_response``.
+        if function_name in {"_error_response", "_limit_response"} and (
+            len(node.args) > 1
+        ):
             value = node.args[1]
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 categories.add(value.value)
@@ -728,7 +736,7 @@ def _error_categories_from_ast(tree: ast.AST) -> set[str]:
             value = node.args[0]
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 categories.add(value.value)
-        if function_name in {"AuthError", "_error_response"}:
+        if function_name in {"AuthError", "MTLSAuthenticationError", "_error_response"}:
             for keyword in node.keywords:
                 if keyword.arg != "code":
                     continue
