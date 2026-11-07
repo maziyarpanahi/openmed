@@ -15,6 +15,7 @@ on:
       - 'tests/fixtures/multimodal/local_review_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
+      - 'tests/fixtures/portable_bundle/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -29,6 +30,7 @@ on:
       - 'tests/fixtures/multimodal/local_review_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
+      - 'tests/fixtures/portable_bundle/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

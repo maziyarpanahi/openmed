@@ -1,0 +1,658 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/models/portable-bundle.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable model-bundle manifest",
+  "description": "Canonical (RFC 8785) manifest stored as openmed-bundle.json. Every member is critical: readers reject unknown members and accept only critical_extensions they implement. Cross-field rules (sorted unique paths, declared references, acyclic fallbacks, and the format, platform, and precision tables) are enforced by the verifiers.",
+  "schema_version": 1,
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._+-]{0,127}(/[A-Za-z0-9_][A-Za-z0-9._+-]{0,127}){0,15}$"
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_os_exclusive",
+        "min_os",
+        "platform"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "android",
+            "ios",
+            "linux",
+            "macos",
+            "visionos",
+            "watchos",
+            "web",
+            "windows"
+          ]
+        },
+        "min_os": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.(0|[1-9][0-9]{0,8})){0,3}$"
+            }
+          ]
+        },
+        "max_os_exclusive": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]{0,8})(\\.(0|[1-9][0-9]{0,8})){0,3}$"
+            }
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entrypoint",
+        "fallback",
+        "files",
+        "format",
+        "id",
+        "min_memory_bytes",
+        "min_storage_bytes",
+        "platforms",
+        "precision"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "format": {
+          "enum": [
+            "coreml",
+            "mlx",
+            "onnx",
+            "ort",
+            "pytorch",
+            "transformersjs"
+          ]
+        },
+        "precision": {
+          "enum": [
+            "bf16",
+            "fp16",
+            "fp32",
+            "int2",
+            "int4",
+            "int8"
+          ]
+        },
+        "entrypoint": {
+          "$ref": "#/$defs/path"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/platform"
+          }
+        },
+        "min_memory_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "min_storage_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fallback": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          ]
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executable",
+        "media_type",
+        "path",
+        "role",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z]+/[a-z0-9][a-z0-9.+-]{0,126}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "role": {
+          "enum": [
+            "calibration",
+            "config",
+            "decoder",
+            "evidence",
+            "graph",
+            "labels",
+            "license",
+            "metadata",
+            "policy",
+            "provenance",
+            "segmenter",
+            "tokenizer",
+            "weights"
+          ]
+        },
+        "executable": {
+          "const": false
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle",
+    "calibration",
+    "compatibility",
+    "critical_extensions",
+    "decoder",
+    "evidence",
+    "extensions",
+    "files",
+    "labels",
+    "licenses",
+    "model",
+    "offsets",
+    "policy",
+    "provenance",
+    "runtimes",
+    "schema",
+    "schema_version",
+    "segmenter",
+    "tokenizer"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.portable_bundle"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expires_at",
+        "id",
+        "issued_at",
+        "sequence",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,8})(\\.(0|[1-9][0-9]{0,8})){2}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "issued_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        },
+        "expires_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture",
+        "family",
+        "id",
+        "languages",
+        "revision",
+        "task"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+        },
+        "revision": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          ]
+        },
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "architecture": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "task": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{1,8}){0,4}$"
+          }
+        }
+      }
+    },
+    "tokenizer": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract_version",
+            "files",
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            "contract_version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "labels": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "path",
+            "scheme"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/path"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "scheme": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          }
+        }
+      ]
+    },
+    "offsets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "unit"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "unicode_scalar",
+            "utf16_code_unit",
+            "utf8_byte"
+          ]
+        },
+        "contract_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "decoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "contract_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "segmenter": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/path"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_version_exclusive",
+        "min_version",
+        "path"
+      ],
+      "properties": {
+        "min_version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "max_version_exclusive": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "path": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ]
+        }
+      }
+    },
+    "calibration": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "profile_version"
+          ],
+          "properties": {
+            "profile_version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "path": {
+              "$ref": "#/$defs/path"
+            }
+          }
+        }
+      ]
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sdks"
+      ],
+      "properties": {
+        "sdks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "max_exclusive",
+              "min",
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+              },
+              "min": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,8})(\\.(0|[1-9][0-9]{0,8})){0,3}$"
+              },
+              "max_exclusive": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,8})(\\.(0|[1-9][0-9]{0,8})){0,3}$"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtimes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/runtime"
+      }
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "files",
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.+-]{0,63}$"
+          },
+          "files": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/path"
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "export_record",
+        "source_digest"
+      ],
+      "properties": {
+        "source_digest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "export_record": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "path": {
+            "$ref": "#/$defs/path"
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 65536,
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,31}(\\.[a-z0-9][a-z0-9_-]{0,31}){1,7}$"
+      }
+    },
+    "critical_extensions": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,31}(\\.[a-z0-9][a-z0-9_-]{0,31}){1,7}$"
+      }
+    }
+  }
+}

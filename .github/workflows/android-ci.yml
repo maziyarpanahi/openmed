@@ -8,6 +8,7 @@ on:
       - 'android/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
+      - 'tests/fixtures/portable_bundle/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'android/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
+      - 'tests/fixtures/portable_bundle/**'
 
 permissions:
   contents: read

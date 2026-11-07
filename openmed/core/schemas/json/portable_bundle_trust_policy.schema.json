@@ -1,0 +1,85 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/models/portable-bundle-trust-policy.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable-bundle offline trust policy",
+  "description": "Caller-controlled trust roots. Keys are RFC 8037 OKP Ed25519 JWKs with validity windows; overlapping windows support rotation. OpenMed never ships production trust roots.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "keys",
+    "revoked_content_ids",
+    "schema",
+    "schema_version",
+    "threshold"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.portable_bundle.trust_policy"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "threshold": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16
+    },
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "crv",
+          "kid",
+          "kty",
+          "not_after",
+          "not_before",
+          "status",
+          "x"
+        ],
+        "properties": {
+          "kid": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "kty": {
+            "const": "OKP"
+          },
+          "crv": {
+            "const": "Ed25519"
+          },
+          "x": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$"
+          },
+          "not_before": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+          },
+          "not_after": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ]
+          }
+        }
+      }
+    },
+    "revoked_content_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    }
+  }
+}

@@ -1,0 +1,2507 @@
+{
+  "canonicalization": [
+    {
+      "canonical": "{\"A\":5,\"a\":4,\"\u20ac\":1,\"\ud83d\ude00\":2,\"\ufb33\":3}",
+      "id": "member_order_utf16",
+      "input": "{\"\\u20ac\":1,\"\\ud83d\\ude00\":2,\"\\ufb33\":3,\"a\":4,\"A\":5}"
+    },
+    {
+      "canonical": "[\"\\u0000\\u001f\\b\\t\\n\\f\\r\\\"\\\\/\u007f\u2028\"]",
+      "id": "string_escapes",
+      "input": "[\"\\u0000\\u001f\\b\\t\\n\\f\\r\\\"\\\\/\\u007f\\u2028\"]"
+    },
+    {
+      "canonical": "{\"text\":\"\u00e9\u4e2d\ud83d\ude00\"}",
+      "id": "non_ascii_literal",
+      "input": "{\"text\":\"\\u00e9\\u4e2d\\ud83d\\ude00\"}"
+    },
+    {
+      "canonical": "[0,-1,9007199254740991,-9007199254740991]",
+      "id": "integers",
+      "input": "[0,-1,9007199254740991,-9007199254740991]"
+    },
+    {
+      "canonical": "{\"a\":{\"y\":\"x\",\"z\":[]},\"b\":[true,false,null,{}]}",
+      "id": "literals_and_nesting",
+      "input": "{\"b\":[true,false,null,{}],\"a\":{\"z\":[],\"y\":\"x\"}}"
+    }
+  ],
+  "canonicalization_rejects": [
+    {
+      "id": "fraction",
+      "input": "1.5"
+    },
+    {
+      "id": "beyond_safe_integer",
+      "input": "9007199254740992"
+    },
+    {
+      "id": "lone_surrogate",
+      "input": "\"\\ud800\""
+    }
+  ],
+  "cases": [
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_android",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_manifest_only",
+      "manifest": "golden",
+      "tree": null,
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_ios",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          0,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_ios",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_web",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_web",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_python",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          0,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_python",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_no_target",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          0,
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_no_target",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "valid_rotation_new_key",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_rotation_new_key",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "rotation"
+    },
+    {
+      "context": "valid_rotation_old_key_expired_dual_signed",
+      "envelope": "valid_rotation_old_key_expired_dual_signed",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_rotation_old_key_expired_dual_signed",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "rotation"
+    },
+    {
+      "context": "default",
+      "envelope": "valid_rotation_old_key_expired_dual_signed",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 2
+      },
+      "id": "valid_threshold_two",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "threshold_two"
+    },
+    {
+      "context": "valid_sequence_at_floor",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_sequence_at_floor",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_critical_extension_understood",
+      "envelope": "valid_critical_extension_understood",
+      "expected": {
+        "content_id": "sha256:fd593e291433a7f018c1fe09b60aa5c0f11b93cfedb0639e060d180e452e0dcf",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "valid_critical_extension_understood",
+      "manifest": "valid_critical_extension_understood",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "manifest_too_large",
+      "envelope": "golden",
+      "expected": {
+        "content_id": null,
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_too_large",
+        "valid_signatures": 0
+      },
+      "id": "manifest_too_large",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "envelope_too_large",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "envelope_too_large",
+        "valid_signatures": 0
+      },
+      "id": "envelope_too_large",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "envelope_not_canonical",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "envelope_malformed",
+        "valid_signatures": 0
+      },
+      "id": "envelope_not_canonical",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "envelope_unknown_member",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "envelope_malformed",
+        "valid_signatures": 0
+      },
+      "id": "envelope_unknown_member",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "envelope_version_unsupported",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "envelope_version_unsupported",
+        "valid_signatures": 0
+      },
+      "id": "envelope_version_unsupported",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:68ec2fa5b50bb3365f68104891294ff1f773eb7f5020f78ffcf3dd7d6a69a549",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "content_id_mismatch",
+        "valid_signatures": 0
+      },
+      "id": "modified_manifest",
+      "manifest": "modified_manifest",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "modified_manifest_relabelled",
+      "expected": {
+        "content_id": "sha256:68ec2fa5b50bb3365f68104891294ff1f773eb7f5020f78ffcf3dd7d6a69a549",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      },
+      "id": "modified_manifest_relabelled",
+      "manifest": "modified_manifest",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "bundle_revoked",
+        "valid_signatures": 0
+      },
+      "id": "bundle_revoked",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "revoked_bundle"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_missing",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_missing",
+        "valid_signatures": 0
+      },
+      "id": "signature_missing",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_algorithm_unsupported",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_algorithm_unsupported",
+        "valid_signatures": 0
+      },
+      "id": "signature_algorithm_unsupported",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "wrong_signer",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "untrusted_key",
+        "valid_signatures": 0
+      },
+      "id": "wrong_signer",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "key_revoked",
+        "valid_signatures": 0
+      },
+      "id": "key_revoked",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "key_revoked"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "key_not_yet_valid",
+        "valid_signatures": 0
+      },
+      "id": "key_not_yet_valid",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "key_future"
+    },
+    {
+      "context": "key_expired",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "key_expired",
+        "valid_signatures": 0
+      },
+      "id": "key_expired",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "valid_rotation_old_key_expired_dual_signed",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "key_expired",
+        "valid_signatures": 0
+      },
+      "id": "rotation_old_key_after_window",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "rotation"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_bit_flip",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      },
+      "id": "signature_bit_flip",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_padded_base64",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      },
+      "id": "signature_padded_base64",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_scalar_not_reduced",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      },
+      "id": "signature_scalar_not_reduced",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_threshold_not_met",
+        "valid_signatures": 0
+      },
+      "id": "signature_threshold_not_met",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "threshold_two"
+    },
+    {
+      "context": "default",
+      "envelope": "signature_duplicate_key_counts_once",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_threshold_not_met",
+        "valid_signatures": 0
+      },
+      "id": "signature_duplicate_key_counts_once",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "threshold_two"
+    },
+    {
+      "context": "default",
+      "envelope": "manifest_whitespace",
+      "expected": {
+        "content_id": "sha256:38873228cea62acfc525a687d9cd9fdceeb17314dbf2bf974474166fe7f6f841",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_not_canonical",
+        "valid_signatures": 1
+      },
+      "id": "manifest_whitespace",
+      "manifest": "manifest_whitespace",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "manifest_reordered_members",
+      "expected": {
+        "content_id": "sha256:c8d5cc423e0a51779d96414b4b6796351d0e54c3505af7d974542ed145d97d48",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_not_canonical",
+        "valid_signatures": 1
+      },
+      "id": "manifest_reordered_members",
+      "manifest": "manifest_reordered_members",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "manifest_duplicate_member",
+      "expected": {
+        "content_id": "sha256:90607f744267bcd2883ed9fae485b2abaccebd910bd1ad909b4b01fd13b8c501",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_not_canonical",
+        "valid_signatures": 1
+      },
+      "id": "manifest_duplicate_member",
+      "manifest": "manifest_duplicate_member",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "manifest_non_integer_number",
+      "expected": {
+        "content_id": "sha256:177c2d4c20ae61e4888d16d9ab942943cbe8fbc9e76e3a5ffdd8808422f59e46",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_not_canonical",
+        "valid_signatures": 1
+      },
+      "id": "manifest_non_integer_number",
+      "manifest": "manifest_non_integer_number",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "manifest_escaped_ascii",
+      "expected": {
+        "content_id": "sha256:07640dcff60db8bf4d79c303ec52673f058016baec21dbb5a28965a974ec771f",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_not_canonical",
+        "valid_signatures": 1
+      },
+      "id": "manifest_escaped_ascii",
+      "manifest": "manifest_escaped_ascii",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "schema_unsupported",
+      "expected": {
+        "content_id": "sha256:7724ee64e5da3e6f01f798e6b9c34695dce34ad874a463937899045386dde891",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "schema_unsupported",
+        "valid_signatures": 1
+      },
+      "id": "schema_unsupported",
+      "manifest": "schema_unsupported",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "schema_version_unsupported",
+      "expected": {
+        "content_id": "sha256:2290ce97ac1a0095d4b3f129fa6cea3c9ab90165c656099c74f2ff0211ec82df",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "schema_version_unsupported",
+        "valid_signatures": 1
+      },
+      "id": "schema_version_unsupported",
+      "manifest": "schema_version_unsupported",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "unknown_critical_top_level_field",
+      "expected": {
+        "content_id": "sha256:e3416cb9839df2d72353a9f9acf91f8b39e00725a5d57bf9f7f91b684c47ce25",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "unknown_critical_field",
+        "valid_signatures": 1
+      },
+      "id": "unknown_critical_top_level_field",
+      "manifest": "unknown_critical_top_level_field",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "unknown_critical_nested_field",
+      "expected": {
+        "content_id": "sha256:99484a34e712b148d8a8babbcd4f722884f949068dff2df9c029fe400ae28569",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "unknown_critical_field",
+        "valid_signatures": 1
+      },
+      "id": "unknown_critical_nested_field",
+      "manifest": "unknown_critical_nested_field",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "missing_required_section",
+      "expected": {
+        "content_id": "sha256:47faec0ac0534013f49c34662a30e30110868fcb9e8f7f47350089d7056cd605",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_malformed",
+        "valid_signatures": 1
+      },
+      "id": "missing_required_section",
+      "manifest": "missing_required_section",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "wrong_field_type",
+      "expected": {
+        "content_id": "sha256:b22d710935f48255f5966df1b1d97912e6831c96be8e74354f3bac4d191c3814",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_malformed",
+        "valid_signatures": 1
+      },
+      "id": "wrong_field_type",
+      "manifest": "wrong_field_type",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "valid_critical_extension_understood",
+      "expected": {
+        "content_id": "sha256:fd593e291433a7f018c1fe09b60aa5c0f11b93cfedb0639e060d180e452e0dcf",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "unknown_critical_extension",
+        "valid_signatures": 1
+      },
+      "id": "unknown_critical_extension",
+      "manifest": "valid_critical_extension_understood",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_traversal",
+      "expected": {
+        "content_id": "sha256:7478db239c6681a2bcfae4dee02282abd76fe722ad6b3d42db32984f313cda7f",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_unsafe",
+        "valid_signatures": 1
+      },
+      "id": "path_traversal",
+      "manifest": "path_traversal",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_absolute",
+      "expected": {
+        "content_id": "sha256:e3c30cdb8fe5e27ce42f7bb922715f093693894c6bacc17b069b9119ed60e546",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_unsafe",
+        "valid_signatures": 1
+      },
+      "id": "path_absolute",
+      "manifest": "path_absolute",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_backslash",
+      "expected": {
+        "content_id": "sha256:2432f4b91660bf02d9062049ab64c913227ad87f446931d11fde11886134ea43",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_unsafe",
+        "valid_signatures": 1
+      },
+      "id": "path_backslash",
+      "manifest": "path_backslash",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_dot_segment",
+      "expected": {
+        "content_id": "sha256:f5546e08fe02ee33d731344af0e8f74d6ff5caa5a00494448ee953ef43a7fefd",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_unsafe",
+        "valid_signatures": 1
+      },
+      "id": "path_dot_segment",
+      "manifest": "path_dot_segment",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_reserved_name",
+      "expected": {
+        "content_id": "sha256:08f2f4edee3dd7b7aa10b4b906370e9e62b4b14e7688527195432cf844f02066",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_unsafe",
+        "valid_signatures": 1
+      },
+      "id": "path_reserved_name",
+      "manifest": "path_reserved_name",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "executable_file",
+      "expected": {
+        "content_id": "sha256:500d2f6b360454ca0c6776dcead387f33407170e3acab2292b923bb847cfcdde",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "executable_file_forbidden",
+        "valid_signatures": 1
+      },
+      "id": "executable_file",
+      "manifest": "executable_file",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "duplicate_path",
+      "expected": {
+        "content_id": "sha256:c1b3147932635b38f050d3ab7faebb679ffe879740644784ff13586c3673e32c",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "duplicate_path",
+        "valid_signatures": 1
+      },
+      "id": "duplicate_path",
+      "manifest": "duplicate_path",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "duplicate_path_case_folded",
+      "expected": {
+        "content_id": "sha256:4c14b28e5d43b2866cd4378c18cdb2928f3824d3fca8cbbea17797904b8cd63c",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "duplicate_path",
+        "valid_signatures": 1
+      },
+      "id": "duplicate_path_case_folded",
+      "manifest": "duplicate_path_case_folded",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "path_file_directory_conflict",
+      "expected": {
+        "content_id": "sha256:8b366f7eaa33050bb1d1761f70fad87b0e1f28bc50f2d328b47c54bcddb89975",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "path_conflict",
+        "valid_signatures": 1
+      },
+      "id": "path_file_directory_conflict",
+      "manifest": "path_file_directory_conflict",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "files_reordered",
+      "expected": {
+        "content_id": "sha256:a0c3eeb1df6b1304f482edaff803199c126ecccf005fe24b55100749ab1d5e8f",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_order_invalid",
+        "valid_signatures": 1
+      },
+      "id": "files_reordered",
+      "manifest": "files_reordered",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "reference_undeclared",
+      "expected": {
+        "content_id": "sha256:67a19077d2ef3c660a311159a918df7c2607ee5ca211620c0fffb566d6d3c839",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_reference_undeclared",
+        "valid_signatures": 1
+      },
+      "id": "reference_undeclared",
+      "manifest": "reference_undeclared",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "runtime_wrong_platform_combination",
+      "expected": {
+        "content_id": "sha256:5b50390f2ca558b7a761f13b8e9ebd9233fe275e90fc2e336b18ad52eb587773",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "runtime_combination_unsupported",
+        "valid_signatures": 1
+      },
+      "id": "runtime_wrong_platform_combination",
+      "manifest": "runtime_wrong_platform_combination",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "runtime_wrong_precision_combination",
+      "expected": {
+        "content_id": "sha256:e30b177d73a4d0a2453f4ef824d65c095706a94fed73d9c771401a036bf1dc63",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "runtime_combination_unsupported",
+        "valid_signatures": 1
+      },
+      "id": "runtime_wrong_precision_combination",
+      "manifest": "runtime_wrong_precision_combination",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "fallback_cycle",
+      "expected": {
+        "content_id": "sha256:684e6545551aa4460ac5cff24a48885ae098826111538b30fc2caed2f4943db4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "fallback_invalid",
+        "valid_signatures": 1
+      },
+      "id": "fallback_cycle",
+      "manifest": "fallback_cycle",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "fallback_unknown",
+      "expected": {
+        "content_id": "sha256:edcf67ecc2ff630e8d5949ae529c55c0c3dcf80034d59e88b56ef0708f05a931",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "fallback_invalid",
+        "valid_signatures": 1
+      },
+      "id": "fallback_unknown",
+      "manifest": "fallback_unknown",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "too_many_files",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "size_limit_exceeded",
+        "valid_signatures": 1
+      },
+      "id": "too_many_files",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "declared_bytes_over_limit",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "size_limit_exceeded",
+        "valid_signatures": 1
+      },
+      "id": "declared_bytes_over_limit",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "bundle_not_yet_valid",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "bundle_not_yet_valid",
+        "valid_signatures": 1
+      },
+      "id": "bundle_not_yet_valid",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "bundle_expired",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "bundle_expired",
+        "valid_signatures": 1
+      },
+      "id": "bundle_expired",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "rollback",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "rollback_rejected",
+        "valid_signatures": 1
+      },
+      "id": "rollback",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "sdk_too_new",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "sdk_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "sdk_too_new",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "sdk_not_declared",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "sdk_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "sdk_not_declared",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "policy_incompatible",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "policy_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "policy_incompatible",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "wrong_platform",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "platform_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "wrong_platform",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "os_too_old",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "platform_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "os_too_old",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "memory_too_small",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "platform_incompatible",
+        "valid_signatures": 1
+      },
+      "id": "memory_too_small",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 7,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_missing",
+        "valid_signatures": 1
+      },
+      "id": "file_missing",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [
+        "onnx/model.onnx"
+      ],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 13,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_digest_mismatch",
+        "valid_signatures": 1
+      },
+      "id": "file_modified",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsyntheti!\n"
+        }
+      ],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 12,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_size_mismatch",
+        "valid_signatures": 1
+      },
+      "id": "file_oversized",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n                                                                "
+        }
+      ],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 2,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_size_mismatch",
+        "valid_signatures": 1
+      },
+      "id": "file_truncated",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [
+        {
+          "path": "config.json",
+          "text": "{}\n"
+        }
+      ],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_undeclared",
+        "valid_signatures": 1
+      },
+      "id": "file_added",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [
+        {
+          "path": "onnx/extra.onnx",
+          "text": "unexpected\n"
+        }
+      ],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
+      "envelope": "golden",
+      "expected": {
+        "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": false,
+        "ok": false,
+        "reason": "file_undeclared",
+        "valid_signatures": 1
+      },
+      "id": "file_added_hidden",
+      "manifest": "golden",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [
+        {
+          "path": ".DS_Store",
+          "text": "unexpected\n"
+        }
+      ],
+      "trust_policy": "default"
+    }
+  ],
+  "contexts": {
+    "bundle_expired": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2027-06-01T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "bundle_not_yet_valid": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-09-01T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "declared_bytes_over_limit": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 128,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "default": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "envelope_too_large": {
+      "max_envelope_bytes": 64,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "key_expired": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2027-08-01T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "manifest_too_large": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 256,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "memory_too_small": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": 1024,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "os_too_old": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "25",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "policy_incompatible": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 2,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "rollback": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {
+        "openmed.synthetic.tiny-pii": 8
+      },
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "sdk_not_declared": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-desktop",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "sdk_too_new": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "5.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "too_many_files": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "valid_critical_extension_understood": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": [
+        "org.openmed.test.note"
+      ]
+    },
+    "valid_ios": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": 4294967296,
+        "os_version": "17.2",
+        "platform": "ios",
+        "policy_version": 1,
+        "runtimes": [
+          "coreml",
+          "mlx",
+          "onnx"
+        ],
+        "sdk_name": "openmedkit-swift",
+        "sdk_version": "4.1.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "valid_no_target": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": null,
+      "understood_extensions": []
+    },
+    "valid_python": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "15.1",
+        "platform": "macos",
+        "policy_version": 1,
+        "runtimes": [
+          "coreml",
+          "mlx",
+          "onnx",
+          "pytorch"
+        ],
+        "sdk_name": "openmed-python",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "valid_rotation_old_key_expired_dual_signed": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-12-15T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "valid_sequence_at_floor": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {
+        "openmed.synthetic.tiny-pii": 7
+      },
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "valid_web": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": null,
+        "platform": "web",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "transformersjs"
+        ],
+        "sdk_name": "openmedkit-web",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    },
+    "wrong_platform": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": 4294967296,
+        "os_version": "10.0",
+        "platform": "watchos",
+        "policy_version": 1,
+        "runtimes": [
+          "coreml"
+        ],
+        "sdk_name": "openmedkit-swift",
+        "sdk_version": "4.1.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": []
+    }
+  },
+  "ed25519_rfc8032": [
+    {
+      "message_hex": "",
+      "name": "TEST 1",
+      "public_hex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signature_hex": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    },
+    {
+      "message_hex": "72",
+      "name": "TEST 2",
+      "public_hex": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "signature_hex": "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"
+    },
+    {
+      "message_hex": "af82",
+      "name": "TEST 3",
+      "public_hex": "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
+      "signature_hex": "6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"
+    }
+  ],
+  "envelopes": {
+    "duplicate_path": "{\"content_id\":\"sha256:c1b3147932635b38f050d3ab7faebb679ffe879740644784ff13586c3673e32c\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"s0I21LFnjtMsgPgAWpYvNzlvg6UB-oMrA-PikXSWOSEIspAVdCELDL-DQIEk8dqNtd-JsHb1qmbGq3mWZLU7DQ\"}]}",
+    "duplicate_path_case_folded": "{\"content_id\":\"sha256:4c14b28e5d43b2866cd4378c18cdb2928f3824d3fca8cbbea17797904b8cd63c\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"2RPtOvdhwWsYoiJeGkMz1GzVnrdJzyfJoJg37tDEJbBInLrLwc_WmtPLraC4g0yqu2MUSGKxIpisLcLA5EOECQ\"}]}",
+    "envelope_not_canonical": "{\n  \"content_id\": \"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\n  \"schema\": \"openmed.portable_bundle.signatures\",\n  \"schema_version\": 1,\n  \"signatures\": [\n    {\n      \"alg\": \"Ed25519\",\n      \"kid\": \"openmed-test-root-a\",\n      \"sig\": \"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"\n    }\n  ]\n}",
+    "envelope_unknown_member": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"note\":1,\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "envelope_version_unsupported": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":2,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "executable_file": "{\"content_id\":\"sha256:500d2f6b360454ca0c6776dcead387f33407170e3acab2292b923bb847cfcdde\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"9g3lru_iJRR6mQMbdwzpLFxmciTbVLQztbMSRv1sc3rztTYdWmRCDav6B_dyiPiO9jC1SFV6ZD5kTkuzIGEJAQ\"}]}",
+    "fallback_cycle": "{\"content_id\":\"sha256:684e6545551aa4460ac5cff24a48885ae098826111538b30fc2caed2f4943db4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"bUJiXFTUBO1Ia8ZBwo4Zpk29by76Ug38O4oaCB7CgNbLyRkprDXow1_4oOvSPoBsQgVy3vQEIs7AMTG0NKhNCQ\"}]}",
+    "fallback_unknown": "{\"content_id\":\"sha256:edcf67ecc2ff630e8d5949ae529c55c0c3dcf80034d59e88b56ef0708f05a931\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"V7cmgp13zvD6rAHKD-Xy_dqbutNtm-oH-wjcS_wDEXGszeuREBUA3jPLpxbsWeZCXNgqtLbG1UZmjQ6DuIbwBw\"}]}",
+    "files_reordered": "{\"content_id\":\"sha256:a0c3eeb1df6b1304f482edaff803199c126ecccf005fe24b55100749ab1d5e8f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"gc4eaKXq7Eu_w3-CN-Vd2i3Rr78rIP9Ro6vI7_Ak-_6X4A_1MhYQgUgaQtMPewHoOvp5J8cjeCYBfeFVrtgFBw\"}]}",
+    "golden": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "manifest_duplicate_member": "{\"content_id\":\"sha256:90607f744267bcd2883ed9fae485b2abaccebd910bd1ad909b4b01fd13b8c501\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"7zBPv6NEep3DFSgIRSuLDWW1wuBBfygASKfEH9aQl7TfhqlbWvNzOZ4Q_gXym-VRSy9gqMYyUUHHyxyefeI2Dg\"}]}",
+    "manifest_escaped_ascii": "{\"content_id\":\"sha256:07640dcff60db8bf4d79c303ec52673f058016baec21dbb5a28965a974ec771f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"CeQaHjINxbPgwwAeBnKB_4L3xcHRzsUYTGCSot3iPsdfOruh24zgDpYMWn7h3phBtGXv95atAofcw9jSIHpUBw\"}]}",
+    "manifest_non_integer_number": "{\"content_id\":\"sha256:177c2d4c20ae61e4888d16d9ab942943cbe8fbc9e76e3a5ffdd8808422f59e46\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"9g9ndPEOOlucIRpJ-mQQPuySVkYIdMd8rLI5lMzFm7k9Yg8IqwEUyBCeXisOoiqibs8-sAcezhgKSt0hFHljAw\"}]}",
+    "manifest_reordered_members": "{\"content_id\":\"sha256:c8d5cc423e0a51779d96414b4b6796351d0e54c3505af7d974542ed145d97d48\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"Lb12mHpqiRGqaWz51FD0QBI-_wIVNuT_nIqljYotf_k8DWThDgc53SnFQ8tpBmmsSyU8XEhK6Z2FM6yM3fmpCA\"}]}",
+    "manifest_whitespace": "{\"content_id\":\"sha256:38873228cea62acfc525a687d9cd9fdceeb17314dbf2bf974474166fe7f6f841\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"stVHCIYqIlCXY5Dla2BmOkDO-Q3gmQYbleftCpnnPj4crZfKutkqCrfvFfqxU8ebpiENi2S8QqNzjvs4Y0TLAA\"}]}",
+    "missing_required_section": "{\"content_id\":\"sha256:47faec0ac0534013f49c34662a30e30110868fcb9e8f7f47350089d7056cd605\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"efBxJIRZj-y2XfPTeJBNZy4I5azSdjG-fAbQtGhAuty8l-Vp1X_JFrXezKogubYBvhtR40ppRVrzNjgm8sYjDg\"}]}",
+    "modified_manifest_relabelled": "{\"content_id\":\"sha256:68ec2fa5b50bb3365f68104891294ff1f773eb7f5020f78ffcf3dd7d6a69a549\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "path_absolute": "{\"content_id\":\"sha256:e3c30cdb8fe5e27ce42f7bb922715f093693894c6bacc17b069b9119ed60e546\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"fhKhO4j1zBjQrFRlaeZo6cdsKXbfIWq2p94_6xFPwE5TFdlVzFYrRewVDHHSjvvfEKL0mC6ALomDSu-zTdGvAA\"}]}",
+    "path_backslash": "{\"content_id\":\"sha256:2432f4b91660bf02d9062049ab64c913227ad87f446931d11fde11886134ea43\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"1E-P6HmY-Vb-jdfm_L5zvQvNDWjyB2387a7leBNGfe_CwNf5owug3c19ZBzAsYaxCx9UsfcXGWDtqAN_vKdYDQ\"}]}",
+    "path_dot_segment": "{\"content_id\":\"sha256:f5546e08fe02ee33d731344af0e8f74d6ff5caa5a00494448ee953ef43a7fefd\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"yrBGsobLDmxkPnrZNdZivmIERhD08k_oALE7o8_ySZ34jlevOLoMEN45xjq4_QQT3UsmImCiUfhvtxf97wI9Ag\"}]}",
+    "path_file_directory_conflict": "{\"content_id\":\"sha256:8b366f7eaa33050bb1d1761f70fad87b0e1f28bc50f2d328b47c54bcddb89975\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"5fzVVaHfM_YmaP4o4nX5B0uoRdWRa2y05gu3ZuQi9Ep6T_otJ2hhv4-39MyJrE9CsvoYi_IBHbkb_byfjvWCBA\"}]}",
+    "path_reserved_name": "{\"content_id\":\"sha256:08f2f4edee3dd7b7aa10b4b906370e9e62b4b14e7688527195432cf844f02066\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"gbdAYHiJXVU9PtRVZHu-5i-q7rf6iRrpFaiwtjQy66GAzkYzi-vJylK00M5tJsYs0Cd0CoZBVMyBmvOJ_kbRDw\"}]}",
+    "path_traversal": "{\"content_id\":\"sha256:7478db239c6681a2bcfae4dee02282abd76fe722ad6b3d42db32984f313cda7f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"fBLtR9rgXl0R4Eke0-tXCo6tyR4BS7WLWcc0Juh4ie2JZ3JMhgQGr9uCvTAc1zAjXwhW-OF4i7GybtXPB1wdAw\"}]}",
+    "reference_undeclared": "{\"content_id\":\"sha256:67a19077d2ef3c660a311159a918df7c2607ee5ca211620c0fffb566d6d3c839\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"XDnBWcBjWzFxU25IrVGqHcyeoarswxiawPmTEkASltmh7t-NUqEsPoLiGqakPG6lFx4LlF_BMqn1tl2ujsOwDA\"}]}",
+    "runtime_wrong_platform_combination": "{\"content_id\":\"sha256:5b50390f2ca558b7a761f13b8e9ebd9233fe275e90fc2e336b18ad52eb587773\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"ox3yQ0UsLLpDxxzGGBey5QFMBQtLD2pIbqjo9vQE2jIV6uM4vWnPDqekbr7O4mi-8i7rNdbJzfurSXefhjHFBw\"}]}",
+    "runtime_wrong_precision_combination": "{\"content_id\":\"sha256:e30b177d73a4d0a2453f4ef824d65c095706a94fed73d9c771401a036bf1dc63\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"xSyNvg-v-ecCixfJ8LrBOcxczEtOlxDleYcU1yfqlOk9I2LOkF18jbtme_RVhtWSZWumtaMAgsqVxDoObBT1Ag\"}]}",
+    "schema_unsupported": "{\"content_id\":\"sha256:7724ee64e5da3e6f01f798e6b9c34695dce34ad874a463937899045386dde891\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"XCgNGDOLNDQQ8DTufEuK3vS8yzli2OjviG7M-kWpKchXjijdoawd-Zjm0VFvSHi0ZtLwc1f-iBiDT7llhz3zCw\"}]}",
+    "schema_version_unsupported": "{\"content_id\":\"sha256:2290ce97ac1a0095d4b3f129fa6cea3c9ab90165c656099c74f2ff0211ec82df\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"zSUPsFcFNhgthZQ3BAlNNLQzrEZHy7d8pFSbbYcDNvS74Abs4ZpXwcfPtI3yoHsj7jUxxtLvcnEPUKE24v3yCA\"}]}",
+    "signature_algorithm_unsupported": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"RS256\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "signature_bit_flip": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCop9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "signature_duplicate_key_counts_once": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"},{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+    "signature_missing": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[]}",
+    "signature_padded_base64": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw==\"}]}",
+    "signature_scalar_not_reduced": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KQ7ktrZhEEtjxQW5-lfeNLOuO3lV1UIYypQ0AMrs7UhGw\"}]}",
+    "unknown_critical_nested_field": "{\"content_id\":\"sha256:99484a34e712b148d8a8babbcd4f722884f949068dff2df9c029fe400ae28569\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"dHM7hBxsL022ZN7Gz_5qxLMIn34PrZJ1qkujpGvVTSQY1N4gougL_h0J36rIFnv10LTUWszbxiZXHFIWNvmgAQ\"}]}",
+    "unknown_critical_top_level_field": "{\"content_id\":\"sha256:e3416cb9839df2d72353a9f9acf91f8b39e00725a5d57bf9f7f91b684c47ce25\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"yglgfw496wGYUpwDIFSkM3PW8iQIPp9zX9oMqyyc0Nq86LntkQMKMPQ35qPOkndBPg9yXTpubItKv3jYsZy5Bg\"}]}",
+    "valid_critical_extension_understood": "{\"content_id\":\"sha256:fd593e291433a7f018c1fe09b60aa5c0f11b93cfedb0639e060d180e452e0dcf\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"9CAG0rn3AjaC7IlSzCHEQVuea6e9sACbY7hmxFBtXc4FVeRn-PS4i2jAR1ZTTiaoaAhwB4y_VUypR2q4Of_qAg\"}]}",
+    "valid_rotation_new_key": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-b\",\"sig\":\"wbBzeJ8UFOVcLS34NczZ6nUNA1XRrMMQht9KmosCP-GU10HFUEwtbaNxE7GgqFmkg1iiQKXBM8T5dxiB9gmIAA\"}]}",
+    "valid_rotation_old_key_expired_dual_signed": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"},{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-b\",\"sig\":\"wbBzeJ8UFOVcLS34NczZ6nUNA1XRrMMQht9KmosCP-GU10HFUEwtbaNxE7GgqFmkg1iiQKXBM8T5dxiB9gmIAA\"}]}",
+    "wrong_field_type": "{\"content_id\":\"sha256:b22d710935f48255f5966df1b1d97912e6831c96be8e74354f3bac4d191c3814\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"Nlp-IHI8CptflTAO_0sB_YHRHg0P8eaMQJcSU_-ADXAIvIhF3CmKfwIBznuRcG2rngdS-I9n_iw7e5WKSIqnBw\"}]}",
+    "wrong_signer": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-rogue\",\"sig\":\"iP_s-Kd8S3Hyt3mK1C3SyfMJGQVBQ7GKvalW9Ffe4kFCW4HxIH5VSGkHjpN-Yd9APy1P7cIUyPC6S82-PV1BBw\"}]}"
+  },
+  "golden": {
+    "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+    "manifest": "golden",
+    "signing_input_sha256": "32a19863f36d722e40e3a3fcadd28d9b64f8c0956b16b69d38722014c8e981f9"
+  },
+  "manifests": {
+    "duplicate_path": {
+      "at": 3503,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}"
+    },
+    "duplicate_path_case_folded": {
+      "at": 2175,
+      "base": "golden",
+      "delete": 0,
+      "insert": "text/plain\",\"path\":\"license\",\"role\":\"metadata\",\"sha256\":\"sha256:18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\"size_bytes\":10},{\"executable\":false,\"media_type\":\""
+    },
+    "executable_file": {
+      "at": 728,
+      "base": "golden",
+      "delete": 4,
+      "insert": "tru"
+    },
+    "fallback_cycle": {
+      "at": 4997,
+      "base": "golden",
+      "delete": 4,
+      "insert": "\"onnx-int8\""
+    },
+    "fallback_unknown": {
+      "at": 4595,
+      "base": "golden",
+      "delete": 4,
+      "insert": "tflite"
+    },
+    "files_reordered": {
+      "at": 748,
+      "base": "golden",
+      "delete": 351,
+      "insert": "application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61"
+    },
+    "golden": {
+      "text": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":7,\"version\":\"1.2.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:a852e61c225e8114142630d53061b98257c569a604861d27829bb7fcd240e547\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}"
+    },
+    "manifest_duplicate_member": {
+      "at": 5681,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",\"tokenizer\":null"
+    },
+    "manifest_escaped_ascii": {
+      "at": 3659,
+      "base": "golden",
+      "delete": 1,
+      "insert": "\\u0069"
+    },
+    "manifest_non_integer_number": {
+      "at": 3524,
+      "base": "golden",
+      "delete": 0,
+      "insert": ".0"
+    },
+    "manifest_reordered_members": {
+      "at": 2,
+      "base": "golden",
+      "delete": 5677,
+      "insert": "tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"},\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"schema_version\":1,\"schema\":\"openmed.portable_bundle\",\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:a852e61c225e8114142630d53061b98257c569a604861d27829bb7fcd240e547\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"critical_extensions\":[],\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":7,\"version\":\"1.2.0"
+    },
+    "manifest_whitespace": {
+      "at": 1,
+      "base": "golden",
+      "delete": 5680,
+      "insert": "\n  \"bundle\": {\n    \"expires_at\": \"2027-05-01T00:00:00Z\",\n    \"id\": \"openmed.synthetic.tiny-pii\",\n    \"issued_at\": \"2026-10-01T00:00:00Z\",\n    \"sequence\": 7,\n    \"version\": \"1.2.0\"\n  },\n  \"calibration\": {\n    \"path\": \"calibration/profile.json\",\n    \"profile_version\": 1\n  },\n  \"compatibility\": {\n    \"sdks\": [\n      {\n        \"max_exclusive\": \"5.0.0\",\n        \"min\": \"4.0.0\",\n        \"name\": \"openmed-python\"\n      },\n      {\n        \"max_exclusive\": \"5.0.0\",\n        \"min\": \"4.0.0\",\n        \"name\": \"openmedkit-android\"\n      },\n      {\n        \"max_exclusive\": \"5.0.0\",\n        \"min\": \"4.0.0\",\n        \"name\": \"openmedkit-swift\"\n      },\n      {\n        \"max_exclusive\": \"5.0.0\",\n        \"min\": \"4.0.0\",\n        \"name\": \"openmedkit-web\"\n      }\n    ]\n  },\n  \"critical_extensions\": [],\n  \"decoder\": {\n    \"contract_version\": 1,\n    \"kind\": \"bio\"\n  },\n  \"evidence\": [\n    {\n      \"kind\": \"parity\",\n      \"path\": \"evidence/parity.json\"\n    }\n  ],\n  \"extensions\": {\n    \"org.openmed.test.note\": {\n      \"kept\": true,\n      \"revision\": 1\n    }\n  },\n  \"files\": [\n    {\n      \"executable\": false,\n      \"media_type\": \"text/plain\",\n      \"path\": \"LICENSE\",\n      \"role\": \"license\",\n      \"sha256\": \"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\n      \"size_bytes\": 61\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"calibration/profile.json\",\n      \"role\": \"calibration\",\n      \"sha256\": \"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\n      \"size_bytes\": 39\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"config.json\",\n      \"role\": \"config\",\n      \"sha256\": \"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\n      \"size_bytes\": 54\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/vnd.apple.coreml\",\n      \"path\": \"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\n      \"role\": \"graph\",\n      \"sha256\": \"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\n      \"size_bytes\": 35\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"coreml/model.mlpackage/Manifest.json\",\n      \"role\": \"graph\",\n      \"sha256\": \"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\n      \"size_bytes\": 19\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"evidence/parity.json\",\n      \"role\": \"evidence\",\n      \"sha256\": \"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\n      \"size_bytes\": 29\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"id2label.json\",\n      \"role\": \"labels\",\n      \"sha256\": \"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\n      \"size_bytes\": 36\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/onnx\",\n      \"path\": \"onnx/model.onnx\",\n      \"role\": \"graph\",\n      \"sha256\": \"sha256:a852e61c225e8114142630d53061b98257c569a604861d27829bb7fcd240e547\",\n      \"size_bytes\": 38\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/onnx\",\n      \"path\": \"onnx/model_int8.onnx\",\n      \"role\": \"graph\",\n      \"sha256\": \"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\n      \"size_bytes\": 38\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"policy/default.json\",\n      \"role\": \"policy\",\n      \"sha256\": \"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\n      \"size_bytes\": 38\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"provenance/export.json\",\n      \"role\": \"provenance\",\n      \"sha256\": \"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\n      \"size_bytes\": 38\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"text/plain\",\n      \"path\": \"segmenter/rules.txt\",\n      \"role\": \"segmenter\",\n      \"sha256\": \"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\n      \"size_bytes\": 26\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"application/json\",\n      \"path\": \"tokenizer.json\",\n      \"role\": \"tokenizer\",\n      \"sha256\": \"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\n      \"size_bytes\": 35\n    },\n    {\n      \"executable\": false,\n      \"media_type\": \"text/plain\",\n      \"path\": \"vocab.txt\",\n      \"role\": \"tokenizer\",\n      \"sha256\": \"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\n      \"size_bytes\": 22\n    }\n  ],\n  \"labels\": {\n    \"count\": 3,\n    \"path\": \"id2label.json\",\n    \"scheme\": \"bio\"\n  },\n  \"licenses\": [\n    {\n      \"files\": [\n        \"LICENSE\"\n      ],\n      \"id\": \"apache-2.0\"\n    }\n  ],\n  \"model\": {\n    \"architecture\": \"bert\",\n    \"family\": \"pii\",\n    \"id\": \"OpenMed/synthetic-tiny-pii\",\n    \"languages\": [\n      \"en\"\n    ],\n    \"revision\": \"0123456789abcdef0123456789abcdef01234567\",\n    \"task\": \"token-classification\"\n  },\n  \"offsets\": {\n    \"contract_version\": 1,\n    \"unit\": \"unicode_scalar\"\n  },\n  \"policy\": {\n    \"max_version_exclusive\": 2,\n    \"min_version\": 1,\n    \"path\": \"policy/default.json\"\n  },\n  \"provenance\": {\n    \"export_record\": \"provenance/export.json\",\n    \"source_digest\": \"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"\n  },\n  \"runtimes\": [\n    {\n      \"entrypoint\": \"coreml/model.mlpackage/Manifest.json\",\n      \"fallback\": \"onnx-fp32\",\n      \"files\": [\n        \"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\n        \"coreml/model.mlpackage/Manifest.json\",\n        \"config.json\"\n      ],\n      \"format\": \"coreml\",\n      \"id\": \"coreml-fp16\",\n      \"min_memory_bytes\": 268435456,\n      \"min_storage_bytes\": 1048576,\n      \"platforms\": [\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"17.0\",\n          \"platform\": \"ios\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"14.0\",\n          \"platform\": \"macos\"\n        }\n      ],\n      \"precision\": \"fp16\"\n    },\n    {\n      \"entrypoint\": \"onnx/model_int8.onnx\",\n      \"fallback\": \"onnx-fp32\",\n      \"files\": [\n        \"config.json\",\n        \"onnx/model_int8.onnx\"\n      ],\n      \"format\": \"onnx\",\n      \"id\": \"onnx-int8\",\n      \"min_memory_bytes\": 134217728,\n      \"min_storage_bytes\": 1048576,\n      \"platforms\": [\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"26\",\n          \"platform\": \"android\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": null,\n          \"platform\": \"web\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": null,\n          \"platform\": \"linux\"\n        }\n      ],\n      \"precision\": \"int8\"\n    },\n    {\n      \"entrypoint\": \"onnx/model.onnx\",\n      \"fallback\": null,\n      \"files\": [\n        \"config.json\",\n        \"onnx/model.onnx\"\n      ],\n      \"format\": \"onnx\",\n      \"id\": \"onnx-fp32\",\n      \"min_memory_bytes\": 268435456,\n      \"min_storage_bytes\": 2097152,\n      \"platforms\": [\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"26\",\n          \"platform\": \"android\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"17.0\",\n          \"platform\": \"ios\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": \"14.0\",\n          \"platform\": \"macos\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": null,\n          \"platform\": \"linux\"\n        },\n        {\n          \"max_os_exclusive\": null,\n          \"min_os\": null,\n          \"platform\": \"web\"\n        }\n      ],\n      \"precision\": \"fp32\"\n    }\n  ],\n  \"schema\": \"openmed.portable_bundle\",\n  \"schema_version\": 1,\n  \"segmenter\": {\n    \"files\": [\n      \"segmenter/rules.txt\"\n    ],\n    \"id\": \"synthetic-rules\"\n  },\n  \"tokenizer\": {\n    \"contract_version\": 1,\n    \"files\": [\n      \"tokenizer.json\",\n      \"vocab.txt\"\n    ],\n    \"kind\": \"wordpiece\"\n  }\n"
+    },
+    "missing_required_section": {
+      "at": 533,
+      "base": "golden",
+      "delete": 46,
+      "insert": ""
+    },
+    "modified_manifest": {
+      "at": 127,
+      "base": "golden",
+      "delete": 1,
+      "insert": "8"
+    },
+    "path_absolute": {
+      "at": 768,
+      "base": "golden",
+      "delete": 7,
+      "insert": "/etc/escape.txt"
+    },
+    "path_backslash": {
+      "at": 768,
+      "base": "golden",
+      "delete": 7,
+      "insert": "onnx\\\\x.onnx"
+    },
+    "path_dot_segment": {
+      "at": 768,
+      "base": "golden",
+      "delete": 7,
+      "insert": "a/./b.txt"
+    },
+    "path_file_directory_conflict": {
+      "at": 2175,
+      "base": "golden",
+      "delete": 0,
+      "insert": "text/plain\",\"path\":\"onnx\",\"role\":\"metadata\",\"sha256\":\"sha256:18c4f85a180cf29ddc1f8e3a3143ff54d643d1c306dbe610f4f70482632071d4\",\"size_bytes\":10},{\"executable\":false,\"media_type\":\""
+    },
+    "path_reserved_name": {
+      "at": 768,
+      "base": "golden",
+      "delete": 7,
+      "insert": "openmed-bundle.json"
+    },
+    "path_traversal": {
+      "at": 768,
+      "base": "golden",
+      "delete": 7,
+      "insert": "../escape.txt"
+    },
+    "reference_undeclared": {
+      "at": 5660,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",\"merges.txt\""
+    },
+    "runtime_wrong_platform_combination": {
+      "at": 4524,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"}"
+    },
+    "runtime_wrong_precision_combination": {
+      "at": 4539,
+      "base": "golden",
+      "delete": 2,
+      "insert": "bf"
+    },
+    "schema_unsupported": {
+      "at": 5484,
+      "base": "golden",
+      "delete": 15,
+      "insert": "other"
+    },
+    "schema_version_unsupported": {
+      "at": 5518,
+      "base": "golden",
+      "delete": 1,
+      "insert": "2"
+    },
+    "unknown_critical_nested_field": {
+      "at": 4584,
+      "base": "golden",
+      "delete": 0,
+      "insert": "execution_hint\":\"gpu\",\""
+    },
+    "unknown_critical_top_level_field": {
+      "at": 5681,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",\"weights_url\":\"https\""
+    },
+    "valid_critical_extension_understood": {
+      "at": 530,
+      "base": "golden",
+      "delete": 0,
+      "insert": "\"org.openmed.test.note\""
+    },
+    "wrong_field_type": {
+      "at": 127,
+      "base": "golden",
+      "delete": 1,
+      "insert": "\"7\""
+    }
+  },
+  "notice": "TEST-ONLY vectors. Keys derive from public labels in generate_vectors.py; never trust them in production.",
+  "payload_type": "application/vnd.openmed.portable-bundle.v1+json",
+  "reason_codes": [
+    "manifest_too_large",
+    "envelope_too_large",
+    "envelope_malformed",
+    "envelope_version_unsupported",
+    "content_id_mismatch",
+    "bundle_revoked",
+    "signature_missing",
+    "signature_algorithm_unsupported",
+    "untrusted_key",
+    "key_revoked",
+    "key_not_yet_valid",
+    "key_expired",
+    "signature_invalid",
+    "signature_verifier_unavailable",
+    "signature_threshold_not_met",
+    "manifest_not_canonical",
+    "schema_unsupported",
+    "schema_version_unsupported",
+    "unknown_critical_field",
+    "manifest_malformed",
+    "path_unsafe",
+    "executable_file_forbidden",
+    "runtime_combination_unsupported",
+    "duplicate_path",
+    "path_conflict",
+    "file_order_invalid",
+    "file_reference_undeclared",
+    "fallback_invalid",
+    "unknown_critical_extension",
+    "size_limit_exceeded",
+    "bundle_not_yet_valid",
+    "bundle_expired",
+    "rollback_rejected",
+    "sdk_incompatible",
+    "policy_incompatible",
+    "platform_incompatible",
+    "file_missing",
+    "file_size_mismatch",
+    "file_digest_mismatch",
+    "file_undeclared",
+    "trust_policy_invalid",
+    "context_invalid",
+    "signing_key_invalid"
+  ],
+  "schema": "openmed.portable_bundle.vectors",
+  "synthetic_only": true,
+  "test_only_keys": true,
+  "trees": {
+    "golden": [
+      {
+        "path": "LICENSE",
+        "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+      },
+      {
+        "path": "calibration/profile.json",
+        "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+      },
+      {
+        "path": "config.json",
+        "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+      },
+      {
+        "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+        "text": "synthetic coreml graph placeholder\n"
+      },
+      {
+        "path": "coreml/model.mlpackage/Manifest.json",
+        "text": "{\"synthetic\":true}\n"
+      },
+      {
+        "path": "evidence/parity.json",
+        "text": "{\"cases\":0,\"synthetic\":true}\n"
+      },
+      {
+        "path": "id2label.json",
+        "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+      },
+      {
+        "path": "onnx/model.onnx",
+        "text": "synthetic fp32 onnx graph placeholder\n"
+      },
+      {
+        "path": "onnx/model_int8.onnx",
+        "text": "synthetic int8 onnx graph placeholder\n"
+      },
+      {
+        "path": "policy/default.json",
+        "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+      },
+      {
+        "path": "provenance/export.json",
+        "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+      },
+      {
+        "path": "segmenter/rules.txt",
+        "text": "synthetic segmenter rules\n"
+      },
+      {
+        "path": "tokenizer.json",
+        "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+      },
+      {
+        "path": "vocab.txt",
+        "text": "[PAD]\n[UNK]\nsynthetic\n"
+      }
+    ]
+  },
+  "trust_policies": {
+    "default": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2027-07-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "key_future": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2028-01-01T00:00:00Z",
+          "not_before": "2027-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "key_revoked": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2027-07-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "revoked",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "revoked_bundle": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2027-07-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        }
+      ],
+      "revoked_content_ids": [
+        "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4"
+      ],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "rotation": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2026-12-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        },
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-b",
+          "kty": "OKP",
+          "not_after": "2028-01-01T00:00:00Z",
+          "not_before": "2026-10-01T00:00:00Z",
+          "status": "active",
+          "x": "m7PyXaHJleQl-lHa9K1BTAbMaqqaN_vSnFeZLSYL9EY"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "threshold_two": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2027-07-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        },
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-b",
+          "kty": "OKP",
+          "not_after": "2028-01-01T00:00:00Z",
+          "not_before": "2026-10-01T00:00:00Z",
+          "status": "active",
+          "x": "m7PyXaHJleQl-lHa9K1BTAbMaqqaN_vSnFeZLSYL9EY"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 2
+    }
+  },
+  "version": 1
+}
