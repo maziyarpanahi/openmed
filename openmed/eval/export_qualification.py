@@ -15,12 +15,16 @@ family or a runtime:
 - identity digests for the source revision, tokenizer, label map, and artifact
   files, plus offline verification of a written report.
 
-Family adapters (ModernBERT today; Longformer, Privacy Filter, and GLiNER
+Family adapters (ModernBERT and Longformer today; Privacy Filter and GLiNER
 later) supply the runners. A runner receives one padded feed such as
 ``{"input_ids": array[1, S], "attention_mask": array[1, S]}`` and returns
-logits shaped ``[1, S, num_labels]``. Reports carry only revisions, versions,
-digests, dimensions, counts, aggregate metrics, timings, and reason codes:
-never fixture text, decoded values, token ids, logits, or local paths.
+logits shaped ``[1, S, num_labels]``. Contracts may also declare a
+``global_attention_mask`` input with a named fill policy, a sequence sweep
+that checks logits at minimum, typical, boundary, and maximum lengths, and a
+long-document windowing policy whose document-global spans are compared across
+overlap boundaries. Reports carry only revisions, versions, digests,
+dimensions, counts, aggregate metrics, timings, and reason codes: never
+fixture text, decoded values, token ids, logits, or local paths.
 """
 
 from __future__ import annotations
@@ -83,6 +87,17 @@ QUANTIZATION_NONE = "none"
 SHAPE_MODE_STATIC = "static"
 SHAPE_MODE_DYNAMIC = "dynamic"
 _SHAPE_MODES = (SHAPE_MODE_STATIC, SHAPE_MODE_DYNAMIC)
+GLOBAL_ATTENTION_INPUT = "global_attention_mask"
+GLOBAL_ATTENTION_NONE = "none"
+GLOBAL_ATTENTION_FIRST_TOKEN = "first_token"
+GLOBAL_ATTENTION_POLICIES = (GLOBAL_ATTENTION_NONE, GLOBAL_ATTENTION_FIRST_TOKEN)
+# Default long-document windowing; matches ``OnnxModel``'s default overlap.
+WINDOW_OVERLAP_CAP = 96
+DEFAULT_MAX_DOCUMENT_WINDOWS = 64
+LONG_DOCUMENT_WINDOW_MULTIPLE = 2.5
+LONG_DOCUMENT_COUNT = 2
+SWEEP_PROBE_POLICY = "policy"
+SWEEP_PROBE_GLOBAL = "global_probe"
 _VOLATILE_VARIANT_KEYS = ("latency_ms", "process_peak_rss_bytes")
 _REPORT_REQUIRED_KEYS = (
     "family",
@@ -109,6 +124,10 @@ class ExportReason(StrEnum):
     UNSUPPORTED_QUANTIZATION = "unsupported_quantization"
     UNSUPPORTED_SEQUENCE_LENGTH = "unsupported_sequence_length"
     UNSUPPORTED_SEQUENCE_SHAPE = "unsupported_sequence_shape"
+    BUCKET_UNAVAILABLE = "bucket_unavailable"
+    SEQUENCE_TOO_LONG = "sequence_too_long"
+    MEMORY_BUDGET_EXCEEDED = "memory_budget_exceeded"
+    UNSUPPORTED_GLOBAL_ATTENTION = "unsupported_global_attention"
     UNSUPPORTED_OPERATOR = "unsupported_operator"
     UNSUPPORTED_CONVERTER_ENVIRONMENT = "unsupported_converter_environment"
     RUNTIME_UNAVAILABLE = "runtime_unavailable"
@@ -127,6 +146,8 @@ class ExportReason(StrEnum):
     INFERENCE_FAILED = "inference_failed"
     LOGIT_PARITY_FAILED = "logit_parity_failed"
     SPAN_PARITY_FAILED = "span_parity_failed"
+    SEQUENCE_PARITY_FAILED = "sequence_parity_failed"
+    LONG_DOCUMENT_PARITY_FAILED = "long_document_parity_failed"
     DIRECT_IDENTIFIER_RECALL_FAILED = "direct_identifier_recall_failed"
     CRITICAL_LEAKAGE_DETECTED = "critical_leakage_detected"
     QUANTIZATION_DELTA_EXCEEDED = "quantization_delta_exceeded"
@@ -142,6 +163,16 @@ _REASON_MESSAGES: Mapping[ExportReason, str] = {
         "sequence length is outside the declared buckets"
     ),
     ExportReason.UNSUPPORTED_SEQUENCE_SHAPE: "sequence shape mode is not qualified",
+    ExportReason.BUCKET_UNAVAILABLE: "sequence bucket is not a declared bucket",
+    ExportReason.SEQUENCE_TOO_LONG: (
+        "document exceeds the declared windowed-document bound"
+    ),
+    ExportReason.MEMORY_BUDGET_EXCEEDED: (
+        "estimated working set exceeds the declared memory ceiling"
+    ),
+    ExportReason.UNSUPPORTED_GLOBAL_ATTENTION: (
+        "global attention policy is not declared for this export"
+    ),
     ExportReason.UNSUPPORTED_OPERATOR: "graph uses an operator without coverage",
     ExportReason.UNSUPPORTED_CONVERTER_ENVIRONMENT: (
         "installed converter dependencies are not qualified for this family"
@@ -162,6 +193,12 @@ _REASON_MESSAGES: Mapping[ExportReason, str] = {
     ExportReason.INFERENCE_FAILED: "runtime inference failed",
     ExportReason.LOGIT_PARITY_FAILED: "logits exceed the declared tolerance",
     ExportReason.SPAN_PARITY_FAILED: "decoded spans differ from the reference",
+    ExportReason.SEQUENCE_PARITY_FAILED: (
+        "logits differ from the reference at a swept sequence length"
+    ),
+    ExportReason.LONG_DOCUMENT_PARITY_FAILED: (
+        "windowed long-document spans differ from the reference"
+    ),
     ExportReason.DIRECT_IDENTIFIER_RECALL_FAILED: (
         "direct-identifier recall fell below the reference"
     ),
@@ -255,6 +292,138 @@ class RuntimeSupport:
         }
 
 
+def global_attention_row(policy: str, token_count: int, length: int) -> list[int]:
+    """Return one ``global_attention_mask`` row for a declared fill policy.
+
+    ``"none"`` leaves every token on local attention (the Hugging Face
+    token-classification default); ``"first_token"`` gives the leading special
+    token global attention. Padding positions are never global.
+
+    Args:
+        policy: A value from :data:`GLOBAL_ATTENTION_POLICIES`.
+        token_count: Number of real (non-padding) tokens in the row.
+        length: Padded row length.
+
+    Raises:
+        ExportQualificationError: ``unsupported_global_attention`` for an
+            undeclared policy.
+    """
+
+    if policy not in GLOBAL_ATTENTION_POLICIES:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
+    row = [0] * int(length)
+    if policy == GLOBAL_ATTENTION_FIRST_TOKEN and token_count > 0 and row:
+        row[0] = 1
+    return row
+
+
+def default_window_overlap(window_tokens: int) -> int:
+    """Return the default overlap for *window_tokens*, matching ``OnnxModel``."""
+    return min(WINDOW_OVERLAP_CAP, max(0, (int(window_tokens) - 2) // 4))
+
+
+@dataclass(frozen=True)
+class WindowingPolicy:
+    """Declared long-document windowing for a bounded export.
+
+    Documents longer than one window are split into overlapping windows of the
+    complete (untruncated) encoding. Each token keeps the logits of the window
+    that gives it the most surrounding context, and spans are decoded once in
+    document order with document-global character offsets. Documents above
+    :attr:`max_document_tokens` fail with ``sequence_too_long``; nothing is
+    ever truncated silently.
+
+    Attributes:
+        window_tokens: Tokens per window, including special tokens.
+        overlap_tokens: Content tokens shared by consecutive windows.
+        max_document_tokens: Largest accepted document, in tokens.
+        strategy: Window planner name recorded in manifests.
+        selection: Rule that picks one window's logits per token.
+        offsets: Coordinate system of reconstructed spans.
+    """
+
+    window_tokens: int
+    overlap_tokens: int
+    max_document_tokens: int
+    strategy: str = "overlapping_windows"
+    selection: str = "best_context"
+    offsets: str = "document_global"
+
+    def __post_init__(self) -> None:
+        if (
+            self.window_tokens <= 0
+            or self.overlap_tokens < 0
+            or self.overlap_tokens >= self.window_tokens
+            or self.max_document_tokens < self.window_tokens
+        ):
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+
+    @classmethod
+    def for_window(
+        cls,
+        window_tokens: int,
+        *,
+        overlap_tokens: int | None = None,
+        max_document_windows: int = DEFAULT_MAX_DOCUMENT_WINDOWS,
+    ) -> "WindowingPolicy":
+        """Return the default policy for one window size.
+
+        Args:
+            window_tokens: Largest qualified window, including special tokens.
+            overlap_tokens: Overlap; defaults to :func:`default_window_overlap`.
+            max_document_windows: Document bound as a multiple of the window.
+        """
+
+        overlap = (
+            default_window_overlap(window_tokens)
+            if overlap_tokens is None
+            else int(overlap_tokens)
+        )
+        return cls(
+            window_tokens=int(window_tokens),
+            overlap_tokens=overlap,
+            max_document_tokens=int(window_tokens) * int(max_document_windows),
+        )
+
+    def check_document(self, token_count: int) -> None:
+        """Reject a document above the declared bound.
+
+        Raises:
+            ExportQualificationError: ``sequence_too_long``.
+        """
+
+        if int(token_count) > self.max_document_tokens:
+            raise ExportQualificationError(ExportReason.SEQUENCE_TOO_LONG)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the manifest form of the policy."""
+        return {
+            "strategy": self.strategy,
+            "window_tokens": self.window_tokens,
+            "overlap_tokens": self.overlap_tokens,
+            "max_document_tokens": self.max_document_tokens,
+            "selection": self.selection,
+            "offsets": self.offsets,
+            "truncation": "never",
+            "overflow": ExportReason.SEQUENCE_TOO_LONG.value,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "WindowingPolicy":
+        """Rebuild a policy from :meth:`to_dict` output."""
+        try:
+            return cls(
+                window_tokens=int(payload["window_tokens"]),
+                overlap_tokens=int(payload["overlap_tokens"]),
+                max_document_tokens=int(payload["max_document_tokens"]),
+                strategy=str(payload.get("strategy") or "overlapping_windows"),
+                selection=str(payload.get("selection") or "best_context"),
+                offsets=str(payload.get("offsets") or "document_global"),
+            )
+        except (KeyError, TypeError, ValueError):
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH) from None
+
+
 @dataclass(frozen=True)
 class ExportIOContract:
     """Stable tensor names and sequence bounds of an exported graph.
@@ -267,6 +436,11 @@ class ExportIOContract:
         shape_mode: ``"static"`` (pad to the next bucket) or ``"dynamic"``.
         batch_size: Fixed batch size, or ``None`` for a dynamic batch axis.
         input_dtype: Integer dtype of every input tensor.
+        global_attention: Fill policy for ``global_attention_mask``, or
+            ``None`` for families without global attention. A policy without
+            the input means global attention is fixed in the graph.
+        windowing: Long-document windowing policy, or ``None`` when documents
+            must fit one window.
     """
 
     input_names: tuple[str, ...]
@@ -276,6 +450,8 @@ class ExportIOContract:
     shape_mode: str = SHAPE_MODE_STATIC
     batch_size: int | None = 1
     input_dtype: str = "int32"
+    global_attention: str | None = None
+    windowing: WindowingPolicy | None = None
 
     def __post_init__(self) -> None:
         buckets = tuple(sorted({int(bucket) for bucket in self.sequence_buckets}))
@@ -292,6 +468,23 @@ class ExportIOContract:
             or (self.shape_mode == SHAPE_MODE_STATIC and not buckets)
         ):
             raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+        if (
+            self.global_attention is not None
+            and self.global_attention not in GLOBAL_ATTENTION_POLICIES
+        ):
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
+        if GLOBAL_ATTENTION_INPUT in self.input_names and self.global_attention is None:
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+        if (
+            self.windowing is not None
+            and self.windowing.window_tokens > self.max_sequence_length
+        ):
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+
+    @property
+    def has_global_attention_input(self) -> bool:
+        """Return whether the graph takes an explicit global attention mask."""
+        return GLOBAL_ATTENTION_INPUT in self.input_names
 
     def bucket_for(self, sequence_length: int) -> int:
         """Return the padded length for *sequence_length* tokens.
@@ -315,7 +508,7 @@ class ExportIOContract:
         """Return the manifest form of the contract."""
         batch: int | str = self.batch_size if self.batch_size is not None else "batch"
         sequence: str = "bucket" if self.shape_mode == SHAPE_MODE_STATIC else "sequence"
-        return {
+        payload: dict[str, Any] = {
             "inputs": [
                 {"name": name, "dtype": self.input_dtype, "shape": [batch, sequence]}
                 for name in self.input_names
@@ -335,6 +528,19 @@ class ExportIOContract:
             "shape_mode": self.shape_mode,
             "overflow": "reject",
         }
+        if self.global_attention is not None:
+            payload["global_attention"] = {
+                "policy": self.global_attention,
+                "input": (
+                    GLOBAL_ATTENTION_INPUT if self.has_global_attention_input else None
+                ),
+                "fixed_in_graph": not self.has_global_attention_input,
+                "values": [0, 1],
+                "padding": "never_global",
+            }
+        if self.windowing is not None:
+            payload["windowing"] = self.windowing.to_dict()
+        return payload
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ExportIOContract":
@@ -342,6 +548,8 @@ class ExportIOContract:
         try:
             inputs = payload.get("inputs") or []
             batch = inputs[0]["shape"][0] if inputs else 1
+            global_attention = payload.get("global_attention")
+            windowing = payload.get("windowing")
             return cls(
                 input_names=tuple(payload["input_names"]),
                 output_names=tuple(payload["output_names"]),
@@ -350,7 +558,19 @@ class ExportIOContract:
                 shape_mode=str(payload.get("shape_mode") or SHAPE_MODE_STATIC),
                 batch_size=batch if isinstance(batch, int) else None,
                 input_dtype=str(inputs[0]["dtype"]) if inputs else "int32",
+                global_attention=(
+                    str(global_attention["policy"])
+                    if isinstance(global_attention, Mapping)
+                    else None
+                ),
+                windowing=(
+                    WindowingPolicy.from_dict(windowing)
+                    if isinstance(windowing, Mapping)
+                    else None
+                ),
             )
+        except ExportQualificationError:
+            raise
         except (KeyError, IndexError, TypeError, ValueError):
             raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH) from None
 
@@ -513,6 +733,8 @@ class VariantQualification:
     latency_ms: Mapping[str, Any] = field(default_factory=dict)
     process_peak_rss_bytes: int | None = None
     evidence: Mapping[str, Any] = field(default_factory=dict)
+    sequence_sweep: Mapping[str, Any] = field(default_factory=dict)
+    long_document: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def claim(self) -> str:
@@ -525,6 +747,14 @@ class VariantQualification:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the JSON-ready variant evidence."""
+        payload = self._base_dict()
+        if self.sequence_sweep:
+            payload["sequence_sweep"] = dict(self.sequence_sweep)
+        if self.long_document:
+            payload["long_document"] = dict(self.long_document)
+        return payload
+
+    def _base_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "runtime": self.runtime,
@@ -571,6 +801,7 @@ class ExportQualificationReport:
     variants: tuple[VariantQualification, ...]
     artifacts: Mapping[str, str]
     task: str = "token-classification"
+    limits: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -594,6 +825,12 @@ class ExportQualificationReport:
         return payload
 
     def _payload(self) -> dict[str, Any]:
+        payload = self._base_payload()
+        if self.limits:
+            payload["limits"] = dict(self.limits)
+        return payload
+
+    def _base_payload(self) -> dict[str, Any]:
         return {
             "format": EXPORT_QUALIFICATION_FORMAT,
             "schema_version": EXPORT_QUALIFICATION_SCHEMA_VERSION,
@@ -878,6 +1115,92 @@ def load_qualification_fixtures(
 # ---------------------------------------------------------------------------
 
 
+def build_feed(
+    contract: ExportIOContract,
+    input_ids: Sequence[int],
+    *,
+    bucket: int,
+    pad_id: int = 0,
+    global_attention: Sequence[int] | None = None,
+) -> dict[str, Any]:
+    """Return one padded ``[1, bucket]`` feed for every contract input.
+
+    Args:
+        contract: Tensor contract naming the graph inputs.
+        input_ids: Real token ids, including special tokens.
+        bucket: Padded length; must hold every token.
+        pad_id: Padding token id.
+        global_attention: Explicit ``global_attention_mask`` row of length
+            *bucket*; defaults to the contract's fill policy.
+
+    Raises:
+        ExportQualificationError: ``io_contract_mismatch`` for an input the
+            harness cannot fill or a row of the wrong length.
+    """
+
+    import numpy as np
+
+    dtype = np.dtype(contract.input_dtype)
+    ids = [int(value) for value in input_ids]
+    padding = int(bucket) - len(ids)
+    if padding < 0:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_SEQUENCE_LENGTH)
+    feed: dict[str, Any] = {}
+    for name in contract.input_names:
+        if name == "input_ids":
+            values = ids + [int(pad_id)] * padding
+        elif name == "attention_mask":
+            values = [1] * len(ids) + [0] * padding
+        elif name == "token_type_ids":
+            values = [0] * int(bucket)
+        elif name == GLOBAL_ATTENTION_INPUT:
+            values = (
+                [int(value) for value in global_attention]
+                if global_attention is not None
+                else global_attention_row(
+                    contract.global_attention or GLOBAL_ATTENTION_NONE,
+                    len(ids),
+                    bucket,
+                )
+            )
+            if len(values) != int(bucket) or any(values[len(ids) :]):
+                raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+        else:
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+        feed[name] = np.asarray([values], dtype=dtype)
+    return feed
+
+
+def _pad_token_id(tokenizer: Any) -> int:
+    pad_id = getattr(tokenizer, "pad_token_id", None)
+    return int(pad_id) if pad_id is not None else 0
+
+
+def _encode_text(
+    tokenizer: Any, text: str
+) -> tuple[list[int], list[tuple[int, int]], list[int] | None]:
+    """Encode one text without truncation, returning ids, offsets, specials."""
+    try:
+        tokens = tokenizer(
+            text,
+            add_special_tokens=True,
+            return_offsets_mapping=True,
+            return_special_tokens_mask=True,
+            truncation=False,
+        )
+    except (NotImplementedError, TypeError, ValueError):
+        raise ExportQualificationError(ExportReason.MISSING_OFFSET_MAPPING) from None
+    offsets = tokens.get("offset_mapping")
+    if offsets is None:
+        raise ExportQualificationError(ExportReason.MISSING_OFFSET_MAPPING)
+    special = tokens.get("special_tokens_mask")
+    return (
+        [int(value) for value in tokens["input_ids"]],
+        [(int(start), int(end)) for start, end in offsets],
+        [int(value) for value in special] if special is not None else None,
+    )
+
+
 def encode_fixtures(
     fixtures: Sequence[Any],
     tokenizer: Any,
@@ -891,43 +1214,15 @@ def encode_fixtures(
             fixture longer than the contract allows.
     """
 
-    import numpy as np
-
-    dtype = np.dtype(contract.input_dtype)
-    pad_id = getattr(tokenizer, "pad_token_id", None)
-    pad_id = int(pad_id) if pad_id is not None else 0
+    pad_id = _pad_token_id(tokenizer)
     encoded: list[EncodedFixture] = []
     for fixture in fixtures:
-        try:
-            tokens = tokenizer(
-                fixture.text,
-                add_special_tokens=True,
-                return_offsets_mapping=True,
-                truncation=False,
-            )
-        except (NotImplementedError, TypeError, ValueError):
-            raise ExportQualificationError(
-                ExportReason.MISSING_OFFSET_MAPPING
-            ) from None
-        offsets = tokens.get("offset_mapping")
-        if offsets is None:
-            raise ExportQualificationError(ExportReason.MISSING_OFFSET_MAPPING)
-        input_ids = [int(value) for value in tokens["input_ids"]]
+        input_ids, offsets, _ = _encode_text(tokenizer, fixture.text)
         token_count = len(input_ids)
         bucket = contract.bucket_for(token_count)
         padding = bucket - token_count
         attention = [1] * token_count + [0] * padding
-        feed: dict[str, Any] = {}
-        for name in contract.input_names:
-            if name == "input_ids":
-                values = input_ids + [pad_id] * padding
-            elif name == "attention_mask":
-                values = attention
-            elif name == "token_type_ids":
-                values = [0] * bucket
-            else:
-                raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
-            feed[name] = np.asarray([values], dtype=dtype)
+        feed = build_feed(contract, input_ids, bucket=bucket, pad_id=pad_id)
         padded_offsets = [(int(start), int(end)) for start, end in offsets] + [
             (0, 0)
         ] * padding
@@ -1010,22 +1305,10 @@ def collect_runner_outputs(
     latencies: list[float] = []
     for item in encoded:
         started = time.perf_counter()
-        try:
-            output = runner(item.feed)
-        except ExportQualificationError:
-            raise
-        except Exception:
-            raise ExportQualificationError(ExportReason.INFERENCE_FAILED) from None
+        rows = _runner_rows(
+            runner, item.feed, bucket=item.bucket, num_labels=num_labels
+        )
         latencies.append((time.perf_counter() - started) * 1000.0)
-        batch = _as_nested(output)
-        if (
-            not isinstance(batch, list)
-            or len(batch) != 1
-            or len(batch[0]) != item.bucket
-            or any(len(row) != num_labels for row in batch[0])
-        ):
-            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
-        rows = [[float(value) for value in row] for row in batch[0]]
         logits_by_fixture[item.fixture_id] = [
             rows[index] for index in range(item.bucket) if item.attention[index]
         ]
@@ -1036,6 +1319,433 @@ def collect_runner_outputs(
             id2label=id2label,
         )
     return logits_by_fixture, spans_by_fixture, latencies
+
+
+def _runner_rows(
+    runner: LogitRunner,
+    feed: Mapping[str, Any],
+    *,
+    bucket: int,
+    num_labels: int,
+) -> list[list[float]]:
+    """Run one feed and return its ``[bucket, num_labels]`` logit rows.
+
+    Raises:
+        ExportQualificationError: ``inference_failed`` (the runtime message is
+            suppressed because it may echo inputs) or ``io_contract_mismatch``.
+    """
+
+    try:
+        output = runner(feed)
+    except ExportQualificationError:
+        raise
+    except Exception:
+        raise ExportQualificationError(ExportReason.INFERENCE_FAILED) from None
+    batch = _as_nested(output)
+    if (
+        not isinstance(batch, list)
+        or len(batch) != 1
+        or len(batch[0]) != bucket
+        or any(len(row) != num_labels for row in batch[0])
+    ):
+        raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+    return [[float(value) for value in row] for row in batch[0]]
+
+
+# ---------------------------------------------------------------------------
+# Sequence sweep and long-document windowing
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SweepCase:
+    """One synthetic feed of the sequence sweep (kept in memory only)."""
+
+    length: int
+    bucket: int
+    probe: str
+    feed: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class SequenceSweep:
+    """Sweep cases plus the reference logits for their real tokens."""
+
+    cases: tuple[SweepCase, ...]
+    reference: tuple[tuple[tuple[float, ...], ...], ...]
+
+    @property
+    def lengths(self) -> tuple[int, ...]:
+        """Return the distinct swept lengths."""
+        return tuple(sorted({case.length for case in self.cases}))
+
+
+@dataclass(frozen=True)
+class LongDocument:
+    """One synthetic long document planned into overlapping windows."""
+
+    fixture: Any
+    token_count: int
+    offsets: tuple[tuple[int, int], ...]
+    windows: tuple[Any, ...]
+    overlap_tokens: frozenset[int]
+
+
+@dataclass(frozen=True)
+class LongDocumentPlan:
+    """Long documents, their windows, and the windowed reference spans."""
+
+    windowing: WindowingPolicy
+    documents: tuple[LongDocument, ...]
+    reference_spans: Mapping[str, Sequence[Mapping[str, Any]]]
+
+    @property
+    def fixtures(self) -> tuple[Any, ...]:
+        """Return the synthetic long-document fixtures."""
+        return tuple(document.fixture for document in self.documents)
+
+
+def sequence_sweep_lengths(
+    contract: ExportIOContract,
+    *,
+    minimum: int,
+    typical: int,
+    boundaries: Iterable[int] = (),
+) -> tuple[int, ...]:
+    """Return the minimum, typical, boundary, and maximum lengths to sweep.
+
+    Every declared bucket and each *boundary* (for example an attention
+    window) contributes the length below, at, and above it. Lengths outside
+    ``[minimum, max_sequence_length]`` are dropped.
+    """
+
+    upper = contract.max_sequence_length
+    candidates = {int(minimum), int(typical), upper}
+    for boundary in (*boundaries, *contract.sequence_buckets):
+        candidates.update({int(boundary) - 1, int(boundary), int(boundary) + 1})
+    return tuple(sorted(value for value in candidates if minimum <= value <= upper))
+
+
+def _content_span(
+    ids: Sequence[int],
+    offsets: Sequence[tuple[int, int]],
+    special: Sequence[int] | None,
+) -> list[int]:
+    """Return the contiguous content token indices of one encoding."""
+    if special is not None:
+        return [index for index in range(len(ids)) if not special[index]]
+    anchored = [index for index, pair in enumerate(offsets) if pair[0] != pair[1]]
+    if not anchored:
+        return []
+    return list(range(anchored[0], anchored[-1] + 1))
+
+
+def _synthetic_document(
+    fixtures: Sequence[Any], tokenizer: Any, *, min_tokens: int, rotation: int
+) -> tuple[Any, list[int], list[tuple[int, int]], list[int]]:
+    """Join synthetic fixtures until the encoding reaches *min_tokens*."""
+    from openmed.eval.harness import BenchmarkFixture
+
+    order = [*fixtures[rotation:], *fixtures[:rotation]]
+    if not order:
+        raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
+    # Estimate from per-fixture token counts, then confirm on the joined text
+    # (one encode per added fixture only once the estimate is reached).
+    sizes = []
+    for fixture in order:
+        ids, offsets, special = _encode_text(tokenizer, fixture.text)
+        sizes.append(len(_content_span(ids, offsets, special)))
+    texts: list[str] = []
+    spans: list[dict[str, Any]] = []
+    cursor = 0
+    estimate = 0
+    ids, offsets, special = [], [], None
+    for index in range(int(min_tokens) + len(order)):
+        fixture = order[index % len(order)]
+        if texts:
+            cursor += 1
+        texts.append(fixture.text)
+        for span in fixture.gold_spans:
+            spans.append(
+                {
+                    "start": span.start + cursor,
+                    "end": span.end + cursor,
+                    "label": span.label,
+                    "text": span.text,
+                }
+            )
+        cursor += len(fixture.text)
+        estimate += sizes[index % len(order)]
+        if estimate < min_tokens:
+            continue
+        ids, offsets, special = _encode_text(tokenizer, " ".join(texts))
+        if len(ids) >= min_tokens:
+            break
+    if len(ids) < min_tokens:
+        raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
+    text = " ".join(texts)
+    content = _content_span(ids, offsets, special)
+    language = getattr(order[0], "language", "en")
+    document = BenchmarkFixture.from_mapping(
+        {
+            "id": f"long-document-{rotation + 1:02d}",
+            "language": language,
+            "text": text,
+            "gold_spans": spans,
+            "metadata": {"synthetic": True},
+        }
+    )
+    return document, ids, offsets, content
+
+
+def build_sequence_sweep(
+    fixtures: Sequence[Any],
+    tokenizer: Any,
+    contract: ExportIOContract,
+    *,
+    reference_runner: LogitRunner,
+    num_labels: int,
+    boundaries: Iterable[int] = (),
+) -> SequenceSweep:
+    """Build synthetic sweep feeds from the suite and run the reference.
+
+    Feeds reuse real token ids from the synthetic suite, padded to their
+    bucket. When the graph takes ``global_attention_mask``, each length also
+    runs a probe with global attention on the first, middle, and last token.
+
+    Raises:
+        ExportQualificationError: For contract violations or reference
+            inference failures.
+    """
+
+    pad_id = _pad_token_id(tokenizer)
+    encodings = [_encode_text(tokenizer, fixture.text) for fixture in fixtures]
+    first_ids, first_offsets, first_special = encodings[0]
+    content = _content_span(first_ids, first_offsets, first_special)
+    prefix = first_ids[: content[0]] if content else []
+    suffix = first_ids[content[-1] + 1 :] if content else []
+    stream_document, stream_ids, _, stream_content = _synthetic_document(
+        fixtures,
+        tokenizer,
+        min_tokens=contract.max_sequence_length + 2,
+        rotation=0,
+    )
+    del stream_document
+    stream = [stream_ids[index] for index in stream_content]
+    minimum = len(prefix) + len(suffix) + 1
+    typical = int(statistics.median(len(ids) for ids, _, _ in encodings))
+    lengths = sequence_sweep_lengths(
+        contract,
+        minimum=minimum,
+        typical=min(max(typical, minimum), contract.max_sequence_length),
+        boundaries=boundaries,
+    )
+    cases: list[SweepCase] = []
+    reference: list[tuple[tuple[float, ...], ...]] = []
+    for length in lengths:
+        body = length - len(prefix) - len(suffix)
+        if body > len(stream):
+            raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
+        ids = [*prefix, *stream[:body], *suffix]
+        bucket = contract.bucket_for(length)
+        probes: list[tuple[str, list[int] | None]] = [(SWEEP_PROBE_POLICY, None)]
+        if contract.has_global_attention_input:
+            row = [0] * bucket
+            for position in {0, length // 2, length - 1}:
+                row[position] = 1
+            probes.append((SWEEP_PROBE_GLOBAL, row))
+        for probe, global_row in probes:
+            feed = build_feed(
+                contract,
+                ids,
+                bucket=bucket,
+                pad_id=pad_id,
+                global_attention=global_row,
+            )
+            rows = _runner_rows(
+                reference_runner, feed, bucket=bucket, num_labels=num_labels
+            )
+            cases.append(
+                SweepCase(length=length, bucket=bucket, probe=probe, feed=feed)
+            )
+            reference.append(tuple(tuple(row) for row in rows[:length]))
+    return SequenceSweep(cases=tuple(cases), reference=tuple(reference))
+
+
+def build_long_documents(
+    fixtures: Sequence[Any],
+    tokenizer: Any,
+    contract: ExportIOContract,
+    *,
+    reference_runner: LogitRunner,
+    id2label: Mapping[Any, str],
+    count: int = LONG_DOCUMENT_COUNT,
+) -> LongDocumentPlan:
+    """Build synthetic documents longer than one window and run the reference.
+
+    Documents join the synthetic suite (shifting gold spans to document-global
+    offsets) until they span at least
+    :data:`LONG_DOCUMENT_WINDOW_MULTIPLE` windows, then reuse the
+    ``OnnxModel`` window planner, so spans cross overlap boundaries.
+
+    Raises:
+        ExportQualificationError: ``io_contract_mismatch`` without a windowing
+            policy, ``sequence_too_long`` past the declared document bound, or
+            reference inference failures.
+    """
+
+    from openmed.onnx.inference import _windows_from_encoding
+
+    windowing = contract.windowing
+    if windowing is None:
+        raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+    target = int(math.ceil(windowing.window_tokens * LONG_DOCUMENT_WINDOW_MULTIPLE))
+    documents: list[LongDocument] = []
+    for rotation in range(min(int(count), len(fixtures))):
+        fixture, ids, offsets, content = _synthetic_document(
+            fixtures, tokenizer, min_tokens=target, rotation=rotation
+        )
+        windowing.check_document(len(ids))
+        windows = _windows_from_encoding(
+            ids,
+            offsets,
+            [1] * len(ids),
+            [0] * len(ids),
+            content,
+            rotation,
+            windowing.window_tokens,
+            windowing.overlap_tokens,
+        )
+        seen: dict[int, int] = {}
+        for window in windows:
+            for token_index in window.token_indices:
+                if token_index is not None:
+                    seen[token_index] = seen.get(token_index, 0) + 1
+        if len(windows) < 2:
+            raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
+        documents.append(
+            LongDocument(
+                fixture=fixture,
+                token_count=len(content),
+                offsets=tuple(offsets[index] for index in content),
+                windows=tuple(windows),
+                overlap_tokens=frozenset(
+                    index for index, hits in seen.items() if hits > 1
+                ),
+            )
+        )
+    pad_id = _pad_token_id(tokenizer)
+    reference_spans = {
+        str(document.fixture.fixture_id): windowed_document_spans(
+            reference_runner,
+            document,
+            contract,
+            pad_id=pad_id,
+            id2label=id2label,
+        )
+        for document in documents
+    }
+    return LongDocumentPlan(
+        windowing=windowing,
+        documents=tuple(documents),
+        reference_spans=reference_spans,
+    )
+
+
+def windowed_document_spans(
+    runner: LogitRunner,
+    document: LongDocument,
+    contract: ExportIOContract,
+    *,
+    pad_id: int,
+    id2label: Mapping[Any, str],
+) -> list[dict[str, Any]]:
+    """Run every window of *document* and decode document-global spans.
+
+    Each content token keeps the logits of the window where it sits furthest
+    from a window edge (the same rule ``OnnxModel`` applies), then the merged
+    token sequence is decoded once.
+
+    Raises:
+        ExportQualificationError: ``inference_failed``,
+            ``io_contract_mismatch``, or ``long_document_parity_failed`` when
+            the windows leave a token uncovered or disagree on offsets.
+    """
+
+    num_labels = len(id2label)
+    votes: dict[int, tuple[int, tuple[int, int], list[float]]] = {}
+    for window in document.windows:
+        length = len(window.input_ids)
+        bucket = contract.bucket_for(length)
+        feed = build_feed(contract, window.input_ids, bucket=bucket, pad_id=pad_id)
+        rows = _runner_rows(runner, feed, bucket=bucket, num_labels=num_labels)
+        positions = [
+            index
+            for index, value in enumerate(window.token_indices)
+            if value is not None
+        ]
+        for rank, position in enumerate(positions):
+            token_index = int(window.token_indices[position])
+            weight = 1 + min(rank, len(positions) - rank - 1)
+            offset = (
+                int(window.offsets[position][0]),
+                int(window.offsets[position][1]),
+            )
+            existing = votes.get(token_index)
+            if existing is not None and existing[1] != offset:
+                raise ExportQualificationError(ExportReason.LONG_DOCUMENT_PARITY_FAILED)
+            if existing is None or weight > existing[0]:
+                votes[token_index] = (weight, offset, rows[position])
+    if sorted(votes) != list(range(document.token_count)):
+        raise ExportQualificationError(ExportReason.LONG_DOCUMENT_PARITY_FAILED)
+    ordered = [votes[index] for index in range(document.token_count)]
+    return decode_token_spans(
+        [item[2] for item in ordered],
+        offsets=[item[1] for item in ordered],
+        attention=[1] * len(ordered),
+        id2label=id2label,
+    )
+
+
+def _sweep_payload(
+    sweep: SequenceSweep,
+    candidate_rows: Sequence[Sequence[Sequence[float]]],
+    policy: QualificationPolicy,
+) -> dict[str, Any]:
+    within = True
+    max_abs = 0.0
+    mismatches = 0
+    failed: set[int] = set()
+    for case, expected, actual in zip(sweep.cases, sweep.reference, candidate_rows):
+        parity = evaluate_onnx_logit_parity(
+            [[list(row) for row in expected]],
+            [[list(row) for row in actual]],
+            atol=policy.logit_atol,
+            rtol=policy.logit_rtol,
+        )
+        mismatches += parity.token_mismatches
+        if math.isfinite(parity.max_abs_diff):
+            max_abs = max(max_abs, float(parity.max_abs_diff))
+        else:
+            max_abs = math.inf
+        if not parity.logits_within_tolerance:
+            within = False
+            failed.add(case.length)
+    probes = sorted({case.probe for case in sweep.cases})
+    return {
+        "lengths": list(sweep.lengths),
+        "buckets": sorted({case.bucket for case in sweep.cases}),
+        "probes": probes,
+        "global_probe_positions": (
+            ["first", "middle", "last"] if SWEEP_PROBE_GLOBAL in probes else []
+        ),
+        "cases": len(sweep.cases),
+        "within_tolerance": within,
+        "max_abs_diff": _finite_or_none(max_abs),
+        "argmax_mismatches": mismatches,
+        "failed_lengths": sorted(failed),
+        "gated": policy.gate_logits,
+    }
 
 
 def direct_identifier_labels(fixtures: Sequence[Any]) -> tuple[str, ...]:
@@ -1131,6 +1841,10 @@ def qualify_variant(
     reference_spans: Mapping[str, Sequence[Mapping[str, Any]]],
     artifact_root: str | Path | None = None,
     direct_identifier_recall_floor: float | None = None,
+    sweep: SequenceSweep | None = None,
+    long_documents: LongDocumentPlan | None = None,
+    contract: ExportIOContract | None = None,
+    pad_id: int = 0,
 ) -> VariantQualification:
     """Run every gate for one candidate against precomputed reference outputs.
 
@@ -1138,6 +1852,13 @@ def qualify_variant(
     by *support* before the candidate runs. Inference failures and wrong
     output shapes are recorded as failing reasons rather than raised, so one
     broken variant never hides the evidence for its siblings.
+
+    When *sweep* is given, the candidate's logits at every swept length (and
+    global-attention probe) must match the reference within the logit
+    tolerance (``sequence_parity_failed``). When *long_documents* is given,
+    windowed document-global spans must match the windowed reference
+    (``long_document_parity_failed``) and leak no critical identifier the
+    reference caught. Both need *contract*.
 
     Raises:
         ExportQualificationError: For combinations *support* does not declare.
@@ -1279,6 +2000,43 @@ def qualify_variant(
     if not leak_payload["passed"]:
         reasons.append(ExportReason.CRITICAL_LEAKAGE_DETECTED.value)
 
+    sweep_payload: dict[str, Any] = {}
+    if sweep is not None:
+        try:
+            candidate_rows = [
+                _runner_rows(
+                    candidate.runner,
+                    case.feed,
+                    bucket=case.bucket,
+                    num_labels=len(id2label),
+                )[: case.length]
+                for case in sweep.cases
+            ]
+        except ExportQualificationError as exc:
+            reasons.append(exc.reason_code)
+            sweep_payload = {"lengths": list(sweep.lengths), "passed": False}
+        else:
+            sweep_payload = _sweep_payload(sweep, candidate_rows, policy)
+            sweep_failed = not sweep_payload["within_tolerance"]
+            sweep_payload["passed"] = not (policy.gate_logits and sweep_failed)
+            if not sweep_payload["passed"]:
+                reasons.append(ExportReason.SEQUENCE_PARITY_FAILED.value)
+
+    long_payload: dict[str, Any] = {}
+    if long_documents is not None:
+        if contract is None:
+            raise ExportQualificationError(ExportReason.IO_CONTRACT_MISMATCH)
+        long_payload, long_reasons = _long_document_payload(
+            candidate,
+            long_documents,
+            contract,
+            policy=policy,
+            pad_id=pad_id,
+            id2label=id2label,
+        )
+        reasons.extend(long_reasons)
+
+    rss_final = _peak_rss_bytes()
     return VariantQualification(
         passed=not reasons,
         reasons=tuple(dict.fromkeys(reasons)),
@@ -1288,9 +2046,78 @@ def qualify_variant(
         critical_leakage=leak_payload,
         quantization_delta=quant_payload,
         latency_ms=_latency_summary(latencies),
-        process_peak_rss_bytes=max(rss_before or 0, rss_after or 0) or None,
+        process_peak_rss_bytes=max(rss_before or 0, rss_after or 0, rss_final or 0)
+        or None,
+        sequence_sweep=sweep_payload,
+        long_document=long_payload,
         **base,
     )
+
+
+def _long_document_payload(
+    candidate: VariantCandidate,
+    plan: LongDocumentPlan,
+    contract: ExportIOContract,
+    *,
+    policy: QualificationPolicy,
+    pad_id: int,
+    id2label: Mapping[Any, str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Compare windowed document-global spans with the windowed reference."""
+    windowing = plan.windowing
+    base = {
+        "documents": len(plan.documents),
+        "windows": sum(len(document.windows) for document in plan.documents),
+        "window_tokens": windowing.window_tokens,
+        "overlap_tokens": windowing.overlap_tokens,
+        "tokens": sum(document.token_count for document in plan.documents),
+        "tokens_in_overlaps": sum(
+            len(document.overlap_tokens) for document in plan.documents
+        ),
+        "gated": policy.gate_spans,
+    }
+    try:
+        spans = {
+            str(document.fixture.fixture_id): windowed_document_spans(
+                candidate.runner,
+                document,
+                contract,
+                pad_id=pad_id,
+                id2label=id2label,
+            )
+            for document in plan.documents
+        }
+    except ExportQualificationError as exc:
+        return {**base, "passed": False}, [exc.reason_code]
+    parity = _span_parity(plan.reference_spans, spans, tolerance=policy.span_tolerance)
+    boundary_spans = 0
+    for document in plan.documents:
+        for span in plan.reference_spans.get(str(document.fixture.fixture_id), ()):
+            covered = {
+                index
+                for index, (start, end) in enumerate(document.offsets)
+                if start < int(span["end"]) and end > int(span["start"])
+            }
+            if covered & document.overlap_tokens:
+                boundary_spans += 1
+    fixtures = plan.fixtures
+    reference_leaks = critical_leaks(fixtures, plan.reference_spans)
+    new_leaks = critical_leaks(fixtures, spans) - reference_leaks
+    reasons: list[str] = []
+    if policy.gate_spans and not parity["identical"]:
+        reasons.append(ExportReason.LONG_DOCUMENT_PARITY_FAILED.value)
+    if len(new_leaks) > policy.max_new_critical_leaks:
+        reasons.append(ExportReason.CRITICAL_LEAKAGE_DETECTED.value)
+    payload = {
+        **base,
+        "span_parity": parity,
+        "reference_spans_in_overlaps": boundary_spans,
+        "reference_leaked_spans": len(reference_leaks),
+        "new_critical_leaks": len(new_leaks),
+        "new_critical_leaks_by_label": _count_by_label(new_leaks),
+        "passed": not reasons,
+    }
+    return payload, reasons
 
 
 def qualify_export(
@@ -1311,6 +2138,8 @@ def qualify_export(
     exclude_artifact_names: Iterable[str] = (),
     direct_identifier_recall_floor: float | None = None,
     environment: Mapping[str, Any] | None = None,
+    sequence_sweep_boundaries: Iterable[int] | None = None,
+    limits: Mapping[str, Any] | None = None,
 ) -> ExportQualificationReport:
     """Qualify every candidate variant of one export against its reference.
 
@@ -1332,6 +2161,11 @@ def qualify_export(
             as manifests rewritten after qualification.
         direct_identifier_recall_floor: Optional absolute recall floor.
         environment: Converter environment; defaults to the installed one.
+        sequence_sweep_boundaries: Enables the sequence sweep when not
+            ``None``; the given lengths (for example attention windows) are
+            swept alongside the minimum, typical, bucket, and maximum lengths.
+        limits: Value-free declared bounds (buckets, memory ceilings,
+            estimates) recorded in the report.
 
     Returns:
         The complete report. Call :meth:`ExportQualificationReport.raise_for_failure`
@@ -1349,6 +2183,30 @@ def qualify_export(
     reference_logits, reference_spans, _ = collect_runner_outputs(
         reference_runner, encoded, id2label=id2label
     )
+    sweep = (
+        build_sequence_sweep(
+            fixtures,
+            tokenizer,
+            io_contract,
+            reference_runner=reference_runner,
+            num_labels=len(id2label),
+            boundaries=sequence_sweep_boundaries,
+        )
+        if sequence_sweep_boundaries is not None
+        else None
+    )
+    long_documents = (
+        build_long_documents(
+            fixtures,
+            tokenizer,
+            io_contract,
+            reference_runner=reference_runner,
+            id2label=id2label,
+        )
+        if io_contract.windowing is not None
+        else None
+    )
+    pad_id = _pad_token_id(tokenizer)
     variants = tuple(
         qualify_variant(
             candidate=candidate,
@@ -1361,6 +2219,10 @@ def qualify_export(
             reference_spans=reference_spans,
             artifact_root=artifact_root,
             direct_identifier_recall_floor=direct_identifier_recall_floor,
+            sweep=sweep,
+            long_documents=long_documents,
+            contract=io_contract,
+            pad_id=pad_id,
         )
         for candidate in candidates
     )
@@ -1386,6 +2248,7 @@ def qualify_export(
         suite=suite,
         variants=variants,
         artifacts=digests,
+        limits=dict(limits or {}),
     )
 
 
@@ -1410,7 +2273,7 @@ def write_qualification_report(
 def summarize_report(report: ExportQualificationReport) -> dict[str, Any]:
     """Return the compact block embedded in converter manifests."""
     payload = report.to_dict()
-    return {
+    summary: dict[str, Any] = {
         "format": payload["format"],
         "schema_version": payload["schema_version"],
         "family": payload["family"],
@@ -1432,6 +2295,16 @@ def summarize_report(report: ExportQualificationReport) -> dict[str, Any]:
             for item in payload["variants"]
         },
     }
+    contract = payload["io_contract"]
+    for key in ("global_attention", "windowing"):
+        if key in contract:
+            summary[key] = contract[key]
+    if "global_attention" in summary or "windowing" in summary:
+        summary["input_names"] = contract["input_names"]
+        summary["max_sequence_length"] = contract["max_sequence_length"]
+    if "limits" in payload:
+        summary["limits"] = payload["limits"]
+    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -1508,6 +2381,8 @@ def check_qualified_request(
     artifact: str | None = None,
     providers: Sequence[str] | None = None,
     sequence_length: int | None = None,
+    document_tokens: int | None = None,
+    global_attention: str | None = None,
 ) -> dict[str, Any]:
     """Reject an inference request the report does not qualify.
 
@@ -1522,14 +2397,19 @@ def check_qualified_request(
         artifact: Artifact path relative to the report's root.
         providers: Execution providers the caller will request.
         sequence_length: Padded sequence length the caller will feed.
+        document_tokens: Whole-document token count; checked against the
+            declared windowing bound, or against one window when the report
+            declares no windowing.
+        global_attention: Global attention fill policy the caller will use.
 
     Returns:
         The qualified variant entry.
 
     Raises:
         ExportQualificationError: ``unsupported_runtime``,
-            ``variant_not_qualified``, ``unsupported_provider``, or
-            ``unsupported_sequence_length``.
+            ``variant_not_qualified``, ``unsupported_provider``,
+            ``unsupported_sequence_length``, ``sequence_too_long``, or
+            ``unsupported_global_attention``.
     """
 
     _validate_report_structure(report)
@@ -1542,8 +2422,18 @@ def check_qualified_request(
     for provider in providers or ():
         if qualified_provider is not None and provider != qualified_provider:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_PROVIDER)
+    if sequence_length is None and document_tokens is None and global_attention is None:
+        return dict(entry)
+    contract = ExportIOContract.from_dict(report["io_contract"])
+    if global_attention is not None and global_attention != contract.global_attention:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
     if sequence_length is not None:
-        ExportIOContract.from_dict(report["io_contract"]).bucket_for(sequence_length)
+        contract.bucket_for(sequence_length)
+    if document_tokens is not None:
+        if contract.windowing is None:
+            contract.bucket_for(document_tokens)
+        else:
+            contract.windowing.check_document(document_tokens)
     return dict(entry)
 
 
@@ -1767,6 +2657,10 @@ __all__ = [
     "EXPORT_QUALIFICATION_FILENAME",
     "EXPORT_QUALIFICATION_FORMAT",
     "EXPORT_QUALIFICATION_SCHEMA_VERSION",
+    "GLOBAL_ATTENTION_FIRST_TOKEN",
+    "GLOBAL_ATTENTION_INPUT",
+    "GLOBAL_ATTENTION_NONE",
+    "GLOBAL_ATTENTION_POLICIES",
     "OFFSET_CONTRACT",
     "EncodedFixture",
     "ExportIOContract",
@@ -1774,29 +2668,41 @@ __all__ = [
     "ExportQualificationReport",
     "ExportReason",
     "LogitRunner",
+    "LongDocument",
+    "LongDocumentPlan",
     "QualificationPolicy",
     "RuntimeSupport",
+    "SequenceSweep",
+    "SweepCase",
     "VariantCandidate",
     "VariantQualification",
+    "WindowingPolicy",
     "artifact_file_digests",
+    "build_feed",
+    "build_long_documents",
+    "build_sequence_sweep",
     "check_qualified_request",
     "collect_runner_outputs",
     "config_identity",
     "converter_environment",
     "critical_leaks",
     "decode_token_spans",
+    "default_window_overlap",
     "direct_identifier_labels",
     "encode_fixtures",
+    "global_attention_row",
     "label_map_identity",
     "load_qualification_fixtures",
     "load_qualification_report",
     "qualify_export",
     "qualify_variant",
     "recall_by_label",
+    "sequence_sweep_lengths",
     "sha256_file",
     "source_identity",
     "summarize_report",
     "tokenizer_identity",
     "verify_qualification_report",
+    "windowed_document_spans",
     "write_qualification_report",
 ]

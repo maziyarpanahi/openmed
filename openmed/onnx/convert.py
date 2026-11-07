@@ -17,7 +17,7 @@ import logging
 import os
 import shutil
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -26,12 +26,14 @@ from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.export_qualification import (
     EXPORT_QUALIFICATION_FILENAME,
+    GLOBAL_ATTENTION_INPUT,
     SHAPE_MODE_DYNAMIC,
     ExportIOContract,
     ExportQualificationError,
     ExportQualificationReport,
     ExportReason,
     VariantCandidate,
+    WindowingPolicy,
     qualify_export,
     source_identity,
     summarize_report,
@@ -261,14 +263,21 @@ def export_onnx(
     adapter = _resolve_export_adapter(
         getattr(getattr(model, "config", None), "model_type", None)
     )
+    graph_inputs: tuple[str, ...] = ("input_ids", "attention_mask")
+    sequence_bound: int | None = None
     if adapter is not None:
         adapter.validate_request(
             runtime="onnx",
             config=model.config,
             max_sequence_length=max_seq_length,
             shape_mode=SHAPE_MODE_DYNAMIC,
+            profile=profile,
         )
         adapter.prepare_model(model)
+        graph_inputs = adapter.inputs_for("onnx", profile)
+        if adapter.limits_for(model.config, "onnx", "float32") is not None:
+            # Bounded families declare the sequence ceiling in the graph.
+            sequence_bound = max_seq_length
 
     sample = tokenizer(
         [sample_text, sample_text],
@@ -307,8 +316,12 @@ def export_onnx(
         wrapper.eval()
         trace_context = nullcontext()
 
-    input_names = ["input_ids", "attention_mask"]
-    example_inputs: tuple[Any, ...] = (sample["input_ids"], sample["attention_mask"])
+    if GLOBAL_ATTENTION_INPUT in graph_inputs:
+        global_sample = torch.zeros_like(sample["input_ids"])
+        global_sample[:, 0] = 1
+        sample[GLOBAL_ATTENTION_INPUT] = global_sample
+    input_names = list(graph_inputs)
+    example_inputs: tuple[Any, ...] = tuple(sample[name] for name in input_names)
     if use_token_type_ids:
         input_names.append("token_type_ids")
         example_inputs = (*example_inputs, sample["token_type_ids"])
@@ -327,9 +340,10 @@ def export_onnx(
                 input_names=input_names,
                 max_seq_length=max_seq_length,
                 profile=profile,
+                sequence_bound=sequence_bound,
             )
         )
-        with _onnx_export_compatibility(model, torch), trace_context:
+        with trace_context:
             torch.onnx.export(
                 wrapper,
                 example_inputs,
@@ -403,16 +417,17 @@ def convert(
     qualification_fixtures_path: str | Path | None = None,
     expected_source_revision: str | None = None,
     direct_identifier_recall_floor: float | None = None,
+    global_attention: str | None = None,
 ) -> OnnxConversionResult:
     """Export ONNX artifacts and optionally publish the resulting directory.
 
-    Families with a registered export adapter (ModernBERT) are traced through
-    that adapter and qualified on ``CPUExecutionProvider`` against the stock
-    PyTorch checkpoint on a synthetic PHI suite. The report is written to
-    ``openmed-export-qualification.json`` and summarized in the manifest. The
-    WebGPU fp16 graph is qualified on the CPU provider as a numeric proxy and
-    is recorded as ``cpu_proxy``, never as a WebGPU claim. Undeclared
-    profiles, providers, or bundles fail with
+    Families with a registered export adapter (ModernBERT, Longformer) are
+    traced through that adapter and qualified on ``CPUExecutionProvider``
+    against the stock PyTorch checkpoint on a synthetic PHI suite. The report
+    is written to ``openmed-export-qualification.json`` and summarized in the
+    manifest. The WebGPU fp16 graph is qualified on the CPU provider as a
+    numeric proxy and is recorded as ``cpu_proxy``, never as a WebGPU claim.
+    Undeclared profiles, providers, or bundles fail with
     :class:`ExportQualificationError` before any inference, a failing gate
     raises after the evidence is written, and unqualified artifacts are never
     published.
@@ -425,11 +440,23 @@ def convert(
             Defaults to the packaged synthetic PHI suite.
         expected_source_revision: Optional pinned source revision.
         direct_identifier_recall_floor: Optional absolute recall floor.
+        global_attention: Global attention fill policy for Longformer:
+            ``"none"`` (default) or ``"first_token"``. The default profile
+            graph takes an explicit ``global_attention_mask`` input; the
+            Android profile keeps its two-input contract, so only ``"none"``
+            is accepted there.
+
+    Longformer graphs declare a bounded dynamic sequence axis: the maximum
+    must be a multiple of the largest attention window whose estimated
+    attention working set fits the ONNX memory ceiling. Qualification also
+    sweeps minimum, typical, attention-window boundary, and maximum lengths
+    and compares windowed long documents with the reference.
     """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile = _normalize_profile(profile)
+    explicit_shape_buckets = shape_bucket_config is not None
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
     should_optimize_onnx = optimize_onnx and profile not in {
@@ -474,9 +501,13 @@ def convert(
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
     )
     adapter = _resolve_export_adapter(config.get("model_type"))
+    global_policy: str | None = None
+    sequence_limits: Any = None
     if adapter is None:
         if qualify:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+        if global_attention is not None:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
     else:
         if profile == OPENVINO_PROFILE_NAME or include_transformersjs:
             # OpenVINO IR and Transformers.js bundles have no qualified path.
@@ -489,7 +520,25 @@ def convert(
             quantizations=("int8",) if profile == ANDROID_PROFILE_NAME else (),
             providers=tuple(optimization_config.providers),
             shape_mode=SHAPE_MODE_DYNAMIC,
+            global_attention=global_attention,
+            profile=profile,
         )
+        global_policy = adapter.resolve_global_attention(
+            global_attention, runtime="onnx", profile=profile
+        )
+        sequence_limits = adapter.limits_for(config, "onnx", "float32")
+        if sequence_limits is not None:
+            # Bounded families pad to their declared buckets and validate
+            # optimized graphs only within the qualified maximum.
+            declared = tuple(
+                bucket for bucket in sequence_limits.buckets if bucket <= max_seq_length
+            )
+            if not explicit_shape_buckets:
+                shape_bucket_config = ShapeBucketConfig(
+                    buckets=declared, min_length=1, max_length=max_seq_length
+                )
+            if validation_lengths is None:
+                validation_lengths = declared
     segmenter = (
         package_segmenter_resources(output_dir, segmenter_id)
         if segmenter_id is not None
@@ -680,6 +729,15 @@ def convert(
             "reasons": [ExportReason.MISSING_EVIDENCE.value],
             "qualified_variants": [],
         }
+        if global_policy is not None:
+            qualification_block["global_attention"] = global_policy
+            qualification_block["input_names"] = list(
+                adapter.inputs_for("onnx", profile)
+            )
+        if sequence_limits is not None:
+            qualification_block["limits"] = sequence_limits.to_dict(
+                selected=max_seq_length
+            )
 
     manifest_path = write_export_manifest(
         output_dir,
@@ -717,6 +775,9 @@ def convert(
             fixtures_path=qualification_fixtures_path,
             expected_source_revision=expected_source_revision,
             direct_identifier_recall_floor=direct_identifier_recall_floor,
+            profile=profile,
+            global_policy=global_policy,
+            sequence_limits=sequence_limits,
         )
         write_qualification_report(
             qualification_report,
@@ -792,6 +853,9 @@ def _qualify_onnx_artifacts(
     fixtures_path: str | Path | None,
     expected_source_revision: str | None,
     direct_identifier_recall_floor: float | None,
+    profile: str = DEFAULT_PROFILE_NAME,
+    global_policy: str | None = None,
+    sequence_limits: Any = None,
 ) -> ExportQualificationReport:
     """Qualify every exported ONNX graph against the stock PyTorch checkpoint."""
 
@@ -830,6 +894,10 @@ def _qualify_onnx_artifacts(
         _onnx_variant_candidate(ort, artifact, output_dir=output_dir)
         for artifact in artifacts
     ]
+    for candidate in candidates:
+        # Fail before inference when a graph kept an operator the family
+        # adapter exists to remove (for example Longformer's NonZero gathers).
+        adapter.check_operators(candidate.evidence.get("operator_types") or ())
     support_files = [
         output_dir / name
         for name in ("config.json", "id2label.json", *tokenizer_files)
@@ -844,13 +912,19 @@ def _qualify_onnx_artifacts(
         runtime="onnx",
         support=adapter.support_for("onnx"),
         io_contract=ExportIOContract(
-            input_names=("input_ids", "attention_mask"),
+            input_names=adapter.inputs_for("onnx", profile),
             output_names=("logits",),
             sequence_buckets=buckets,
             max_sequence_length=max_seq_length,
             shape_mode=SHAPE_MODE_DYNAMIC,
             batch_size=None,
             input_dtype="int64",
+            global_attention=global_policy,
+            windowing=(
+                WindowingPolicy.for_window(max_seq_length)
+                if adapter.windowed_documents
+                else None
+            ),
         ),
         tokenizer=tokenizer,
         id2label=reference_model.config.id2label,
@@ -862,6 +936,16 @@ def _qualify_onnx_artifacts(
         fixtures_path=fixtures_path,
         exclude_artifact_names=(MANIFEST_FILENAME,),
         direct_identifier_recall_floor=direct_identifier_recall_floor,
+        sequence_sweep_boundaries=(
+            adapter.sweep_boundaries(source_config)
+            if adapter.sweep_boundaries is not None
+            else None
+        ),
+        limits=(
+            sequence_limits.to_dict(selected=max_seq_length)
+            if sequence_limits is not None
+            else None
+        ),
     )
 
 
@@ -1821,8 +1905,15 @@ def _dynamic_export_kwargs(
     input_names: Sequence[str],
     max_seq_length: int,
     profile: str = DEFAULT_PROFILE_NAME,
+    sequence_bound: int | None = None,
 ) -> dict[str, Any]:
-    """Return Torch ONNX dynamic-shape kwargs for the installed exporter."""
+    """Return Torch ONNX dynamic-shape kwargs for the installed exporter.
+
+    ``sequence_bound`` declares an inclusive maximum on the dynamo
+    exporter's ``sequence`` dimension. The TorchScript exporter (Android
+    profile) cannot record bounds, so qualification and the runtime loader
+    enforce them instead.
+    """
 
     parameters = inspect.signature(export_fn).parameters
     if profile == ANDROID_PROFILE_NAME:
@@ -1837,7 +1928,11 @@ def _dynamic_export_kwargs(
 
     if "dynamo" in parameters and "dynamic_shapes" in parameters:
         batch_dim = torch_module.export.Dim("batch", min=1)
-        sequence_dim = torch_module.export.Dim("sequence", min=1)
+        sequence_dim = (
+            torch_module.export.Dim("sequence", min=1, max=int(sequence_bound))
+            if sequence_bound is not None
+            else torch_module.export.Dim("sequence", min=1)
+        )
         return {
             "dynamo": True,
             "dynamic_shapes": {
@@ -1849,34 +1944,6 @@ def _dynamic_export_kwargs(
         name: {0: "batch", 1: "sequence"} for name in [*input_names, "logits"]
     }
     return {"dynamic_axes": dynamic_axes}
-
-
-@contextmanager
-def _onnx_export_compatibility(model: Any, torch_module: Any):
-    """Apply narrowly scoped exporter compatibility fixes for known families."""
-
-    if getattr(getattr(model, "config", None), "model_type", None) != "longformer":
-        yield
-        return
-
-    from transformers.models.longformer import modeling_longformer
-
-    original = modeling_longformer.create_bidirectional_mask
-
-    def legacy_bidirectional_mask(
-        *,
-        inputs_embeds: Any,
-        attention_mask: Any,
-        **_: Any,
-    ) -> Any:
-        mask = attention_mask[:, None, None, :].to(dtype=inputs_embeds.dtype)
-        return (1.0 - mask) * torch_module.finfo(inputs_embeds.dtype).min
-
-    modeling_longformer.create_bidirectional_mask = legacy_bidirectional_mask
-    try:
-        yield
-    finally:
-        modeling_longformer.create_bidirectional_mask = original
 
 
 def main() -> None:
@@ -2027,6 +2094,15 @@ def main() -> None:
         help="Optional absolute direct-identifier recall floor",
     )
     parser.add_argument(
+        "--global-attention",
+        choices=("none", "first_token"),
+        default=None,
+        help=(
+            "Global attention fill policy for Longformer graphs "
+            "(default: none; the Android profile accepts only none)"
+        ),
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -2107,6 +2183,7 @@ def main() -> None:
         qualification_fixtures_path=args.qualification_fixtures,
         expected_source_revision=args.expected_source_revision,
         direct_identifier_recall_floor=args.direct_identifier_recall_floor,
+        global_attention=args.global_attention,
     )
 
 

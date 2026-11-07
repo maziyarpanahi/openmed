@@ -68,8 +68,10 @@ def test_matrix_is_in_mkdocs_nav_and_cross_linked() -> None:
         )
 
 
-def _modernbert_support_rows(text: str) -> dict[str, dict[str, list[str]]]:
-    section = text.split("## ModernBERT runtime support", 1)[1]
+def _modernbert_support_rows(
+    text: str, heading: str = "## ModernBERT runtime support"
+) -> dict[str, dict[str, list[str]]]:
+    section = text.split(heading, 1)[1]
     section = section.split("### ", 1)[0]
     rows: dict[str, dict[str, list[str]]] = {}
     for line in section.splitlines():
@@ -98,6 +100,53 @@ def test_modernbert_support_table_matches_the_export_adapter() -> None:
         for key in ("precisions", "quantizations", "providers", "shape_modes"):
             assert row[key] == support[key], (runtime, key)
         assert row["target"] == [support["target"]]
+
+
+def test_longformer_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.export_adapters import LONGFORMER_EXPORT_ADAPTER
+
+    documented = _modernbert_support_rows(
+        DOC.read_text(encoding="utf-8"), "## Longformer runtime support"
+    )
+    declared = LONGFORMER_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_longformer_bounds_table_matches_the_declared_limits() -> None:
+    from types import SimpleNamespace
+
+    from openmed.torch.export_adapters import LONGFORMER_EXPORT_ADAPTER
+
+    text = DOC.read_text(encoding="utf-8")
+    section = text.split("### Sequence bounds and memory", 1)[1].split("### ", 1)[0]
+    base = SimpleNamespace(
+        num_hidden_layers=12,
+        num_attention_heads=12,
+        attention_window=512,
+        max_position_embeddings=4098,
+        pad_token_id=1,
+    )
+    rows = 0
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 4 or cells[0] in {"Runtime", "---"}:
+            continue
+        runtime, precision, ceiling, buckets = cells
+        limits = LONGFORMER_EXPORT_ADAPTER.limits_for(base, runtime, precision)
+        assert int(ceiling) * 1024**2 == limits.memory_ceiling_bytes, line
+        assert [int(value) for value in buckets.split(", ")] == list(
+            limits.supported_buckets
+        ), line
+        rows += 1
+    assert rows == 3
+    assert "longformer" in {
+        token for token in _backtick_tokens(text) if token.islower()
+    }
 
 
 def test_matrix_lists_every_export_qualification_reason_code() -> None:

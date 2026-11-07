@@ -166,6 +166,10 @@ def test_reason_codes_are_stable_and_value_free() -> None:
         "unsupported_quantization",
         "unsupported_sequence_length",
         "unsupported_sequence_shape",
+        "bucket_unavailable",
+        "sequence_too_long",
+        "memory_budget_exceeded",
+        "unsupported_global_attention",
         "unsupported_operator",
         "unsupported_converter_environment",
         "runtime_unavailable",
@@ -184,6 +188,8 @@ def test_reason_codes_are_stable_and_value_free() -> None:
         "inference_failed",
         "logit_parity_failed",
         "span_parity_failed",
+        "sequence_parity_failed",
+        "long_document_parity_failed",
         "direct_identifier_recall_failed",
         "critical_leakage_detected",
         "quantization_delta_exceeded",
@@ -599,3 +605,333 @@ def test_rule_fixture_rows_match_gold_offsets() -> None:
     for row in rule_fixture_rows():
         for span in row["gold_spans"]:
             assert row["text"][span["start"] : span["end"]] == span["text"]
+
+
+# ---------------------------------------------------------------------------
+# Global attention, sequence sweeps, and long-document windowing (Longformer)
+# ---------------------------------------------------------------------------
+
+WINDOWED_CONTRACT = ExportIOContract(
+    input_names=("input_ids", "attention_mask", "global_attention_mask"),
+    output_names=("logits",),
+    sequence_buckets=(16, 32, 48, 64),
+    max_sequence_length=64,
+    shape_mode="dynamic",
+    batch_size=None,
+    input_dtype="int64",
+    global_attention="none",
+    windowing=eq.WindowingPolicy.for_window(64),
+)
+WINDOWED_LIMITS = {"memory_ceiling_bytes": 1024, "declared_buckets": [16, 32]}
+
+
+def global_runner(*, use_global: bool = True, **kwargs: Any) -> Any:
+    """Rule runner whose logits also read the global attention mask."""
+    inner = rule_runner(**kwargs)
+
+    def run(feed: Mapping[str, Any]) -> Any:
+        logits = inner(feed)
+        if use_global and "global_attention_mask" in feed:
+            weight = float(np.asarray(feed["global_attention_mask"]).sum())
+            logits[0, :, 0] += np.float32(0.01 * weight)
+        return logits
+
+    run.calls = inner.calls  # type: ignore[attr-defined]
+    return run
+
+
+def full_window_runner(feed: Mapping[str, Any]) -> Any:
+    """Drops names only in completely filled 64-token windows."""
+    logits = rule_runner()(feed)
+    mask = np.asarray(feed["attention_mask"])[0]
+    if mask.shape[0] == 64 and mask.all():
+        logits[0, :, 1] = 0.0
+    return logits
+
+
+def _variant(tmp_path: Path, name: str, runner: Any, **kwargs: Any):
+    return _candidate(tmp_path, name, runner=runner, **kwargs)
+
+
+def _qualify_windowed(tmp_path: Path, *candidates: VariantCandidate, **overrides):
+    options: dict[str, Any] = {
+        "io_contract": WINDOWED_CONTRACT,
+        "reference_runner": global_runner(),
+        "limits": WINDOWED_LIMITS,
+    }
+    options.update(overrides)
+    return _qualify(tmp_path, *candidates, **options)
+
+
+def test_global_attention_rows_follow_declared_policies() -> None:
+    assert eq.global_attention_row("none", 3, 5) == [0, 0, 0, 0, 0]
+    assert eq.global_attention_row("first_token", 3, 5) == [1, 0, 0, 0, 0]
+    assert eq.global_attention_row("first_token", 0, 4) == [0, 0, 0, 0]
+    with pytest.raises(ExportQualificationError) as error:
+        eq.global_attention_row("all_tokens", 3, 5)
+    assert error.value.reason is ExportReason.UNSUPPORTED_GLOBAL_ATTENTION
+
+
+def test_windowing_policy_defaults_bounds_and_round_trip() -> None:
+    policy = eq.WindowingPolicy.for_window(512)
+    assert (policy.window_tokens, policy.overlap_tokens) == (512, 96)
+    assert policy.max_document_tokens == 512 * eq.DEFAULT_MAX_DOCUMENT_WINDOWS
+    assert eq.WindowingPolicy.for_window(64).overlap_tokens == 15
+    assert eq.default_window_overlap(64) == 15
+    payload = policy.to_dict()
+    assert payload["truncation"] == "never"
+    assert payload["overflow"] == "sequence_too_long"
+    assert payload["offsets"] == "document_global"
+    assert eq.WindowingPolicy.from_dict(payload) == policy
+    policy.check_document(policy.max_document_tokens)
+    with pytest.raises(ExportQualificationError) as error:
+        policy.check_document(policy.max_document_tokens + 1)
+    assert error.value.reason is ExportReason.SEQUENCE_TOO_LONG
+    for kwargs in (
+        {"window_tokens": 0, "overlap_tokens": 0, "max_document_tokens": 8},
+        {"window_tokens": 8, "overlap_tokens": 8, "max_document_tokens": 8},
+        {"window_tokens": 8, "overlap_tokens": 2, "max_document_tokens": 7},
+    ):
+        with pytest.raises(ExportQualificationError) as error:
+            eq.WindowingPolicy(**kwargs)
+        assert error.value.reason is ExportReason.IO_CONTRACT_MISMATCH
+
+
+def test_io_contract_declares_global_attention_and_windowing() -> None:
+    payload = WINDOWED_CONTRACT.to_dict()
+    assert payload["input_names"][-1] == "global_attention_mask"
+    assert payload["global_attention"] == {
+        "policy": "none",
+        "input": "global_attention_mask",
+        "fixed_in_graph": False,
+        "values": [0, 1],
+        "padding": "never_global",
+    }
+    assert payload["windowing"]["window_tokens"] == 64
+    assert ExportIOContract.from_dict(payload) == WINDOWED_CONTRACT
+    fixed = ExportIOContract(
+        input_names=("input_ids", "attention_mask"),
+        output_names=("logits",),
+        sequence_buckets=(64,),
+        max_sequence_length=64,
+        global_attention="none",
+    )
+    assert fixed.to_dict()["global_attention"]["fixed_in_graph"] is True
+    base: dict[str, Any] = {
+        "output_names": ("logits",),
+        "sequence_buckets": (64,),
+        "max_sequence_length": 64,
+    }
+    cases = (
+        (
+            {"input_names": ("input_ids", "attention_mask", "global_attention_mask")},
+            ExportReason.IO_CONTRACT_MISMATCH,
+        ),
+        (
+            {"input_names": ("input_ids",), "global_attention": "everything"},
+            ExportReason.UNSUPPORTED_GLOBAL_ATTENTION,
+        ),
+        (
+            {
+                "input_names": ("input_ids",),
+                "windowing": eq.WindowingPolicy.for_window(128),
+            },
+            ExportReason.IO_CONTRACT_MISMATCH,
+        ),
+    )
+    for overrides, reason in cases:
+        with pytest.raises(ExportQualificationError) as error:
+            ExportIOContract(**base, **overrides)
+        assert error.value.reason is reason
+
+
+def test_build_feed_fills_global_attention_and_never_marks_padding() -> None:
+    contract = ExportIOContract(
+        input_names=("input_ids", "attention_mask", "global_attention_mask"),
+        output_names=("logits",),
+        sequence_buckets=(8,),
+        max_sequence_length=8,
+        global_attention="first_token",
+    )
+    feed = eq.build_feed(contract, [2, 10, 3], bucket=8, pad_id=0)
+    assert feed["input_ids"].tolist() == [[2, 10, 3, 0, 0, 0, 0, 0]]
+    assert feed["attention_mask"].tolist() == [[1, 1, 1, 0, 0, 0, 0, 0]]
+    assert feed["global_attention_mask"].tolist() == [[1, 0, 0, 0, 0, 0, 0, 0]]
+    assert feed["global_attention_mask"].dtype == np.int32
+    explicit = eq.build_feed(
+        contract, [2, 10, 3], bucket=8, global_attention=[0, 1, 1, 0, 0, 0, 0, 0]
+    )
+    assert explicit["global_attention_mask"].tolist()[0][:3] == [0, 1, 1]
+    with pytest.raises(ExportQualificationError) as error:
+        eq.build_feed(contract, [2, 10, 3], bucket=8, global_attention=[0] * 7 + [1])
+    assert error.value.reason is ExportReason.IO_CONTRACT_MISMATCH
+    with pytest.raises(ExportQualificationError) as error:
+        eq.build_feed(contract, [2] * 9, bucket=8)
+    assert error.value.reason is ExportReason.UNSUPPORTED_SEQUENCE_LENGTH
+
+
+def test_sweep_lengths_cover_minimum_typical_boundaries_and_maximum() -> None:
+    lengths = eq.sequence_sweep_lengths(
+        WINDOWED_CONTRACT, minimum=3, typical=30, boundaries=(4, 8, 16)
+    )
+    assert lengths[0] == 3 and lengths[-1] == 64
+    assert {3, 30, 64} <= set(lengths)
+    assert {4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 47, 48, 49, 63} <= set(lengths)
+    assert 65 not in lengths
+    static = ExportIOContract(
+        input_names=("input_ids",),
+        output_names=("logits",),
+        sequence_buckets=(64,),
+        max_sequence_length=64,
+    )
+    assert eq.sequence_sweep_lengths(static, minimum=3, typical=3) == (3, 63, 64)
+
+
+def test_sequence_sweep_catches_a_graph_that_ignores_global_attention(
+    tmp_path: Path,
+) -> None:
+    good = _variant(tmp_path, "onnx-fp32", global_runner())
+    deaf = _variant(tmp_path, "onnx-deaf", global_runner(use_global=False))
+    report = _qualify_windowed(
+        tmp_path, good, deaf, sequence_sweep_boundaries=(4, 8, 16)
+    )
+    passed, failed = report.variants
+    assert passed.passed, passed.reasons
+    sweep = passed.sequence_sweep
+    assert sweep["within_tolerance"] is True and sweep["passed"] is True
+    assert sweep["probes"] == ["global_probe", "policy"]
+    assert sweep["global_probe_positions"] == ["first", "middle", "last"]
+    assert sweep["lengths"][0] == 3 and sweep["lengths"][-1] == 64
+    assert {7, 8, 9, 15, 16, 17} <= set(sweep["lengths"])
+    assert sweep["cases"] == 2 * len(sweep["lengths"])
+    # The policy fill is "none", so the main gates cannot see the bug; only
+    # the global-attention probe in the sweep can.
+    assert failed.logit_parity["within_tolerance"] is True
+    assert failed.reasons == (ExportReason.SEQUENCE_PARITY_FAILED.value,)
+    assert failed.sequence_sweep["failed_lengths"] == sweep["lengths"]
+    payload = report.to_dict()
+    assert payload["limits"] == WINDOWED_LIMITS
+    serialized = json.dumps(payload)
+    assert not any(value in serialized for value in SENTINELS)
+
+
+def test_quantized_sweep_drift_is_recorded_but_not_gated(tmp_path: Path) -> None:
+    noisy = _variant(
+        tmp_path, "onnx-int8", global_runner(noise=0.5), quantization="int8"
+    )
+    report = _qualify_windowed(tmp_path, noisy, sequence_sweep_boundaries=())
+    variant = report.variants[0]
+    assert variant.passed, variant.reasons
+    assert variant.sequence_sweep["within_tolerance"] is False
+    assert variant.sequence_sweep["gated"] is False
+
+
+def test_long_documents_compare_document_global_spans_across_overlaps(
+    tmp_path: Path,
+) -> None:
+    good = _variant(tmp_path, "onnx-fp32", global_runner())
+    edge = _variant(tmp_path, "onnx-edge", full_window_runner)
+    report = _qualify_windowed(tmp_path, good, edge)
+    passed, failed = report.variants
+    assert passed.passed, passed.reasons
+    long_document = passed.long_document
+    assert long_document["documents"] == 2
+    assert long_document["windows"] >= 2 * 2
+    assert long_document["window_tokens"] == 64
+    assert long_document["overlap_tokens"] == 15
+    assert long_document["tokens"] >= 2 * 150
+    assert long_document["tokens_in_overlaps"] > 0
+    assert long_document["reference_spans_in_overlaps"] >= 1
+    assert long_document["span_parity"]["identical"] is True
+    assert long_document["new_critical_leaks"] == 0
+    # Single-window gates pass; only windowed documents expose the defect.
+    assert failed.span_parity["identical"] is True
+    assert failed.reasons == (
+        ExportReason.LONG_DOCUMENT_PARITY_FAILED.value,
+        ExportReason.CRITICAL_LEAKAGE_DETECTED.value,
+    )
+    assert failed.long_document["new_critical_leaks_by_label"]["PERSON"] > 0
+    serialized = json.dumps(report.to_dict())
+    assert not any(value in serialized for value in SENTINELS)
+
+
+def test_long_document_runtime_failure_is_recorded_not_raised(
+    tmp_path: Path,
+) -> None:
+    def fails_on_full_windows(feed: Mapping[str, Any]) -> Any:
+        mask = np.asarray(feed["attention_mask"])[0]
+        if mask.shape[0] == 64 and mask.all():
+            raise RuntimeError(f"kernel failed near {SENTINELS[1]}")
+        return rule_runner()(feed)
+
+    candidate = _variant(tmp_path, "onnx-fp32", fails_on_full_windows)
+    variant = _qualify_windowed(tmp_path, candidate).variants[0]
+    assert variant.reasons == (ExportReason.INFERENCE_FAILED.value,)
+    assert variant.long_document["passed"] is False
+    assert SENTINELS[1] not in json.dumps(variant.to_dict())
+
+
+def test_long_documents_respect_the_declared_document_bound(tmp_path: Path) -> None:
+    tight = ExportIOContract(
+        input_names=WINDOWED_CONTRACT.input_names,
+        output_names=("logits",),
+        sequence_buckets=(16, 32, 48, 64),
+        max_sequence_length=64,
+        shape_mode="dynamic",
+        batch_size=None,
+        input_dtype="int64",
+        global_attention="none",
+        windowing=eq.WindowingPolicy(
+            window_tokens=64, overlap_tokens=15, max_document_tokens=128
+        ),
+    )
+    with pytest.raises(ExportQualificationError) as error:
+        _qualify_windowed(tmp_path, _candidate(tmp_path), io_contract=tight)
+    assert error.value.reason is ExportReason.SEQUENCE_TOO_LONG
+
+
+def test_check_qualified_request_enforces_document_bound_and_policy(
+    tmp_path: Path,
+) -> None:
+    candidate = _variant(tmp_path, "onnx-fp32", global_runner())
+    payload = _qualify_windowed(tmp_path, candidate).to_dict()
+    bound = payload["io_contract"]["windowing"]["max_document_tokens"]
+    entry = eq.check_qualified_request(
+        payload,
+        runtime="onnx",
+        variant="onnx-fp32",
+        sequence_length=64,
+        document_tokens=bound,
+        global_attention="none",
+    )
+    assert entry["passed"] is True
+    rejections = (
+        ({"document_tokens": bound + 1}, "sequence_too_long"),
+        ({"sequence_length": 65}, "unsupported_sequence_length"),
+        ({"global_attention": "first_token"}, "unsupported_global_attention"),
+    )
+    for kwargs, reason in rejections:
+        with pytest.raises(ExportQualificationError) as error:
+            eq.check_qualified_request(
+                payload, runtime="onnx", variant="onnx-fp32", **kwargs
+            )
+        assert error.value.reason_code == reason
+    # Without windowing a whole document must fit one window.
+    plain = _qualify(tmp_path, _candidate(tmp_path)).to_dict()
+    with pytest.raises(ExportQualificationError) as error:
+        eq.check_qualified_request(
+            plain, runtime="onnx", variant="onnx-fp32", document_tokens=97
+        )
+    assert error.value.reason is ExportReason.UNSUPPORTED_SEQUENCE_LENGTH
+
+
+def test_summary_carries_bounds_only_for_bounded_families(tmp_path: Path) -> None:
+    candidate = _variant(tmp_path, "onnx-fp32", global_runner())
+    bounded = eq.summarize_report(_qualify_windowed(tmp_path, candidate))
+    assert bounded["global_attention"]["policy"] == "none"
+    assert bounded["windowing"]["window_tokens"] == 64
+    assert bounded["input_names"][-1] == "global_attention_mask"
+    assert bounded["max_sequence_length"] == 64
+    assert bounded["limits"]["memory_ceiling_bytes"] == 1024
+    plain = eq.summarize_report(_qualify(tmp_path, _candidate(tmp_path)))
+    assert not {"global_attention", "windowing", "limits"} & set(plain)
