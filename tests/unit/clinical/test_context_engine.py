@@ -86,21 +86,19 @@ def test_apply_context_rules_honors_occurrence_for_repeated_text() -> None:
     assert hits == []
 
 
-@pytest.mark.parametrize(
-    ("text", "surface"),
-    [
+def test_bidirectional_rule_scopes_on_either_side(subtests) -> None:
+    for text, surface in [
         ("Edema absent.", "Edema"),
         ("Absent edema.", "edema"),
-    ],
-)
-def test_bidirectional_rule_scopes_on_either_side(text: str, surface: str) -> None:
-    target = _span(text, surface)
+    ]:
+        with subtests.test(text=text, surface=surface):
+            target = _span(text, surface)
 
-    [(_, hits)] = apply_context_rules(text, [target])
+            [(_, hits)] = apply_context_rules(text, [target])
 
-    assert [(hit.cue.casefold(), hit.direction) for hit in hits] == [
-        ("absent", "bidirectional")
-    ]
+            assert [(hit.cue.casefold(), hit.direction) for hit in hits] == [
+                ("absent", "bidirectional")
+            ]
 
 
 def test_starter_rule_file_covers_all_axes_and_documents_provenance() -> None:

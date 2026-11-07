@@ -40,24 +40,26 @@ def edit(payload: bytes, offset: int, fmt: str, value: int) -> bytes:
     return bytes(changed)
 
 
-@pytest.mark.parametrize("kind", [b"VP8 ", b"VP8L", b"VP8X"])
-@pytest.mark.parametrize("size", [(1, 1), (7, 5), (258, 772), (16383, 1)])
-def test_each_header_layout(kind, size) -> None:
-    result = read_webp_dimensions(webp(*size, kind=kind))
-    assert (result.width, result.height) == size
-    assert result.chunk_type == kind.decode("ascii").strip()
-    assert not result.is_animated
-    assert not result.has_alpha
+def test_each_header_layout(subtests) -> None:
+    for kind in [b"VP8 ", b"VP8L", b"VP8X"]:
+        for size in [(1, 1), (7, 5), (258, 772), (16383, 1)]:
+            with subtests.test(kind=kind, size=size):
+                result = read_webp_dimensions(webp(*size, kind=kind))
+                assert (result.width, result.height) == size
+                assert result.chunk_type == kind.decode("ascii").strip()
+                assert not result.is_animated
+                assert not result.has_alpha
 
 
-@pytest.mark.parametrize("flags", [0, 2, 4, 8, 16, 32, 62])
-def test_extended_flags_are_metadata_not_animation_traversal(flags) -> None:
-    payload = webp(kind=b"VP8X", flags=flags)
-    stream = ShortStream(payload + b"do-not-read-ANIM-EXIF-XMP", boundary=30)
-    result = read_webp_dimensions(stream)
-    assert result.is_animated is bool(flags & 2)
-    assert result.has_alpha is bool(flags & 16)
-    assert stream.stream.tell() == 30
+def test_extended_flags_are_metadata_not_animation_traversal(subtests) -> None:
+    for flags in [0, 2, 4, 8, 16, 32, 62]:
+        with subtests.test(flags=flags):
+            payload = webp(kind=b"VP8X", flags=flags)
+            stream = ShortStream(payload + b"do-not-read-ANIM-EXIF-XMP", boundary=30)
+            result = read_webp_dimensions(stream)
+            assert result.is_animated is bool(flags & 2)
+            assert result.has_alpha is bool(flags & 16)
+            assert stream.stream.tell() == 30
 
 
 def test_lossless_alpha_flag() -> None:
@@ -70,44 +72,49 @@ def test_lossy_scaling_bits_do_not_change_canvas_size() -> None:
     assert (result.width, result.height) == (7, 5)
 
 
-@pytest.mark.parametrize("kind,required", [(b"VP8 ", 30), (b"VP8L", 25), (b"VP8X", 30)])
-def test_truncation_and_exact_byte_budget(kind, required) -> None:
-    payload = webp(kind=kind)
-    for cut in range(required):
-        with pytest.raises(WebpDimensionsError, match="^webp_header_truncated$"):
-            read_webp_dimensions(payload[:cut])
-    result = read_webp_dimensions(payload[:required], max_header_bytes=required)
-    assert result.width == 7
-    with pytest.raises(WebpDimensionsError, match="^webp_header_limit_exceeded$"):
-        read_webp_dimensions(payload, max_header_bytes=required - 1)
+def test_truncation_and_exact_byte_budget(subtests) -> None:
+    for kind, required in [(b"VP8 ", 30), (b"VP8L", 25), (b"VP8X", 30)]:
+        with subtests.test(kind=kind, required=required):
+            payload = webp(kind=kind)
+            for cut in range(required):
+                with pytest.raises(
+                    WebpDimensionsError, match="^webp_header_truncated$"
+                ):
+                    read_webp_dimensions(payload[:cut])
+            result = read_webp_dimensions(payload[:required], max_header_bytes=required)
+            assert result.width == 7
+            with pytest.raises(
+                WebpDimensionsError, match="^webp_header_limit_exceeded$"
+            ):
+                read_webp_dimensions(payload, max_header_bytes=required - 1)
 
 
-@pytest.mark.parametrize("size", [0, 3, 4, 11, 13, 0xFFFFFFFF, 0xFFFFFFF8])
-def test_invalid_riff_size(size) -> None:
-    with pytest.raises(WebpDimensionsError, match="^webp_riff_size_invalid$"):
-        read_webp_dimensions(edit(webp(), 4, "<I", size))
+def test_invalid_riff_size(subtests) -> None:
+    for size in [0, 3, 4, 11, 13, 0xFFFFFFFF, 0xFFFFFFF8]:
+        with subtests.test(size=size):
+            with pytest.raises(WebpDimensionsError, match="^webp_riff_size_invalid$"):
+                read_webp_dimensions(edit(webp(), 4, "<I", size))
 
 
-@pytest.mark.parametrize("offset", [0, 8])
-def test_invalid_riff_or_webp_signature(offset) -> None:
-    with pytest.raises(WebpDimensionsError, match="^webp_signature_invalid$"):
-        read_webp_dimensions(edit(webp(), offset, "<I", 0))
+def test_invalid_riff_or_webp_signature(subtests) -> None:
+    for offset in [0, 8]:
+        with subtests.test(offset=offset):
+            with pytest.raises(WebpDimensionsError, match="^webp_signature_invalid$"):
+                read_webp_dimensions(edit(webp(), offset, "<I", 0))
 
 
-@pytest.mark.parametrize(
-    "kind,size",
-    [
+def test_declared_chunk_sizes(subtests) -> None:
+    for kind, size in [
         (b"VP8 ", 0),
         (b"VP8 ", 9),
         (b"VP8L", 4),
         (b"VP8X", 9),
         (b"VP8X", 11),
         (b"VP8 ", 0xFFFFFFFF),
-    ],
-)
-def test_declared_chunk_sizes(kind, size) -> None:
-    with pytest.raises(WebpDimensionsError, match="^webp_chunk_size_invalid$"):
-        read_webp_dimensions(edit(webp(kind=kind), 16, "<I", size))
+    ]:
+        with subtests.test(kind=kind, size=size):
+            with pytest.raises(WebpDimensionsError, match="^webp_chunk_size_invalid$"):
+                read_webp_dimensions(edit(webp(kind=kind), 16, "<I", size))
 
 
 def test_odd_chunk_padding_must_fit_declared_riff_extent() -> None:
@@ -124,20 +131,18 @@ def test_unknown_first_chunk_is_not_scanned() -> None:
     assert stream.stream.tell() == 20
 
 
-@pytest.mark.parametrize(
-    "offset,value,category",
-    [
+def test_invalid_lossy_headers(subtests) -> None:
+    for offset, value, category in [
         (20, 17, "webp_vp8_header_invalid"),
         (20, 24, "webp_vp8_version_unsupported"),
         (23, 0, "webp_vp8_header_invalid"),
         (26, 0, "webp_dimensions_invalid"),
         (28, 0, "webp_dimensions_invalid"),
-    ],
-)
-def test_invalid_lossy_headers(offset, value, category) -> None:
-    with pytest.raises(WebpDimensionsError) as raised:
-        read_webp_dimensions(edit(webp(), offset, "<B", value))
-    assert str(raised.value) == category
+    ]:
+        with subtests.test(offset=offset, value=value, category=category):
+            with pytest.raises(WebpDimensionsError) as raised:
+                read_webp_dimensions(edit(webp(), offset, "<B", value))
+            assert str(raised.value) == category
 
 
 def test_invalid_lossless_signature_and_version() -> None:
@@ -147,12 +152,13 @@ def test_invalid_lossless_signature_and_version() -> None:
         read_webp_dimensions(edit(webp(kind=b"VP8L"), 24, "<B", 0x20))
 
 
-@pytest.mark.parametrize(
-    "offset,value", [(20, 1), (20, 64), (20, 128), (21, 1), (22, 1), (23, 1)]
-)
-def test_extended_reserved_fields(offset, value) -> None:
-    with pytest.raises(WebpDimensionsError, match="^webp_vp8x_reserved_bits_invalid$"):
-        read_webp_dimensions(edit(webp(kind=b"VP8X"), offset, "<B", value))
+def test_extended_reserved_fields(subtests) -> None:
+    for offset, value in [(20, 1), (20, 64), (20, 128), (21, 1), (22, 1), (23, 1)]:
+        with subtests.test(offset=offset, value=value):
+            with pytest.raises(
+                WebpDimensionsError, match="^webp_vp8x_reserved_bits_invalid$"
+            ):
+                read_webp_dimensions(edit(webp(kind=b"VP8X"), offset, "<B", value))
 
 
 def test_extended_canvas_product_limit_cannot_be_disabled() -> None:
@@ -167,7 +173,8 @@ def test_extended_canvas_product_limit_cannot_be_disabled() -> None:
 @pytest.mark.parametrize("lossless", [False, True])
 @pytest.mark.parametrize("mode", ["RGB", "RGBA"])
 def test_pillow_generated_file_end_to_end(tmp_path, size, lossless, mode) -> None:
-    from PIL import Image, features
+    Image = pytest.importorskip("PIL.Image")
+    features = pytest.importorskip("PIL.features")
 
     assert features.check("webp"), "Pillow must include WebP for this integration test"
     path = tmp_path / "synthetic.webp"
@@ -183,7 +190,7 @@ def test_pillow_generated_file_end_to_end(tmp_path, size, lossless, mode) -> Non
 
 @pytest.mark.integration
 def test_real_animated_webp_uses_canvas_not_frame_payloads(tmp_path) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic-animated.webp"
     first = Image.new("RGB", (19, 13), (0, 0, 0))
@@ -245,21 +252,26 @@ def test_failure_restores_caller_owned_stream() -> None:
     assert not stream.closed
 
 
-@pytest.mark.parametrize("option", ["max_header_bytes", "max_pixels"])
-@pytest.mark.parametrize("value", [0, -1, True, False, 2.0, "2", None])
-def test_invalid_limits_do_not_read(option, value) -> None:
-    class Unreadable:
-        def read(self, size):
-            pytest.fail("invalid options must be checked before I/O")
+def test_invalid_limits_do_not_read(subtests) -> None:
+    for option in ["max_header_bytes", "max_pixels"]:
+        for value in [0, -1, True, False, 2.0, "2", None]:
+            with subtests.test(option=option, value=value):
 
-    with pytest.raises(ValueError, match=option):
-        read_webp_dimensions(Unreadable(), **{option: value})
+                class Unreadable:
+                    def read(self, size):
+                        pytest.fail("invalid options must be checked before I/O")
+
+                with pytest.raises(ValueError, match=option):
+                    read_webp_dimensions(Unreadable(), **{option: value})
 
 
-@pytest.mark.parametrize("source", [None, "not-bytes", bytearray(b"data"), 12])
-def test_invalid_source_type(source) -> None:
-    with pytest.raises(TypeError, match="source must be bytes or a binary stream"):
-        read_webp_dimensions(source)
+def test_invalid_source_type(subtests) -> None:
+    for source in [None, "not-bytes", bytearray(b"data"), 12]:
+        with subtests.test(source=source):
+            with pytest.raises(
+                TypeError, match="source must be bytes or a binary stream"
+            ):
+                read_webp_dimensions(source)
 
 
 @pytest.mark.parametrize("returned", [None, "text", bytearray(b"x"), b"x" * 1000])

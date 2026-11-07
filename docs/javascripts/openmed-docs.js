@@ -54,9 +54,58 @@
       }
     };
 
+    let scheduled = false;
+    const scheduleUpdate = () => {
+      if (scheduled) return;
+      scheduled = true;
+      window.requestAnimationFrame(() => {
+        scheduled = false;
+        update();
+      });
+    };
+    const searchResults = document.querySelector(
+      '[data-md-component="search-result"]',
+    );
+    if (searchResults) {
+      // Search snippets arrive after page initialization and change per query.
+      // Observe content only: our tabindex updates must not trigger this observer.
+      new MutationObserver(scheduleUpdate).observe(searchResults, {
+        childList: true,
+        subtree: true,
+      });
+      searchResults.addEventListener("toggle", scheduleUpdate, true);
+      searchResults.addEventListener("keydown", (event) => {
+        const region = event.target;
+        if (
+          !(region instanceof HTMLElement)
+          || region.dataset.openmedScrollable !== "true"
+          || event.altKey || event.ctrlKey || event.metaKey
+        ) {
+          return;
+        }
+        // Search's global result shortcuts intercept these keys. Handle them
+        // on the focused region, including WebKit's nested-link scroll case.
+        const movement = {
+          ArrowLeft: [-40, 0],
+          ArrowRight: [40, 0],
+          ArrowUp: [0, -40],
+          ArrowDown: [0, 40],
+          PageUp: [0, -region.clientHeight],
+          PageDown: [0, region.clientHeight],
+          Home: [-region.scrollWidth, -region.scrollHeight],
+          End: [region.scrollWidth, region.scrollHeight],
+        }[event.key];
+        if (!movement) return;
+        region.scrollLeft += movement[0];
+        region.scrollTop += movement[1];
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    }
+    document.querySelector("#__search")?.addEventListener("change", scheduleUpdate);
     update();
-    document.fonts?.ready.then(update);
-    window.addEventListener("resize", update, { passive: true });
+    document.fonts?.ready.then(scheduleUpdate);
+    window.addEventListener("resize", scheduleUpdate, { passive: true });
   }
 
   function initializeDrawer() {

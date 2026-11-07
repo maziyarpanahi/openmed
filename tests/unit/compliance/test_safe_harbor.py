@@ -163,9 +163,8 @@ def test_attestation_rejects_untrusted_action_text() -> None:
     assert untrusted not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    ("span", "message"),
-    [
+def test_attestation_errors_do_not_echo_untrusted_fields(subtests) -> None:
+    for span, message in [
         (
             {"canonical_label": "synthetic patient value", "action": "mask"},
             "unsupported label",
@@ -178,18 +177,14 @@ def test_attestation_rejects_untrusted_action_text() -> None:
             },
             "unknown Safe Harbor category",
         ),
-    ],
-)
-def test_attestation_errors_do_not_echo_untrusted_fields(
-    span: dict[str, str],
-    message: str,
-) -> None:
-    untrusted = "synthetic patient value"
-    with pytest.raises(ValueError, match=message) as error:
-        generate_safe_harbor_attestation(
-            {"policy": "hipaa_safe_harbor", "spans": [span]}
-        )
-    assert untrusted not in str(error.value)
+    ]:
+        with subtests.test(span=span, message=message):
+            untrusted = "synthetic patient value"
+            with pytest.raises(ValueError, match=message) as error:
+                generate_safe_harbor_attestation(
+                    {"policy": "hipaa_safe_harbor", "spans": [span]}
+                )
+            assert untrusted not in str(error.value)
 
 
 def test_attestation_rejects_tampered_audit_report() -> None:

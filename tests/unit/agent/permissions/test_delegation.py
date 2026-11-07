@@ -221,9 +221,8 @@ def test_complete_chain_verifies_locally() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "error_type", "code"),
-    [
+def test_signed_child_chain_rejects_amplified_or_unbound_metadata(subtests) -> None:
+    for field, value, error_type, code in [
         (
             "expires_at",
             EXPIRES_AT + 1,
@@ -237,23 +236,19 @@ def test_complete_chain_verifies_locally() -> None:
             DelegationChainError,
             "parent_mismatch",
         ),
-    ],
-)
-def test_signed_child_chain_rejects_amplified_or_unbound_metadata(
-    field: str,
-    value: object,
-    error_type: type[Exception],
-    code: str,
-) -> None:
-    root = _root(remaining_depth=3)
-    payload = _derive(root).to_dict()
-    payload[field] = value
-    child = _resign(payload)
+    ]:
+        with subtests.test(field=field, value=value, error_type=error_type, code=code):
+            root = _root(remaining_depth=3)
+            payload = _derive(root).to_dict()
+            payload[field] = value
+            child = _resign(payload)
 
-    with pytest.raises(error_type) as caught:
-        DelegationGrantVerifier(KEY).verify_link(root, child, now=EXPIRES_AT - 1_000)
+            with pytest.raises(error_type) as caught:
+                DelegationGrantVerifier(KEY).verify_link(
+                    root, child, now=EXPIRES_AT - 1_000
+                )
 
-    assert getattr(caught.value, "code") == code
+            assert getattr(caught.value, "code") == code
 
 
 def test_signed_child_chain_rejects_scope_amplification() -> None:
@@ -365,9 +360,8 @@ def test_wrong_key_and_clock_failure_do_not_echo_provider_details() -> None:
     assert rejected not in caught.value.audit_record.to_json()
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
+def test_malformed_delegation_metadata_fails_closed(subtests) -> None:
+    for factory in [
         lambda: DelegationScope((_capability(),), (), (PURPOSE,)),
         lambda: _scope(purposes=("free-text-purpose",)),
         lambda: _scope(capabilities=(_capability(), _capability())),
@@ -375,8 +369,7 @@ def test_wrong_key_and_clock_failure_do_not_echo_provider_details() -> None:
         lambda: _request(remaining_depth=True),
         lambda: _root(expires_at=True),
         lambda: DelegationGrant.from_dict({}),
-    ],
-)
-def test_malformed_delegation_metadata_fails_closed(factory: Any) -> None:
-    with pytest.raises(DelegationValidationError):
-        factory()
+    ]:
+        with subtests.test(factory=factory):
+            with pytest.raises(DelegationValidationError):
+                factory()

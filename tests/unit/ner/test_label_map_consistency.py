@@ -274,17 +274,15 @@ class TestMicrobiologyDomain:
         labels = get_default_labels("microbiology")
         assert labels == self.EXPECTED_LABELS
 
-    @pytest.mark.parametrize(
-        ("label", "expected"),
-        [
+    def test_microbiology_labels_normalize(self, subtests):
+        for label, expected in [
             ("susceptibility", "SUSCEPTIBILITY"),
             ("antibiotic", "ANTIBIOTIC"),
             ("microorganism", "MICROORGANISM"),
             ("organism", "ORGANISM"),
-        ],
-    )
-    def test_microbiology_labels_normalize(self, label, expected):
-        assert normalize_canonical_label(label) == expected
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_canonical_label(label) == expected
 
     def test_match_categories_routes_microbiology(self):
         categories = [
@@ -420,24 +418,20 @@ class TestRadiologyDomain:
         assert normalized == self.EXPECTED_CANONICAL_LABELS
         assert normalized == _CATEGORY_ENTITY_TYPES["Radiology"]
 
-    @pytest.mark.parametrize(
-        ("label", "expected"),
-        [
+    def test_radiology_labels_are_non_identifier_biomedical_concepts(self, subtests):
+        for label, expected in [
             ("finding", "FINDING"),
             ("imaging modality", "IMAGING_MODALITY"),
             ("laterality", "LATERALITY"),
             ("measurement", "MEASUREMENT"),
             ("impression", "FINDING"),
-        ],
-    )
-    def test_radiology_labels_are_non_identifier_biomedical_concepts(
-        self, label, expected
-    ):
-        assert normalize_canonical_label(label) == expected
-        assert expected in CANONICAL_LABELS
-        assert label_kind_for(expected) == BIOMEDICAL_LABEL_KIND
-        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
-        assert hipaa_class_for(expected) is None
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_canonical_label(label) == expected
+                assert expected in CANONICAL_LABELS
+                assert label_kind_for(expected) == BIOMEDICAL_LABEL_KIND
+                assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+                assert hipaa_class_for(expected) is None
 
 
 class TestRadiologyRouting:
@@ -449,9 +443,8 @@ class TestRadiologyRouting:
         ]
         assert categories == ["Radiology"]
 
-    @pytest.mark.parametrize(
-        "text",
-        [
+    def test_each_radiology_keyword_routes(self, subtests):
+        for text in [
             "CT chest",
             "MRI brain",
             "chest x-ray",
@@ -461,11 +454,10 @@ class TestRadiologyRouting:
             "impression is unchanged",
             "pulmonary nodule",
             "left lower lobe opacity",
-        ],
-    )
-    def test_each_radiology_keyword_routes(self, text):
-        categories = [category for category, _reason in _match_categories(text)]
-        assert "Radiology" in categories
+        ]:
+            with subtests.test(text=text):
+                categories = [category for category, _reason in _match_categories(text)]
+                assert "Radiology" in categories
 
     def test_radiology_is_registry_metadata_not_a_live_category(self):
         from openmed.core.model_registry import CATEGORIES

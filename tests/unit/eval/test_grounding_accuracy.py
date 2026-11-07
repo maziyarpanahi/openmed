@@ -139,6 +139,7 @@ def test_report_serializes_standard_benchmark_schema():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_not_groundable_mentions_are_scored_for_correct_abstention():
     # The not-groundable (truly unmappable) surfaces must be exercised and the
     # generator must correctly abstain on them (return no code).
@@ -172,6 +173,7 @@ def test_every_language_is_scored_for_every_system():
             assert report.system(system).language(language) is not None
 
 
+@pytest.mark.slow
 def test_shipped_gold_gate_passes_and_report_is_deterministic():
     first = evaluate_grounding_accuracy().to_benchmark_report().to_json()
     second = evaluate_grounding_accuracy().to_benchmark_report().to_json()
@@ -220,6 +222,7 @@ def test_cli_grounding_gate_fails_closed_on_regression(tmp_path, monkeypatch):
     assert any(not check["passed"] for check in payload["gate_results"])
 
 
+@pytest.mark.slow
 def test_cli_grounding_gate_passes_on_shipped_gold(tmp_path):
     output = tmp_path / "grounding-gate.json"
     exit_code = rg.main(["--grounding", "--output", str(output)])
@@ -233,6 +236,7 @@ def test_cli_grounding_gate_passes_on_shipped_gold(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_gate_report_round_trips_sign_and_verify():
     report = evaluate_grounding_accuracy()
     gate_report = rg.build_grounding_gate_report(report)

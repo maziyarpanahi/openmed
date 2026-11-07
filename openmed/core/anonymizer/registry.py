@@ -547,6 +547,10 @@ def _gen_phone(faker, original, *, locale):
             if african_surrogate is not None:
                 return african_surrogate
         return preserve_phone_format(original, rng=faker.random)
+    if not hasattr(faker, "phone_number") and hasattr(faker, "mobile_number"):
+        # Faker's Philippine locales (fil_PH, tl_PH, en_PH) ship carrier mobile
+        # and landline providers but no generic ``phone_number`` method.
+        return faker.mobile_number()
     return faker.phone_number()
 
 
@@ -712,13 +716,19 @@ _DAY_FIRST_LOCALES = frozenset(
 
 def _gen_date(faker, original, *, locale):
     return preserve_date_format(
-        original, date_order=date_order_for_locale(locale), rng=faker.random
+        original,
+        date_order=date_order_for_locale(locale),
+        rng=faker.random,
+        locale=locale,
     )
 
 
 def _gen_date_of_birth(faker, original, *, locale):
     return preserve_date_format(
-        original, date_order=date_order_for_locale(locale), rng=faker.random
+        original,
+        date_order=date_order_for_locale(locale),
+        rng=faker.random,
+        locale=locale,
     )
 
 
@@ -814,6 +824,7 @@ _LOCALE_ID_METHODS = {
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
     "rw_RW": "rwanda_id",
+    "si_LK": "sri_lanka_nic",
     "sw_TZ": "tanzania_nida",
     "ur_PK": "cnic",
 }
@@ -1026,6 +1037,13 @@ def _gen_id_num(faker, original, *, locale):
 
         if validate_chinese_resident_id(original.strip()):
             return _generate_distinct_chinese_resident_id(faker, original)
+    if locale == "si_LK" and hasattr(faker, "sri_lanka_nic") and original:
+        from openmed.core.pii_i18n import validate_sri_lanka_nic
+
+        # Checked before the generic shapes: a nine-digit NIC with an
+        # upper-case V or X also looks like an M-Pesa transaction code.
+        if validate_sri_lanka_nic(original):
+            return faker.sri_lanka_nic(original)
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
@@ -1919,6 +1937,34 @@ def _register_builtin_script_name_generators() -> None:
 _register_builtin_script_name_generators()
 
 
+def _register_builtin_script_label_generators() -> None:
+    """Install per-label Arabic and Ethiopic name and place generators.
+
+    Faker's ``ar_EG`` default and the ``en_KE`` backend behind ``am_ET`` hold
+    no Arabic-script or Ethiopic person and address data. Routing by source
+    script keeps these surrogates in the source script, while Latin spans in
+    the same documents keep the Faker fallback.
+    """
+
+    from .providers.script_names import SCRIPT_NAME_PART_PACKS
+    from .providers.script_places import SCRIPT_PLACE_PACKS
+
+    for language_pack, script, generators in (
+        *SCRIPT_NAME_PART_PACKS,
+        *SCRIPT_PLACE_PACKS,
+    ):
+        for canonical_label, generator in generators.items():
+            register_label_generator(
+                canonical_label,
+                generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_builtin_script_label_generators()
+
+
 def _register_marathi_name_generators() -> None:
     """Install Marathi-specific three-part Devanagari name generators."""
 
@@ -1943,6 +1989,31 @@ def _register_marathi_name_generators() -> None:
 _register_marathi_name_generators()
 
 
+def _register_aksara_name_generators() -> None:
+    """Install pronounceable aksara name generators for Hindi and Telugu.
+
+    They replace the letter-inventory generators installed for the ``hi``
+    Devanagari and ``te`` Telugu name labels by
+    :func:`_register_builtin_script_name_generators`. Marathi keeps its native
+    three-part generators.
+    """
+
+    from .providers.aksara_names import AKSARA_NAME_PACKS
+
+    name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
+    for language_pack, script, generator in AKSARA_NAME_PACKS:
+        for canonical_label in name_labels:
+            register_label_generator(
+                canonical_label,
+                generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_aksara_name_generators()
+
+
 def register_india_label_generators() -> None:
     """Install locale-gated India surrogate generators in the label registry."""
 
@@ -1961,6 +2032,33 @@ def register_india_label_generators() -> None:
 
 
 register_india_label_generators()
+
+
+def _register_african_place_generators() -> None:
+    """Route African language-pack address and town surrogates to local shapes.
+
+    Faker ships no address data for the ``sw``, ``ha_NG``, ``ig_NG`` and
+    ``yo_NG`` locales, and ``rw_RW`` is backed by ``en_US``, so the generic
+    path emitted US street, unit and city templates. Each dispatcher keeps the
+    previously registered generator as its fallback for every other locale.
+    """
+
+    from .providers.african_places import (
+        AFRICAN_PLACE_GENERATORS,
+        AfricanPlaceDispatcher,
+    )
+
+    for canonical_label, generator in AFRICAN_PLACE_GENERATORS.items():
+        register_label_generator(
+            canonical_label,
+            AfricanPlaceDispatcher(
+                generator=generator,
+                fallback=LABEL_GENERATORS[canonical_label],
+            ),
+        )
+
+
+_register_african_place_generators()
 
 
 __all__ = [

@@ -49,19 +49,17 @@ def test_by_mouth_phrase_maps_to_oral():
     assert sig["form"] == "tablet"
 
 
-@pytest.mark.parametrize(
-    ("abbr", "route"),
-    [
+def test_route_controlled_set(subtests):
+    for abbr, route in [
         ("IV", "intravenous"),
         ("IM", "intramuscular"),
         ("SC", "subcutaneous"),
         ("SL", "sublingual"),
         ("PR", "rectal"),
-    ],
-)
-def test_route_controlled_set(abbr, route):
-    sig = parse_sig(f"1 unit {abbr} daily")
-    assert sig["route"] == route
+    ]:
+        with subtests.test(abbr=abbr, route=route):
+            sig = parse_sig(f"1 unit {abbr} daily")
+            assert sig["route"] == route
 
 
 def test_prn_with_condition():
@@ -128,13 +126,17 @@ def test_empty_sig_flags_everything_missing():
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("cue", "per_day"),
-    [("qd", 1.0), ("BID", 2.0), ("TID", 3.0), ("QID", 4.0), ("q8h", 3.0)],
-)
-def test_frequency_reuses_normalizer(cue, per_day):
-    sig = parse_sig(f"1 tab PO {cue}")
-    assert sig["frequency_per_day"] == per_day
+def test_frequency_reuses_normalizer(subtests):
+    for cue, per_day in [
+        ("qd", 1.0),
+        ("BID", 2.0),
+        ("TID", 3.0),
+        ("QID", 4.0),
+        ("q8h", 3.0),
+    ]:
+        with subtests.test(cue=cue, per_day=per_day):
+            sig = parse_sig(f"1 tab PO {cue}")
+            assert sig["frequency_per_day"] == per_day
 
 
 # --------------------------------------------------------------------------
