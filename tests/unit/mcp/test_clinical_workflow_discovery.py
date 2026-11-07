@@ -300,20 +300,19 @@ def test_golden_note_pipeline_matches_chained_handlers_without_egress_or_phi(
         assert marker not in logged
 
 
-@pytest.mark.parametrize("artifact_name", CLINICAL_WORKFLOW_SPEC.stage_order)
-def test_golden_agent_run_artifact_schemas_reject_invalid_payloads(
-    artifact_name: str,
-) -> None:
-    fixture = load_golden_agent_run()
-    invalid = deepcopy(fixture["artifacts"][artifact_name])
-    invalid.clear()
+def test_golden_agent_run_artifact_schemas_reject_invalid_payloads(subtests) -> None:
+    for artifact_name in CLINICAL_WORKFLOW_SPEC.stage_order:
+        with subtests.test(artifact_name=artifact_name):
+            fixture = load_golden_agent_run()
+            invalid = deepcopy(fixture["artifacts"][artifact_name])
+            invalid.clear()
 
-    with pytest.raises(ToolSchemaValidationError, match=artifact_name):
-        validate_registered_workflow_artifact(
-            CLINICAL_WORKFLOW_NAME,
-            artifact_name,
-            invalid,
-        )
+            with pytest.raises(ToolSchemaValidationError, match=artifact_name):
+                validate_registered_workflow_artifact(
+                    CLINICAL_WORKFLOW_NAME,
+                    artifact_name,
+                    invalid,
+                )
 
 
 def test_golden_post_deidentification_outputs_and_logs_exclude_source_markers(

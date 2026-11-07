@@ -27,15 +27,16 @@ def _unknown_state(state="unknown"):
     }
 
 
-@pytest.mark.parametrize("version", [FHIR_R4, FHIR_R5, "4.0.1", "5.0.0"])
-def test_allowlisted_unknown_state_is_valid_in_r4_and_r5(version):
-    resource = _observation([_unknown_state()])
+def test_allowlisted_unknown_state_is_valid_in_r4_and_r5(subtests):
+    for version in [FHIR_R4, FHIR_R5, "4.0.1", "5.0.0"]:
+        with subtests.test(version=version):
+            resource = _observation([_unknown_state()])
 
-    first = check_observation_extensions(resource, fhir_version=version)
-    second = check_observation_extensions(resource, fhir_version=version)
+            first = check_observation_extensions(resource, fhir_version=version)
+            second = check_observation_extensions(resource, fhir_version=version)
 
-    assert first == []
-    assert first == second
+            assert first == []
+            assert first == second
 
 
 def test_unknown_url_and_value_are_rejected_without_echoing_the_value():

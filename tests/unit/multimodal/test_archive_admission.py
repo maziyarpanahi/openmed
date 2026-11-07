@@ -238,6 +238,15 @@ def test_ordinary_deflate_crosses_chunk_boundaries(size):
         assert archive.read("part") == payload
 
 
+def test_zip64_directory_rejected_without_classic_sentinels():
+    end64 = struct.pack("<4sQ2H2L4Q", b"PK\x06\x06", 44, 45, 45, 0, 0, 0, 0, 0, 0)
+    locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, 0, 1)
+    classic_end = struct.pack("<4s4H2LH", b"PK\x05\x06", 0, 0, 0, 0, 0, 0, 0)
+    with pytest.raises(ArchiveDocumentError, match="archive_zip64_directory"):
+        with admitted_zip(io.BytesIO(end64 + locator + classic_end), POLICY):
+            pytest.fail("ZIP64 directory bypassed admission")
+
+
 def test_zip64_local_header_with_bounded_sizes_is_accepted():
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:

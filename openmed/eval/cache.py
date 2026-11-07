@@ -109,9 +109,11 @@ def load(
 ) -> BenchmarkReport | None:
     """Load a cached report, returning ``None`` on a cache miss."""
     path = cache_path(report_key, cache_dir=cache_dir)
-    if not path.exists():
+    try:
+        return BenchmarkReport.read_json(path)
+    except FileNotFoundError:
+        # An entry may disappear after a concurrent invalidate or clear.
         return None
-    return BenchmarkReport.read_json(path)
 
 
 def store(

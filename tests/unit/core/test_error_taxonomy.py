@@ -87,9 +87,8 @@ def test_taxonomy_hierarchy_and_stable_codes() -> None:
         assert error_class.code == expected[name]
 
 
-@pytest.mark.parametrize(
-    ("error_class", "legacy_base"),
-    [
+def test_builtin_exception_compatibility(subtests) -> None:
+    for error_class, legacy_base in [
         (InputError, ValueError),
         (InputError, TypeError),
         (ConfigurationError, ValueError),
@@ -104,13 +103,9 @@ def test_taxonomy_hierarchy_and_stable_codes() -> None:
         (BudgetExceededError, RuntimeError),
         (InternalError, RuntimeError),
         (InferenceError, RuntimeError),
-    ],
-)
-def test_builtin_exception_compatibility(
-    error_class: type[OpenMedError],
-    legacy_base: type[BaseException],
-) -> None:
-    assert issubclass(error_class, legacy_base)
+    ]:
+        with subtests.test(error_class=error_class, legacy_base=legacy_base):
+            assert issubclass(error_class, legacy_base)
 
 
 def test_public_exports_and_existing_error_aliases_remain_compatible() -> None:
@@ -197,43 +192,35 @@ def test_unprintable_values_still_produce_safe_typed_input_errors() -> None:
     assert "SYNTHETIC_RAW_PHI_SENTINEL_1354" not in serialized
 
 
-@pytest.mark.parametrize(
-    "call",
-    [
+def test_malformed_public_pii_input_raises_input_error_end_to_end(subtests) -> None:
+    for call in [
         lambda: openmed.extract_pii(12345),
         lambda: openmed.deidentify(None),
         lambda: openmed.reidentify(object(), {}),
         lambda: openmed.reidentify("synthetic", ["not", "a", "mapping"]),
         lambda: openmed.reidentify("synthetic", {"[NAME]": object()}),
-    ],
-)
-def test_malformed_public_pii_input_raises_input_error_end_to_end(
-    call: Callable[[], object],
-) -> None:
-    with pytest.raises(InputError) as raised:
-        call()
+    ]:
+        with subtests.test(call=call):
+            with pytest.raises(InputError) as raised:
+                call()
 
-    assert isinstance(raised.value, (TypeError, ValueError))
-    assert raised.value.code == "input_error"
+            assert isinstance(raised.value, (TypeError, ValueError))
+            assert raised.value.code == "input_error"
 
 
-@pytest.mark.parametrize(
-    "call",
-    [
+def test_invalid_selectors_do_not_echo_untrusted_values(subtests) -> None:
+    for call in [
         lambda secret: _resolve_deidentification_method(secret, None, None),
         lambda secret: validate_language(secret),
         lambda secret: validate_output_format(secret),
-    ],
-)
-def test_invalid_selectors_do_not_echo_untrusted_values(
-    call: Callable[[str], object],
-) -> None:
-    raw_phi = "SYNTHETIC_RAW_PHI_SENTINEL_1354"
-    with pytest.raises(InputError) as raised:
-        call(raw_phi)
+    ]:
+        with subtests.test(call=call):
+            raw_phi = "SYNTHETIC_RAW_PHI_SENTINEL_1354"
+            with pytest.raises(InputError) as raised:
+                call(raw_phi)
 
-    serialized = json.dumps(raised.value.to_dict(), sort_keys=True)
-    assert raw_phi not in serialized
+            serialized = json.dumps(raised.value.to_dict(), sort_keys=True)
+            assert raw_phi not in serialized
 
 
 def test_invalid_policy_name_does_not_echo_untrusted_value() -> None:

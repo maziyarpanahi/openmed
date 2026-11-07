@@ -113,46 +113,48 @@ def test_expiry_purge_preserves_unexpired_claims(tmp_path):
     assert store.claim(short, expires_at=201, now=101)
 
 
-@pytest.mark.parametrize(
-    "damage", ["truncated", "empty", "future", "missing", "schema"]
-)
-def test_damaged_store_refuses_dispatch_and_reopening(tmp_path, damage):
-    path = tmp_path / "private-canary.db"
-    store = SQLiteApprovalNonceStore(path)
-    assert store.claim(DIGEST, expires_at=200, now=100)
-    if damage == "truncated":
-        path.write_bytes(path.read_bytes()[:100])
-    elif damage == "empty":
-        path.write_bytes(b"")
-    elif damage == "missing":
-        path.unlink()
-    else:
-        with sqlite3.connect(path) as connection:
-            connection.execute(
-                "PRAGMA user_version = 99"
-                if damage == "future"
-                else "DROP TABLE nonce_claims"
+def test_damaged_store_refuses_dispatch_and_reopening(subtests, tmp_path):
+    case_root = tmp_path
+    for damage in ["truncated", "empty", "future", "missing", "schema"]:
+        with subtests.test(damage=damage):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "private-canary.db"
+            store = SQLiteApprovalNonceStore(path)
+            assert store.claim(DIGEST, expires_at=200, now=100)
+            if damage == "truncated":
+                path.write_bytes(path.read_bytes()[:100])
+            elif damage == "empty":
+                path.write_bytes(b"")
+            elif damage == "missing":
+                path.unlink()
+            else:
+                with sqlite3.connect(path) as connection:
+                    connection.execute(
+                        "PRAGMA user_version = 99"
+                        if damage == "future"
+                        else "DROP TABLE nonce_claims"
+                    )
+            token = ApprovalTokenSigner(KEY, clock=lambda: 100).issue(
+                action_digest=ACTION,
+                reviewer_role=ROLE,
+                expires_at=200,
             )
-    token = ApprovalTokenSigner(KEY, clock=lambda: 100).issue(
-        action_digest=ACTION,
-        reviewer_role=ROLE,
-        expires_at=200,
-    )
-    calls = []
-    with pytest.raises(ApprovalNonceStoreError) as error:
-        dispatch_with_approval_token(
-            token,
-            action_digest=ACTION,
-            reviewer_role=ROLE,
-            verifier=ApprovalTokenVerifier(KEY, store),
-            dispatch=lambda: calls.append(True),
-            now=100,
-        )
-    assert calls == []
-    assert "private-canary" not in str(error.value)
-    if damage != "missing":
-        with pytest.raises(ApprovalNonceStoreError):
-            SQLiteApprovalNonceStore(path)
+            calls = []
+            with pytest.raises(ApprovalNonceStoreError) as error:
+                dispatch_with_approval_token(
+                    token,
+                    action_digest=ACTION,
+                    reviewer_role=ROLE,
+                    verifier=ApprovalTokenVerifier(KEY, store),
+                    dispatch=lambda: calls.append(True),
+                    now=100,
+                )
+            assert calls == []
+            assert "private-canary" not in str(error.value)
+            if damage != "missing":
+                with pytest.raises(ApprovalNonceStoreError):
+                    SQLiteApprovalNonceStore(path)
 
 
 def test_lock_timeout_fails_closed_without_claiming(tmp_path):
@@ -194,29 +196,34 @@ def test_failed_commit_rolls_back_and_never_authorizes(tmp_path, monkeypatch):
     assert SQLiteApprovalNonceStore(path).claim(DIGEST, expires_at=200, now=100)
 
 
-@pytest.mark.parametrize("timeout", [-1, float("inf"), float("nan"), True, "private"])
-def test_invalid_timeout_is_value_free(tmp_path, timeout):
-    with pytest.raises(ApprovalNonceStoreError) as error:
-        SQLiteApprovalNonceStore(tmp_path / "claims.db", timeout=timeout)
-    assert error.value.code == "invalid_nonce_store_timeout"
+def test_invalid_timeout_is_value_free(subtests, tmp_path):
+    case_root = tmp_path
+    for timeout in [-1, float("inf"), float("nan"), True, "private"]:
+        with subtests.test(timeout=timeout):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.raises(ApprovalNonceStoreError) as error:
+                SQLiteApprovalNonceStore(tmp_path / "claims.db", timeout=timeout)
+            assert error.value.code == "invalid_nonce_store_timeout"
 
 
-@pytest.mark.parametrize(
-    "digest,expiry,now",
-    [
+def test_invalid_claim_inputs_are_not_persisted(subtests, tmp_path):
+    case_root = tmp_path
+    for digest, expiry, now in [
         ("private raw nonce", 200, 100),
         (DIGEST, 200.5, 100),
         (DIGEST, 200, True),
         (DIGEST, 2**63, 100),
-    ],
-)
-def test_invalid_claim_inputs_are_not_persisted(tmp_path, digest, expiry, now):
-    path = tmp_path / "claims.db"
-    store = SQLiteApprovalNonceStore(path)
-    with pytest.raises(ApprovalTokenValidationError):
-        store.claim(digest, expires_at=expiry, now=now)
-    with sqlite3.connect(path) as connection:
-        assert connection.execute("SELECT * FROM nonce_claims").fetchall() == []
+    ]:
+        with subtests.test(digest=digest, expiry=expiry, now=now):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "claims.db"
+            store = SQLiteApprovalNonceStore(path)
+            with pytest.raises(ApprovalTokenValidationError):
+                store.claim(digest, expires_at=expiry, now=now)
+            with sqlite3.connect(path) as connection:
+                assert connection.execute("SELECT * FROM nonce_claims").fetchall() == []
 
 
 def test_symlink_store_is_refused(tmp_path):

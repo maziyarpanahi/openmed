@@ -50,6 +50,11 @@ def _check_directory(source: BinaryIO, policy: ArchiveSafetyPolicy) -> None:
     if offset + 22 + comment != len(tail):
         _fail("archive_invalid")
     end = size - len(tail) + offset
+    if end >= 20:
+        # ZipFile reads a ZIP64 locator even when the classic fields are small.
+        source.seek(end - 20)
+        if source.read(4) == b"PK\x06\x07":
+            _fail("archive_zip64_directory")
     start = end - length
     if start < 0:
         _fail("archive_invalid")

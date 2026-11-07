@@ -10,7 +10,8 @@ import pytest
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import ID_SUBTYPE_NPI
 from openmed.core.pii import _apply_safety_sweep_to_result, deidentify
-from openmed.core.pii_entity_merger import PIIPattern
+from openmed.core.pii_entity_merger import PIIPattern, find_semantic_units
+from openmed.core.pii_i18n import get_patterns_for_language
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
     SAFETY_SWEEP_PATTERNS_VERSION,
@@ -26,68 +27,71 @@ def _empty_prediction(text, **kwargs):
     )
 
 
-@pytest.mark.parametrize(
-    ("lang", "prefix", "digits", "zero"),
-    [
+def test_native_digits_masked_in_both_public_paths(subtests):
+    for lang, prefix, digits, zero in [
         ("th", "เลขประจำตัวประชาชน ", "1101700203450", 0x0E50),
         ("th", "โทร ", "0812345678", 0x0E50),
         ("hi", "आधार ", "2345 6789 0124", 0x0966),
         ("te", "ఆధార్ ", "2345 6789 0124", 0x0C66),
-    ],
-)
-def test_native_digits_masked_in_both_public_paths(
-    monkeypatch, lang, prefix, digits, zero
-):
-    from openmed.core.pii_i18n import validate_thai_national_id
-    from openmed.core.pipeline import Pipeline
+    ]:
+        with subtests.test(lang=lang, prefix=prefix, digits=digits, zero=zero):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.core.pii_i18n import validate_thai_national_id
+                from openmed.core.pipeline import Pipeline
 
-    if lang == "th" and len(digits) == 13:
-        check = (
-            11 - sum(int(v) * w for v, w in zip(digits[:12], range(13, 1, -1))) % 11
-        ) % 10
-        digits = digits[:12] + str(check)
-    native = "".join(chr(zero + int(c)) if c.isdecimal() else c for c in digits)
-    for value in (native, native[:5] + digits[5:]):
-        text = prefix + value + " stable"
-        entities = safety_sweep(text, [], lang=lang)
-        assert any(
-            (e.start, e.end, e.text) == (len(prefix), len(prefix) + len(value), value)
-            for e in entities
-        )
-        monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
-        direct = deidentify(text, lang=lang, model_name="unit-test-model")
-        staged = Pipeline(lang=lang, model_detector=_empty_prediction).run(text)
-        assert value not in direct.deidentified_text
-        assert value not in staged.redacted_text
-        assert staged.redacted_text.endswith(" stable")
-    if len(digits) == 13:
-        assert validate_thai_national_id(native)
-        invalid = native[:-1] + chr(zero + (int(digits[-1]) + 1) % 10)
-        assert not validate_thai_national_id(invalid)
-        assert not any(
-            e.label == "national_id"
-            for e in safety_sweep(prefix + invalid, [], lang=lang)
-        )
-    if len(digits.replace(" ", "")) in {12, 13}:
-        invalid = native[:-1] + chr(zero + (int(digits[-1]) + 1) % 10)
-        source = prefix + invalid
-        assert (
-            invalid
-            in deidentify(
-                source, lang=lang, model_name="unit-test-model"
-            ).deidentified_text
-        )
-        assert (
-            invalid
-            in Pipeline(lang=lang, model_detector=_empty_prediction)
-            .run(source)
-            .redacted_text
-        )
+                if lang == "th" and len(digits) == 13:
+                    check = (
+                        11
+                        - sum(int(v) * w for v, w in zip(digits[:12], range(13, 1, -1)))
+                        % 11
+                    ) % 10
+                    digits = digits[:12] + str(check)
+                native = "".join(
+                    chr(zero + int(c)) if c.isdecimal() else c for c in digits
+                )
+                for value in (native, native[:5] + digits[5:]):
+                    text = prefix + value + " stable"
+                    entities = safety_sweep(text, [], lang=lang)
+                    assert any(
+                        (e.start, e.end, e.text)
+                        == (len(prefix), len(prefix) + len(value), value)
+                        for e in entities
+                    )
+                    monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
+                    direct = deidentify(text, lang=lang, model_name="unit-test-model")
+                    staged = Pipeline(lang=lang, model_detector=_empty_prediction).run(
+                        text
+                    )
+                    assert value not in direct.deidentified_text
+                    assert value not in staged.redacted_text
+                    assert staged.redacted_text.endswith(" stable")
+                if len(digits) == 13:
+                    assert validate_thai_national_id(native)
+                    invalid = native[:-1] + chr(zero + (int(digits[-1]) + 1) % 10)
+                    assert not validate_thai_national_id(invalid)
+                    assert not any(
+                        e.label == "national_id"
+                        for e in safety_sweep(prefix + invalid, [], lang=lang)
+                    )
+                if len(digits.replace(" ", "")) in {12, 13}:
+                    invalid = native[:-1] + chr(zero + (int(digits[-1]) + 1) % 10)
+                    source = prefix + invalid
+                    assert (
+                        invalid
+                        in deidentify(
+                            source, lang=lang, model_name="unit-test-model"
+                        ).deidentified_text
+                    )
+                    assert (
+                        invalid
+                        in Pipeline(lang=lang, model_detector=_empty_prediction)
+                        .run(source)
+                        .redacted_text
+                    )
 
 
-@pytest.mark.parametrize(
-    "controls",
-    [
+def test_in_value_bidi_marks_are_masked_in_both_public_paths(subtests):
+    for controls in [
         ("\u200e", ""),
         ("\u200f", ""),
         ("\u061c", ""),
@@ -98,115 +102,128 @@ def test_native_digits_masked_in_both_public_paths(
         ("\u2066", "\u2069"),
         ("\u2067", "\u2069"),
         ("\u2068", "\u2069"),
-    ],
-)
-@pytest.mark.parametrize(
-    ("lang", "prefix", "value"),
-    [
-        ("fa", "کد ملی ", "0012345679"),
-        ("en", "SSN ", "123-45-6789"),
-        ("he", "טלפון ", "0501234567"),
-        ("ur", "آدھار ", "2345 6789 0124"),
-        ("ar", "الرقم القومي ", "29001011234562"),
-    ],
-)
-def test_in_value_bidi_marks_are_masked_in_both_public_paths(
-    monkeypatch, controls, lang, prefix, value
-):
-    from openmed.core.pipeline import Pipeline
-    from openmed.core.rtl_render import strip_unbalanced_bidi_controls
+    ]:
+        for lang, prefix, value in [
+            ("fa", "کد ملی ", "0012345679"),
+            ("en", "SSN ", "123-45-6789"),
+            ("he", "טלפון ", "0501234567"),
+            ("ur", "آدھار ", "2345 6789 0124"),
+            ("ar", "الرقم القومي ", "29001011234562"),
+        ]:
+            with subtests.test(
+                controls=controls, lang=lang, prefix=prefix, value=value
+            ):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    from openmed.core.pipeline import Pipeline
+                    from openmed.core.rtl_render import strip_unbalanced_bidi_controls
 
-    left, right = controls
-    marked = value[:3] + left + value[3:6] + right + value[6:]
-    text = prefix + marked + " stable"
-    baseline = safety_sweep(prefix + value, [], lang=lang)
-    assert baseline, "synthetic control must be detectable"
-    entities = safety_sweep(text, [], lang=lang)
-    assert any(
-        e.start == len(prefix) and e.end == len(prefix) + len(marked) for e in entities
-    )
-    monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
-    for result in (
-        deidentify(text, lang=lang, model_name="unit-test-model"),
-        Pipeline(lang=lang, model_detector=_empty_prediction)
-        .run(text)
-        .deidentification_result,
-    ):
-        assert marked not in result.deidentified_text
-        assert (
-            strip_unbalanced_bidi_controls(result.deidentified_text)
-            == result.deidentified_text
-        )
+                    left, right = controls
+                    marked = value[:3] + left + value[3:6] + right + value[6:]
+                    text = prefix + marked + " stable"
+                    baseline = safety_sweep(prefix + value, [], lang=lang)
+                    assert baseline, "synthetic control must be detectable"
+                    entities = safety_sweep(text, [], lang=lang)
+                    assert any(
+                        e.start == len(prefix) and e.end == len(prefix) + len(marked)
+                        for e in entities
+                    )
+                    monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
+                    for result in (
+                        deidentify(text, lang=lang, model_name="unit-test-model"),
+                        Pipeline(lang=lang, model_detector=_empty_prediction)
+                        .run(text)
+                        .deidentification_result,
+                    ):
+                        assert marked not in result.deidentified_text
+                        assert (
+                            strip_unbalanced_bidi_controls(result.deidentified_text)
+                            == result.deidentified_text
+                        )
 
 
-@pytest.mark.parametrize(
-    "lang",
-    ["no", "he", "id", "vi", "th", "fa", "bn", "ta", "hi", "yo", "ha", "ig", "ne"],
-)
-def test_dot_dates_have_validated_coverage_and_no_version_matches(monkeypatch, lang):
-    from openmed.core.pipeline import Pipeline
+def test_dot_dates_have_validated_coverage_and_no_version_matches(subtests):
+    for lang in [
+        "no",
+        "he",
+        "id",
+        "vi",
+        "th",
+        "fa",
+        "bn",
+        "ta",
+        "hi",
+        "yo",
+        "ha",
+        "ig",
+        "ne",
+    ]:
+        with subtests.test(lang=lang):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.core.pipeline import Pipeline
 
-    assert any(
-        e.text == "15.01.1980" and e.label == "date"
-        for e in safety_sweep("DOB 15.01.1980", [], lang=lang)
-    )
-    assert not any(
-        e.label == "date"
-        for e in safety_sweep(
-            "version 1.2.3, 15.01, section 4.2.1; 31.02.1980", [], lang=lang
-        )
-    )
-    monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
-    source = "DOB 15.01.1980"
-    assert (
-        "15.01.1980"
-        not in deidentify(
-            source, lang=lang, model_name="unit-test-model"
-        ).deidentified_text
-    )
-    assert (
-        "15.01.1980"
-        not in Pipeline(
-            lang=lang, model_name="unit-test-model", model_detector=_empty_prediction
-        )
-        .run(source)
-        .redacted_text
-    )
+                assert any(
+                    e.text == "15.01.1980" and e.label == "date"
+                    for e in safety_sweep("DOB 15.01.1980", [], lang=lang)
+                )
+                assert not any(
+                    e.label == "date"
+                    for e in safety_sweep(
+                        "version 1.2.3, 15.01, section 4.2.1; 31.02.1980", [], lang=lang
+                    )
+                )
+                monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
+                source = "DOB 15.01.1980"
+                assert (
+                    "15.01.1980"
+                    not in deidentify(
+                        source, lang=lang, model_name="unit-test-model"
+                    ).deidentified_text
+                )
+                assert (
+                    "15.01.1980"
+                    not in Pipeline(
+                        lang=lang,
+                        model_name="unit-test-model",
+                        model_detector=_empty_prediction,
+                    )
+                    .run(source)
+                    .redacted_text
+                )
 
 
-@pytest.mark.parametrize("prefix", ["ב", "ל", "מ", "ה", "ו", "כ", "ש"])
-@pytest.mark.parametrize("separator", ["", "-", "־"])
-def test_hebrew_date_prefixes_are_not_in_spans(prefix, separator):
-    for value in ("15.01.1980", "15 בינואר 2026"):
-        text = "נולד " + prefix + separator + value
-        assert any(
-            e.text == value and e.start == len("נולד " + prefix + separator)
-            for e in safety_sweep(text, [], lang="he")
-        )
+def test_hebrew_date_prefixes_are_not_in_spans(subtests):
+    for prefix in ["ב", "ל", "מ", "ה", "ו", "כ", "ש"]:
+        for separator in ["", "-", "־"]:
+            with subtests.test(prefix=prefix, separator=separator):
+                for value in ("15.01.1980", "15 בינואר 2026"):
+                    text = "נולד " + prefix + separator + value
+                    assert any(
+                        e.text == value and e.start == len("נולד " + prefix + separator)
+                        for e in safety_sweep(text, [], lang="he")
+                    )
 
 
-@pytest.mark.parametrize(
-    ("lang", "text", "value"),
-    [
+def test_arabic_keyboard_variants_match_context_without_rewriting_output(subtests):
+    for lang, text, value in [
         ("fa", "بيمار كد ملي ۰۰۱۲۳۴۵۶۷۹", "۰۰۱۲۳۴۵۶۷۹"),
         ("fa", "كد پستي ۱۴۳۹۸۱۴۵۶۷", "۱۴۳۹۸۱۴۵۶۷"),
         ("ur", "مريض آدهار 2345 6789 0124", "2345 6789 0124"),
-    ],
-)
-def test_arabic_keyboard_variants_match_context_without_rewriting_output(
-    monkeypatch, lang, text, value
-):
-    from openmed.core.pipeline import Pipeline
+    ]:
+        with subtests.test(lang=lang, text=text, value=value):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.core.pipeline import Pipeline
 
-    monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
-    for result in (
-        deidentify(text, lang=lang, model_name="unit-test-model"),
-        Pipeline(lang=lang, model_detector=_empty_prediction)
-        .run(text)
-        .deidentification_result,
-    ):
-        assert value not in result.deidentified_text
-        assert result.deidentified_text.startswith(text[: text.index(value)])
+                monkeypatch.setattr("openmed.analyze_text", _empty_prediction)
+                for result in (
+                    deidentify(text, lang=lang, model_name="unit-test-model"),
+                    Pipeline(lang=lang, model_detector=_empty_prediction)
+                    .run(text)
+                    .deidentification_result,
+                ):
+                    assert value not in result.deidentified_text
+                    assert result.deidentified_text.startswith(
+                        text[: text.index(value)]
+                    )
 
 
 def _entity_for(text: str, value: str, label: str = "MODEL") -> EntityPrediction:
@@ -257,6 +274,113 @@ def test_safety_sweep_rejects_invalid_checksum_identifiers():
 
     assert "credit_debit_card" not in swept
     assert "iban" not in swept
+
+
+# Each synthetic note labels a valid identifier and an invalid one of the same
+# type. The invalid value must stay unmasked: no duplicate national-ID rule may
+# accept it, and no lower-priority rule may relabel it or one of its segments.
+_LABELLED_INVALID_ID_NOTES = [
+    pytest.param(
+        "am",
+        "የፋይዳ መለያ ቁጥር፡ 384726195056 ትክክል ነው። የፋይዳ መለያ ቁጥር፡ 384726195057 ልክ አይደለም።",
+        "384726195056",
+        "384726195057",
+        id="am-fayda-checksum",
+    ),
+    pytest.param(
+        "sw",
+        "nambari ya kitambulisho 23456781 halali, "
+        "nambari ya NIDA 19871103-41205-00017-26 halali, "
+        "nambari ya NIDA 19871332-41205-00017-26 batili.",
+        "19871103-41205-00017-26",
+        "19871332-41205-00017-26",
+        id="sw-nida-birth-month",
+    ),
+    pytest.param(
+        "yo",
+        "nọ́mbà ìdánimọ̀ NIN 48291736054 tọ́, NIN 11111111111 kò tọ́.",
+        "48291736054",
+        "11111111111",
+        id="yo-nin-placeholder",
+    ),
+    pytest.param(
+        "ha",
+        "lambar NIN 48291736054 ingantacciya ce, lambar NIN 11111111111 ba ta da "
+        "inganci.",
+        "48291736054",
+        "11111111111",
+        id="ha-nin-placeholder",
+    ),
+    pytest.param(
+        "ig",
+        "nọmba NIN 48291736054 ziri ezi, nọmba NIN 11111111111 ezighi ezi.",
+        "48291736054",
+        "11111111111",
+        id="ig-nin-placeholder",
+    ),
+    pytest.param(
+        "fa",
+        "کد ملی ۲۹۳۵۰۷۱۶۴۶ معتبر است و کد ملی ۲۹۳۵۰۷۱۶۴۷ نامعتبر است.",
+        "۲۹۳۵۰۷۱۶۴۶",
+        "۲۹۳۵۰۷۱۶۴۷",
+        id="fa-melli-checksum-not-phone",
+    ),
+    pytest.param(
+        "th",
+        "เลขประจำตัวประชาชน 3-1005-01234-56-3 ถูกต้อง "
+        "เลขประจำตัวประชาชน 3-1005-01234-56-4 ไม่ถูกต้อง",
+        "3-1005-01234-56-3",
+        "3-1005-01234-56-4",
+        id="th-id-checksum-not-postcode",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("lang", "text", "valid_id", "invalid_id"), _LABELLED_INVALID_ID_NOTES
+)
+def test_labelled_invalid_national_id_is_not_masked_under_any_label(
+    lang, text, valid_id, invalid_id
+):
+    valid_span = (text.index(valid_id), text.index(valid_id) + len(valid_id))
+    invalid_start = text.index(invalid_id)
+    invalid_end = invalid_start + len(invalid_id)
+
+    swept = [(span.start, span.end) for span in safety_sweep(text, [], lang=lang)]
+    validated_units = [
+        (unit[0], unit[1])
+        for unit in find_semantic_units(text, get_patterns_for_language(lang))
+        if unit[5]
+    ]
+
+    for spans in (swept, validated_units):
+        assert valid_span in spans
+        assert [
+            (start, end)
+            for start, end in spans
+            if start < invalid_end and invalid_start < end
+        ] == []
+
+
+def test_unlabelled_rejected_value_keeps_lower_priority_sweep_match():
+    labelled = "Card ID: 12345-67890"
+    unlabelled = "Card ID on file; reference 12345-67890"
+    patterns = [
+        PIIPattern(
+            r"\b\d{5}-\d{5}\b",
+            "national_id",
+            priority=10,
+            context_words=["card id"],
+            validator=lambda value: False,
+        ),
+        PIIPattern(r"\b\d{5}\b", "postcode", priority=5),
+    ]
+
+    assert safety_sweep(labelled, [], patterns=patterns) == []
+    assert [span.text for span in safety_sweep(unlabelled, [], patterns=patterns)] == [
+        "12345",
+        "67890",
+    ]
 
 
 def test_safety_sweep_delegates_checksum_validation_to_clinical_ids(monkeypatch):

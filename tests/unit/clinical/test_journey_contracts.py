@@ -71,21 +71,19 @@ def _records() -> tuple[
     return artifact, evidence, first_fact, second_fact, conflict, resolution, dataset
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_journey_timestamps_reject_interpreter_dependent_grammars(subtests):
+    for value in [
         "20260105T100000Z",
         "2026-W02-1T10:00:00Z",
         "2026-005T10:00:00Z",
         "2026-01-05T10:00:00+0530",
-    ],
-)
-def test_journey_timestamps_reject_interpreter_dependent_grammars(value):
-    fixture = _fixtures()["clinical_artifact"]
-    fixture["recorded_at"] = value
-    with pytest.raises(JourneyContractError) as error:
-        ClinicalArtifact.from_dict(fixture)
-    assert value not in str(error.value)
+    ]:
+        with subtests.test(value=value):
+            fixture = _fixtures()["clinical_artifact"]
+            fixture["recorded_at"] = value
+            with pytest.raises(JourneyContractError) as error:
+                ClinicalArtifact.from_dict(fixture)
+            assert value not in str(error.value)
 
 
 def test_all_contracts_round_trip_and_validate_against_bundled_schemas() -> None:
@@ -114,6 +112,7 @@ def test_all_contracts_round_trip_and_validate_against_bundled_schemas() -> None
         assert record.canonical_hash.startswith("sha256:")
 
 
+@pytest.mark.slow
 def test_canonical_serialization_is_byte_stable_across_fresh_processes() -> None:
     payload = _fixtures()["clinical_fact"]
     script = (
@@ -170,9 +169,8 @@ def test_contracts_are_deeply_immutable() -> None:
         fact.value["code"] = "changed"  # type: ignore[index]
 
 
-@pytest.mark.parametrize(
-    ("location_type", "location"),
-    [
+def test_every_evidence_coordinate_kind_is_supported(subtests) -> None:
+    for location_type, location in [
         ("text_span", {"start": 4, "end": 18}),
         ("json_pointer", {"pointer": "/entry/0/resource"}),
         ("message_field", {"path": "PID.3.1"}),
@@ -201,30 +199,25 @@ def test_contracts_are_deeply_immutable() -> None:
             },
         ),
         ("table_cell", {"sheet": "Labs", "row": 2, "column": 3}),
-    ],
-)
-def test_every_evidence_coordinate_kind_is_supported(
-    location_type: str,
-    location: dict[str, object],
-) -> None:
-    locator = EvidenceLocator(
-        locator_id=derived_opaque_id("evidence", location_type, location),
-        artifact_id="artifact_aaaaaaaaaaaaaaaa",
-        location_type=location_type,
-        location=location,
-        schema_version="1.1.0" if location_type == "document_path" else "1.0.0",
-    )
+    ]:
+        with subtests.test(location_type=location_type, location=location):
+            locator = EvidenceLocator(
+                locator_id=derived_opaque_id("evidence", location_type, location),
+                artifact_id="artifact_aaaaaaaaaaaaaaaa",
+                location_type=location_type,
+                location=location,
+                schema_version="1.1.0" if location_type == "document_path" else "1.0.0",
+            )
 
-    assert locator.location_type == location_type
-    assert EvidenceLocator.from_dict(locator.to_dict()) == locator
-    schema = load_all_journey_schemas()["evidence_locator"]
-    validator = validator_for(schema)
-    assert not tuple(validator(schema).iter_errors(locator.to_dict()))
+            assert locator.location_type == location_type
+            assert EvidenceLocator.from_dict(locator.to_dict()) == locator
+            schema = load_all_journey_schemas()["evidence_locator"]
+            validator = validator_for(schema)
+            assert not tuple(validator(schema).iter_errors(locator.to_dict()))
 
 
-@pytest.mark.parametrize(
-    ("location_type", "location"),
-    [
+def test_invalid_evidence_coordinates_are_rejected(subtests) -> None:
+    for location_type, location in [
         ("text_span", {"start": 4, "end": 4}),
         ("json_pointer", {"pointer": "/entry/~2"}),
         ("message_field", {"path": "PID"}),
@@ -247,19 +240,15 @@ def test_every_evidence_coordinate_kind_is_supported(
             },
         ),
         ("table_cell", {"row": 0, "column": 1}),
-    ],
-)
-def test_invalid_evidence_coordinates_are_rejected(
-    location_type: str,
-    location: dict[str, object],
-) -> None:
-    with pytest.raises(JourneyContractError):
-        EvidenceLocator(
-            locator_id="evidence_aaaaaaaaaaaaaaaa",
-            artifact_id="artifact_aaaaaaaaaaaaaaaa",
-            location_type=location_type,
-            location=location,
-        )
+    ]:
+        with subtests.test(location_type=location_type, location=location):
+            with pytest.raises(JourneyContractError):
+                EvidenceLocator(
+                    locator_id="evidence_aaaaaaaaaaaaaaaa",
+                    artifact_id="artifact_aaaaaaaaaaaaaaaa",
+                    location_type=location_type,
+                    location=location,
+                )
 
 
 def test_document_path_requires_same_major_locator_version_1_1() -> None:

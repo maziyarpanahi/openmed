@@ -62,14 +62,12 @@ def test_abstention_contract_is_available_from_public_multimodal_api() -> None:
     assert issubclass(AbstentionValidationError, ValueError)
 
 
-@pytest.mark.parametrize(("stage", "reason"), VALID_RECORDS)
-def test_every_stage_and_reason_round_trips(
-    stage: AbstentionStage,
-    reason: AbstentionReason,
-) -> None:
-    record = AbstentionRecord(stage=stage, reason=reason)
+def test_every_stage_and_reason_round_trips(subtests) -> None:
+    for stage, reason in VALID_RECORDS:
+        with subtests.test(stage=stage, reason=reason):
+            record = AbstentionRecord(stage=stage, reason=reason)
 
-    assert AbstentionRecord.from_json(record.to_json()) == record
+            assert AbstentionRecord.from_json(record.to_json()) == record
 
 
 def test_json_is_deterministic_and_metadata_only() -> None:
@@ -88,21 +86,15 @@ def test_json_is_deterministic_and_metadata_only() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("stage", "reason"),
-    INVALID_RECORDS,
-)
-def test_invalid_stage_reason_combinations_fail_closed(
-    stage: AbstentionStage,
-    reason: AbstentionReason,
-) -> None:
-    with pytest.raises(ValueError, match="reason is not valid for stage"):
-        AbstentionRecord(stage=stage, reason=reason)
+def test_invalid_stage_reason_combinations_fail_closed(subtests) -> None:
+    for stage, reason in INVALID_RECORDS:
+        with subtests.test(stage=stage, reason=reason):
+            with pytest.raises(ValueError, match="reason is not valid for stage"):
+                AbstentionRecord(stage=stage, reason=reason)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    (
+def test_invalid_payloads_do_not_echo_submitted_content(subtests) -> None:
+    for payload in (
         {
             "schema_version": 1,
             "stage": "secret-stage-raw-ocr-text",
@@ -119,31 +111,28 @@ def test_invalid_stage_reason_combinations_fail_closed(
             "reason": "unsupported_media",
             "transcript": "secret-transcript",
         },
-    ),
-)
-def test_invalid_payloads_do_not_echo_submitted_content(payload: object) -> None:
-    submitted = json.dumps(payload)
+    ):
+        with subtests.test(payload=payload):
+            submitted = json.dumps(payload)
 
-    with pytest.raises(ValueError) as exc_info:
-        AbstentionRecord.from_json(submitted)
+            with pytest.raises(ValueError) as exc_info:
+                AbstentionRecord.from_json(submitted)
 
-    assert "secret" not in str(exc_info.value)
-    assert "raw-ocr-text" not in str(exc_info.value)
-    assert "dicom-value" not in str(exc_info.value)
-    assert "secret-transcript" not in str(exc_info.value)
+            assert "secret" not in str(exc_info.value)
+            assert "raw-ocr-text" not in str(exc_info.value)
+            assert "dicom-value" not in str(exc_info.value)
+            assert "secret-transcript" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    (
+def test_malformed_or_incomplete_payloads_fail_closed(subtests) -> None:
+    for payload in (
         "not-json",
         "[]",
         '{"schema_version":1,"stage":"preflight","stage":"decode",'
         '"reason":"unsupported_media"}',
         '{"schema_version":2,"stage":"preflight","reason":"unsupported_media"}',
         '{"schema_version":1,"stage":"preflight"}',
-    ),
-)
-def test_malformed_or_incomplete_payloads_fail_closed(payload: str) -> None:
-    with pytest.raises(ValueError):
-        AbstentionRecord.from_json(payload)
+    ):
+        with subtests.test(payload=payload):
+            with pytest.raises(ValueError):
+                AbstentionRecord.from_json(payload)

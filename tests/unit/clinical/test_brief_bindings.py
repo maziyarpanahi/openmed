@@ -81,9 +81,8 @@ def test_paraphrases_reach_all_guards_with_exact_traceable_offsets():
     )
 
 
-@pytest.mark.parametrize(
-    "output",
-    [
+def test_invalid_or_ambiguous_contracts_refuse_without_verification(subtests):
+    for output in [
         BriefGenerationResult((), 1),
         replace(generation(), schema_version=2),
         replace(generation(), schema_version=True),
@@ -126,40 +125,42 @@ def test_paraphrases_reach_all_guards_with_exact_traceable_offsets():
         BriefGenerationResult(generation().claims * 22),
         {"schema_version": 1, "claims": [], "confidence": 1.0},
         generation().render(),
-    ],
-)
-def test_invalid_or_ambiguous_contracts_refuse_without_verification(output):
-    result, context = fixture_context()
-    brief = build_clinical_brief(
-        result,
-        context=replace(context, nli_predict=lambda *_: pytest.fail("NLI called")),
-        model=SyntheticBoundGenerator(output),
-    )
-    assert brief.refusal_reason is not None
-    assert brief.summary == ""
-    assert brief.citations == ()
-    assert "nli" not in brief.to_dict()["stages"]
-    assert "Signal improved" not in json.dumps(brief.to_dict())
+    ]:
+        with subtests.test(output=output):
+            result, context = fixture_context()
+            brief = build_clinical_brief(
+                result,
+                context=replace(
+                    context, nli_predict=lambda *_: pytest.fail("NLI called")
+                ),
+                model=SyntheticBoundGenerator(output),
+            )
+            assert brief.refusal_reason is not None
+            assert brief.summary == ""
+            assert brief.citations == ()
+            assert "nli" not in brief.to_dict()["stages"]
+            assert "Signal improved" not in json.dumps(brief.to_dict())
 
 
-@pytest.mark.parametrize("label", ["contradiction", "neutral"])
-def test_binding_is_never_proof_of_support(label):
-    result, context = fixture_context()
-    brief = build_clinical_brief(
-        result,
-        context=replace(
-            context,
-            nli_predict=lambda *_: {
-                "label": label,
-                "score": 1.0,
-                "calibration_id": "synthetic-test-only",
-            },
-        ),
-        model=SyntheticBoundGenerator(),
-    )
-    assert brief.refusal_reason is BriefRefusal.NLI_REJECTED
-    assert brief.summary == ""
-    assert brief.citations == ()
+def test_binding_is_never_proof_of_support(subtests):
+    for label in ["contradiction", "neutral"]:
+        with subtests.test(label=label):
+            result, context = fixture_context()
+            brief = build_clinical_brief(
+                result,
+                context=replace(
+                    context,
+                    nli_predict=lambda *_: {
+                        "label": label,
+                        "score": 1.0,
+                        "calibration_id": "synthetic-test-only",
+                    },
+                ),
+                model=SyntheticBoundGenerator(),
+            )
+            assert brief.refusal_reason is BriefRefusal.NLI_REJECTED
+            assert brief.summary == ""
+            assert brief.citations == ()
 
 
 def test_free_form_paraphrases_remain_unbound():
@@ -181,20 +182,23 @@ def test_structured_exact_claims_are_supported_without_changing_legacy_packet():
     assert "generation_contract" not in legacy.to_dict()
 
 
-@pytest.mark.parametrize(
-    "identifier",
-    ["SYNTHETIC_SENTINEL", "person@example.test", "+33 6 12 34 56 78", "患者識別子"],
-)
-def test_bound_output_does_not_bypass_direct_identifier_leakage(identifier):
-    result, context = fixture_context()
-    result.mapping = {"[IDENTIFIER]": identifier}
-    output = generation((f"{identifier} was admitted.", *PARAPHRASES[1:]))
-    brief = build_clinical_brief(
-        result, context=context, model=SyntheticBoundGenerator(output)
-    )
-    assert brief.refusal_reason is BriefRefusal.PRIVACY
-    assert brief.summary == ""
-    assert identifier not in json.dumps(brief.to_dict())
+def test_bound_output_does_not_bypass_direct_identifier_leakage(subtests):
+    for identifier in [
+        "SYNTHETIC_SENTINEL",
+        "person@example.test",
+        "+33 6 12 34 56 78",
+        "患者識別子",
+    ]:
+        with subtests.test(identifier=identifier):
+            result, context = fixture_context()
+            result.mapping = {"[IDENTIFIER]": identifier}
+            output = generation((f"{identifier} was admitted.", *PARAPHRASES[1:]))
+            brief = build_clinical_brief(
+                result, context=context, model=SyntheticBoundGenerator(output)
+            )
+            assert brief.refusal_reason is BriefRefusal.PRIVACY
+            assert brief.summary == ""
+            assert identifier not in json.dumps(brief.to_dict())
 
 
 def test_bound_output_and_complete_packet_are_privacy_scanned():
@@ -252,49 +256,56 @@ def test_shared_native_paraphrase_packet_matches_composer():
     )
 
 
-@pytest.mark.parametrize(
-    "offsets", [(0, len(SENTENCES[0])), (1, len(SENTENCES[0]) - 1)]
-)
-def test_overlapping_reviewed_bindings_are_ambiguous(offsets):
-    from openmed.clinical.evidence_packet import (
-        build_evidence_packet,
-        fingerprint_evidence_review,
-    )
-    from openmed.clinical.review_state_machine import (
-        ReviewState,
-        ReviewStateMachine,
-        make_opaque_event_id,
-    )
+def test_overlapping_reviewed_bindings_are_ambiguous(subtests):
+    for offsets in [(0, len(SENTENCES[0])), (1, len(SENTENCES[0]) - 1)]:
+        with subtests.test(offsets=offsets):
+            from openmed.clinical.evidence_packet import (
+                build_evidence_packet,
+                fingerprint_evidence_review,
+            )
+            from openmed.clinical.review_state_machine import (
+                ReviewState,
+                ReviewStateMachine,
+                make_opaque_event_id,
+            )
 
-    value, context = fixture_context()
-    rows = [r.to_dict() for r in context.packet.references]
-    rows[1]["start"], rows[1]["end"] = offsets
-    row = rows[1]
-    fingerprint = fingerprint_evidence_review(
-        **{
-            k: row[k]
-            for k in ("reference_id", "source_id", "start", "end", "policy_fingerprint")
-        }
-    )
-    machine = ReviewStateMachine()
-    for state in (ReviewState.IN_REVIEW, ReviewState.APPROVED):
-        machine.transition(
-            state, make_opaque_event_id((fingerprint, state.value)), fingerprint
-        )
-    row["review_transitions"] = machine.transitions
-    packet = build_evidence_packet(
-        rows, policy_fingerprint=context.packet.policy_fingerprint
-    )
-    assert len(packet.references) == 3
-    brief = build_clinical_brief(
-        value,
-        context=replace(
-            context, packet=packet, nli_predict=lambda *_: pytest.fail("NLI called")
-        ),
-        model=SyntheticBoundGenerator(),
-    )
-    assert brief.refusal_reason is BriefRefusal.UNSUPPORTED_CLAIM
-    assert brief.summary == ""
+            value, context = fixture_context()
+            rows = [r.to_dict() for r in context.packet.references]
+            rows[1]["start"], rows[1]["end"] = offsets
+            row = rows[1]
+            fingerprint = fingerprint_evidence_review(
+                **{
+                    k: row[k]
+                    for k in (
+                        "reference_id",
+                        "source_id",
+                        "start",
+                        "end",
+                        "policy_fingerprint",
+                    )
+                }
+            )
+            machine = ReviewStateMachine()
+            for state in (ReviewState.IN_REVIEW, ReviewState.APPROVED):
+                machine.transition(
+                    state, make_opaque_event_id((fingerprint, state.value)), fingerprint
+                )
+            row["review_transitions"] = machine.transitions
+            packet = build_evidence_packet(
+                rows, policy_fingerprint=context.packet.policy_fingerprint
+            )
+            assert len(packet.references) == 3
+            brief = build_clinical_brief(
+                value,
+                context=replace(
+                    context,
+                    packet=packet,
+                    nli_predict=lambda *_: pytest.fail("NLI called"),
+                ),
+                model=SyntheticBoundGenerator(),
+            )
+            assert brief.refusal_reason is BriefRefusal.UNSUPPORTED_CLAIM
+            assert brief.summary == ""
 
 
 def test_unicode_output_uses_scalar_offsets_not_utf8_byte_offsets():
@@ -310,17 +321,18 @@ def test_unicode_output_uses_scalar_offsets_not_utf8_byte_offsets():
     assert citation["output_end"] < len(brief.summary.encode())
 
 
-@pytest.mark.parametrize("field", ["text", "reference"])
-def test_direct_generation_render_does_not_retain_malformed_private_values(field):
-    private = "SYNTHETIC_PRIVATE_IDENTIFIER\ud800"
-    claim = BriefGeneratedClaim(
-        private if field == "text" else "Symptoms improved.",
-        (private if field == "reference" else "synthetic:ref-0",),
-    )
-    with pytest.raises(LocalSummarizerError) as caught:
-        BriefGenerationResult((claim,)).render()
-    assert caught.value.__context__ is None
-    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
+def test_direct_generation_render_does_not_retain_malformed_private_values(subtests):
+    for field in ["text", "reference"]:
+        with subtests.test(field=field):
+            private = "SYNTHETIC_PRIVATE_IDENTIFIER\ud800"
+            claim = BriefGeneratedClaim(
+                private if field == "text" else "Symptoms improved.",
+                (private if field == "reference" else "synthetic:ref-0",),
+            )
+            with pytest.raises(LocalSummarizerError) as caught:
+                BriefGenerationResult((claim,)).render()
+            assert caught.value.__context__ is None
+            assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
 
 
 def test_actual_bound_brief_matches_bundled_and_service_response_contracts():
@@ -338,32 +350,32 @@ def test_actual_bound_brief_matches_bundled_and_service_response_contracts():
     assert response.model_dump(exclude_unset=True) == brief.to_response()
 
 
-@pytest.mark.parametrize("schema", ["brief_audit", "brief_response"])
-@pytest.mark.parametrize(
-    "mutation",
-    [
-        lambda x: x.pop("generation_contract"),
-        lambda x: x.pop("claim_bindings"),
-        lambda x: x["generation_contract"].update(schema_version=True),
-        lambda x: x["generation_contract"].update(text="Synthetic unknown value"),
-        lambda x: x["claim_bindings"][0].update(reference_digest="invalid"),
-        lambda x: x["claim_bindings"].pop(),
-        lambda x: x["claim_bindings"][0].update(claim_index=1),
-        lambda x: x["citations"][0].update(claim_index=1),
-    ],
-)
-def test_bound_record_contract_rejects_inconsistent_metadata(schema, mutation):
-    from openmed.clinical.record_schemas import (
-        ClinicalRecordSchemaError,
-        validate_clinical_record,
-    )
+def test_bound_record_contract_rejects_inconsistent_metadata(subtests):
+    for schema in ["brief_audit", "brief_response"]:
+        for mutation in [
+            lambda x: x.pop("generation_contract"),
+            lambda x: x.pop("claim_bindings"),
+            lambda x: x["generation_contract"].update(schema_version=True),
+            lambda x: x["generation_contract"].update(text="Synthetic unknown value"),
+            lambda x: x["claim_bindings"][0].update(reference_digest="invalid"),
+            lambda x: x["claim_bindings"].pop(),
+            lambda x: x["claim_bindings"][0].update(claim_index=1),
+            lambda x: x["citations"][0].update(claim_index=1),
+        ]:
+            with subtests.test(schema=schema, mutation=mutation):
+                from openmed.clinical.record_schemas import (
+                    ClinicalRecordSchemaError,
+                    validate_clinical_record,
+                )
 
-    value, context = fixture_context()
-    brief = build_clinical_brief(
-        value, context=context, model=SyntheticBoundGenerator()
-    )
-    record = brief.to_dict() if schema == "brief_audit" else brief.to_response()
-    mutation(record)
-    with pytest.raises(ClinicalRecordSchemaError) as caught:
-        validate_clinical_record(schema, record)
-    assert "Synthetic unknown value" not in str(caught.value)
+                value, context = fixture_context()
+                brief = build_clinical_brief(
+                    value, context=context, model=SyntheticBoundGenerator()
+                )
+                record = (
+                    brief.to_dict() if schema == "brief_audit" else brief.to_response()
+                )
+                mutation(record)
+                with pytest.raises(ClinicalRecordSchemaError) as caught:
+                    validate_clinical_record(schema, record)
+                assert "Synthetic unknown value" not in str(caught.value)
