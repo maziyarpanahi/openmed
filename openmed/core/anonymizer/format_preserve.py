@@ -67,18 +67,32 @@ def preserve_date_format(
     original: str,
     *,
     day_first: bool = False,
+    date_order: str | None = None,
     rng: Optional[random.Random] = None,
+    locale: str | None = None,
 ) -> str:
     """Generate a fake date that uses the same separator and ordering.
 
     Recognises the common ``dd/mm/yyyy``, ``mm/dd/yyyy``, ``yyyy-mm-dd``,
     and ``dd.mm.yyyy`` shapes. ``day_first`` controls fallback when the
-    original is ambiguous (e.g. ``05/06/2020``).
+    original is ambiguous (e.g. ``05/06/2020``). ``date_order`` (``dmy``,
+    ``mdy`` or ``ymd``) takes precedence over that legacy fallback.
+
+    Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and Bikram
+    Sambat originals, recognized from era markers, calendar month names or
+    the default calendar of the ``locale``'s language pack, get a surrogate in
+    that calendar, digit system, separators and month-name form.
 
     Returns a surrogate date in the same format, drawn uniformly from the
     last 100 years.
     """
     rng = rng or random
+
+    from ..calendar_dates import calendar_date_surrogate
+
+    native = calendar_date_surrogate(original, lang=locale, rng=rng)
+    if native is not None:
+        return native
 
     days = rng.randint(0, 365 * 100)
     fake = datetime(1925, 1, 1) + timedelta(days=days)
@@ -91,9 +105,9 @@ def preserve_date_format(
             break
 
     # Detect ordering: yyyy-first if a 4-digit run is at the start
-    if re.match(r"^\d{4}", original):
+    if re.match(r"^\d{4}", original) or date_order == "ymd":
         return f"{fake.year:04d}{sep}{fake.month:02d}{sep}{fake.day:02d}"
-    if day_first:
+    if date_order == "dmy" or (date_order is None and day_first):
         return f"{fake.day:02d}{sep}{fake.month:02d}{sep}{fake.year:04d}"
     return f"{fake.month:02d}{sep}{fake.day:02d}{sep}{fake.year:04d}"
 

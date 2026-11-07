@@ -160,9 +160,8 @@ def test_single_document_release_remains_byte_compatible() -> None:
     assert result.after_report == before
 
 
-@pytest.mark.parametrize(
-    ("factory", "message"),
-    [
+def test_policy_rejects_invalid_controls(subtests) -> None:
+    for factory, message in [
         (lambda: LongitudinalMitigationPolicy(linkage_ceiling=1.1), "linkage_ceiling"),
         (
             lambda: LongitudinalMitigationPolicy(surrogate_cohort_size=0),
@@ -172,14 +171,10 @@ def test_single_document_release_remains_byte_compatible() -> None:
             lambda: LongitudinalMitigationPolicy(age_perturbation_years=-1),
             "age_perturbation_years",
         ),
-    ],
-)
-def test_policy_rejects_invalid_controls(
-    factory: Callable[[], LongitudinalMitigationPolicy],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        factory()
+    ]:
+        with subtests.test(factory=factory, message=message):
+            with pytest.raises(ValueError, match=message):
+                factory()
 
 
 def test_date_trajectory_is_scored_without_serializing_dates() -> None:

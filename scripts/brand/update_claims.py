@@ -47,9 +47,9 @@ COMMUNITY_REFRESH = {
     "network": "explicit opt-in only",
     "ci": "forbidden",
 }
-AS_OF = "2026-07-29"
-REVIEW_BY = "2026-10-29"
-UNVERIFIED_FOLLOW_UP_BY = "2026-10-29"
+AS_OF = "2026-10-30"
+REVIEW_BY = "2026-11-30"
+UNVERIFIED_FOLLOW_UP_BY = "2026-11-30"
 MODEL_MANIFEST_AS_OF = "2026-08-11"
 MODEL_MANIFEST_REVIEW_BY = "2026-11-11"
 OWNER = "repository-owner"
@@ -960,6 +960,7 @@ def build_registry() -> dict[str, Any]:
     return {
         "schema_version": 2,
         "generated_at": max(
+            AS_OF,
             MODEL_MANIFEST_AS_OF,
             github["captured_at"][:10],
             community_as_of,
