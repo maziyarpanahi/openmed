@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gate ambient capture on unanimous consent in Python and OpenMedKit, with explicit interruption/resume, non-renewable retention, revocable owned-memory references and draft-only review exports with conservative deletion accounting (#3208).
+
 - Add an isolated local MLX Whisper streaming provider with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
 
 - Flag ASR hypotheses over non-speech audio and repetition loops for review, using bounded provider statistics, voice-activity evidence and content-free decisions (#3815).
