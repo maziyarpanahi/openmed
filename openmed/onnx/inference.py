@@ -607,6 +607,14 @@ def _check_qualified_artifact(
     if not report_path.is_file():
         return None
     report = load_qualification_report(report_path)
+    if report.get("task", "token-classification") != "token-classification":
+        # GLiNER and GLiClass bundles load through ZeroShotOnnxModel.
+        from openmed.eval.export_qualification import (
+            ExportQualificationError,
+            ExportReason,
+        )
+
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_TASK)
     try:
         relative = model_path.resolve().relative_to(artifact_dir.resolve())
         artifact = relative.as_posix()

@@ -37,9 +37,9 @@ when a new family is added to the code.
 | ModernBERT | `modernbert`, `modern-bert` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ⚠️ qualification-gated, static buckets | ⚠️ INT8-if-recall-holds | ⚠️ qualification-gated (CPU provider; WebGPU fp16 is a CPU proxy) | ⚠️ qualification-gated (CPU provider) | ❌ rejected, no qualified path | ❌ |
 | Longformer | `longformer` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
 | OpenAI Privacy Filter | `openai-privacy-filter`, `privacy-filter`, `privacy-filter-nemotron`, `nemotron-privacy-filter`, `privacy-filter-multilingual`, `multilingual-privacy-filter` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ❌ no ONNX converter path today | ❌ | ❌ | ❌ |
-| GLiNER (span) | `gliner-uni-encoder-span` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| GLiClass | `gliclass-uni-encoder` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| GLiNER (token-relex) | `gliner-uni-encoder-token-relex` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| GLiNER (span) | `gliner-uni-encoder-span` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ typed refusal (`unsupported_runtime`) | ❌ | ⚠️ qualification-gated profile `gliner-span-uni-encoder-v1` (CPU provider, fp32, bounded) | ❌ not qualified | ❌ not qualified | ❌ |
+| GLiClass | `gliclass-uni-encoder` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ typed refusal (`unsupported_runtime`) | ❌ | ⚠️ qualification-gated profile `gliclass-uni-encoder-v1` (CPU provider, fp32, bounded) | ❌ not qualified | ❌ not qualified | ❌ |
+| GLiNER (token-relex) | `gliner-uni-encoder-token-relex` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ rejected (`unsupported_task`) | ❌ | ❌ rejected (`unsupported_task`) | ❌ | ❌ | ❌ |
 
 ## Known limitations
 
@@ -58,7 +58,15 @@ truth is the backend code, but the essentials are:
   `bert`, `distilbert`, `electra`, `roberta`, `xlm-roberta`, `deberta-v2`, and
   `modernbert`. Any other architecture fails before tracing with the
   `unsupported_family` reason and an error that lists the supported families.
-  See [CoreML Packaging](coreml-export.md).
+  GLiNER and GLiClass checkpoints declare a DeBERTa backbone, so they are
+  refused first with `unsupported_runtime` (relation extraction with
+  `unsupported_task`) instead of being traced as a token classifier. See
+  [CoreML Packaging](coreml-export.md).
+- **GLiNER span and GLiClass exports are label-conditioned and bounded.** They
+  export through `openmed.onnx.zero_shot_export`, not the token-classification
+  converter, under versioned profiles with declared label, sequence, word, and
+  span-width bounds; see
+  [GLiNER span and GLiClass runtime support](#gliner-span-and-gliclass-runtime-support).
 - **ModernBERT exports are qualification-gated.** ModernBERT is traced through
   a family adapter and every exported variant is qualified against the PyTorch
   reference checkpoint before it is claimed; see
@@ -181,6 +189,176 @@ qualification, loading, and inference open no network connection and write no
 synthetic sentinel to logs, output, or artifacts. Release evidence for a
 pinned production ModernBERT checkpoint is produced separately with the
 commands above; until it is published the cells stay ⚠️.
+
+## GLiNER span and GLiClass runtime support
+
+GLiNER span detection and GLiClass zero-shot classification take their
+candidate labels as part of the model input, so their graphs do not fit the
+`(input_ids, attention_mask) -> logits` token-classification contract. OpenMed
+exports them through `openmed.onnx.zero_shot_export` under two versioned
+profiles defined in `openmed.ner.families.zero_shot_export`. The source is a
+local OpenMed MLX artifact directory (`config.json`, `weights.safetensors`,
+`tokenizer.json`); Hub ids are never resolved and repository code is never
+run. The weights are loaded into the PyTorch reference graph in
+`openmed.torch.zero_shot_export`, which re-expresses the MLX runtime
+computation parameter for parameter, and that graph is traced to ONNX.
+
+| Profile | Family | Task | Graph inputs | Graph output |
+|---|---|---|---|---|
+| `gliner-span-uni-encoder-v1` | `gliner-uni-encoder-span` | `zero-shot-ner` | `input_ids`, `attention_mask`, `words_mask`, `text_lengths`, `span_idx`, `span_mask` | `logits` `[batch, words, max_width, labels]` |
+| `gliclass-uni-encoder-v1` | `gliclass-uni-encoder` | `zero-shot-sequence-classification` | `input_ids`, `attention_mask` | `logits` `[batch, labels]` |
+
+The GLiNER tensor names follow the portable GLiNER ONNX convention, and the
+GLiClass graph keeps the contract that `GLiClassOnnxRunner` in
+`openmed.structured.decision_gliclass` already consumes.
+
+Both profiles declare this support table. Every other runtime, precision,
+quantization, provider, or shape mode fails before weights load with a stable
+reason code:
+
+| Runtime | Precisions | Quantizations | Providers | Shape modes | Target |
+|---|---|---|---|---|---|
+| onnx | float32 | none | CPUExecutionProvider | dynamic | opset>=18 |
+
+Core ML is explicitly unsupported for both profiles: the Core ML converter and
+the profile's `support_for("coreml")` refuse with `unsupported_runtime`. No
+Core ML package was traced or gated for a tiny model, so no bounded-shape,
+operator-coverage, memory, parity, or recall evidence exists for one. Mobile
+(ONNX Runtime Mobile, NNAPI, Core ML EP) and browser (WebGPU, WASM) providers
+are likewise not qualified: requesting one fails with `unsupported_provider`,
+and the bundle manifest records every provider other than the CPU provider as
+unsupported.
+
+**Unsupported variants.** Relation extraction (`gliner-uni-encoder-token-relex`
+or the `zero-shot-relation-extraction` task) fails with `unsupported_task`.
+Quantized sources fail with `unsupported_quantization`; checkpoints that need
+repository code (`auto_map`, `trust_remote_code`) fail with
+`unsupported_remote_code`. GLiNER span modes other than `markerV0`, more than
+one LSTM layer, convolutional DeBERTa layers, non-GELU activations, GLiClass
+scorers other than `mlp`, `extract_text_features`, `use_lstm`,
+`squeeze_layers`, pooling other than `first` or `mean`, an explicit
+first-token `class_token_pooling` (the OpenMed reference span-averages
+labels), and marker tokens that do not match the tokenizer all fail with
+`unsupported_model_variant`. The token-classification ONNX converter refuses
+GLiNER and GLiClass checkpoints with `unsupported_task`, and `OnnxModel`
+refuses a zero-shot bundle the same way.
+
+### Prompt, label, and offset contract
+
+- **GLiNER span:** the prompt is `<<ENT>> label` per candidate label in caller
+  order, then `<<SEP>>`, then the source words, encoded pre-tokenized. Words
+  come from the regex `\w+(?:[-_]\w+)*|\S` shared with the MLX runtime.
+  `words_mask` marks the first token of each source word with its 1-based
+  index; `span_idx` enumerates every start word and every width below the
+  checkpoint `max_width`; `span_mask` masks spans past the text or wider than
+  the requested width. Span offsets are half-open Unicode code-point offsets
+  from the first word's start to the last word's end.
+- **GLiClass:** the input string is `<<LABEL>>label` per candidate label, then
+  `<<SEP>>`, an optional instruction, and the text (or the text first for
+  checkpoints with `prompt_first: false`). Few-shot examples are not part of
+  the profile.
+- **Labels:** caller order is preserved end to end. Labels must be non-blank,
+  unique, free of control characters and reserved markers (`<<ENT>>`,
+  `<<SEP>>`, `<<REL>>`, `<<LABEL>>`, `<<EXAMPLE>>`), and at most
+  `max_label_chars` code points. Text containing a reserved GLiClass marker is
+  refused with `unsupported_control_marker`; the encoder also checks that the
+  number of marker tokens equals the number of labels. Inputs are never
+  truncated.
+- **Decoder:** scores are `sigmoid(logit)` and a candidate is kept when
+  `score >= threshold` (`0.5` by default, recorded in the manifest). GLiNER
+  flat NER keeps the highest-scoring non-overlapping spans, breaking ties by
+  start, end, then caller label order, and returns spans ordered by start,
+  end, label order; nested mode keeps every span above the threshold.
+  GLiClass ranks labels by descending score with ties in caller label order.
+
+### Bounds
+
+Bounds are declared at export, recorded in the manifest and the
+qualification report, and enforced by the runtime before inference. A
+request outside them returns a typed `ZeroShotUnsupported` result (`status`,
+`reason`, `dimension`, `limit`) with no text, labels, or token ids.
+
+| Bound | Default | Hard limit | Reason when exceeded |
+|---|---|---|---|
+| Candidate labels | 32 | 64 | `unsupported_label_count` |
+| Tokens, prompt included | `min(512, max_position_embeddings)` | `max_position_embeddings` | `unsupported_sequence_length` |
+| Source words (GLiNER) | checkpoint `max_len` (384 if unset) | the token bound | `unsupported_word_count` |
+| Span width in words (GLiNER) | checkpoint `max_width` | checkpoint `max_width` | `unsupported_span_width` |
+| Label length | 128 code points | set at export (`max_label_chars`) | `unsupported_label` |
+| Activation memory | none | caller `memory_budget_bytes` | `unsupported_memory_budget` |
+
+The memory estimate is a deterministic float32 activation figure for the
+encoder, disentangled attention scores, and the span or label head; the
+manifest records it at the declared bounds. Only batch size 1 is qualified.
+
+### Qualification gates
+
+`openmed.eval.zero_shot_qualification` extends the family-neutral harness.
+The PyTorch reference and the exported graph on `CPUExecutionProvider` receive
+identical feeds built by the contract, once in the suite's candidate-label
+order and once in reversed order, so a graph that froze its tracing example's
+label count or label positions fails. The default suites are the packaged
+synthetic PHI suite (GLiNER; each canonical label is asked for with a
+natural-language prompt such as `person` or `identifier`) and
+`openmed/eval/fixtures/zero_shot_classification.jsonl` (GLiClass).
+
+| Gate | GLiNER span | GLiClass |
+|---|---|---|
+| Logit parity | float32 atol/rtol `1e-4` on valid span and label cells | float32 atol/rtol `1e-4` |
+| Decoded output | spans identical (labels, code-point offsets, overlap resolution, threshold) | label ranking identical (`label_order_parity_failed`); accepted labels identical (`decision_parity_failed`) |
+| Direct-identifier recall | no per-label loss against the reference | not applicable |
+| Critical leakage | no high-risk span the reference caught may leak | not applicable |
+
+The report (`openmed-export-qualification.json`) uses the same format as the
+token-classification reports, with `task` set to the profile's task, the
+word-splitter offset contract, the decoder contract, and a label-schema digest
+in place of a label map (candidate labels are caller-supplied, so no label
+text is recorded). The bundle manifest (`openmed-zero-shot.json`) records the
+profile, source revision, adapter version, architecture facts, prompt and
+label schema, tokenizer identity, tensor contract, bounds, memory estimate,
+decoder and threshold, offset contract, precision, runtime compatibility,
+unsupported surfaces, file digests, the qualification summary, and that the
+export does not change the model's clinical claim or trigger decisions.
+
+`ZeroShotOnnxModel` in `openmed.onnx.zero_shot_inference` loads a bundle only
+when the report verifies against every file digest, the tokenizer identity
+matches, and the requested provider is the qualified one; it needs only
+`numpy`, `onnxruntime`, and `tokenizers`. A bundle exported with
+`--no-qualify` claims nothing and is refused with `missing_evidence`.
+
+Additional reason codes for these profiles: `unsupported_task`,
+`unsupported_model_variant`, `unsupported_remote_code`,
+`unsupported_label_count`, `unsupported_label`, `unsupported_control_marker`,
+`unsupported_span_width`, `unsupported_word_count`,
+`unsupported_memory_budget`, `label_order_parity_failed`,
+`decision_parity_failed`.
+
+### Reproduction
+
+Convert the pinned checkpoint to an OpenMed MLX artifact once, then export
+from the local directory with the network disabled:
+
+```bash
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+python -m openmed.onnx.zero_shot_export --source ./artifacts/gliner-span-mlx \
+  --output ./dist/gliner-span-onnx --max-labels 16 --max-sequence-length 384 \
+  --expected-source-revision sha256:<content digest>
+python -m openmed.onnx.zero_shot_export --source ./artifacts/gliclass-mlx \
+  --output ./dist/gliclass-onnx --max-labels 16
+```
+
+The committed tests build tiny GLiNER-shaped and GLiClass-shaped checkpoints
+in-test (`tests/fixtures/zero_shot_export_stub.py`), so they need no
+download: `tests/unit/ner/test_zero_shot_export_contract.py` and
+`tests/unit/eval/test_zero_shot_qualification.py` run everywhere;
+`tests/unit/onnx/test_onnx_zero_shot_export.py` exports, qualifies, and loads
+both profiles with PyTorch and ONNX Runtime, proves that no network
+connection is opened and no synthetic sentinel reaches logs, output, or
+artifacts, and on Apple silicon checks that the MLX runtime, the PyTorch
+reference, and the ONNX graph agree. Release evidence for a pinned
+production GLiNER span checkpoint and a pinned GLiClass checkpoint is
+produced separately with the commands above; until it is published the cells
+stay ⚠️.
 
 ## See also
 
