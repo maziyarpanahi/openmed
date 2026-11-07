@@ -29,17 +29,27 @@ _HELPERS = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_HELPERS)
 
 
-@pytest.fixture(autouse=True)
-def forbid_network(monkeypatch):
+@pytest.fixture
+def offline_loop(monkeypatch):
+    # ProactorEventLoop creates its internal socketpair via loopback on Windows.
+    # All application/session work still runs with every connection denied.
+    loop = asyncio.new_event_loop()
+
     def denied(*args, **kwargs):
         raise AssertionError("Offline MCP session attempted network access")
 
     monkeypatch.setattr(socket.socket, "connect", denied)
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
+    try:
+        yield loop
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.run_until_complete(loop.shutdown_default_executor())
+        loop.close()
 
 
-def test_actual_sdk_session_preflights_previews_requests_review_and_polls():
+def test_actual_sdk_session_preflights_previews_requests_review_and_polls(offline_loop):
     service = _HELPERS._Service()
     policy, provider = _HELPERS._consent()
     server = create_mcp_server(
@@ -78,7 +88,7 @@ def test_actual_sdk_session_preflights_previews_requests_review_and_polls():
             )
             assert "signature" not in json.dumps(result.model_dump(mode="json"))
 
-    asyncio.run(session())
+    offline_loop.run_until_complete(session())
     assert service.calls == [
         "preflight",
         "preview",
@@ -101,7 +111,9 @@ def _plain(value):
     "fixture", DEFAULT_ADVERSARIAL_FIXTURES, ids=lambda f: f.case_id
 )
 @pytest.mark.parametrize("guard_mode", ["strict", "allow"])
-def test_default_boundary_attempts_use_actual_mcp_dispatch(fixture, guard_mode, caplog):
+def test_default_boundary_attempts_use_actual_mcp_dispatch(
+    fixture, guard_mode, caplog, offline_loop
+):
     service = _HELPERS._Service()
     request_data = _HELPERS._request().to_dict()
     payload = _plain(fixture.payload)
@@ -132,7 +144,7 @@ def test_default_boundary_attempts_use_actual_mcp_dispatch(fixture, guard_mode, 
                 "openmed_workflow_preflight", {"request": request_data}
             )
 
-    result = asyncio.run(session())
+    result = offline_loop.run_until_complete(session())
     assert result.isError is (not benign)
     assert service.calls == (["preflight"] if benign else [])
     assert service.handoffs == service.clinical_effects == 0
@@ -143,3 +155,19 @@ def test_default_boundary_attempts_use_actual_mcp_dispatch(fixture, guard_mode, 
             "invalid_arguments",
             "prompt_injection_detected",
         }
+
+
+def test_offline_session_loop_still_denies_connections(offline_loop):
+    async def attempt():
+        with pytest.raises(
+            AssertionError, match="Offline MCP session attempted network access"
+        ):
+            socket.create_connection(("127.0.0.1", 9))
+        with socket.socket() as client:
+            for operation in (client.connect, client.connect_ex):
+                with pytest.raises(
+                    AssertionError, match="Offline MCP session attempted network access"
+                ):
+                    operation(("127.0.0.1", 9))
+
+    offline_loop.run_until_complete(attempt())

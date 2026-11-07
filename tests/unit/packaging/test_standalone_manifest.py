@@ -174,28 +174,22 @@ def test_requirement_drift_fails_without_echoing_the_requirement() -> None:
     assert "approved project boundary" in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "expected_path"),
-    [
+def test_declared_boundaries_cannot_be_silently_removed(subtests) -> None:
+    """Validation requires every approved opt-in and exclusion record."""
+    for field, expected_path in [
         ("components", "components"),
         ("optional_dependencies", "dependencies.optional"),
         ("restricted_dependencies", "dependencies.restricted"),
         ("restricted_assets", "restricted_assets"),
-    ],
-)
-def test_declared_boundaries_cannot_be_silently_removed(
-    field: str,
-    expected_path: str,
-) -> None:
-    """Validation requires every approved opt-in and exclusion record."""
+    ]:
+        with subtests.test(field=field, expected_path=expected_path):
+            invalid = replace(manifest_module.STANDALONE_MANIFEST, **{field: ()})
 
-    invalid = replace(manifest_module.STANDALONE_MANIFEST, **{field: ()})
+            issues = manifest_module.validate_manifest(invalid)
 
-    issues = manifest_module.validate_manifest(invalid)
-
-    assert expected_path in {issue.path for issue in issues}
-    with pytest.raises(manifest_module.ManifestValidationError):
-        manifest_module.assert_valid_manifest(invalid)
+            assert expected_path in {issue.path for issue in issues}
+            with pytest.raises(manifest_module.ManifestValidationError):
+                manifest_module.assert_valid_manifest(invalid)
 
 
 def test_optional_network_metadata_cannot_understate_egress() -> None:

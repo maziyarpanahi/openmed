@@ -292,17 +292,15 @@ def test_no_redirect_even_when_injected_http_client_follows_redirects():
     assert caught.value.mutation_outcome == "unknown"
 
 
-@pytest.mark.parametrize(
-    "body", [b"{" + b" " * 262145, b"\xff", b'{"value":[' + b"0," * 5000 + b"0]}"]
-)
-def test_byte_utf8_and_node_bounds(body):
-    with pytest.raises(WorkflowClientError):
-        parse_workflow_response(body, REFERENCE)
+def test_byte_utf8_and_node_bounds(subtests):
+    for body in [b"{" + b" " * 262145, b"\xff", b'{"value":[' + b"0," * 5000 + b"0]}"]:
+        with subtests.test(body=body):
+            with pytest.raises(WorkflowClientError):
+                parse_workflow_response(body, REFERENCE)
 
 
-@pytest.mark.parametrize(
-    "constructor,values",
-    [
+def test_closed_resource_policy(subtests):
+    for constructor, values in [
         (WorkflowReadOptions, {"max_attempts": True}),
         (WorkflowReadOptions, {"max_attempts": 4}),
         (WorkflowReadOptions, {"retry_delay_seconds": float("inf")}),
@@ -310,11 +308,10 @@ def test_byte_utf8_and_node_bounds(body):
         (WorkflowPollPolicy, {"max_requests": 101}),
         (WorkflowPollPolicy, {"timeout_seconds": 301}),
         (WorkflowPollPolicy, {"interval_seconds": -1}),
-    ],
-)
-def test_closed_resource_policy(constructor, values):
-    with pytest.raises(WorkflowClientError):
-        constructor(**values)
+    ]:
+        with subtests.test(constructor=constructor, values=values):
+            with pytest.raises(WorkflowClientError):
+                constructor(**values)
 
 
 def test_poll_refusal_keeps_the_last_validated_phase():
@@ -374,28 +371,41 @@ def test_client_construction_and_metadata_parsing_do_not_open_sockets(monkeypatc
         )
 
 
-@pytest.mark.parametrize("boundary", ["reference", "receipt", "clock"])
-def test_pre_dispatch_errors_drop_private_exception_context(monkeypatch, boundary):
-    def private_failure(*args, **kwargs):
-        raise UnicodeDecodeError("utf-8", b"PRIVATE-CANARY", 0, 1, "invalid")
+def test_pre_dispatch_errors_drop_private_exception_context(subtests):
+    for boundary in ["reference", "receipt", "clock"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    calls = []
-    with OpenMedClient(
-        transport=httpx.MockTransport(lambda request: calls.append(request))
-    ) as client:
-        if boundary == "reference":
-            monkeypatch.setattr(WorkflowReference, "to_dict", private_failure)
-            invoke = lambda: client.workflow_status(REFERENCE)
-        elif boundary == "receipt":
-            receipt = ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
-            monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
-            invoke = lambda: client.workflow_submit_receipt(MUTATION, receipt)
-        else:
-            invoke = lambda: client.poll_workflow(REFERENCE, clock=private_failure)
-        with pytest.raises(WorkflowClientError) as caught:
-            invoke()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
-    assert calls == []
+                def private_failure(*args, **kwargs):
+                    raise UnicodeDecodeError(
+                        "utf-8", b"PRIVATE-CANARY", 0, 1, "invalid"
+                    )
+
+                calls = []
+                with OpenMedClient(
+                    transport=httpx.MockTransport(lambda request: calls.append(request))
+                ) as client:
+                    if boundary == "reference":
+                        monkeypatch.setattr(
+                            WorkflowReference, "to_dict", private_failure
+                        )
+                        invoke = lambda: client.workflow_status(REFERENCE)
+                    elif boundary == "receipt":
+                        receipt = ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
+                        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+                        invoke = lambda: client.workflow_submit_receipt(
+                            MUTATION, receipt
+                        )
+                    else:
+                        invoke = lambda: client.poll_workflow(
+                            REFERENCE, clock=private_failure
+                        )
+                    with pytest.raises(WorkflowClientError) as caught:
+                        invoke()
+                assert (
+                    caught.value.__context__ is None and caught.value.__cause__ is None
+                )
+                assert calls == []
 
 
 @pytest.mark.parametrize("operation", ["receipt", "cancel"])

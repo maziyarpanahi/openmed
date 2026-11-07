@@ -101,9 +101,8 @@ def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
     assert response.json() == expected
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_rest_rejects_untrusted_configuration(subtests):
+    for change in [
         {"model": "https://remote.example"},
         {"profile": "unknown"},
         {"review_id": "invalid"},
@@ -111,15 +110,18 @@ def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
         {"text": ""},
         {"text": "é" * 9000},
         {"context": {"approved": True}},
-    ],
-)
-def test_rest_rejects_untrusted_configuration(change):
-    payload = {"text": "Synthetic note", "model": "extractive", "review_id": REVIEW_ID}
-    payload.update(change)
-    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
-        response = client.post("/brief", json=payload)
-    assert response.status_code == 422
-    assert "Synthetic note" not in response.text
+    ]:
+        with subtests.test(change=change):
+            payload = {
+                "text": "Synthetic note",
+                "model": "extractive",
+                "review_id": REVIEW_ID,
+            }
+            payload.update(change)
+            with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+                response = client.post("/brief", json=payload)
+            assert response.status_code == 422
+            assert "Synthetic note" not in response.text
 
 
 def test_missing_review_and_mismatched_provider_refuse():
@@ -138,7 +140,7 @@ def test_missing_review_and_mismatched_provider_refuse():
 
 def cli_args(tmp_path, text):
     source = tmp_path / "source.txt"
-    source.write_text(text)
+    source.write_bytes(text.encode("utf-8"))
     return argparse.Namespace(
         path=source,
         model="extractive",
@@ -171,22 +173,26 @@ def test_cli_separates_protected_content_and_private_audit(tmp_path, capsys):
             assert mode & stat.S_IWRITE
 
 
-@pytest.mark.parametrize("collision", ["existing", "same", "symlink"])
-def test_cli_never_overwrites_outputs(tmp_path, collision):
-    value, provider, _ = setup_review()
-    args = cli_args(tmp_path, value.original_text)
-    protected = tmp_path / "protected.txt"
-    protected.write_text("keep")
-    if collision == "existing":
-        args.review_output = protected
-    elif collision == "same":
-        args.review_output = args.summary_output
-    else:
-        args.review_output.symlink_to(protected)
-    with pytest.raises(CliError, match="Brief request or output failed"):
-        handle_brief(args, context_provider=provider)
-    assert protected.read_text() == "keep"
-    assert not args.summary_output.exists()
+def test_cli_never_overwrites_outputs(subtests, tmp_path):
+    case_root = tmp_path
+    for collision in ["existing", "same", "symlink"]:
+        with subtests.test(collision=collision):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            value, provider, _ = setup_review()
+            args = cli_args(tmp_path, value.original_text)
+            protected = tmp_path / "protected.txt"
+            protected.write_text("keep")
+            if collision == "existing":
+                args.review_output = protected
+            elif collision == "same":
+                args.review_output = args.summary_output
+            else:
+                args.review_output.symlink_to(protected)
+            with pytest.raises(CliError, match="Brief request or output failed"):
+                handle_brief(args, context_provider=provider)
+            assert protected.read_text() == "keep"
+            assert not args.summary_output.exists()
 
 
 def test_cli_refusal_has_nonzero_gate_exit(tmp_path):

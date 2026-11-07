@@ -30,21 +30,30 @@ SAFE = "sha256:" + "a" * 64
 CANARY = "SYNTHETIC-PRIVATE-METADATA-CANARY"
 
 
-@pytest.mark.parametrize("bad", [CANARY, True, [], None])
-def test_result_refuses_non_digest_private_metadata(bad):
-    with pytest.raises(OmopDatabaseError, match="invalid_input") as exc:
-        OmopDatabaseResult(
-            OmopDatabaseStatus.COMMITTED, None, bad, SAFE, SAFE, SAFE, 1, 1
-        )
-    assert CANARY not in str(exc.value)
+def test_result_refuses_non_digest_private_metadata(subtests):
+    for bad in [CANARY, True, [], None]:
+        with subtests.test(bad=bad):
+            with pytest.raises(OmopDatabaseError, match="invalid_input") as exc:
+                OmopDatabaseResult(
+                    OmopDatabaseStatus.COMMITTED, None, bad, SAFE, SAFE, SAFE, 1, 1
+                )
+            assert CANARY not in str(exc.value)
 
 
-@pytest.mark.parametrize("count", [0, True, -1, 10001])
-def test_result_requires_bounded_non_boolean_counts(count):
-    with pytest.raises(OmopDatabaseError, match="invalid_input"):
-        OmopDatabaseResult(
-            OmopDatabaseStatus.COMMITTED, None, SAFE, SAFE, SAFE, SAFE, count, count
-        )
+def test_result_requires_bounded_non_boolean_counts(subtests):
+    for count in [0, True, -1, 10001]:
+        with subtests.test(count=count):
+            with pytest.raises(OmopDatabaseError, match="invalid_input"):
+                OmopDatabaseResult(
+                    OmopDatabaseStatus.COMMITTED,
+                    None,
+                    SAFE,
+                    SAFE,
+                    SAFE,
+                    SAFE,
+                    count,
+                    count,
+                )
 
 
 def test_unknown_outcome_never_claims_an_applied_row_count():

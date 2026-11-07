@@ -206,24 +206,20 @@ def test_scoring_is_order_independent_and_byte_deterministic() -> None:
     assert report.report_digest.startswith("sha256:")
 
 
-@pytest.mark.parametrize(
-    ("schema_id", "schema_version", "code"),
-    [
+def test_packet_must_bind_the_exact_schema_version(subtests) -> None:
+    for schema_id, schema_version, code in [
         ("payer.other_schema", 3, "schema_id_mismatch"),
         ("payer.synthetic_imaging", 4, "schema_version_mismatch"),
-    ],
-)
-def test_packet_must_bind_the_exact_schema_version(
-    schema_id: str,
-    schema_version: int,
-    code: str,
-) -> None:
-    packet = _packet((), schema_id=schema_id, schema_version=schema_version)
+    ]:
+        with subtests.test(
+            schema_id=schema_id, schema_version=schema_version, code=code
+        ):
+            packet = _packet((), schema_id=schema_id, schema_version=schema_version)
 
-    with pytest.raises(PriorAuthCompletenessError) as caught:
-        score_prior_authorization_packet(packet, _schema())
+            with pytest.raises(PriorAuthCompletenessError) as caught:
+                score_prior_authorization_packet(packet, _schema())
 
-    assert caught.value.code == code
+            assert caught.value.code == code
 
 
 def test_duplicate_requirements_evidence_and_citations_fail_closed() -> None:
@@ -244,9 +240,8 @@ def test_duplicate_requirements_evidence_and_citations_fail_closed() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "build",
-    [
+def test_rejected_values_never_appear_in_exception_chains(subtests) -> None:
+    for build in [
         lambda value: PriorAuthRequirement(value),
         lambda value: PriorAuthRequirementSchema(
             value, 1, (PriorAuthRequirement("a"),)
@@ -254,16 +249,17 @@ def test_duplicate_requirements_evidence_and_citations_fail_closed() -> None:
         lambda value: PacketEvidence(value, EVIDENCE_A),
         lambda value: PacketEvidence("clinical.service", value),
         lambda value: PriorAuthorizationPacket(value, "payer.synthetic", 1, ()),
-    ],
-)
-def test_rejected_values_never_appear_in_exception_chains(build) -> None:
-    sentinel = "Synthetic Person Z99.999 /private/packet.json bearer_secret"
+    ]:
+        with subtests.test(build=build):
+            sentinel = "Synthetic Person Z99.999 /private/packet.json bearer_secret"
 
-    with pytest.raises(PriorAuthCompletenessError) as caught:
-        build(sentinel)
+            with pytest.raises(PriorAuthCompletenessError) as caught:
+                build(sentinel)
 
-    rendered = "".join(traceback.format_exception(caught.type, caught.value, caught.tb))
-    assert sentinel not in rendered
+            rendered = "".join(
+                traceback.format_exception(caught.type, caught.value, caught.tb)
+            )
+            assert sentinel not in rendered
 
 
 def test_report_contains_no_raw_packet_or_citation_values() -> None:

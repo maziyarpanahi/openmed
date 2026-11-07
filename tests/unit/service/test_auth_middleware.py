@@ -301,35 +301,31 @@ def test_missing_or_invalid_credentials_return_401_without_phi(
     assert "Maria Garcia" not in invalid.text
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["/pii/deidentify", "/pii/deidentify/stream"],
-)
-def test_scope_enforcement_blocks_underprivileged_api_key(
-    monkeypatch: pytest.MonkeyPatch,
-    path: str,
-) -> None:
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        _api_key_config("test-secret", scopes=["pii:read"]),
-    )
-    app = create_app()
+def test_scope_enforcement_blocks_underprivileged_api_key(subtests) -> None:
+    for path in ["/pii/deidentify", "/pii/deidentify/stream"]:
+        with subtests.test(path=path):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    _api_key_config("test-secret", scopes=["pii:read"]),
+                )
+                app = create_app()
 
-    with TestClient(
-        app,
-        base_url=LOOPBACK_BASE_URL,
-        raise_server_exceptions=False,
-    ) as client:
-        response = client.post(
-            path,
-            headers={"X-API-Key": "test-secret"},
-            json={"text": "Patient Maria Garcia", "method": "mask"},
-        )
+                with TestClient(
+                    app,
+                    base_url=LOOPBACK_BASE_URL,
+                    raise_server_exceptions=False,
+                ) as client:
+                    response = client.post(
+                        path,
+                        headers={"X-API-Key": "test-secret"},
+                        json={"text": "Patient Maria Garcia", "method": "mask"},
+                    )
 
-    payload = _assert_error_payload(response, 403, "forbidden")
-    assert payload["error"]["details"]["required_scopes"] == ["pii:write"]
-    assert "Maria Garcia" not in response.text
+                payload = _assert_error_payload(response, 403, "forbidden")
+                assert payload["error"]["details"]["required_scopes"] == ["pii:write"]
+                assert "Maria Garcia" not in response.text
 
 
 def test_jwt_hs_and_rs_signatures_and_expiry_are_validated(
@@ -398,31 +394,37 @@ def test_failed_auth_attempts_are_rate_limited(
     assert int(second.headers["Retry-After"]) >= 1
 
 
-@pytest.mark.parametrize("claim", ["exp", "iat", "nbf"])
-@pytest.mark.parametrize(
-    "value",
-    [
-        float("nan"),
-        float("inf"),
-        -float("inf"),
-        "nan",
-        "2000000060",
-        True,
-        False,
-        None,
-        10**400,
-    ],
-)
-def test_jwt_dates_require_finite_json_numbers(claim, value):
-    from openmed.service.auth import AuthError, ServiceAuthConfig, authenticate_jwt
+def test_jwt_dates_require_finite_json_numbers(subtests):
+    for claim in ["exp", "iat", "nbf"]:
+        for value in [
+            float("nan"),
+            float("inf"),
+            -float("inf"),
+            "nan",
+            "2000000060",
+            True,
+            False,
+            None,
+            10**400,
+        ]:
+            with subtests.test(claim=claim, value=value):
+                from openmed.service.auth import (
+                    AuthError,
+                    ServiceAuthConfig,
+                    authenticate_jwt,
+                )
 
-    claims = {"exp": 2_000_000_060, "iat": 1_999_999_990, "nbf": 1_999_999_990}
-    claims[claim] = value
-    config = ServiceAuthConfig(jwks=tuple(json.loads(_jwks())["keys"]))
-    with pytest.raises(AuthError) as error:
-        authenticate_jwt(_jwt_hs256(claims), config, now=2_000_000_000)
-    assert error.value.code == "invalid_credentials"
-    assert error.value.message == "Authentication credentials are invalid"
+                claims = {
+                    "exp": 2_000_000_060,
+                    "iat": 1_999_999_990,
+                    "nbf": 1_999_999_990,
+                }
+                claims[claim] = value
+                config = ServiceAuthConfig(jwks=tuple(json.loads(_jwks())["keys"]))
+                with pytest.raises(AuthError) as error:
+                    authenticate_jwt(_jwt_hs256(claims), config, now=2_000_000_000)
+                assert error.value.code == "invalid_credentials"
+                assert error.value.message == "Authentication credentials are invalid"
 
 
 def test_jwt_lifetime_and_leeway_keep_valid_tokens():
@@ -448,9 +450,8 @@ def test_jwt_lifetime_and_leeway_keep_valid_tokens():
             authenticate_jwt(_jwt_hs256(claims), config, now=100)
 
 
-@pytest.mark.parametrize(
-    ("method", "path", "scope"),
-    [
+def test_all_phi_routes_deny_before_handlers(subtests):
+    for method, path, scope in [
         ("POST", "/pii/extract/stream", "pii:read"),
         ("POST", "/jobs", "jobs:write"),
         ("POST", "/fhir/bulk/exports", "bulk:write"),
@@ -461,22 +462,24 @@ def test_jwt_lifetime_and_leeway_keep_valid_tokens():
         ("POST", "/profile", "profile:write"),
         ("POST", "/cohort/resolve", "cohort:read"),
         ("GET", "/v1/journey/resources", "journey:read"),
-    ],
-)
-def test_all_phi_routes_deny_before_handlers(monkeypatch, method, path, scope):
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        _api_key_config("synthetic-secret", scopes=["models:read"]),
-    )
-    app = create_app()
-    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
-        response = client.request(
-            method, path, headers={"X-API-Key": "synthetic-secret"}, json={}
-        )
-    assert response.status_code == 403
-    assert response.json()["error"]["details"] == {"required_scopes": [scope]}
-    assert app.state.runtime._loader is None
+    ]:
+        with subtests.test(method=method, path=path, scope=scope):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    _api_key_config("synthetic-secret", scopes=["models:read"]),
+                )
+                app = create_app()
+                with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+                    response = client.request(
+                        method, path, headers={"X-API-Key": "synthetic-secret"}, json={}
+                    )
+                assert response.status_code == 403
+                assert response.json()["error"]["details"] == {
+                    "required_scopes": [scope]
+                }
+                assert app.state.runtime._loader is None
 
 
 def test_route_override_matches_template_and_unknown_routes_fail(monkeypatch):
@@ -575,14 +578,21 @@ def test_invalid_utf8_jwt_payload_drops_private_decoder_context():
     assert caught.value.__context__ is caught.value.__cause__ is None
 
 
-@pytest.mark.parametrize("now", [float("nan"), float("inf"), -float("inf"), True])
-def test_jwt_validator_refuses_invalid_clock_values(now):
-    from openmed.service.auth import AuthError, ServiceAuthConfig, validate_jwt_claims
+def test_jwt_validator_refuses_invalid_clock_values(subtests):
+    for now in [float("nan"), float("inf"), -float("inf"), True]:
+        with subtests.test(now=now):
+            from openmed.service.auth import (
+                AuthError,
+                ServiceAuthConfig,
+                validate_jwt_claims,
+            )
 
-    with pytest.raises(AuthError, match="credentials are invalid"):
-        validate_jwt_claims(
-            {"exp": 2_000_000_060, "iat": 1_999_999_990}, ServiceAuthConfig(), now=now
-        )
+            with pytest.raises(AuthError, match="credentials are invalid"):
+                validate_jwt_claims(
+                    {"exp": 2_000_000_060, "iat": 1_999_999_990},
+                    ServiceAuthConfig(),
+                    now=now,
+                )
 
 
 def test_nested_router_policies_use_effective_prefixed_templates():

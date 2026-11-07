@@ -158,3 +158,23 @@ def test_retained_label_runs_actual_local_redaction_and_header_gate(
     ]:
         with pytest.raises(ValueError, match="dicom_slide_associated_image_refused"):
             redact_dicom_pixels(source, policy={**policy, **changed})
+
+
+def test_label_with_extra_decoded_pixels_cannot_be_retained(tmp_path):
+    source = tmp_path / "synthetic.dcm"
+    output = tmp_path / "clean.dcm"
+    ds = dataset("LABEL")
+    ds.NumberOfFrames = 1
+    ds.PixelData *= 2
+    ds.save_as(source, enforce_file_format=True)
+    with pytest.raises(ValueError, match="dicom_slide_pixel_coverage_incomplete"):
+        redact_dicom_pixels(
+            source,
+            policy={
+                "output_path": output,
+                "keep_slide_associated_images": True,
+                "reviewer_confirmed": True,
+                "ocr_engine": object(),
+            },
+        )
+    assert not output.exists()

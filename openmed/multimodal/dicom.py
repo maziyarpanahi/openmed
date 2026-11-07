@@ -1873,6 +1873,11 @@ def _redact_pixels(
     _decompress_pixel_data(dataset)
     pixel_array = _copy_pixel_array(dataset)
     frame_views = tuple(_iter_pixel_frames(pixel_array, dataset))
+    if associated_slide and (
+        len(frame_views) != 1
+        or pixel_array.size != dataset.Rows * dataset.Columns * dataset.SamplesPerPixel
+    ):
+        raise ValueError("dicom_slide_pixel_coverage_incomplete")
     _burn_overlay_planes(frame_views, overlays, dataset)
     findings: list[DicomPixelFinding] = []
 
@@ -1937,7 +1942,7 @@ def _redact_pixels(
 def _slide_instance_role(dataset: Any) -> str | None:
     if str(getattr(dataset, "SOPClassUID", "")) != "1.2.840.10008.5.1.4.1.1.77.1.6":
         return None
-    image_type = getattr(dataset, "ImageType", ())
+    image_type = getattr(dataset, "ImageType", ()) or ()
     if isinstance(image_type, str):
         image_type = image_type.split("\\")
     if len(image_type) < 3 or str(image_type[2]) not in {
@@ -1948,6 +1953,8 @@ def _slide_instance_role(dataset: Any) -> str | None:
     }:
         raise ValueError("dicom_slide_image_type_unknown")
     role = str(image_type[2]).lower()
+    if role in {"label", "overview"} and getattr(dataset, "NumberOfFrames", 1) != 1:
+        raise ValueError("dicom_slide_frame_count_invalid")
     # A mislabeled volume with an explicit specimen label is not safe to retain.
     if (
         role in {"volume", "thumbnail"}
@@ -1968,7 +1975,7 @@ def _guard_slide_headers(
         policy.keep_slide_associated_images is True
         and policy.reviewer_confirmed is True
         and pixels is not None
-        and pixels.frames_processed > 0
+        and pixels.frames_processed == 1
         and pixels.residual_verified
         and pixels.residual_report.passed
         and pixels.residual_report.frame_count == pixels.frames_processed

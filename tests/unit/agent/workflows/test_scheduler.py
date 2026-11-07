@@ -108,28 +108,30 @@ def test_independent_progress_dependency_commit_and_concurrency():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("parallel", [False, True])
-def test_explicit_read_policy_and_exclusive_effect_barrier(parallel):
-    async def run():
-        executor = Executor()
-        executor.releases["a"] = asyncio.Event()
-        worker = scheduler(
-            [action("a"), action("b", read_only=False), action("c")],
-            executor,
-            budget=limits(parallel_reads=parallel),
-        )
-        task = asyncio.create_task(worker.run(RUN))
-        await until(lambda: executor.started == ["a"])
-        for _ in range(10):
-            await asyncio.sleep(0)
-        assert executor.started == ["a"]
-        executor.releases["a"].set()
-        result = await task
-        assert result.stop_reason is StopReason.COMPLETED
-        assert executor.started == ["a", "b", "c"]
-        assert executor.peak == 1
+def test_explicit_read_policy_and_exclusive_effect_barrier(subtests):
+    for parallel in [False, True]:
+        with subtests.test(parallel=parallel):
 
-    asyncio.run(run())
+            async def run():
+                executor = Executor()
+                executor.releases["a"] = asyncio.Event()
+                worker = scheduler(
+                    [action("a"), action("b", read_only=False), action("c")],
+                    executor,
+                    budget=limits(parallel_reads=parallel),
+                )
+                task = asyncio.create_task(worker.run(RUN))
+                await until(lambda: executor.started == ["a"])
+                for _ in range(10):
+                    await asyncio.sleep(0)
+                assert executor.started == ["a"]
+                executor.releases["a"].set()
+                result = await task
+                assert result.stop_reason is StopReason.COMPLETED
+                assert executor.started == ["a", "b", "c"]
+                assert executor.peak == 1
+
+            asyncio.run(run())
 
 
 def test_default_action_classification_is_exclusive():
@@ -156,17 +158,18 @@ def test_inflight_resource_reservations_admit_fitting_independent_work():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("budget", [limits(max_actions=1), limits(max_total_units=1)])
-def test_cumulative_budget_stops_additional_dispatch(budget):
-    executor = Executor()
-    result = asyncio.run(
-        scheduler([action("a"), action("b")], executor, budget=budget).run(RUN)
-    )
-    assert executor.started == ["a"]
-    assert result.stop_reason is StopReason.BUDGET_EXHAUSTED
-    assert result.admitted_actions == result.reserved_units == 1
-    assert dict(result.states)["a"] is ActionState.COMMITTED
-    assert dict(result.states)["b"] is ActionState.PENDING
+def test_cumulative_budget_stops_additional_dispatch(subtests):
+    for budget in [limits(max_actions=1), limits(max_total_units=1)]:
+        with subtests.test(budget=budget):
+            executor = Executor()
+            result = asyncio.run(
+                scheduler([action("a"), action("b")], executor, budget=budget).run(RUN)
+            )
+            assert executor.started == ["a"]
+            assert result.stop_reason is StopReason.BUDGET_EXHAUSTED
+            assert result.admitted_actions == result.reserved_units == 1
+            assert dict(result.states)["a"] is ActionState.COMMITTED
+            assert dict(result.states)["b"] is ActionState.PENDING
 
 
 def test_unadmittable_resource_estimate_never_dispatches():
@@ -176,30 +179,28 @@ def test_unadmittable_resource_estimate_never_dispatches():
     assert result.stop_reason is StopReason.BUDGET_EXHAUSTED
 
 
-@pytest.mark.parametrize(
-    "verdict,reason",
-    [
+def test_failure_and_review_stop_descendants_and_independent_pending(subtests):
+    for verdict, reason in [
         (DispatchOutcome.REVIEW_REQUIRED, StopReason.REVIEW_REQUIRED),
         (DispatchOutcome.FAILED, StopReason.DISPATCH_FAILED),
         (RuntimeError(PRIVATE), StopReason.REVIEW_REQUIRED),
         (PRIVATE, StopReason.REVIEW_REQUIRED),
-    ],
-)
-def test_failure_and_review_stop_descendants_and_independent_pending(verdict, reason):
-    executor = Executor()
-    executor.outcomes["a"] = verdict
-    result = asyncio.run(
-        scheduler(
-            [action("a"), action("b", "a"), action("c")],
-            executor,
-            budget=limits(max_concurrency=1),
-        ).run(RUN)
-    )
-    assert executor.started == ["a"]
-    assert result.stop_reason is reason
-    assert dict(result.states)["b"] is ActionState.PENDING
-    assert dict(result.states)["c"] is ActionState.PENDING
-    assert PRIVATE not in result.to_json()
+    ]:
+        with subtests.test(verdict=verdict, reason=reason):
+            executor = Executor()
+            executor.outcomes["a"] = verdict
+            result = asyncio.run(
+                scheduler(
+                    [action("a"), action("b", "a"), action("c")],
+                    executor,
+                    budget=limits(max_concurrency=1),
+                ).run(RUN)
+            )
+            assert executor.started == ["a"]
+            assert result.stop_reason is reason
+            assert dict(result.states)["b"] is ActionState.PENDING
+            assert dict(result.states)["c"] is ActionState.PENDING
+            assert PRIVATE not in result.to_json()
 
 
 def test_review_peer_prevents_successful_peer_descendant_admission():
@@ -287,15 +288,16 @@ def test_elapsed_budget_uses_injected_clock_and_stops_descendants():
     assert result.stop_reason is StopReason.BUDGET_EXHAUSTED
 
 
-@pytest.mark.parametrize("bad_clock", [-1, True, PRIVATE])
-def test_invalid_clock_fails_closed_without_values(bad_clock):
-    executor = Executor()
-    result = asyncio.run(
-        scheduler([action("a")], executor, clock=lambda: bad_clock).run(RUN)
-    )
-    assert result.stop_reason is StopReason.CLOCK_FAILED
-    assert executor.started == []
-    assert PRIVATE not in result.to_json()
+def test_invalid_clock_fails_closed_without_values(subtests):
+    for bad_clock in [-1, True, PRIVATE]:
+        with subtests.test(bad_clock=bad_clock):
+            executor = Executor()
+            result = asyncio.run(
+                scheduler([action("a")], executor, clock=lambda: bad_clock).run(RUN)
+            )
+            assert result.stop_reason is StopReason.CLOCK_FAILED
+            assert executor.started == []
+            assert PRIVATE not in result.to_json()
 
 
 def test_regressing_clock_stops_before_dispatch():
@@ -308,40 +310,43 @@ def test_regressing_clock_stops_before_dispatch():
     assert executor.started == []
 
 
-@pytest.mark.parametrize("boundary", [1, 2])
-def test_checkpoint_failure_prevents_dispatch_or_descendants(boundary):
-    executor, saved = Executor(), []
+def test_checkpoint_failure_prevents_dispatch_or_descendants(subtests):
+    for boundary in [1, 2]:
+        with subtests.test(boundary=boundary):
+            executor, saved = Executor(), []
 
-    def save(cp):
-        saved.append(cp)
-        if len(saved) == boundary:
-            raise RuntimeError(PRIVATE)
+            def save(cp):
+                saved.append(cp)
+                if len(saved) == boundary:
+                    raise RuntimeError(PRIVATE)
 
-    worker = ActionScheduler(
-        [action("a"), action("b", "a")], limits(), executor, save, clock=lambda: 0
-    )
-    result = asyncio.run(worker.run(RUN))
-    assert executor.started == ([] if boundary == 1 else ["a"])
-    assert result.stop_reason is StopReason.CHECKPOINT_FAILED
-    assert dict(result.states)["b"] is ActionState.PENDING
-    assert PRIVATE not in result.to_json()
+            worker = ActionScheduler(
+                [action("a"), action("b", "a")],
+                limits(),
+                executor,
+                save,
+                clock=lambda: 0,
+            )
+            result = asyncio.run(worker.run(RUN))
+            assert executor.started == ([] if boundary == 1 else ["a"])
+            assert result.stop_reason is StopReason.CHECKPOINT_FAILED
+            assert dict(result.states)["b"] is ActionState.PENDING
+            assert PRIVATE not in result.to_json()
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_limits_fail_closed(subtests):
+    for field in [
         "max_actions",
         "max_concurrency",
         "max_inflight_units",
         "max_total_units",
         "max_elapsed_ns",
-    ],
-)
-@pytest.mark.parametrize("value", [0, -1, True, PRIVATE])
-def test_limits_fail_closed(field, value):
-    with pytest.raises(SchedulerError) as exc:
-        limits(**{field: value})
-    assert str(exc.value) == "invalid_integer"
+    ]:
+        for value in [0, -1, True, PRIVATE]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(SchedulerError) as exc:
+                    limits(**{field: value})
+                assert str(exc.value) == "invalid_integer"
 
 
 def test_invalid_graph_is_never_scheduled():
@@ -531,20 +536,24 @@ def test_empty_graph_completes_without_invocation():
     assert executor.started == []
 
 
-@pytest.mark.parametrize(
-    "verdict",
-    [DispatchOutcome.REVIEW_REQUIRED, DispatchOutcome.FAILED, RuntimeError(PRIVATE)],
-)
-def test_immediate_stop_verdict_prevents_not_yet_invoked_peer(verdict):
-    executor = Executor()
-    executor.outcomes["a"] = verdict
-    result = asyncio.run(scheduler([action("a"), action("b")], executor).run(RUN))
-    assert executor.started == ["a"]
-    assert result.stop_reason in (
-        StopReason.REVIEW_REQUIRED,
-        StopReason.DISPATCH_FAILED,
-    )
-    assert dict(result.states)["b"] is ActionState.REVIEW_REQUIRED
+def test_immediate_stop_verdict_prevents_not_yet_invoked_peer(subtests):
+    for verdict in [
+        DispatchOutcome.REVIEW_REQUIRED,
+        DispatchOutcome.FAILED,
+        RuntimeError(PRIVATE),
+    ]:
+        with subtests.test(verdict=verdict):
+            executor = Executor()
+            executor.outcomes["a"] = verdict
+            result = asyncio.run(
+                scheduler([action("a"), action("b")], executor).run(RUN)
+            )
+            assert executor.started == ["a"]
+            assert result.stop_reason in (
+                StopReason.REVIEW_REQUIRED,
+                StopReason.DISPATCH_FAILED,
+            )
+            assert dict(result.states)["b"] is ActionState.REVIEW_REQUIRED
 
 
 def test_dispatcher_self_cancellation_stops_peer_before_invocation():

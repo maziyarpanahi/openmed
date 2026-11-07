@@ -592,6 +592,7 @@ def test_releasable_phase_report_requires_every_g1a_through_g8_check() -> None:
     assert machine.current_phase("pii", "tiny", "mlx-fp") == PHASE_SHADOW
 
 
+@pytest.mark.slow
 def test_apply_gate_cli_rolls_back_manifest_and_regenerates_card(
     tmp_path: Path,
 ) -> None:

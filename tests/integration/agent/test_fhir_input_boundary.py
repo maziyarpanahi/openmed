@@ -60,15 +60,16 @@ def test_fhir_transport_payload_is_screened_before_agent_context(source, hostile
     assert transport_calls == (["GET"] if source == "read" else [])
 
 
-@pytest.mark.parametrize("content_type", ["application/pdf", "image/png"])
-def test_allow_dispatch_has_no_unsupported_attachment_content(content_type):
-    canary = "SYNTHETIC-ATTACHMENT-CANARY"
-    encoded = base64.b64encode(canary.encode()).decode()
-    payload = {
-        "resourceType": "DiagnosticReport",
-        "presentedForm": [{"contentType": content_type, "data": encoded}],
-    }
-    received_context = InjectionGuard("allow").guard_input(payload).value
-    assert received_context["presentedForm"] == [{}]
-    assert canary not in json.dumps(received_context)
-    assert encoded not in json.dumps(received_context)
+def test_allow_dispatch_has_no_unsupported_attachment_content(subtests):
+    for content_type in ["application/pdf", "image/png"]:
+        with subtests.test(content_type=content_type):
+            canary = "SYNTHETIC-ATTACHMENT-CANARY"
+            encoded = base64.b64encode(canary.encode()).decode()
+            payload = {
+                "resourceType": "DiagnosticReport",
+                "presentedForm": [{"contentType": content_type, "data": encoded}],
+            }
+            received_context = InjectionGuard("allow").guard_input(payload).value
+            assert received_context["presentedForm"] == [{}]
+            assert canary not in json.dumps(received_context)
+            assert encoded not in json.dumps(received_context)

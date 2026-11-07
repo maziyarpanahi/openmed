@@ -88,86 +88,97 @@ def authorization(role=ROLE):
     )
 
 
-@pytest.mark.parametrize("kind", TYPES)
-def test_round_trip_changes_only_meta_and_status_and_is_idempotent(kind):
-    original = resource(kind)
-    before = deepcopy(original)
-    result = normalize_proposed_resource(original)
-    assert original == before
-    assert validate_proposed_resource(original)  # Passive exporter cannot pass.
-    assert not validate_proposed_resource(result.resource)
-    exempt = {"meta", "status", "verificationStatus"}
-    assert {k: v for k, v in original.items() if k not in exempt} == {
-        k: v for k, v in result.resource.items() if k not in exempt
-    }
-    assert result.resource["meta"]["versionId"] == "synthetic-version"
-    again = normalize_proposed_resource(json.loads(json.dumps(result.resource)))
-    assert again.resource == result.resource
-    assert again.findings == ()
-    assert CANARY not in repr(result)
-    assert CANARY not in json.dumps([f.to_dict() for f in result.findings])
-    assert all(
-        set(asdict(f)) == {"resource_type", "path", "code"} for f in result.findings
-    )
-    result.resource["code"]["text"] = "changed"
-    assert original == before  # No shared nested clinical data.
+def test_round_trip_changes_only_meta_and_status_and_is_idempotent(subtests):
+    for kind in TYPES:
+        with subtests.test(kind=kind):
+            original = resource(kind)
+            before = deepcopy(original)
+            result = normalize_proposed_resource(original)
+            assert original == before
+            assert validate_proposed_resource(original)  # Passive exporter cannot pass.
+            assert not validate_proposed_resource(result.resource)
+            exempt = {"meta", "status", "verificationStatus"}
+            assert {k: v for k, v in original.items() if k not in exempt} == {
+                k: v for k, v in result.resource.items() if k not in exempt
+            }
+            assert result.resource["meta"]["versionId"] == "synthetic-version"
+            again = normalize_proposed_resource(json.loads(json.dumps(result.resource)))
+            assert again.resource == result.resource
+            assert again.findings == ()
+            assert CANARY not in repr(result)
+            assert CANARY not in json.dumps([f.to_dict() for f in result.findings])
+            assert all(
+                set(asdict(f)) == {"resource_type", "path", "code"}
+                for f in result.findings
+            )
+            result.resource["code"]["text"] = "changed"
+            assert original == before  # No shared nested clinical data.
 
 
-@pytest.mark.parametrize("kind", TYPES)
-@pytest.mark.parametrize("role", [None, "role:org.openmed/reviewer", ROLE])
 def test_final_assertions_require_consumed_receipt_and_configured_attesting_role(
-    kind, role
+    subtests,
 ):
-    policy = FHIRWriteLabelPolicy(attesting_roles=frozenset({ROLE}))
-    payload = normalize_proposed_resource(resource(kind), policy=policy).resource
-    set_status(payload, "final" if kind == "Observation" else "confirmed")
-    findings = validate_proposed_resource(
-        payload,
-        policy=policy,
-        approval_authorization=authorization(role) if role else None,
-    )
-    assert bool(findings) == (role != ROLE)
-    assert validate_proposed_resource(
-        payload, approval_authorization=authorization()
-    )  # Empty role policy.
-    # Even an attesting policy never upgrades a proposal at normalization.
-    normalized = normalize_proposed_resource(payload, policy=policy)
-    assert not validate_proposed_resource(normalized.resource)
+    for kind in TYPES:
+        for role in [None, "role:org.openmed/reviewer", ROLE]:
+            with subtests.test(kind=kind, role=role):
+                policy = FHIRWriteLabelPolicy(attesting_roles=frozenset({ROLE}))
+                payload = normalize_proposed_resource(
+                    resource(kind), policy=policy
+                ).resource
+                set_status(payload, "final" if kind == "Observation" else "confirmed")
+                findings = validate_proposed_resource(
+                    payload,
+                    policy=policy,
+                    approval_authorization=authorization(role) if role else None,
+                )
+                assert bool(findings) == (role != ROLE)
+                assert validate_proposed_resource(
+                    payload, approval_authorization=authorization()
+                )  # Empty role policy.
+                # Even an attesting policy never upgrades a proposal at normalization.
+                normalized = normalize_proposed_resource(payload, policy=policy)
+                assert not validate_proposed_resource(normalized.resource)
 
 
-@pytest.mark.parametrize("kind", TYPES)
-@pytest.mark.parametrize("field", ["security", "tag"])
-@pytest.mark.parametrize(
-    "mutation", ["missing", "system", "code", "split-pair", "empty", "malformed"]
-)
-def test_origin_label_negative_controls_fail_closed(kind, field, mutation):
-    payload = normalize_proposed_resource(resource(kind)).resource
-    if mutation == "missing":
-        del payload["meta"][field]
-    elif mutation in {"system", "code"}:
-        payload["meta"][field][0][mutation] = CANARY
-    elif mutation == "split-pair":
-        correct = payload["meta"][field][0]
-        payload["meta"][field] = [
-            {"system": correct["system"], "code": "wrong"},
-            {"system": "wrong", "code": correct["code"]},
-        ]
-    elif mutation == "empty":
-        payload["meta"][field] = []
-    else:
-        payload["meta"][field] = [CANARY]
-    findings = validate_proposed_resource(
-        payload, approval_authorization=authorization()
-    )
-    assert findings
-    assert CANARY not in repr(findings)
-    if mutation != "missing":
-        before = deepcopy(payload)
-        with pytest.raises(WriteLabelError) as error:
-            normalize_proposed_resource(payload)
-        assert payload == before
-        assert CANARY not in str(error.value)
-        assert CANARY not in repr(error.value.findings)
+def test_origin_label_negative_controls_fail_closed(subtests):
+    for kind in TYPES:
+        for field in ["security", "tag"]:
+            for mutation in [
+                "missing",
+                "system",
+                "code",
+                "split-pair",
+                "empty",
+                "malformed",
+            ]:
+                with subtests.test(kind=kind, field=field, mutation=mutation):
+                    payload = normalize_proposed_resource(resource(kind)).resource
+                    if mutation == "missing":
+                        del payload["meta"][field]
+                    elif mutation in {"system", "code"}:
+                        payload["meta"][field][0][mutation] = CANARY
+                    elif mutation == "split-pair":
+                        correct = payload["meta"][field][0]
+                        payload["meta"][field] = [
+                            {"system": correct["system"], "code": "wrong"},
+                            {"system": "wrong", "code": correct["code"]},
+                        ]
+                    elif mutation == "empty":
+                        payload["meta"][field] = []
+                    else:
+                        payload["meta"][field] = [CANARY]
+                    findings = validate_proposed_resource(
+                        payload, approval_authorization=authorization()
+                    )
+                    assert findings
+                    assert CANARY not in repr(findings)
+                    if mutation != "missing":
+                        before = deepcopy(payload)
+                        with pytest.raises(WriteLabelError) as error:
+                            normalize_proposed_resource(payload)
+                        assert payload == before
+                        assert CANARY not in str(error.value)
+                        assert CANARY not in repr(error.value.findings)
 
 
 def test_custom_labels_are_exact_and_preserve_other_metadata():
@@ -188,9 +199,8 @@ def test_custom_labels_are_exact_and_preserve_other_metadata():
     assert normalize_proposed_resource(payload, policy=policy).resource == payload
 
 
-@pytest.mark.parametrize(
-    "kind,status",
-    [
+def test_tentative_and_negative_states_never_become_positive(subtests):
+    for kind, status in [
         ("Observation", "registered"),
         ("Observation", "preliminary"),
         ("Observation", "cancelled"),
@@ -203,84 +213,92 @@ def test_custom_labels_are_exact_and_preserve_other_metadata():
         ("AllergyIntolerance", "refuted"),
         ("AllergyIntolerance", "unconfirmed"),
         ("AllergyIntolerance", "entered-in-error"),
-    ],
-)
-def test_tentative_and_negative_states_never_become_positive(kind, status):
-    original = resource(kind, status)
-    result = normalize_proposed_resource(original)
-    path = "status" if kind == "Observation" else "verificationStatus"
-    assert result.resource[path] == original[path]
-    assert not validate_proposed_resource(result.resource)
-
-
-@pytest.mark.parametrize("status", ["final", "amended", "corrected"])
-def test_all_final_observation_states_need_attestation(status):
-    payload = normalize_proposed_resource(resource("Observation")).resource
-    set_status(payload, status)
-    assert validate_proposed_resource(payload)[0].code == "attestation_required"
-    assert normalize_proposed_resource(payload).resource["status"] == "preliminary"
-
-
-@pytest.mark.parametrize("kind", TYPES)
-@pytest.mark.parametrize("malformed", [CANARY, None, [], {"coding": []}])
-def test_malformed_status_is_not_silently_reinterpreted(kind, malformed):
-    payload = resource(kind)
-    payload["status" if kind == "Observation" else "verificationStatus"] = malformed
-    assert validate_proposed_resource(payload)
-    with pytest.raises(WriteLabelError) as error:
-        normalize_proposed_resource(payload)
-    assert CANARY not in repr(error.value.findings)
-
-
-@pytest.mark.parametrize("kind", TYPES)
-def test_missing_status_becomes_provisional_but_validation_rejects_it(kind):
-    payload = resource(kind)
-    del payload["status" if kind == "Observation" else "verificationStatus"]
-    assert validate_proposed_resource(payload)
-    assert not validate_proposed_resource(normalize_proposed_resource(payload).resource)
-
-
-@pytest.mark.parametrize("kind", ["Condition", "AllergyIntolerance"])
-def test_status_system_and_multiple_codings_fail_closed(kind):
-    for codings in [
-        [{"system": "urn:wrong", "code": "confirmed"}],
-        [
-            {"system": SYSTEMS[kind], "code": "unconfirmed"},
-            {"system": SYSTEMS[kind], "code": "confirmed"},
-        ],
     ]:
-        payload = resource(kind)
-        payload["verificationStatus"] = {"coding": codings}
-        with pytest.raises(WriteLabelError):
-            normalize_proposed_resource(payload)
+        with subtests.test(kind=kind, status=status):
+            original = resource(kind, status)
+            result = normalize_proposed_resource(original)
+            path = "status" if kind == "Observation" else "verificationStatus"
+            assert result.resource[path] == original[path]
+            assert not validate_proposed_resource(result.resource)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_all_final_observation_states_need_attestation(subtests):
+    for status in ["final", "amended", "corrected"]:
+        with subtests.test(status=status):
+            payload = normalize_proposed_resource(resource("Observation")).resource
+            set_status(payload, status)
+            assert validate_proposed_resource(payload)[0].code == "attestation_required"
+            assert (
+                normalize_proposed_resource(payload).resource["status"] == "preliminary"
+            )
+
+
+def test_malformed_status_is_not_silently_reinterpreted(subtests):
+    for kind in TYPES:
+        for malformed in [CANARY, None, [], {"coding": []}]:
+            with subtests.test(kind=kind, malformed=malformed):
+                payload = resource(kind)
+                payload["status" if kind == "Observation" else "verificationStatus"] = (
+                    malformed
+                )
+                assert validate_proposed_resource(payload)
+                with pytest.raises(WriteLabelError) as error:
+                    normalize_proposed_resource(payload)
+                assert CANARY not in repr(error.value.findings)
+
+
+def test_missing_status_becomes_provisional_but_validation_rejects_it(subtests):
+    for kind in TYPES:
+        with subtests.test(kind=kind):
+            payload = resource(kind)
+            del payload["status" if kind == "Observation" else "verificationStatus"]
+            assert validate_proposed_resource(payload)
+            assert not validate_proposed_resource(
+                normalize_proposed_resource(payload).resource
+            )
+
+
+def test_status_system_and_multiple_codings_fail_closed(subtests):
+    for kind in ["Condition", "AllergyIntolerance"]:
+        with subtests.test(kind=kind):
+            for codings in [
+                [{"system": "urn:wrong", "code": "confirmed"}],
+                [
+                    {"system": SYSTEMS[kind], "code": "unconfirmed"},
+                    {"system": SYSTEMS[kind], "code": "confirmed"},
+                ],
+            ]:
+                payload = resource(kind)
+                payload["verificationStatus"] = {"coding": codings}
+                with pytest.raises(WriteLabelError):
+                    normalize_proposed_resource(payload)
+
+
+def test_unsupported_shapes_never_echo_untrusted_resource_type(subtests):
+    for payload in [
         None,
         [],
         {"resourceType": CANARY},
         {"resourceType": []},
         {"resourceType": "Bundle", "entry": []},
-    ],
-)
-def test_unsupported_shapes_never_echo_untrusted_resource_type(payload):
-    findings = validate_proposed_resource(payload)
-    assert findings[0].resource_type == "Resource"
-    with pytest.raises(WriteLabelError) as error:
-        normalize_proposed_resource(payload)
-    assert CANARY not in repr(error.value.findings)
+    ]:
+        with subtests.test(payload=payload):
+            findings = validate_proposed_resource(payload)
+            assert findings[0].resource_type == "Resource"
+            with pytest.raises(WriteLabelError) as error:
+                normalize_proposed_resource(payload)
+            assert CANARY not in repr(error.value.findings)
 
 
-@pytest.mark.parametrize("meta", [None, CANARY, [], 42])
-def test_invalid_meta_fails_without_leakage(meta):
-    payload = resource("Observation")
-    payload["meta"] = meta
-    with pytest.raises(WriteLabelError) as error:
-        normalize_proposed_resource(payload)
-    assert error.value.findings[0].code == "invalid_meta"
-    assert CANARY not in repr(error.value.findings)
+def test_invalid_meta_fails_without_leakage(subtests):
+    for meta in [None, CANARY, [], 42]:
+        with subtests.test(meta=meta):
+            payload = resource("Observation")
+            payload["meta"] = meta
+            with pytest.raises(WriteLabelError) as error:
+                normalize_proposed_resource(payload)
+            assert error.value.findings[0].code == "invalid_meta"
+            assert CANARY not in repr(error.value.findings)
 
 
 def test_embedded_proposals_cannot_bypass_labeling():
@@ -301,16 +319,14 @@ def test_plain_role_or_receipt_mapping_cannot_attest():
         )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_configuration_uses_constant_errors(subtests):
+    for kwargs in [
         {"security_code": ""},
         {"security_system": None},
         {"tag_code": " padded "},
         {"attesting_roles": {ROLE}},
         {"attesting_roles": frozenset({None})},
-    ],
-)
-def test_invalid_configuration_uses_constant_errors(kwargs):
-    with pytest.raises(ValueError, match="^invalid_write_label_policy$"):
-        FHIRWriteLabelPolicy(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError, match="^invalid_write_label_policy$"):
+                FHIRWriteLabelPolicy(**kwargs)

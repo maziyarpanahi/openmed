@@ -61,31 +61,37 @@ _DEFAULT_EN_MODEL = DEFAULT_PII_MODELS["en"]
 _EXPLICIT_MODEL = "OpenMed/privacy-filter-multilingual"
 
 
-@pytest.mark.parametrize("lang", INDIC_AND_URDU_LANGUAGES)
-def test_every_code_is_accepted_when_the_caller_supplies_a_model(lang: str) -> None:
-    assert _resolve_effective_pii_model(_EXPLICIT_MODEL, lang) == _EXPLICIT_MODEL
+def test_every_code_is_accepted_when_the_caller_supplies_a_model(subtests) -> None:
+    for lang in INDIC_AND_URDU_LANGUAGES:
+        with subtests.test(lang=lang):
+            assert (
+                _resolve_effective_pii_model(_EXPLICIT_MODEL, lang) == _EXPLICIT_MODEL
+            )
 
 
-@pytest.mark.parametrize("lang", INDIC_AND_URDU_LANGUAGES)
-def test_every_code_is_registered_on_the_public_display_surfaces(lang: str) -> None:
-    assert LANGUAGE_NAMES[lang]
-    assert LANGUAGE_MODEL_PREFIX[lang] == f"{LANGUAGE_NAMES[lang]}-"
-    assert LANG_TO_LOCALE[lang]
-    assert DEFAULT_PII_MODELS[lang]
+def test_every_code_is_registered_on_the_public_display_surfaces(subtests) -> None:
+    for lang in INDIC_AND_URDU_LANGUAGES:
+        with subtests.test(lang=lang):
+            assert LANGUAGE_NAMES[lang]
+            assert LANGUAGE_MODEL_PREFIX[lang] == f"{LANGUAGE_NAMES[lang]}-"
+            assert LANG_TO_LOCALE[lang]
+            assert DEFAULT_PII_MODELS[lang]
 
 
-@pytest.mark.parametrize("lang", INDIC_AND_URDU_LANGUAGES)
-def test_every_code_resolves_deterministic_patterns(lang: str) -> None:
-    assert get_patterns_for_language(lang)
+def test_every_code_resolves_deterministic_patterns(subtests) -> None:
+    for lang in INDIC_AND_URDU_LANGUAGES:
+        with subtests.test(lang=lang):
+            assert get_patterns_for_language(lang)
 
 
-@pytest.mark.parametrize("lang", INDIC_AND_URDU_LANGUAGES)
-def test_pipeline_accepts_every_code_with_an_explicit_model(lang: str) -> None:
-    pipeline = Pipeline(lang=lang, model_name=_EXPLICIT_MODEL)
-    route = pipeline.stage2_language_script("MRN 4821")
+def test_pipeline_accepts_every_code_with_an_explicit_model(subtests) -> None:
+    for lang in INDIC_AND_URDU_LANGUAGES:
+        with subtests.test(lang=lang):
+            pipeline = Pipeline(lang=lang, model_name=_EXPLICIT_MODEL)
+            route = pipeline.stage2_language_script("MRN 4821")
 
-    assert route.lang == lang
-    assert route.model_name == _EXPLICIT_MODEL
+            assert route.lang == lang
+            assert route.model_name == _EXPLICIT_MODEL
 
 
 @pytest.mark.parametrize("lang", sorted(USER_SUPPLIED_MODEL_LANGUAGES))
@@ -183,14 +189,13 @@ def test_echoing_a_registry_placeholder_back_is_rejected(
     assert "Invalid characters" not in message
 
 
-@pytest.mark.parametrize("sentinel", (OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL))
-def test_placeholder_is_rejected_even_for_a_model_backed_language(
-    sentinel: str,
-) -> None:
-    with pytest.raises(ValueError, match="registry placeholder") as excinfo:
-        _resolve_effective_pii_model(sentinel, "hi")
+def test_placeholder_is_rejected_even_for_a_model_backed_language(subtests) -> None:
+    for sentinel in (OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL):
+        with subtests.test(sentinel=sentinel):
+            with pytest.raises(ValueError, match="registry placeholder") as excinfo:
+                _resolve_effective_pii_model(sentinel, "hi")
 
-    assert "OpenMed/" not in str(excinfo.value)
+            assert "OpenMed/" not in str(excinfo.value)
 
 
 @pytest.mark.parametrize("lang", NO_WEIGHTS_LANGUAGES)
