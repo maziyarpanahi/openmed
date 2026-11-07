@@ -192,6 +192,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
 
+- Offline critical transcript-token classification and value-free confirmation
+  holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
+  reviewer receipts, guarded export permits and unchanged local dosing checks.
+
 - Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
 
 - Review ECG lead identity, expected sets, display positions and grouped acquisition timing before canonical reordering, with explicit rhythm-strip declarations and value-free non-diagnostic findings (#2807).
