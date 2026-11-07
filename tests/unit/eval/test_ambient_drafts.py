@@ -103,6 +103,16 @@ def test_attribution_cannot_be_offset_by_citation_coverage():
     assert cells["unsupported"]["rate"] == 0.5
 
 
+def test_unsupported_claim_slices_follow_statement_identity():
+    draft = load_case("invented_statement")
+    original = evaluate_ambient_drafts(repeated(draft))
+    reordered = replace(draft, statements=tuple(reversed(draft.statements)))
+    assert evaluate_ambient_drafts(repeated(reordered)) == original
+    slices = original["slices"]
+    assert slices["class:finding"]["unsupported"]["rate"] == 1
+    assert slices["class:medication"]["unsupported"]["rate"] == 0
+
+
 def test_omitted_medication_slice():
     slices = evaluate_ambient_drafts(repeated(load_case("omitted_medication")))[
         "slices"

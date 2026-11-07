@@ -28,6 +28,7 @@ from openmed.eval.summary_unsupported_claims import (
     UNRESOLVED,
     ApprovedEvidence,
     SummaryClaim,
+    _normalize_claims,
     score_summary_claims,
 )
 
@@ -297,7 +298,11 @@ def evaluate_ambient_drafts(
         # Existing four-state metric supplies the unsupported/contradiction counts;
         # its unsuppressed reports are never exposed at this publication boundary.
         scored = score_summary_claims(claims, evidence, n_resamples=1)
-        for statement, assessment in zip(draft.statements, scored.assessments):
+        statements_by_id = {row.fact_id: row for row in draft.statements}
+        for claim, assessment in zip(
+            _normalize_claims(claims), scored.assessments, strict=True
+        ):
+            statement = statements_by_id[claim.claim_id]
             for code in _slice_codes(statement):
                 observations[code]["unsupported"].append(assessment.unsupported)
                 observations[code]["contradiction"].append(

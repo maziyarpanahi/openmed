@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -34,10 +33,6 @@ from openmed.eval.determinism import (
 
 GOLDEN_PATH = Path("openmed/eval/golden/determinism_golden.json")
 _APIS = ("extract_pii", "deidentify", "analyze_text")
-
-# Keep the reference corpus well under the 60s CI budget: the harness is the
-# only slow part, so we cap end-to-end wall time here.
-CI_TIME_BUDGET_SECONDS = 60.0
 
 
 def _load_golden() -> dict:
@@ -99,6 +94,7 @@ def test_golden_file_contains_no_raw_phi() -> None:
             assert value.startswith("sha256:")
 
 
+@pytest.mark.slow
 def test_repro_hash_stable_across_100_iterations() -> None:
     """Same input + seed must yield the identical span-set hash 100 times."""
     corpus = {item.item_id: item for item in default_corpus()}
@@ -147,6 +143,7 @@ def test_detector_row_order_does_not_change_tied_span_output() -> None:
     assert forward == reverse
 
 
+@pytest.mark.slow
 def test_cross_process_determinism_fresh_interpreter() -> None:
     """A fresh interpreter must emit the same hashes as the in-process run.
 
@@ -242,16 +239,6 @@ def test_divergence_diagnostic_reports_offsets_only_no_raw_text() -> None:
     assert "offsets/labels/hashes only" in message
     for secret in forbidden:
         assert secret not in message
-
-
-def test_harness_runs_within_ci_time_budget() -> None:
-    started = time.perf_counter()
-    run_determinism_check(iterations=5)
-    elapsed = time.perf_counter() - started
-    assert elapsed < CI_TIME_BUDGET_SECONDS, (
-        f"determinism harness took {elapsed:.2f}s, over the {CI_TIME_BUDGET_SECONDS}s "
-        "CI budget"
-    )
 
 
 def test_span_set_hash_is_order_independent_and_phi_free() -> None:

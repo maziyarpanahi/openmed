@@ -290,12 +290,14 @@ def test_reconciliation_is_offline_and_rejects_mixed_documents(
         )
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [("PO", "oral"), ("IV", "intravenous"), ("by mouth", "oral")],
-)
-def test_route_normalization(value, expected):
-    assert normalize_medication_route(value) == expected
+def test_route_normalization(subtests):
+    for value, expected in [
+        ("PO", "oral"),
+        ("IV", "intravenous"),
+        ("by mouth", "oral"),
+    ]:
+        with subtests.test(value=value, expected=expected):
+            assert normalize_medication_route(value) == expected
 
 
 def test_invalid_absolute_timestamp_is_rejected():
