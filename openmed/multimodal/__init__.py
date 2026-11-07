@@ -255,6 +255,18 @@ from .metadata_scrub import (
     scrub_metadata,
     verify_metadata,
 )
+from .notices import (
+    NOTICE_CATALOG,
+    NOTICE_RESULT_TYPES,
+    DraftReviewResult,
+    MeasurementReviewResult,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
+    VisualDescriptionResult,
+    validate_notice_registry,
+)
 
 # Importing the OCR module registers remaining OCR-only image-format handlers
 # (BMP/GIF/WebP). PNG/JPEG/TIFF are registered by ``image`` above because they
@@ -674,6 +686,16 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "NOTICE_CATALOG",
+    "NOTICE_RESULT_TYPES",
+    "DraftReviewResult",
+    "MeasurementReviewResult",
+    "MultimodalNotice",
+    "MultimodalNoticeError",
+    "NoticeBoundOutput",
+    "NoticeKind",
+    "VisualDescriptionResult",
+    "validate_notice_registry",
     "PROCESSING_DIFF_SCHEMA_VERSION",
     "AbstentionDelta",
     "DigestChange",
