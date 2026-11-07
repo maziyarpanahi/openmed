@@ -209,6 +209,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
 
+### Changed
+
+- Group multimodal guides into a dedicated workflow-ordered section with an
+  overview of supported contracts and experimental surfaces, preserving all
+  existing page URLs (#3845).
+
 ## [3.2.0] - 2026-10-30
 
 Global languages, synthetic clinical data and local decision-model backends.
