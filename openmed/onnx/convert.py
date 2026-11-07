@@ -17,13 +17,26 @@ import logging
 import os
 import shutil
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
+from openmed.eval.export_qualification import (
+    EXPORT_QUALIFICATION_FILENAME,
+    SHAPE_MODE_DYNAMIC,
+    ExportIOContract,
+    ExportQualificationError,
+    ExportQualificationReport,
+    ExportReason,
+    VariantCandidate,
+    qualify_export,
+    source_identity,
+    summarize_report,
+    write_qualification_report,
+)
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
 from openmed.mlx.artifact import find_tokenizer_files
 from openmed.onnx.android_profile import (
@@ -81,12 +94,19 @@ MINIMUM_TOKEN_CLASSIFICATION_OPSET = 18
 DEFAULT_SHAPE_BUCKETS = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
 DEFAULT_DYNAMIC_VALIDATION_LENGTHS = DEFAULT_SHAPE_BUCKETS
 DEFAULT_EXECUTION_PROVIDERS = ("CPUExecutionProvider",)
+# Tensors smaller than this many bytes stay inline in the graph protobuf.
+EXTERNAL_DATA_SIZE_THRESHOLD = 1024
 
 _FUSION_OPTION_ATTRS = {
     "attention_fusion": ("enable_attention",),
     "layer_norm_fusion": ("enable_layer_norm", "enable_layer_norm_fusion"),
     "gelu_fusion": ("enable_gelu", "enable_gelu_approximation"),
 }
+
+# Export qualification runs on the CPU provider. The WebGPU graph is checked
+# there as a numeric proxy and recorded with its target provider.
+QUALIFICATION_PROVIDER = "CPUExecutionProvider"
+WEBGPU_TARGET_PROVIDER = "WebGpuExecutionProvider"
 
 
 @dataclass(frozen=True)
@@ -238,6 +258,17 @@ def export_onnx(
     )
     model.to(dtype=torch.float32)
     model.eval()
+    adapter = _resolve_export_adapter(
+        getattr(getattr(model, "config", None), "model_type", None)
+    )
+    if adapter is not None:
+        adapter.validate_request(
+            runtime="onnx",
+            config=model.config,
+            max_sequence_length=max_seq_length,
+            shape_mode=SHAPE_MODE_DYNAMIC,
+        )
+        adapter.prepare_model(model)
 
     sample = tokenizer(
         [sample_text, sample_text],
@@ -246,7 +277,7 @@ def export_onnx(
         truncation=True,
         return_tensors="pt",
     )
-    use_token_type_ids = "token_type_ids" in sample
+    use_token_type_ids = "token_type_ids" in sample and adapter is None
 
     class TokenClassificationWrapper(torch.nn.Module):
         def __init__(self, base_model: Any, include_token_type_ids: bool) -> None:
@@ -268,8 +299,13 @@ def export_onnx(
                 inputs["token_type_ids"] = token_type_ids
             return self.base_model(**inputs).logits
 
-    wrapper = TokenClassificationWrapper(model, use_token_type_ids)
-    wrapper.eval()
+    if adapter is not None:
+        wrapper = adapter.build_wrapper(torch, model)
+        trace_context = adapter.trace_context(torch, model)
+    else:
+        wrapper = TokenClassificationWrapper(model, use_token_type_ids)
+        wrapper.eval()
+        trace_context = nullcontext()
 
     input_names = ["input_ids", "attention_mask"]
     example_inputs: tuple[Any, ...] = (sample["input_ids"], sample["attention_mask"])
@@ -293,7 +329,7 @@ def export_onnx(
                 profile=profile,
             )
         )
-        with _onnx_export_compatibility(model, torch):
+        with _onnx_export_compatibility(model, torch), trace_context:
             torch.onnx.export(
                 wrapper,
                 example_inputs,
@@ -363,8 +399,33 @@ def convert(
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
     segmenter_id: str | None = None,
+    qualify: bool | None = None,
+    qualification_fixtures_path: str | Path | None = None,
+    expected_source_revision: str | None = None,
+    direct_identifier_recall_floor: float | None = None,
 ) -> OnnxConversionResult:
-    """Export ONNX artifacts and optionally publish the resulting directory."""
+    """Export ONNX artifacts and optionally publish the resulting directory.
+
+    Families with a registered export adapter (ModernBERT) are traced through
+    that adapter and qualified on ``CPUExecutionProvider`` against the stock
+    PyTorch checkpoint on a synthetic PHI suite. The report is written to
+    ``openmed-export-qualification.json`` and summarized in the manifest. The
+    WebGPU fp16 graph is qualified on the CPU provider as a numeric proxy and
+    is recorded as ``cpu_proxy``, never as a WebGPU claim. Undeclared
+    profiles, providers, or bundles fail with
+    :class:`ExportQualificationError` before any inference, a failing gate
+    raises after the evidence is written, and unqualified artifacts are never
+    published.
+
+    Args:
+        qualify: ``None`` or ``True`` qualifies adapter families; ``False``
+            skips qualification and the manifest claims nothing. ``True`` for
+            a family without an adapter raises ``unsupported_family``.
+        qualification_fixtures_path: Synthetic suite for qualification.
+            Defaults to the packaged synthetic PHI suite.
+        expected_source_revision: Optional pinned source revision.
+        direct_identifier_recall_floor: Optional absolute recall floor.
+    """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -412,6 +473,23 @@ def convert(
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
     )
+    adapter = _resolve_export_adapter(config.get("model_type"))
+    if adapter is None:
+        if qualify:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+    else:
+        if profile == OPENVINO_PROFILE_NAME or include_transformersjs:
+            # OpenVINO IR and Transformers.js bundles have no qualified path.
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_RUNTIME)
+        adapter.validate_request(
+            runtime="onnx",
+            config=config,
+            max_sequence_length=max_seq_length,
+            precisions=("float32", "float16") if include_webgpu else ("float32",),
+            quantizations=("int8",) if profile == ANDROID_PROFILE_NAME else (),
+            providers=tuple(optimization_config.providers),
+            shape_mode=SHAPE_MODE_DYNAMIC,
+        )
     segmenter = (
         package_segmenter_resources(output_dir, segmenter_id)
         if segmenter_id is not None
@@ -592,6 +670,17 @@ def convert(
             for artifact in artifacts
         ]
 
+    qualification_block: dict[str, Any] | None = None
+    if adapter is not None:
+        qualification_block = {
+            "family": adapter.family,
+            "adapter_version": adapter.version,
+            "passed": False,
+            "status": "not_run",
+            "reasons": [ExportReason.MISSING_EVIDENCE.value],
+            "qualified_variants": [],
+        }
+
     manifest_path = write_export_manifest(
         output_dir,
         source_model_id=model_id,
@@ -604,6 +693,7 @@ def convert(
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
         segmenter=segmenter,
+        qualification=qualification_block,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
@@ -611,6 +701,36 @@ def convert(
             recall_report,
             report_relpath=str(recall_report["report_path"]),
         )
+
+    # Qualify last so the recorded digests cover the final config and graphs.
+    qualification_report: ExportQualificationReport | None = None
+    if adapter is not None and qualify is not False:
+        qualification_report = _qualify_onnx_artifacts(
+            adapter=adapter,
+            model_id=model_id,
+            cache_dir=cache_dir,
+            output_dir=output_dir,
+            artifacts=artifacts,
+            tokenizer_files=tokenizer_files,
+            max_seq_length=max_seq_length,
+            shape_bucket_config=shape_bucket_config,
+            fixtures_path=qualification_fixtures_path,
+            expected_source_revision=expected_source_revision,
+            direct_identifier_recall_floor=direct_identifier_recall_floor,
+        )
+        write_qualification_report(
+            qualification_report,
+            output_dir / EXPORT_QUALIFICATION_FILENAME,
+        )
+        _attach_manifest_qualification(
+            manifest_path, summarize_report(qualification_report)
+        )
+        if not qualification_report.passed:
+            logger.warning(
+                "ONNX qualification failed: %s",
+                ", ".join(qualification_report.reasons),
+            )
+            qualification_report.raise_for_failure()
     result = OnnxConversionResult(
         output_dir=output_dir,
         manifest_path=manifest_path,
@@ -618,6 +738,10 @@ def convert(
     )
 
     if publish_to_hub:
+        if adapter is not None and (
+            qualification_report is None or not qualification_report.passed
+        ):
+            raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
         publish_result = publish_artifact(
             artifact_dir=output_dir,
             source_model_id=model_id,
@@ -637,6 +761,192 @@ def convert(
             logger.info("Published ONNX artifacts to %s", publish_result.repo_id)
 
     return result
+
+
+def _attach_manifest_qualification(
+    manifest_path: Path, qualification: Mapping[str, Any]
+) -> None:
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    manifest["qualification"] = dict(qualification)
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+
+def _resolve_export_adapter(model_type: Any) -> Any:
+    from openmed.torch.export_adapters import resolve_export_adapter
+
+    return resolve_export_adapter(str(model_type) if model_type else None)
+
+
+def _qualify_onnx_artifacts(
+    *,
+    adapter: Any,
+    model_id: str,
+    cache_dir: str | None,
+    output_dir: Path,
+    artifacts: Sequence[ExportArtifact],
+    tokenizer_files: Sequence[str],
+    max_seq_length: int,
+    shape_bucket_config: ShapeBucketConfig,
+    fixtures_path: str | Path | None,
+    expected_source_revision: str | None,
+    direct_identifier_recall_floor: float | None,
+) -> ExportQualificationReport:
+    """Qualify every exported ONNX graph against the stock PyTorch checkpoint."""
+
+    try:
+        import onnxruntime as ort
+        import torch
+        from transformers import (
+            AutoConfig,
+            AutoModelForTokenClassification,
+            AutoTokenizer,
+        )
+    except ImportError as exc:
+        raise_missing_backend("onnx", feature="ONNX export qualification", cause=exc)
+
+    from openmed.torch.export_adapters import torch_reference_runner
+
+    source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    source = source_identity(
+        model_id,
+        config=source_config,
+        expected_revision=expected_source_revision,
+    )
+    tokenizer = get_tokenizer_with_loader(
+        model_id,
+        AutoTokenizer.from_pretrained,
+        cache_dir=cache_dir,
+    )
+    reference_model = AutoModelForTokenClassification.from_pretrained(
+        model_id,
+        cache_dir=cache_dir,
+    )
+    reference_model.to(dtype=torch.float32)
+    reference_model.eval()
+
+    candidates = [
+        _onnx_variant_candidate(ort, artifact, output_dir=output_dir)
+        for artifact in artifacts
+    ]
+    support_files = [
+        output_dir / name
+        for name in ("config.json", "id2label.json", *tokenizer_files)
+        if (output_dir / name).is_file()
+    ]
+    buckets = tuple(
+        bucket for bucket in shape_bucket_config.buckets if bucket <= max_seq_length
+    )
+    return qualify_export(
+        family=adapter.family,
+        adapter_version=adapter.version,
+        runtime="onnx",
+        support=adapter.support_for("onnx"),
+        io_contract=ExportIOContract(
+            input_names=("input_ids", "attention_mask"),
+            output_names=("logits",),
+            sequence_buckets=buckets,
+            max_sequence_length=max_seq_length,
+            shape_mode=SHAPE_MODE_DYNAMIC,
+            batch_size=None,
+            input_dtype="int64",
+        ),
+        tokenizer=tokenizer,
+        id2label=reference_model.config.id2label,
+        reference_runner=torch_reference_runner(torch, reference_model),
+        candidates=candidates,
+        source=source,
+        artifact_root=output_dir,
+        artifact_paths=support_files,
+        fixtures_path=fixtures_path,
+        exclude_artifact_names=(MANIFEST_FILENAME,),
+        direct_identifier_recall_floor=direct_identifier_recall_floor,
+    )
+
+
+def _onnx_variant_candidate(
+    ort_module: Any,
+    artifact: ExportArtifact,
+    *,
+    output_dir: Path,
+) -> VariantCandidate:
+    """Build a CPU-provider qualification candidate for one exported graph."""
+
+    path = Path(artifact.path)
+    quantization = "int8" if artifact.format == ONNX_INT8_FORMAT else "none"
+    precision = "float32" if quantization == "int8" else artifact.precision
+    if artifact.format not in {
+        "onnx",
+        "webgpu",
+        ANDROID_ONNX_FORMAT,
+        ONNX_INT8_FORMAT,
+        ORT_ANDROID_FORMAT,
+    }:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_RUNTIME)
+    tag = {"float32": "fp32", "float16": "fp16"}.get(precision, precision)
+    name = artifact.format if quantization == "int8" else f"{artifact.format}-{tag}"
+    artifact_paths = [path]
+    sidecar = path.with_name(f"{path.name}.data")
+    if sidecar.is_file():
+        artifact_paths.append(sidecar)
+    return VariantCandidate(
+        name=name,
+        runner=_onnx_logits_runner(ort_module, path),
+        precision=precision,
+        quantization=quantization,
+        provider=QUALIFICATION_PROVIDER,
+        artifact_paths=tuple(artifact_paths),
+        target_provider=(
+            WEBGPU_TARGET_PROVIDER if artifact.format == "webgpu" else None
+        ),
+        evidence=_onnx_operator_evidence(path),
+    )
+
+
+def _onnx_logits_runner(ort_module: Any, path: Path) -> Any:
+    import numpy as np
+
+    session = ort_module.InferenceSession(
+        str(path),
+        providers=[QUALIFICATION_PROVIDER],
+    )
+    if QUALIFICATION_PROVIDER not in session.get_providers():
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_PROVIDER)
+    inputs = session.get_inputs()
+
+    def run(feed: Mapping[str, Any]) -> Any:
+        prepared = {
+            item.name: np.asarray(
+                feed[item.name],
+                dtype=np.int32 if "int32" in str(item.type) else np.int64,
+            )
+            for item in inputs
+        }
+        return np.asarray(session.run(["logits"], prepared)[0], dtype=np.float32)
+
+    return run
+
+
+def _onnx_operator_evidence(path: Path) -> dict[str, Any]:
+    """Return the value-free operator inventory of an ONNX graph."""
+
+    if path.suffix != ".onnx":
+        return {"operator_inventory": "not_applicable"}
+    try:
+        import onnx
+    except ImportError:
+        return {"operator_inventory": "unavailable"}
+    graph = onnx.load(str(path), load_external_data=False).graph
+    operators = sorted(
+        {f"{node.domain or 'ai.onnx'}:{node.op_type}" for node in graph.node}
+    )
+    return {
+        "operator_inventory": "computed",
+        "operator_types": operators,
+        "node_count": len(graph.node),
+        "qualified_provider_fallbacks": [],
+    }
 
 
 def save_source_assets(
@@ -713,6 +1023,7 @@ def write_export_manifest(
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
     segmenter: Mapping[str, Any] | None = None,
+    qualification: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
 
@@ -756,6 +1067,8 @@ def write_export_manifest(
     }
     if segmenter is not None:
         manifest["segmenter"] = dict(segmenter)
+    if qualification is not None:
+        manifest["qualification"] = dict(qualification)
 
     manifest_path = output_dir / MANIFEST_FILENAME
     with manifest_path.open("w", encoding="utf-8") as handle:
@@ -1348,22 +1661,29 @@ def _consolidate_external_onnx_data(path: Path) -> None:
     temporary_dir.mkdir()
 
     try:
+        # Small tensors stay inline: ONNX Runtime shape inference cannot read
+        # external constants such as Slice starts/ends, so a sidecar holding
+        # every tensor makes the graph unloadable from disk.
         onnx.save_model(
             model,
             str(temporary_path),
             save_as_external_data=True,
             all_tensors_to_one_file=True,
             location=sidecar_name,
-            size_threshold=0,
+            size_threshold=EXTERNAL_DATA_SIZE_THRESHOLD,
             convert_attribute=False,
         )
-        if not temporary_path.is_file() or not temporary_sidecar.is_file():
+        if not temporary_path.is_file():
+            raise RuntimeError("ONNX external-data consolidation was incomplete")
+        has_sidecar = temporary_sidecar.is_file()
+        if not has_sidecar and _has_external_initializers(onnx, temporary_path):
             raise RuntimeError("ONNX external-data consolidation was incomplete")
 
         if sidecar_path.exists():
             sidecar_path.replace(backup_sidecar)
         try:
-            temporary_sidecar.replace(sidecar_path)
+            if has_sidecar:
+                temporary_sidecar.replace(sidecar_path)
             temporary_path.replace(path)
         except Exception:
             sidecar_path.unlink(missing_ok=True)
@@ -1377,6 +1697,14 @@ def _consolidate_external_onnx_data(path: Path) -> None:
         old_path = (path.parent / location).resolve(strict=False)
         if old_path.parent == path.parent.resolve(strict=False):
             old_path.unlink(missing_ok=True)
+
+
+def _has_external_initializers(onnx_module: Any, path: Path) -> bool:
+    model = onnx_module.load(str(path), load_external_data=False)
+    return any(
+        tensor.data_location == onnx_module.TensorProto.EXTERNAL
+        for tensor in model.graph.initializer
+    )
 
 
 def _copy_missing_model_metadata(target: Any, source: Any) -> None:
@@ -1675,6 +2003,30 @@ def main() -> None:
         help="Output path for the INT8 recall_delta.json report",
     )
     parser.add_argument(
+        "--no-qualify",
+        action="store_true",
+        help=(
+            "Skip qualification of adapter families such as ModernBERT; the "
+            "manifest then claims no qualified variant"
+        ),
+    )
+    parser.add_argument(
+        "--qualification-fixtures",
+        default=None,
+        help="Synthetic benchmark fixture JSON/JSONL for qualification",
+    )
+    parser.add_argument(
+        "--expected-source-revision",
+        default=None,
+        help="Fail unless the source checkpoint resolves to this revision",
+    )
+    parser.add_argument(
+        "--direct-identifier-recall-floor",
+        type=float,
+        default=None,
+        help="Optional absolute direct-identifier recall floor",
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1751,6 +2103,10 @@ def main() -> None:
         publish_token_env=args.publish_token_env,
         publish_private=args.publish_private,
         publish_overwrite_existing=args.publish_overwrite_existing,
+        qualify=False if args.no_qualify else None,
+        qualification_fixtures_path=args.qualification_fixtures,
+        expected_source_revision=args.expected_source_revision,
+        direct_identifier_recall_floor=args.direct_identifier_recall_floor,
     )
 
 

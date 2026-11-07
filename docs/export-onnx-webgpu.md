@@ -120,6 +120,22 @@ to the published `models.jsonl` row. Consumers should use `artifacts[].path`
 from `openmed-onnx.json` to resolve files rather than deriving filenames from
 the format name.
 
+## ModernBERT Exports
+
+ModernBERT checkpoints are traced through the family adapter in
+`openmed.torch.export_adapters` and qualified on `CPUExecutionProvider`
+against the PyTorch reference checkpoint before the converter returns. The
+directory gains `openmed-export-qualification.json` and the manifest gains a
+`qualification` summary. `model.onnx` is claimed as `qualified`;
+`model.webgpu.onnx` is checked on the CPU provider as a numeric proxy and
+recorded as `cpu_proxy`, which is not a WebGPU support claim. Other providers,
+`--include-transformersjs`, and the OpenVINO profile are rejected with stable
+reason codes before inference, and `--no-qualify` records `status: not_run`
+and blocks publishing. `OnnxModel` reads the bundled report and rejects an
+unqualified variant, provider, or sequence length before it opens a session.
+Gates, tolerances, and the offline reproduction command are in the
+[Export Format Support Matrix](export-matrix.md#modernbert-runtime-support).
+
 ## Load with Python ONNX Runtime
 
 Install only the inference dependencies when export tooling is not needed:

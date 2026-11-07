@@ -188,6 +188,13 @@ class OnnxModel:
         )
         self.config = _read_json(self.artifact_dir / "config.json")
         self.id2label = _read_id2label(self.artifact_dir, self.config)
+        # Qualified exports (for example ModernBERT) reject unqualified
+        # variants and providers before a runtime session exists.
+        self.qualification = _check_qualified_artifact(
+            self.artifact_dir,
+            self.model_path,
+            providers=providers,
+        )
         np, ort, auto_tokenizer = _load_runtime_dependencies()
         self._np = np
         self.tokenizer = tokenizer or auto_tokenizer.from_pretrained(
@@ -216,6 +223,10 @@ class OnnxModel:
             input_shape[1]
             if len(input_shape) > 1 and isinstance(input_shape[1], int)
             else None
+        )
+        qualified_max = (self.qualification or {}).get("max_sequence_length")
+        self._qualified_max_length = (
+            int(qualified_max) if isinstance(qualified_max, int) else None
         )
 
     @classmethod
@@ -389,12 +400,21 @@ class OnnxModel:
                 self.config.get("max_position_embeddings"),
                 getattr(self.tokenizer, "model_max_length", None),
                 self._fixed_sequence_length,
+                self._qualified_max_length,
             )
             if isinstance(value, int) and 2 < value < 10**7
         ]
         model_limit = min(limits) if limits else 512
         window_size = min(model_limit, 512) if max_length is None else max_length
         _positive_integer("max_length", window_size)
+        qualified_limit = self._qualified_max_length
+        if qualified_limit is not None and window_size > qualified_limit:
+            from openmed.eval.export_qualification import (
+                ExportQualificationError,
+                ExportReason,
+            )
+
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_SEQUENCE_LENGTH)
         if window_size > model_limit:
             raise ValueError("max_length exceeds the model token limit")
         overlap = min(96, max(0, (window_size - 2) // 4)) if stride is None else stride
@@ -567,6 +587,44 @@ class OnnxModel:
             dtype = _numpy_input_dtype(self._np, inputs_by_name[name])
             feed[name] = self._np.asarray(value, dtype=dtype)
         return feed
+
+
+def _check_qualified_artifact(
+    artifact_dir: Path,
+    model_path: Path,
+    *,
+    providers: Sequence[str],
+) -> dict[str, Any] | None:
+    """Apply a bundled qualification report, when present, before inference."""
+
+    from openmed.eval.export_qualification import (
+        EXPORT_QUALIFICATION_FILENAME,
+        check_qualified_request,
+        load_qualification_report,
+    )
+
+    report_path = artifact_dir / EXPORT_QUALIFICATION_FILENAME
+    if not report_path.is_file():
+        return None
+    report = load_qualification_report(report_path)
+    try:
+        relative = model_path.resolve().relative_to(artifact_dir.resolve())
+        artifact = relative.as_posix()
+    except ValueError:
+        artifact = model_path.name
+    variant = check_qualified_request(
+        report,
+        runtime="onnx",
+        artifact=artifact,
+        providers=list(providers),
+    )
+    contract = report.get("io_contract") or {}
+    return {
+        "family": report.get("family"),
+        "variant": variant.get("name"),
+        "claim": variant.get("claim"),
+        "max_sequence_length": contract.get("max_sequence_length"),
+    }
 
 
 def load_onnx_model(

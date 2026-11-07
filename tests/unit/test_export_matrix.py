@@ -66,3 +66,43 @@ def test_matrix_is_in_mkdocs_nav_and_cross_linked() -> None:
         assert "export-matrix.md" in text, (
             f"{path.relative_to(ROOT)} should link to the export matrix"
         )
+
+
+def _modernbert_support_rows(text: str) -> dict[str, dict[str, list[str]]]:
+    section = text.split("## ModernBERT runtime support", 1)[1]
+    section = section.split("### ", 1)[0]
+    rows: dict[str, dict[str, list[str]]] = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 6 or cells[0] in {"Runtime", "---"}:
+            continue
+        runtime, precisions, quantizations, providers, shapes, target = cells
+        rows[runtime] = {
+            "precisions": precisions.split(", "),
+            "quantizations": quantizations.split(", "),
+            "providers": providers.split(", "),
+            "shape_modes": shapes.split(", "),
+            "target": [target],
+        }
+    return rows
+
+
+def test_modernbert_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.export_adapters import MODERNBERT_EXPORT_ADAPTER
+
+    documented = _modernbert_support_rows(DOC.read_text(encoding="utf-8"))
+    declared = MODERNBERT_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_matrix_lists_every_export_qualification_reason_code() -> None:
+    from openmed.eval.export_qualification import ExportReason
+
+    tokens = _backtick_tokens(DOC.read_text(encoding="utf-8"))
+    missing = {reason.value for reason in ExportReason} - tokens
+    assert not missing, f"undocumented reason codes: {sorted(missing)}"
