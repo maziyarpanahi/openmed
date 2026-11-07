@@ -30,6 +30,7 @@ rootProject.name = "openmed-android"
 include(":OpenMedScanDemo:app")
 include(":OpenMedMapleDemo:app")
 include(":openmedkit")
+include(":openmedkit-mlkit")
 include(":OpenMedDemo:app")
 // Reserved for a future app/demo module; enable once android/sample exists.
 // include(":sample")

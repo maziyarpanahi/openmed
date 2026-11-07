@@ -150,7 +150,10 @@ jobs:
       - name: Run Android CI commands
         working-directory: android
         run: |
-          ./gradlew :openmedkit:assembleDebug :openmedkit:testDebugUnitTest --stacktrace
+          ./gradlew :openmedkit:assembleDebug :openmedkit:testDebugUnitTest \
+            :openmedkit-mlkit:assembleDebug :openmedkit-mlkit:testDebugUnitTest \
+            :openmedkit:verifyDependencyBoundary :openmedkit-mlkit:verifyDependencyBoundary \
+            --stacktrace
 
       - name: Build signed Maven Central bundle
         if: needs.guard.outputs.central_portal_configured == 'true'
@@ -160,14 +163,19 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.ANDROID_SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: |
-          ./gradlew :openmedkit:bundleCentralPortalPublication --stacktrace
+          ./gradlew :openmedkit:bundleCentralPortalPublication \
+            :openmedkit-mlkit:bundleCentralPortalPublication --stacktrace
+          cp "openmedkit-mlkit/build/central-portal/openmedkit-mlkit-${ORG_GRADLE_PROJECT_openmedAndroidVersion}.zip" \
+            openmedkit/build/central-portal/
 
       - name: Upload Central Portal bundle artifact
         if: needs.guard.outputs.central_portal_configured == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: openmedkit-central-portal-bundle
-          path: android/openmedkit/build/central-portal/openmedkit-${{ needs.guard.outputs.version }}.zip
+          path: |
+            android/openmedkit/build/central-portal/openmedkit-${{ needs.guard.outputs.version }}.zip
+            android/openmedkit/build/central-portal/openmedkit-mlkit-${{ needs.guard.outputs.version }}.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -201,10 +209,13 @@ jobs:
           fi
 
           token=$(printf '%s:%s' "$SONATYPE_USERNAME" "$SONATYPE_PASSWORD" | base64 | tr -d '\n')
-          deployment_id=$(curl --fail --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer ${token}" \
-            --form "bundle=@dist/openmedkit-${RELEASE_VERSION}.zip;type=application/octet-stream" \
-            "https://central.sonatype.com/api/v1/publisher/upload?name=openmedkit-${RELEASE_VERSION}&publishingType=AUTOMATIC")
+          # Upload the core artifact first; the optional ML Kit adapter depends on it.
+          for artifact in openmedkit openmedkit-mlkit; do
+            deployment_id=$(curl --fail --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer ${token}" \
+              --form "bundle=@dist/${artifact}-${RELEASE_VERSION}.zip;type=application/octet-stream" \
+              "https://central.sonatype.com/api/v1/publisher/upload?name=${artifact}-${RELEASE_VERSION}&publishingType=AUTOMATIC")
 
-          echo "Central Portal deployment ${deployment_id} accepted for OpenMedKit ${RELEASE_VERSION}."
+            echo "Central Portal deployment ${deployment_id} accepted for ${artifact} ${RELEASE_VERSION}."
+          done

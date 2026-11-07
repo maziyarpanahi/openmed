@@ -56,6 +56,11 @@ After tag publication, JitPack resolves the immutable `v3.2.0` tag and builds th
 Android release component as an AAR. Public consumers do not need GitHub
 credentials.
 
+The core artifact has no OCR engine and requests no network permission. Add
+the optional ML Kit OCR adapter only if you need it; see
+[Optional ML Kit OCR module](android-integration.md#optional-ml-kit-ocr-module)
+for the license and network permissions it adds.
+
 ## Quick Start: Kotlin
 
 The snippet below discovers a model in the on-device catalog, resolves its

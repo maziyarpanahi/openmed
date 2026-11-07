@@ -44,9 +44,20 @@ jobs:
           android/gradle/wrapper/gradle-wrapper.properties
           android/**/build.gradle*
 
-    - name: Assemble OpenMedKit debug library
+    - name: Assemble OpenMedKit debug libraries
       working-directory: android
-      run: ./gradlew :openmedkit:assembleDebug --stacktrace
+      run: ./gradlew :openmedkit:assembleDebug :openmedkit-mlkit:assembleDebug --stacktrace
+
+    - name: Verify core dependency boundary
+      working-directory: android
+      run: >-
+        ./gradlew :openmedkit:verifyDependencyBoundary
+        :openmedkit-mlkit:verifyDependencyBoundary
+        --stacktrace
+
+    - name: Run optional ML Kit OCR module tests
+      working-directory: android
+      run: ./gradlew :openmedkit-mlkit:testDebugUnitTest --stacktrace
 
     - name: Run Android offset-contract parity suite
       working-directory: android
@@ -105,4 +116,8 @@ jobs:
           android/openmedkit/build/reports/tests/testDebugUnitTest/
           android/openmedkit/build/test-results/testDebugUnitTest/
           android/openmedkit/build/reports/budgets/
+          android/openmedkit/build/reports/dependency-boundary/
+          android/openmedkit-mlkit/build/reports/dependency-boundary/
+          android/openmedkit-mlkit/build/reports/tests/testDebugUnitTest/
+          android/openmedkit-mlkit/build/test-results/testDebugUnitTest/
         if-no-files-found: ignore
