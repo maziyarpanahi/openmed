@@ -1,0 +1,137 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/runtimes/execution-constraints.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed execution-plan caller constraints",
+  "description": "Caller policy applied by the execution-plan resolver. local_only must be true for a plan; false resolves to remote_execution_unsupported.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "allowed_precisions",
+    "deadline_ms",
+    "disallowed_providers",
+    "energy",
+    "local_only",
+    "max_memory_bytes",
+    "max_steps",
+    "min_sequence_length",
+    "require_verified_files",
+    "required_evidence",
+    "revoked_artifacts",
+    "schema",
+    "schema_version"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.execution_constraints"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "local_only": {
+      "type": "boolean"
+    },
+    "allowed_precisions": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "bf16",
+              "fp16",
+              "fp32",
+              "int2",
+              "int4",
+              "int8"
+            ]
+          }
+        }
+      ]
+    },
+    "disallowed_providers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "coreml",
+          "cpu",
+          "metal",
+          "nnapi",
+          "qnn",
+          "wasm",
+          "webgpu"
+        ]
+      }
+    },
+    "max_memory_bytes": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      ]
+    },
+    "min_sequence_length": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      ]
+    },
+    "energy": {
+      "enum": [
+        "balanced",
+        "low_power"
+      ]
+    },
+    "required_evidence": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+      }
+    },
+    "revoked_artifacts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "max_steps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16
+    },
+    "deadline_ms": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400000
+        }
+      ]
+    },
+    "require_verified_files": {
+      "type": "boolean"
+    }
+  }
+}

@@ -667,7 +667,7 @@ private fun AcceleratorConfig.withDiscoveredCoverage(modelFile: File): Accelerat
     return if (discovered == null) this else copy(modelCoverage = discovered)
 }
 
-private fun availableAcceleratorProviders(): Set<AcceleratorProvider> {
+internal fun availableAcceleratorProviders(): Set<AcceleratorProvider> {
     val ortProviders = OrtEnvironment.getAvailableProviders()
     return buildSet {
         add(AcceleratorProvider.CPU)
