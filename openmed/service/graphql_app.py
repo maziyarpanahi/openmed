@@ -10,7 +10,14 @@ from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
 
-from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
+from .admission import REASON_GLOBAL_LIMIT
+from .graphql_schema import (
+    ADMISSION_REJECTED_CODE,
+    ADMISSION_REJECTED_MESSAGE,
+    SAFE_RESOLVER_ERROR,
+    OpenMedGraphQLContext,
+    schema,
+)
 from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
 
@@ -36,6 +43,30 @@ class PrivacySafeGraphQLRouter(GraphQLRouter):
                     {
                         "message": "Operation is not permitted.",
                         "extensions": {"code": "OPENMED_FORBIDDEN"},
+                    }
+                ],
+            }
+        admission_reasons = [
+            error.extensions.get("reason")
+            for error in result.errors or ()
+            if error.extensions.get("code") == ADMISSION_REJECTED_CODE
+        ]
+        if admission_reasons:
+            # Drop partial results so a rejected document is retried whole.
+            reason = (
+                REASON_GLOBAL_LIMIT
+                if REASON_GLOBAL_LIMIT in admission_reasons
+                else admission_reasons[0]
+            )
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": ADMISSION_REJECTED_MESSAGE,
+                        "extensions": {
+                            "code": ADMISSION_REJECTED_CODE,
+                            "reason": reason,
+                        },
                     }
                 ],
             }

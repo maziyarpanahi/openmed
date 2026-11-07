@@ -33,6 +33,8 @@ _CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 # list is intentionally value-only metadata: it never contains a request,
 # response, credential, or model payload.
 _LEGACY_STABLE_ERROR_CATEGORIES = (
+    "admission_limited",
+    "admission_saturated",
     "auth_rate_limited",
     "authentication_required",
     "backpressure",
