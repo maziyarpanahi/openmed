@@ -510,6 +510,7 @@ classification:
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
     - multimodal/ambient-session-policy.md
+    - multimodal/apple-audio-capture.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
@@ -538,6 +539,8 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/openphi-vision.md
+    - evaluation/edge-health-bench.md
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
     - evaluation/cross-lingual-regressions.md
@@ -562,6 +565,7 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/multimodal-clinical-validation.md
     - evaluation/transcript-accuracy.md
     - evaluation/local-guardrail-bypass.md
     - evaluation/synthetic-memorization.md
