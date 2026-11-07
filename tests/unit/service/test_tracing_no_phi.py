@@ -243,3 +243,37 @@ def test_span_attribute_guard_drops_unapproved_text_keys() -> None:
         "openmed.entity.count": 1,
         "openmed.entity.labels": ["NAME"],
     }
+
+
+def test_failed_stages_record_only_the_error_type(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failing_extract_pii(text: str, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError(f"backend rejected {text}")
+
+    monkeypatch.setattr(openmed, "extract_pii", failing_extract_pii)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/pii/extract",
+            json={"text": PHI_TEXT, "model_name": "test-pii-model"},
+        )
+
+    assert response.status_code == 500
+    spans = list(span_exporter.get_finished_spans())
+    # Retries may run the pipeline stage more than once.
+    pipeline_spans = [
+        span for span in spans if span.name == "openmed.service.pii_extract_pipeline"
+    ]
+    assert pipeline_spans
+    for pipeline_span in pipeline_spans:
+        assert pipeline_span.attributes["openmed.error.type"] == "RuntimeError"
+        assert pipeline_span.status.status_code.name == "ERROR"
+    assert all(not span.events for span in spans)
+    descriptions = "\n".join(str(span.status.description) for span in spans)
+    assert [item for item in PHI_SUBSTRINGS if item in descriptions] == []

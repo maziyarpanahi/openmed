@@ -112,10 +112,17 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         except ValueError:
             abort_rpc(context, REASON_INVALID_REQUEST)
 
+        # Admission failures (warm-pool capacity, an open circuit breaker, a
+        # model loader error) map exactly as they do for unary RPCs; nothing
+        # may escape to grpcio, which would reflect the exception text.
         try:
             model_key = self.runtime.begin_model_request(payload.model_name)
         except ModelNotServedError:
             abort_rpc(context, REASON_MODEL_NOT_SERVED)
+        except ValueError:
+            abort_rpc(context, REASON_INVALID_REQUEST)
+        except Exception:
+            abort_rpc(context, REASON_INTERNAL_ERROR)
         try:
             for event in deidentify_stream(
                 chunks,
