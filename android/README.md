@@ -71,6 +71,13 @@ OpenMed group on JitPack. Dependency and plugin versions are declared in
 `gradle/libs.versions.toml`; avoid hardcoding library versions in module build
 files.
 
+Every module's resolved versions are locked in its committed `gradle.lockfile`,
+and `gradle/verification-metadata.xml` holds a SHA-256 checksum for every
+downloaded artifact. A dependency change that does not regenerate both fails
+the build. See
+[Android dependency locking](../docs/security/dependency-policy.md#android-dependency-locking-and-verification)
+for the regeneration commands.
+
 The library currently targets SDK 33 and sets `minSdk` to 26. Android 8.0 is the
 baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
