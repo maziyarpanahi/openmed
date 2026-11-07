@@ -191,6 +191,7 @@ def test_transfer_matrix_covers_supported_languages_and_ranks_weak_target() -> N
     assert report.deficiencies[0].excess == pytest.approx(0.75)
 
 
+@pytest.mark.slow
 def test_transfer_gap_ci_and_report_rendering_are_byte_stable() -> None:
     weak_language = _weak_language()
     kwargs = {
@@ -227,6 +228,7 @@ def test_transfer_gap_ci_and_report_rendering_are_byte_stable() -> None:
     assert "EN-ID-0" not in first.to_markdown()
 
 
+@pytest.mark.slow
 def test_harness_wrapper_preserves_requested_transfer_suite_name() -> None:
     report = run_cross_lingual_transfer(
         _transfer_fixtures(),

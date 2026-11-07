@@ -13,7 +13,7 @@ from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
 from .proto.generated import openmed_pb2, openmed_pb2_grpc
-from .runtime import ServiceRuntime
+from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
 
 DEFAULT_GRPC_ADDRESS = "[::]:50051"
@@ -65,7 +65,10 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         except ValueError:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
 
-        model_key = self.runtime.begin_model_request(payload.model_name)
+        try:
+            model_key = self.runtime.begin_model_request(payload.model_name)
+        except ModelNotServedError:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
         try:
             for event in deidentify_stream(
                 chunks,
@@ -154,6 +157,8 @@ def serve(
 def _run_unary(context: grpc.ServicerContext, operation: Callable[[], Any]) -> Any:
     try:
         return operation()
+    except ModelNotServedError:
+        context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
     except ValueError:
         context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
     except Exception:

@@ -26,6 +26,7 @@ from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
 from openmed.core.audit import hash_text, stable_hash
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 TemporalStatus: TypeAlias = Literal[
     "recent",
@@ -259,9 +260,9 @@ def _coerce_date(value: object, *, field_name: str) -> date:
         raise _invalid(field_name)
     try:
         if _ISO_DATE_RE.fullmatch(candidate):
-            return date.fromisoformat(candidate)
+            return parse_iso_date(candidate)
         normalized = candidate[:-1] + "+00:00" if candidate.endswith("Z") else candidate
-        return datetime.fromisoformat(normalized).date()
+        return parse_iso_datetime(normalized).date()
     except (TypeError, ValueError, OverflowError):
         raise _invalid(field_name) from None
 
@@ -470,7 +471,7 @@ def _interval_from_value(
         return start, end
     try:
         if _ISO_DATE_RE.fullmatch(candidate):
-            point = date.fromisoformat(candidate)
+            point = parse_iso_date(candidate)
             return point, point
         if _ISO_MONTH_RE.fullmatch(candidate):
             year, month = (int(part) for part in candidate.split("-"))

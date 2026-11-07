@@ -51,6 +51,7 @@ _ORDERED_FIELDS = (
 )
 
 _SUPPORTED_EXACT_MEDIA_TYPES = {
+    "video/mp4",
     "application/dicom",
     "application/pdf",
     "application/dicom+json",

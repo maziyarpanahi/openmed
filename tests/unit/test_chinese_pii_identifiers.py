@@ -83,20 +83,20 @@ class TestChineseValidators:
         assert not validate_chinese_mobile_number(mobile[:-1])
         assert not validate_chinese_mobile_number("0" + mobile)
 
-    @pytest.mark.parametrize("length", range(16, 20))
     def test_bank_cards_are_luhn_valid_for_every_supported_length(
-        self,
-        length: int,
+        self, subtests
     ) -> None:
-        card = generate_chinese_bank_card(
-            length=length,
-            rng=random.Random(600 + length),
-        )
-        bad_check_digit = str((int(card[-1]) + 1) % 10)
+        for length in range(16, 20):
+            with subtests.test(length=length):
+                card = generate_chinese_bank_card(
+                    length=length,
+                    rng=random.Random(600 + length),
+                )
+                bad_check_digit = str((int(card[-1]) + 1) % 10)
 
-        assert len(card) == length
-        assert validate_chinese_bank_card(card)
-        assert not validate_chinese_bank_card(card[:-1] + bad_check_digit)
+                assert len(card) == length
+                assert validate_chinese_bank_card(card)
+                assert not validate_chinese_bank_card(card[:-1] + bad_check_digit)
 
     def test_travel_document_validators_reject_wrong_shapes(self) -> None:
         values = _synthetic_values()
@@ -169,39 +169,31 @@ class TestChineseRecognition:
 
 
 class TestChineseSubtypesAndProviders:
-    @pytest.mark.parametrize(
-        ("label", "subtype"),
-        [
+    def test_travel_documents_keep_flat_id_num_contract(self, subtests) -> None:
+        for label, subtype in [
             ("chinese_passport", ID_SUBTYPE_CHINESE_PASSPORT),
             ("home_return_permit", ID_SUBTYPE_HONG_KONG_MACAU_PERMIT),
             ("taiwan_compatriot_permit", ID_SUBTYPE_TAIWAN_PERMIT),
-        ],
-    )
-    def test_travel_documents_keep_flat_id_num_contract(
-        self,
-        label: str,
-        subtype: str,
-    ) -> None:
-        assert normalize_label(label) == ID_NUM
-        assert id_subtype_for(label) == subtype
-        assert subtype in ID_SUBTYPES
+        ]:
+            with subtests.test(label=label, subtype=subtype):
+                assert normalize_label(label) == ID_NUM
+                assert id_subtype_for(label) == subtype
+                assert subtype in ID_SUBTYPES
 
-    @pytest.mark.parametrize(
-        ("id_type", "validator"),
-        [
+    def test_registry_specs_generate_valid_surrogates(self, subtests) -> None:
+        for id_type, validator in [
             ("chinese_passport", validate_chinese_passport),
             ("hong_kong_macau_permit", validate_hong_kong_macau_permit),
             ("taiwan_permit", validate_taiwan_compatriot_permit),
-        ],
-    )
-    def test_registry_specs_generate_valid_surrogates(self, id_type, validator) -> None:
-        spec = get_national_id("zh_CN", id_type)
-        assert spec is not None
+        ]:
+            with subtests.test(id_type=id_type, validator=validator):
+                spec = get_national_id("zh_CN", id_type)
+                assert spec is not None
 
-        faker = Faker("zh_CN")
-        register_clinical_providers(faker)
-        faker.seed_instance(654)
-        assert validator(getattr(faker, spec.faker_method)())
+                faker = Faker("zh_CN")
+                register_clinical_providers(faker)
+                faker.seed_instance(654)
+                assert validator(getattr(faker, spec.faker_method)())
 
     def test_provider_registers_all_chinese_methods(self) -> None:
         faker = Faker("zh_CN")
