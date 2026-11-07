@@ -108,61 +108,53 @@ def test_content_only_message_reordering_is_detected() -> None:
     assert report.failing_paths == ("$.messages",)
 
 
-@pytest.mark.parametrize(
-    ("field", "replacement", "code"),
-    [
+def test_semantic_changes_are_classified_without_values(subtests) -> None:
+    for field, replacement, code in [
         ("trace_id", "trace-synthetic-2", "identifier"),
         ("timestamp", "2026-01-02T00:00:00Z", "timestamp"),
         ("tool_call_id", "call-synthetic-2", "call_linkage"),
         ("label", "rejected", "training_label"),
-    ],
-)
-def test_semantic_changes_are_classified_without_values(
-    field: str,
-    replacement: str,
-    code: str,
-) -> None:
-    original = _trace()
-    output = copy.deepcopy(original)
-    if field == "trace_id":
-        output[field] = replacement
-    elif field == "timestamp":
-        output["messages"][0][field] = replacement
-    elif field == "tool_call_id":
-        output["messages"][2][field] = replacement
-    else:
-        output[field] = replacement
+    ]:
+        with subtests.test(field=field, replacement=replacement, code=code):
+            original = _trace()
+            output = copy.deepcopy(original)
+            if field == "trace_id":
+                output[field] = replacement
+            elif field == "timestamp":
+                output["messages"][0][field] = replacement
+            elif field == "tool_call_id":
+                output["messages"][2][field] = replacement
+            else:
+                output[field] = replacement
 
-    report = verify_trace_fidelity(original, output)
+            report = verify_trace_fidelity(original, output)
 
-    assert report.has_code(code)
-    assert replacement not in report.to_json()
-    assert SYNTHETIC_CONTENT not in report.to_json()
+            assert report.has_code(code)
+            assert replacement not in report.to_json()
+            assert SYNTHETIC_CONTENT not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    ("field", "original_value", "replacement", "code"),
-    [
+def test_broad_content_paths_cannot_mask_semantic_fields(subtests) -> None:
+    for field, original_value, replacement, code in [
         ("ids", ["synthetic-id-1"], ["synthetic-id-2"], "identifier"),
         ("call_ids", ["call-1"], ["call-2"], "call_linkage"),
         ("timestamp_ms", 1_700_000_000_000, 1_700_000_000_001, "timestamp"),
         ("score", 1.0, 0.0, "training_label"),
         ("role", "user", "assistant", "structure"),
-    ],
-)
-def test_broad_content_paths_cannot_mask_semantic_fields(
-    field: str,
-    original_value: object,
-    replacement: object,
-    code: str,
-) -> None:
-    original = {"content": {field: original_value}}
-    output = {"content": {field: replacement}}
+    ]:
+        with subtests.test(
+            field=field,
+            original_value=original_value,
+            replacement=replacement,
+            code=code,
+        ):
+            original = {"content": {field: original_value}}
+            output = {"content": {field: replacement}}
 
-    report = verify_trace_fidelity(original, output)
+            report = verify_trace_fidelity(original, output)
 
-    assert report.passed is False
-    assert report.has_code(code)
+            assert report.passed is False
+            assert report.has_code(code)
 
 
 def test_scalar_type_changes_fail_even_when_the_field_is_declared_content() -> None:

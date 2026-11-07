@@ -85,23 +85,24 @@ def test_gaussian_count_release_charges_delta_and_scale() -> None:
     assert budget.spends[0].to_dict()["calibration_method"] == "analytic_gaussian"
 
 
-@pytest.mark.parametrize("epsilon", [0.05, 0.1, 0.5, 0.99, 1, 2, 10, 20, 50])
-@pytest.mark.parametrize("delta", [1e-10, 1e-8, 1e-5, 1e-3])
-def test_analytic_gaussian_meets_independently_evaluated_profile(epsilon, delta):
-    sigma = gaussian_scale(1.0, epsilon, delta)
-    # Independent direct equation from Balle/Wang Theorem 8. The production
-    # implementation uses scaled erfc; this ordinary range needs no scaling.
-    first = math.erfc((epsilon * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
-    second = (
-        math.exp(epsilon)
-        * math.erfc((epsilon * sigma + 0.5 / sigma) / math.sqrt(2))
-        / 2
-    )
-    assert first - second <= delta
-    assert gaussian_privacy_delta(sigma, 1.0, epsilon) == pytest.approx(
-        first - second, rel=1e-9, abs=1e-16
-    )
-    assert gaussian_scale(7.0, epsilon, delta) == pytest.approx(7 * sigma)
+def test_analytic_gaussian_meets_independently_evaluated_profile(subtests):
+    for epsilon in [0.05, 0.1, 0.5, 0.99, 1, 2, 10, 20, 50]:
+        for delta in [1e-10, 1e-8, 1e-5, 1e-3]:
+            with subtests.test(epsilon=epsilon, delta=delta):
+                sigma = gaussian_scale(1.0, epsilon, delta)
+                # Independent direct equation from Balle/Wang Theorem 8. The production
+                # implementation uses scaled erfc; this ordinary range needs no scaling.
+                first = math.erfc((epsilon * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
+                second = (
+                    math.exp(epsilon)
+                    * math.erfc((epsilon * sigma + 0.5 / sigma) / math.sqrt(2))
+                    / 2
+                )
+                assert first - second <= delta
+                assert gaussian_privacy_delta(sigma, 1.0, epsilon) == pytest.approx(
+                    first - second, rel=1e-9, abs=1e-16
+                )
+                assert gaussian_scale(7.0, epsilon, delta) == pytest.approx(7 * sigma)
 
 
 def test_gaussian_old_high_epsilon_reproduction_and_utility():
@@ -112,9 +113,8 @@ def test_gaussian_old_high_epsilon_reproduction_and_utility():
         assert gaussian_privacy_delta(point.noise_scale, 1, point.epsilon) <= 1e-5
 
 
-@pytest.mark.parametrize(
-    "epsilon,delta",
-    [
+def test_gaussian_invalid_parameters_fail_closed(subtests):
+    for epsilon, delta in [
         (0, 1e-5),
         (float("inf"), 1e-5),
         (float("nan"), 1e-5),
@@ -122,11 +122,10 @@ def test_gaussian_old_high_epsilon_reproduction_and_utility():
         (1, -1),
         (1, 1),
         (1, float("nan")),
-    ],
-)
-def test_gaussian_invalid_parameters_fail_closed(epsilon, delta):
-    with pytest.raises(ValueError):
-        gaussian_scale(1.0, epsilon, delta)
+    ]:
+        with subtests.test(epsilon=epsilon, delta=delta):
+            with pytest.raises(ValueError):
+                gaussian_scale(1.0, epsilon, delta)
 
 
 def test_gaussian_extreme_scales_and_zero_sensitivity():
@@ -260,12 +259,13 @@ class _FixedGaussian:
         return mu + self.value * sigma
 
 
-@pytest.mark.parametrize("sensitivity", [0.1, 1.0, 7.0])
-def test_small_epsilon_calibration_accounts_for_cdf_rounding(sensitivity):
-    epsilon, delta = 1e-20, 1e-5
-    sigma = gaussian_scale(sensitivity, epsilon, delta)
-    # Independently, delta(epsilon) >= delta(0) - (exp(epsilon) - 1).
-    # The zero-epsilon Gaussian profile uses erf directly, avoiding CDF
-    # subtraction; a violating lower bound proves under-calibration.
-    zero_profile = math.erf(sensitivity / (2.0 * sigma * math.sqrt(2.0)))
-    assert zero_profile - math.expm1(epsilon) <= delta
+def test_small_epsilon_calibration_accounts_for_cdf_rounding(subtests):
+    for sensitivity in [0.1, 1.0, 7.0]:
+        with subtests.test(sensitivity=sensitivity):
+            epsilon, delta = 1e-20, 1e-5
+            sigma = gaussian_scale(sensitivity, epsilon, delta)
+            # Independently, delta(epsilon) >= delta(0) - (exp(epsilon) - 1).
+            # The zero-epsilon Gaussian profile uses erf directly, avoiding CDF
+            # subtraction; a violating lower bound proves under-calibration.
+            zero_profile = math.erf(sensitivity / (2.0 * sigma * math.sqrt(2.0)))
+            assert zero_profile - math.expm1(epsilon) <= delta

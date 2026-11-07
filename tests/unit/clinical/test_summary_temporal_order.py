@@ -113,21 +113,17 @@ def test_unlinked_timeline_events_are_unresolved_not_source_ordered() -> None:
     assert result.review_required is True
 
 
-@pytest.mark.parametrize(
-    ("references", "expected_code"),
-    [
+def test_ambiguous_reference_sets_route_to_review(subtests) -> None:
+    for references, expected_code in [
         (("private-alpha",), "insufficient_references"),
         (("private-alpha", "private-alpha"), "duplicate_reference"),
         (("private-alpha", "private-missing"), "unknown_event"),
-    ],
-)
-def test_ambiguous_reference_sets_route_to_review(
-    references: tuple[str, ...], expected_code: str
-) -> None:
-    result = validate_summary_temporal_order(references, _timeline())
+    ]:
+        with subtests.test(references=references, expected_code=expected_code):
+            result = validate_summary_temporal_order(references, _timeline())
 
-    assert result.status == "review_required"
-    assert result.findings[0].code == expected_code
+            assert result.status == "review_required"
+            assert result.findings[0].code == expected_code
 
 
 def test_result_is_deterministic_and_value_free() -> None:

@@ -40,6 +40,8 @@ DEPENDENCIES = {
 TEST_PATHS = (
     "tests/unit/multimodal",
     "tests/unit/eval/test_multimodal_dicom_suite.py",
+    "tests/unit/eval/test_multimodal_clinical_validation.py",
+    "tests/unit/eval/test_multimodal_release_gates.py",
     "tests/unit/eval/test_dicom_sr_content_eval.py",
     "tests/unit/eval/test_ocr_routing.py",
     "tests/fuzz/test_format_parsers_fuzz.py",

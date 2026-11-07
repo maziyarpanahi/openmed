@@ -138,6 +138,13 @@ def test_workflow_runs_both_platforms_and_build_requires_lane():
     install = next(s["run"] for s in steps if "lightweight" in s.get("name", ""))
     assert "--requirements" in install
     assert "--extra multimodal" not in install
+    constraints = next(
+        s["run"]
+        for s in steps
+        if s.get("name") == "Export frozen multimodal constraints"
+    )
+    assert "uv export --frozen" in constraints
+    assert '--constraint "$RUNNER_TEMP/multimodal-constraints.txt"' in install
     test = next(s for s in steps if s.get("run") == "make test-multimodal")
     assert test["timeout-minutes"] == 10
     assert "multimodal-tests" in workflow["jobs"]["build"]["needs"]

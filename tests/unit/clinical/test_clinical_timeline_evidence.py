@@ -21,38 +21,41 @@ from openmed.clinical.timeline_graph import (
 from openmed.core.audit import hash_text
 
 
-@pytest.mark.parametrize(
-    "value", ["20260105", "2026-W02-1", "2026-005", "2026-01-05T10:00:00+0530"]
-)
-def test_timeline_normalized_values_reject_interpreter_dependent_grammars(value):
-    with pytest.raises(ValueError) as error:
-        TimelineEvidence(0, 1, normalized_value=value)
-    assert value not in str(error.value)
+def test_timeline_normalized_values_reject_interpreter_dependent_grammars(subtests):
+    for value in ["20260105", "2026-W02-1", "2026-005", "2026-01-05T10:00:00+0530"]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError) as error:
+                TimelineEvidence(0, 1, normalized_value=value)
+            assert value not in str(error.value)
 
 
-@pytest.mark.parametrize("field", ["event_type", "relation"])
-def test_freeform_graph_labels_are_opaque(field: str) -> None:
-    private = "patient-jane-doe"
-    event = TimelineGraphEvent(
-        "one",
-        private if field == "event_type" else "event",
-        0,
-        1,
-        temporal_evidence=(
-            TimelineEvidence(
-                0, 1, relation=private if field == "relation" else "temporal_anchor"
-            ),
-        ),
-    )
-    serialized = build_timeline_graph([event]).to_json()
-    assert private not in serialized
-    assert hash_text(private) in serialized
+def test_freeform_graph_labels_are_opaque(subtests) -> None:
+    for field in ["event_type", "relation"]:
+        with subtests.test(field=field):
+            private = "patient-jane-doe"
+            event = TimelineGraphEvent(
+                "one",
+                private if field == "event_type" else "event",
+                0,
+                1,
+                temporal_evidence=(
+                    TimelineEvidence(
+                        0,
+                        1,
+                        relation=private if field == "relation" else "temporal_anchor",
+                    ),
+                ),
+            )
+            serialized = build_timeline_graph([event]).to_json()
+            assert private not in serialized
+            assert hash_text(private) in serialized
 
 
-@pytest.mark.parametrize("value", ["sha256:patient-jane-doe", "sha256:" + "a" * 63])
-def test_graph_hashes_require_complete_digest(value: str) -> None:
-    with pytest.raises(ValueError):
-        TimelineEvidence(0, 1, text_hash=value)
+def test_graph_hashes_require_complete_digest(subtests) -> None:
+    for value in ["sha256:patient-jane-doe", "sha256:" + "a" * 63]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError):
+                TimelineEvidence(0, 1, text_hash=value)
 
 
 def test_graph_experiencer_is_controlled() -> None:
@@ -62,48 +65,53 @@ def test_graph_experiencer_is_controlled() -> None:
         )
 
 
-@pytest.mark.parametrize("typed", [False, True])
-@pytest.mark.parametrize("where", ["event", "evidence", "link"])
-def test_graph_rejects_out_of_document_spans(typed: bool, where: str) -> None:
-    from openmed.clinical.clinical_timeline_evidence import TimelineTemporalLink
+def test_graph_rejects_out_of_document_spans(subtests) -> None:
+    for typed in [False, True]:
+        for where in ["event", "evidence", "link"]:
+            with subtests.test(typed=typed, where=where):
+                from openmed.clinical.clinical_timeline_evidence import (
+                    TimelineTemporalLink,
+                )
 
-    evidence = TimelineEvidence(0, 50) if typed else {"start": 0, "end": 50}
-    events = (
-        [
-            TimelineGraphEvent(
-                "one",
-                "event",
-                0,
-                50 if where == "event" else 1,
-                temporal_evidence=(evidence,) if where == "evidence" else (),
-            )
-        ]
-        if typed
-        else [
-            {
-                "id": "one",
-                "start": 0,
-                "end": 50 if where == "event" else 1,
-                "evidence": [evidence] if where == "evidence" else [],
-            }
-        ]
-    )
-    links = (
-        [TimelineTemporalLink("one", "one", "overlap", (evidence,))]
-        if typed and where == "link"
-        else [
-            {
-                "source": "one",
-                "target": "one",
-                "relation": "overlap",
-                "evidence": [evidence],
-            }
-        ]
-        if where == "link"
-        else []
-    )
-    with pytest.raises(ValueError, match="source document"):
-        build_timeline_graph(events, links, document_text="synthetic")
+                evidence = TimelineEvidence(0, 50) if typed else {"start": 0, "end": 50}
+                events = (
+                    [
+                        TimelineGraphEvent(
+                            "one",
+                            "event",
+                            0,
+                            50 if where == "event" else 1,
+                            temporal_evidence=(evidence,)
+                            if where == "evidence"
+                            else (),
+                        )
+                    ]
+                    if typed
+                    else [
+                        {
+                            "id": "one",
+                            "start": 0,
+                            "end": 50 if where == "event" else 1,
+                            "evidence": [evidence] if where == "evidence" else [],
+                        }
+                    ]
+                )
+                links = (
+                    [TimelineTemporalLink("one", "one", "overlap", (evidence,))]
+                    if typed and where == "link"
+                    else [
+                        {
+                            "source": "one",
+                            "target": "one",
+                            "relation": "overlap",
+                            "evidence": [evidence],
+                        }
+                    ]
+                    if where == "link"
+                    else []
+                )
+                with pytest.raises(ValueError, match="source document"):
+                    build_timeline_graph(events, links, document_text="synthetic")
 
 
 def test_graph_orders_aware_times_by_instant() -> None:
@@ -120,10 +128,11 @@ def test_graph_orders_aware_times_by_instant() -> None:
     assert graph.ordered_event_ids == ("earlier", "later")
 
 
-@pytest.mark.parametrize("value", ["0000-02", "2026/2027/2028"])
-def test_graph_rejects_invalid_partial_dates_and_interval_arity(value: str) -> None:
-    with pytest.raises(ValueError):
-        TimelineEvidence(0, 1, normalized_value=value)
+def test_graph_rejects_invalid_partial_dates_and_interval_arity(subtests) -> None:
+    for value in ["0000-02", "2026/2027/2028"]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError):
+                TimelineEvidence(0, 1, normalized_value=value)
 
 
 def test_graph_fixed_envelope_and_sanitized_errors() -> None:
@@ -289,13 +298,11 @@ def test_temporal_evidence_rejects_source_text_without_echoing_it() -> None:
     assert private_text not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["2026-02-30", "2026-13", "2026-06-31T12:00", "P", "PT"],
-)
-def test_temporal_evidence_rejects_invalid_normalized_values(value: str) -> None:
-    with pytest.raises(ValueError, match="normalized date or duration"):
-        TimelineEvidence(start=0, end=5, normalized_value=value)
+def test_temporal_evidence_rejects_invalid_normalized_values(subtests) -> None:
+    for value in ["2026-02-30", "2026-13", "2026-06-31T12:00", "P", "PT"]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="normalized date or duration"):
+                TimelineEvidence(start=0, end=5, normalized_value=value)
 
 
 def test_before_after_cycle_is_rejected_without_echoing_event_values() -> None:

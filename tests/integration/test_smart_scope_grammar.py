@@ -105,9 +105,10 @@ def test_current_custody_retains_constraints_without_exporting_private_values() 
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    ("required", "declared", "missing", "excessive"),
-    [
+def test_current_preflight_conservative_granular_and_identity_controls(
+    subtests,
+) -> None:
+    for required, declared, missing, excessive in [
         ("patient/Observation.read", "patient/Observation.rs", False, False),
         ("patient/Observation.cu", "patient/Observation.write", False, True),
         ("patient/Observation.rs", "patient/Observation.rs?category=lab", True, False),
@@ -125,18 +126,17 @@ def test_current_custody_retains_constraints_without_exporting_private_values() 
             False,
         ),
         ("patient/Observation.rs", "openid fhirUser offline_access", True, True),
-    ],
-)
-def test_current_preflight_conservative_granular_and_identity_controls(
-    required, declared, missing, excessive
-) -> None:
-    from openmed.interop.smart_scope_audit import audit_smart_scope_preflight
+    ]:
+        with subtests.test(
+            required=required, declared=declared, missing=missing, excessive=excessive
+        ):
+            from openmed.interop.smart_scope_audit import audit_smart_scope_preflight
 
-    report = audit_smart_scope_preflight(
-        required_scopes=required, requested_scopes=declared
-    )
-    assert bool(report.missing_scopes) is missing
-    assert bool(report.excessive_scopes) is excessive
-    assert not report.findings
-    assert report.is_least_privilege is (not missing and not excessive)
-    assert "category=" not in json.dumps(report.to_dict())
+            report = audit_smart_scope_preflight(
+                required_scopes=required, requested_scopes=declared
+            )
+            assert bool(report.missing_scopes) is missing
+            assert bool(report.excessive_scopes) is excessive
+            assert not report.findings
+            assert report.is_least_privilege is (not missing and not excessive)
+            assert "category=" not in json.dumps(report.to_dict())
