@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from dataclasses import replace
@@ -586,6 +587,7 @@ def test_repo_ships_no_zh_model_weights() -> None:
         # A symlink is the documented "keep it outside the repository"
         # workflow, so it is a pointer, not a checkpoint living in the tree.
         and not (REPO_ROOT / name).is_symlink()
+        and not _is_recorded_synthetic_test_model(name)
     )
     assert weights == [], f"model weights must stay outside the repository: {weights}"
 
@@ -633,6 +635,28 @@ def test_local_checkpoint_meets_the_span_and_label_contract() -> None:
         set(finding) == {"end", "fixture_id", "label", "start", "token_hash"}
         for finding in leakage["findings"]
     )
+
+
+# Randomly initialised test models committed on purpose, mapped to the fixture
+# that records their digest. Only the exact recorded bytes are exempt, so a
+# real checkpoint copied over one of these paths still fails the guard.
+_SYNTHETIC_TEST_MODELS = {
+    "android/openmedkit/src/androidTest/assets/emulator-lane/model/model.onnx": (
+        "android/openmedkit/src/androidTest/assets/emulator-lane/expected.json"
+    ),
+}
+
+
+def _is_recorded_synthetic_test_model(name: str) -> bool:
+    """Return True for a committed synthetic test model with its recorded digest."""
+
+    fixture_name = _SYNTHETIC_TEST_MODELS.get(name)
+    if fixture_name is None:
+        return False
+    fixture = json.loads((REPO_ROOT / fixture_name).read_text(encoding="utf-8"))
+    recorded = fixture["model"]["files"][Path(name).name]["sha256"]
+    digest = hashlib.sha256((REPO_ROOT / name).read_bytes()).hexdigest()
+    return digest == recorded
 
 
 def _looks_like_model_weights(name: str) -> bool:

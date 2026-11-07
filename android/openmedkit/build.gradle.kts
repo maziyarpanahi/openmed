@@ -92,6 +92,7 @@ android {
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The build runs on JDK 17 (required by AGP 8), while the published
@@ -136,6 +137,33 @@ kotlin {
     jvmToolchain(17)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
+    }
+}
+
+// Deliberate packaging fault for the emulator lane's negative control
+// (scripts/android/run_emulator_lane.sh). `missing-native-libraries` strips the
+// ONNX Runtime and tokenizer shared libraries from every ABI of the instrumented
+// test APK, so no ABI the device supports can load them and the lane must fail
+// with `native_library_unloadable`. It never changes the library or its AAR.
+val nativePackagingFault = providers.gradleProperty("openmedNativePackagingFault")
+    .orElse("none")
+    .get()
+val faultyNativeLibraries = when (nativePackagingFault) {
+    "none" -> emptyList()
+    "missing-native-libraries" -> listOf(
+        "**/libonnxruntime.so",
+        "**/libonnxruntime4j_jni.so",
+        "**/libdjl_tokenizer.so",
+    )
+    else -> throw GradleException(
+        "Unknown openmedNativePackagingFault '$nativePackagingFault'; " +
+            "expected none or missing-native-libraries.",
+    )
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.androidTest?.packaging?.jniLibs?.excludes?.addAll(faultyNativeLibraries)
     }
 }
 
@@ -189,6 +217,10 @@ tasks.withType<Test>().configureEach {
     )
 
     inputs.file(budgetPropertiesFile)
+    // EmulatorLaneFixtureContractTest reads the instrumented-test fixture by path.
+    inputs.dir(layout.projectDirectory.dir("src/androidTest/assets/emulator-lane"))
+        .withPropertyName("emulatorLaneFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(coldStartBudgetReport)
 
     doFirst {
@@ -372,4 +404,7 @@ dependencies {
     testImplementation(libs.icu4j)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.junit)
 }
