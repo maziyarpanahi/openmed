@@ -4,6 +4,8 @@ from pathlib import Path
 
 import yaml
 
+from openmed.service.secret_files import CREDENTIAL_SETTINGS
+
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "deploy" / "openmed-compose.yaml"
 DOCS_FILE = ROOT / "docs" / "deploy" / "self-hosted-compose.md"
@@ -122,7 +124,9 @@ def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() ->
     assert "network_mode" not in service
     assert "extra_hosts" not in service
     assert "env_file" not in service
-    assert "secrets" not in service
+    assert [secret["source"] for secret in service["secrets"]] == [
+        "openmed_journey_postgres_dsn"
+    ]
 
 
 def test_bundle_healthcheck_probes_readiness_with_bounded_timeout() -> None:
@@ -158,9 +162,55 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> Non
         "three 10 MiB files",
         "synthetic",
         "OPENMED_POSTGRES_PASSWORD",
+        "OPENMED_JOURNEY_POSTGRES_DSN",
+        "/run/secrets/openmed_journey_postgres_dsn",
+        "secret_file_permissions_too_open",
         "journey-golden",
         "backup",
         "restore",
         "secret rotation",
     ):
         assert required_text in docs
+
+
+def test_bundle_delivers_credentials_as_secret_files_not_environment() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+    forbidden = {*CREDENTIAL_SETTINGS, "POSTGRES_PASSWORD"}
+
+    for name, service in services.items():
+        environment = service.get("environment", {})
+        assert forbidden.isdisjoint(environment), name
+        for value in environment.values():
+            assert "PASSWORD}" not in str(value), name
+            assert "postgresql://" not in str(value), name
+
+    assert compose["secrets"] == {
+        "openmed_postgres_password": {"environment": "OPENMED_POSTGRES_PASSWORD"},
+        "openmed_journey_postgres_dsn": {"environment": "OPENMED_JOURNEY_POSTGRES_DSN"},
+    }
+    postgres = services["postgres"]
+    assert postgres["environment"]["POSTGRES_PASSWORD_FILE"] == (
+        "/run/secrets/openmed_postgres_password"
+    )
+    assert postgres["secrets"] == [
+        {"source": "openmed_postgres_password", "mode": 0o400}
+    ]
+
+    dsn_consumers = {"journey-migrate", "journey-worker", "openmed", "journey-golden"}
+    for name in dsn_consumers:
+        service = services[name]
+        assert service["environment"]["OPENMED_JOURNEY_POSTGRES_DSN_FILE"] == (
+            "/run/secrets/openmed_journey_postgres_dsn"
+        )
+        assert service["secrets"] == [
+            {
+                "source": "openmed_journey_postgres_dsn",
+                "uid": "65532",
+                "gid": "65532",
+                "mode": 0o400,
+            }
+        ]
+        assert service["user"] == "65532:65532"
+    assert "secrets" not in services["mcp"]
+    assert "OPENMED_JOURNEY_POSTGRES_DSN_FILE" not in services["mcp"]["environment"]

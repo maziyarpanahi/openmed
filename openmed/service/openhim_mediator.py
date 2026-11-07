@@ -23,10 +23,13 @@ import httpx
 
 from openmed.__about__ import __version__
 
+from .secret_files import SecretSourceError, read_secret_setting
+
 OPENHIM_MEDIA_TYPE = "application/json+openhim"
 OPENHIM_MEDIATOR_PATH = "/openhim/deidentify"
 OPENHIM_HEARTBEAT_PATH = "/openhim/heartbeat"
 DEFAULT_MEDIATOR_URN = "urn:openhim-mediator:openmed-deidentification"
+OPENHIM_PASSWORD_ENV_VAR = "OPENMED_OPENHIM_PASSWORD"
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
@@ -215,13 +218,16 @@ class OpenHIMMediatorSettings:
 
         api_url = os.environ.get("OPENMED_OPENHIM_CORE_URL", "").strip().rstrip("/")
         username = os.environ.get("OPENMED_OPENHIM_USERNAME", "").strip()
-        password = os.environ.get("OPENMED_OPENHIM_PASSWORD", "")
+        try:
+            password = read_secret_setting(OPENHIM_PASSWORD_ENV_VAR) or ""
+        except SecretSourceError as exc:
+            raise OpenHIMMediatorConfigurationError(str(exc)) from None
         missing = [
             name
             for name, value in (
                 ("OPENMED_OPENHIM_CORE_URL", api_url),
                 ("OPENMED_OPENHIM_USERNAME", username),
-                ("OPENMED_OPENHIM_PASSWORD", password),
+                (OPENHIM_PASSWORD_ENV_VAR, password),
             )
             if not value
         ]

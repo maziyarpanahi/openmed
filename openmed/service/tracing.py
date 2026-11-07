@@ -19,6 +19,7 @@ from .operational import (
     OperationalEvent,
     OperationalState,
 )
+from .secret_files import read_secret_setting
 
 try:  # pragma: no cover - exercised when the optional service extra is absent.
     from opentelemetry import trace
@@ -47,6 +48,7 @@ else:
 TRACING_ENABLED_ENV_VAR = "OPENMED_SERVICE_TRACING_ENABLED"
 OTLP_ENDPOINT_ENV_VAR = "OPENMED_SERVICE_OTLP_ENDPOINT"
 OTLP_HEADERS_ENV_VAR = "OPENMED_SERVICE_OTLP_HEADERS"
+OTLP_HEADERS_FILE_ENV_VAR = "OPENMED_SERVICE_OTLP_HEADERS_FILE"
 OTLP_TIMEOUT_ENV_VAR = "OPENMED_SERVICE_OTLP_TIMEOUT_SECONDS"
 DEFAULT_OTLP_TIMEOUT_SECONDS = 10.0
 TRACER_NAME = "openmed.service"
@@ -200,7 +202,7 @@ def service_trace_config_from_env() -> ServiceTraceConfig:
     return ServiceTraceConfig(
         enabled=enabled,
         otlp_endpoint=endpoint,
-        otlp_headers=parse_otlp_headers(os.getenv(OTLP_HEADERS_ENV_VAR)),
+        otlp_headers=parse_otlp_headers(read_secret_setting(OTLP_HEADERS_ENV_VAR)),
         otlp_timeout_seconds=parse_otlp_timeout(os.getenv(OTLP_TIMEOUT_ENV_VAR)),
     )
 
@@ -479,6 +481,7 @@ __all__ = [
     "DEFAULT_OTLP_TIMEOUT_SECONDS",
     "OTLP_ENDPOINT_ENV_VAR",
     "OTLP_HEADERS_ENV_VAR",
+    "OTLP_HEADERS_FILE_ENV_VAR",
     "OTLP_TIMEOUT_ENV_VAR",
     "OpenTelemetryMiddleware",
     "ServiceTraceConfig",
