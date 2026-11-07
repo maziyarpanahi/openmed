@@ -460,6 +460,7 @@ nav:
       - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
+      - HEIF and M4A Header Preflight: multimodal/iso-bmff-preflight.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
       - EDF and EDF+ Reader: multimodal/edf-reader.md

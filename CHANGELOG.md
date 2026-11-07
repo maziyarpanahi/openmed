@@ -173,6 +173,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Keep ambient speaker-role hypotheses separate from aliases and require exact-source reviewer decisions before role-sensitive extraction and note finalization, with explicit provisional drafts and stale-attribution rejection (#2817).
 
+- Bounded HEIF/M4A header preflight in Python and OpenMedKit, with primary image
+  geometry, item-role and EXIF/XMP presence inventory, declared audio metadata,
+  decoder-required results, value-free refusals and shared synthetic fixtures
+  (#3841). No media decoding or metadata-value extraction is performed.
+
 - Opt-in BigTIFF pyramid metadata preflight in Python and OpenMedKit, with
   declared tiled IFD-chain/SubIFD profiles, bounded directory and tile-table
   traversal, value-free failures and shared synthetic geometry fixtures (#3683).

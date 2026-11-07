@@ -31,8 +31,8 @@ class MediaTypeStatus(str, Enum):
 def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
     """Detect a supported media type from at most 132 leading bytes.
 
-    The detector returns ``None`` for truncated, ambiguous, and unsupported
-    inputs. It does not inspect filenames, decode content, or log input bytes.
+    Detection uses format signatures and bounded file-type brands. It does not
+    inspect filenames, decode content, or log input bytes.
     """
 
     if not isinstance(prefix, (bytes, bytearray, memoryview)):
@@ -42,14 +42,6 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
     # Part 10 permits arbitrary application data in its 128-byte preamble.
     if len(bounded) >= 132 and bounded[128:132] == b"DICM":
         return "application/dicom"
-    if (
-        len(bounded) >= 16
-        and bounded[4:8] == b"ftyp"
-        and 16 <= int.from_bytes(bounded[:4], "big") <= 4096
-        and bounded[8:12]
-        in {b"isom", b"iso2", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1"}
-    ):
-        return "video/mp4"
     if bounded.startswith(b"%PDF-"):
         return "application/pdf"
     if bounded.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -70,7 +62,45 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         return "audio/wav"
     if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WEBP":
         return "image/webp"
-    return None
+    return _detect_bmff_type(bounded)
+
+
+def _detect_bmff_type(prefix: bytes) -> str | None:
+    """Read explicit brands from a complete, bounded first file-type box."""
+    if len(prefix) < 16 or prefix[4:8] != b"ftyp":
+        return None
+    size = int.from_bytes(prefix[:4], "big")
+    video = (
+        "video/mp4"
+        if 16 <= size <= 4096
+        and prefix[8:12]
+        in {b"isom", b"iso2", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1"}
+        else None
+    )
+    header = 8
+    if size == 1:
+        size = int.from_bytes(prefix[8:16], "big")
+        header = 16
+    if size < header + 8 or (size - header) % 4:
+        return None
+    if size > len(prefix):
+        return video
+    brands = {prefix[header : header + 4]}
+    brands.update(prefix[i : i + 4] for i in range(header + 8, size, 4))
+    # AVIF shares the structural mif1 brand; do not mistake it for HEIC.
+    if brands & {b"avif", b"avis"}:
+        return None
+    image = None
+    if brands & {b"hevc", b"hevx"}:
+        image = "image/heic-sequence"
+    elif b"msf1" in brands:
+        image = "image/heif-sequence"
+    elif brands & {b"heic", b"heix", b"heim", b"heis"}:
+        image = "image/heic"
+    elif b"mif1" in brands:
+        image = "image/heif"
+    audio = "audio/mp4" if b"M4A " in brands else None
+    return None if image and audio else image or audio or video
 
 
 def validate_media_type(
