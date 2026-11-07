@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revision-bound blinded review imports. Bundle hand-authored synthetic encounters;
   no clinical validation or autonomous action is implied (#3822).
 
+- Dependency-free, counts-only PDF hidden-content inventory for annotations,
+  form values, embedded files, XFA, layers, JavaScript, OpenAction, Launch and
+  incremental revisions, including superseded definitions. Strict/review
+  policies and explicit PDF asset preflight expose controlled findings without
+  overriding existing raster-budget abstentions (#3824).
+
 - Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
 
 - Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
