@@ -485,6 +485,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
+      - OpenPHI-Vision Fixed Fixtures: evaluation/openphi-vision-fixtures.md
       - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md
       - Script Tokenization Audit: evaluation/script-tokenization.md
       - Language-slice Uncertainty: evaluation/language-uncertainty.md

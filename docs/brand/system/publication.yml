@@ -545,6 +545,7 @@ classification:
     - testing.md
     - eval-harness.md
     - evaluation/openphi-vision.md
+    - evaluation/openphi-vision-fixtures.md
     - evaluation/edge-health-bench.md
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
