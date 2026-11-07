@@ -46,6 +46,8 @@ def configured(monkeypatch, *, scopes=("decisions:write", "pii:write"), burst=20
     monkeypatch.setenv("OPENMED_SERVICE_SYSTEM_ONE", "1")
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "1")
+    # The default prod profile requires a durable job-ownership digest key.
+    monkeypatch.setenv("OPENMED_SERVICE_DIGEST_KEY", "synthetic-digest-key-" + "0" * 32)
     monkeypatch.setenv(
         "OPENMED_SERVICE_AUTH_API_KEYS",
         json.dumps(
