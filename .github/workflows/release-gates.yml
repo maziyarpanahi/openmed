@@ -76,7 +76,49 @@ jobs:
             eval/suites/summaries/extractive.json \
             eval/suites/summaries/mlx.json
 
+  service-no-egress:
+    # Release evidence that the cached service workflow completes inside an
+    # OS-enforced boundary with only loopback. An unsupported host exits 3,
+    # which fails this job: a skip is never a pass.
+    if: >-
+      github.event_name != 'repository_dispatch' &&
+      github.event.inputs.rollback_family == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+      - name: Install service dependencies
+        run: python -m pip install -e ".[dev,service]"
+      - name: Allow unprivileged user namespaces for the network boundary
+        run: |
+          # Ubuntu 24.04 runners restrict unprivileged user namespaces through
+          # AppArmor; the gate needs one to create its network namespace.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+      - name: Run OS-enforced no-egress gate
+        run: |
+          python scripts/security/no_egress_gate.py \
+            --boundary netns \
+            --output no-egress-attestation.json \
+            --markdown no-egress-attestation.md
+      - name: Verify no-egress attestation
+        if: always() && hashFiles('no-egress-attestation.json') != ''
+        run: python scripts/security/no_egress_gate.py --verify no-egress-attestation.json
+      - name: Upload no-egress attestation
+        if: always() && hashFiles('no-egress-attestation.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: no-egress-attestation
+          path: |
+            no-egress-attestation.json
+            no-egress-attestation.md
+
   release-gates:
+    needs: service-no-egress
     if: >-
       github.event_name != 'repository_dispatch' &&
       github.event.inputs.rollback_family == ''
