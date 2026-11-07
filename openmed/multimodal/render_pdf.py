@@ -235,9 +235,11 @@ class PdfRedactionResult:
     region_fidelity: PdfFidelityReport
     text_removal: PdfTextRemovalReport
     layout_fidelity: PdfLayoutFidelityReport
-    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
+    code_coverage: CodeCoverageReport = field(
+        default_factory=CodeCoverageReport, kw_only=True
+    )
     residual_code_coverage: CodeCoverageReport = field(
-        default_factory=CodeCoverageReport
+        default_factory=CodeCoverageReport, kw_only=True
     )
     annotations: tuple[Mapping[str, Any], ...] = ()
 

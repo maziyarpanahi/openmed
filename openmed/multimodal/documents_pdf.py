@@ -22,6 +22,7 @@ from numbers import Integral
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .asset_limits import LimitProfile
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .code_regions import (
     CodeCoverageReport,
@@ -38,6 +39,12 @@ from .documents_pdf_layout import (
     validate_pdf_reading_order,
 )
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .redaction_admission import (
+    check_limit,
+    pdf_page_pixels,
+    redaction_limit_profile,
+    snapshot_admitted_pdf,
+)
 
 _PDFPLUMBER_HINT = 'Install with: pip install "openmed[multimodal]".'
 _PDF_WORD_FIELDS = ("x0", "top", "x1", "bottom")
@@ -102,6 +109,7 @@ def extract_pdf(
     reading_order: PdfReadingOrder = "auto",
     preserve_lines: bool = False,
     include_annotations: bool = False,
+    _limit_profile: LimitProfile | None = None,
 ) -> ExtractedDocument:
     """Extract normalized PDF text plus char-offset source spans.
 
@@ -145,10 +153,13 @@ def extract_pdf(
         if content is None:
             raise ValueError("annotation_appearance_unmappable") from None
         prepared = _prepare_annotation_source(
-            BytesIO(content), include_annotations=True
+            BytesIO(content), include_annotations=True, _limit_profile=_limit_profile
         )
         document = extract_pdf(
-            BytesIO(content), reading_order=reading_order, preserve_lines=preserve_lines
+            BytesIO(content),
+            reading_order=reading_order,
+            preserve_lines=preserve_lines,
+            _limit_profile=_limit_profile,
         )
         separator = "\n" if document.text and prepared.document.text else ""
         offset = len(document.text) + len(separator)
@@ -176,9 +187,10 @@ def extract_pdf(
     word_count = 0
 
     with pdfplumber.open(path) as pdf:
-        pages = tuple(getattr(pdf, "pages", ()))
-        page_count = len(pages)
-        for page_index, page in enumerate(pages):
+        for page_index, page in enumerate(getattr(pdf, "pages", ())):
+            page_count = page_index + 1
+            if _limit_profile is not None:
+                check_limit(_limit_profile, "pages", page_count)
             words = _extract_page_words(page)
             if not words:
                 continue
@@ -290,7 +302,10 @@ _ANNOTATION_TEXT_OPERATORS = frozenset(
 
 
 def _prepare_annotation_source(
-    source: Any, *, include_annotations: bool = False
+    source: Any,
+    *,
+    include_annotations: bool = False,
+    _limit_profile: LimitProfile | None = None,
 ) -> _AnnotationSource:
     """Make an in-memory raster source with no unchecked annotation objects."""
     try:
@@ -307,6 +322,8 @@ def _prepare_annotation_source(
     try:
         with pikepdf.open(source) as pdf:
             for page_index, page in enumerate(pdf.pages):
+                if _limit_profile is not None:
+                    check_limit(_limit_profile, "pages", page_index + 1)
                 annotations = tuple(page.obj.get("/Annots", ()))
                 if len(annotations) > 10_000:
                     raise ValueError("annotation_appearance_unmappable")
@@ -795,15 +812,20 @@ def _pdf_handler(
         raise ValueError("include_annotations must be a boolean")
     if include_annotations and _resolve_detector(models) is None:
         raise ValueError("annotation_detector_required")
-    content = _snapshot_pdf_source(path)
+    limit_profile = redaction_limit_profile(policy)
+    content = snapshot_admitted_pdf(path, limit_profile)
     document = extract_pdf(
-        BytesIO(content), include_annotations=bool(include_annotations)
+        BytesIO(content),
+        include_annotations=bool(include_annotations),
+        _limit_profile=limit_profile,
     )
     # Keep this bbox-preserving extraction as the canonical text/offset map
     # while adding structured boxes for table cells and caption lines.
     from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
-    regions = extract_pdf_regions(BytesIO(content), document=document)
+    regions = extract_pdf_regions(
+        BytesIO(content), document=document, _limit_profile=limit_profile
+    )
     entities = (
         _annotation_entities(document, models, lang)
         if include_annotations
@@ -866,6 +888,7 @@ def _pdf_handler(
             rectangles,
             include_annotations=bool(include_annotations),
             annotation_report=annotation_report,
+            policy=policy,
             code_detector=_policy_value(policy, "code_detector"),
             code_detection_policy=(
                 "coverage_incomplete" if code_policy is None else code_policy
@@ -902,11 +925,14 @@ def _render_redacted_pdf(
     resolution: int = 150,
     include_annotations: bool = False,
     annotation_report: list[Mapping[str, Any]] | None = None,
+    policy: Any = None,
     code_detector: CodeRegionDetector | None = None,
     code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
     code_report: dict[str, Any] | None = None,
 ) -> bytes:
     """Rasterize a PDF and burn opaque boxes into a fresh image-only PDF."""
+    limit_profile = redaction_limit_profile(policy)
+    content = snapshot_admitted_pdf(source, limit_profile, resolution=resolution)
     pdfplumber = _import_pdfplumber()
     try:
         image_draw = importlib.import_module("PIL.ImageDraw")
@@ -921,7 +947,9 @@ def _render_redacted_pdf(
 
     images: list[Any] = []
     prepared = _prepare_annotation_source(
-        source, include_annotations=include_annotations
+        BytesIO(content),
+        include_annotations=include_annotations,
+        _limit_profile=limit_profile,
     )
     if annotation_report is not None:
         annotation_report.extend(prepared.report)
@@ -929,7 +957,18 @@ def _render_redacted_pdf(
     residual_coverage: list[CodeCoverageReport] = []
     try:
         with pdfplumber.open(BytesIO(prepared.content)) as pdf:
+            total_pixels = 0
             for page_index, page in enumerate(getattr(pdf, "pages", ())):
+                check_limit(limit_profile, "pages", page_index + 1)
+                media_box = getattr(page, "mediabox", (0, 0, page.width, page.height))
+                pixels = pdf_page_pixels(
+                    float(media_box[2]) - float(media_box[0]),
+                    float(media_box[3]) - float(media_box[1]),
+                    resolution,
+                )
+                check_limit(limit_profile, "pixels", pixels)
+                total_pixels += pixels
+                check_limit(limit_profile, "total_pixels", total_pixels)
                 rendered = page.to_image(
                     resolution=resolution,
                     antialias=True,

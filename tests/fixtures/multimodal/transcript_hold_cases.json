@@ -1,0 +1,137 @@
+{
+  "policy_version": 1,
+  "cases": [
+    {
+      "text": "fifteen",
+      "alternatives": [],
+      "classes": [
+        "number"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "50",
+      "alternatives": [],
+      "classes": [
+        "number"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "twenty-five",
+      "alternatives": [],
+      "classes": [
+        "number"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "mg",
+      "alternatives": [],
+      "classes": [
+        "unit"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "no",
+      "alternatives": [],
+      "classes": [
+        "negation"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "possible",
+      "alternatives": [],
+      "classes": [
+        "uncertainty"
+      ],
+      "threshold": 0.9
+    },
+    {
+      "text": "left",
+      "alternatives": [],
+      "classes": [
+        "laterality"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "syntheticmed",
+      "alternatives": [],
+      "classes": [
+        "medication"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "hypo",
+      "alternatives": [],
+      "classes": [
+        "modifier"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "fifteen",
+      "alternatives": [
+        "fifty"
+      ],
+      "classes": [
+        "number"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "",
+      "alternatives": [
+        "no"
+      ],
+      "classes": [
+        "negation"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "no",
+      "alternatives": [
+        ""
+      ],
+      "classes": [
+        "negation"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": ".5",
+      "alternatives": [
+        "5"
+      ],
+      "classes": [
+        "number"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "15mg",
+      "alternatives": [],
+      "classes": [
+        "dose",
+        "number",
+        "unit"
+      ],
+      "threshold": 0.95
+    },
+    {
+      "text": "0.5 mg",
+      "alternatives": [],
+      "classes": [
+        "dose",
+        "number",
+        "unit"
+      ],
+      "threshold": 0.95
+    }
+  ]
+}
