@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-ABSTENTION_SCHEMA_VERSION: Final = 2
+ABSTENTION_SCHEMA_VERSION: Final = 1
 
 
 class AbstentionValidationError(ValueError):
@@ -60,7 +60,7 @@ class AbstentionReason(str, Enum):
     @property
     def schema_version(self) -> int:
         """Return the wire version required by this controlled code."""
-        return 2 if self in _V2_REASONS else 1
+        return 2 if self in _V2_REASONS else ABSTENTION_SCHEMA_VERSION
 
 
 _V2_REASONS: Final = frozenset(

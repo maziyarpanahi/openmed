@@ -22,24 +22,27 @@ from openmed.agent.permissions.revocation import (
 from tests.fixtures.agent.authority_status import SyntheticAuthority
 
 
-@pytest.mark.parametrize("kind", list(AuthorityKind))
-@pytest.mark.parametrize("boundary", list(AuthorityBoundary))
-def test_fresh_status_checked_at_every_boundary(kind, boundary):
-    fixture = SyntheticAuthority()
-    contract = next(c for c in fixture.contracts if c.kind is kind)
-    binding = fixture.runtime.bind((contract,))
-    calls = fixture.provider.calls
-    assert fixture.runtime.check(binding, boundary).reason is AuthorityReason.ACTIVE
-    assert fixture.provider.calls == calls + 1
-    fixture.provider.revoke(contract)
-    with pytest.raises(AuthorityDeniedError) as error:
-        fixture.runtime.check(binding, boundary)
-    assert error.value.receipt.reason is AuthorityReason.REVOKED
+def test_fresh_status_checked_at_every_boundary(subtests):
+    for kind in list(AuthorityKind):
+        for boundary in list(AuthorityBoundary):
+            with subtests.test(kind=kind, boundary=boundary):
+                fixture = SyntheticAuthority()
+                contract = next(c for c in fixture.contracts if c.kind is kind)
+                binding = fixture.runtime.bind((contract,))
+                calls = fixture.provider.calls
+                assert (
+                    fixture.runtime.check(binding, boundary).reason
+                    is AuthorityReason.ACTIVE
+                )
+                assert fixture.provider.calls == calls + 1
+                fixture.provider.revoke(contract)
+                with pytest.raises(AuthorityDeniedError) as error:
+                    fixture.runtime.check(binding, boundary)
+                assert error.value.receipt.reason is AuthorityReason.REVOKED
 
 
-@pytest.mark.parametrize(
-    "failure,reason",
-    [
+def test_status_failures_are_closed_and_content_free(subtests):
+    for failure, reason in [
         ("missing", AuthorityReason.UNAVAILABLE),
         ("unavailable", AuthorityReason.UNAVAILABLE),
         ("wrong_digest", AuthorityReason.UNAVAILABLE),
@@ -49,42 +52,41 @@ def test_fresh_status_checked_at_every_boundary(kind, boundary):
         ("future", AuthorityReason.STALE),
         ("lower_generation", AuthorityReason.ROLLBACK),
         ("changed_generation", AuthorityReason.GENERATION_CHANGED),
-    ],
-)
-def test_status_failures_are_closed_and_content_free(failure, reason):
-    fixture = SyntheticAuthority()
-    contract = fixture.contracts[0]
-    fixture.provider.records[(contract.kind, contract.digest)] = (2, False)
-    binding = fixture.runtime.bind((contract,))
-    status = fixture.current_status(contract)
-    if failure == "missing":
-        fixture.provider.records.clear()
-    elif failure == "unavailable":
-        fixture.provider.unavailable = True
-    else:
-        changes = {
-            "wrong_digest": {"digest": "sha256:" + "f" * 64},
-            "wrong_kind": {"kind": AuthorityKind.PURPOSE_TICKET},
-            "stale": {"observed_at": fixture.clock() - 1},
-            "future": {"observed_at": fixture.clock() + 1},
-            "lower_generation": {"generation": 1},
-            "changed_generation": {"generation": 3},
-        }
-        fixture.provider.override = (
-            object()
-            if failure == "invalid_response"
-            else replace(status, **changes[failure])
-        )
-    with pytest.raises(AuthorityDeniedError) as error:
-        fixture.runtime.check(binding, AuthorityBoundary.EFFECT_DISPATCH)
-    assert error.value.receipt.reason is reason
-    output = json.dumps(error.value.receipt.to_dict()) + "".join(
-        traceback.format_exception(error.value)
-    )
-    assert "synthetic-private-provider-payload" not in output
-    assert fixture.ticket.purpose not in output
-    assert fixture.grant.signature not in output
-    assert fixture.ticket.record_selectors[0].digest not in output
+    ]:
+        with subtests.test(failure=failure, reason=reason):
+            fixture = SyntheticAuthority()
+            contract = fixture.contracts[0]
+            fixture.provider.records[(contract.kind, contract.digest)] = (2, False)
+            binding = fixture.runtime.bind((contract,))
+            status = fixture.current_status(contract)
+            if failure == "missing":
+                fixture.provider.records.clear()
+            elif failure == "unavailable":
+                fixture.provider.unavailable = True
+            else:
+                changes = {
+                    "wrong_digest": {"digest": "sha256:" + "f" * 64},
+                    "wrong_kind": {"kind": AuthorityKind.PURPOSE_TICKET},
+                    "stale": {"observed_at": fixture.clock() - 1},
+                    "future": {"observed_at": fixture.clock() + 1},
+                    "lower_generation": {"generation": 1},
+                    "changed_generation": {"generation": 3},
+                }
+                fixture.provider.override = (
+                    object()
+                    if failure == "invalid_response"
+                    else replace(status, **changes[failure])
+                )
+            with pytest.raises(AuthorityDeniedError) as error:
+                fixture.runtime.check(binding, AuthorityBoundary.EFFECT_DISPATCH)
+            assert error.value.receipt.reason is reason
+            output = json.dumps(error.value.receipt.to_dict()) + "".join(
+                traceback.format_exception(error.value)
+            )
+            assert "synthetic-private-provider-payload" not in output
+            assert fixture.ticket.purpose not in output
+            assert fixture.grant.signature not in output
+            assert fixture.ticket.record_selectors[0].digest not in output
 
 
 def test_expiry_is_distinct_from_revocation_even_with_historical_clock():
@@ -111,13 +113,18 @@ def test_restored_high_generation_cannot_be_downgraded_by_fresh_low_status():
         restarted.check(binding, AuthorityBoundary.RESUME)
 
 
-@pytest.mark.parametrize("generation", [0, 1, 2])
-def test_tombstone_rejects_resurrection_at_any_generation(generation):
-    store = InMemoryAuthorityGenerationStore()
-    status = AuthorityStatus(AuthorityKind.GRANT, "sha256:" + "a" * 64, 1, True, 10)
-    assert store.observe(status)
-    assert not store.observe(replace(status, generation=generation, revoked=False))
-    assert store.observe(replace(status, generation=2))
+def test_tombstone_rejects_resurrection_at_any_generation(subtests):
+    for generation in [0, 1, 2]:
+        with subtests.test(generation=generation):
+            store = InMemoryAuthorityGenerationStore()
+            status = AuthorityStatus(
+                AuthorityKind.GRANT, "sha256:" + "a" * 64, 1, True, 10
+            )
+            assert store.observe(status)
+            assert not store.observe(
+                replace(status, generation=generation, revoked=False)
+            )
+            assert store.observe(replace(status, generation=2))
 
 
 def test_equal_generation_cannot_change_state_and_concurrent_rollback_is_rejected():
@@ -156,13 +163,18 @@ def test_generation_store_failure_is_closed(failure):
     )
 
 
-@pytest.mark.parametrize("value", [-1, True, 2**63, "synthetic-private-value"])
-def test_clock_failure_is_closed(value):
-    fixture = SyntheticAuthority()
-    binding = fixture.runtime.bind((fixture.contracts[0],))
-    runtime = AuthorityRuntime(fixture.provider, fixture.store, clock=lambda: value)
-    with pytest.raises(AuthorityDeniedError, match="authority_status_unavailable"):
-        runtime.check(binding, AuthorityBoundary.RESUME)
+def test_clock_failure_is_closed(subtests):
+    for value in [-1, True, 2**63, "synthetic-private-value"]:
+        with subtests.test(value=value):
+            fixture = SyntheticAuthority()
+            binding = fixture.runtime.bind((fixture.contracts[0],))
+            runtime = AuthorityRuntime(
+                fixture.provider, fixture.store, clock=lambda: value
+            )
+            with pytest.raises(
+                AuthorityDeniedError, match="authority_status_unavailable"
+            ):
+                runtime.check(binding, AuthorityBoundary.RESUME)
 
 
 def test_explicit_bounded_age_policy_and_unknown_preview():
@@ -216,26 +228,25 @@ def test_binding_roundtrip_preserves_exact_generations_and_canonical_digest():
     )
 
 
-@pytest.mark.parametrize(
-    "mutation", ["extra", "missing", "schema", "generation", "kind", "duplicate"]
-)
-def test_malformed_recovery_binding_is_rejected(mutation):
-    fixture = SyntheticAuthority()
-    payload = fixture.runtime.bind((fixture.contracts[0],)).to_dict()
-    if mutation == "extra":
-        payload["source"] = "synthetic-private-payload"
-    elif mutation == "missing":
-        del payload["versions"][0]["generation"]
-    elif mutation == "schema":
-        payload["schema_version"] = "future"
-    elif mutation == "generation":
-        payload["versions"][0]["generation"] = True
-    elif mutation == "kind":
-        payload["versions"][0]["kind"] = "synthetic-private-payload"
-    else:
-        payload["versions"] *= 2
-    with pytest.raises(ValueError, match="^invalid_authority_binding$"):
-        AuthorityBinding.from_dict(payload)
+def test_malformed_recovery_binding_is_rejected(subtests):
+    for mutation in ["extra", "missing", "schema", "generation", "kind", "duplicate"]:
+        with subtests.test(mutation=mutation):
+            fixture = SyntheticAuthority()
+            payload = fixture.runtime.bind((fixture.contracts[0],)).to_dict()
+            if mutation == "extra":
+                payload["source"] = "synthetic-private-payload"
+            elif mutation == "missing":
+                del payload["versions"][0]["generation"]
+            elif mutation == "schema":
+                payload["schema_version"] = "future"
+            elif mutation == "generation":
+                payload["versions"][0]["generation"] = True
+            elif mutation == "kind":
+                payload["versions"][0]["kind"] = "synthetic-private-payload"
+            else:
+                payload["versions"] *= 2
+            with pytest.raises(ValueError, match="^invalid_authority_binding$"):
+                AuthorityBinding.from_dict(payload)
 
 
 def test_preview_denies_revoked_expired_or_duplicate_contracts():
@@ -251,10 +262,11 @@ def test_preview_denies_revoked_expired_or_duplicate_contracts():
         fixture.runtime.bind((contract,))
 
 
-@pytest.mark.parametrize("generation", [-1, True, 2**63])
-def test_contract_and_status_validate_controlled_metadata(generation):
-    contract = AuthorityContract(AuthorityKind.GRANT, "sha256:" + "a" * 64, 100)
-    with pytest.raises(ValueError, match="invalid_authority_integer"):
-        AuthorityVersion(contract, generation)
-    with pytest.raises(ValueError, match="invalid_authority_integer"):
-        AuthorityStatus(contract.kind, contract.digest, generation, False, 10)
+def test_contract_and_status_validate_controlled_metadata(subtests):
+    for generation in [-1, True, 2**63]:
+        with subtests.test(generation=generation):
+            contract = AuthorityContract(AuthorityKind.GRANT, "sha256:" + "a" * 64, 100)
+            with pytest.raises(ValueError, match="invalid_authority_integer"):
+                AuthorityVersion(contract, generation)
+            with pytest.raises(ValueError, match="invalid_authority_integer"):
+                AuthorityStatus(contract.kind, contract.digest, generation, False, 10)

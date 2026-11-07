@@ -807,6 +807,43 @@
             "description": "Evaluate caller-supplied choices without authorizing diagnosis, treatment, enrollment, outreach, ordering, or autonomous clinical action."
           },
           "response": []
+        },
+        {
+          "name": "Submit a De-Identified System One Decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"A synthetic caller asks to reschedule.\",\n  \"questions\": {\n    \"callback\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Does the caller ask to reschedule?\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/systemone",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "systemone"
+              ]
+            },
+            "description": "Requires the opt-in privacy route, a local PII model, both service scopes and enabled rate limits. Use synthetic text when trying this request."
+          },
+          "response": []
         }
       ]
     },

@@ -36,6 +36,13 @@ make format-check
 CI enforces `ruff check .`, `ruff format --check .`, and the scoped mypy configuration in `pyproject.toml`; pull
 requests should not include unrelated formatting-only changes outside the files needed for the feature or fix.
 
+The same `make lint` command, local pre-commit `effect-paths` hook and CI lint job
+run `python scripts/security/check_effect_paths.py --check`. Review changes to
+`scripts/security/effect_paths.json` when adding or removing effect candidates;
+new paths receive no implicit classification. Built-in agent-facing dependencies
+must not reach the legacy FHIR/OpenMRS writers. See the
+[effect-path inventory](security/agent-threat-model.md#effect-path-inventory).
+
 Swift package code uses Apple `swift-format` with the checked-in `.swift-format` configuration. For changes under
 `swift/OpenMedKit`, run:
 

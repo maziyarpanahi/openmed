@@ -35,28 +35,26 @@ RESTRICTED_MARKERS = (
 )
 
 
-@pytest.mark.parametrize(
-    ("language", "text", "canonical_magnitude", "canonical_unit"),
-    [
+def test_locale_measurements_parse_to_canonical_ucum(subtests):
+    for language, text, canonical_magnitude, canonical_unit in [
         ("en", "5 mg/dL", 0.05, "g/L"),
         ("es", "5,0 mg/dl", 0.05, "g/L"),
         ("fr", "5,0 mg par dL", 0.05, "g/L"),
         ("de", "1.234,5 mg/dl", 12.345, "g/L"),
         ("zh", "５.０ 毫克/分升", 0.05, "g/L"),
-    ],
-)
-def test_locale_measurements_parse_to_canonical_ucum(
-    language,
-    text,
-    canonical_magnitude,
-    canonical_unit,
-):
-    parsed = parse_measurement(text, language=language)
+    ]:
+        with subtests.test(
+            language=language,
+            text=text,
+            canonical_magnitude=canonical_magnitude,
+            canonical_unit=canonical_unit,
+        ):
+            parsed = parse_measurement(text, language=language)
 
-    assert parsed["status"] == "ok"
-    assert parsed["canonical_magnitude"] == pytest.approx(canonical_magnitude)
-    assert parsed["canonical_unit"] == canonical_unit
-    assert parsed["provenance"]["source_language"] == language
+            assert parsed["status"] == "ok"
+            assert parsed["canonical_magnitude"] == pytest.approx(canonical_magnitude)
+            assert parsed["canonical_unit"] == canonical_unit
+            assert parsed["provenance"]["source_language"] == language
 
 
 def test_lab_range_parsing_uses_locale_numbers_and_units():
@@ -76,24 +74,20 @@ def test_lab_range_parsing_uses_locale_numbers_and_units():
     )
 
 
-@pytest.mark.parametrize(
-    ("language", "text", "expected_per_day"),
-    [
+def test_medication_frequency_uses_localized_sig_aliases(subtests):
+    for language, text, expected_per_day in [
         ("es", "dos veces al día", 2.0),
         ("fr", "deux fois par jour", 2.0),
         ("de", "2x täglich", 2.0),
         ("zh", "每日两次", 2.0),
-    ],
-)
-def test_medication_frequency_uses_localized_sig_aliases(
-    language,
-    text,
-    expected_per_day,
-):
-    parsed = normalize_frequency(text, language=language)
+    ]:
+        with subtests.test(
+            language=language, text=text, expected_per_day=expected_per_day
+        ):
+            parsed = normalize_frequency(text, language=language)
 
-    assert parsed["recognized"] is True
-    assert parsed["frequency_per_day"] == expected_per_day
+            assert parsed["recognized"] is True
+            assert parsed["frequency_per_day"] == expected_per_day
 
 
 def test_medication_duration_uses_localized_unit_aliases():
@@ -104,29 +98,22 @@ def test_medication_duration_uses_localized_unit_aliases():
     assert parsed["days"] == 7
 
 
-@pytest.mark.parametrize(
-    ("language", "text", "kind", "unit"),
-    [
+def test_vital_signs_use_localized_abbreviation_expansions(subtests):
+    for language, text, kind, unit in [
         ("es", "TA: 120/80 mmHg", "blood_pressure", "mmHg"),
         ("fr", "TA: 120/80 mm Hg", "blood_pressure", "mmHg"),
         ("de", "RR: 120/80 mmHg", "blood_pressure", "mmHg"),
         ("zh", "血压: １２０/８０ 毫米汞柱", "blood_pressure", "mmHg"),
-    ],
-)
-def test_vital_signs_use_localized_abbreviation_expansions(
-    language,
-    text,
-    kind,
-    unit,
-):
-    parsed = structure_vital_sign(text, language=language)
+    ]:
+        with subtests.test(language=language, text=text, kind=kind, unit=unit):
+            parsed = structure_vital_sign(text, language=language)
 
-    assert parsed["kind"] == kind
-    assert parsed["unit"] == unit
-    assert parsed["components"] == [
-        {"kind": "systolic", "value": 120, "unit": unit},
-        {"kind": "diastolic", "value": 80, "unit": unit},
-    ]
+            assert parsed["kind"] == kind
+            assert parsed["unit"] == unit
+            assert parsed["components"] == [
+                {"kind": "systolic", "value": 120, "unit": unit},
+                {"kind": "diastolic", "value": 80, "unit": unit},
+            ]
 
 
 def test_multilingual_normalization_gold_meets_per_language_accuracy_gate():

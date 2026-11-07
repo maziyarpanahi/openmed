@@ -78,8 +78,8 @@ Omitting `schema_version` when constructing a record selects the version from
 the reason. Legacy codes still produce exactly the same v1 bytes. New codes
 produce v2 bytes. An explicit version must match the reason: v1 with a new code,
 v2 with a legacy code, booleans, null and unknown versions are rejected by the
-wire parser. `ABSTENTION_SCHEMA_VERSION` names the latest supported version (2),
-not the version of every record.
+wire parser. `ABSTENTION_SCHEMA_VERSION` remains 1 for existing callers. Read
+the record’s `schema_version` for its actual wire version.
 
 ```python
 record = AbstentionRecord(

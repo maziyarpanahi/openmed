@@ -30,32 +30,32 @@ def test_bound_brief_integrates_offline_generation_and_review(monkeypatch):
     assert brief.summary not in json.dumps(brief.to_dict())
 
 
-@pytest.mark.parametrize(
-    "module,name",
-    [
+def test_bound_claims_cannot_skip_required_guards(subtests):
+    for module, name in [
         ("nli_assertion_pairs", "build_nli_pair"),
         ("nli_temporal_pairs", "build_temporal_nli_pair"),
         ("nli_experiencer_pairs", "build_experiencer_nli_pair"),
         ("summary_citations", "compute_summary_citation_metrics"),
         ("citation_boundaries", "validate_citation_boundaries"),
         ("citation_minimality", "check_citation_minimality"),
-    ],
-)
-def test_bound_claims_cannot_skip_required_guards(monkeypatch, module, name):
-    def fail(*args, **kwargs):
-        raise RuntimeError("SYNTHETIC_PRIVATE_ERROR")
+    ]:
+        with subtests.test(module=module, name=name):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(
-        importlib.import_module("openmed.clinical." + module), name, fail
-    )
-    value, context = fixture_context()
-    brief = build_clinical_brief(
-        value, context=context, model=SyntheticBoundGenerator()
-    )
-    assert brief.refusal_reason is BriefRefusal.STAGE_FAILED
-    assert brief.summary == ""
-    assert brief.citations == ()
-    assert "SYNTHETIC_PRIVATE_ERROR" not in json.dumps(brief.to_dict())
+                def fail(*args, **kwargs):
+                    raise RuntimeError("SYNTHETIC_PRIVATE_ERROR")
+
+                monkeypatch.setattr(
+                    importlib.import_module("openmed.clinical." + module), name, fail
+                )
+                value, context = fixture_context()
+                brief = build_clinical_brief(
+                    value, context=context, model=SyntheticBoundGenerator()
+                )
+                assert brief.refusal_reason is BriefRefusal.STAGE_FAILED
+                assert brief.summary == ""
+                assert brief.citations == ()
+                assert "SYNTHETIC_PRIVATE_ERROR" not in json.dumps(brief.to_dict())
 
 
 def test_bound_generation_cannot_supply_uncalibrated_confidence():

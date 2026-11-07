@@ -426,18 +426,16 @@ def test_crd_requires_lifecycle_fields_and_rejects_unknown_tier() -> None:
         DesiredModel.from_resource(blocked_rollout)
 
 
-@pytest.mark.parametrize(
-    "base_url",
-    [
+def test_kubernetes_client_rejects_unsafe_api_origins(subtests) -> None:
+    for base_url in [
         "file:///var/run/secrets/kubernetes.io/serviceaccount/token",
         "https://operator@example.test",
         "http://kubernetes.default.svc",
         "https://example.test/api/v1",
-    ],
-)
-def test_kubernetes_client_rejects_unsafe_api_origins(base_url: str) -> None:
-    with pytest.raises(ValueError, match="Kubernetes API|unencrypted"):
-        KubernetesAPIClient(base_url)
+    ]:
+        with subtests.test(base_url=base_url):
+            with pytest.raises(ValueError, match="Kubernetes API|unencrypted"):
+                KubernetesAPIClient(base_url)
 
 
 def test_synthetic_apply_drives_manifest_rollout_and_ready_conditions() -> None:

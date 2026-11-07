@@ -184,6 +184,12 @@ approved workflow and use an atomic transactional adapter at the effect boundary
 
 A committer implements one small local protocol:
 
+This adapter sketch requires an application database transaction and reference
+snapshot revalidation. The documentation check compiles this fragment but does
+not execute database writes.
+
+<!-- openmed-docs-fragment: omop-database-transaction -->
+
 ```python
 class LocalCommitter:
     def commit_batch(self, mutations, *, batch_digest, approval):

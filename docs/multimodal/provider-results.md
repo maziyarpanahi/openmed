@@ -116,8 +116,8 @@ Legacy codes and all non-abstention outcomes retain
 and policy codes use `openmed.multimodal.provider_result.v2`. Constructors select
 the version automatically when it is omitted; supplied versions must match the
 code. Parsers require an explicit string version, rejecting null, unknown and
-mismatched versions. `PROVIDER_RESULT_SCHEMA_VERSION` identifies the latest
-supported contract, v2, rather than every result's wire version.
+mismatched versions. `PROVIDER_RESULT_SCHEMA_VERSION` continues to identify
+v1 for existing callers. Read the envelope’s `schema_version` for its wire version.
 
 The envelope has no stage field: stage validation belongs to `AbstentionRecord`.
 See [abstention reasons](abstention-reasons.md) for each code's stage and meaning,
