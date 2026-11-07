@@ -49,3 +49,22 @@ def test_docker_compose_persists_hf_and_openmed_model_cache():
         environment["OPENMED_SERVICE_MAX_RESIDENT_MODELS"]
         == "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
     )
+
+
+def test_docker_compose_app_healthcheck_probes_readyz():
+    service = _app_service(_load_compose())
+
+    healthcheck = service["healthcheck"]
+    assert isinstance(healthcheck, dict)
+
+    test = healthcheck["test"]
+    assert isinstance(test, list)
+    joined = " ".join(str(part) for part in test)
+    assert "http://127.0.0.1:8080/readyz" in joined
+    # The probe is bounded: a few seconds to fail fast, a start period for
+    # model preload, and a retry budget rather than an indefinite wait.
+    assert "timeout=3" in joined or "timeout 3" in joined
+    assert healthcheck["interval"] == "10s"
+    assert healthcheck["timeout"] == "5s"
+    assert healthcheck["start_period"] == "15s"
+    assert healthcheck["retries"] == 6
