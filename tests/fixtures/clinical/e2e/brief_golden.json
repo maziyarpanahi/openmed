@@ -2,12 +2,12 @@
   "synthetic_only": true,
   "model_validation": false,
   "providers": "fixture-ner-and-nli-not-deployable",
-  "deidentified_digest": "sha256:3615cc2268185f79ea48e9d5d8af5fc345d4325d934943af64589557b74da1d8",
+  "deidentified_digest": "sha256:38d11e36ef4320bd05252851f6bed847a118ef55c67a18c25f3ddfc14db42fce",
   "extraction_count": 1,
   "grounding": [
     {
-      "start": 83,
-      "end": 92,
+      "start": 76,
+      "end": 85,
       "candidate_count": 1
     }
   ],
@@ -18,22 +18,22 @@
         "claim_index": 0,
         "output_end": 36,
         "output_start": 0,
-        "source_end": 93,
-        "source_start": 57
+        "source_end": 86,
+        "source_start": 50
       },
       {
         "claim_index": 1,
         "output_end": 75,
         "output_start": 37,
-        "source_end": 132,
-        "source_start": 94
+        "source_end": 125,
+        "source_start": 87
       },
       {
         "claim_index": 2,
         "output_end": 116,
         "output_start": 76,
-        "source_end": 173,
-        "source_start": 133
+        "source_end": 166,
+        "source_start": 126
       }
     ],
     "envelope": {
@@ -41,14 +41,14 @@
       "human_review_mode": true,
       "is_diagnostic": false,
       "provenance": {
-        "artifact_id": "deidentified-1c2ceed6dd1a51083fa4772b",
-        "content_hash": "sha256:1c2ceed6dd1a51083fa4772b02da31e491a89ecc5c538c431c586facc8273f3c",
+        "artifact_id": "deidentified-81692c53860f2537e6fa1845",
+        "content_hash": "sha256:81692c53860f2537e6fa1845928b847c698f2af2d7de991179495d9679704d9d",
         "deidentification_method": "mask",
         "max_length": 512,
         "sentence_count": 6,
         "sentence_detection": true,
         "sentence_language": "en",
-        "source_hash": "sha256:1c2ceed6dd1a51083fa4772b02da31e491a89ecc5c538c431c586facc8273f3c",
+        "source_hash": "sha256:81692c53860f2537e6fa1845928b847c698f2af2d7de991179495d9679704d9d",
         "verification_method": "deidentification_result",
         "verified": true
       },
@@ -116,8 +116,8 @@
         "provenance": {
           "adjudication_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
           "claim_digest": "sha256:959a6e01b76b7736bb0c8e82a5a22e6a6f6f460652f7d218d12844940f1a9c2e",
-          "evidence_digest": "sha256:a3ee4607532bc88ad65e16d2584cad290a51da8a1961fd918d85374038b90daa",
-          "input_digest": "sha256:2732c741666e33e8f61c8f9db1fe67b2caed8c0db0b2d0286aa7e640af72907a"
+          "evidence_digest": "sha256:f92d5fb3bd50978d0b1be47be9050a6281261808ac6904e468a4e9228f4c7670",
+          "input_digest": "sha256:dd377d79706756602879529189e2001302066348c69907f08272c2715410938d"
         },
         "schema_version": 1,
         "suite": "citation_support_metrics",
@@ -358,30 +358,30 @@
       "disclaimer": "Guarded clinical-output provenance is value-free assistive metadata for human review; it is not a clinical decision, compliance certification, diagnosis, or treatment recommendation.",
       "evidence": [
         {
-          "evidence_hash": "sha256:e554ab60c413249053cb2cb50c8940ba617d0a33df2ddd7c1738df838fa50719",
+          "evidence_hash": "sha256:300f3923f2decd33ecd4610a335b9c55d58f01079f29c83b2d91defa6c8f52c5",
           "evidence_id": "sha256:36b3ef6d59e4ca1a54ee95783f636c3bdd40290af3ee6af5270147d5f18cc786",
           "kind": "source_span",
           "source_offsets": {
-            "end": 132,
-            "start": 94
+            "end": 125,
+            "start": 87
           }
         },
         {
-          "evidence_hash": "sha256:593ba78134e430f4d8bc0cc882d1ed85abfd00beed136a1e1a1d0a83bdb9651b",
+          "evidence_hash": "sha256:da0f43111eb5a19c09b47701bab94a0ed98a11f9a95ecdafa51b4628807ce1e9",
           "evidence_id": "sha256:756d6760cdb8e67179251f689ec4b8883a59d286fbd2fb3052d141e0695ded8d",
           "kind": "source_span",
           "source_offsets": {
-            "end": 93,
-            "start": 57
+            "end": 86,
+            "start": 50
           }
         },
         {
-          "evidence_hash": "sha256:bf9f143e39f51fa1265d27168c1eaf688013cedabe4203fafa653c0aa6cbb586",
+          "evidence_hash": "sha256:2fe99128582a583e3b89e9331b462fb9f2bfaecbfa2cf2e14d8cc3ab0be9bf90",
           "evidence_id": "sha256:f856794c66b8a40aa010700245aa1178588767ecd6c6f4d899e2b77736b829f6",
           "kind": "source_span",
           "source_offsets": {
-            "end": 173,
-            "start": 133
+            "end": 166,
+            "start": 126
           }
         }
       ],
@@ -390,7 +390,7 @@
         "sha256:756d6760cdb8e67179251f689ec4b8883a59d286fbd2fb3052d141e0695ded8d",
         "sha256:f856794c66b8a40aa010700245aa1178588767ecd6c6f4d899e2b77736b829f6"
       ],
-      "input_hash": "sha256:b83cfc7fa4a33ee6ef6180ea2cf2beca4c73ac06c7c98dde068941a5b9bc3616",
+      "input_hash": "sha256:63114438f289897f87126dc3b9671f148ee481fd82493b167ed93306f1efd9fc",
       "integrity": {
         "changed_evidence_count": 0,
         "changed_evidence_ids": [],
@@ -417,9 +417,9 @@
       },
       "output_hash": "sha256:4dc25b3e2eca2c08b7ea14f581bf534d952c0cdd73e6631a8d9d83a273f1d18e",
       "output_kind": "clinical_output",
-      "policy_fingerprint": "sha256:aeef746ee0d8b7e391be17215305cfd5d415320743451199b3105bd0e75da93a",
-      "record_hash": "sha256:6f4285d761cf3623e717d3904fa076a93b50dea23fbb1666e55f95554bd2cdc4",
-      "record_id": "sha256:481f10a116a0b04ceca0d06d27eb2fdfaf467c1d590a285b64487cbae2fc318f",
+      "policy_fingerprint": "sha256:b9b7aff9af4ecd4dd6b1540ede85864a317e46656b23866ac0387c05bd566f35",
+      "record_hash": "sha256:262c821e6226eb3bb5987de36679787886cad9a27560d40e133c7d9ff6a628b2",
+      "record_id": "sha256:623d04710423d928137bf439335e2bb578521ad5d1ff17318d10ee7c87b463a9",
       "record_type": "openmed.clinical.guarded_output_provenance",
       "review": {
         "required": true,
@@ -546,7 +546,7 @@
         "label": "entailment"
       }
     ],
-    "digest": "sha256:b0ac5eb45fbaa28dad62bb62fe1275ba7df5c573e528256d65fdfcd5c7ca97d0",
+    "digest": "sha256:543d227430b79ddc4df2461c4c79e1f383f8fc1e4c2b2dd84721aba16281e25c",
     "summary": "The admission problem was pneumonia. The discharge diagnosis was pneumonia. Symptoms improved after supportive care."
   }
 }

@@ -239,6 +239,10 @@ jobs:
       run: |
         uv run python scripts/security/check_effect_paths.py --check
 
+    - name: Check generated portable policy resources are current
+      run: |
+        uv run python scripts/parity/generate_portable_policies.py --check
+
     - name: Enforce public API backwards-compatibility policy
       run: |
         uv run python scripts/release/check_public_api.py

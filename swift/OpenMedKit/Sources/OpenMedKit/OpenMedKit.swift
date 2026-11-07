@@ -255,7 +255,7 @@
                 confidenceThreshold: confidenceThreshold,
                 useSmartMerging: useSmartMerging
             )
-            return Self.deidentify(text, entities: entities, policy: policy)
+            return try Self.deidentify(text, entities: entities, policy: policy)
         }
 
         /// Detect and de-identify PII, returning a Python-schema-compatible result.
@@ -460,124 +460,54 @@
             return Self.deduplicateOverlappingEntities(merged)
         }
 
+        /// Apply a verified policy to detected entities.
+        ///
+        /// Entities are first snapped to grapheme boundaries (a platform
+        /// pre-step). The shared portable policy engine then applies label
+        /// normalization, thresholds, overlap resolution, and rendering, so the
+        /// output matches every other OpenMedKit surface for the same spans.
         static func deidentify(
             _ text: String,
             entities: [EntityPrediction],
-            policy: Policy
-        ) -> PolicyDeidentificationResult {
-            let candidates = deidentificationCandidates(entities, in: text)
-            var redactedText = text
-            var actionRecords: [DeidentifiedSpanAction] = []
-
-            for entity in candidates {
-                let canonicalLabel = Policy.canonicalLabel(for: entity.label)
-                let action = policy.action(for: entity.label)
-                let original = substring(text, start: entity.start, end: entity.end)
-                let replacement = replacementText(
-                    for: action,
-                    canonicalLabel: canonicalLabel,
-                    original: original
-                )
-
-                actionRecords.append(
-                    DeidentifiedSpanAction(
-                        label: entity.label,
-                        canonicalLabel: canonicalLabel,
-                        action: action,
-                        start: entity.start,
-                        end: entity.end,
-                        confidence: entity.confidence,
-                        replacement: replacement
-                    )
-                )
-            }
-
-            for record in actionRecords.reversed() {
-                guard let replacement = record.replacement else {
-                    continue
-                }
-                guard
-                    let range = PostProcessing.scalarRange(
-                        in: redactedText,
-                        start: record.start,
-                        end: record.end
-                    )
-                else {
-                    continue
-                }
-                redactedText.replaceSubrange(range, with: replacement)
-            }
-
-            return PolicyDeidentificationResult(
-                redactedText: redactedText,
-                policyName: policy.name,
-                actions: actionRecords
-            )
-        }
-
-        private static func deidentificationCandidates(
-            _ entities: [EntityPrediction],
-            in text: String
-        ) -> [EntityPrediction] {
+            policy: Policy,
+            surrogateKey: Data? = nil
+        ) throws -> PolicyDeidentificationResult {
             let textLength = PostProcessing.unicodeScalarCount(in: text)
-            let sorted =
-                entities
+            let detections =
+                try entities
                 .compactMap { $0.snappedToGraphemeBoundaries(in: text) }
                 .filter { $0.start >= 0 && $0.end > $0.start && $0.end <= textLength }
-                .sorted {
-                    if $0.start == $1.start {
-                        let lhsLength = entityLength($0)
-                        let rhsLength = entityLength($1)
-                        if lhsLength == rhsLength {
-                            return $0.confidence > $1.confidence
-                        }
-                        return lhsLength > rhsLength
-                    }
-                    return $0.start < $1.start
+                .map { entity in
+                    PolicyDetection(
+                        label: entity.label,
+                        start: entity.start,
+                        end: entity.end,
+                        confidencePPM: try KitParity.confidencePPM(entity.confidence)
+                    )
                 }
-
-            var selected: [EntityPrediction] = []
-            for entity in sorted {
-                let overlapsSelected = selected.contains { existing in
-                    entity.start < existing.end && entity.end > existing.start
-                }
-                if !overlapsSelected {
-                    selected.append(entity)
-                }
+            let outcome = try PolicyEngine.decide(
+                policy: policy,
+                text: text,
+                detections: detections,
+                surrogateKey: surrogateKey
+            )
+            let actions = outcome.result.spans.map { span in
+                DeidentifiedSpanAction(
+                    label: span.label,
+                    canonicalLabel: span.canonicalLabel,
+                    action: PolicyAction(rawValue: span.action) ?? .mask,
+                    start: span.start,
+                    end: span.end,
+                    confidence: Float(span.confidencePPM ?? 0)
+                        / Float(KitParity.confidenceScale),
+                    replacement: span.replacement
+                )
             }
-
-            return selected.sorted {
-                if $0.start == $1.start {
-                    return $0.end < $1.end
-                }
-                return $0.start < $1.start
-            }
-        }
-
-        private static func replacementText(
-            for action: PolicyAction,
-            canonicalLabel: String,
-            original: String
-        ) -> String? {
-            switch action.redactionEquivalent {
-            case .keep:
-                return nil
-            case .mask:
-                return "[\(canonicalLabel)]"
-            case .replace:
-                return "[\(canonicalLabel)_REPLACED]"
-            case .remove:
-                return ""
-            case .hash:
-                return "\(canonicalLabel)_\(stableHash(original))"
-            case .redact:
-                return "[\(canonicalLabel)]"
-            }
-        }
-
-        private static func stableHash(_ text: String) -> String {
-            let digest = SHA256.hash(data: Data(text.utf8))
-            return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
+            return PolicyDeidentificationResult(
+                redactedText: outcome.result.deidentifiedText,
+                policyName: policy.name,
+                actions: actions
+            )
         }
 
         static func deduplicateOverlappingEntities(

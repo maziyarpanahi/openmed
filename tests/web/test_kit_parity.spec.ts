@@ -293,11 +293,10 @@ test("web results project to the canonical bytes of every vector", async () => {
     assert.equal(sha256(vector.deidentified_text), vector.deidentified_sha256);
 
     // The web package's own redaction routine works on UTF-16 offsets and
-    // has no keep semantics, so it receives only the replaced spans.
-    const replaced = result.spans.filter((span) => span.action !== "keep");
+    // leaves `keep` spans in place, so it receives every span unfiltered.
     assert.equal(
       Buffer.compare(
-        Buffer.from(spansToRedactedText(vector.text, replaced), "utf8"),
+        Buffer.from(spansToRedactedText(vector.text, result.spans), "utf8"),
         Buffer.from(vector.deidentified_text, "utf8"),
       ),
       0,
@@ -386,9 +385,9 @@ test("an altered offset, label, action, order, or byte fails the gate", async ()
   ]);
 
   const relabeled = webResult(vector);
-  relabeled.spans[last] = { ...relabeled.spans[last]!, canonical_label: "PERSON" };
+  relabeled.spans[last] = { ...relabeled.spans[last]!, canonical_label: "OTHER" };
   assert.deepEqual(differences(vector.id, vector.result_json, project(relabeled)), [
-    "case=emoji_sequences path=$.spans[0].canonical_label expected=OTHER actual=PERSON",
+    "case=emoji_sequences path=$.spans[0].canonical_label expected=PERSON actual=OTHER",
   ]);
 
   const reaction = webResult(vector);
@@ -440,7 +439,7 @@ test("web projection rejects actions and offsets outside the profile", async () 
   const emojiText = "\u{1F600}x";
   const splitSurrogate: OpenMedDeidentifyResult = {
     text: emojiText,
-    deidentifiedText: "[OTHER]",
+    deidentifiedText: "[PERSON]",
     spans: [
       { ...webSpan(emojiText, { ...vector.spans[0]!, start: 0, end: 2 }), start: 1, end: 3 },
     ],
@@ -463,7 +462,7 @@ test("web projection rejects actions and offsets outside the profile", async () 
   const noScore = webResult(vector);
   noScore.spans = [{ ...webSpan(vector.text, vector.spans[0]!), score: null }];
   noScore.deidentifiedText = vector.text.slice(0, scalarToUtf16Offset(vector.text, vector.spans[0]!.start)) +
-    "[OTHER]" + vector.text.slice(scalarToUtf16Offset(vector.text, vector.spans[0]!.end));
+    "[PERSON]" + vector.text.slice(scalarToUtf16Offset(vector.text, vector.spans[0]!.end));
   const projected = toKitParityResult(noScore);
   assert.equal("confidence_ppm" in projected.spans[0]!, false);
   verifyKitParityResult(projected, vector.text);

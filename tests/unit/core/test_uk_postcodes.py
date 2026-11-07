@@ -352,7 +352,7 @@ def test_deidentify_en_gb_masks_postcode(monkeypatch):
     )
 
     assert "ZZ1 1ZZ" not in result.deidentified_text
-    assert "[postcode]" in result.deidentified_text
+    assert "[ZIPCODE]" in result.deidentified_text
 
 
 @pytest.mark.parametrize(

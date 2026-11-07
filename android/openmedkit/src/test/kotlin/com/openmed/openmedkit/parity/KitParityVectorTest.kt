@@ -283,8 +283,8 @@ class KitParityVectorTest {
             differences("emoji_sequences", expected, serialized(parsed.copy(spans = listOf(spans[0].copy(end = end + 1)) + spans.drop(1)))),
         )
         assertEquals(
-            listOf("case=emoji_sequences path=$.spans[0].canonical_label expected=OTHER actual=PERSON"),
-            differences("emoji_sequences", expected, serialized(parsed.copy(spans = listOf(spans[0].copy(canonicalLabel = "PERSON")) + spans.drop(1)))),
+            listOf("case=emoji_sequences path=$.spans[0].canonical_label expected=PERSON actual=OTHER"),
+            differences("emoji_sequences", expected, serialized(parsed.copy(spans = listOf(spans[0].copy(canonicalLabel = "OTHER")) + spans.drop(1)))),
         )
         assertEquals(
             listOf("case=emoji_sequences path=$.spans[1].action expected=mask actual=redact"),

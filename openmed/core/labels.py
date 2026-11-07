@@ -1655,6 +1655,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "patient": PERSON,
     "doctor": PERSON,
     "fullname": PERSON,
+    # Role-qualified name labels. Without these, ``patient_name`` fell
+    # through to ``OTHER`` and stayed in plain text under any policy that
+    # keeps ``OTHER`` (for example ``clinical_minimal_redaction``).
+    "patientname": PERSON,
+    "personname": PERSON,
+    "doctorname": PERSON,
+    "physicianname": PERSON,
+    "providername": PERSON,
+    "clinicianname": PERSON,
+    "nursename": PERSON,
+    "staffname": PERSON,
     "firstname": FIRST_NAME,
     "givenname": FIRST_NAME,
     "lastname": LAST_NAME,
@@ -1774,11 +1785,25 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "facilityid": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
+    # Identifier labels the OpenMedKit kits already recognized; the portable
+    # policy taxonomy is generated from this map, so they live here too.
+    "insuranceid": ID_NUM,
+    "memberid": ID_NUM,
+    "policy": ID_NUM,
+    "policynumber": ID_NUM,
+    "driverlicense": ID_NUM,
+    "passportnumber": ID_NUM,
+    "employeeid": ID_NUM,
+    "encounternumber": ID_NUM,
+    "documentid": ID_NUM,
+    "documentnumber": ID_NUM,
     "ssn": SSN,
     "socialsecuritynumber": SSN,
     "accountnumber": ACCOUNT_NUMBER,
     "accountname": ACCOUNT_NUMBER,
     "bankaccount": ACCOUNT_NUMBER,
+    "routing": ACCOUNT_NUMBER,
+    "routingnumber": ACCOUNT_NUMBER,
     "mobilemoneyaccount": ACCOUNT_NUMBER,
     "password": PASSWORD,
     "pin": PIN,
@@ -1787,6 +1812,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "creditcard": CREDIT_CARD,
     "creditdebitcard": CREDIT_CARD,
     "creditcardnumber": CREDIT_CARD,
+    "paymentcard": CREDIT_CARD,
     "creditcardissuer": CREDIT_CARD_ISSUER,
     "cvv": CVV,
     "iban": IBAN,
@@ -1825,6 +1851,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # Tech
     "ipaddress": IP_ADDRESS,
     "ip": IP_ADDRESS,
+    "ipv4": IP_ADDRESS,
+    "ipv6": IP_ADDRESS,
     "macaddress": MAC_ADDRESS,
     "useragent": USER_AGENT,
     "vin": VIN,
@@ -2379,6 +2407,11 @@ def _key(label: str) -> str:
     return re.sub(r"[^a-z0-9]", "", stripped.lower())
 
 
+_CANONICAL_BY_KEY: Final[Mapping[str, str]] = {
+    _key(label): label for label in sorted(CANONICAL_LABELS)
+}
+
+
 def normalize_label(label: str, lang: str = "en") -> str:
     """Normalize an entity label to the canonical taxonomy.
 
@@ -2411,6 +2444,12 @@ def normalize_label(label: str, lang: str = "en") -> str:
         if cmeee is not None:
             return cmeee
     canonical = _ALIAS_MAP.get(key)
+    if canonical is not None:
+        return canonical
+    # A canonical label the alias map does not list still normalizes through
+    # its key, so BIOES-tagged or padded forms (``B-DIET_TYPE``) resolve too.
+    # The portable OpenMedKit taxonomy uses exactly this lookup.
+    canonical = _CANONICAL_BY_KEY.get(key)
     if canonical is not None:
         return canonical
     # If the input already matches a canonical label after stripping

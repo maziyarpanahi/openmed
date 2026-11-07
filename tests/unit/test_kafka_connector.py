@@ -300,7 +300,7 @@ def test_deidentify_stream_produces_redacted_record_with_provenance(
 
     topic, output = producer.produced[0]
     assert topic == "redacted-notes"
-    assert output["note"] == "Patient [NAME] checked in"
+    assert output["note"] == "Patient [PERSON] checked in"
     assert output["event_id"] == "evt-1"
     assert output["encounter"] == {"id": "enc-7"}
     assert output["deid_provenance"] == {

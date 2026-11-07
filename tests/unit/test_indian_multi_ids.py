@@ -330,9 +330,9 @@ def test_pipeline_detector_masks_ids_and_keeps_only_safe_evidence():
     assert "OMDBR7117R" not in result.redacted_text
     assert "06OMDBX7342DTZM" not in result.redacted_text
     assert "ZE65ZRR5256" not in result.redacted_text
-    assert "[pan]" in result.redacted_text
-    assert "[gstin]" in result.redacted_text
-    assert "[indian_vehicle_registration]" in result.redacted_text
+    # PAN and GSTIN both normalize to the canonical ID_NUM placeholder.
+    assert result.redacted_text.count("[ID_NUM]") >= 2
+    assert "[VEHICLE_REGISTRATION]" in result.redacted_text
     assert all(span.text_hash.startswith("hmac-sha256:") for span in result.spans)
     assert all("text" not in span.metadata for span in result.spans)
     assert all("surface" not in span.evidence for span in result.spans)

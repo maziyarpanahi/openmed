@@ -96,7 +96,7 @@ def test_derived_profile_drives_pipeline_and_preserves_source_profile():
     }
     assert policy_actions[PERSON] == "mask"
     assert policy_actions[AGE] == "keep"
-    assert result.redacted_text == "Patient [NAME] is 47 years old"
+    assert result.redacted_text == "Patient [PERSON] is 47 years old"
     assert dict(strict.actions) == original_actions
 
 

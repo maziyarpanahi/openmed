@@ -1,0 +1,2972 @@
+{
+  "schema": "openmed.portable_policy_vectors",
+  "version": 1,
+  "description": "Synthetic portable policy decision vectors (V35-12). All text, names, identifiers, and surrogate keys are invented, non-PHI, and for tests only. Offsets are half-open Unicode scalar offsets. The expected blocks, digests, and consumers are derived by scripts/parity/generate_portable_policies.py --write from the Python reference engine.",
+  "surrogate_test_keys": {
+    "synthetic_test_key_a": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "synthetic_test_key_b": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+    "synthetic_test_key_short": "0001020304050607",
+    "synthetic_test_key_long": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40"
+  },
+  "decision_cases": [
+    {
+      "id": "threshold_label_floor_edges",
+      "categories": [
+        "threshold",
+        "boundary"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Seen 2026-03-02 and again 2026-04-09.",
+      "detections": [
+        {
+          "label": "date",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 550000
+        },
+        {
+          "label": "date",
+          "start": 26,
+          "end": 36,
+          "confidence_ppm": 549999
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "DATE",
+            "confidence_ppm": 550000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "DATE",
+            "confidence_ppm": 549999,
+            "end": 36,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "below_threshold",
+            "recognized": true,
+            "start": 26,
+            "strict_upgrade": false
+          }
+        ],
+        "deidentified_text": "Seen [DATE] and again 2026-04-09.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Seen [DATE] and again 2026-04-09.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":550000,\"end\":15,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":5}]}",
+        "result_sha256": "ac917ffa86690c0ed9ed568c0eb24fe12d5254d9c7567678ff6236e930cb01cb"
+      }
+    },
+    {
+      "id": "threshold_default_floor_edges",
+      "categories": [
+        "threshold",
+        "boundary"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Mail ada.quill@example.test or call 555-014-7721.",
+      "detections": [
+        {
+          "label": "email",
+          "start": 5,
+          "end": 27,
+          "confidence_ppm": 500000
+        },
+        {
+          "label": "phone_number",
+          "start": 36,
+          "end": 48,
+          "confidence_ppm": 499999
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "EMAIL",
+            "confidence_ppm": 500000,
+            "end": 27,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "email",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 499999,
+            "end": 48,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "phone_number",
+            "outcome": "below_threshold",
+            "recognized": true,
+            "start": 36,
+            "strict_upgrade": false
+          }
+        ],
+        "deidentified_text": "Mail [EMAIL] or call 555-014-7721.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Mail [EMAIL] or call 555-014-7721.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":500000,\"end\":27,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":5}]}",
+        "result_sha256": "f1bc12157319d1fe56be759b222a4850abae4c67779301ee9165a4b6fecaa3a4"
+      }
+    },
+    {
+      "id": "threshold_escalate_band",
+      "categories": [
+        "threshold",
+        "cascade"
+      ],
+      "profile": "strict_no_leak",
+      "text": "Ref MRN-300417 filed.",
+      "detections": [
+        {
+          "label": "medical_record_number",
+          "start": 4,
+          "end": 14,
+          "confidence_ppm": 600000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 600000,
+            "end": 14,
+            "escalate": true,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 50000,
+            "kind": "model",
+            "label": "medical_record_number",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 4,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Ref [ID_NUM] filed.",
+        "policy_digest": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c",
+        "result_json": "{\"deidentified_text\":\"Ref [ID_NUM] filed.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":600000,\"end\":14,\"label\":\"medical_record_number\",\"replacement\":\"[ID_NUM]\",\"start\":4}]}",
+        "result_sha256": "cbd014739adddfe40a6665034ef780b956d706816bdafcd278b392ee817aea52"
+      }
+    },
+    {
+      "id": "threshold_strict_profile_floors",
+      "categories": [
+        "threshold",
+        "strict_no_leak"
+      ],
+      "profile": "strict_no_leak",
+      "text": "Bo Reed at 04:15, Ivo Lamb at 05:20.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 7,
+          "confidence_ppm": 80000
+        },
+        {
+          "label": "name",
+          "start": 18,
+          "end": 26,
+          "confidence_ppm": 79999
+        },
+        {
+          "label": "time",
+          "start": 11,
+          "end": 16,
+          "confidence_ppm": 100000
+        },
+        {
+          "label": "time",
+          "start": 30,
+          "end": 35,
+          "confidence_ppm": 99999
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 80000,
+            "end": 7,
+            "escalate": true,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 80000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "TIME",
+            "confidence_ppm": 100000,
+            "end": 16,
+            "escalate": true,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 100000,
+            "kind": "model",
+            "label": "time",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 11,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 79999,
+            "end": 26,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 80000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "below_threshold",
+            "recognized": true,
+            "start": 18,
+            "strict_upgrade": false
+          },
+          {
+            "action": "mask",
+            "canonical_label": "TIME",
+            "confidence_ppm": 99999,
+            "end": 35,
+            "escalate": false,
+            "inputs": [
+              3
+            ],
+            "keep_floor_ppm": 100000,
+            "kind": "model",
+            "label": "time",
+            "outcome": "below_threshold",
+            "recognized": true,
+            "start": 30,
+            "strict_upgrade": false
+          }
+        ],
+        "deidentified_text": "[PERSON] at [TIME], Ivo Lamb at 05:20.",
+        "policy_digest": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c",
+        "result_json": "{\"deidentified_text\":\"[PERSON] at [TIME], Ivo Lamb at 05:20.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":80000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"TIME\",\"confidence_ppm\":100000,\"end\":16,\"label\":\"time\",\"replacement\":\"[TIME]\",\"start\":11}]}",
+        "result_sha256": "f6c5104fa60712fd9ca9dcc8c5a3748ac24b600f6cb276ce663d8d19935b4b14"
+      }
+    },
+    {
+      "id": "patient_name_is_person",
+      "categories": [
+        "labels",
+        "regression",
+        "keep"
+      ],
+      "profile": "clinical_minimal_redaction",
+      "text": "Pt Ada Quill, Dr Ivo Lamb, nurse Bo Reed.",
+      "detections": [
+        {
+          "label": "patient_name",
+          "start": 3,
+          "end": 12,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "B-DOCTOR_NAME",
+          "start": 17,
+          "end": 25,
+          "confidence_ppm": 980000
+        },
+        {
+          "label": "NurseName",
+          "start": 33,
+          "end": 40,
+          "confidence_ppm": 970000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "patient_name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 3,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 980000,
+            "end": 25,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "B-DOCTOR_NAME",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 17,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 970000,
+            "end": 40,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "NurseName",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 33,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "Pt [PERSON], Dr [PERSON], nurse [PERSON].",
+        "policy_digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "result_json": "{\"deidentified_text\":\"Pt [PERSON], Dr [PERSON], nurse [PERSON].\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":12,\"label\":\"patient_name\",\"replacement\":\"[PERSON]\",\"start\":3},{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":980000,\"end\":25,\"label\":\"B-DOCTOR_NAME\",\"replacement\":\"[PERSON]\",\"start\":17},{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":970000,\"end\":40,\"label\":\"NurseName\",\"replacement\":\"[PERSON]\",\"start\":33}]}",
+        "result_sha256": "255968532282427628c16077c1800b57133d98dc3078d09820d1b7f283596e6e"
+      }
+    },
+    {
+      "id": "unknown_and_nutrition_labels",
+      "categories": [
+        "labels",
+        "unknown_label",
+        "keep"
+      ],
+      "profile": "clinical_minimal_redaction",
+      "text": "Spring visit; diet low-sodium via oral route.",
+      "detections": [
+        {
+          "label": "season_hint",
+          "start": 0,
+          "end": 6,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "diet_type",
+          "start": 19,
+          "end": 29,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "FEEDING_ROUTE",
+          "start": 34,
+          "end": 38,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "keep",
+            "canonical_label": "OTHER",
+            "confidence_ppm": 900000,
+            "end": 6,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "season_hint",
+            "outcome": "applied",
+            "recognized": false,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "keep",
+            "canonical_label": "DIET_TYPE",
+            "confidence_ppm": 900000,
+            "end": 29,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "diet_type",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 19,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "keep",
+            "canonical_label": "FEEDING_ROUTE",
+            "confidence_ppm": 900000,
+            "end": 38,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "FEEDING_ROUTE",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 34,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "Spring visit; diet low-sodium via oral route.",
+        "policy_digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "result_json": "{\"deidentified_text\":\"Spring visit; diet low-sodium via oral route.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"keep\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":900000,\"end\":6,\"label\":\"season_hint\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DIET_TYPE\",\"confidence_ppm\":900000,\"end\":29,\"label\":\"diet_type\",\"start\":19},{\"action\":\"keep\",\"canonical_label\":\"FEEDING_ROUTE\",\"confidence_ppm\":900000,\"end\":38,\"label\":\"FEEDING_ROUTE\",\"start\":34}]}",
+        "result_sha256": "927616b39e503142d5ba3aa4c0d8ab79814dccbe3eaea8463b101b2696331234"
+      }
+    },
+    {
+      "id": "unknown_label_masked_by_default_profile",
+      "categories": [
+        "labels",
+        "unknown_label"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Spring visit; diet low-sodium via oral route.",
+      "detections": [
+        {
+          "label": "season_hint",
+          "start": 0,
+          "end": 6,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "diet_type",
+          "start": 19,
+          "end": 29,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "OTHER",
+            "confidence_ppm": 900000,
+            "end": 6,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "season_hint",
+            "outcome": "applied",
+            "recognized": false,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "DIET_TYPE",
+            "confidence_ppm": 900000,
+            "end": 29,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "diet_type",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 19,
+            "strict_upgrade": false,
+            "span": 1
+          }
+        ],
+        "deidentified_text": "[OTHER] visit; diet [DIET_TYPE] via oral route.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"[OTHER] visit; diet [DIET_TYPE] via oral route.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":900000,\"end\":6,\"label\":\"season_hint\",\"replacement\":\"[OTHER]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"DIET_TYPE\",\"confidence_ppm\":900000,\"end\":29,\"label\":\"diet_type\",\"replacement\":\"[DIET_TYPE]\",\"start\":19}]}",
+        "result_sha256": "99e06a4be02b057d737a751af1e5327b87196945327b5820f224b5e32f5bc174"
+      }
+    },
+    {
+      "id": "identifier_aliases",
+      "categories": [
+        "labels",
+        "keep"
+      ],
+      "profile": "research_limited_dataset",
+      "text": "Passport X1234567, member M-88, ip 10.0.0.7.",
+      "detections": [
+        {
+          "label": "passport_number",
+          "start": 9,
+          "end": 17,
+          "confidence_ppm": 950000
+        },
+        {
+          "label": "member_id",
+          "start": 26,
+          "end": 30,
+          "confidence_ppm": 950000
+        },
+        {
+          "label": "ipv4",
+          "start": 35,
+          "end": 43,
+          "confidence_ppm": 950000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 950000,
+            "end": 17,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "passport_number",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 9,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 950000,
+            "end": 30,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "member_id",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 26,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "mask",
+            "canonical_label": "IP_ADDRESS",
+            "confidence_ppm": 950000,
+            "end": 43,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "ipv4",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 35,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "Passport [ID_NUM], member [ID_NUM], ip [IP_ADDRESS].",
+        "policy_digest": "sha256:e75acd6219a206fe77e2cb74b3d1904aa8972182fc38377de0884a4d5db9e5c4",
+        "result_json": "{\"deidentified_text\":\"Passport [ID_NUM], member [ID_NUM], ip [IP_ADDRESS].\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":950000,\"end\":17,\"label\":\"passport_number\",\"replacement\":\"[ID_NUM]\",\"start\":9},{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":950000,\"end\":30,\"label\":\"member_id\",\"replacement\":\"[ID_NUM]\",\"start\":26},{\"action\":\"mask\",\"canonical_label\":\"IP_ADDRESS\",\"confidence_ppm\":950000,\"end\":43,\"label\":\"ipv4\",\"replacement\":\"[IP_ADDRESS]\",\"start\":35}]}",
+        "result_sha256": "3e6d00eab8032b7a14a635b609a25f243d1356055805eb581d59c83fa9eacd4b"
+      }
+    },
+    {
+      "id": "profile_keep_versus_mask",
+      "categories": [
+        "keep",
+        "override"
+      ],
+      "profile": "clinical_minimal_redaction",
+      "text": "Ada Quill seen 2026-03-02 for asthma.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date",
+          "start": 15,
+          "end": 25,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "condition",
+          "start": 30,
+          "end": 36,
+          "confidence_ppm": 990000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "keep",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 25,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 15,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "keep",
+            "canonical_label": "CONDITION",
+            "confidence_ppm": 990000,
+            "end": 36,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "condition",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 30,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "[PERSON] seen 2026-03-02 for asthma.",
+        "policy_digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "result_json": "{\"deidentified_text\":\"[PERSON] seen 2026-03-02 for asthma.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":25,\"label\":\"date\",\"start\":15},{\"action\":\"keep\",\"canonical_label\":\"CONDITION\",\"confidence_ppm\":990000,\"end\":36,\"label\":\"condition\",\"start\":30}]}",
+        "result_sha256": "0dda9e24130d4afb497db6dd4d6afa56d0ca5793477075cf0f5cb05e3fb9cbe3"
+      }
+    },
+    {
+      "id": "caller_keep_and_mask_overrides",
+      "categories": [
+        "keep",
+        "override"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill seen 2026-03-02 for asthma.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date",
+          "start": 15,
+          "end": 25,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "condition",
+          "start": 30,
+          "end": 36,
+          "confidence_ppm": 990000
+        }
+      ],
+      "overrides": {
+        "CONDITION": "keep",
+        "DATE": "keep",
+        "PERSON": "remove"
+      },
+      "expected": {
+        "decisions": [
+          {
+            "action": "remove",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "keep",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 25,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 15,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "keep",
+            "canonical_label": "CONDITION",
+            "confidence_ppm": 990000,
+            "end": 36,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "condition",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 30,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": " seen 2026-03-02 for asthma.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\" seen 2026-03-02 for asthma.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"remove\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":25,\"label\":\"date\",\"start\":15},{\"action\":\"keep\",\"canonical_label\":\"CONDITION\",\"confidence_ppm\":990000,\"end\":36,\"label\":\"condition\",\"start\":30}]}",
+        "result_sha256": "2720b667bf1cfde5be0a19d7ad2fd4a60cd428d8097f922aa238ec6af36a2594"
+      }
+    },
+    {
+      "id": "strict_no_leak_refuses_keep_override",
+      "categories": [
+        "keep",
+        "override",
+        "strict_no_leak"
+      ],
+      "profile": "strict_no_leak",
+      "text": "Ada Quill seen 2026-03-02 for asthma.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date",
+          "start": 15,
+          "end": 25,
+          "confidence_ppm": 990000
+        }
+      ],
+      "overrides": {
+        "DATE": "keep"
+      },
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 80000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 25,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 80000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 15,
+            "strict_upgrade": true,
+            "span": 1
+          }
+        ],
+        "deidentified_text": "[PERSON] seen [DATE] for asthma.",
+        "policy_digest": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c",
+        "result_json": "{\"deidentified_text\":\"[PERSON] seen [DATE] for asthma.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":25,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":15}]}",
+        "result_sha256": "9a954855a6550c6a2ade56151ea5aa454f49ce53ae5797c7871a345f1d3ae12a"
+      }
+    },
+    {
+      "id": "redact_and_hash_actions",
+      "categories": [
+        "actions"
+      ],
+      "profile": "hipaa_expert_review_assist",
+      "text": "Ada Quill seen 2026-03-02 for asthma.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date",
+          "start": 15,
+          "end": 25,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "condition",
+          "start": 30,
+          "end": 36,
+          "confidence_ppm": 990000
+        }
+      ],
+      "overrides": {
+        "DATE": "hash"
+      },
+      "expected": {
+        "decisions": [
+          {
+            "action": "redact",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "hash",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 25,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 15,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "keep",
+            "canonical_label": "CONDITION",
+            "confidence_ppm": 990000,
+            "end": 36,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "condition",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 30,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "[PERSON] seen DATE_df548305d3b630dc22355e77 for asthma.",
+        "policy_digest": "sha256:88c165343f70ea5510717d7c9a105553b805169c267edc14ac8d00cea23ee595",
+        "result_json": "{\"deidentified_text\":\"[PERSON] seen DATE_df548305d3b630dc22355e77 for asthma.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"redact\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"hash\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":25,\"label\":\"date\",\"replacement\":\"DATE_df548305d3b630dc22355e77\",\"start\":15},{\"action\":\"keep\",\"canonical_label\":\"CONDITION\",\"confidence_ppm\":990000,\"end\":36,\"label\":\"condition\",\"start\":30}]}",
+        "result_sha256": "c2c6818b1f8ff7e77f689358a894635e41cf847433e638578dad245fa15ec0df"
+      }
+    },
+    {
+      "id": "overlap_specificity_wins_union_extent",
+      "categories": [
+        "overlap",
+        "merge"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill called.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "first_name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 600000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "FIRST_NAME",
+            "confidence_ppm": 600000,
+            "end": 3,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "first_name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "[FIRST_NAME] called.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"[FIRST_NAME] called.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"FIRST_NAME\",\"confidence_ppm\":600000,\"end\":9,\"label\":\"first_name\",\"replacement\":\"[FIRST_NAME]\",\"start\":0}]}",
+        "result_sha256": "724a5bbc728d27771ef3791d38eec8c8f731cd0ed421d675eb74c10e3ef61b26"
+      }
+    },
+    {
+      "id": "overlap_length_breaks_equal_specificity",
+      "categories": [
+        "overlap",
+        "tie"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Lives 12 Elm Row Northfield.",
+      "detections": [
+        {
+          "label": "location",
+          "start": 6,
+          "end": 16,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "organization",
+          "start": 9,
+          "end": 27,
+          "confidence_ppm": 700000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "LOCATION",
+            "confidence_ppm": 990000,
+            "end": 16,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "location",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 6,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "ORGANIZATION",
+            "confidence_ppm": 700000,
+            "end": 27,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "organization",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 9,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Lives [ORGANIZATION].",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Lives [ORGANIZATION].\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ORGANIZATION\",\"confidence_ppm\":700000,\"end\":27,\"label\":\"organization\",\"replacement\":\"[ORGANIZATION]\",\"start\":6}]}",
+        "result_sha256": "f683530fe0bf33bb7b0b0d161d5129dd7d9ffabfdfb0474d14f763b0ad3c24b9"
+      }
+    },
+    {
+      "id": "overlap_confidence_breaks_equal_length",
+      "categories": [
+        "overlap",
+        "tie"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Code 7741-22 noted.",
+      "detections": [
+        {
+          "label": "location",
+          "start": 5,
+          "end": 12,
+          "confidence_ppm": 700000
+        },
+        {
+          "label": "id",
+          "start": 5,
+          "end": 12,
+          "confidence_ppm": 800000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 800000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "id",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "LOCATION",
+            "confidence_ppm": 700000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "location",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Code [ID_NUM] noted.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Code [ID_NUM] noted.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":800000,\"end\":12,\"label\":\"id\",\"replacement\":\"[ID_NUM]\",\"start\":5}]}",
+        "result_sha256": "78c2eb898413f27e3c051ca0ce64f819a377925d6256692e64f8d4c565f2d81e"
+      }
+    },
+    {
+      "id": "overlap_exact_tie_uses_label_order",
+      "categories": [
+        "overlap",
+        "tie"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Code 7741-22 noted.",
+      "detections": [
+        {
+          "label": "location",
+          "start": 5,
+          "end": 12,
+          "confidence_ppm": 800000
+        },
+        {
+          "label": "id",
+          "start": 5,
+          "end": 12,
+          "confidence_ppm": 800000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 800000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "id",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "LOCATION",
+            "confidence_ppm": 800000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "location",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Code [ID_NUM] noted.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Code [ID_NUM] noted.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":800000,\"end\":12,\"label\":\"id\",\"replacement\":\"[ID_NUM]\",\"start\":5}]}",
+        "result_sha256": "78c2eb898413f27e3c051ca0ce64f819a377925d6256692e64f8d4c565f2d81e"
+      }
+    },
+    {
+      "id": "duplicate_spans_collapse",
+      "categories": [
+        "overlap",
+        "duplicate"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Call 555-014-7721 now.",
+      "detections": [
+        {
+          "label": "phone",
+          "start": 5,
+          "end": 17,
+          "confidence_ppm": 700000
+        },
+        {
+          "label": "phone_number",
+          "start": 5,
+          "end": 17,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 700000,
+            "end": 17,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "phone",
+            "outcome": "duplicate",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 900000,
+            "end": 17,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "phone_number",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Call [PHONE] now.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Call [PHONE] now.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":900000,\"end\":17,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":5}]}",
+        "result_sha256": "473d6533263ed6d7fbadca242be3411105cdb3f35be9972a8087b1a6485901f0"
+      }
+    },
+    {
+      "id": "protective_action_beats_keep",
+      "categories": [
+        "overlap",
+        "keep"
+      ],
+      "profile": "clinical_minimal_redaction",
+      "text": "Asthma Ada Quill follow-up.",
+      "detections": [
+        {
+          "label": "condition",
+          "start": 0,
+          "end": 10,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 7,
+          "end": 16,
+          "confidence_ppm": 600000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "keep",
+            "canonical_label": "CONDITION",
+            "confidence_ppm": 990000,
+            "end": 10,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "condition",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 600000,
+            "end": 16,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 7,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "[PERSON] follow-up.",
+        "policy_digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "result_json": "{\"deidentified_text\":\"[PERSON] follow-up.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":600000,\"end\":16,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0}]}",
+        "result_sha256": "38252adc5052d093127f8180f7c06a318d3f39a8af64fa7b506ca5b0de094814"
+      }
+    },
+    {
+      "id": "transitive_cluster_union",
+      "categories": [
+        "overlap",
+        "merge"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Ids ABC-123-XYZ-9 end.",
+      "detections": [
+        {
+          "label": "id",
+          "start": 4,
+          "end": 9,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "id",
+          "start": 8,
+          "end": 13,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "id",
+          "start": 12,
+          "end": 17,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 900000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "id",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 4,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 900000,
+            "end": 13,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "id",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 8,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "ID_NUM",
+            "confidence_ppm": 900000,
+            "end": 17,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "id",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 12,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Ids [ID_NUM] end.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Ids [ID_NUM] end.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":900000,\"end\":17,\"label\":\"id\",\"replacement\":\"[ID_NUM]\",\"start\":4}]}",
+        "result_sha256": "51367c0b04b9f7431de28e2ad600b0d03b49ab60c13698960b9c62b49a9f49d0"
+      }
+    },
+    {
+      "id": "adjacent_spans_stay_separate",
+      "categories": [
+        "overlap",
+        "boundary"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "2026-03-02555-014-7721",
+      "detections": [
+        {
+          "label": "date",
+          "start": 0,
+          "end": 10,
+          "confidence_ppm": 1000000
+        },
+        {
+          "label": "phone_number",
+          "start": 10,
+          "end": 22,
+          "confidence_ppm": 1000000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "DATE",
+            "confidence_ppm": 1000000,
+            "end": 10,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 1000000,
+            "end": 22,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "phone_number",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 10,
+            "strict_upgrade": false,
+            "span": 1
+          }
+        ],
+        "deidentified_text": "[DATE][PHONE]",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"[DATE][PHONE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":10,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":1000000,\"end\":22,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":10}]}",
+        "result_sha256": "e2b23749a14fed8cc35f5ebe1d8653536333691823cf56a2cf7c9f7b79fa0ae4"
+      }
+    },
+    {
+      "id": "balanced_prefers_specific_label",
+      "categories": [
+        "overlap",
+        "arbitration"
+      ],
+      "profile": "gdpr_pseudonymization",
+      "text": "Born 1980-02-03 per chart.",
+      "detections": [
+        {
+          "label": "date",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date_of_birth",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 700000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "replace",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "DATE_OF_BIRTH",
+            "confidence_ppm": 700000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "date_of_birth",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Born [DATE_OF_BIRTH_REPLACED] per chart.",
+        "policy_digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "result_json": "{\"deidentified_text\":\"Born [DATE_OF_BIRTH_REPLACED] per chart.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"replace\",\"canonical_label\":\"DATE_OF_BIRTH\",\"confidence_ppm\":700000,\"end\":15,\"label\":\"date_of_birth\",\"replacement\":\"[DATE_OF_BIRTH_REPLACED]\",\"start\":5}]}",
+        "result_sha256": "20e572869676aa2bb7481872d9de54c603604a235f521a37c81be01c1567c759"
+      }
+    },
+    {
+      "id": "high_recall_union_keeps_strongest_action",
+      "categories": [
+        "overlap",
+        "arbitration",
+        "strict_no_leak"
+      ],
+      "profile": "gdpr_art9_health",
+      "text": "Born 1980-02-03 per chart.",
+      "detections": [
+        {
+          "label": "date",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date_of_birth",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 700000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 80000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "DATE_OF_BIRTH",
+            "confidence_ppm": 700000,
+            "end": 15,
+            "escalate": true,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 100000,
+            "kind": "model",
+            "label": "date_of_birth",
+            "outcome": "overlap_loser",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Born [DATE] per chart.",
+        "policy_digest": "sha256:ab685660368099b681a018b500b7f5b1f1c02d95563fbdc95359519c8aa452a4",
+        "result_json": "{\"deidentified_text\":\"Born [DATE] per chart.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":15,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":5}]}",
+        "result_sha256": "89d465ec86ce7a919aeb704cdcfb5a80353c80811d0835ff92cdb1d3a112bdcf"
+      }
+    },
+    {
+      "id": "semantic_unit_merges_model_fragments",
+      "categories": [
+        "semantic",
+        "merge"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "DOB: 01/15/1970 recorded.",
+      "detections": [
+        {
+          "label": "date",
+          "start": 5,
+          "end": 7,
+          "confidence_ppm": 700000
+        },
+        {
+          "label": "date_of_birth",
+          "start": 7,
+          "end": 15,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "date",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 950000,
+          "source": "semantic",
+          "validated": true
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "DATE_OF_BIRTH",
+            "confidence_ppm": 860000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              0,
+              1,
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "merged",
+            "label": "date_of_birth",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "DOB: [DATE_OF_BIRTH] recorded.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"DOB: [DATE_OF_BIRTH] recorded.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE_OF_BIRTH\",\"confidence_ppm\":860000,\"end\":15,\"label\":\"date_of_birth\",\"replacement\":\"[DATE_OF_BIRTH]\",\"start\":5}]}",
+        "result_sha256": "199604ec6fd212c986391d4adc4dc05787bdc27a3ffda55eea45a830e221d687"
+      }
+    },
+    {
+      "id": "semantic_unit_unvalidated_weighting",
+      "categories": [
+        "semantic",
+        "merge"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "DOB: 01/15/1970 recorded.",
+      "detections": [
+        {
+          "label": "date",
+          "start": 5,
+          "end": 7,
+          "confidence_ppm": 700000
+        },
+        {
+          "label": "date_of_birth",
+          "start": 7,
+          "end": 15,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "date",
+          "start": 5,
+          "end": 15,
+          "confidence_ppm": 300000,
+          "source": "semantic",
+          "validated": false
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "DATE_OF_BIRTH",
+            "confidence_ppm": 750000,
+            "end": 15,
+            "escalate": false,
+            "inputs": [
+              0,
+              1,
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "merged",
+            "label": "date_of_birth",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "DOB: [DATE_OF_BIRTH] recorded.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"DOB: [DATE_OF_BIRTH] recorded.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE_OF_BIRTH\",\"confidence_ppm\":750000,\"end\":15,\"label\":\"date_of_birth\",\"replacement\":\"[DATE_OF_BIRTH]\",\"start\":5}]}",
+        "result_sha256": "fd39f662737fa34704aa34beff81fc204348b07ef11466055e118daee790d198"
+      }
+    },
+    {
+      "id": "semantic_only_matches",
+      "categories": [
+        "semantic",
+        "semantic_only",
+        "threshold"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "Reach 555-014-7721 or 555-014-7722.",
+      "detections": [
+        {
+          "label": "phone_number",
+          "start": 6,
+          "end": 18,
+          "confidence_ppm": 800000,
+          "source": "semantic"
+        },
+        {
+          "label": "phone_number",
+          "start": 22,
+          "end": 34,
+          "confidence_ppm": 400000,
+          "source": "semantic"
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 800000,
+            "end": 18,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "semantic_only",
+            "label": "phone_number",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 6,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "mask",
+            "canonical_label": "PHONE",
+            "confidence_ppm": 400000,
+            "end": 34,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "semantic_only",
+            "label": "phone_number",
+            "outcome": "below_threshold",
+            "recognized": true,
+            "start": 22,
+            "strict_upgrade": false
+          }
+        ],
+        "deidentified_text": "Reach [PHONE] or 555-014-7722.",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"Reach [PHONE] or 555-014-7722.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":800000,\"end\":18,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":6}]}",
+        "result_sha256": "1be71d61aa07ec86d615b67979d71f0543191c8e00d8a08471c5c519874486b7"
+      }
+    },
+    {
+      "id": "semantic_unit_label_less_specific_than_model",
+      "categories": [
+        "semantic",
+        "merge"
+      ],
+      "profile": "clinical_minimal_redaction",
+      "text": "Unit A-17 wing.",
+      "detections": [
+        {
+          "label": "street_address",
+          "start": 5,
+          "end": 9,
+          "confidence_ppm": 900000
+        },
+        {
+          "label": "location",
+          "start": 5,
+          "end": 14,
+          "confidence_ppm": 900000,
+          "source": "semantic"
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "mask",
+            "canonical_label": "STREET_ADDRESS",
+            "confidence_ppm": 900000,
+            "end": 14,
+            "escalate": false,
+            "inputs": [
+              0,
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "merged",
+            "label": "street_address",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 5,
+            "strict_upgrade": false,
+            "span": 0
+          }
+        ],
+        "deidentified_text": "Unit [STREET_ADDRESS].",
+        "policy_digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "result_json": "{\"deidentified_text\":\"Unit [STREET_ADDRESS].\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"STREET_ADDRESS\",\"confidence_ppm\":900000,\"end\":14,\"label\":\"street_address\",\"replacement\":\"[STREET_ADDRESS]\",\"start\":5}]}",
+        "result_sha256": "6b8dcb784455d8dcbe01b15ec2f6cd4ae8f5e176ceea6bd5c08b31dd9700642f"
+      }
+    },
+    {
+      "id": "surrogate_reuse_with_test_key",
+      "categories": [
+        "surrogate"
+      ],
+      "profile": "gdpr_pseudonymization",
+      "text": "Ada Quill met Bo Reed; Ada Quill left.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 14,
+          "end": 21,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 23,
+          "end": 32,
+          "confidence_ppm": 990000
+        }
+      ],
+      "surrogate_key": "synthetic_test_key_a",
+      "expected": {
+        "decisions": [
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 21,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 14,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 32,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 23,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "[PERSON_01d9b93a3282ce09] met [PERSON_9e532c3e0fd084ff]; [PERSON_01d9b93a3282ce09] left.",
+        "policy_digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "result_json": "{\"deidentified_text\":\"[PERSON_01d9b93a3282ce09] met [PERSON_9e532c3e0fd084ff]; [PERSON_01d9b93a3282ce09] left.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON_01d9b93a3282ce09]\",\"start\":0},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":21,\"label\":\"name\",\"replacement\":\"[PERSON_9e532c3e0fd084ff]\",\"start\":14},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":32,\"label\":\"name\",\"replacement\":\"[PERSON_01d9b93a3282ce09]\",\"start\":23}]}",
+        "result_sha256": "7e33e7854ad571ba27f576beb0abe45316a3a762f05ce3c83f7728f092e0675a"
+      }
+    },
+    {
+      "id": "surrogate_rotates_with_key",
+      "categories": [
+        "surrogate"
+      ],
+      "profile": "gdpr_pseudonymization",
+      "text": "Ada Quill met Bo Reed; Ada Quill left.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 14,
+          "end": 21,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 23,
+          "end": 32,
+          "confidence_ppm": 990000
+        }
+      ],
+      "surrogate_key": "synthetic_test_key_b",
+      "expected": {
+        "decisions": [
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 21,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 14,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 32,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 23,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "[PERSON_04de63285f8ce627] met [PERSON_8709862cc8d5c1a4]; [PERSON_04de63285f8ce627] left.",
+        "policy_digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "result_json": "{\"deidentified_text\":\"[PERSON_04de63285f8ce627] met [PERSON_8709862cc8d5c1a4]; [PERSON_04de63285f8ce627] left.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON_04de63285f8ce627]\",\"start\":0},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":21,\"label\":\"name\",\"replacement\":\"[PERSON_8709862cc8d5c1a4]\",\"start\":14},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":32,\"label\":\"name\",\"replacement\":\"[PERSON_04de63285f8ce627]\",\"start\":23}]}",
+        "result_sha256": "706153b71233881c4a7694bcaba7d8a0a5174a6e37e7b31428f63232d494edb0"
+      }
+    },
+    {
+      "id": "replace_without_key_uses_placeholder",
+      "categories": [
+        "surrogate"
+      ],
+      "profile": "gdpr_pseudonymization",
+      "text": "Ada Quill met Bo Reed; Ada Quill left.",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 14,
+          "end": 21,
+          "confidence_ppm": 990000
+        }
+      ],
+      "expected": {
+        "decisions": [
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 9,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 0,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 21,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 14,
+            "strict_upgrade": false,
+            "span": 1
+          }
+        ],
+        "deidentified_text": "[PERSON_REPLACED] met [PERSON_REPLACED]; Ada Quill left.",
+        "policy_digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "result_json": "{\"deidentified_text\":\"[PERSON_REPLACED] met [PERSON_REPLACED]; Ada Quill left.\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":9,\"label\":\"name\",\"replacement\":\"[PERSON_REPLACED]\",\"start\":0},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":21,\"label\":\"name\",\"replacement\":\"[PERSON_REPLACED]\",\"start\":14}]}",
+        "result_sha256": "70e87c5481672dd13b01f54891ceee2c6300d960b290e74bbcea05642062d12e"
+      }
+    },
+    {
+      "id": "surrogate_unicode_surface",
+      "categories": [
+        "surrogate",
+        "unicode"
+      ],
+      "profile": "gdpr_pseudonymization",
+      "text": "Pat Léa 😀 李华 2026-01-02",
+      "detections": [
+        {
+          "label": "name",
+          "start": 4,
+          "end": 7,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "name",
+          "start": 10,
+          "end": 12,
+          "confidence_ppm": 990000
+        },
+        {
+          "label": "date",
+          "start": 13,
+          "end": 23,
+          "confidence_ppm": 990000
+        }
+      ],
+      "surrogate_key": "synthetic_test_key_a",
+      "expected": {
+        "decisions": [
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 7,
+            "escalate": false,
+            "inputs": [
+              0
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 4,
+            "strict_upgrade": false,
+            "span": 0
+          },
+          {
+            "action": "replace",
+            "canonical_label": "PERSON",
+            "confidence_ppm": 990000,
+            "end": 12,
+            "escalate": false,
+            "inputs": [
+              1
+            ],
+            "keep_floor_ppm": 500000,
+            "kind": "model",
+            "label": "name",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 10,
+            "strict_upgrade": false,
+            "span": 1
+          },
+          {
+            "action": "replace",
+            "canonical_label": "DATE",
+            "confidence_ppm": 990000,
+            "end": 23,
+            "escalate": false,
+            "inputs": [
+              2
+            ],
+            "keep_floor_ppm": 550000,
+            "kind": "model",
+            "label": "date",
+            "outcome": "applied",
+            "recognized": true,
+            "start": 13,
+            "strict_upgrade": false,
+            "span": 2
+          }
+        ],
+        "deidentified_text": "Pat [PERSON_60e55ca5b6ef507d] 😀 [PERSON_2cdea2be20e04671] [DATE_73b7765820225e92]",
+        "policy_digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "result_json": "{\"deidentified_text\":\"Pat [PERSON_60e55ca5b6ef507d] 😀 [PERSON_2cdea2be20e04671] [DATE_73b7765820225e92]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON_60e55ca5b6ef507d]\",\"start\":4},{\"action\":\"replace\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":990000,\"end\":12,\"label\":\"name\",\"replacement\":\"[PERSON_2cdea2be20e04671]\",\"start\":10},{\"action\":\"replace\",\"canonical_label\":\"DATE\",\"confidence_ppm\":990000,\"end\":23,\"label\":\"date\",\"replacement\":\"[DATE_73b7765820225e92]\",\"start\":13}]}",
+        "result_sha256": "3d2a3625129ab7f1dd19a7f1c56f7a1116a0b0c89636d838234074180bbaec90"
+      }
+    },
+    {
+      "id": "empty_input",
+      "categories": [
+        "empty"
+      ],
+      "profile": "hipaa_safe_harbor",
+      "text": "",
+      "detections": [],
+      "expected": {
+        "decisions": [],
+        "deidentified_text": "",
+        "policy_digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "result_json": "{\"deidentified_text\":\"\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[]}",
+        "result_sha256": "a10eb1d4f87a27d090e78fbebdddeac92a67fa9a36232d5caabfd2fdafb20f39"
+      }
+    }
+  ],
+  "error_cases": [
+    {
+      "id": "detection_label_invalid",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "9name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "code": "detection_label_invalid",
+        "field_path": "$.detections[0].label"
+      }
+    },
+    {
+      "id": "detection_label_whitespace",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "first name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "code": "detection_label_invalid",
+        "field_path": "$.detections[0].label"
+      }
+    },
+    {
+      "id": "detection_start_negative",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": -1,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "code": "detection_offset_invalid",
+        "field_path": "$.detections[0].start"
+      }
+    },
+    {
+      "id": "detection_empty_span",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 3,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "code": "detection_offset_invalid",
+        "field_path": "$.detections[0].end"
+      }
+    },
+    {
+      "id": "detection_past_end",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 4,
+          "end": 10,
+          "confidence_ppm": 900000
+        }
+      ],
+      "expected": {
+        "code": "detection_offset_out_of_bounds",
+        "field_path": "$.detections[0].end"
+      }
+    },
+    {
+      "id": "detection_confidence_above_scale",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 1000001
+        }
+      ],
+      "expected": {
+        "code": "detection_confidence_invalid",
+        "field_path": "$.detections[0].confidence_ppm"
+      }
+    },
+    {
+      "id": "detection_confidence_negative",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": -1
+        }
+      ],
+      "expected": {
+        "code": "detection_confidence_invalid",
+        "field_path": "$.detections[0].confidence_ppm"
+      }
+    },
+    {
+      "id": "detection_source_unknown",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000,
+          "source": "regex"
+        }
+      ],
+      "expected": {
+        "code": "detection_source_invalid",
+        "field_path": "$.detections[0].source"
+      }
+    },
+    {
+      "id": "override_label_unknown",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "overrides": {
+        "NOT_A_LABEL": "keep"
+      },
+      "expected": {
+        "code": "override_label_unknown",
+        "field_path": "$.overrides"
+      }
+    },
+    {
+      "id": "override_alias_is_not_canonical",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "overrides": {
+        "patient_name": "keep"
+      },
+      "expected": {
+        "code": "override_label_unknown",
+        "field_path": "$.overrides"
+      }
+    },
+    {
+      "id": "override_action_unknown",
+      "profile": "hipaa_safe_harbor",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "overrides": {
+        "PERSON": "obliterate"
+      },
+      "expected": {
+        "code": "override_action_unknown",
+        "field_path": "$.overrides"
+      }
+    },
+    {
+      "id": "surrogate_key_too_short",
+      "profile": "gdpr_pseudonymization",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "surrogate_key": "synthetic_test_key_short",
+      "expected": {
+        "code": "surrogate_key_invalid",
+        "field_path": "$.surrogate_key"
+      }
+    },
+    {
+      "id": "surrogate_key_too_long",
+      "profile": "gdpr_pseudonymization",
+      "text": "Ada Quill",
+      "detections": [
+        {
+          "label": "name",
+          "start": 0,
+          "end": 3,
+          "confidence_ppm": 900000
+        }
+      ],
+      "surrogate_key": "synthetic_test_key_long",
+      "expected": {
+        "code": "surrogate_key_invalid",
+        "field_path": "$.surrogate_key"
+      }
+    }
+  ],
+  "load_cases": [
+    {
+      "id": "load_australia_privacy_act",
+      "profile": "australia_privacy_act",
+      "expected": {
+        "digest": "sha256:0c8ea782e8373cd7a60224d62d363da63d46ab622c3a47623454cb5bbc8bb401",
+        "name": "australia_privacy_act",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "surrogate.hmac_sha256.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_canada_pipeda",
+      "profile": "canada_pipeda",
+      "expected": {
+        "digest": "sha256:2200b8748f6b862cbe214acd2ce7b521c9b81aead714e78e2f151bbe03210f8a",
+        "name": "canada_pipeda",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "surrogate.hmac_sha256.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_clinical_minimal_redaction",
+      "profile": "clinical_minimal_redaction",
+      "expected": {
+        "digest": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+        "name": "clinical_minimal_redaction",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_gdpr_art9_health",
+      "profile": "gdpr_art9_health",
+      "expected": {
+        "digest": "sha256:ab685660368099b681a018b500b7f5b1f1c02d95563fbdc95359519c8aa452a4",
+        "name": "gdpr_art9_health",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "surrogate.hmac_sha256.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_gdpr_pseudonymization",
+      "profile": "gdpr_pseudonymization",
+      "expected": {
+        "digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "name": "gdpr_pseudonymization",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "surrogate.hmac_sha256.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_hipaa_expert_review_assist",
+      "profile": "hipaa_expert_review_assist",
+      "expected": {
+        "digest": "sha256:88c165343f70ea5510717d7c9a105553b805169c267edc14ac8d00cea23ee595",
+        "name": "hipaa_expert_review_assist",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_hipaa_safe_harbor",
+      "profile": "hipaa_safe_harbor",
+      "expected": {
+        "digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "name": "hipaa_safe_harbor",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_research_limited_dataset",
+      "profile": "research_limited_dataset",
+      "expected": {
+        "digest": "sha256:e75acd6219a206fe77e2cb74b3d1904aa8972182fc38377de0884a4d5db9e5c4",
+        "name": "research_limited_dataset",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "load_strict_no_leak",
+      "profile": "strict_no_leak",
+      "expected": {
+        "digest": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c",
+        "name": "strict_no_leak",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "strict_no_leak.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "alias_resolves",
+      "profile": "gdpr",
+      "expected": {
+        "digest": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+        "name": "gdpr_pseudonymization",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "surrogate.hmac_sha256.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "name_normalizes_case_and_dashes",
+      "profile": " HIPAA-Safe-Harbor ",
+      "expected": {
+        "digest": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+        "name": "hipaa_safe_harbor",
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      }
+    },
+    {
+      "id": "blank_name",
+      "profile": "   ",
+      "expected": {
+        "code": "profile_name_invalid",
+        "field_path": "$.name"
+      }
+    },
+    {
+      "id": "unknown_profile",
+      "profile": "not_a_profile",
+      "expected": {
+        "code": "profile_unknown",
+        "field_path": "$.name"
+      }
+    },
+    {
+      "id": "python_only_profile_refused",
+      "profile": "china_pipl",
+      "expected": {
+        "code": "profile_not_portable",
+        "field_path": "$.name"
+      }
+    },
+    {
+      "id": "python_only_alias_refused",
+      "profile": "uk_ico",
+      "expected": {
+        "code": "profile_not_portable",
+        "field_path": "$.name"
+      }
+    },
+    {
+      "id": "structured_schema_policy_refused",
+      "profile": "fhir_hipaa_safe_harbor",
+      "expected": {
+        "code": "profile_not_portable",
+        "field_path": "$.name"
+      }
+    },
+    {
+      "id": "pinned_digest_mismatch",
+      "profile": "hipaa_safe_harbor",
+      "expected_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": {
+        "code": "digest_mismatch",
+        "field_path": "$.digest"
+      }
+    },
+    {
+      "id": "stale_resource_digest",
+      "profile": "hipaa_safe_harbor",
+      "manifest_patch": {
+        "profiles": {
+          "hipaa_safe_harbor": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      },
+      "expected": {
+        "code": "resource_digest_mismatch",
+        "field_path": "$.profiles"
+      }
+    },
+    {
+      "id": "stale_taxonomy_digest",
+      "profile": "hipaa_safe_harbor",
+      "manifest_patch": {
+        "taxonomy_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "expected": {
+        "code": "taxonomy_digest_mismatch",
+        "field_path": "$.taxonomy_digest"
+      }
+    },
+    {
+      "id": "manifest_version_unsupported",
+      "profile": "hipaa_safe_harbor",
+      "manifest_patch": {
+        "schema_version": 2
+      },
+      "expected": {
+        "code": "manifest_version_unsupported",
+        "field_path": "$.schema_version"
+      }
+    },
+    {
+      "id": "manifest_ir_version_unsupported",
+      "profile": "hipaa_safe_harbor",
+      "manifest_patch": {
+        "ir_version": 2
+      },
+      "expected": {
+        "code": "ir_version_unsupported",
+        "field_path": "$.ir_version"
+      }
+    },
+    {
+      "id": "profile_ir_version_unsupported",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "ir_version": 2
+      },
+      "expected": {
+        "code": "ir_version_unsupported",
+        "field_path": "$.ir_version"
+      }
+    },
+    {
+      "id": "profile_taxonomy_binding_mismatch",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "taxonomy_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "expected": {
+        "code": "taxonomy_digest_mismatch",
+        "field_path": "$.taxonomy_digest"
+      }
+    },
+    {
+      "id": "capability_missing",
+      "profile": "strict_no_leak",
+      "profile_patch": {
+        "required_capabilities": [
+          "actions.v1",
+          "labels.portable_taxonomy.v1",
+          "merge.cluster_union.v1",
+          "merge.semantic_units.v1",
+          "safety_sweep.v1",
+          "strict_no_leak.v1",
+          "thresholds.keep_floor.v1"
+        ]
+      },
+      "expected": {
+        "code": "capability_missing",
+        "field_path": "$.required_capabilities"
+      }
+    },
+    {
+      "id": "merge_algorithm_unsupported",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "merge": {
+          "algorithm": "openmed.portable_merge",
+          "version": 2
+        }
+      },
+      "expected": {
+        "code": "merge_algorithm_unsupported",
+        "field_path": "$.merge"
+      }
+    },
+    {
+      "id": "surrogate_algorithm_unsupported",
+      "profile": "gdpr_pseudonymization",
+      "profile_patch": {
+        "surrogate": {
+          "algorithm": "openmed.portable_surrogate.hmac_sha256",
+          "version": 2
+        }
+      },
+      "expected": {
+        "code": "surrogate_algorithm_unsupported",
+        "field_path": "$.surrogate"
+      }
+    },
+    {
+      "id": "arbitration_mode_unknown",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "arbitration_mode": "best_effort"
+      },
+      "expected": {
+        "code": "profile_invalid",
+        "field_path": "$.arbitration_mode"
+      }
+    },
+    {
+      "id": "actions_incomplete",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "actions": {
+          "PERSON": "mask"
+        }
+      },
+      "expected": {
+        "code": "profile_invalid",
+        "field_path": "$.actions"
+      }
+    },
+    {
+      "id": "default_action_unknown",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "default_action": "obliterate"
+      },
+      "expected": {
+        "code": "profile_invalid",
+        "field_path": "$.default_action"
+      }
+    },
+    {
+      "id": "thresholds_out_of_range",
+      "profile": "hipaa_safe_harbor",
+      "profile_patch": {
+        "thresholds": {
+          "default": {
+            "escalate_below_ppm": 500000,
+            "keep_floor_ppm": 1000001
+          },
+          "labels": {}
+        }
+      },
+      "expected": {
+        "code": "profile_invalid",
+        "field_path": "$.thresholds"
+      }
+    }
+  ],
+  "ir": {
+    "schema": "openmed.portable_policy",
+    "version": 1
+  },
+  "manifest_sha256": "8d37f62a79cb9a1026866945b8a2fd5734b945d0a57b2812e1f170ef24c466a9",
+  "profiles": {
+    "australia_privacy_act": "sha256:0c8ea782e8373cd7a60224d62d363da63d46ab622c3a47623454cb5bbc8bb401",
+    "canada_pipeda": "sha256:2200b8748f6b862cbe214acd2ce7b521c9b81aead714e78e2f151bbe03210f8a",
+    "clinical_minimal_redaction": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+    "gdpr_art9_health": "sha256:ab685660368099b681a018b500b7f5b1f1c02d95563fbdc95359519c8aa452a4",
+    "gdpr_pseudonymization": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+    "hipaa_expert_review_assist": "sha256:88c165343f70ea5510717d7c9a105553b805169c267edc14ac8d00cea23ee595",
+    "hipaa_safe_harbor": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+    "research_limited_dataset": "sha256:e75acd6219a206fe77e2cb74b3d1904aa8972182fc38377de0884a4d5db9e5c4",
+    "strict_no_leak": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c"
+  },
+  "excluded_profiles": {
+    "africa_malabo_baseline": "python_only_profile",
+    "china_pipl": "python_only_profile",
+    "clinical_preserve": "python_only_profile",
+    "eg_pdpl": "python_only_profile",
+    "fhir_hipaa_safe_harbor": "structured_schema_policy",
+    "fhir_research_limited_dataset": "structured_schema_policy",
+    "india_dpdp_act": "python_only_profile",
+    "india_health_id": "python_only_profile",
+    "ke_dpa": "python_only_profile",
+    "ma_law_09_08": "python_only_profile",
+    "ng_ndpa": "python_only_profile",
+    "omop_hipaa_safe_harbor": "structured_schema_policy",
+    "omop_research_limited_dataset": "structured_schema_policy",
+    "uk_ico_anonymisation": "python_only_profile",
+    "za_popia": "python_only_profile"
+  },
+  "taxonomy_digest": "sha256:7bed76c52805c7692ca7324701692601bb683c013d643f968663fba65c4d9087",
+  "supported_capabilities": [
+    "actions.v1",
+    "labels.portable_taxonomy.v1",
+    "merge.cluster_union.v1",
+    "merge.semantic_units.v1",
+    "strict_no_leak.v1",
+    "surrogate.hmac_sha256.v1",
+    "thresholds.keep_floor.v1"
+  ],
+  "consumers": [
+    {
+      "surface": "python",
+      "test": "tests/unit/parity/test_portable_policy.py",
+      "gate": "pytest"
+    },
+    {
+      "surface": "swift",
+      "test": "swift/OpenMedKit/Tests/OpenMedKitTests/PortablePolicyVectorTests.swift",
+      "gate": "swift test --filter PortablePolicyVectorTests"
+    },
+    {
+      "surface": "kotlin",
+      "test": "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/policy/PortablePolicyVectorTest.kt",
+      "gate": "--tests '*PortablePolicyVectorTest'"
+    },
+    {
+      "surface": "web",
+      "test": "tests/web/test_portable_policy.spec.ts",
+      "gate": "npm --prefix js/openmedkit-web test"
+    }
+  ]
+}

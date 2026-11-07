@@ -11,7 +11,7 @@
     }
   },
   "expected": {
-    "deidentified_text": "Callback [phone_number] or email [email].",
+    "deidentified_text": "Callback [PHONE] or email [EMAIL].",
     "score_tolerance": 0.000001,
     "spans": [
       {
@@ -25,7 +25,7 @@
         "policy_label": "DIRECT_IDENTIFIER",
         "score": 0.85,
         "action": "mask",
-        "replacement": "[phone_number]"
+        "replacement": "[PHONE]"
       },
       {
         "schema_version": 1,
@@ -38,7 +38,7 @@
         "policy_label": "DIRECT_IDENTIFIER",
         "score": 1.0,
         "action": "mask",
-        "replacement": "[email]"
+        "replacement": "[EMAIL]"
       }
     ]
   }

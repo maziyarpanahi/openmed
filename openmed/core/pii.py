@@ -2266,7 +2266,7 @@ def _build_deidentification_result(
             source_surrogates.setdefault(source_key, redacted)
 
         if keep_mapping and actual_entity_method == "remove":
-            redacted = f"[{entity.entity_type}_REMOVED]"
+            redacted = f"[{_placeholder_label(entity)}_REMOVED]"
 
         # Only make repeated placeholders unique for reversible mappings. Plain
         # masking/removal without keep_mapping keeps the legacy redacted text.
@@ -2960,7 +2960,11 @@ def _redact_entity(
                 surrogate_label,
                 lang=lang,
             )
-        return _generate_fake_pii(entity.entity_type, lang=lang)
+        return _generate_fake_pii(
+            entity.entity_type,
+            lang=lang,
+            placeholder_label=_placeholder_label(entity),
+        )
 
     elif method == "format_preserve":
         if _is_mixed_label_union(entity):
@@ -3030,8 +3034,20 @@ def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
     return None
 
 
+def _placeholder_label(entity: PIIEntity) -> str:
+    """Return the canonical taxonomy label used inside redaction placeholders.
+
+    Placeholders name the canonical label (``[PERSON]``, ``[DATE]``) rather
+    than the raw detector label (``[patient_name]``), so Python output matches
+    the OpenMedKit kits and never echoes a model-specific label vocabulary.
+    """
+    from .labels import normalize_label
+
+    return entity.canonical_label or normalize_label(entity.entity_type)
+
+
 def _mask_placeholder(entity: PIIEntity) -> str:
-    return f"[{entity.entity_type}]"
+    return f"[{_placeholder_label(entity)}]"
 
 
 _LABEL_TO_FAKE_KEY: Dict[str, str] = {
@@ -3152,12 +3168,20 @@ def _resolve_fake_data_key(entity_type: str, lang: str = "en") -> str:
     return _CANONICAL_TO_FAKE_KEY.get(canonical, entity_type.upper())
 
 
-def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
+def _generate_fake_pii(
+    entity_type: str,
+    lang: str = "en",
+    *,
+    placeholder_label: Optional[str] = None,
+) -> str:
     """Generate fake but realistic PII data.
 
     Args:
         entity_type: Type of PII entity
         lang: Language code for language-appropriate fake data
+        placeholder_label: Canonical label for the placeholder returned when
+            no fake data exists for ``entity_type``. Defaults to the
+            normalized ``entity_type``.
 
     Returns:
         Fake replacement text
@@ -3175,7 +3199,11 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     if key in en_data:
         return random.choice(en_data[key])
 
-    return f"[{entity_type}]"
+    if placeholder_label is None:
+        from .labels import normalize_label
+
+        placeholder_label = normalize_label(entity_type, lang)
+    return f"[{placeholder_label}]"
 
 
 def _parse_localized_month_date(

@@ -547,5 +547,5 @@ def test_representative_deidentify_path_opens_no_socket(monkeypatch):
         loader=loader,
         use_smart_merging=False,
     )
-    assert deid_result.deidentified_text == "Patient [NAME] called [PHONE]."
+    assert deid_result.deidentified_text == "Patient [PERSON] called [PHONE]."
     assert blocked_attempts == []

@@ -1,0 +1,46 @@
+{
+  "default_profile": "hipaa_safe_harbor",
+  "excluded_profiles": {
+    "africa_malabo_baseline": "python_only_profile",
+    "china_pipl": "python_only_profile",
+    "clinical_preserve": "python_only_profile",
+    "eg_pdpl": "python_only_profile",
+    "fhir_hipaa_safe_harbor": "structured_schema_policy",
+    "fhir_research_limited_dataset": "structured_schema_policy",
+    "india_dpdp_act": "python_only_profile",
+    "india_health_id": "python_only_profile",
+    "ke_dpa": "python_only_profile",
+    "ma_law_09_08": "python_only_profile",
+    "ng_ndpa": "python_only_profile",
+    "omop_hipaa_safe_harbor": "structured_schema_policy",
+    "omop_research_limited_dataset": "structured_schema_policy",
+    "uk_ico_anonymisation": "python_only_profile",
+    "za_popia": "python_only_profile"
+  },
+  "ir_schema": "openmed.portable_policy",
+  "ir_version": 1,
+  "profile_aliases": {
+    "abha": "india_health_id",
+    "au_privacy": "australia_privacy_act",
+    "gdpr": "gdpr_pseudonymization",
+    "gdpr_health": "gdpr_art9_health",
+    "india_health_ids": "india_health_id",
+    "kenya_dpa": "ke_dpa",
+    "pipeda": "canada_pipeda",
+    "uk_ico": "uk_ico_anonymisation"
+  },
+  "profiles": {
+    "australia_privacy_act": "sha256:0c8ea782e8373cd7a60224d62d363da63d46ab622c3a47623454cb5bbc8bb401",
+    "canada_pipeda": "sha256:2200b8748f6b862cbe214acd2ce7b521c9b81aead714e78e2f151bbe03210f8a",
+    "clinical_minimal_redaction": "sha256:69821bbd6352264432b2cf5e130456791fe6a81b9f3c0c9bdd8455fedff9f82b",
+    "gdpr_art9_health": "sha256:ab685660368099b681a018b500b7f5b1f1c02d95563fbdc95359519c8aa452a4",
+    "gdpr_pseudonymization": "sha256:1ef398103a78adac0a50645f2dd030afb36c8c87ca31e7e2364031e556eb766f",
+    "hipaa_expert_review_assist": "sha256:88c165343f70ea5510717d7c9a105553b805169c267edc14ac8d00cea23ee595",
+    "hipaa_safe_harbor": "sha256:c4e9434f56f389c7a72111157ba1046d728782f018784bfa1bcce1e10d648e04",
+    "research_limited_dataset": "sha256:e75acd6219a206fe77e2cb74b3d1904aa8972182fc38377de0884a4d5db9e5c4",
+    "strict_no_leak": "sha256:bdb2ab49833cea834dc3f63bd056b51975d84510752b8dd5de37fa96bd0a394c"
+  },
+  "schema": "openmed.portable_policy_manifest",
+  "schema_version": 1,
+  "taxonomy_digest": "sha256:7bed76c52805c7692ca7324701692601bb683c013d643f968663fba65c4d9087"
+}
