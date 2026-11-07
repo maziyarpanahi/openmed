@@ -538,6 +538,7 @@ nav:
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
       - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM ECG Waveforms: multimodal/dicom-ecg-waveforms.md
       - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
       - DICOM pixel provenance: multimodal/vision/dicom-pixel-provenance.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
