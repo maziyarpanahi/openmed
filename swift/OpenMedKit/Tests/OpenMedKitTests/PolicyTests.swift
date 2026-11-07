@@ -29,16 +29,21 @@ final class PolicyTests: XCTestCase {
         XCTAssertEqual(australia.action(for: "medical_record_number"), .mask)
     }
 
-    func testUnknownProfileThrowsClearError() {
+    func testUnknownProfileThrowsValueFreeError() {
         XCTAssertThrowsError(try Policy(named: "unknown_policy")) { error in
-            guard case PolicyError.unknownProfile(let name, let allowed) = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-            XCTAssertEqual(name, "unknown_policy")
-            XCTAssertTrue(allowed.contains("hipaa_safe_harbor"))
-            XCTAssertTrue(allowed.contains("gdpr"))
-            XCTAssertTrue(allowed.contains("gdpr_health"))
-            XCTAssertTrue(allowed.contains("au_privacy"))
+            XCTAssertEqual(error as? PolicyError, PolicyError("profile_unknown", "$.name"))
+            XCTAssertFalse(String(describing: error).contains("unknown_policy"))
+        }
+        XCTAssertThrowsError(try Policy(named: "china_pipl")) { error in
+            XCTAssertEqual(error as? PolicyError, PolicyError("profile_not_portable", "$.name"))
+        }
+        XCTAssertThrowsError(try Policy(named: "  ")) { error in
+            XCTAssertEqual(error as? PolicyError, PolicyError("profile_name_invalid", "$.name"))
+        }
+        XCTAssertThrowsError(
+            try Policy(named: "hipaa_safe_harbor", expectedDigest: "sha256:" + String(repeating: "0", count: 64))
+        ) { error in
+            XCTAssertEqual(error as? PolicyError, PolicyError("digest_mismatch", "$.digest"))
         }
     }
 
@@ -65,7 +70,7 @@ final class PolicyTests: XCTestCase {
                 entity(label: "date_of_birth", value: "04/01/2026", in: text),
             ]
 
-            let result: PolicyDeidentificationResult = OpenMed.deidentify(
+            let result: PolicyDeidentificationResult = try OpenMed.deidentify(
                 text,
                 entities: entities,
                 policy: policy
@@ -84,7 +89,7 @@ final class PolicyTests: XCTestCase {
             XCTAssertEqual(result.actions[1].end, 23)
         }
 
-        func testSyntheticActionToTextTransformMapping() {
+        func testSyntheticActionToTextTransformMapping() throws {
             let text =
                 "Name Ada Phone 555-0100 SSN 123-45-6789 ID MRN-123 penicillin"
             let policy = Policy(
@@ -106,7 +111,7 @@ final class PolicyTests: XCTestCase {
                 entity(label: "antibiotic", value: "penicillin", in: text),
             ]
 
-            let result = OpenMed.deidentify(text, entities: entities, policy: policy)
+            let result = try OpenMed.deidentify(text, entities: entities, policy: policy)
             let ssnReplacement = result.actions[2].replacement ?? ""
 
             XCTAssertTrue(ssnReplacement.hasPrefix("SSN_"))

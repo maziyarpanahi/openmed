@@ -523,7 +523,7 @@ def test_deidentify_runs_safety_sweep_by_default_for_ml_misses(mock_extract):
 
     result = deidentify(text, method="mask")
 
-    assert result.deidentified_text == "Email: [email]"
+    assert result.deidentified_text == "Email: [EMAIL]"
     assert result.metadata["safety_sweep"]["spans_added"] == 1
     assert result.pii_entities[0].metadata["source"] == SAFETY_SWEEP_SOURCE
     assert result.to_dict()["pii_entities"][0]["metadata"]["patterns_version"] == (

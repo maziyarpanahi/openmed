@@ -10,6 +10,11 @@ on:
       - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
+      - 'tests/fixtures/parity/portable_policy_vectors.json'
+      - 'openmed/core/policies/**'
+      - 'openmed/core/labels.py'
+      - 'openmed/core/thresholds.json'
+      - 'openmed/core/portable_policy.py'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
@@ -20,6 +25,11 @@ on:
       - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
+      - 'tests/fixtures/parity/portable_policy_vectors.json'
+      - 'openmed/core/policies/**'
+      - 'openmed/core/labels.py'
+      - 'openmed/core/thresholds.json'
+      - 'openmed/core/portable_policy.py'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
 permissions:
@@ -54,7 +64,7 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
 
-    - name: Run Android offset-contract, span-equivalence, and kit-parity suites
+    - name: Run Android offset-contract, span-equivalence, kit-parity, and policy suites
       working-directory: android
       run: >-
         ./gradlew :openmedkit:testDebugUnitTest
@@ -62,6 +72,7 @@ jobs:
         --tests '*IcuSegmentationFallbackTest'
         --tests '*SpanEquivalenceTest'
         --tests '*KitParityVectorTest'
+        --tests '*PortablePolicyVectorTest'
         --stacktrace
 
     - name: Verify Android library budgets

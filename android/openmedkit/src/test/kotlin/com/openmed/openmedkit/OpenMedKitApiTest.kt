@@ -2,6 +2,7 @@ package com.openmed.openmedkit
 
 import com.openmed.openmedkit.onnx.TokenPrediction
 import com.openmed.openmedkit.policy.PolicyAction
+import com.openmed.openmedkit.policy.PolicyProfileException
 import com.openmed.openmedkit.policy.PolicyProfiles
 import java.io.File
 import kotlin.test.Test
@@ -129,15 +130,18 @@ class OpenMedKitApiTest {
     }
 
     @Test
-    fun policyLoaderExposesTheSixBundledProfiles() {
+    fun policyLoaderExposesThePortableProfiles() {
         assertEquals(
             listOf(
-                "hipaa_safe_harbor",
-                "hipaa_expert_review_assist",
+                "australia_privacy_act",
+                "canada_pipeda",
+                "clinical_minimal_redaction",
+                "gdpr_art9_health",
                 "gdpr_pseudonymization",
+                "hipaa_expert_review_assist",
+                "hipaa_safe_harbor",
                 "research_limited_dataset",
                 "strict_no_leak",
-                "clinical_minimal_redaction",
             ),
             PolicyProfiles.bundledProfileNames,
         )
@@ -145,9 +149,11 @@ class OpenMedKitApiTest {
             PolicyAction.REPLACE,
             PolicyProfiles.load("gdpr").actionFor("B-PERSON"),
         )
-        assertFailsWith<IllegalArgumentException> {
-            PolicyProfiles.load("canada_pipeda")
+        assertEquals("canada_pipeda", PolicyProfiles.load("pipeda").name)
+        val pythonOnly = assertFailsWith<IllegalArgumentException> {
+            PolicyProfiles.load("china_pipl")
         }
+        assertEquals("profile_not_portable", (pythonOnly as PolicyProfileException).code)
     }
 
     @Test

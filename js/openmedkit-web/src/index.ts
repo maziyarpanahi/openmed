@@ -74,6 +74,44 @@ export {
   validateKitParityResult,
   verifyKitParityResult,
 } from "./kit-parity";
+export {
+  PORTABLE_POLICY_DEFAULT_PROFILE,
+  PORTABLE_POLICY_IR_SCHEMA,
+  PORTABLE_POLICY_IR_VERSION,
+  PORTABLE_POLICY_MANIFEST_FILE,
+  PORTABLE_POLICY_SUPPORTED_CAPABILITIES,
+  PORTABLE_POLICY_SURROGATE_KEY_MAX_BYTES,
+  PORTABLE_POLICY_SURROGATE_KEY_MIN_BYTES,
+  PORTABLE_POLICY_TAXONOMY_FILE,
+  PortablePolicyError,
+  decidePortablePolicy,
+  decodePortablePolicyManifest,
+  decodePortablePolicyProfile,
+  decodePortablePolicyTaxonomy,
+  loadPortablePolicy,
+  normalizePortableLabel,
+  portableLabelKey,
+  portablePolicyNames,
+  portablePolicyReplacement,
+  portableSurrogateToken,
+  resolvePortablePolicyName,
+  sha256Digest,
+} from "./portable-policy";
+export type {
+  LoadPortablePolicyOptions,
+  PortablePolicy,
+  PortablePolicyDecideOptions,
+  PortablePolicyDecision,
+  PortablePolicyDecisionResult,
+  PortablePolicyDetection,
+  PortablePolicyManifest,
+  PortablePolicyTaxonomy,
+  PortablePolicyThreshold,
+} from "./portable-policy";
+export {
+  PORTABLE_POLICY_RESOURCES,
+  PORTABLE_TAXONOMY_LABELS,
+} from "./portable-policy-resources";
 export type {
   KitParityAction,
   KitParityBundleContract,
@@ -246,9 +284,16 @@ export async function deidentify(
   };
 }
 
+/**
+ * Apply span replacements right to left at UTF-16 offsets.
+ *
+ * Spans whose action is `keep` are left in the text: a kept span is an
+ * explicit policy decision, never a redaction.
+ */
 export function spansToRedactedText(text: string, spans: OpenMedSpan[]): string {
   let redacted = text;
-  for (const span of [...spans].sort((left, right) => right.start - left.start)) {
+  const applied = spans.filter((span) => span.action !== "keep");
+  for (const span of applied.sort((left, right) => right.start - left.start)) {
     redacted =
       redacted.slice(0, span.start) +
       (span.replacement ?? `[${span.canonical_label}]`) +

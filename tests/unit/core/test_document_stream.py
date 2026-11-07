@@ -502,6 +502,6 @@ def test_preserve_whitespace_pipeline_keeps_global_offsets_and_redaction_layout(
         ("NAME", 10, 18),
         ("EMAIL", 33, 57),
     ]
-    assert result.redacted_text == ("  Patient [NAME] was called at [EMAIL].  \n")
+    assert result.redacted_text == ("  Patient [PERSON] was called at [EMAIL].  \n")
     for entity in result.pii_entities:
         assert text[entity.start : entity.end] == entity.text

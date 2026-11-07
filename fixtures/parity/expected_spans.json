@@ -67,11 +67,11 @@
       "actions": [
         {
           "label": "patient_name",
-          "canonical_label": "OTHER",
+          "canonical_label": "PERSON",
           "action": "mask",
           "start": 9,
           "end": 20,
-          "replacement": "[OTHER]"
+          "replacement": "[PERSON]"
         },
         {
           "label": "date_of_birth",
@@ -114,7 +114,7 @@
           "replacement": "[DATE]"
         }
       ],
-      "expected_deidentified_text": "Patient: [OTHER]\nDOB: [DATE_OF_BIRTH]\nMRN: [ID_NUM]\nPhone: [PHONE]\nEmail: [EMAIL]\nFollow-up at North Harbor Clinic on [DATE].\n"
+      "expected_deidentified_text": "Patient: [PERSON]\nDOB: [DATE_OF_BIRTH]\nMRN: [ID_NUM]\nPhone: [PHONE]\nEmail: [EMAIL]\nFollow-up at North Harbor Clinic on [DATE].\n"
     },
     {
       "id": "emoji_and_combining_marks",
@@ -179,11 +179,11 @@
       "actions": [
         {
           "label": "patient_name",
-          "canonical_label": "OTHER",
+          "canonical_label": "PERSON",
           "action": "mask",
           "start": 41,
           "end": 51,
-          "replacement": "[OTHER]"
+          "replacement": "[PERSON]"
         },
         {
           "label": "date_of_birth",
@@ -226,7 +226,7 @@
           "replacement": "[DATE]"
         }
       ],
-      "expected_deidentified_text": "Intake \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f re\u0301sume\u0301 caf\u00e9 \ud83c\udde8\ud83c\udde6 \u2705\nPatient: [OTHER]\nDOB: [DATE_OF_BIRTH]\nMRN: \ud83e\ude7a[ID_NUM] \ud83d\udccb\nPhone \ud83d\udcde [PHONE]\nEmail: [EMAIL]\ud83d\udc4d\nSeen in \u6771\u4eac on [DATE] n\u0303\u0303.\n"
+      "expected_deidentified_text": "Intake \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f re\u0301sume\u0301 caf\u00e9 \ud83c\udde8\ud83c\udde6 \u2705\nPatient: [PERSON]\nDOB: [DATE_OF_BIRTH]\nMRN: \ud83e\ude7a[ID_NUM] \ud83d\udccb\nPhone \ud83d\udcde [PHONE]\nEmail: [EMAIL]\ud83d\udc4d\nSeen in \u6771\u4eac on [DATE] n\u0303\u0303.\n"
     },
     {
       "id": "overlapping_identifiers",

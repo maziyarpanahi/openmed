@@ -345,7 +345,7 @@ def test_no_budget_matches_explicit_none_and_unlimited():
         baseline.redacted_text
         == explicit_none.redacted_text
         == unlimited.redacted_text
-        == "Patient [NAME] called."
+        == "Patient [PERSON] called."
     )
     assert (
         baseline.deidentification_result.deidentified_text
@@ -427,7 +427,7 @@ def test_deidentify_accepts_generous_budget_via_public_api(monkeypatch):
         budget=RequestBudget(max_wall_time=60.0, max_input_chars=10_000),
     )
     assert baseline.deidentified_text == budgeted.deidentified_text
-    assert budgeted.deidentified_text == "Patient [NAME] called."
+    assert budgeted.deidentified_text == "Patient [PERSON] called."
 
 
 def test_deidentify_input_guard_rejects_over_length_input(monkeypatch):

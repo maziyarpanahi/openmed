@@ -48,19 +48,11 @@ public enum KitParity {
 
     public static let actions = ["hash", "keep", "mask", "redact", "remove", "replace"]
 
-    public static let canonicalLabels = [
-        "ACCOUNT_NUMBER", "AGE", "AMOUNT", "ANTIBIOTIC", "API_KEY", "BIC",
-        "BITCOIN_ADDRESS", "BODY_SITE", "BUILDING_NUMBER", "CONDITION", "CREDIT_CARD",
-        "CREDIT_CARD_ISSUER", "CURRENCY", "CVV", "DATE", "DATE_OF_BIRTH", "DIET_TYPE",
-        "EMAIL", "ETHEREUM_ADDRESS", "EYE_COLOR", "FEEDING_ROUTE", "FIRST_NAME", "GENDER",
-        "GPS_COORDINATES", "HEIGHT", "IBAN", "ID_NUM", "IMEI", "IP_ADDRESS",
-        "JOB_DEPARTMENT", "JOB_TITLE", "LAB_TEST", "LAST_NAME", "LITECOIN_ADDRESS",
-        "LOCATION", "MAC_ADDRESS", "MASKED_NUMBER", "MEDICATION", "MICROORGANISM",
-        "MIDDLE_NAME", "NUTRITIONAL_STATUS", "NUTRITION_TARGET", "OCCUPATION",
-        "ORDINAL_DIRECTION", "ORGANIZATION", "OTHER", "PASSWORD", "PERSON", "PHONE", "PIN",
-        "PREFIX", "PROCEDURE", "SSN", "STREET_ADDRESS", "SUSCEPTIBILITY", "TIME", "URL",
-        "USERNAME", "USER_AGENT", "VEHICLE_REGISTRATION", "VIN", "ZIPCODE",
-    ]
+    /// Canonical labels a kit result may carry: the portable policy taxonomy
+    /// generated from `openmed/core/labels.py`, loaded from the digest-verified
+    /// `portable_policy_taxonomy.json` resource. An unverifiable taxonomy
+    /// yields an empty vocabulary, so every result fails closed.
+    public static let canonicalLabels: [String] = Policy.bundledTaxonomy?.labels ?? []
 
     /// One applied span; offsets are Unicode scalar offsets into the source.
     public struct Span: Equatable, Sendable {

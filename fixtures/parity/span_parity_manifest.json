@@ -7,7 +7,7 @@
   "files": [
     {
       "path": "expected_spans.json",
-      "sha256": "923f2ed699694371d7d5fe9bc0b35d224b50db3d75b2d8401d9bdd22efce1ec2"
+      "sha256": "d261ac3f428b43b069a13f11392fad043a118b0ccef90816bf2bfb60889ed43c"
     },
     {
       "path": "synthetic_clinical_note.txt",
@@ -42,7 +42,7 @@
     "version": 1,
     "profile": "openmed.kit_parity_result",
     "profile_version": 1,
-    "sha256": "7cdba47da1c5bfb055ba5417db5f130b4ba711fbdfd08666fe223fd412cab7de",
+    "sha256": "fe8cb806f773f49c9c9df7302f154d43973a13899a00a8a1524a02303b01e99b",
     "consumers": [
       {
         "surface": "python",

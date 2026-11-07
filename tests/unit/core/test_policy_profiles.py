@@ -891,10 +891,10 @@ def test_uk_ico_masks_nhs_number_and_pseudonymizes_quasi_identifier(monkeypatch)
     )
 
     assert result.deidentified_text != text
-    assert result.deidentified_text.startswith("NHS number [NHS_NUMBER]")
+    assert result.deidentified_text.startswith("NHS number [ID_NUM]")
     assert "Cardiff" not in result.deidentified_text
     assert result.mapping is not None
-    assert result.mapping["[NHS_NUMBER]"] == "NHS-A4857773456"
+    assert result.mapping["[ID_NUM]"] == "NHS-A4857773456"
     assert result.pii_entities[0].canonical_label == "ID_NUM"
     assert [entity.action for entity in result.pii_entities] == ["mask", "replace"]
     assert all(entity.reversible_id for entity in result.pii_entities)
@@ -933,7 +933,7 @@ def test_deidentify_without_policy_preserves_default_output(monkeypatch):
 
     result = deidentify(text, method="mask", use_safety_sweep=False)
 
-    assert result.deidentified_text == "Patient [NAME]"
+    assert result.deidentified_text == "Patient [PERSON]"
     assert result.mapping is None
     assert "reversible_id" not in result.to_dict()["pii_entities"][0]
 

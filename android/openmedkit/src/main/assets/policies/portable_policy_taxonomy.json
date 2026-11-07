@@ -1,0 +1,1318 @@
+{
+  "aliases": {
+    "a1c": "GLYCEMIC_MEASURE",
+    "aadhaar": "ID_NUM",
+    "aadhaarnumber": "ID_NUM",
+    "abdmhfrid": "ID_NUM",
+    "abdmhprid": "ID_NUM",
+    "abdominalpain": "GI_SYMPTOM",
+    "abha": "ID_NUM",
+    "abhaaddress": "ID_NUM",
+    "abhaid": "ID_NUM",
+    "abhanumber": "ID_NUM",
+    "abnormalflag": "ABNORMAL_FLAG",
+    "abnormalityflag": "ABNORMAL_FLAG",
+    "accountname": "ACCOUNT_NUMBER",
+    "accountnumber": "ACCOUNT_NUMBER",
+    "activeproblem": "PROBLEM",
+    "activityofdailyliving": "ADL_ACTIVITY",
+    "address": "STREET_ADDRESS",
+    "adlactivity": "ADL_ACTIVITY",
+    "administrationdate": "DATE",
+    "administrationroute": "ADMINISTRATION_ROUTE",
+    "administrationsite": "BODY_SITE",
+    "age": "AGE",
+    "airway": "AIRWAY_MANAGEMENT",
+    "airwaydevice": "AIRWAY_MANAGEMENT",
+    "airwaymanagement": "AIRWAY_MANAGEMENT",
+    "allergen": "ALLERGEN",
+    "allergicreaction": "FINDING",
+    "allergies": "ALLERGEN",
+    "allergy": "ALLERGEN",
+    "allergycriticality": "ALLERGY_CRITICALITY",
+    "allergytype": "OTHER",
+    "ambulation": "MOBILITY_ABILITY",
+    "aminoacid": "CHEMICAL",
+    "aminoacidchange": "PROTEIN_CHANGE",
+    "amount": "AMOUNT",
+    "analyte": "LAB_TEST",
+    "anatomia": "ANATOMY",
+    "anatomical": "ANATOMY",
+    "anatomicalsystem": "ANATOMY",
+    "anatomy": "ANATOMY",
+    "anesthesia": "ANESTHESIA_TYPE",
+    "anesthesiatype": "ANESTHESIA_TYPE",
+    "anesthetic": "ANESTHETIC_AGENT",
+    "anestheticagent": "ANESTHETIC_AGENT",
+    "anestheticdrug": "ANESTHETIC_AGENT",
+    "antibiotic": "ANTIBIOTIC",
+    "antibody": "PROTEIN",
+    "antimicrobial": "ANTIBIOTIC",
+    "apikey": "API_KEY",
+    "approach": "OTHER",
+    "armcircumference": "GROWTH_PARAMETER",
+    "asa": "ASA_CLASS",
+    "asaclass": "ASA_CLASS",
+    "asaphysicalstatus": "ASA_CLASS",
+    "assistance": "ASSISTANCE_LEVEL",
+    "assistancelevel": "ASSISTANCE_LEVEL",
+    "assistivedevice": "DEVICE",
+    "ayushmorbidity": "CONDITION",
+    "bankaccount": "ACCOUNT_NUMBER",
+    "barthel": "FUNCTIONAL_SCALE",
+    "barthelindex": "FUNCTIONAL_SCALE",
+    "basalbolus": "INSULIN_REGIMEN",
+    "bathing": "ADL_ACTIVITY",
+    "bic": "BIC",
+    "biomarker": "BIOMARKER",
+    "biopsy": "PROCEDURE",
+    "biopsysite": "BODY_SITE",
+    "birthdate": "DATE_OF_BIRTH",
+    "bitcoinaddress": "BITCOIN_ADDRESS",
+    "bmi": "GROWTH_PARAMETER",
+    "bodymassindex": "GROWTH_PARAMETER",
+    "bodypart": "BODY_SITE",
+    "bodysite": "BODY_SITE",
+    "bostonbowelprep": "GI_SCORE",
+    "bowelprepquality": "GI_SCORE",
+    "braden": "NURSING_RISK_SCORE",
+    "bradenscore": "NURSING_RISK_SCORE",
+    "bristolstool": "GI_SCORE",
+    "bsn": "ID_NUM",
+    "buildingnumber": "BUILDING_NUMBER",
+    "cancer": "CANCER",
+    "careintervention": "CARE_INTERVENTION",
+    "catheter": "DEVICE",
+    "cell": "CELL",
+    "cellline": "CELL",
+    "celltype": "CELL",
+    "cellularcomponent": "CELL",
+    "centralline": "LINE_DRAIN_TUBE",
+    "chem": "CHEMICAL",
+    "chemical": "CHEMICAL",
+    "chesttube": "LINE_DRAIN_TUBE",
+    "chinesepassport": "ID_NUM",
+    "city": "LOCATION",
+    "ckdstage": "CKD_STAGE",
+    "cl": "CELL",
+    "clinicalsignificance": "CLINICAL_SIGNIFICANCE",
+    "clinicianname": "PERSON",
+    "cnpj": "ID_NUM",
+    "codicefiscale": "ID_NUM",
+    "cognitivestatus": "OTHER",
+    "colonoscopy": "ENDOSCOPIC_FINDING",
+    "company": "ORGANIZATION",
+    "condition": "CONDITION",
+    "cortisol": "HORMONE_LEVEL",
+    "country": "LOCATION",
+    "county": "LOCATION",
+    "cpf": "ID_NUM",
+    "crackles": "RESPIRATORY_FINDING",
+    "cramping": "GI_SYMPTOM",
+    "creatinine": "RENAL_FUNCTION_MEASURE",
+    "creditcard": "CREDIT_CARD",
+    "creditcardissuer": "CREDIT_CARD_ISSUER",
+    "creditcardnumber": "CREDIT_CARD",
+    "creditdebitcard": "CREDIT_CARD",
+    "criticality": "ALLERGY_CRITICALITY",
+    "currency": "CURRENCY",
+    "currencycode": "CURRENCY",
+    "currencyname": "CURRENCY",
+    "currencysymbol": "CURRENCY",
+    "cvv": "CVV",
+    "date": "DATE",
+    "dateofbirth": "DATE_OF_BIRTH",
+    "deliverymode": "PROCEDURE",
+    "dentalcondition": "CONDITION",
+    "dentalprocedure": "PROCEDURE",
+    "department": "JOB_DEPARTMENT",
+    "developinganatomicalstructure": "ANATOMY",
+    "developmentalmilestone": "DEVELOPMENTAL_MILESTONE",
+    "device": "DEVICE",
+    "deviceidentifier": "DEVICE_IDENTIFIER",
+    "devicemodel": "DEVICE_MODEL",
+    "devicestatus": "OTHER",
+    "devicetype": "DEVICE_TYPE",
+    "diagnosis": "PROBLEM",
+    "diagnosticprocedure": "PROCEDURE",
+    "dialysis": "DIALYSIS_MODALITY",
+    "dialysismodality": "DIALYSIS_MODALITY",
+    "diet": "DIET_TYPE",
+    "diettype": "DIET_TYPE",
+    "disease": "DISEASE",
+    "disorder": "CONDITION",
+    "dna": "DNA",
+    "dni": "ID_NUM",
+    "dob": "DATE_OF_BIRTH",
+    "doctor": "PERSON",
+    "doctorname": "PERSON",
+    "documentid": "ID_NUM",
+    "documentnumber": "ID_NUM",
+    "doenca": "DISEASE",
+    "dosage": "DOSAGE",
+    "dosageform": "FORM",
+    "dose": "DOSAGE",
+    "doseform": "FORM",
+    "dosenumber": "DOSE_NUMBER",
+    "dosestrength": "STRENGTH",
+    "dosing": "DOSAGE",
+    "dressing": "DRESSING_TYPE",
+    "dressingchange": "CARE_INTERVENTION",
+    "dressingtype": "DRESSING_TYPE",
+    "driverlicense": "ID_NUM",
+    "drivinglicence": "ID_NUM",
+    "drivinglicense": "ID_NUM",
+    "drug": "DRUG",
+    "duration": "DURATION",
+    "dx": "PROBLEM",
+    "dyspnea": "DYSPNEA_GRADE",
+    "dyspneagrade": "DYSPNEA_GRADE",
+    "egfr": "RENAL_FUNCTION_MEASURE",
+    "email": "EMAIL",
+    "emailaddress": "EMAIL",
+    "employeeid": "ID_NUM",
+    "employer": "ORGANIZATION",
+    "encounternumber": "ID_NUM",
+    "endocrinegland": "BODY_SITE",
+    "endoscopicfinding": "ENDOSCOPIC_FINDING",
+    "endoscopicprocedure": "PROCEDURE",
+    "endoscopy": "ENDOSCOPIC_FINDING",
+    "endoscopyfinding": "ENDOSCOPIC_FINDING",
+    "epic": "ID_NUM",
+    "erosion": "ENDOSCOPIC_FINDING",
+    "ethereumaddress": "ETHEREUM_ADDRESS",
+    "ethnicity": "ETHNICITY",
+    "ethnicorigin": "ETHNICITY",
+    "exudate": "EXUDATE_DESCRIPTOR",
+    "exudatedescriptor": "EXUDATE_DESCRIPTOR",
+    "eyecolor": "EYE_COLOR",
+    "facilityid": "ID_NUM",
+    "fallrisk": "NURSING_RISK_SCORE",
+    "familyname": "LAST_NAME",
+    "fax": "PHONE",
+    "feeding": "ADL_ACTIVITY",
+    "feedinghistory": "NUTRITIONAL_STATUS",
+    "feedingroute": "FEEDING_ROUTE",
+    "fetalfinding": "FETAL_FINDING",
+    "fetalstatus": "FETAL_FINDING",
+    "fev1": "SPIROMETRY_MEASURE",
+    "finding": "FINDING",
+    "firstname": "FIRST_NAME",
+    "foley": "LINE_DRAIN_TUBE",
+    "foleycatheter": "LINE_DRAIN_TUBE",
+    "form": "FORM",
+    "freq": "FREQUENCY",
+    "frequency": "FREQUENCY",
+    "fullname": "PERSON",
+    "functionalscale": "FUNCTIONAL_SCALE",
+    "fvc": "SPIROMETRY_MEASURE",
+    "gastrointestinalsymptom": "GI_SYMPTOM",
+    "gender": "GENDER",
+    "gene": "GENE",
+    "genename": "GENE_SYMBOL",
+    "geneorgeneproduct": "GENE_OR_GENE_PRODUCT",
+    "geneproduct": "GENE_OR_GENE_PRODUCT",
+    "genesymbol": "GENE_SYMBOL",
+    "gestation": "GESTATIONAL_AGE",
+    "gestationalage": "GESTATIONAL_AGE",
+    "gestationalageweeks": "GESTATIONAL_AGE",
+    "ghghanacard": "ID_NUM",
+    "giscore": "GI_SCORE",
+    "gisymptom": "GI_SYMPTOM",
+    "givenname": "FIRST_NAME",
+    "glargine": "INSULIN_REGIMEN",
+    "glucose": "GLYCEMIC_MEASURE",
+    "glycemic": "GLYCEMIC_MEASURE",
+    "glycemicmeasure": "GLYCEMIC_MEASURE",
+    "gps": "GPS_COORDINATES",
+    "gpscoordinates": "GPS_COORDINATES",
+    "grade": "TUMOR_GRADE",
+    "gravidity": "GRAVIDITY_PARITY",
+    "gravidityparity": "GRAVIDITY_PARITY",
+    "grossdescription": "OTHER",
+    "growthparameter": "GROWTH_PARAMETER",
+    "growthpercentile": "GROWTH_PERCENTILE",
+    "growthvelocity": "GROWTH_PARAMETER",
+    "growthzscore": "GROWTH_PERCENTILE",
+    "gstin": "ID_NUM",
+    "gstnumber": "ID_NUM",
+    "gxp": "GRAVIDITY_PARITY",
+    "gynaecologicfinding": "CONDITION",
+    "gynecologicfinding": "CONDITION",
+    "hba1c": "GLYCEMIC_MEASURE",
+    "headcircumference": "GROWTH_PARAMETER",
+    "height": "HEIGHT",
+    "hematuria": "URINE_FINDING",
+    "heterozygous": "ZYGOSITY",
+    "hgvs": "VARIANT_DESCRIPTOR",
+    "histologicalfinding": "HISTOLOGIC_FINDING",
+    "histologicalgrade": "HISTOLOGIC_GRADE",
+    "histologicfinding": "HISTOLOGIC_FINDING",
+    "histologicgrade": "HISTOLOGIC_GRADE",
+    "hkmacaupermit": "ID_NUM",
+    "homereturnpermit": "ID_NUM",
+    "homozygous": "ZYGOSITY",
+    "hormone": "HORMONE_LEVEL",
+    "hormonelevel": "HORMONE_LEVEL",
+    "hormonereceptorstatus": "RECEPTOR_STATUS",
+    "hormones": "HORMONE_LEVEL",
+    "iban": "IBAN",
+    "id": "ID_NUM",
+    "identifier": "ID_NUM",
+    "idnum": "ID_NUM",
+    "ifsc": "ID_NUM",
+    "ifsccode": "ID_NUM",
+    "ihc": "IHC_STAIN",
+    "ihcstain": "IHC_STAIN",
+    "imagingfinding": "FINDING",
+    "imagingmodality": "IMAGING_MODALITY",
+    "imei": "IMEI",
+    "immaterialanatomicalentity": "ANATOMY",
+    "immunization": "IMMUNIZATION",
+    "immunohistochemistry": "IHC_STAIN",
+    "immunohistochemistrystain": "IHC_STAIN",
+    "implant": "DEVICE",
+    "implantlocation": "IMPLANT_SITE",
+    "implantsite": "IMPLANT_SITE",
+    "impression": "FINDING",
+    "independent": "ASSISTANCE_LEVEL",
+    "indiandrivinglicence": "ID_NUM",
+    "indiandrivinglicense": "ID_NUM",
+    "indiandrug": "MEDICATION",
+    "indiandrugbrand": "MEDICATION",
+    "indianpassport": "ID_NUM",
+    "indianvehicleregistration": "VEHICLE_REGISTRATION",
+    "indication": "INDICATION",
+    "insulin": "INSULIN_REGIMEN",
+    "insulinpump": "INSULIN_REGIMEN",
+    "insulinregimen": "INSULIN_REGIMEN",
+    "insuranceid": "ID_NUM",
+    "intakeandoutput": "INTAKE_OUTPUT",
+    "intakeoutput": "INTAKE_OUTPUT",
+    "intervention": "PROCEDURE",
+    "intraoperativeevent": "OTHER",
+    "ip": "IP_ADDRESS",
+    "ipaddress": "IP_ADDRESS",
+    "ipv4": "IP_ADDRESS",
+    "ipv6": "IP_ADDRESS",
+    "jobdepartment": "JOB_DEPARTMENT",
+    "jobtitle": "JOB_TITLE",
+    "katz": "FUNCTIONAL_SCALE",
+    "katzindex": "FUNCTIONAL_SCALE",
+    "kemaishanamba": "ID_NUM",
+    "kenationalid": "ID_NUM",
+    "lab": "LAB_TEST",
+    "labresult": "LAB_VALUE",
+    "labtest": "LAB_TEST",
+    "labvalue": "LAB_VALUE",
+    "laparoscopic": "PROCEDURE",
+    "lastname": "LAST_NAME",
+    "laterality": "LATERALITY",
+    "length": "GROWTH_PARAMETER",
+    "lesionmorphology": "POLYP_DESCRIPTOR",
+    "licenseplate": "VEHICLE_REGISTRATION",
+    "linedraintube": "LINE_DRAIN_TUBE",
+    "litecoinaddress": "LITECOIN_ADDRESS",
+    "loc": "LOCATION",
+    "location": "LOCATION",
+    "lungauscultation": "RESPIRATORY_FINDING",
+    "macaddress": "MAC_ADDRESS",
+    "mainlandtravelpermithongkongmacau": "ID_NUM",
+    "mainlandtravelpermittaiwan": "ID_NUM",
+    "manufacturer": "ORGANIZATION",
+    "marginstatus": "MARGIN_STATUS",
+    "maskednumber": "MASKED_NUMBER",
+    "mayoscore": "GI_SCORE",
+    "mcategory": "TNM_M",
+    "measurement": "MEASUREMENT",
+    "med": "MEDICATION",
+    "medicaldevice": "DEVICE",
+    "medicalrecordnumber": "ID_NUM",
+    "medication": "MEDICATION",
+    "memberid": "ID_NUM",
+    "menstrual": "OTHER",
+    "menstrualhistory": "OTHER",
+    "metabolicfinding": "CONDITION",
+    "metastasiscategory": "TNM_M",
+    "microbe": "MICROORGANISM",
+    "microorganism": "MICROORGANISM",
+    "middlename": "MIDDLE_NAME",
+    "milestone": "DEVELOPMENTAL_MILESTONE",
+    "minimalassistance": "ASSISTANCE_LEVEL",
+    "mitoticcount": "MEASUREMENT",
+    "mitoticindex": "MEASUREMENT",
+    "mmrc": "DYSPNEA_GRADE",
+    "mobilemoneyaccount": "ACCOUNT_NUMBER",
+    "mobilemoneyagent": "ID_NUM",
+    "mobilemoneypaybill": "ID_NUM",
+    "mobilemoneytill": "ID_NUM",
+    "mobility": "MOBILITY_ABILITY",
+    "mobilityability": "MOBILITY_ABILITY",
+    "mobilitystatus": "OTHER",
+    "modality": "IMAGING_MODALITY",
+    "modelnumber": "DEVICE_MODEL",
+    "modeofdelivery": "PROCEDURE",
+    "momoreference": "ID_NUM",
+    "monitoringmodality": "OTHER",
+    "morsefallscale": "NURSING_RISK_SCORE",
+    "motordevelopment": "DEVELOPMENTAL_MILESTONE",
+    "mpesatxcode": "ID_NUM",
+    "mrn": "ID_NUM",
+    "muac": "GROWTH_PARAMETER",
+    "multitissuestructure": "TISSUE",
+    "namastemorbidity": "CONDITION",
+    "name": "PERSON",
+    "nasalcannula": "OXYGEN_SUPPORT",
+    "nationalid": "ID_NUM",
+    "ncategory": "TNM_N",
+    "ngbvn": "ID_NUM",
+    "ngnin": "ID_NUM",
+    "ngphone": "PHONE",
+    "nhs": "ID_NUM",
+    "nhsnumber": "ID_NUM",
+    "nie": "ID_NUM",
+    "nir": "ID_NUM",
+    "nodecategory": "TNM_N",
+    "normalrange": "REFERENCE_RANGE",
+    "npi": "ID_NUM",
+    "nursename": "PERSON",
+    "nursingriskscore": "NURSING_RISK_SCORE",
+    "nutritionalstatus": "NUTRITIONAL_STATUS",
+    "nutritiontarget": "NUTRITION_TARGET",
+    "obstetricevent": "OBSTETRIC_EVENT",
+    "obstetricevents": "OBSTETRIC_EVENT",
+    "occupation": "OCCUPATION",
+    "onsetcontext": "OTHER",
+    "operation": "PROCEDURE",
+    "ordinaldirection": "ORDINAL_DIRECTION",
+    "org": "ORGANIZATION",
+    "organ": "ORGAN",
+    "organism": "ORGANISM",
+    "organismsubdivision": "ORGANISM",
+    "organismsubstance": "ORGANISM",
+    "organization": "ORGANIZATION",
+    "other": "OTHER",
+    "overallstage": "STAGE_GROUP",
+    "overallstagegroup": "STAGE_GROUP",
+    "oxygensupport": "OXYGEN_SUPPORT",
+    "oxygentherapy": "OXYGEN_SUPPORT",
+    "packyears": "PACK_YEARS",
+    "painscore": "OTHER",
+    "pan": "ID_NUM",
+    "parity": "GRAVIDITY_PARITY",
+    "passport": "ID_NUM",
+    "passportmrz": "ID_NUM",
+    "passportnumber": "ID_NUM",
+    "password": "PASSWORD",
+    "pathogen": "MICROORGANISM",
+    "pathogenicity": "CLINICAL_SIGNIFICANCE",
+    "pathologicalformation": "PATHOLOGY",
+    "pathology": "PATHOLOGY",
+    "patient": "PERSON",
+    "patientname": "PERSON",
+    "paymentcard": "CREDIT_CARD",
+    "pediatricfinding": "CONDITION",
+    "pedunculatedpolyp": "POLYP_DESCRIPTOR",
+    "per": "PERSON",
+    "percentile": "GROWTH_PERCENTILE",
+    "permanentaccountnumber": "ID_NUM",
+    "person": "PERSON",
+    "personalurl": "URL",
+    "personname": "PERSON",
+    "phone": "PHONE",
+    "phonenumber": "PHONE",
+    "physicianname": "PERSON",
+    "pin": "PIN",
+    "place": "LOCATION",
+    "policy": "ID_NUM",
+    "policynumber": "ID_NUM",
+    "polypdescriptor": "POLYP_DESCRIPTOR",
+    "postalcode": "ZIPCODE",
+    "postcode": "ZIPCODE",
+    "prcpassport": "ID_NUM",
+    "prefix": "PREFIX",
+    "pressureinjury": "WOUND_TYPE",
+    "pressureinjurystage": "WOUND_STAGE",
+    "pressureulcer": "WOUND_TYPE",
+    "pressureulcerstage": "WOUND_STAGE",
+    "primarysite": "BODY_SITE",
+    "primarytumorsite": "BODY_SITE",
+    "problem": "PROBLEM",
+    "problemlist": "PROBLEM",
+    "problemlistitem": "PROBLEM",
+    "procedure": "PROCEDURE",
+    "profession": "OCCUPATION",
+    "protein": "PROTEIN",
+    "proteinchange": "PROTEIN_CHANGE",
+    "proteincomplex": "PROTEIN",
+    "proteinenum": "PROTEIN",
+    "proteinenumeration": "PROTEIN",
+    "proteinfamiliyorgroup": "PROTEIN",
+    "proteinfamilyorgroup": "PROTEIN",
+    "proteinuria": "URINE_FINDING",
+    "proteinvariant": "PROTEIN",
+    "providername": "PERSON",
+    "psychiatricsymptom": "PSYCH_SYMPTOM",
+    "psychsymptom": "PSYCH_SYMPTOM",
+    "quitdate": "DATE",
+    "race": "ETHNICITY",
+    "racialorigin": "ETHNICITY",
+    "radiologyfinding": "FINDING",
+    "rationcard": "ID_NUM",
+    "reactionmanifestation": "REACTION_MANIFESTATION",
+    "reactionseverity": "REACTION_SEVERITY",
+    "reasonfordrug": "INDICATION",
+    "receptor": "RECEPTOR_STATUS",
+    "receptorstatus": "RECEPTOR_STATUS",
+    "referencerange": "REFERENCE_RANGE",
+    "refrange": "REFERENCE_RANGE",
+    "region": "LOCATION",
+    "renalfunction": "RENAL_FUNCTION_MEASURE",
+    "renalfunctionmeasure": "RENAL_FUNCTION_MEASURE",
+    "repositioning": "CARE_INTERVENTION",
+    "requiresassistance": "ASSISTANCE_LEVEL",
+    "resection": "PROCEDURE",
+    "respiratoryfinding": "RESPIRATORY_FINDING",
+    "responseassessment": "OTHER",
+    "restoration": "PROCEDURE",
+    "resultvalue": "LAB_VALUE",
+    "riskscore": "NURSING_RISK_SCORE",
+    "rna": "RNA",
+    "route": "ROUTE",
+    "routeofadministration": "ROUTE",
+    "routing": "ACCOUNT_NUMBER",
+    "routingnumber": "ACCOUNT_NUMBER",
+    "rtoregistration": "VEHICLE_REGISTRATION",
+    "secondaryaddress": "STREET_ADDRESS",
+    "sessilepolyp": "POLYP_DESCRIPTOR",
+    "severity": "SEVERITY",
+    "severitygrade": "SEVERITY",
+    "sex": "GENDER",
+    "simplechemical": "CHEMICAL",
+    "skinassessment": "BODY_SITE",
+    "skinfold": "GROWTH_PARAMETER",
+    "socialcreditcode": "ID_NUM",
+    "socialsecuritynumber": "SSN",
+    "species": "SPECIES",
+    "specimen": "SPECIMEN",
+    "specimensource": "SPECIMEN",
+    "specimentype": "SPECIMEN_TYPE",
+    "spirometry": "SPIROMETRY_MEASURE",
+    "spirometrymeasure": "SPIROMETRY_MEASURE",
+    "ssn": "SSN",
+    "staffname": "PERSON",
+    "stagegroup": "STAGE_GROUP",
+    "state": "LOCATION",
+    "steuerid": "ID_NUM",
+    "street": "STREET_ADDRESS",
+    "streetaddress": "STREET_ADDRESS",
+    "strength": "STRENGTH",
+    "subscapularskinfold": "GROWTH_PARAMETER",
+    "substance": "SUBSTANCE",
+    "surgery": "PROCEDURE",
+    "surname": "LAST_NAME",
+    "susceptibility": "SUSCEPTIBILITY",
+    "susceptibilityresult": "SUSCEPTIBILITY",
+    "swift": "BIC",
+    "syndrome": "CONDITION",
+    "taiwancompatriotpermit": "ID_NUM",
+    "taiwanpermit": "ID_NUM",
+    "tcategory": "TNM_T",
+    "telephone": "PHONE",
+    "test": "LAB_TEST",
+    "teudatzehut": "ID_NUM",
+    "therapy": "PROCEDURE",
+    "thyroid": "THYROID_MEASURE",
+    "thyroidfunctionmeasure": "THYROID_MEASURE",
+    "thyroidmeasure": "THYROID_MEASURE",
+    "time": "TIME",
+    "tissue": "TISSUE",
+    "tissuesite": "BODY_SITE",
+    "tissuetype": "TISSUE",
+    "title": "PREFIX",
+    "tnmm": "TNM_M",
+    "tnmn": "TNM_N",
+    "tnmt": "TNM_T",
+    "tooth": "TOOTH",
+    "transferability": "MOBILITY_ABILITY",
+    "transfers": "MOBILITY_ABILITY",
+    "treatmentresponse": "OTHER",
+    "tribalaffiliation": "ETHNICITY",
+    "tribe": "ETHNICITY",
+    "tricepsskinfold": "GROWTH_PARAMETER",
+    "tsh": "THYROID_MEASURE",
+    "tumorcategory": "TNM_T",
+    "tumorgrade": "TUMOR_GRADE",
+    "tumorsize": "MEASUREMENT",
+    "tumourcategory": "TNM_T",
+    "tumourgrade": "TUMOR_GRADE",
+    "tumoursize": "MEASUREMENT",
+    "tz": "ID_NUM",
+    "udi": "DEVICE_IDENTIFIER",
+    "udidi": "DEVICE_IDENTIFIER",
+    "unifiedsocialcreditcode": "ID_NUM",
+    "unit": "UNIT",
+    "units": "UNIT",
+    "uom": "UNIT",
+    "upiid": "ID_NUM",
+    "urinefinding": "URINE_FINDING",
+    "urineoutput": "INTAKE_OUTPUT",
+    "url": "URL",
+    "urlpersonal": "URL",
+    "uscc": "ID_NUM",
+    "useduration": "DURATION",
+    "usefrequency": "FREQUENCY",
+    "usequantity": "USE_QUANTITY",
+    "useragent": "USER_AGENT",
+    "userhandle": "USERNAME",
+    "username": "USERNAME",
+    "usestatus": "USE_STATUS",
+    "vaccination": "VACCINE_NAME",
+    "vaccinationname": "VACCINE_NAME",
+    "vaccinationseries": "VACCINE_SERIES",
+    "vaccine": "VACCINE_NAME",
+    "vaccinelot": "VACCINE_LOT",
+    "vaccinelotnumber": "VACCINE_LOT",
+    "vaccinename": "VACCINE_NAME",
+    "vaccineroute": "ADMINISTRATION_ROUTE",
+    "vaccineseries": "VACCINE_SERIES",
+    "variant": "VARIANT_DESCRIPTOR",
+    "variantdescriptor": "VARIANT_DESCRIPTOR",
+    "variantnotation": "VARIANT_DESCRIPTOR",
+    "varices": "ENDOSCOPIC_FINDING",
+    "vehicleregistration": "VEHICLE_REGISTRATION",
+    "vin": "VIN",
+    "voterid": "ID_NUM",
+    "voteridepic": "ID_NUM",
+    "vpa": "ID_NUM",
+    "vrm": "VEHICLE_REGISTRATION",
+    "walkeraid": "DEVICE",
+    "website": "URL",
+    "weight": "GROWTH_PARAMETER",
+    "wheeze": "RESPIRATORY_FINDING",
+    "wound": "WOUND_TYPE",
+    "wounddimension": "MEASUREMENT",
+    "wounddimensions": "MEASUREMENT",
+    "wounddrainage": "EXUDATE_DESCRIPTOR",
+    "wounddressing": "CARE_INTERVENTION",
+    "wounddressingtype": "DRESSING_TYPE",
+    "woundexudate": "EXUDATE_DESCRIPTOR",
+    "woundgrade": "WOUND_STAGE",
+    "woundlocation": "BODY_SITE",
+    "woundmeasurement": "MEASUREMENT",
+    "woundsite": "BODY_SITE",
+    "woundsize": "MEASUREMENT",
+    "woundstage": "WOUND_STAGE",
+    "woundtissue": "TISSUE",
+    "woundtype": "WOUND_TYPE",
+    "zip": "ZIPCODE",
+    "zipcode": "ZIPCODE",
+    "zygosity": "ZYGOSITY"
+  },
+  "labels": {
+    "ABNORMAL_FLAG": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ACCOUNT_NUMBER": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "ADL_ACTIVITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ADMINISTRATION_ROUTE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "AGE": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "AIRWAY_MANAGEMENT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ALLERGEN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ALLERGY_CRITICALITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "AMOUNT": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "ANATOMY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ANESTHESIA_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ANESTHETIC_AGENT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ANTIBIOTIC": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "API_KEY": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "ASA_CLASS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ASSISTANCE_LEVEL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "BIC": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "BIOMARKER": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "BITCOIN_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "BODY_SITE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "BUILDING_NUMBER": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "CANCER": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CARE_INTERVENTION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CELL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CHEMICAL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CKD_STAGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CLINICAL_SIGNIFICANCE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CONDITION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "CREDIT_CARD": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "CREDIT_CARD_ISSUER": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "CURRENCY": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "CVV": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "DATE": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "DATE_OF_BIRTH": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "DEVELOPMENTAL_MILESTONE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DEVICE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DEVICE_IDENTIFIER": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "DEVICE_MODEL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DEVICE_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DIALYSIS_MODALITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DIET_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DISEASE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DNA": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DOSAGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DOSE_NUMBER": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DRESSING_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DRUG": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DURATION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "DYSPNEA_GRADE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "EMAIL": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "ENDOSCOPIC_FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ETHEREUM_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "ETHNICITY": {
+      "policy_label": "SENSITIVE_ATTRIBUTE",
+      "specificity": 1
+    },
+    "EXUDATE_DESCRIPTOR": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "EYE_COLOR": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "FEEDING_ROUTE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "FETAL_FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "FIRST_NAME": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "FORM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "FREQUENCY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "FUNCTIONAL_SCALE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GENDER": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "GENE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GENE_OR_GENE_PRODUCT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GENE_SYMBOL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GESTATIONAL_AGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GI_SCORE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GI_SYMPTOM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GLYCEMIC_MEASURE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GPS_COORDINATES": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "GRAVIDITY_PARITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GROWTH_PARAMETER": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "GROWTH_PERCENTILE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "HEIGHT": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "HISTOLOGIC_FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "HISTOLOGIC_GRADE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "HORMONE_LEVEL": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "IBAN": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "ID_NUM": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "IHC_STAIN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "IMAGING_MODALITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "IMEI": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "IMMUNIZATION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "IMPLANT_SITE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "INDICATION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "INSULIN_REGIMEN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "INTAKE_OUTPUT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "IP_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "JOB_DEPARTMENT": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "JOB_TITLE": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "LAB_TEST": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "LAB_VALUE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "LAST_NAME": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "LATERALITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "LINE_DRAIN_TUBE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "LITECOIN_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "LOCATION": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "MAC_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "MARGIN_STATUS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "MASKED_NUMBER": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "MEASUREMENT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "MEDICATION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "MICROORGANISM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "MIDDLE_NAME": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "MOBILITY_ABILITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "NURSING_RISK_SCORE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "NUTRITIONAL_STATUS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "NUTRITION_TARGET": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "OBSTETRIC_EVENT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "OCCUPATION": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "ORDINAL_DIRECTION": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "ORGAN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ORGANISM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ORGANIZATION": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "OTHER": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 0
+    },
+    "OXYGEN_SUPPORT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PACK_YEARS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PASSWORD": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "PATHOLOGY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PERSON": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "PHONE": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "PIN": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "POLYP_DESCRIPTOR": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PREFIX": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "PROBLEM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PROCEDURE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PROTEIN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PROTEIN_CHANGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "PSYCH_SYMPTOM": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "REACTION_MANIFESTATION": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "REACTION_SEVERITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "RECEPTOR_STATUS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "REFERENCE_RANGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "RENAL_FUNCTION_MEASURE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "RESPIRATORY_FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "RNA": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ROUTE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SEVERITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SPECIES": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SPECIMEN": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SPECIMEN_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SPIROMETRY_MEASURE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SSN": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "STAGE_GROUP": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "STREET_ADDRESS": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "STRENGTH": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SUBSTANCE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "SUSCEPTIBILITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "THYROID_MEASURE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TIME": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "TISSUE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TNM_M": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TNM_N": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TNM_T": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TOOTH": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "TUMOR_GRADE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "UNIT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "URINE_FINDING": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "URL": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "USERNAME": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 2
+    },
+    "USER_AGENT": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "USE_QUANTITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "USE_STATUS": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "VACCINE_LOT": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "VACCINE_NAME": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "VACCINE_SERIES": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "VARIANT_DESCRIPTOR": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "VEHICLE_REGISTRATION": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "VIN": {
+      "policy_label": "DIRECT_IDENTIFIER",
+      "specificity": 1
+    },
+    "WOUND_STAGE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "WOUND_TYPE": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    },
+    "ZIPCODE": {
+      "policy_label": "QUASI_IDENTIFIER",
+      "specificity": 1
+    },
+    "ZYGOSITY": {
+      "policy_label": "CLINICAL_CONCEPT",
+      "specificity": 1
+    }
+  },
+  "name": "openmed.portable_taxonomy",
+  "normalization": {
+    "bioes_prefix": "^[BIES]-",
+    "key": "lowercase_ascii_alphanumeric",
+    "unknown": "unknown_label"
+  },
+  "unknown_label": "OTHER",
+  "version": 1
+}

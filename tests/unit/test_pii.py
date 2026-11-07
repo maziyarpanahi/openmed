@@ -369,9 +369,9 @@ class TestDeidentify:
 
         result = deidentify("Patient John Doe", method="mask")
 
-        assert result.deidentified_text == "Patient [NAME]"
+        assert result.deidentified_text == "Patient [PERSON]"
         assert len(result.pii_entities) == 1
-        assert result.pii_entities[0].redacted_text == "[NAME]"
+        assert result.pii_entities[0].redacted_text == "[PERSON]"
         assert result.method == "mask"
 
     @patch("openmed.core.pii.extract_pii")
@@ -455,7 +455,7 @@ class TestDeidentify:
 
         result = deidentify("John Doe at 555-1234", method="mask")
 
-        assert result.deidentified_text == "[NAME] at [PHONE]"
+        assert result.deidentified_text == "[PERSON] at [PHONE]"
         assert len(result.pii_entities) == 2
 
     @patch("openmed.core.pii.extract_pii")
@@ -475,8 +475,8 @@ class TestDeidentify:
         result = deidentify("Patient John Doe", method="mask", keep_mapping=True)
 
         assert result.mapping is not None
-        assert "[NAME]" in result.mapping
-        assert result.mapping["[NAME]"] == "John Doe"
+        assert "[PERSON]" in result.mapping
+        assert result.mapping["[PERSON]"] == "John Doe"
 
     @patch("openmed.core.pii.extract_pii")
     def test_deidentify_without_keep_mapping(self, mock_extract):
@@ -807,7 +807,7 @@ class TestRedactEntity:
             text="John Doe", label="NAME", start=0, end=8, confidence=0.95
         )
         result = _redact_entity(entity, "mask")
-        assert result == "[NAME]"
+        assert result == "[PERSON]"
 
     def test_redact_remove(self):
         """Test remove redaction method."""
@@ -863,7 +863,7 @@ class TestRedactEntity:
             text="John Doe", label="NAME", start=0, end=8, confidence=0.95
         )
         result = _redact_entity(entity, "shift_dates", date_shift_days=30)
-        assert result == "[NAME]"
+        assert result == "[PERSON]"
 
     def test_redact_shift_dates_uses_canonical_label(self):
         """shift_dates must shift dates whose raw label is not literally 'DATE'.
@@ -911,7 +911,7 @@ class TestGenerateFakePII:
     def test_generate_fake_unknown_type(self):
         """Test generating placeholder for unknown types."""
         result = _generate_fake_pii("UNKNOWN_TYPE")
-        assert result == "[UNKNOWN_TYPE]"
+        assert result == "[OTHER]"
 
     def test_generate_fake_consistent_types(self):
         """Test fake data is from predefined list (not random strings)."""
@@ -1542,7 +1542,7 @@ class TestMultilingualPII:
     def test_generate_fake_pii_unknown_type_returns_placeholder(self):
         """Test fake PII for unknown type returns placeholder."""
         result = _generate_fake_pii("UNKNOWN_ENTITY", lang="de")
-        assert result == "[UNKNOWN_ENTITY]"
+        assert result == "[OTHER]"
 
     def test_shift_date_german_format(self):
         """Test date shifting with German DD.MM.YYYY format."""
@@ -1833,7 +1833,7 @@ class TestAccentNormalization:
         )
 
         assert mock_analyze.call_args[0][0] == "Patient John Doe"
-        assert result.deidentified_text == "Patient [NAME]"
+        assert result.deidentified_text == "Patient [PERSON]"
         assert result.pii_entities[0].start == 8
         assert result.pii_entities[0].end == len(original)
         assert result.pii_entities[0].original_text == original[8:]
@@ -1867,7 +1867,7 @@ class TestIntegration:
 
         # De-identify
         deid_result = deidentify(original_text, method="mask", keep_mapping=True)
-        assert deid_result.deidentified_text == "Patient [NAME] at [PHONE]"
+        assert deid_result.deidentified_text == "Patient [PERSON] at [PHONE]"
         assert deid_result.mapping is not None
 
         # Re-identify
@@ -1918,8 +1918,8 @@ class TestIntegration:
         )
 
         deid_result = deidentify(original_text, method="mask", keep_mapping=True)
-        # First NAME -> [NAME], second NAME -> [NAME_2]
-        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME_2] today"
+        # First NAME -> [PERSON], second NAME -> [PERSON_2]
+        assert deid_result.deidentified_text == "Dr. [PERSON] met [PERSON_2] today"
         assert deid_result.mapping is not None
 
         reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
@@ -1955,10 +1955,10 @@ class TestIntegration:
 
         deid_result = deidentify(original_text, method="mask", keep_mapping=False)
 
-        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME] today"
+        assert deid_result.deidentified_text == "Dr. [PERSON] met [PERSON] today"
         assert [entity.redacted_text for entity in deid_result.pii_entities] == [
-            "[NAME]",
-            "[NAME]",
+            "[PERSON]",
+            "[PERSON]",
         ]
         assert deid_result.mapping is None
 
@@ -2012,8 +2012,8 @@ class TestIntegration:
         )
 
         deid_result = deidentify(original_text, method="mask", keep_mapping=True)
-        assert "[NAME]" in deid_result.deidentified_text
-        assert "[NAME_2]" in deid_result.deidentified_text
+        assert "[PERSON]" in deid_result.deidentified_text
+        assert "[PERSON_2]" in deid_result.deidentified_text
         assert "[PHONE]" in deid_result.deidentified_text
         assert "[DATE]" in deid_result.deidentified_text
 
@@ -2108,10 +2108,12 @@ class TestIntegration:
 
         deid_result = deidentify(original_text, method="remove", keep_mapping=True)
 
-        assert deid_result.deidentified_text == "[NAME_REMOVED] and [NAME_REMOVED_2]"
+        assert (
+            deid_result.deidentified_text == "[PERSON_REMOVED] and [PERSON_REMOVED_2]"
+        )
         assert deid_result.mapping == {
-            "[NAME_REMOVED]": "Alice Smith",
-            "[NAME_REMOVED_2]": "Bob Jones",
+            "[PERSON_REMOVED]": "Alice Smith",
+            "[PERSON_REMOVED_2]": "Bob Jones",
         }
         reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
         assert reidentified == original_text
@@ -2133,8 +2135,8 @@ class TestIntegration:
 
         deid_result = deidentify(original_text, method="mask", keep_mapping=True)
         # Single entity should NOT have a counter suffix
-        assert deid_result.deidentified_text == "Patient [NAME]"
-        assert "[NAME_2]" not in deid_result.deidentified_text
+        assert deid_result.deidentified_text == "Patient [PERSON]"
+        assert "[PERSON_2]" not in deid_result.deidentified_text
 
         reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
         assert reidentified == original_text

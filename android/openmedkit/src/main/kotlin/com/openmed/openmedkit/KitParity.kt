@@ -1,5 +1,6 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.policy.PolicyProfiles
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -64,22 +65,16 @@ object KitParity {
 
     val ACTIONS: List<String> = listOf("hash", "keep", "mask", "redact", "remove", "replace")
 
-    val CANONICAL_LABELS: List<String> = listOf(
-        "ACCOUNT_NUMBER", "AGE", "AMOUNT", "ANTIBIOTIC", "API_KEY", "BIC",
-        "BITCOIN_ADDRESS", "BODY_SITE", "BUILDING_NUMBER", "CONDITION", "CREDIT_CARD",
-        "CREDIT_CARD_ISSUER", "CURRENCY", "CVV", "DATE", "DATE_OF_BIRTH", "DIET_TYPE",
-        "EMAIL", "ETHEREUM_ADDRESS", "EYE_COLOR", "FEEDING_ROUTE", "FIRST_NAME", "GENDER",
-        "GPS_COORDINATES", "HEIGHT", "IBAN", "ID_NUM", "IMEI", "IP_ADDRESS",
-        "JOB_DEPARTMENT", "JOB_TITLE", "LAB_TEST", "LAST_NAME", "LITECOIN_ADDRESS",
-        "LOCATION", "MAC_ADDRESS", "MASKED_NUMBER", "MEDICATION", "MICROORGANISM",
-        "MIDDLE_NAME", "NUTRITIONAL_STATUS", "NUTRITION_TARGET", "OCCUPATION",
-        "ORDINAL_DIRECTION", "ORGANIZATION", "OTHER", "PASSWORD", "PERSON", "PHONE", "PIN",
-        "PREFIX", "PROCEDURE", "SSN", "STREET_ADDRESS", "SUSCEPTIBILITY", "TIME", "URL",
-        "USERNAME", "USER_AGENT", "VEHICLE_REGISTRATION", "VIN", "ZIPCODE",
-    )
+    /**
+     * Canonical labels a kit result may carry: the portable policy taxonomy
+     * generated from `openmed/core/labels.py`, loaded from the digest-verified
+     * `portable_policy_taxonomy.json` asset. An unverifiable taxonomy yields an
+     * empty vocabulary, so every result fails closed.
+     */
+    val CANONICAL_LABELS: List<String> by lazy { PolicyProfiles.bundledTaxonomyLabels() }
 
     private val actionSet = ACTIONS.toSet()
-    private val labelSet = CANONICAL_LABELS.toSet()
+    private val labelSet by lazy { CANONICAL_LABELS.toSet() }
     private val labelPattern = Regex("^[A-Za-z][A-Za-z0-9_:-]{0,79}$")
     private val topLevelKeys = setOf(
         "deidentified_text",
