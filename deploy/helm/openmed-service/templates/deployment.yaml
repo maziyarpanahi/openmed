@@ -28,37 +28,17 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.journey.enabled }}
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 65532
-        fsGroupChangePolicy: OnRootMismatch
-        seccompProfile:
-          type: RuntimeDefault
-      {{- else }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- end }}
       containers:
         - name: openmed-service
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.journey.enabled }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 65532
-            runAsGroup: 65532
-            capabilities:
-              drop: ["ALL"]
-          {{- else }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
-          {{- end }}
           {{- end }}
           ports:
             - name: http
@@ -67,8 +47,11 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "openmed-service.configMapName" . }}
-          {{- if or .Values.journey.enabled .Values.extraEnv }}
           env:
+            - name: HOME
+              value: {{ .Values.writableVolumes.home.mountPath | quote }}
+            - name: TMPDIR
+              value: /tmp
             {{- if .Values.journey.enabled }}
             - name: OPENMED_JOURNEY_POSTGRES_DSN
               valueFrom:
@@ -79,7 +62,6 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- end }}
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path | quote }}
@@ -119,44 +101,43 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.extraVolumeMounts }}
           volumeMounts:
-            {{- if .Values.persistence.enabled }}
+            - name: home
+              mountPath: {{ .Values.writableVolumes.home.mountPath | quote }}
+            - name: tmp
+              mountPath: /tmp
             - name: model-cache
               mountPath: {{ .Values.persistence.mountPath | quote }}
-              {{- if .Values.persistence.subPath }}
+              {{- if and .Values.persistence.enabled .Values.persistence.subPath }}
               subPath: {{ .Values.persistence.subPath | quote }}
               {{- end }}
-            {{- end }}
             {{- if .Values.journey.enabled }}
             - name: journey-artifacts
               mountPath: {{ .Values.journey.artifacts.mountPath | quote }}
-            - name: tmp
-              mountPath: /tmp
             {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- end }}
-      {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.extraVolumes }}
       volumes:
-        {{- if .Values.persistence.enabled }}
+        - name: home
+          emptyDir: {{ include "openmed-service.emptyDir" .Values.writableVolumes.home }}
+        - name: tmp
+          emptyDir: {{ include "openmed-service.emptyDir" .Values.writableVolumes.tmp }}
         - name: model-cache
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "openmed-service.modelCacheClaimName" . }}
-        {{- end }}
+          {{- else }}
+          emptyDir: {{ include "openmed-service.emptyDir" .Values.writableVolumes.modelCache }}
+          {{- end }}
         {{- if .Values.journey.enabled }}
         - name: journey-artifacts
           persistentVolumeClaim:
             claimName: {{ include "openmed-service.journeyArtifactClaimName" . }}
-        - name: tmp
-          emptyDir:
-            sizeLimit: 128Mi
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

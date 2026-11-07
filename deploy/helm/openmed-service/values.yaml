@@ -25,11 +25,52 @@ podLabels: {}
 # Extra annotations added to pods.
 podAnnotations: {}
 
-# Pod-level security context.
-podSecurityContext: {}
+# Pod-level security context for every API pod, with or without Journey.
+# The defaults run as the image's fixed non-root UID/GID 65532 with the
+# RuntimeDefault seccomp profile; fsGroup makes mounted volumes group-writable.
+# Helm merges overrides key by key, so `podSecurityContext: {}` keeps these
+# defaults. Weakening one requires setting that key explicitly (for example to
+# `false` or `null`), and the chart tests flag every weakened render.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
 
-# Container-level security context.
-securityContext: {}
+# Container-level security context for the API container. The root filesystem
+# is read-only; the only writable paths are the volumes declared under
+# `writableVolumes`, `persistence` and, with Journey, the artifact store.
+# The same key-by-key override rule as `podSecurityContext` applies.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# Writable emptyDir volumes that keep the read-only root filesystem usable.
+writableVolumes:
+  # HOME of the non-root image user, exported as HOME. Small library config
+  # files land here; the cache directory below it is the model-cache volume.
+  home:
+    mountPath: /home/nonroot
+    sizeLimit: 128Mi
+  # Scratch space mounted at /tmp and exported as TMPDIR.
+  tmp:
+    sizeLimit: 512Mi
+  # emptyDir that backs the model-cache mount when persistence.enabled is
+  # false. Empty means no size limit.
+  modelCache:
+    sizeLimit: 20Gi
 
 # How long Kubernetes waits for graceful shutdown after SIGTERM.
 terminationGracePeriodSeconds: 45
@@ -38,8 +79,11 @@ terminationGracePeriodSeconds: 45
 config:
   # OpenMed configuration profile.
   profile: prod
-  # Cache directory used by OpenMed model downloads inside the container.
-  cacheDir: /root/.cache/huggingface/openmed
+  # OPENMED_CACHE_DIR for data and deployment workflows that read it. It sits
+  # on the model-cache volume next to the default OpenMed model cache.
+  cacheDir: /home/nonroot/.cache/openmed
+  # HF_HOME for Hugging Face Hub files, on the model-cache volume.
+  hfHome: /home/nonroot/.cache/huggingface
   # Models to preload before readiness flips to ready.
   preloadModels: []
   # Maximum resident models in the warm pool. Empty means unbounded.
@@ -119,7 +163,8 @@ resources:
 
 # Persistent model cache volume settings.
 persistence:
-  # Create or mount a PersistentVolumeClaim for model cache reuse.
+  # Create or mount a PersistentVolumeClaim for model cache reuse. When false,
+  # the same mount path is backed by the writableVolumes.modelCache emptyDir.
   enabled: true
   # Existing PVC name to mount instead of creating one.
   existingClaim: ""
@@ -130,8 +175,10 @@ persistence:
     - ReadWriteOnce
   # Requested PVC size.
   size: 20Gi
-  # Cache mount path inside the container.
-  mountPath: /root/.cache/huggingface
+  # Cache mount path inside the container: the non-root user's cache
+  # directory, which holds the OpenMed model cache (~/.cache/openmed), the
+  # service job store and the Hugging Face cache (~/.cache/huggingface).
+  mountPath: /home/nonroot/.cache
   # Optional subPath for the mounted PVC.
   subPath: ""
   # Extra annotations added to the generated PVC.
