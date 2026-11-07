@@ -2,19 +2,23 @@ name: MLX Unit Tests
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - 'openmed/mlx/**'
       - 'openmed/core/backends.py'
       - 'tests/unit/mlx/**'
       - 'tests/unit/test_backends.py'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - 'openmed/mlx/**'
       - 'openmed/core/backends.py'
       - 'tests/unit/mlx/**'
       - 'tests/unit/test_backends.py'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   mlx-unit-tests:

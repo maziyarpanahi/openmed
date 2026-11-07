@@ -167,9 +167,9 @@ nonseekable streams are consumed once. The actual page tree is bounded by the
 resource profile's page ceiling. A failed byte/digest/type check prevents
 inventory evaluation.
 
-The standalone inventory maps review to preflight `phi_uncertainty`, strict
-policy rejection to `unsupported_media`, parser failure to `malformed_media`
-and exhausted budgets to `resource_limit`. The asset preflight preserves any
+The standalone inventory uses the shared v2 `policy_refused` preflight reason
+for review and strict policy rejection. Parser failures use `unsupported_media`
+and exhausted budgets use `resource_limit`. The asset preflight preserves any
 earlier abstention reason and appends inventory codes after existing findings,
 as described by `PDF_PREFLIGHT_CHECKS`.
 

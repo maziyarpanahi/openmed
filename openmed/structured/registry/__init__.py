@@ -34,6 +34,19 @@ from .materialize import (
     materialize_registry_cases,
     version_registry_definition,
 )
+from .naaccr import (
+    NAACCR_NAMESPACE,
+    NAACCRDictionary,
+    NAACCRDictionaryError,
+    NAACCRExportReport,
+    NAACCRFieldMapping,
+    NAACCRItemDefinition,
+    NAACCRLoss,
+    NAACCRProjectionError,
+    NAACCRValueError,
+    parse_naaccr_dictionary,
+    write_naaccr_xml,
+)
 from .workflow import (
     adjudicate_registry_case,
     assign_registry_case,
@@ -60,6 +73,17 @@ def load_registry_schema() -> dict[str, Any]:
 
 
 __all__ = [
+    "NAACCR_NAMESPACE",
+    "NAACCRDictionary",
+    "NAACCRDictionaryError",
+    "NAACCRExportReport",
+    "NAACCRFieldMapping",
+    "NAACCRItemDefinition",
+    "NAACCRLoss",
+    "NAACCRProjectionError",
+    "NAACCRValueError",
+    "parse_naaccr_dictionary",
+    "write_naaccr_xml",
     "REGISTRY_ADVISORY",
     "REGISTRY_COMPATIBILITY_POLICY",
     "REGISTRY_SCHEMA_VERSION",

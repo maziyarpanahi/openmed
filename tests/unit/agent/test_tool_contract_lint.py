@@ -101,9 +101,8 @@ def test_overbroad_field_for_another_purpose_fails_review() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("schema", "expected_path"),
-    [
+def test_missing_purpose_is_reported_at_the_schema_path(subtests) -> None:
+    for schema, expected_path in [
         (
             {
                 "type": "object",
@@ -123,38 +122,33 @@ def test_overbroad_field_for_another_purpose_fails_review() -> None:
             ),
             "#/properties/summary/x-openmed-purpose",
         ),
-    ],
-)
-def test_missing_purpose_is_reported_at_the_schema_path(
-    schema: dict[str, object], expected_path: str
-) -> None:
-    report = lint_tool_contract(schema)
+    ]:
+        with subtests.test(schema=schema, expected_path=expected_path):
+            report = lint_tool_contract(schema)
 
-    assert any(
-        finding.reason_code is LintReasonCode.MISSING_PURPOSE
-        and finding.schema_path == expected_path
-        for finding in report.findings
-    )
+            assert any(
+                finding.reason_code is LintReasonCode.MISSING_PURPOSE
+                and finding.schema_path == expected_path
+                for finding in report.findings
+            )
 
 
-@pytest.mark.parametrize(
-    ("field", "required", "expected_code"),
-    [
+def test_optional_and_derived_inputs_fail_review(subtests) -> None:
+    for field, required, expected_code in [
         (_field(minimum_data="optional"), ["context"], LintReasonCode.OPTIONAL_INPUT),
         (_field(), [], LintReasonCode.OPTIONAL_INPUT),
         (_field(minimum_data="derived"), ["context"], LintReasonCode.DERIVED_INPUT),
-    ],
-)
-def test_optional_and_derived_inputs_fail_review(
-    field: dict[str, object],
-    required: list[object],
-    expected_code: LintReasonCode,
-) -> None:
-    report = lint_tool_contract(_contract({"context": field}, required=required))
+    ]:
+        with subtests.test(field=field, required=required, expected_code=expected_code):
+            report = lint_tool_contract(
+                _contract({"context": field}, required=required)
+            )
 
-    assert not report.passed
-    assert expected_code in _codes(report)
-    assert all(finding.severity is LintSeverity.ERROR for finding in report.findings)
+            assert not report.passed
+            assert expected_code in _codes(report)
+            assert all(
+                finding.severity is LintSeverity.ERROR for finding in report.findings
+            )
 
 
 def test_missing_and_invalid_minimum_data_annotations_fail_closed() -> None:
@@ -205,18 +199,18 @@ def test_open_objects_and_schema_combinators_fail_closed() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "purpose",
-    ["care summary", "purpose:org.example/care-summary", 42, None],
-)
-def test_invalid_or_unversioned_purposes_use_a_stable_reason(purpose: object) -> None:
-    report = lint_tool_contract(_contract({"summary": _field()}, purpose=purpose))
+def test_invalid_or_unversioned_purposes_use_a_stable_reason(subtests) -> None:
+    for purpose in ["care summary", "purpose:org.example/care-summary", 42, None]:
+        with subtests.test(purpose=purpose):
+            report = lint_tool_contract(
+                _contract({"summary": _field()}, purpose=purpose)
+            )
 
-    assert report.findings[0].to_dict() == {
-        "severity": "error",
-        "reason_code": "invalid_purpose",
-        "schema_path": "#/x-openmed-purpose",
-    }
+            assert report.findings[0].to_dict() == {
+                "severity": "error",
+                "reason_code": "invalid_purpose",
+                "schema_path": "#/x-openmed-purpose",
+            }
 
 
 def test_report_never_copies_examples_defaults_or_descriptions() -> None:
@@ -274,9 +268,8 @@ def test_cyclic_python_schema_fails_without_recursing_or_echoing_values() -> Non
     ]
 
 
-@pytest.mark.parametrize(
-    "schema",
-    [
+def test_malformed_schemas_return_value_free_invalid_schema_findings(subtests) -> None:
+    for schema in [
         None,
         [],
         {"x-openmed-purpose": PURPOSE, "properties": []},
@@ -299,15 +292,12 @@ def test_cyclic_python_schema_fails_without_recursing_or_echoing_values() -> Non
                 }
             }
         ),
-    ],
-)
-def test_malformed_schemas_return_value_free_invalid_schema_findings(
-    schema: Any,
-) -> None:
-    report = lint_tool_contract(schema)
+    ]:
+        with subtests.test(schema=schema):
+            report = lint_tool_contract(schema)
 
-    assert LintReasonCode.INVALID_SCHEMA in _codes(report)
-    assert all(
-        set(finding.to_dict()) == {"severity", "reason_code", "schema_path"}
-        for finding in report.findings
-    )
+            assert LintReasonCode.INVALID_SCHEMA in _codes(report)
+            assert all(
+                set(finding.to_dict()) == {"severity", "reason_code", "schema_path"}
+                for finding in report.findings
+            )

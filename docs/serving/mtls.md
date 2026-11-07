@@ -11,7 +11,7 @@ mTLS is disabled by default. Enable it without changing application code:
 ```bash
 OPENMED_SERVICE_MTLS_ENABLED=true \
 OPENMED_SERVICE_MTLS_CA_BUNDLE=/etc/openmed/client-ca.pem \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MTLS_CA_BUNDLE` must contain at least one trusted CA
@@ -28,7 +28,7 @@ require client certificates against the same CA bundle. For example, the
 corresponding Uvicorn transport flags are:
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 \
   --port 8443 \
   --ssl-keyfile /etc/openmed/server-key.pem \
@@ -54,7 +54,7 @@ OPENMED_SERVICE_MTLS_ENABLED=true \
 OPENMED_SERVICE_MTLS_CA_BUNDLE=/etc/openmed/client-ca.pem \
 OPENMED_SERVICE_MTLS_CLIENT_CERT_HEADER=X-OpenMed-Client-Cert \
 OPENMED_SERVICE_MTLS_TRUSTED_PROXIES=127.0.0.1/32,10.42.0.0/16 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080 --no-proxy-headers
+python -m openmed.service.logging --host 127.0.0.1 --port 8080 --no-proxy-headers
 ```
 
 The proxy must:

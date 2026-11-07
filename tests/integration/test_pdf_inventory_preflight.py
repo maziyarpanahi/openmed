@@ -31,9 +31,9 @@ def manifest(source):
 @pytest.mark.parametrize(
     "category,reason",
     [
-        ("forms", AbstentionReason.PHI_UNCERTAINTY),
-        ("attachments", AbstentionReason.UNSUPPORTED_MEDIA),
-        ("javascript", AbstentionReason.UNSUPPORTED_MEDIA),
+        ("forms", AbstentionReason.POLICY_REFUSED),
+        ("attachments", AbstentionReason.POLICY_REFUSED),
+        ("javascript", AbstentionReason.POLICY_REFUSED),
     ],
 )
 def test_hidden_content_abstains_after_asset_checks(category, reason):

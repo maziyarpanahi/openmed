@@ -1,4 +1,5 @@
 #if canImport(MLXLMCommon) && !os(watchOS) && !os(visionOS)
+    import CryptoKit
     import Foundation
     import XCTest
 
@@ -73,27 +74,42 @@
             let expected = try referenceResponses(environment: environment)
             let documentURL = URL(fileURLWithPath: fixturePath)
                 .appending(path: "synthetic_clinical_document.png")
-            let privacy = try await model.generate(privacyPrompt, maxTokens: 96)
+            // Known synthetic identifiers; this detector is not qualification.
+            let releaseGuard = GeneratedTextGuard(detector: { _ in [] }, detectorVersion: "synthetic-parity-v1")
+            let documentDigest = digest(try Data(contentsOf: documentURL))
+            let identifiers = [
+                GeneratedIdentifierDigest(
+                    assetDigest: documentDigest, label: .name,
+                    digest: GeneratedTextGuard.identifierDigest("Alex Rivera"), normalizedLength: 10),
+                GeneratedIdentifierDigest(
+                    assetDigest: documentDigest, label: .mrn,
+                    digest: GeneratedTextGuard.identifierDigest("SYN-2048"), normalizedLength: 8),
+            ]
+            let privacy = try await model.generate(
+                privacyPrompt, maxTokens: 96, releaseGuard: releaseGuard,
+                assetDigest: digest(Data(privacyPrompt.utf8)))
             XCTAssertEqual(privacy.promptTokenCount, 30)
             XCTAssertTrue(
                 privacy.text.localizedCaseInsensitiveContains("private")
                     || privacy.text.localizedCaseInsensitiveContains("privacy"),
-                "Missing privacy concept in: \(privacy.text)"
+                "Missing privacy concept"
             )
             for term in ["clinical", "device", "sensitive"] {
                 XCTAssertTrue(
                     privacy.text.localizedCaseInsensitiveContains(term),
-                    "Missing \(term) in: \(privacy.text)"
+                    "Missing expected concept"
                 )
             }
             XCTAssertTrue(
                 ["cloud", "network", "transmit", "local"].contains { term in
                     privacy.text.localizedCaseInsensitiveContains(term)
                 },
-                "Missing local-data rationale in: \(privacy.text)"
+                "Missing local-data rationale"
             )
 
-            let fact = try await model.generate(factPrompt, maxTokens: 32)
+            let fact = try await model.generate(
+                factPrompt, maxTokens: 32, releaseGuard: releaseGuard,
+                assetDigest: digest(Data(factPrompt.utf8)))
             XCTAssertEqual(fact.text, "Tuesday")
             XCTAssertEqual(fact.promptTokenCount, 44)
             if let response = expected["text_fact_extraction"] {
@@ -103,23 +119,34 @@
             let document = try await model.generate(
                 documentPrompt,
                 imageURL: documentURL,
-                maxTokens: 96
+                maxTokens: 96,
+                releaseGuard: releaseGuard,
+                assetDigest: documentDigest,
+                identifiers: identifiers
             )
             XCTAssertEqual(document.promptTokenCount, 1_161)
             for expected in [
-                "Alex Rivera", "SYN-2048", "Metformin", "500", "twice", "Penicillin",
+                "Metformin", "500", "twice", "Penicillin",
             ] {
                 XCTAssertTrue(
                     document.text.localizedCaseInsensitiveContains(expected),
-                    "Missing \(expected) in: \(document.text)"
+                    "Missing expected clinical fixture concept"
                 )
             }
+            XCTAssertFalse(document.text.localizedCaseInsensitiveContains("Alex Rivera"))
+            XCTAssertFalse(document.text.localizedCaseInsensitiveContains("SYN-2048"))
+            XCTAssertGreaterThanOrEqual(document.text.components(separatedBy: "[REDACTED]").count - 1, 2)
+            XCTAssertEqual(document.releaseEnvelope?.guardReport.decision, "redact")
+            XCTAssertTrue(document.tokenIDs.isEmpty)
 
+            let chartURL = URL(fileURLWithPath: fixturePath)
+                .appending(path: "synthetic_clinic_chart.png")
             let chart = try await model.generate(
                 chartPrompt,
-                imageURL: URL(fileURLWithPath: fixturePath)
-                    .appending(path: "synthetic_clinic_chart.png"),
-                maxTokens: 32
+                imageURL: chartURL,
+                maxTokens: 32,
+                releaseGuard: releaseGuard,
+                assetDigest: digest(try Data(contentsOf: chartURL))
             )
             XCTAssertEqual(chart.text, "Screening, 42")
             XCTAssertEqual(chart.promptTokenCount, 1_053)
@@ -127,13 +154,13 @@
                 XCTAssertEqual(chart.text, response)
             }
 
-            print(
-                "OPENMED_COMPASS_PARITY "
-                    + "privacy=\(privacy.text.debugDescription)/\(privacy.tokenIDs) "
-                    + "text=\(fact.text.debugDescription)/\(fact.tokenIDs) "
-                    + "document=\(document.text.debugDescription)/\(document.tokenIDs) "
-                    + "chart=\(chart.text.debugDescription)/\(chart.tokenIDs)"
-            )
+            XCTAssertTrue(privacy.tokenIDs.isEmpty)
+            XCTAssertTrue(fact.tokenIDs.isEmpty)
+            XCTAssertTrue(chart.tokenIDs.isEmpty)
+        }
+
+        private func digest(_ data: Data) -> String {
+            SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         }
 
         private func referenceResponses(

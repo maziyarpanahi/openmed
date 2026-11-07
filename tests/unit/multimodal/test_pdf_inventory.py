@@ -53,11 +53,8 @@ def test_categories_and_profiles(category, code, count, expected, strict, compre
         PdfGeometryStatus.REJECTED if strict else PdfGeometryStatus.REVIEW
     )
     assert report.inventory.to_dict()[count] == expected
-    assert report.abstention.reason is (
-        AbstentionReason.UNSUPPORTED_MEDIA
-        if strict
-        else AbstentionReason.PHI_UNCERTAINTY
-    )
+    assert report.abstention.reason is AbstentionReason.POLICY_REFUSED
+    assert report.abstention.schema_version == 2
     reviewed = read_pdf_inventory(source, profile=PdfContentProfile.REVIEW)
     assert reviewed.status is PdfGeometryStatus.REVIEW
     assert reviewed.inventory == report.inventory

@@ -100,12 +100,14 @@ from .chw_forms import (
 )
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
+    DicomDeidentificationError,
     DicomHeaderAction,
     DicomHeaderDeidPolicy,
     DicomHeaderDeidResult,
     DicomPixelFinding,
     DicomPixelRedactionPolicy,
     DicomPixelRedactionResult,
+    DicomPixelStatus,
     DicomResidualTextReport,
     deidentify_dicom_headers,
     redact_dicom_pixels,
@@ -127,6 +129,21 @@ from .dicom_sr_provenance import (
     map_dicom_sr_provenance,
     render_dicom_sr_provenance,
     serialize_dicom_sr_provenance,
+)
+from .dicom_transfer_syntax import (
+    DEFAULT_MAX_FILE_META_BYTES,
+    DEFAULT_MAX_FILE_META_ELEMENTS,
+    DEFAULT_MAX_TRANSFER_SYNTAX_UID_BYTES,
+    TRANSFER_SYNTAX_CATALOG,
+    TRANSFER_SYNTAX_OUTCOMES,
+    TRANSFER_SYNTAX_REASON_CODES,
+    TRANSFER_SYNTAX_SCHEMA_VERSION,
+    TransferSyntaxCapability,
+    TransferSyntaxError,
+    TransferSyntaxOutcome,
+    TransferSyntaxReport,
+    describe_transfer_syntax,
+    read_dicom_transfer_syntax,
 )
 from .document_graph import (
     BBox,
@@ -349,6 +366,21 @@ from .render_raster import (
     render_redacted_raster_pages,
 )
 from .rtf import extract_rtf, write_redacted_rtf
+from .runtime_session import (
+    SESSION_SCHEMA_VERSION,
+    AssetHandle,
+    DocumentProvider,
+    MultimodalSession,
+    ProviderLease,
+    RuntimeSessionError,
+    SessionEvent,
+    SessionLimits,
+    SessionOperation,
+    SessionOutcome,
+    SessionResult,
+    SessionState,
+    SpeechExecutionProvider,
+)
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -400,6 +432,19 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "SESSION_SCHEMA_VERSION",
+    "AssetHandle",
+    "DocumentProvider",
+    "MultimodalSession",
+    "ProviderLease",
+    "RuntimeSessionError",
+    "SessionEvent",
+    "SessionLimits",
+    "SessionOperation",
+    "SessionOutcome",
+    "SessionResult",
+    "SessionState",
+    "SpeechExecutionProvider",
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
     "AbstentionRecord",
@@ -474,6 +519,8 @@ __all__ = [
     "parse_xform_path",
     "redact_chw_form",
     "redact_contacts_calendar",
+    "DicomDeidentificationError",
+    "DicomPixelStatus",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
@@ -711,4 +758,17 @@ __all__ = [
     "map_dicom_sr_provenance",
     "render_dicom_sr_provenance",
     "serialize_dicom_sr_provenance",
+    "DEFAULT_MAX_FILE_META_BYTES",
+    "DEFAULT_MAX_FILE_META_ELEMENTS",
+    "DEFAULT_MAX_TRANSFER_SYNTAX_UID_BYTES",
+    "TRANSFER_SYNTAX_CATALOG",
+    "TRANSFER_SYNTAX_OUTCOMES",
+    "TRANSFER_SYNTAX_REASON_CODES",
+    "TRANSFER_SYNTAX_SCHEMA_VERSION",
+    "TransferSyntaxCapability",
+    "TransferSyntaxError",
+    "TransferSyntaxOutcome",
+    "TransferSyntaxReport",
+    "describe_transfer_syntax",
+    "read_dicom_transfer_syntax",
 ]

@@ -426,34 +426,37 @@ def test_top_level_generate_text_is_exported(monkeypatch, tmp_path):
     assert "generate_text" in openmed.__all__
 
 
-@pytest.mark.parametrize(
-    ("total_tokens", "budget_exceeded", "evictions", "chunk_ranges"),
-    [
+def test_paged_kv_cache_plan_covers_page_boundaries(subtests):
+    for total_tokens, budget_exceeded, evictions, chunk_ranges in [
         (16, False, 0, [(0, 5), (5, 10), (10, 15), (15, 16)]),
         (17, True, 1, [(0, 5), (5, 10), (10, 15), (15, 17)]),
         (9, False, 0, [(0, 5), (5, 9)]),
-    ],
-)
-def test_paged_kv_cache_plan_covers_page_boundaries(
-    total_tokens, budget_exceeded, evictions, chunk_ranges
-):
-    from openmed.mlx.lm import PagedKVCacheConfig
+    ]:
+        with subtests.test(
+            total_tokens=total_tokens,
+            budget_exceeded=budget_exceeded,
+            evictions=evictions,
+            chunk_ranges=chunk_ranges,
+        ):
+            from openmed.mlx.lm import PagedKVCacheConfig
 
-    config = PagedKVCacheConfig(
-        memory_budget_bytes=16,
-        page_size_tokens=4,
-        chunk_size_tokens=5,
-        bytes_per_token=1,
-    )
+            config = PagedKVCacheConfig(
+                memory_budget_bytes=16,
+                page_size_tokens=4,
+                chunk_size_tokens=5,
+                bytes_per_token=1,
+            )
 
-    plan = config.plan(total_tokens)
+            plan = config.plan(total_tokens)
 
-    assert plan.total_pages == 4
-    assert plan.resident_window_tokens == 16
-    assert plan.budget_exceeded is budget_exceeded
-    assert plan.evictions == evictions
-    assert [(chunk.start, chunk.end) for chunk in plan.chunk_ranges] == chunk_ranges
-    assert plan.stats().memory_budget_bytes == 16
+            assert plan.total_pages == 4
+            assert plan.resident_window_tokens == 16
+            assert plan.budget_exceeded is budget_exceeded
+            assert plan.evictions == evictions
+            assert [
+                (chunk.start, chunk.end) for chunk in plan.chunk_ranges
+            ] == chunk_ranges
+            assert plan.stats().memory_budget_bytes == 16
 
 
 def test_paged_kv_cache_page_table_stores_and_evicts_at_boundaries():

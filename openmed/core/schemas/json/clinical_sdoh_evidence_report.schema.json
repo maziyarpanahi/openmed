@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_sdoh_evidence_report.schema.json",
+  "title": "OpenMed SDOH evidence report",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["disclaimer", "findings", "schema_version"],
+  "properties": {
+    "disclaimer": {"type": "string", "minLength": 1},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "schema_version": {"const": 1, "type": "integer"}
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assertion", "evidence_type", "review_status", "source_section",
+        "source_span"
+      ],
+      "properties": {
+        "assertion": {
+          "enum": ["absent", "present", "refused", "uncertain", "unknown"]
+        },
+        "determinant": {
+          "type": "string",
+          "enum": [
+            "alcohol_use", "caregiving", "disability", "education", "employment",
+            "employment_status", "financial_strain", "food_insecurity",
+            "healthcare_access", "housing", "housing_insecurity", "insurance",
+            "interpersonal_safety", "occupation", "other", "refused",
+            "social_support", "substance_use", "tobacco", "transportation",
+            "unknown", "utilities"
+          ],
+          "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+        },
+        "evidence_type": {
+          "enum": [
+            "clinician_observation", "inferred", "proxy_report", "refused",
+            "self_report", "structured_record", "unknown"
+          ]
+        },
+        "review_status": {
+          "enum": [
+            "needs_review", "refused", "rejected", "reviewed", "unknown",
+            "unreviewed"
+          ]
+        },
+        "source_section": {
+          "enum": [
+            "assessment", "history", "other", "plan", "refused",
+            "social_history", "unknown"
+          ]
+        },
+        "source_span": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 0},
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    }
+  }
+}

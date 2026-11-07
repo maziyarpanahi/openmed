@@ -291,14 +291,11 @@ def _report(
         if codes
         else PdfGeometryStatus.READABLE
     )
-    reason = AbstentionReason.PHI_UNCERTAINTY
-    if rejected:
-        if any(code.endswith("_limit") for code in codes):
-            reason = AbstentionReason.RESOURCE_LIMIT
-        elif inventory is None:
-            reason = AbstentionReason.MALFORMED_MEDIA
-        else:
-            reason = AbstentionReason.UNSUPPORTED_MEDIA
+    reason = AbstentionReason.POLICY_REFUSED
+    if rejected and any(code.endswith("_limit") for code in codes):
+        reason = AbstentionReason.RESOURCE_LIMIT
+    elif rejected and inventory is None:
+        reason = AbstentionReason.UNSUPPORTED_MEDIA
     abstention = (
         None if not codes else AbstentionRecord(AbstentionStage.PREFLIGHT, reason)
     )
