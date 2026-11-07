@@ -7,21 +7,33 @@ kept free of clinical values.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
 import ssl
-import threading
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from importlib import import_module
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, TypeVar, cast
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from openmed.clinical.journey_contracts import canonical_digest
 
+from .deadlines import (
+    STORE_TIMEOUTS_INVALID_CODE,
+    ConnectionCheckout,
+    StoreBusyError,
+    StoreDeadline,
+    StoreDeadlineExceededError,
+    StoreDeadlineInput,
+    StoreTimeouts,
+    StoreTimeoutsError,
+    StoreWaitError,
+    resolve_store_timeouts,
+)
 from .local import (
     LocalStoreError,
     SQLiteJourneyStore,
@@ -42,7 +54,23 @@ from .protocols import (
 
 _SCHEMA_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 _CONSTRAINT_SQLSTATES = frozenset({"23502", "23503", "23505", "23514", "23P01"})
+# query_canceled is raised when statement_timeout fires.
+_DEADLINE_SQLSTATES = frozenset({"57014"})
+# lock_not_available is raised when lock_timeout fires.
+_BUSY_SQLSTATES = frozenset({"55P03"})
 _MIGRATION_LOCK_ID = 613_753_209
+# set_config(..., true) has SET LOCAL semantics: values end with the transaction.
+_ARM_TIMEOUTS_SQL = (
+    "SELECT set_config('statement_timeout', ?, true) AS statement_timeout, "
+    "set_config('lock_timeout', ?, true) AS lock_timeout"
+)
+_REARM_STATEMENT_SQL = (
+    "SELECT set_config('statement_timeout', ?, true) AS statement_timeout"
+)
+# Lower statement_timeout again once the deadline is this much closer.
+_REARM_TOLERANCE_MS = 50
+
+T = TypeVar("T")
 
 
 class DBAPICursor(Protocol):
@@ -496,48 +524,132 @@ class _CursorResult:
 
 
 class _PostgresConnectionAdapter:
+    """Value-safe statement executor with optional deadline enforcement.
+
+    Driver errors are replaced by controlled store errors raised outside the
+    driver's exception context, so no SQL parameters or server diagnostics
+    are reachable through ``__context__``.
+    """
+
     def __init__(self, connection: DBAPIConnection) -> None:
         self.raw = connection
+        self._deadline: StoreDeadline | None = None
+        self._statement_cap_seconds = 0.0
+        self._statement_timeout_ms = 0
+
+    def arm(self, deadline: StoreDeadline, timeouts: StoreTimeouts) -> None:
+        """Apply transaction-local statement and lock timeouts.
+
+        Must run inside an open transaction.
+        """
+
+        statement_ms = deadline.milliseconds(timeouts.operation_seconds)
+        lock_ms = deadline.milliseconds(timeouts.lock_wait_seconds)
+        self.execute(_ARM_TIMEOUTS_SQL, (str(statement_ms), str(lock_ms))).fetchone()
+        self._deadline = deadline
+        self._statement_cap_seconds = timeouts.operation_seconds
+        self._statement_timeout_ms = statement_ms
+
+    def disarm(self) -> None:
+        """Stop enforcing the deadline once its transaction has ended."""
+
+        self._deadline = None
 
     def execute(
         self,
         operation: str,
         parameters: Sequence[Any] = (),
     ) -> _CursorResult:
+        self._enforce_deadline()
         cursor: DBAPICursor | None = None
         try:
             cursor = self.raw.cursor()
             cursor.execute(_postgres_sql(operation), parameters)
             return _CursorResult(cursor)
         except Exception as exc:
-            if cursor is not None:
-                try:
-                    cursor.close()
-                except Exception:
-                    pass
-            if _sqlstate(exc) in _CONSTRAINT_SQLSTATES:
-                raise StoreConstraintError("postgres constraint conflict") from None
-            raise PostgresStoreError("postgres operation failed") from None
+            _close_cursor(cursor)
+            failure = _postgres_failure(exc)
+        raise failure
 
     def executemany(
         self,
         operation: str,
         parameters: Sequence[Sequence[Any]] | Iterator[Sequence[Any]],
     ) -> None:
+        self._enforce_deadline()
         cursor: DBAPICursor | None = None
         try:
             cursor = self.raw.cursor()
             cursor.executemany(_postgres_sql(operation), tuple(parameters))
             cursor.close()
+            return
         except Exception as exc:
-            if cursor is not None:
-                try:
-                    cursor.close()
-                except Exception:
-                    pass
-            if _sqlstate(exc) in _CONSTRAINT_SQLSTATES:
-                raise StoreConstraintError("postgres constraint conflict") from None
-            raise PostgresStoreError("postgres operation failed") from None
+            _close_cursor(cursor)
+            failure = _postgres_failure(exc)
+        raise failure
+
+    def _enforce_deadline(self) -> None:
+        """Refuse statements after the deadline and keep the timeout ahead of it."""
+
+        deadline = self._deadline
+        if deadline is None:
+            return
+        target_ms = deadline.milliseconds(self._statement_cap_seconds)
+        if target_ms + _REARM_TOLERANCE_MS >= self._statement_timeout_ms:
+            return
+        self._statement_timeout_ms = target_ms
+        self.execute(_REARM_STATEMENT_SQL, (str(target_ms),)).fetchone()
+
+
+def _close_cursor(cursor: DBAPICursor | None) -> None:
+    if cursor is None:
+        return
+    try:
+        cursor.close()
+    except Exception:
+        return
+
+
+def _postgres_failure(error: Exception) -> LocalStoreError | StoreWaitError:
+    """Map a driver error to a controlled store error without its diagnostics."""
+
+    state = _sqlstate(error)
+    if state in _CONSTRAINT_SQLSTATES:
+        return StoreConstraintError("postgres constraint conflict")
+    if state in _DEADLINE_SQLSTATES:
+        return StoreDeadlineExceededError()
+    if state in _BUSY_SQLSTATES:
+        return StoreBusyError()
+    return PostgresStoreError("postgres operation failed")
+
+
+def _clear_driver_diagnostics(connection: Any) -> None:
+    """Drop driver-retained server notices, which may echo statement values."""
+
+    notices = getattr(connection, "notices", None)
+    clear = getattr(notices, "clear", None)
+    if not callable(clear):
+        return
+    try:
+        clear()
+    except Exception:
+        return
+
+
+def _bounded_read(
+    method: Callable[..., StoreResult[T]],
+) -> Callable[..., StoreResult[T]]:
+    """Run an inherited result-returning read in a bounded read-only unit."""
+
+    @functools.wraps(method)
+    def bounded(
+        self: "PostgresJourneyStore",
+        *args: Any,
+        **kwargs: Any,
+    ) -> StoreResult[T]:
+        return self._bounded_result(lambda: method(self, *args, **kwargs))
+
+    return bounded
 
 
 class PostgresJourneyTransaction(SQLiteJourneyTransaction):
@@ -550,7 +662,33 @@ class PostgresJourneyStore(SQLiteJourneyStore):
     The supplied connection must be dedicated to this store.  The adapter sets
     it to autocommit mode, creates or selects the configured schema, and closes
     it when the store closes.
+
+    Every read and write runs as one bounded unit: a bounded checkout of the
+    connection, then a transaction with transaction-local ``statement_timeout``
+    and ``lock_timeout`` derived from the operation deadline. After a failure,
+    timeout, or cancellation the transaction is rolled back and the session is
+    reset with ``RESET ALL`` before the connection is reused; a connection that
+    cannot be reset is closed.
+
+    Args:
+        connection: Dedicated DB-API connection.
+        schema: Controlled PostgreSQL schema name.
+        policy: Optional storage policy.
+        timeouts: Caps for checkout, lock waits, and statement time. ``None``
+            reads ``StoreTimeouts.from_env()``.
     """
+
+    # Inherited reads run in a bounded, read-only, armed unit.
+    _read_record = _bounded_read(SQLiteJourneyStore._read_record)
+    get_canonical = _bounded_read(SQLiteJourneyStore.get_canonical)
+    list_canonical_versions = _bounded_read(SQLiteJourneyStore.list_canonical_versions)
+    list_canonical_records = _bounded_read(SQLiteJourneyStore.list_canonical_records)
+    get_job = _bounded_read(SQLiteJourneyStore.get_job)
+    list_job_versions = _bounded_read(SQLiteJourneyStore.list_job_versions)
+    list_jobs = _bounded_read(SQLiteJourneyStore.list_jobs)
+    list_facts = _bounded_read(SQLiteJourneyStore.list_facts)
+    list_conflicts = _bounded_read(SQLiteJourneyStore.list_conflicts)
+    list_resolutions = _bounded_read(SQLiteJourneyStore.list_resolutions)
 
     def __init__(
         self,
@@ -558,6 +696,7 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         *,
         schema: str = "openmed_journey",
         policy: StoragePolicy | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> None:
         assert_contract_compatibility()
         if _SCHEMA_RE.fullmatch(schema) is None:
@@ -569,9 +708,10 @@ class PostgresJourneyStore(SQLiteJourneyStore):
                 )
         if not hasattr(connection, "autocommit"):
             raise TypeError("connection must expose an autocommit attribute")
+        self.timeouts = resolve_store_timeouts(timeouts)
         self.schema = schema
         self.policy = policy or AllowAllStoragePolicy()
-        self._lock = threading.RLock()
+        self._lock = ConnectionCheckout(self.timeouts)
         self._closed = False
         self._raw_connection = connection
         self._connection = cast(Any, _PostgresConnectionAdapter(connection))
@@ -601,11 +741,16 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         *,
         schema: str = "openmed_journey",
         policy: StoragePolicy | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> StoreResult["PostgresJourneyStore"]:
         """Open a store with typed compatibility and failure outcomes."""
 
         try:
-            return StoreResult.success(cls(connection, schema=schema, policy=policy))
+            return StoreResult.success(
+                cls(connection, schema=schema, policy=policy, timeouts=timeouts)
+            )
+        except StoreTimeoutsError:
+            return StoreResult.outcome(StoreState.FAILURE, STORE_TIMEOUTS_INVALID_CODE)
         except StoreCompatibilityError:
             return StoreResult.outcome(StoreState.UNSUPPORTED, "schema_unsupported")
         except (PostgresStoreError, TypeError, ValueError):
@@ -619,15 +764,21 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         schema: str = "openmed_journey",
         policy: StoragePolicy | None = None,
         connect_options: Mapping[str, Any] | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> StoreResult["PostgresJourneyStore"]:
         """Connect lazily with pg8000 when the caller explicitly supplies a DSN.
 
         The DSN and connection options are never stored, logged, or included in
-        result representations.
+        result representations. ``timeouts`` (or the environment defaults) is
+        validated before any connection is opened.
         """
 
         if not isinstance(dsn, str) or not dsn:
             return StoreResult.outcome(StoreState.FAILURE, "invalid_dsn")
+        try:
+            resolved_timeouts = resolve_store_timeouts(timeouts)
+        except (StoreTimeoutsError, TypeError):
+            return StoreResult.outcome(StoreState.FAILURE, STORE_TIMEOUTS_INVALID_CODE)
         try:
             parameters = _pg8000_connect_parameters(dsn, connect_options)
         except (TypeError, ValueError):
@@ -637,7 +788,12 @@ class PostgresJourneyStore(SQLiteJourneyStore):
             connection = pg8000.connect(**parameters)
         except Exception:
             return StoreResult.outcome(StoreState.FAILURE, "postgres_connect_failed")
-        return cls.open(connection, schema=schema, policy=policy)
+        return cls.open(
+            connection,
+            schema=schema,
+            policy=policy,
+            timeouts=resolved_timeouts,
+        )
 
     @property
     def migration_report(self) -> PostgresMigrationReport:
@@ -649,6 +805,15 @@ class PostgresJourneyStore(SQLiteJourneyStore):
     def schema_version(self) -> int:
         """Return the latest verified PostgreSQL migration version."""
 
+        return self._bounded(self._read_schema_version)
+
+    @property
+    def latest_revision(self) -> int | None:
+        """Return the latest committed revision, if any."""
+
+        return self._bounded(lambda: SQLiteJourneyStore.latest_revision.fget(self))
+
+    def _read_schema_version(self) -> int:
         row = self._connection.execute(
             "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations"
         ).fetchone()
@@ -676,43 +841,61 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         return self
 
     @contextmanager
-    def transaction(self, *, committed_at: str) -> Iterator[PostgresJourneyTransaction]:
-        """Open one serializable, atomic PostgreSQL graph transaction."""
+    def transaction(
+        self,
+        *,
+        committed_at: str,
+        deadline: StoreDeadlineInput = None,
+    ) -> Iterator[PostgresJourneyTransaction]:
+        """Open one serializable, atomic PostgreSQL graph transaction.
+
+        The transaction runs under the earliest of ``deadline``, the ambient
+        ``store_deadline`` scope, and ``timeouts.operation_seconds``. The
+        connection checkout waits at most the lock-wait cap, the database
+        enforces ``statement_timeout`` and ``lock_timeout`` derived from the
+        deadline, and work is never committed after the deadline.
+
+        Args:
+            committed_at: Timezone-aware ISO timestamp for the revision.
+            deadline: Optional caller deadline: a ``StoreDeadline``, a started
+                ``BudgetClock``, or seconds from now.
+
+        Yields:
+            The transaction mutation surface.
+
+        Raises:
+            ValueError: If ``committed_at`` is not a timezone-aware timestamp.
+            StoreBusyError: If the connection or a database lock stayed busy.
+            StoreDeadlineExceededError: If the deadline passed; the
+                transaction was rolled back.
+            CommitStatusUnknown: If the commit acknowledgement was lost.
+                Replaying the same idempotent records reconciles it.
+        """
 
         if not _valid_timestamp(committed_at):
             raise ValueError("committed_at must be a timezone-aware ISO timestamp")
         self._require_open()
-        with self._lock:
-            try:
-                self._connection.execute("BEGIN ISOLATION LEVEL SERIALIZABLE")
-                self._connection.execute("LOCK TABLE store_revisions IN EXCLUSIVE MODE")
-                row = self._connection.execute(
-                    "INSERT INTO store_revisions(revision, committed_at) "
-                    "SELECT COALESCE(MAX(revision), 0) + 1, ? "
-                    "FROM store_revisions "
-                    "RETURNING revision",
-                    (committed_at,),
-                ).fetchone()
-                if row is None:
-                    raise PostgresStoreError("postgres revision was not allocated")
-                transaction = PostgresJourneyTransaction(self, int(row["revision"]))
-                yield transaction
-                if transaction.failed or not transaction.mutated:
-                    self._raw_connection.rollback()
-                else:
-                    try:
-                        self._raw_connection.commit()
-                    except Exception:
-                        raise CommitStatusUnknown(
-                            "postgres commit status is unknown"
-                        ) from None
-            except BaseException:
-                try:
-                    self._raw_connection.rollback()
-                except Exception:
-                    pass
-                raise
+        bound = self.timeouts.operation_deadline(deadline)
+        with self._bounded_unit("BEGIN ISOLATION LEVEL SERIALIZABLE", bound):
+            self._connection.execute("LOCK TABLE store_revisions IN EXCLUSIVE MODE")
+            row = self._connection.execute(
+                "INSERT INTO store_revisions(revision, committed_at) "
+                "SELECT COALESCE(MAX(revision), 0) + 1, ? "
+                "FROM store_revisions "
+                "RETURNING revision",
+                (committed_at,),
+            ).fetchone()
+            if row is None:
+                raise PostgresStoreError("postgres revision was not allocated")
+            transaction = PostgresJourneyTransaction(self, int(row["revision"]))
+            yield transaction
+            if transaction.failed or not transaction.mutated:
+                self._rollback()
+            else:
+                bound.check()
+                self._commit_or_report_unknown()
 
+    @_bounded_read
     def integrity_check(self) -> StoreResult[Mapping[str, int]]:
         """Validate constraints and payload hashes without returning values."""
 
@@ -869,6 +1052,87 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         except Exception:
             pass
         self._closed = True
+
+    @contextmanager
+    def _bounded_unit(self, begin: str, deadline: StoreDeadline) -> Iterator[None]:
+        """Hold the connection for one armed transaction and clean up after it.
+
+        The body must end its transaction. On any failure, timeout, or
+        cancellation the session is reset before the checkout is released.
+        """
+
+        self._lock.acquire(deadline)
+        clean = False
+        try:
+            self._require_open()
+            self._connection.execute(begin)
+            self._connection.arm(deadline, self.timeouts)
+            yield
+            clean = True
+        finally:
+            self._connection.disarm()
+            if not clean and not self._closed:
+                self._reset_session()
+            _clear_driver_diagnostics(self._raw_connection)
+            self._lock.release()
+
+    def _bounded(self, operation: Callable[[], T]) -> T:
+        """Run a read in its own bounded read-only unit, or inline in one."""
+
+        if self._lock.held:
+            return operation()
+        self._require_open()
+        deadline = self.timeouts.operation_deadline()
+        with self._bounded_unit("BEGIN READ ONLY", deadline):
+            result = operation()
+            self._rollback()
+        return result
+
+    def _bounded_result(
+        self,
+        operation: Callable[[], StoreResult[T]],
+    ) -> StoreResult[T]:
+        try:
+            return self._bounded(operation)
+        except StoreWaitError as error:
+            return error.outcome()
+
+    def _rollback(self) -> None:
+        failed = False
+        try:
+            self._raw_connection.rollback()
+        except Exception:
+            failed = True
+        if failed:
+            raise PostgresStoreError("postgres rollback failed")
+
+    def _commit_or_report_unknown(self) -> None:
+        acknowledged = False
+        try:
+            self._raw_connection.commit()
+            acknowledged = True
+        except Exception:
+            acknowledged = False
+        if not acknowledged:
+            raise CommitStatusUnknown("postgres commit status is unknown")
+
+    def _reset_session(self) -> None:
+        """Roll back and reset session state, or close an unusable connection.
+
+        ``RESET ALL`` returns every run-time parameter, including any session
+        policy context, to the connection default before the schema search
+        path is re-applied.
+        """
+
+        try:
+            self._raw_connection.rollback()
+            self._connection.execute("RESET ALL")
+            self._connection.execute(f"SET search_path TO {self.schema}")
+        except Exception:
+            self._close_after_failed_open()
+        except BaseException:
+            self._close_after_failed_open()
+            raise
 
 
 def _postgres_sql(operation: str) -> str:
