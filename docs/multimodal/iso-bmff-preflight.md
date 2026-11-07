@@ -47,9 +47,9 @@ interpret audio or trigger clinical decisions.
 
 Detection checks the complete first `ftyp` box within the existing 132-byte
 prefix bound, including extended-size boxes. HEIC, generic HEIF and their
-sequence brands return their registered image MIME types; M4A returns
-`audio/mp4`. Ambiguous image/audio brands, AVIF and generic `isom` alone return
-unknown. No filename or unbounded brand search is used.
+sequence brands return their registered image MIME types. M4A returns
+`audio/mp4`. The HEIF and M4A readers reject ambiguous brands, AVIF and generic
+MP4 video. Detection uses only bytes from the bounded prefix.
 
 ## Bounds and refusals
 

@@ -141,15 +141,26 @@ def test_detection_complete_file_type_box(brand, mime, extended):
 @pytest.mark.parametrize(
     "prefix",
     [
-        ftyp(b"isom", b"mp42"),
         ftyp(b"heic", b"M4A "),
         ftyp(b"avif", b"mif1"),
+        ftyp(b"isom", b"mif1avif"),
+        ftyp(b"isom", b"heicM4A "),
         ftyp(b"heic", b"mif1", to_end=True),
-        ftyp(b"isom", b"x" * 120 + b"heic"),
+        ftyp(b"heic", b"x" * 120),
     ],
 )
 def test_unknown_or_ambiguous_brands_are_not_guessed(prefix):
     assert detect_media_type(prefix) is None
+
+
+def test_explicit_bmff_brands_keep_generic_video_routing():
+    video = ftyp(b"isom", b"mp42")
+    assert detect_media_type(video) == "video/mp4"
+    assert detect_media_type(video[:-1]) == "video/mp4"
+    assert detect_media_type(ftyp(b"isom", b"M4A ")) == "audio/mp4"
+    assert detect_media_type(ftyp(b"isom", b"heic")) == "image/heic"
+    with pytest.raises(BmffPreflightError, match="^bmff_signature_invalid$"):
+        preflight_iso_bmff(video)
 
 
 @pytest.mark.parametrize(

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 from openmed.interop.fhir_server import (
     FHIRServerClient,
@@ -59,6 +60,7 @@ def _assert_redacted(value: Any) -> None:
     assert "123 Main Street" not in encoded
 
 
+@pytest.mark.slow
 def test_import_and_registry_are_http_client_lazy() -> None:
     script = """
 import sys

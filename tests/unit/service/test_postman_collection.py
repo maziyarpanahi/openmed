@@ -484,6 +484,7 @@ def test_collection_does_not_persist_credentials() -> None:
     assert smart_body_seen
 
 
-@pytest.mark.parametrize("endpoint", REQUIRED_ENDPOINTS)
-def test_each_required_endpoint_has_a_request(endpoint: str) -> None:
-    assert endpoint in _request_paths()
+def test_each_required_endpoint_has_a_request(subtests) -> None:
+    for endpoint in REQUIRED_ENDPOINTS:
+        with subtests.test(endpoint=endpoint):
+            assert endpoint in _request_paths()

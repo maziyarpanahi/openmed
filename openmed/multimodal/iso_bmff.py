@@ -199,7 +199,13 @@ def preflight_iso_bmff(
         raise BmffPreflightError("bmff_signature_invalid")
     # Detection is intentionally prefix-only; do not expand its search bound.
     media_type = detect_media_type(walker.read(0, min(ftyp.end, 132), len(source)))
-    if media_type is None:
+    if media_type not in {
+        "audio/mp4",
+        "image/heic",
+        "image/heic-sequence",
+        "image/heif",
+        "image/heif-sequence",
+    }:
         raise BmffPreflightError("bmff_signature_invalid")
     if any(box.kind == b"moof" for box in top):
         raise BmffPreflightError("bmff_layout_unsupported")

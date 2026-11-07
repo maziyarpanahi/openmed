@@ -66,6 +66,7 @@ RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
+LIVE_SURROGATE_QUALITY_GATE = "surrogate_quality_live"
 GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
 CROSS_DOCUMENT_LINKAGE_GATE = "cross_document_linkage"
@@ -822,6 +823,7 @@ class ReleaseGate:
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
+        checks.append(_live_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
         relation_baseline = baseline
         if relation_baseline is None and _relation_golden_gate_is_applicable(
@@ -1199,6 +1201,196 @@ def _surrogate_quality_release_check(
     details["required"] = required
     return GateCheck(
         SURROGATE_QUALITY_GATE,
+        check.passed,
+        reason=check.reason,
+        details=details,
+    )
+
+
+_LIVE_SURROGATE_EVIDENCE_KEYS = frozenset({"exemptions", "min_pass_rate", "samples"})
+
+
+def evaluate_live_surrogate_quality_gate(
+    report: Any | None = None,
+    *,
+    min_pass_rate: float | None = None,
+    exemptions: Sequence[Any] = (),
+    samples: int | None = None,
+    seed: int | None = None,
+) -> GateCheck:
+    """Return the live per-locale, per-label surrogate-quality gate check.
+
+    The gate fails closed: it passes only when the report covers every
+    registered language pack and national-ID-only language for every live
+    label, and every cell either meets the pass-rate floor or carries an
+    exemption backed by a documented approximation. Cells the live scorer
+    cannot grade are reported as ``unscored`` and block the gate.
+
+    Args:
+        report: A precomputed
+            :class:`~openmed.eval.surrogate_quality_live.LiveSurrogateQualityReport`.
+            When omitted, the live run is executed offline with the other
+            arguments.
+        min_pass_rate: Optional per-cell floor. Re-grades a supplied report.
+        exemptions: Exemptions for a fresh run. Each must name a locale with a
+            documented approximation and a reason.
+        samples: Seeded samples per cell for a fresh run.
+        seed: Seed for a fresh run.
+
+    Returns:
+        The ``surrogate_quality_live`` gate check. Details contain the status
+        matrix, failing and unscored cells, reason counts, rates and digests,
+        never surrogate or original values.
+
+    Raises:
+        TypeError: If ``report`` is not a live surrogate-quality report.
+        ValueError: If a fresh run receives invalid arguments.
+    """
+
+    from openmed.eval.surrogate_quality_live import (
+        DEFAULT_LIVE_SURROGATE_PASS_RATE,
+        DEFAULT_LIVE_SURROGATE_SAMPLES,
+        DEFAULT_LIVE_SURROGATE_SEED,
+        LiveSurrogateQualityReport,
+        evaluate_live_surrogate_quality,
+    )
+
+    if report is None:
+        quality_report = evaluate_live_surrogate_quality(
+            samples=DEFAULT_LIVE_SURROGATE_SAMPLES if samples is None else samples,
+            seed=DEFAULT_LIVE_SURROGATE_SEED if seed is None else seed,
+            min_pass_rate=(
+                DEFAULT_LIVE_SURROGATE_PASS_RATE
+                if min_pass_rate is None
+                else min_pass_rate
+            ),
+            exemptions=exemptions,
+        )
+    elif isinstance(report, LiveSurrogateQualityReport):
+        quality_report = (
+            report
+            if min_pass_rate is None
+            else report.with_min_pass_rate(min_pass_rate)
+        )
+    else:
+        raise TypeError("report must be a LiveSurrogateQualityReport or None")
+
+    details = quality_report.gate_details()
+    if quality_report.passed:
+        reason = "ok"
+    elif quality_report.missing_languages or quality_report.missing_labels:
+        reason = "live surrogate report does not cover every registered language"
+    elif quality_report.failing_cells:
+        reason = "live surrogate quality below per-cell pass-rate floor"
+    else:
+        reason = "live surrogate quality has unscored cells"
+    return GateCheck(
+        LIVE_SURROGATE_QUALITY_GATE,
+        quality_report.passed,
+        reason=reason,
+        details=details,
+    )
+
+
+def _live_surrogate_quality_release_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Run the live surrogate gate when a release opts in or requires it.
+
+    Evidence is ``True`` or a mapping with optional ``exemptions``,
+    ``min_pass_rate`` and ``samples``. The floor and sample count can only be
+    raised above the defaults, and the seed is fixed, so release evidence
+    cannot loosen the gate.
+    """
+
+    from openmed.eval.surrogate_quality_live import (
+        DEFAULT_LIVE_SURROGATE_PASS_RATE,
+        DEFAULT_LIVE_SURROGATE_SAMPLES,
+    )
+
+    evidence = _first_value(
+        metrics.get("surrogate_quality_live"),
+        metadata.get("surrogate_quality_live"),
+    )
+    required = bool(
+        metrics.get("surrogate_quality_live_required")
+        or metadata.get("surrogate_quality_live_required")
+    )
+    if evidence is None or evidence is False:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            not required,
+            reason=(
+                "live surrogate-quality evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    if evidence is True:
+        options: dict[str, Any] = {}
+    elif isinstance(evidence, Mapping):
+        options = dict(evidence)
+    else:
+        options = {"<invalid>": None}
+    unknown = sorted(set(options) - _LIVE_SURROGATE_EVIDENCE_KEYS)
+    if unknown:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            False,
+            reason="live surrogate-quality evidence is malformed",
+            details={
+                "error": (
+                    "evidence must be true or a mapping with only "
+                    f"{sorted(_LIVE_SURROGATE_EVIDENCE_KEYS)}"
+                ),
+                "unknown_keys": unknown,
+                "required": required,
+            },
+        )
+
+    requested_rate = options.get("min_pass_rate")
+    requested_samples = options.get("samples")
+    exemptions = options.get("exemptions") or ()
+    try:
+        min_pass_rate = DEFAULT_LIVE_SURROGATE_PASS_RATE
+        if requested_rate is not None:
+            parsed_rate = _strict_probability(requested_rate)
+            if parsed_rate is None:
+                raise ValueError("min_pass_rate must be a number between 0 and 1")
+            min_pass_rate = max(min_pass_rate, parsed_rate)
+        samples = DEFAULT_LIVE_SURROGATE_SAMPLES
+        if requested_samples is not None:
+            if isinstance(requested_samples, bool) or not isinstance(
+                requested_samples, int
+            ):
+                raise ValueError("samples must be an integer")
+            samples = max(samples, requested_samples)
+        if isinstance(exemptions, (str, bytes, Mapping)) or not isinstance(
+            exemptions, Sequence
+        ):
+            raise ValueError("exemptions must be a list of exemption mappings")
+        check = evaluate_live_surrogate_quality_gate(
+            min_pass_rate=min_pass_rate,
+            exemptions=exemptions,
+            samples=samples,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            False,
+            reason="live surrogate-quality evidence is invalid",
+            details={"error": str(exc), "required": required},
+        )
+
+    details = dict(check.details)
+    details["required"] = required
+    details["requested_min_pass_rate"] = requested_rate
+    details["requested_samples"] = requested_samples
+    return GateCheck(
+        LIVE_SURROGATE_QUALITY_GATE,
         check.passed,
         reason=check.reason,
         details=details,
@@ -6112,6 +6304,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Score the shipped grounding-accuracy gold and gate on top-k floors.",
     )
+    candidate_group.add_argument(
+        "--live-surrogate-quality",
+        action="store_true",
+        help=(
+            "Score live surrogates for every registered language pack and "
+            "gate on the per-locale, per-label matrix."
+        ),
+    )
     parser.add_argument(
         "--baseline",
         help="Optional baseline JSON payload. Defaults to the baseline store.",
@@ -6175,6 +6375,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.grounding:
         return _run_grounding_accuracy_gate_cli(args)
+
+    if args.live_surrogate_quality:
+        return _run_live_surrogate_quality_gate_cli(args)
 
     candidate_path = Path(args.candidate)
     if not candidate_path.is_file():
@@ -6254,6 +6457,47 @@ def _run_i18n_throughput_gate_cli(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     print(json.dumps(payload, sort_keys=True))
+    return 0 if check.passed else 1
+
+
+def _run_live_surrogate_quality_gate_cli(args: argparse.Namespace) -> int:
+    from openmed.eval.surrogate_quality_live import evaluate_live_surrogate_quality
+
+    try:
+        quality_report = evaluate_live_surrogate_quality()
+        check = evaluate_live_surrogate_quality_gate(quality_report)
+    except Exception as exc:
+        print(
+            f"live surrogate-quality gate evaluation failed: {exc.__class__.__name__}",
+            file=sys.stderr,
+        )
+        return 2
+
+    decision = RELEASABLE if check.passed else QUARANTINED
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "openmed.eval.live_surrogate_quality_gate",
+        "decision": decision,
+        "gate_result": check.to_dict(),
+        "report": quality_report.to_dict(),
+    }
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "decision": decision,
+                "failing_cells": list(quality_report.failing_cells),
+                "unscored_cells": list(quality_report.unscored_cells),
+                "missing_languages": list(quality_report.missing_languages),
+            },
+            sort_keys=True,
+        )
+    )
     return 0 if check.passed else 1
 
 
@@ -6468,6 +6712,7 @@ __all__ = [
     "RELATION_GOLDEN_TRAP_KINDS",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
+    "LIVE_SURROGATE_QUALITY_GATE",
     "EXPORT_VARIANT_GATE",
     "GROUNDING_ACCURACY_GATE",
     "GROUNDING_TOP1_FLOOR",
@@ -6496,6 +6741,7 @@ __all__ = [
     "evaluate_grounding_accuracy_gate",
     "evaluate_gold_corpus_agreement_gate",
     "evaluate_surrogate_quality_gate",
+    "evaluate_live_surrogate_quality_gate",
     "format_preview",
     "main",
     "preview",

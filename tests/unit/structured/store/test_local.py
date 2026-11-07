@@ -475,6 +475,7 @@ def test_job_metadata_blocks_sensitive_fields_without_echoing_values() -> None:
     assert canary not in str(exc_info.value)
 
 
+@pytest.mark.slow
 @settings(max_examples=25, deadline=None)
 @given(
     st.dictionaries(

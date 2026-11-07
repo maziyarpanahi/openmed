@@ -58,9 +58,8 @@ def test_dispatch_passes_bearer_only_to_bound_sender_and_returns_scope_evidence(
     assert _AUDIENCE not in repr(evidence)
 
 
-@pytest.mark.parametrize(
-    "audience,scopes,reason",
-    [
+def test_rejections_do_not_send_or_echo_secrets(subtests) -> None:
+    for audience, scopes, reason in [
         (
             "https://other.example.test/r4",
             ("patient/Observation.r",),
@@ -70,18 +69,17 @@ def test_dispatch_passes_bearer_only_to_bound_sender_and_returns_scope_evidence(
         (_AUDIENCE, ("user/Observation.r",), "insufficient_scope"),
         (_AUDIENCE, ("patient/Observation.u",), "insufficient_scope"),
         (_AUDIENCE, ("launch/encounter",), "insufficient_scope"),
-    ],
-)
-def test_rejections_do_not_send_or_echo_secrets(audience, scopes, reason) -> None:
-    calls: list[tuple[str, str]] = []
-    custody = _custody(lambda target, header: calls.append((target, header)))
-    handle = _store(custody)
-    with pytest.raises(SmartCustodyError) as error:
-        custody.dispatch(handle, audience=audience, required_scopes=scopes)
-    assert error.value.reason_code == reason
-    assert _ACCESS not in repr(error.value)
-    assert _REFRESH not in str(error.value)
-    assert calls == []
+    ]:
+        with subtests.test(audience=audience, scopes=scopes, reason=reason):
+            calls: list[tuple[str, str]] = []
+            custody = _custody(lambda target, header: calls.append((target, header)))
+            handle = _store(custody)
+            with pytest.raises(SmartCustodyError) as error:
+                custody.dispatch(handle, audience=audience, required_scopes=scopes)
+            assert error.value.reason_code == reason
+            assert _ACCESS not in repr(error.value)
+            assert _REFRESH not in str(error.value)
+            assert calls == []
 
 
 def test_expiry_unknown_handle_and_revocation_fail_closed() -> None:
@@ -104,9 +102,8 @@ def test_expiry_unknown_handle_and_revocation_fail_closed() -> None:
     assert calls == []
 
 
-@pytest.mark.parametrize(
-    "overrides,reason",
-    [
+def test_invalid_registration_has_value_free_errors(subtests) -> None:
+    for overrides, reason in [
         ({"access_token": "bad\r\nsecret"}, "invalid_credential"),
         ({"refresh_token": "bad secret"}, "invalid_credential"),
         ({"audience": "https://user:secret@fhir.example.test/r4"}, "invalid_audience"),
@@ -114,15 +111,14 @@ def test_expiry_unknown_handle_and_revocation_fail_closed() -> None:
         ({"expires_at": _NOW}, "expired"),
         ({"expires_at": datetime(2026, 1, 2)}, "invalid_expiry"),
         ({"scopes": ("Bearer synthetic-secret",)}, "invalid_scopes"),
-    ],
-)
-def test_invalid_registration_has_value_free_errors(overrides, reason) -> None:
-    custody = _custody(lambda _target, _header: None)
-    with pytest.raises(SmartCustodyError) as error:
-        _store(custody, **overrides)
-    assert error.value.reason_code == reason
-    for secret in (_ACCESS, _REFRESH, "synthetic-secret", "user:secret"):
-        assert secret not in repr(error.value)
+    ]:
+        with subtests.test(overrides=overrides, reason=reason):
+            custody = _custody(lambda _target, _header: None)
+            with pytest.raises(SmartCustodyError) as error:
+                _store(custody, **overrides)
+            assert error.value.reason_code == reason
+            for secret in (_ACCESS, _REFRESH, "synthetic-secret", "user:secret"):
+                assert secret not in repr(error.value)
 
 
 def test_sender_exception_is_replaced_by_value_free_error() -> None:

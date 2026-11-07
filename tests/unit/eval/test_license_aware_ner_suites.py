@@ -125,38 +125,37 @@ def test_naamapadam_official_token_tags_load_hi_and_te() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("source_label", "expected"),
-    [("PER", PERSON), ("B-LOC", LOCATION), ("I-ORG", ORGANIZATION)],
-)
-def test_naamapadam_per_loc_org_mapping(source_label: str, expected: str) -> None:
-    mapping = map_naamapadam_label(source_label, language="hi")
+def test_naamapadam_per_loc_org_mapping(subtests) -> None:
+    for source_label, expected in [
+        ("PER", PERSON),
+        ("B-LOC", LOCATION),
+        ("I-ORG", ORGANIZATION),
+    ]:
+        with subtests.test(source_label=source_label, expected=expected):
+            mapping = map_naamapadam_label(source_label, language="hi")
 
-    assert mapping.canonical_label == expected
-    assert mapping.mapped is True
+            assert mapping.canonical_label == expected
+            assert mapping.mapped is True
 
 
-@pytest.mark.parametrize(
-    ("suite", "path_env"),
-    [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)],
-)
-def test_unconfigured_suites_auto_skip_with_clear_message(
-    suite: str,
-    path_env: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(path_env, raising=False)
+def test_unconfigured_suites_auto_skip_with_clear_message(subtests) -> None:
+    for suite, path_env in [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)]:
+        with subtests.test(suite=suite, path_env=path_env):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(path_env, raising=False)
 
-    with pytest.warns(UserWarning, match=rf"Skipping {suite}: {path_env} is not set"):
-        assert load_suite_fixtures(suite) == []
+                with pytest.warns(
+                    UserWarning, match=rf"Skipping {suite}: {path_env} is not set"
+                ):
+                    assert load_suite_fixtures(suite) == []
 
-    metadata = suite_metadata(suite)
-    assert metadata["availability"] == {
-        "configured": False,
-        "path_env": path_env,
-        "reason": f"{path_env} is not set",
-        "status": "skipped",
-    }
+                metadata = suite_metadata(suite)
+                assert metadata["availability"] == {
+                    "configured": False,
+                    "path_env": path_env,
+                    "reason": f"{path_env} is not set",
+                    "status": "skipped",
+                }
 
 
 def test_suites_run_from_environment_paths(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,20 +175,21 @@ def test_suites_run_from_environment_paths(monkeypatch: pytest.MonkeyPatch) -> N
     assert naamapadam[0].language == "hi"
 
 
-@pytest.mark.parametrize(
-    ("suite", "path_env"),
-    [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)],
-)
 def test_configured_empty_suites_fail_instead_of_silently_passing(
-    suite: str,
-    path_env: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    subtests, tmp_path
 ) -> None:
-    monkeypatch.setenv(path_env, str(tmp_path))
+    case_root = tmp_path
+    for suite, path_env in [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)]:
+        with subtests.test(suite=suite, path_env=path_env):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv(path_env, str(tmp_path))
 
-    with pytest.raises(ValueError, match="configured.*contains no benchmark records"):
-        load_suite_fixtures(suite)
+                with pytest.raises(
+                    ValueError, match="configured.*contains no benchmark records"
+                ):
+                    load_suite_fixtures(suite)
 
 
 def test_cross_script_harness_reports_per_suite_micro_f1() -> None:

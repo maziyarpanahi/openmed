@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "release" / "check_import_budget.py"
 
@@ -72,6 +74,7 @@ def test_import_budget_accepts_fast_isolated_core_import():
     assert import_budget.import_budget_failures(measurement, budget) == []
 
 
+@pytest.mark.slow
 def test_core_import_keeps_top_level_exports_lazy():
     code = "\n".join(
         [
@@ -114,6 +117,7 @@ def test_core_import_keeps_top_level_exports_lazy():
     }
 
 
+@pytest.mark.slow
 def test_multilingual_export_resolves_without_eager_optional_modules():
     code = "\n".join(
         [
@@ -147,6 +151,7 @@ def test_multilingual_export_resolves_without_eager_optional_modules():
     }
 
 
+@pytest.mark.slow
 def test_i18n_module_import_does_not_require_top_level_anonymizer_warmup():
     code = "\n".join(
         [

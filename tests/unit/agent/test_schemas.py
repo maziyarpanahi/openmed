@@ -159,13 +159,12 @@ def test_catalog_has_unique_valid_ids_defs_and_only_local_references() -> None:
         )
 
 
-@pytest.mark.parametrize("outcome_class", list(OutcomeClass))
-def test_every_public_outcome_and_allowed_reason_validates(
-    outcome_class: OutcomeClass,
-) -> None:
-    for reason in allowed_reason_codes(outcome_class):
-        payload = WorkflowOutcome(outcome_class, reason).to_dict()
-        _validator("outcome").validate(payload)
+def test_every_public_outcome_and_allowed_reason_validates(subtests) -> None:
+    for outcome_class in list(OutcomeClass):
+        with subtests.test(outcome_class=outcome_class):
+            for reason in allowed_reason_codes(outcome_class):
+                payload = WorkflowOutcome(outcome_class, reason).to_dict()
+                _validator("outcome").validate(payload)
 
 
 def test_public_correlation_timing_and_summary_payloads_validate() -> None:
@@ -178,9 +177,8 @@ def test_public_correlation_timing_and_summary_payloads_validate() -> None:
     _validator("run_summary").validate(RunSummary.from_events([]).to_dict())
 
 
-@pytest.mark.parametrize(
-    ("name", "mutate"),
-    [
+def test_malformed_or_content_bearing_records_fail(subtests) -> None:
+    for name, mutate in [
         ("outcome", lambda p: p.update({"message": "synthetic patient text"})),
         ("outcome", lambda p: p.update({"schema_version": "v0"})),
         ("outcome", lambda p: p.update({"outcome_class": "unknown"})),
@@ -208,15 +206,12 @@ def test_public_correlation_timing_and_summary_payloads_validate() -> None:
         ("run_summary", lambda p: p["artifact_digests"].append(DIGEST + "\n")),
         ("run_summary", lambda p: p.update({"raw_events": []})),
         ("run_summary", lambda p: p.pop("workflow_ids")),
-    ],
-)
-def test_malformed_or_content_bearing_records_fail(
-    name: str, mutate: Callable[[dict[str, Any]], object]
-) -> None:
-    payload = copy.deepcopy(EXAMPLES[name]())
-    mutate(payload)
-    with pytest.raises(ValidationError):
-        _validator(name).validate(payload)
+    ]:
+        with subtests.test(name=name, mutate=mutate):
+            payload = copy.deepcopy(EXAMPLES[name]())
+            mutate(payload)
+            with pytest.raises(ValidationError):
+                _validator(name).validate(payload)
 
 
 def test_bounds_and_nested_closure_track_run_summary_source() -> None:
@@ -278,21 +273,20 @@ def test_outcome_and_correlation_versions_enums_and_fields_track_source() -> Non
     )
 
 
-@pytest.mark.parametrize("outcome_class", list(OutcomeClass))
-def test_outcome_definition_is_closed_when_resolved_independently(
-    outcome_class: OutcomeClass,
-) -> None:
-    schema = build_agent_schema("outcome")
-    fragment = schema["$defs"][f"outcome_{outcome_class.value}"]
-    validator = Draft202012Validator(fragment)
-    payload = WorkflowOutcome(
-        outcome_class, min(allowed_reason_codes(outcome_class))
-    ).to_dict()
-    validator.validate(payload)
-    with pytest.raises(ValidationError):
-        validator.validate({**payload, "note": "synthetic private content"})
-    with pytest.raises(ValidationError):
-        validator.validate({**payload, "schema_version": "v0"})
+def test_outcome_definition_is_closed_when_resolved_independently(subtests) -> None:
+    for outcome_class in list(OutcomeClass):
+        with subtests.test(outcome_class=outcome_class):
+            schema = build_agent_schema("outcome")
+            fragment = schema["$defs"][f"outcome_{outcome_class.value}"]
+            validator = Draft202012Validator(fragment)
+            payload = WorkflowOutcome(
+                outcome_class, min(allowed_reason_codes(outcome_class))
+            ).to_dict()
+            validator.validate(payload)
+            with pytest.raises(ValidationError):
+                validator.validate({**payload, "note": "synthetic private content"})
+            with pytest.raises(ValidationError):
+                validator.validate({**payload, "schema_version": "v0"})
 
 
 def test_timing_schema_matches_serialized_fields_without_inventing_version() -> None:
@@ -327,12 +321,13 @@ def test_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
     assert build_agent_schema("timing")["$defs"]["timing_action"]["properties"]
 
 
-@pytest.mark.parametrize("bad_name", ["", "other", "outcome\nsecret", None, []])
-def test_unknown_schema_names_fail_without_echo(bad_name: object) -> None:
-    with pytest.raises(ValueError, match="^schema: unknown_name$") as caught:
-        build_agent_schema(bad_name)  # type: ignore[arg-type]
-    if bad_name:
-        assert str(bad_name) not in str(caught.value)
+def test_unknown_schema_names_fail_without_echo(subtests) -> None:
+    for bad_name in ["", "other", "outcome\nsecret", None, []]:
+        with subtests.test(bad_name=bad_name):
+            with pytest.raises(ValueError, match="^schema: unknown_name$") as caught:
+                build_agent_schema(bad_name)  # type: ignore[arg-type]
+            if bad_name:
+                assert str(bad_name) not in str(caught.value)
 
 
 def test_catalog_is_available_through_public_agent_module() -> None:

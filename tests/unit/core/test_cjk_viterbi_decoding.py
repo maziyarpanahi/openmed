@@ -135,29 +135,25 @@ def test_cjk_same_label_spans_do_not_merge_across_full_width_space() -> None:
     assert spans == [(name_label, 0, 1), (name_label, 2, 3)]
 
 
-@pytest.mark.parametrize(
-    "description",
-    [
+def test_ideographic_description_sequences_are_atomic_boundaries(subtests) -> None:
+    for description in [
         "⿱⿰木木日",
         "⿲木水火",
         "⿼木丶",
         "⿾木",
         "㇯木一",
-    ],
-)
-def test_ideographic_description_sequences_are_atomic_boundaries(
-    description: str,
-) -> None:
-    text = f"{description}患者"
-    description_end = len(description)
+    ]:
+        with subtests.test(description=description):
+            text = f"{description}患者"
+            description_end = len(description)
 
-    assert list(iter_grapheme_cluster_spans(text))[0] == (0, description_end)
-    assert snap_span_to_graphemes(1, 2, text) == (
-        0,
-        description_end,
-    )
-    for index in range(1, description_end):
-        assert not is_grapheme_boundary(index, text)
+            assert list(iter_grapheme_cluster_spans(text))[0] == (0, description_end)
+            assert snap_span_to_graphemes(1, 2, text) == (
+                0,
+                description_end,
+            )
+            for index in range(1, description_end):
+                assert not is_grapheme_boundary(index, text)
 
 
 def test_non_ids_text_skips_ideographic_component_parsing(
@@ -208,6 +204,7 @@ def _synthetic_han_decode_case(draw):
     return text, words, word_tokens, raw_start, raw_end
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @settings(max_examples=2000, deadline=None)
 @given(_synthetic_han_decode_case())
