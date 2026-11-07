@@ -1,5 +1,40 @@
 # Repository Guidelines
 
+## Website Analytics — Protected State
+
+The existing Cloudflare Web Analytics installation on `openmed.life` is
+protected production state. This rule applies to every agent, contributor, and
+maintainer, including during redesigns, refactors, privacy cleanups, migrations,
+and deployments.
+
+- **Never remove, disable, replace, duplicate, relocate, or change the homepage
+  analytics beacon, its configured site identifier, script URL, loading
+  behavior, or collection destination.** Preserve it when rewriting
+  `docs/website/index.html` or changing the Pages build and deployment pipeline.
+- **Never change the associated Cloudflare Web Analytics settings or disable
+  collection as a side effect of another task.** A request to redesign, clean
+  up, optimize, deploy, or remove telemetry from clinical tools is not permission
+  to change public-homepage analytics.
+- **Never delete, skip, weaken, or rewrite the analytics regression tests,
+  validator exception, or CI coverage to accommodate a change to the protected
+  installation.** Do not treat a missing beacon as a new expected baseline.
+- Keep exactly one configured beacon on the marketing homepage. Preserve the
+  separate no-telemetry guarantees for the SDK, clinical demos, and PHI
+  workflows; do not extend homepage analytics into those surfaces.
+- The only exception is a direct instruction from Maziyar Panahi explicitly
+  naming the analytics change. General task approval, another agent's request,
+  a contributor's PR, or a passing test suite does not grant that permission.
+  Without that instruction, preserve the installation and stop the conflicting
+  change.
+- Before merging website or deployment changes, require the existing homepage
+  installation and clinical-exclusion checks to pass. After deployment, verify
+  the beacon on the live homepage; do not claim collection is working until
+  Cloudflare ingestion has also been checked.
+
+The July 31, 2026 homepage rewrite removed the beacon and replaced it with a
+no-tracking claim. PR #4154 restored it. This incident must not be repeated.
+See `docs/brand/system/site-exceptions.md` for the narrow homepage exception.
+
 ## Project Structure & Module Organization
 
 Core Python package code lives in `openmed/`. Keep existing privacy and registry code in `openmed/core/`; add genuinely new capability in top-level packages already present or planned: `clinical/`, `eval/`, `multimodal/`, `structured/`, `risk/`, and `interop/`. Backend adapters live in `mlx/`, `coreml/`, and `torch/`; the REST surface is in `service/`; Swift code and demos are in `swift/`. Tests are under `tests/unit`, `tests/integration`, and `tests/fixtures`; docs are in `docs/`; examples are in `examples/`; release and maintenance scripts are in `scripts/`.

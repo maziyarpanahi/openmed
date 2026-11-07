@@ -22,3 +22,20 @@ OpenMed is currently maintained by:
   request handling) get extra scrutiny for direct-identifier recall, critical
   leakage, and span integrity, per the no-raw-PHI rule.
 - Releases are tag-driven; see the [release process](docs/contributing.md#release-outline).
+
+## Protected website analytics
+
+Cloudflare Web Analytics on `openmed.life` must be preserved by every
+contributor, maintainer, and automation. The [website analytics rule in
+AGENTS.md](AGENTS.md#website-analytics--protected-state) is a merge requirement.
+Do not approve removal, disabling, replacement, relocation, duplication, or
+configuration changes to the homepage beacon without a direct instruction from
+Maziyar Panahi explicitly naming that analytics change. Redesigns and clinical
+privacy work do not authorize it.
+
+The tests, validator exception, and CI coverage protecting the installation
+must not be weakened to make a conflicting change pass. Require the homepage
+beacon and clinical-exclusion checks before merging website or deployment work;
+verify the deployed installation afterward and distinguish beacon presence from
+confirmed Cloudflare ingestion. The SDK and clinical/PHI surfaces remain free
+of this marketing analytics beacon.
