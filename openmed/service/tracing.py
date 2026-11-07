@@ -152,11 +152,15 @@ class OpenTelemetryMiddleware:
             }
         )
 
+        # Exception messages and stack traces can carry request content, so
+        # spans record only the exception type and an error status.
         with self.tracing.tracer.start_as_current_span(
             "openmed.service.request",
             context=parent_context,
             kind=SpanKind.SERVER,
             attributes=attributes,
+            record_exception=False,
+            set_status_on_exception=False,
         ) as span:
             tracing_token = _CURRENT_TRACING.set(self.tracing)
 
@@ -169,7 +173,6 @@ class OpenTelemetryMiddleware:
             try:
                 await self.app(scope, receive, send_with_status)
             except Exception as exc:
-                span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR))
                 span.set_attributes(
                     safe_trace_attributes({"openmed.error.type": type(exc).__name__})
@@ -306,11 +309,12 @@ def trace_service_stage(
         f"openmed.service.{stage}",
         kind=SpanKind.INTERNAL,
         attributes=safe_trace_attributes(span_attributes),
+        record_exception=False,
+        set_status_on_exception=False,
     ) as span:
         try:
             yield span
         except Exception as exc:
-            span.record_exception(exc)
             span.set_status(Status(StatusCode.ERROR))
             span.set_attributes(
                 safe_trace_attributes({"openmed.error.type": type(exc).__name__})

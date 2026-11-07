@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "description": "Frozen synthetic inputs, model outputs and expected value-free normalized results for the REST, GraphQL and gRPC conformance suite. Every name, identifier and date is invented.",
+  "sentinels": ["SYNTH-SENTINEL-7Q3K", "Zorya Quillfeather"],
+  "unserved_model": "synthetic/unserved-conformance-model",
+  "operations": {
+    "analyze": {
+      "request": {
+        "text": "Synthetic note SYNTH-SENTINEL-7Q3K: reported chest pain and dyspnea overnight.",
+        "model_name": "disease_detection_superclinical"
+      },
+      "model_output": {
+        "entities": [
+          {"text": "chest pain", "label": "SYMPTOM", "start": 45, "end": 55, "confidence": 0.91},
+          {"text": "dyspnea", "label": "SYMPTOM", "start": 60, "end": 67, "confidence": 0.88}
+        ]
+      },
+      "expected": {
+        "spans": [
+          {"text": "sha256:1bce3b700f26488e08cd6974ea39eeb31e87235ac8cc68b33315f3b91fd25b64", "label": "SYMPTOM", "start": 45, "end": 55, "confidence": 0.91},
+          {"text": "sha256:f8d63218336ea525ac853b43578ea246fb7bb951d3a3a41242b70ae510782935", "label": "SYMPTOM", "start": 60, "end": 67, "confidence": 0.88}
+        ]
+      }
+    },
+    "extract": {
+      "request": {
+        "text": "Patient Zorya Quillfeather, MRN SYNTH-SENTINEL-7Q3K, seen on 2026-03-14."
+      },
+      "model_output": {
+        "entities": [
+          {"text": "Zorya Quillfeather", "label": "NAME", "start": 8, "end": 26, "confidence": 0.98},
+          {"text": "SYNTH-SENTINEL-7Q3K", "label": "ID_NUM", "start": 32, "end": 51, "confidence": 0.95},
+          {"text": "2026-03-14", "label": "DATE", "start": 61, "end": 71, "confidence": 0.93}
+        ]
+      },
+      "expected": {
+        "spans": [
+          {"text": "sha256:646d2326980a08e109c245cebc2aa83c42153bdb5486510324f984b67ee8c12e", "label": "NAME", "start": 8, "end": 26, "confidence": 0.98},
+          {"text": "sha256:5ef9fc872f1b5493ea25865e670d31ea1ff2c1654af3b3c11a08b4714f50007c", "label": "ID_NUM", "start": 32, "end": 51, "confidence": 0.95},
+          {"text": "sha256:e88bdf28e35788a6b33cd9ed67616e2ef4ecc56b878a0102b001eb7e8a24f6e9", "label": "DATE", "start": 61, "end": 71, "confidence": 0.93}
+        ]
+      }
+    },
+    "deidentify": {
+      "request": {
+        "text": "Patient Zorya Quillfeather, MRN SYNTH-SENTINEL-7Q3K, seen on 2026-03-14.",
+        "method": "mask",
+        "lang": "en"
+      },
+      "model_output": {
+        "deidentified_text": "Patient [NAME], MRN [ID_NUM], seen on [DATE].",
+        "method": "mask",
+        "entities": [
+          {"text": "Zorya Quillfeather", "label": "NAME", "entity_type": "NAME", "canonical_label": "PERSON", "action": "mask", "redacted_text": "[NAME]", "start": 8, "end": 26, "confidence": 0.98},
+          {"text": "SYNTH-SENTINEL-7Q3K", "label": "ID_NUM", "entity_type": "ID_NUM", "canonical_label": "ID_NUM", "action": "mask", "redacted_text": "[ID_NUM]", "start": 32, "end": 51, "confidence": 0.95},
+          {"text": "2026-03-14", "label": "DATE", "entity_type": "DATE", "canonical_label": "DATE", "action": "mask", "redacted_text": "[DATE]", "start": 61, "end": 71, "confidence": 0.93}
+        ]
+      },
+      "expected": {
+        "redacted_text": "sha256:3cacce399d103bec5ffd480cf79370482d8532c5ab4934b562fa011f3479f252",
+        "method": "mask",
+        "entity_count": 3,
+        "spans": [
+          {"text": "sha256:646d2326980a08e109c245cebc2aa83c42153bdb5486510324f984b67ee8c12e", "label": "NAME", "entity_type": "NAME", "canonical_label": "PERSON", "action": "mask", "start": 8, "end": 26, "confidence": 0.98, "replacement": "sha256:b075ed5998d15b7395ce1a6e7425c457374b326ad885c5518dfe2dc19975f698"},
+          {"text": "sha256:5ef9fc872f1b5493ea25865e670d31ea1ff2c1654af3b3c11a08b4714f50007c", "label": "ID_NUM", "entity_type": "ID_NUM", "canonical_label": "ID_NUM", "action": "mask", "start": 32, "end": 51, "confidence": 0.95, "replacement": "sha256:cb2324d0c59da4a9b025babb6571500b48c76451a742aa142d8e2620710657d6"},
+          {"text": "sha256:e88bdf28e35788a6b33cd9ed67616e2ef4ecc56b878a0102b001eb7e8a24f6e9", "label": "DATE", "entity_type": "DATE", "canonical_label": "DATE", "action": "mask", "start": 61, "end": 71, "confidence": 0.93, "replacement": "sha256:2679a37198f0ea53334143bf79bf7fe44e06bf342ef4e3c33458107bbcee1312"}
+        ]
+      }
+    },
+    "stream_deidentify": {
+      "request": {
+        "text": "Patient Zorya Quillfeather, MRN SYNTH-SENTINEL-7Q3K, seen on 2026-03-14.",
+        "method": "mask",
+        "chunk_size": 16
+      },
+      "model_output": {
+        "doc_id": "hmac-sha256:9052fdab7f0c3d116018e0da2d7c408b030f54bfe7180d234a37cbedfaddb858",
+        "fragments": ["Patient [NAME], ", "MRN [ID_NUM], ", "seen on [DATE]."],
+        "audit_record": {"fragment_count": 3, "span_count": 3},
+        "spans": [
+          {"start": 8, "end": 26, "entity_type": "NAME", "canonical_label": "PERSON", "policy_label": "DIRECT_IDENTIFIER", "action": "mask", "replacement": "[NAME]", "score": 0.98, "text_hash": "hmac-sha256:159bcb7a48199787591d5b873ea5d25d32c5563f9450924b76897b3b36e3cb2b"},
+          {"start": 32, "end": 51, "entity_type": "ID_NUM", "canonical_label": "ID_NUM", "policy_label": "DIRECT_IDENTIFIER", "action": "mask", "replacement": "[ID_NUM]", "score": 0.95, "text_hash": "hmac-sha256:54bfb35f1062eb94ae6fc7f6054714cc18f1bfb43a579053da2d813b1acee027"},
+          {"start": 61, "end": 71, "entity_type": "DATE", "canonical_label": "DATE", "policy_label": "QUASI_IDENTIFIER", "action": "mask", "replacement": "[DATE]", "score": 0.93, "text_hash": "hmac-sha256:142786cd6ca2ab6a9819f366db64696cd225eee7b872d8c34e716e26c13c95dd"}
+        ]
+      },
+      "expected": {
+        "redacted_text": "sha256:3cacce399d103bec5ffd480cf79370482d8532c5ab4934b562fa011f3479f252",
+        "fragment_count": 3,
+        "chunk_count": 5,
+        "audit_record": {"fragment_count": 3, "span_count": 3},
+        "spans": [
+          {"entity_type": "NAME", "canonical_label": "PERSON", "policy_label": "DIRECT_IDENTIFIER", "action": "mask", "start": 8, "end": 26, "score": 0.98, "text_hash": "hmac-sha256:159bcb7a48199787591d5b873ea5d25d32c5563f9450924b76897b3b36e3cb2b", "replacement": "sha256:b075ed5998d15b7395ce1a6e7425c457374b326ad885c5518dfe2dc19975f698"},
+          {"entity_type": "ID_NUM", "canonical_label": "ID_NUM", "policy_label": "DIRECT_IDENTIFIER", "action": "mask", "start": 32, "end": 51, "score": 0.95, "text_hash": "hmac-sha256:54bfb35f1062eb94ae6fc7f6054714cc18f1bfb43a579053da2d813b1acee027", "replacement": "sha256:cb2324d0c59da4a9b025babb6571500b48c76451a742aa142d8e2620710657d6"},
+          {"entity_type": "DATE", "canonical_label": "DATE", "policy_label": "QUASI_IDENTIFIER", "action": "mask", "start": 61, "end": 71, "score": 0.93, "text_hash": "hmac-sha256:142786cd6ca2ab6a9819f366db64696cd225eee7b872d8c34e716e26c13c95dd", "replacement": "sha256:2679a37198f0ea53334143bf79bf7fe44e06bf342ef4e3c33458107bbcee1312"}
+        ]
+      }
+    }
+  }
+}
