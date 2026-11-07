@@ -186,6 +186,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
 
+- Added deterministic synthetic malformed PDF and DICOM header fixtures with
+  recorded pre-decode boundaries, expected reason codes and payload digests,
+  plus offline regression tests (#3094).
+
 - Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
   declared file-meta transfer syntaxes into closed native, optional-decoder,
   review, and unsupported outcomes with stable reason codes, and reports no

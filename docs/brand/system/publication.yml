@@ -468,6 +468,7 @@ classification:
     - i18n/locale-pack-conformance.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-geometry-preflight.md
+    - multimodal/synthetic-malformed-fixtures.md
     - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
