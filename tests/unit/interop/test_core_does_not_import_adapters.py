@@ -28,6 +28,7 @@ def effect_guard():
     return module
 
 
+@pytest.mark.slow
 def test_effect_inventory_matches_all_sources_and_has_no_source_values(effect_guard):
     sources = effect_guard.read_sources()
     paths = effect_guard.scan_effect_paths(sources)
@@ -157,6 +158,7 @@ def test_imported_child_checks_its_package_initializer(effect_guard):
         )
 
 
+@pytest.mark.slow
 def test_real_builtin_mcp_rest_cli_and_journey_surfaces_have_no_legacy_dependency(
     effect_guard, monkeypatch
 ):
@@ -266,6 +268,7 @@ def test_legacy_narrative_exports_preserve_read_only_parser_identity():
     assert "PRIVATE_PAYLOAD" not in repr(result)
 
 
+@pytest.mark.slow
 def test_fresh_builtin_surfaces_do_not_import_legacy_writer_modules():
     import os
 

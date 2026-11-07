@@ -120,17 +120,18 @@ def test_synthetic_happy_paths_are_accepted(data, source, modality, profile, det
     assert report.digest == AssetDigest(sha(source), len(source))
 
 
-@pytest.mark.parametrize("preamble", [b"BM", b"GIF87a", b"GIF89a"])
-def test_dicom_with_image_signature_preamble_is_accepted(preamble):
-    source = preamble + DICOM[len(preamble) :]
-    data = manifest(source, "application/dicom", width=4, height=4, frames=2)
+def test_dicom_with_image_signature_preamble_is_accepted(subtests):
+    for preamble in [b"BM", b"GIF87a", b"GIF89a"]:
+        with subtests.test(preamble=preamble):
+            source = preamble + DICOM[len(preamble) :]
+            data = manifest(source, "application/dicom", width=4, height=4, frames=2)
 
-    report = preflight_asset(data, source)
+            report = preflight_asset(data, source)
 
-    assert report.status is PreflightStatus.ACCEPT
-    assert report.detected_media_type == "application/dicom"
-    assert report.media_type_status is MediaTypeStatus.MATCH
-    assert report.digest == AssetDigest(sha(source), len(source))
+            assert report.status is PreflightStatus.ACCEPT
+            assert report.detected_media_type == "application/dicom"
+            assert report.media_type_status is MediaTypeStatus.MATCH
+            assert report.digest == AssetDigest(sha(source), len(source))
 
 
 def test_accepted_image_report_serialises_byte_stably():
@@ -261,24 +262,24 @@ def test_malformed_manifest_abstains_before_the_source_is_touched(data):
 # --- media type -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("source", "detected", "declared"),
-    [
+def test_media_mismatch_is_a_fail_closed_finding(subtests):
+    for source, detected, declared in [
         (PDF, "application/pdf", "image/png"),
         (GIF, "image/gif", "image/png"),
         (WEBP, "image/webp", "image/bmp"),
         (BMP, "image/bmp", "image/jpeg"),
-    ],
-)
-def test_media_mismatch_is_a_fail_closed_finding(source, detected, declared):
-    report = preflight_asset(manifest(source, declared, width=8, height=8), source)
+    ]:
+        with subtests.test(source=source, detected=detected, declared=declared):
+            report = preflight_asset(
+                manifest(source, declared, width=8, height=8), source
+            )
 
-    assert report.status is PreflightStatus.ABSTAIN
-    assert report.abstention.reason is AbstentionReason.UNSUPPORTED_MEDIA
-    assert report.detected_media_type == detected
-    assert report.media_type_status is MediaTypeStatus.MISMATCH
-    assert checks(report) == [("media_type", "mismatch")]
-    assert report.digest == AssetDigest(sha(source), len(source))
+            assert report.status is PreflightStatus.ABSTAIN
+            assert report.abstention.reason is AbstentionReason.UNSUPPORTED_MEDIA
+            assert report.detected_media_type == detected
+            assert report.media_type_status is MediaTypeStatus.MISMATCH
+            assert checks(report) == [("media_type", "mismatch")]
+            assert report.digest == AssetDigest(sha(source), len(source))
 
 
 @pytest.mark.parametrize(

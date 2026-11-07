@@ -56,6 +56,20 @@ def test_noise_and_irregular_timing_are_configurable_and_seeded():
     assert noisy.samples != regular.samples
 
 
+def test_fast_irregular_timing_accepts_all_generated_events():
+    record = generate_waveform_record(
+        WaveformConfig(
+            seed=7,
+            duration_seconds=60,
+            sample_rate_hz=25,
+            pulses_per_minute=180,
+            rhythm="irregular",
+        )
+    )
+    assert len(record.events) == 183
+    assert all(0 <= sample < 1500 for _, sample, _ in record.events)
+
+
 def test_annotations_can_be_disabled_without_changing_waveform():
     first = generate_waveform_record(WaveformConfig(annotations=False))
     second = generate_waveform_record()

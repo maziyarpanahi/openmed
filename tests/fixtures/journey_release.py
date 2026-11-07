@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import re
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -111,33 +113,13 @@ def make_release_repository(
     """Create a tagged local repository and a passing aggregate manifest."""
 
     root = tmp_path / "release-repo"
-    root.mkdir()
-    inputs = root / "inputs"
-    inputs.mkdir()
-    (inputs / "synthetic.json").write_text(
-        json.dumps(
-            {
-                "provenance": "synthetic",
-                "scenario": "journey-release-contract",
-            },
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    for relative, source in sorted((source_files or {}).items()):
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-
-    _git(root, "init", "-q")
-    _git(root, "config", "user.name", "OpenMed Test")
-    _git(root, "config", "user.email", "test@openmed.invalid")
-    _git(root, "config", "commit.gpgsign", "false")
-    _git(root, "add", ".")
-    _git(root, "commit", "-q", "-m", "synthetic release evidence")
-    commit = _git(root, "rev-parse", "HEAD")
-    _git(root, "tag", "v3.0.0")
+    if source_files:
+        commit = _build_repository(root, source_files)
+    else:
+        # Most cases share one tagged checkout; copying a cached repository
+        # avoids running git again for every test.
+        template, commit = _template_repository()
+        shutil.copytree(template, root, symlinks=True)
 
     manifest = make_passing_manifest(root, commit)
     for index, (relative, _source) in enumerate(
@@ -152,6 +134,52 @@ def make_release_repository(
             }
         )
     return root, commit, manifest
+
+
+def _build_repository(root: Path, source_files: Mapping[str, Path]) -> str:
+    root.mkdir()
+    inputs = root / "inputs"
+    inputs.mkdir()
+    (inputs / "synthetic.json").write_text(
+        json.dumps(
+            {
+                "provenance": "synthetic",
+                "scenario": "journey-release-contract",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    for relative, source in sorted(source_files.items()):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+
+    _git(root, "init", "-q")
+    _git(root, "config", "user.name", "OpenMed Test")
+    _git(root, "config", "user.email", "test@openmed.invalid")
+    _git(root, "config", "commit.gpgsign", "false")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "synthetic release evidence")
+    commit = _git(root, "rev-parse", "HEAD")
+    _git(root, "tag", "v3.0.0")
+    return commit
+
+
+_TEMPLATE_REPOSITORY: tuple[Path, str] | None = None
+
+
+def _template_repository() -> tuple[Path, str]:
+    """Build the default tagged checkout once per test process."""
+
+    global _TEMPLATE_REPOSITORY
+    if _TEMPLATE_REPOSITORY is None:
+        parent = Path(tempfile.mkdtemp(prefix="openmed-journey-release-"))
+        atexit.register(shutil.rmtree, parent, ignore_errors=True)
+        root = parent / "release-repo"
+        _TEMPLATE_REPOSITORY = (root, _build_repository(root, {}))
+    return _TEMPLATE_REPOSITORY
 
 
 def make_passing_manifest(root: Path, commit: str) -> dict[str, Any]:

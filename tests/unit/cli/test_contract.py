@@ -122,47 +122,56 @@ def test_real_brief_handler_matches_outcome_fixture(
     assert "SYNTHETIC_PRIVATE_EXCEPTION" not in stdout
 
 
-@pytest.mark.parametrize("failed", [False, True])
-def test_doctor_envelope_matches_exit_status(monkeypatch, capsys, failed):
-    import openmed.core.doctor as doctor
+def test_doctor_envelope_matches_exit_status(subtests, capsys):
+    for failed in [False, True]:
+        with subtests.test(failed=failed):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import openmed.core.doctor as doctor
 
-    monkeypatch.setattr(
-        doctor,
-        "run_diagnostics",
-        lambda: [
-            {
-                "name": "synthetic_check",
-                "status": "FAIL" if failed else "PASS",
-                "details": "synthetic",
-            }
-        ],
-    )
-    assert cli_main(["doctor", "--json"]) == int(failed)
-    assert json.loads(capsys.readouterr().out)["outcome"] == (
-        "check_failed" if failed else "completed"
-    )
+                monkeypatch.setattr(
+                    doctor,
+                    "run_diagnostics",
+                    lambda: [
+                        {
+                            "name": "synthetic_check",
+                            "status": "FAIL" if failed else "PASS",
+                            "details": "synthetic",
+                        }
+                    ],
+                )
+                assert cli_main(["doctor", "--json"]) == int(failed)
+                assert json.loads(capsys.readouterr().out)["outcome"] == (
+                    "check_failed" if failed else "completed"
+                )
 
 
-@pytest.mark.parametrize("failed", [False, True])
-def test_fhir_envelope_matches_exit_status(monkeypatch, capsys, tmp_path, failed):
-    from openmed.clinical.exporters import fhir
+def test_fhir_envelope_matches_exit_status(subtests, capsys, tmp_path):
+    case_root = tmp_path
+    for failed in [False, True]:
+        with subtests.test(failed=failed):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.clinical.exporters import fhir
 
-    monkeypatch.setattr(
-        fhir,
-        "validate_exchange",
-        lambda *args, **kwargs: {
-            "resourceType": "OperationOutcome",
-            "issue": [{"severity": "error"}] if failed else [],
-        },
-    )
-    source = tmp_path / "synthetic.json"
-    source.write_text("{}", encoding="utf-8")
-    assert cli_main(["fhir", "validate", "--input", str(source), "--json"]) == int(
-        failed
-    )
-    assert json.loads(capsys.readouterr().out)["outcome"] == (
-        "check_failed" if failed else "completed"
-    )
+                monkeypatch.setattr(
+                    fhir,
+                    "validate_exchange",
+                    lambda *args, **kwargs: {
+                        "resourceType": "OperationOutcome",
+                        "issue": [{"severity": "error"}] if failed else [],
+                    },
+                )
+                source = tmp_path / "synthetic.json"
+                source.write_text("{}", encoding="utf-8")
+                assert cli_main(
+                    ["fhir", "validate", "--input", str(source), "--json"]
+                ) == int(failed)
+                assert json.loads(capsys.readouterr().out)["outcome"] == (
+                    "check_failed" if failed else "completed"
+                )
 
 
 def test_failure_categories_and_exit_codes_are_pinned() -> None:
@@ -443,46 +452,59 @@ def test_risk_assess_policy_failure_matches_value_free_contract(
     assert str(rejected_path) not in captured.out
 
 
-@pytest.mark.parametrize("reason", ["cancelled", "deadline_exceeded"])
 def test_interrupted_brief_has_refused_envelope_and_no_output_files(
-    monkeypatch, tmp_path, capsys, reason
+    subtests, tmp_path, capsys
 ):
-    from openmed.cli import brief
+    case_root = tmp_path
+    for reason in ["cancelled", "deadline_exceeded"]:
+        with subtests.test(reason=reason):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.cli import brief
 
-    response = {
-        "status": "refused",
-        "refusal_reason": reason,
-        "summary_characters": 0,
-        "digest": "sha256:" + "0" * 64,
-        "summary": "",
-    }
-    monkeypatch.setattr(brief, "brief_response", lambda *a, **k: dict(response))
-    source = tmp_path / "source.txt"
-    source.write_text("Synthetic note", encoding="utf-8")
-    summary = tmp_path / "summary.txt"
-    review = tmp_path / "review.json"
-    result = cli_main(
-        [
-            "brief",
-            str(source),
-            "--model",
-            "extractive",
-            "--summary-output",
-            str(summary),
-            "--review-output",
-            str(review),
-            "--json",
-        ]
-    )
-    envelope = json.loads(capsys.readouterr().out)
-    assert result == 1
-    assert envelope == {
-        "ok": True,
-        "command": "brief",
-        "outcome": "refused",
-        "data": {
-            key: response[key]
-            for key in ("status", "refusal_reason", "summary_characters", "digest")
-        },
-    }
-    assert not summary.exists() and not review.exists()
+                response = {
+                    "status": "refused",
+                    "refusal_reason": reason,
+                    "summary_characters": 0,
+                    "digest": "sha256:" + "0" * 64,
+                    "summary": "",
+                }
+                monkeypatch.setattr(
+                    brief, "brief_response", lambda *a, **k: dict(response)
+                )
+                source = tmp_path / "source.txt"
+                source.write_text("Synthetic note", encoding="utf-8")
+                summary = tmp_path / "summary.txt"
+                review = tmp_path / "review.json"
+                result = cli_main(
+                    [
+                        "brief",
+                        str(source),
+                        "--model",
+                        "extractive",
+                        "--summary-output",
+                        str(summary),
+                        "--review-output",
+                        str(review),
+                        "--json",
+                    ]
+                )
+                envelope = json.loads(capsys.readouterr().out)
+                assert result == 1
+                assert envelope == {
+                    "ok": True,
+                    "command": "brief",
+                    "outcome": "refused",
+                    "data": {
+                        key: response[key]
+                        for key in (
+                            "status",
+                            "refusal_reason",
+                            "summary_characters",
+                            "digest",
+                        )
+                    },
+                }
+                assert not summary.exists() and not review.exists()

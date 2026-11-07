@@ -163,6 +163,7 @@ def nli_argv(files, *extra):
     ]
 
 
+@pytest.mark.slow
 def test_summary_subprocess_writes_guarded_text_and_only_value_free_metadata(
     files, assert_private_file
 ):
@@ -180,6 +181,7 @@ def test_summary_subprocess_writes_guarded_text_and_only_value_free_metadata(
     assert files[2].read_text() not in result.stdout + files[3].read_text()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "kind,code", [("leak", "summary_leakage_rejected"), ("failure", "summary_failed")]
 )
@@ -192,6 +194,7 @@ def test_summary_subprocess_refuses_leakage_or_exception_without_partial_files(
     assert not any(path.exists() for path in files[2:])
 
 
+@pytest.mark.slow
 def test_summary_subprocess_preserves_existing_destination(files):
     files[3].write_text(CANARY)
     result, envelope = run_cli(summary_argv(files), cwd=files[0].parent)
@@ -201,6 +204,7 @@ def test_summary_subprocess_preserves_existing_destination(files):
     assert not files[2].exists()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "label", ["entailment", "contradiction", "neutral", "abstention"]
 )
@@ -231,6 +235,7 @@ def test_local_factory_subprocess_returns_only_native_claim_projection(label, fi
     assert set(files[0].parent.iterdir()) == set(files[:2])
 
 
+@pytest.mark.slow
 def test_explicit_heuristic_subprocess_matches_existing_api(files):
     from openmed.clinical.nli import verify
 
@@ -245,12 +250,14 @@ def test_explicit_heuristic_subprocess_matches_existing_api(files):
     )
 
 
+@pytest.mark.slow
 def test_missing_local_checkpoint_subprocess_has_no_heuristic_fallback(files):
     result, envelope = run_cli(nli_argv(files), kind="missing", cwd=files[0].parent)
     assert result.returncode == 1 and envelope["ok"] is False
     assert envelope["error"]["code"] == "nli_backend_unavailable"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("command", ["summarize", "nli"])
 def test_protected_usage_subprocess_never_echoes_private_arguments(command, files):
     result, envelope = run_cli([command, CANARY, "--json"], cwd=files[0].parent)

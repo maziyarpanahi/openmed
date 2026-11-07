@@ -58,6 +58,7 @@ def _synthetic_rows(count: int, *, ages: int = 5, zips: int = 4) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_working_set_does_not_scale_with_row_count(tmp_path: Path) -> None:
     """The class census stays constant while the row count grows 8x."""
 
@@ -146,6 +147,7 @@ def test_memory_ceiling_rejects_high_cardinality_census(tmp_path: Path) -> None:
     assert not list(tmp_path.glob(".unique_out.csv.*.tmp"))
 
 
+@pytest.mark.slow
 def test_memory_ceiling_also_blocks_excess_process_rss(tmp_path: Path) -> None:
     """The guard measures process RSS, not only the class-count estimate."""
 
@@ -310,6 +312,7 @@ def test_windows_rss_guard_still_rejects_one_byte_above_ceiling(
         guard.check(stage="synthetic overflow")
 
 
+@pytest.mark.slow
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     tmp_path: Path,
 ) -> None:
@@ -585,6 +588,7 @@ def test_parquet_row_group_streaming_matches_csv_reference(tmp_path: Path) -> No
     assert kanon_report(parquet_rows, quasi_identifiers=["age", "zip"])["k"] >= 2
 
 
+@pytest.mark.slow
 def test_parquet_boundaries_produce_byte_identical_output(tmp_path: Path) -> None:
     """Input row groups and processing chunks do not affect Parquet bytes."""
 

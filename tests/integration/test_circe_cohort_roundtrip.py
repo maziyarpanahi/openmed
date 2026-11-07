@@ -37,74 +37,80 @@ def snapshot():
     )
 
 
-@pytest.mark.parametrize(
-    "mode", ["relative", "count_range", "absolute_any", "exclusion"]
-)
-def test_synthetic_membership_roundtrip(mode):
-    definition = PhenotypeDefinition.load(
-        FIXTURES / "phenotypes" / "diabetes_on_metformin.json"
-    )
-    condition, drug = definition.criteria()
-    condition = replace(
-        condition,
-        occurrence=OccurrenceCount(1, 2)
-        if mode == "count_range"
-        else OccurrenceCount(),
-    )
-    if mode == "absolute_any":
-        drug = replace(
-            drug,
-            temporal=TemporalWindow(start_date="2026-01-01", end_date="2026-12-31"),
-        )
-        other = replace(drug, id="other-drug", occurrence=OccurrenceCount(2))
-        root = Expression.all_of(
-            Expression.leaf(condition),
-            Expression.any_of(Expression.leaf(drug), Expression.leaf(other)),
-        )
-        domains = {
-            condition.id: "ConditionOccurrence",
-            drug.id: "DrugExposure",
-            other.id: "DrugExposure",
-        }
-    elif mode == "exclusion":
-        drug = replace(drug, temporal=None)
-        root = Expression.all_of(
-            Expression.leaf(condition), Expression.exclude(Expression.leaf(drug))
-        )
-        domains = {condition.id: "ConditionOccurrence", drug.id: "DrugExposure"}
-    else:
-        root = Expression.all_of(Expression.leaf(condition), Expression.leaf(drug))
-        domains = {condition.id: "ConditionOccurrence", drug.id: "DrugExposure"}
-    definition = replace(definition, expression=root)
-    envelope = export_cohort_definition(definition, source_snapshot=snapshot()).value
-    conversion = export_circe_expression(
-        envelope,
-        criterion_domains=domains,
-        primary_criterion_id=condition.id,
-        strict=False,
-    ).value
-    imported = import_circe_expression(
-        conversion.expression,
-        source_snapshot=snapshot(),
-        expected_expression_digest=conversion.target_digest,
-        strict=False,
-    ).value
-    assert imported.exchange is not None
-    connection = write_omop_duckdb(
-        load_grounded_jsonl(FIXTURES / "synthetic_grounded.jsonl")
-    )
-    try:
-        hierarchy = load_athena_hierarchy(FIXTURES / "athena")
-        first = resolve_phenotype(definition, connection, hierarchy=hierarchy)
-        second = resolve_phenotype(
-            imported.exchange.definition, connection, hierarchy=hierarchy
-        )
-        assert first.patient_ids == second.patient_ids
-        assert first.patient_ids
-    finally:
-        connection.close()
-    # This is native synthetic membership evidence, not OHDSI execution parity.
-    assert conversion.losses and imported.losses
+def test_synthetic_membership_roundtrip(subtests):
+    for mode in ["relative", "count_range", "absolute_any", "exclusion"]:
+        with subtests.test(mode=mode):
+            definition = PhenotypeDefinition.load(
+                FIXTURES / "phenotypes" / "diabetes_on_metformin.json"
+            )
+            condition, drug = definition.criteria()
+            condition = replace(
+                condition,
+                occurrence=OccurrenceCount(1, 2)
+                if mode == "count_range"
+                else OccurrenceCount(),
+            )
+            if mode == "absolute_any":
+                drug = replace(
+                    drug,
+                    temporal=TemporalWindow(
+                        start_date="2026-01-01", end_date="2026-12-31"
+                    ),
+                )
+                other = replace(drug, id="other-drug", occurrence=OccurrenceCount(2))
+                root = Expression.all_of(
+                    Expression.leaf(condition),
+                    Expression.any_of(Expression.leaf(drug), Expression.leaf(other)),
+                )
+                domains = {
+                    condition.id: "ConditionOccurrence",
+                    drug.id: "DrugExposure",
+                    other.id: "DrugExposure",
+                }
+            elif mode == "exclusion":
+                drug = replace(drug, temporal=None)
+                root = Expression.all_of(
+                    Expression.leaf(condition),
+                    Expression.exclude(Expression.leaf(drug)),
+                )
+                domains = {condition.id: "ConditionOccurrence", drug.id: "DrugExposure"}
+            else:
+                root = Expression.all_of(
+                    Expression.leaf(condition), Expression.leaf(drug)
+                )
+                domains = {condition.id: "ConditionOccurrence", drug.id: "DrugExposure"}
+            definition = replace(definition, expression=root)
+            envelope = export_cohort_definition(
+                definition, source_snapshot=snapshot()
+            ).value
+            conversion = export_circe_expression(
+                envelope,
+                criterion_domains=domains,
+                primary_criterion_id=condition.id,
+                strict=False,
+            ).value
+            imported = import_circe_expression(
+                conversion.expression,
+                source_snapshot=snapshot(),
+                expected_expression_digest=conversion.target_digest,
+                strict=False,
+            ).value
+            assert imported.exchange is not None
+            connection = write_omop_duckdb(
+                load_grounded_jsonl(FIXTURES / "synthetic_grounded.jsonl")
+            )
+            try:
+                hierarchy = load_athena_hierarchy(FIXTURES / "athena")
+                first = resolve_phenotype(definition, connection, hierarchy=hierarchy)
+                second = resolve_phenotype(
+                    imported.exchange.definition, connection, hierarchy=hierarchy
+                )
+                assert first.patient_ids == second.patient_ids
+                assert first.patient_ids
+            finally:
+                connection.close()
+            # This is native synthetic membership evidence, not OHDSI execution parity.
+            assert conversion.losses and imported.losses
 
 
 def _evaluate(node, met):

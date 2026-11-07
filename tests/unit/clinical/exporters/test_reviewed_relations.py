@@ -178,90 +178,100 @@ def test_approved_reason_link_is_closed_source_free_and_input_is_unchanged():
     assert provenance["recorded"] == "2026-10-09T08:00:00Z"
 
 
-@pytest.mark.parametrize(
-    "kind,head,tail,source",
-    [
+def test_supported_direction_uses_reason_reference(subtests):
+    for kind, head, tail, source in [
         ("diagnosis_to_treatment", CONDITION, MEDICATION, "MedicationStatement"),
         ("diagnosis_to_treatment", CONDITION, PROCEDURE, "Procedure"),
         ("procedure_to_indication", PROCEDURE, CONDITION, "Procedure"),
         ("drug_to_reason", MEDICATION, CONDITION, "MedicationStatement"),
         ("drug_to_indication", MEDICATION, CONDITION, "MedicationStatement"),
         ("medication_change", MEDICATION, CONDITION, "MedicationStatement"),
-    ],
-)
-def test_supported_direction_uses_reason_reference(kind, head, tail, source):
-    data = resources()
-    item = replace(candidate(kind), head_reference=head, tail_reference=tail)
-    report = project([reviewed(item, data)], data)
-    assert report.accepted_count == 1
-    linked = next(r for r in bundle_resources(report) if r["resourceType"] == source)
-    assert len(linked["reasonReference"]) == 1
-    assert find_reference_target_issues(report.bundle) == ()
+    ]:
+        with subtests.test(kind=kind, head=head, tail=tail, source=source):
+            data = resources()
+            item = replace(candidate(kind), head_reference=head, tail_reference=tail)
+            report = project([reviewed(item, data)], data)
+            assert report.accepted_count == 1
+            linked = next(
+                r for r in bundle_resources(report) if r["resourceType"] == source
+            )
+            assert len(linked["reasonReference"]) == 1
+            assert find_reference_target_issues(report.bundle) == ()
 
 
-@pytest.mark.parametrize(
-    "kind", ["Condition", "Observation", "DiagnosticReport", "Procedure"]
-)
-@pytest.mark.parametrize("source", ["MedicationStatement", "Procedure"])
-def test_release_reference_allowlist_is_enforced(kind, source):
-    data = resources()
-    target = f"{kind}/reason"
-    endpoint = {
-        "resourceType": kind,
-        "id": "reason",
-        "subject": {"reference": PATIENT},
-        "code": concept(),
-    }
-    if kind != "Condition":
-        endpoint["status"] = "completed" if kind == "Procedure" else "final"
-    data.append(endpoint)
-    item = replace(
-        candidate(
-            "drug_to_reason"
-            if source == "MedicationStatement"
-            else "procedure_to_indication"
-        ),
-        head_reference=MEDICATION if source == "MedicationStatement" else PROCEDURE,
-        tail_reference=target,
-    )
-    report = project([reviewed(item, data)], data)
-    if kind == "Procedure" and source == "MedicationStatement":
-        assert report.accepted_count == 0
-        assert report.losses[0].code == "reference_type_refused"
-    else:
-        assert report.accepted_count == 1
-        assert find_reference_target_issues(report.bundle) == ()
+def test_release_reference_allowlist_is_enforced(subtests):
+    for kind in ["Condition", "Observation", "DiagnosticReport", "Procedure"]:
+        for source in ["MedicationStatement", "Procedure"]:
+            with subtests.test(kind=kind, source=source):
+                data = resources()
+                target = f"{kind}/reason"
+                endpoint = {
+                    "resourceType": kind,
+                    "id": "reason",
+                    "subject": {"reference": PATIENT},
+                    "code": concept(),
+                }
+                if kind != "Condition":
+                    endpoint["status"] = "completed" if kind == "Procedure" else "final"
+                data.append(endpoint)
+                item = replace(
+                    candidate(
+                        "drug_to_reason"
+                        if source == "MedicationStatement"
+                        else "procedure_to_indication"
+                    ),
+                    head_reference=MEDICATION
+                    if source == "MedicationStatement"
+                    else PROCEDURE,
+                    tail_reference=target,
+                )
+                report = project([reviewed(item, data)], data)
+                if kind == "Procedure" and source == "MedicationStatement":
+                    assert report.accepted_count == 0
+                    assert report.losses[0].code == "reference_type_refused"
+                else:
+                    assert report.accepted_count == 1
+                    assert find_reference_target_issues(report.bundle) == ()
 
 
-@pytest.mark.parametrize("relative", [True, False])
-def test_family_condition_is_inline_and_never_emitted_as_patient_condition(relative):
-    data = family_resources()
-    report = project([reviewed(family_candidate(relative=relative), data)], data)
-    assert report.accepted_count == 1
-    output = bundle_resources(report)
-    assert not any(
-        r["resourceType"] in ("Condition", "MedicationStatement", "Procedure")
-        for r in output
-    )
-    family = next(r for r in output if r["resourceType"] == "FamilyMemberHistory")
-    assert family["relationship"]["coding"][0]["code"] == "mother"
-    assert family["condition"][0]["code"]["coding"][0]["code"] == "synthetic-condition"
-    assert not validate_resource(family).findings
-    assert find_reference_target_issues(report.bundle) == ()
-    assert PRIVATE not in json.dumps(report.to_dict())
+def test_family_condition_is_inline_and_never_emitted_as_patient_condition(subtests):
+    for relative in [True, False]:
+        with subtests.test(relative=relative):
+            data = family_resources()
+            report = project(
+                [reviewed(family_candidate(relative=relative), data)], data
+            )
+            assert report.accepted_count == 1
+            output = bundle_resources(report)
+            assert not any(
+                r["resourceType"] in ("Condition", "MedicationStatement", "Procedure")
+                for r in output
+            )
+            family = next(
+                r for r in output if r["resourceType"] == "FamilyMemberHistory"
+            )
+            assert family["relationship"]["coding"][0]["code"] == "mother"
+            assert (
+                family["condition"][0]["code"]["coding"][0]["code"]
+                == "synthetic-condition"
+            )
+            assert not validate_resource(family).findings
+            assert find_reference_target_issues(report.bundle) == ()
+            assert PRIVATE not in json.dumps(report.to_dict())
 
 
-@pytest.mark.parametrize("key", ["status", "patient", "relationship"])
-def test_family_required_fields_are_locally_validated(key):
-    data = family_resources()
-    report = project([reviewed(family_candidate(), data)], data)
-    family = next(
-        r
-        for r in bundle_resources(report)
-        if r["resourceType"] == "FamilyMemberHistory"
-    )
-    del family[key]
-    assert any(f.code == "required" for f in validate_resource(family).errors)
+def test_family_required_fields_are_locally_validated(subtests):
+    for key in ["status", "patient", "relationship"]:
+        with subtests.test(key=key):
+            data = family_resources()
+            report = project([reviewed(family_candidate(), data)], data)
+            family = next(
+                r
+                for r in bundle_resources(report)
+                if r["resourceType"] == "FamilyMemberHistory"
+            )
+            del family[key]
+            assert any(f.code == "required" for f in validate_resource(family).errors)
 
 
 def test_family_nested_condition_code_and_status_binding_are_validated():
@@ -280,9 +290,8 @@ def test_family_nested_condition_code_and_status_binding_are_validated():
     assert result.errors and PRIVATE not in repr(result)
 
 
-@pytest.mark.parametrize(
-    "assertion",
-    [
+def test_non_affirmative_relations_never_create_links(subtests):
+    for assertion in [
         s.value
         for s in AssertionState
         if s
@@ -291,32 +300,35 @@ def test_family_nested_condition_code_and_status_binding_are_validated():
             AssertionState.CONFIRMED,
             AssertionState.HISTORICAL,
         )
-    ],
-)
-def test_non_affirmative_relations_never_create_links(assertion):
-    data = resources()
-    report = project([reviewed(candidate(assertion=assertion), data)], data)
-    assert report.bundle["entry"] == []
-    assert report.losses[0].code == "assertion_refused"
+    ]:
+        with subtests.test(assertion=assertion):
+            data = resources()
+            report = project([reviewed(candidate(assertion=assertion), data)], data)
+            assert report.bundle["entry"] == []
+            assert report.losses[0].code == "assertion_refused"
 
 
-@pytest.mark.parametrize("assertion", ["affirmed", "confirmed", "historical"])
-def test_positive_reviewed_assertion_can_be_projected(assertion):
-    data = resources()
-    assert (
-        project([reviewed(candidate(assertion=assertion), data)], data).accepted_count
-        == 1
-    )
+def test_positive_reviewed_assertion_can_be_projected(subtests):
+    for assertion in ["affirmed", "confirmed", "historical"]:
+        with subtests.test(assertion=assertion):
+            data = resources()
+            assert (
+                project(
+                    [reviewed(candidate(assertion=assertion), data)], data
+                ).accepted_count
+                == 1
+            )
 
 
-@pytest.mark.parametrize(
-    "state,code",
-    [(ReviewState.REJECTED, "rejected"), (ReviewState.EXPIRED, "review_not_approved")],
-)
-def test_review_refusals_are_explicit(state, code):
-    data = resources()
-    report = project([reviewed(candidate(), data, state=state)], data)
-    assert report.bundle["entry"] == [] and report.losses[0].code == code
+def test_review_refusals_are_explicit(subtests):
+    for state, code in [
+        (ReviewState.REJECTED, "rejected"),
+        (ReviewState.EXPIRED, "review_not_approved"),
+    ]:
+        with subtests.test(state=state, code=code):
+            data = resources()
+            report = project([reviewed(candidate(), data, state=state)], data)
+            assert report.bundle["entry"] == [] and report.losses[0].code == code
 
 
 def test_unreviewed_and_fabricated_approved_history_fail_closed():
@@ -348,9 +360,8 @@ def test_reopened_history_needs_new_review():
     assert project([item], data).losses[0].code == "review_not_approved"
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_review_is_invalidated_by_changed_projection_inputs(subtests):
+    for change in [
         "code",
         "private_field",
         "subject",
@@ -358,77 +369,85 @@ def test_reopened_history_needs_new_review():
         "relation",
         "offset",
         "terminology",
-    ],
-)
-def test_review_is_invalidated_by_changed_projection_inputs(change):
-    data = resources()
-    item = reviewed(candidate(), data)
-    kwargs = {}
-    if change == "code":
-        data[1]["code"] = concept("changed")
-    elif change == "private_field":
-        data[0]["name"] = "changed-source"
-    elif change == "subject":
-        data[1]["subject"] = {"reference": "Patient/other"}
-    elif change == "attribution":
-        item = replace(item, experiencer="family")
-    elif change == "relation":
-        item = replace(
-            item, relation=replace(item.relation, relation_type="medication_change")
-        )
-    elif change == "offset":
-        item = replace(
-            item,
-            relation=replace(item.relation, head=replace(item.relation.head, end=6)),
-        )
-    else:
-        kwargs["code_systems"] = (SYSTEM,)
-    report = project([item], data, **kwargs)
-    assert report.accepted_count == 0 and report.losses[0].code == "review_mismatch"
+    ]:
+        with subtests.test(change=change):
+            data = resources()
+            item = reviewed(candidate(), data)
+            kwargs = {}
+            if change == "code":
+                data[1]["code"] = concept("changed")
+            elif change == "private_field":
+                data[0]["name"] = "changed-source"
+            elif change == "subject":
+                data[1]["subject"] = {"reference": "Patient/other"}
+            elif change == "attribution":
+                item = replace(item, experiencer="family")
+            elif change == "relation":
+                item = replace(
+                    item,
+                    relation=replace(item.relation, relation_type="medication_change"),
+                )
+            elif change == "offset":
+                item = replace(
+                    item,
+                    relation=replace(
+                        item.relation, head=replace(item.relation.head, end=6)
+                    ),
+                )
+            else:
+                kwargs["code_systems"] = (SYSTEM,)
+            report = project([item], data, **kwargs)
+            assert (
+                report.accepted_count == 0
+                and report.losses[0].code == "review_mismatch"
+            )
 
 
-@pytest.mark.parametrize("experiencer", ["family", "other"])
-def test_non_patient_reason_relations_are_refused(experiencer):
-    data = resources()
-    item = replace(candidate(), experiencer=experiencer)
-    assert project([reviewed(item, data)], data).losses[0].code == "non_patient"
+def test_non_patient_reason_relations_are_refused(subtests):
+    for experiencer in ["family", "other"]:
+        with subtests.test(experiencer=experiencer):
+            data = resources()
+            item = replace(candidate(), experiencer=experiencer)
+            assert project([reviewed(item, data)], data).losses[0].code == "non_patient"
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_family_attribution_and_offset_bindings_cannot_be_guessed(subtests):
+    for change in [
         "condition_offset",
         "relative_offset",
         "absent_record",
         "wrong_head",
         "wrong_tail",
         "patient_attribution",
-    ],
-)
-def test_family_attribution_and_offset_bindings_cannot_be_guessed(change):
-    data = family_resources()
-    item = family_candidate()
-    if change == "condition_offset":
-        item = replace(
-            item, family_record=replace(item.family_record, condition_span=(1, 5))
-        )
-    elif change == "relative_offset":
-        item = replace(
-            item, family_record=replace(item.family_record, relative_span=(11, 15))
-        )
-    elif change == "absent_record":
-        item = replace(item, family_record=None)
-    elif change == "wrong_head":
-        item = replace(item, head_reference=MEDICATION)
-    elif change == "wrong_tail":
-        item = replace(item, tail_reference=MEDICATION)
-    else:
-        item = replace(item, experiencer="patient")
-    report = project([reviewed(item, data)], data)
-    assert report.accepted_count == 0
-    assert report.losses[0].code == (
-        "non_patient" if change == "patient_attribution" else "family_binding_invalid"
-    )
+    ]:
+        with subtests.test(change=change):
+            data = family_resources()
+            item = family_candidate()
+            if change == "condition_offset":
+                item = replace(
+                    item,
+                    family_record=replace(item.family_record, condition_span=(1, 5)),
+                )
+            elif change == "relative_offset":
+                item = replace(
+                    item,
+                    family_record=replace(item.family_record, relative_span=(11, 15)),
+                )
+            elif change == "absent_record":
+                item = replace(item, family_record=None)
+            elif change == "wrong_head":
+                item = replace(item, head_reference=MEDICATION)
+            elif change == "wrong_tail":
+                item = replace(item, tail_reference=MEDICATION)
+            else:
+                item = replace(item, experiencer="patient")
+            report = project([reviewed(item, data)], data)
+            assert report.accepted_count == 0
+            assert report.losses[0].code == (
+                "non_patient"
+                if change == "patient_attribution"
+                else "family_binding_invalid"
+            )
 
 
 def test_same_condition_cannot_be_attributed_to_both_patient_and_relative():
@@ -439,9 +458,8 @@ def test_same_condition_cannot_be_attributed_to_both_patient_and_relative():
     assert [loss.code for loss in report.losses] == ["attribution_conflict"] * 2
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_endpoint_contracts_refuse_unsafe_or_unrepresentable_content(subtests):
+    for change in [
         "subject",
         "status",
         "modifier",
@@ -449,29 +467,35 @@ def test_same_condition_cannot_be_attributed_to_both_patient_and_relative():
         "free_text_code",
         "missing_code",
         "wrong_reason_type",
-    ],
-)
-def test_endpoint_contracts_refuse_unsafe_or_unrepresentable_content(change):
-    data = resources()
-    item = candidate()
-    if change == "subject":
-        data[1]["subject"]["reference"] = "Patient/other"
-    elif change == "status":
-        data[2]["status"] = "entered-in-error"
-    elif change == "modifier":
-        data[1]["modifierExtension"] = [{"url": SYSTEM, "valueBoolean": True}]
-    elif change == "unknown_system":
-        data[1]["code"]["coding"][0]["system"] = "https://untrusted.example/terms"
-    elif change == "free_text_code":
-        data[1]["code"]["coding"][0]["code"] = "private source text"
-    elif change == "missing_code":
-        del data[1]["code"]
-    else:
-        item = replace(item, head_reference=MEDICATION, tail_reference=PROCEDURE)
-    report = project([reviewed(item, data)], data)
-    assert report.accepted_count == 0
-    assert report.losses[0].code in ("endpoint_invalid", "reference_type_refused")
-    assert PRIVATE not in json.dumps(report.to_dict())
+    ]:
+        with subtests.test(change=change):
+            data = resources()
+            item = candidate()
+            if change == "subject":
+                data[1]["subject"]["reference"] = "Patient/other"
+            elif change == "status":
+                data[2]["status"] = "entered-in-error"
+            elif change == "modifier":
+                data[1]["modifierExtension"] = [{"url": SYSTEM, "valueBoolean": True}]
+            elif change == "unknown_system":
+                data[1]["code"]["coding"][0]["system"] = (
+                    "https://untrusted.example/terms"
+                )
+            elif change == "free_text_code":
+                data[1]["code"]["coding"][0]["code"] = "private source text"
+            elif change == "missing_code":
+                del data[1]["code"]
+            else:
+                item = replace(
+                    item, head_reference=MEDICATION, tail_reference=PROCEDURE
+                )
+            report = project([reviewed(item, data)], data)
+            assert report.accepted_count == 0
+            assert report.losses[0].code in (
+                "endpoint_invalid",
+                "reference_type_refused",
+            )
+            assert PRIVATE not in json.dumps(report.to_dict())
 
 
 def test_unrelated_unsupported_or_invalid_resources_do_not_poison_accepted_link():
@@ -553,25 +577,21 @@ def test_each_review_transition_must_bind_to_the_same_input():
     assert project([item], data).losses[0].code == "review_mismatch"
 
 
-@pytest.mark.parametrize(
-    "kind,wrong_source",
-    [
+def test_relation_direction_requires_the_semantically_correct_source_type(subtests):
+    for kind, wrong_source in [
         ("procedure_to_indication", MEDICATION),
         ("drug_to_reason", PROCEDURE),
         ("drug_to_indication", PROCEDURE),
         ("medication_change", PROCEDURE),
-    ],
-)
-def test_relation_direction_requires_the_semantically_correct_source_type(
-    kind, wrong_source
-):
-    data = resources()
-    item = replace(
-        candidate(kind), head_reference=wrong_source, tail_reference=CONDITION
-    )
-    report = project([reviewed(item, data)], data)
-    assert report.accepted_count == 0
-    assert report.losses[0].code == "reference_type_refused"
+    ]:
+        with subtests.test(kind=kind, wrong_source=wrong_source):
+            data = resources()
+            item = replace(
+                candidate(kind), head_reference=wrong_source, tail_reference=CONDITION
+            )
+            report = project([reviewed(item, data)], data)
+            assert report.accepted_count == 0
+            assert report.losses[0].code == "reference_type_refused"
 
 
 def test_new_approval_after_reopening_is_accepted():
@@ -615,34 +635,37 @@ def test_multiple_approved_reasons_accumulate_without_copying_old_links():
     assert "unreviewed" not in json.dumps(report.to_dict())
 
 
-@pytest.mark.parametrize("verification", ["refuted", "entered-in-error"])
-def test_refuted_condition_cannot_be_a_reason_or_family_template(verification):
-    data = family_resources()
-    data[1]["verificationStatus"] = {
-        "coding": [
-            {
-                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
-                "code": verification,
+def test_refuted_condition_cannot_be_a_reason_or_family_template(subtests):
+    for verification in ["refuted", "entered-in-error"]:
+        with subtests.test(verification=verification):
+            data = family_resources()
+            data[1]["verificationStatus"] = {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                        "code": verification,
+                    }
+                ]
             }
-        ]
-    }
-    for item in (candidate(), family_candidate()):
-        report = project([reviewed(item, data)], data)
-        assert (
-            report.accepted_count == 0 and report.losses[0].code == "endpoint_invalid"
-        )
+            for item in (candidate(), family_candidate()):
+                report = project([reviewed(item, data)], data)
+                assert (
+                    report.accepted_count == 0
+                    and report.losses[0].code == "endpoint_invalid"
+                )
 
 
-@pytest.mark.parametrize("condition", [None, {}])
-def test_explicit_empty_family_backbone_entry_is_invalid(condition):
-    family = {
-        "resourceType": "FamilyMemberHistory",
-        "status": "partial",
-        "patient": {"reference": PATIENT},
-        "relationship": concept("mother"),
-        "condition": [condition],
-    }
-    assert validate_resource(family).errors
+def test_explicit_empty_family_backbone_entry_is_invalid(subtests):
+    for condition in [None, {}]:
+        with subtests.test(condition=condition):
+            family = {
+                "resourceType": "FamilyMemberHistory",
+                "status": "partial",
+                "patient": {"reference": PATIENT},
+                "relationship": concept("mother"),
+                "condition": [condition],
+            }
+            assert validate_resource(family).errors
 
 
 def test_safe_boundary_discards_private_clock_exception():
@@ -669,24 +692,25 @@ def test_refused_only_run_never_uses_technical_clock():
     assert report.accepted_count == 0
 
 
-@pytest.mark.parametrize("instant", [datetime(2026, 1, 1), PRIVATE, None])
-def test_invalid_technical_clock_fails_with_fixed_diagnostic(instant):
-    data = resources()
-    with pytest.raises(
-        RelationFHIRExportError, match=r"^Invalid reviewed FHIR relation input\.$"
-    ) as caught:
-        export_reviewed_relations(
-            [reviewed(candidate(), data)],
-            data,
-            patient_reference=PATIENT,
-            clock=lambda: instant,
-        )
-    assert caught.value.__suppress_context__
+def test_invalid_technical_clock_fails_with_fixed_diagnostic(subtests):
+    for instant in [datetime(2026, 1, 1), PRIVATE, None]:
+        with subtests.test(instant=instant):
+            data = resources()
+            with pytest.raises(
+                RelationFHIRExportError,
+                match=r"^Invalid reviewed FHIR relation input\.$",
+            ) as caught:
+                export_reviewed_relations(
+                    [reviewed(candidate(), data)],
+                    data,
+                    patient_reference=PATIENT,
+                    clock=lambda: instant,
+                )
+            assert caught.value.__suppress_context__
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_bounded_input_contract_has_source_free_errors(subtests):
+    for change in [
         "duplicate",
         "oversized",
         "nonfinite",
@@ -694,52 +718,53 @@ def test_invalid_technical_clock_fails_with_fixed_diagnostic(instant):
         "missing_patient",
         "bad_reference",
         "too_many_relations",
-    ],
-)
-def test_bounded_input_contract_has_source_free_errors(change):
-    data = resources()
-    items = [candidate()]
-    patient = PATIENT
-    if change == "duplicate":
-        data.append(copy.deepcopy(data[0]))
-    elif change == "oversized":
-        data[0]["name"] = "x" * 4_194_304
-    elif change == "nonfinite":
-        data[0]["name"] = float("nan")
-    elif change == "depth":
-        value = PRIVATE
-        for _ in range(35):
-            value = {"nested": value}
-        data[0]["name"] = value
-    elif change == "missing_patient":
-        del data[0]
-    elif change == "bad_reference":
-        patient = "https://private.example/Patient/private-id"
-    else:
-        items *= 513
-    with pytest.raises(RelationFHIRExportError) as caught:
-        export_reviewed_relations(items, data, patient_reference=patient)
-    assert str(caught.value) == "Invalid reviewed FHIR relation input."
-    assert PRIVATE not in str(caught.value)
+    ]:
+        with subtests.test(change=change):
+            data = resources()
+            items = [candidate()]
+            patient = PATIENT
+            if change == "duplicate":
+                data.append(copy.deepcopy(data[0]))
+            elif change == "oversized":
+                data[0]["name"] = "x" * 4_194_304
+            elif change == "nonfinite":
+                data[0]["name"] = float("nan")
+            elif change == "depth":
+                value = PRIVATE
+                for _ in range(35):
+                    value = {"nested": value}
+                data[0]["name"] = value
+            elif change == "missing_patient":
+                del data[0]
+            elif change == "bad_reference":
+                patient = "https://private.example/Patient/private-id"
+            else:
+                items *= 513
+            with pytest.raises(RelationFHIRExportError) as caught:
+                export_reviewed_relations(items, data, patient_reference=patient)
+            assert str(caught.value) == "Invalid reviewed FHIR relation input."
+            assert PRIVATE not in str(caught.value)
 
 
-@pytest.mark.parametrize("boundary", ["constructor", "fingerprint", "export"])
-def test_public_relation_errors_discard_private_exception_context(boundary):
-    class PrivateResources(list):
-        def __len__(self):
-            raise RuntimeError(PRIVATE)
+def test_public_relation_errors_discard_private_exception_context(subtests):
+    for boundary in ["constructor", "fingerprint", "export"]:
+        with subtests.test(boundary=boundary):
 
-    if boundary == "constructor":
-        call = lambda: replace(candidate(), head_reference=PRIVATE)
-    elif boundary == "fingerprint":
-        call = lambda: relation_fhir_review_fingerprint(
-            candidate(), PrivateResources(), PATIENT
-        )
-    else:
-        call = lambda: project([candidate()], PrivateResources())
-    with pytest.raises(RelationFHIRExportError) as caught:
-        call()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
+            class PrivateResources(list):
+                def __len__(self):
+                    raise RuntimeError(PRIVATE)
+
+            if boundary == "constructor":
+                call = lambda: replace(candidate(), head_reference=PRIVATE)
+            elif boundary == "fingerprint":
+                call = lambda: relation_fhir_review_fingerprint(
+                    candidate(), PrivateResources(), PATIENT
+                )
+            else:
+                call = lambda: project([candidate()], PrivateResources())
+            with pytest.raises(RelationFHIRExportError) as caught:
+                call()
+            assert caught.value.__context__ is None and caught.value.__cause__ is None
 
 
 def test_loss_code_rejects_private_scalar_alias():

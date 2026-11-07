@@ -1,0 +1,22 @@
+{
+  "schema": "openmed.offline_asr_qualification.v1",
+  "model": "mlx-community/whisper-large-v3-turbo",
+  "revision": "a4aaeec0636e6fef84abdcbe3544cb2bf7e9f6fb",
+  "weight_sha256": "951ed3fc1203e6a62467abb2144a96ce7eafca8fa77e3704fdb8635ff3e7f8a6",
+  "languages": ["en", "es", "fr"],
+  "repeats": 3,
+  "minimum_sustained_seconds": 120,
+  "maximum_aggregate_clean_wer": 0.25,
+  "maximum_per_language_clean_wer": 0.4,
+  "minimum_clean_release_fraction": 1.0,
+  "maximum_identifier_leaks": 0,
+  "minimum_unknown_speaker_fraction": 1.0,
+  "maximum_warm_decode_p95_seconds": 8.0,
+  "maximum_warm_decode_p95_real_time_factor": 1.5,
+  "maximum_first_decode_seconds": 45.0,
+  "maximum_worker_rss_gib": 8.0,
+  "maximum_device_gib": 6.0,
+  "maximum_cancel_seconds": 3.0,
+  "maximum_network_attempts": 0,
+  "notes": "Engineering profile for synthetic local voices and an explicit fixture PHI screener; not clinical detector recall, speaker recognition, cross-device, or Swift qualification. Real thermal states and injected policy controls are reported separately. Gates fixed before first model inference."
+}

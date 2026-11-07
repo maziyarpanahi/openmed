@@ -538,6 +538,20 @@ def _exif_tag_name(piexif: Any, ifd_name: str, tag_id: int) -> str:
     return str(tag_info.get("name", tag_id))
 
 
+def scrub_raster_pixels(image: Any) -> Any:
+    """Return an oriented, detached raster with an empty metadata allowlist.
+
+    The caller must preflight size, mode and frame count before calling this
+    in-memory equivalent of an image scrub. The returned raster may still
+    contain visible identifiers; metadata removal is not de-identification.
+    """
+    image_module = _import_module("PIL.Image")
+    ops = _import_module("PIL.ImageOps")
+    alpha = "A" in image.getbands() or "transparency" in image.info
+    oriented = ops.exif_transpose(image).convert("RGBA" if alpha else "RGB")
+    return image_module.frombytes(oriented.mode, oriented.size, oriented.tobytes())
+
+
 def _scrub_image(
     path: Path,
     *,

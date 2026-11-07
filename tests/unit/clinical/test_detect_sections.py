@@ -214,9 +214,8 @@ def test_detect_sections_fills_internal_candidate_gaps(
     validate_sections(text, sections)
 
 
-@pytest.mark.parametrize(
-    ("spans", "message"),
-    (
+def test_validate_sections_rejects_invalid_covers(subtests) -> None:
+    for spans, message in (
         ((SectionSpan(label="history", start=-1, end=2),), "outside"),
         ((SectionSpan(label="history", start=0, end=5),), "outside"),
         (
@@ -233,11 +232,7 @@ def test_detect_sections_fills_internal_candidate_gaps(
             ),
             "overlap",
         ),
-    ),
-)
-def test_validate_sections_rejects_invalid_covers(
-    spans: tuple[SectionSpan, ...],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        validate_sections("abcd", spans)
+    ):
+        with subtests.test(spans=spans, message=message):
+            with pytest.raises(ValueError, match=message):
+                validate_sections("abcd", spans)

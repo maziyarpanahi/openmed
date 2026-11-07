@@ -12,6 +12,10 @@ from dataclasses import dataclass
 _LEADS = frozenset(
     {"I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"}
 )
+_FIRST_PULSE_SECONDS = 0.2
+_IRREGULAR_JITTER = 0.2
+# At 180 pulses/minute with 20% shorter intervals, 60 seconds permits at most 225 events.
+_MAX_TEMPLATE_EVENTS = 225
 NOTICE = "Synthetic template waveform for software evaluation only; not diagnostic or clinical ground truth."
 
 
@@ -126,7 +130,7 @@ class SyntheticWaveformRecord:
             raise ValueError("synthetic waveform samples are inconsistent")
         if (
             not isinstance(self.events, Sequence)
-            or len(self.events) > 181
+            or len(self.events) > _MAX_TEMPLATE_EVENTS
             or (not self.config.annotations and self.events)
         ):
             raise ValueError("provide bounded events consistent with annotation mode")
@@ -206,7 +210,7 @@ def generate_waveform_record(
     interval = 60 / config.pulses_per_minute
     centers = []
     events = []
-    clock = 0.2
+    clock = _FIRST_PULSE_SECONDS
     beat = 0
     length = math.ceil(config.duration_seconds * config.sample_rate_hz)
     while clock < config.duration_seconds:
@@ -218,7 +222,11 @@ def generate_waveform_record(
             events.append(
                 ("template_pause" if paused else "template_pulse", sample, clock)
             )
-        jitter = rng.uniform(-0.2, 0.2) if config.rhythm == "irregular" else 0
+        jitter = (
+            rng.uniform(-_IRREGULAR_JITTER, _IRREGULAR_JITTER)
+            if config.rhythm == "irregular"
+            else 0
+        )
         clock += interval * (1 + jitter)
         beat += 1
     base = []

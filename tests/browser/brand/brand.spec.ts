@@ -568,6 +568,22 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
   expect(running, "reduced motion left active animations").toEqual([]);
 }
 
+async function waitForSearchReady(page: Page): Promise<void> {
+  // The search worker loads the page's lunr language packs after network idle.
+  // Wait for its localized ready placeholder so a test never ends, or audits
+  // the console, while that request is still in flight.
+  const placeholder = await page.evaluate(
+    () =>
+      JSON.parse(document.getElementById("__config")?.textContent ?? "{}")
+        .translations?.["search.result.placeholder"] as string | undefined,
+  );
+  expect(placeholder, "search ready placeholder").toBeTruthy();
+  await expect(page.locator(".md-search-result__meta")).toHaveText(
+    placeholder as string,
+    { timeout: 20_000 },
+  );
+}
+
 function expectCleanAudit(audit: Audit): void {
   expect(audit.consoleErrors, "browser console errors").toEqual([]);
   expect(audit.pageErrors, "uncaught page errors").toEqual([]);
@@ -1323,12 +1339,41 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await search.click();
   await expect(search).toBeFocused();
   await expect(page.locator("#__search")).toBeChecked();
-  await search.pressSequentially("OpenMedSpan");
+  // Material submits on keyup. Fill first, then submit one complete query so
+  // partial-query results cannot replace the overflow fixture attached below.
+  await search.fill("OpenMedSpan");
+  await search.press("End");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
   await expect(page.locator(".md-search-result__link").first()).toBeVisible();
+  // Wait for the complete query, then exercise a newly inserted long snippet.
+  // Its width is independent of platform fonts and search-index ranking.
+  const resultArticle = page.locator(".md-search-result__article")
+    .filter({ hasText: "OpenMedSpan" }).first();
+  await expect(resultArticle).toBeVisible();
+  await resultArticle.evaluate((article) => {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.id = "synthetic-search-overflow";
+    code.textContent = "synthetic_long_reference_".repeat(80);
+    pre.append(code);
+    article.append(pre);
+  });
+  const searchCode = page.locator("#synthetic-search-overflow");
+  await expect(searchCode).toBeVisible();
+  expect(await searchCode.evaluate((region) =>
+    region.scrollWidth > region.clientWidth + 1,
+  )).toBe(true);
+  await expect(searchCode).toHaveAttribute("tabindex", "0");
+  await searchCode.focus();
+  await expect(searchCode).toBeFocused();
+  await searchCode.press("ArrowRight");
+  await expect.poll(async () =>
+    searchCode.evaluate((region) => region.scrollLeft),
+  ).toBeGreaterThan(0);
+  await search.focus();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
@@ -1346,6 +1391,9 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     "data-md-color-scheme",
     "slate",
   );
+  // Worker language requests can outlive page network idle after a reload.
+  // Finish initialization before navigation tears down the worker.
+  await waitForSearchReady(page);
 
   await page.goto("/docs/getting-started/", { waitUntil: "networkidle" });
   const copy = page.getByRole("button", { name: "Copy to clipboard" }).first();
@@ -1356,11 +1404,14 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
+  await waitForSearchReady(page);
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+  await waitForSearchReady(page);
   await page.goto("/docs/hi/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await waitForSearchReady(page);
   expectCleanAudit(audit);
 });
 
@@ -1377,7 +1428,9 @@ test("docs deep links, admonitions, tabs, and tables are explicit", async ({
   );
   expect(apiResponse?.status()).toBe(200);
   await expect(page.locator("#openmed\\.PIIEntity")).toBeAttached();
-  await expect(page).toHaveURL(/#openmed\.PIIEntity$/);
+  await expect(page.locator("#piientity")).toBeInViewport();
+  // Material's navigation.tracking may normalize the API alias to its heading.
+  await expect(page).toHaveURL(/#(?:openmed\.PIIEntity|piientity)$/);
 
   await page.goto("/docs/onboarding-india/", {
     waitUntil: "networkidle",

@@ -437,6 +437,7 @@ def test_local_subprocess_timeout_is_typed_without_output() -> None:
     assert result.value is None
 
 
+@pytest.mark.slow
 @given(
     openmed_rows=st.lists(
         st.integers(min_value=0, max_value=1_000), min_size=9, max_size=9

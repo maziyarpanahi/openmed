@@ -62,75 +62,73 @@ def test_each_reference_uses_its_own_expected_interval() -> None:
     assert report.conflicts[0].evidence_ids == (hash_text("b"),)
 
 
-@pytest.mark.parametrize(
-    "interval",
-    [
+def test_inverted_intervals_are_rejected(subtests) -> None:
+    for interval in [
         "2026-02-01/2026-01-01",
         {"start": "2026-02-01", "end": "2026-01-01"},
         ["2026-02-01", "2026-01-01"],
-    ],
-)
-def test_inverted_intervals_are_rejected(interval: object) -> None:
-    with pytest.raises(ValueError, match="inverted"):
-        TemporalRecord("a", interval=interval)
+    ]:
+        with subtests.test(interval=interval):
+            with pytest.raises(ValueError, match="inverted"):
+                TemporalRecord("a", interval=interval)
 
 
-@pytest.mark.parametrize(
-    "records", [None, [{"record_id": "a", "assertion": "unknown"}]]
-)
-def test_unchecked_or_unknown_evidence_never_clears_claim(records: object) -> None:
-    report = review_claim_conflicts(
-        [
-            {
-                "claim_id": "claim",
-                "expected_assertion": "affirmed",
-                "evidence_ids": ["a"],
-            }
-        ],
-        assertion_records=records,
-    )
-    assert report.review_state == CLAIM_REVIEW_REQUIRED
-    assert "missing_evidence" in report.claims[0].review_routes
-
-
-@pytest.mark.parametrize(
-    "axes, expected",
-    [
-        ({"negation": "affirmed", "temporality": "hypothetical"}, "hypothetical"),
-        ({"negation": "affirmed", "certainty": "uncertain"}, "uncertain"),
-    ],
-)
-def test_assertion_axes_do_not_upgrade_uncertainty(axes: dict, expected: str) -> None:
-    assert AssertionRecord("a", assertion=axes).state == expected
-    report = review_claim_conflicts(
-        [
-            {
-                "claim_id": "claim",
-                "expected_assertion": "affirmed",
-                "evidence_ids": ["a"],
-            }
-        ],
-        assertion_records=[{"record_id": "a", **axes}],
-    )
-    assert report.review_state == CLAIM_REVIEW_REQUIRED
-
-
-@pytest.mark.parametrize("mapping", [False, True])
-def test_conflicting_integrity_aliases_rejected(mapping: bool) -> None:
-    with pytest.raises(ValueError, match="conflicting"):
-        if mapping:
-            review_claim_conflicts(
-                [{"claim_id": "claim", "evidence_ids": ["a"]}],
-                source_integrity_records=[
+def test_unchecked_or_unknown_evidence_never_clears_claim(subtests) -> None:
+    for records in [None, [{"record_id": "a", "assertion": "unknown"}]]:
+        with subtests.test(records=records):
+            report = review_claim_conflicts(
+                [
                     {
-                        "record_id": "a",
-                        "status": "verified",
-                        "integrity_status": "mismatch",
+                        "claim_id": "claim",
+                        "expected_assertion": "affirmed",
+                        "evidence_ids": ["a"],
                     }
                 ],
+                assertion_records=records,
             )
-        else:
-            SourceIntegrityRecord("a", status="verified", integrity_status="mismatch")
+            assert report.review_state == CLAIM_REVIEW_REQUIRED
+            assert "missing_evidence" in report.claims[0].review_routes
+
+
+def test_assertion_axes_do_not_upgrade_uncertainty(subtests) -> None:
+    for axes, expected in [
+        ({"negation": "affirmed", "temporality": "hypothetical"}, "hypothetical"),
+        ({"negation": "affirmed", "certainty": "uncertain"}, "uncertain"),
+    ]:
+        with subtests.test(axes=axes, expected=expected):
+            assert AssertionRecord("a", assertion=axes).state == expected
+            report = review_claim_conflicts(
+                [
+                    {
+                        "claim_id": "claim",
+                        "expected_assertion": "affirmed",
+                        "evidence_ids": ["a"],
+                    }
+                ],
+                assertion_records=[{"record_id": "a", **axes}],
+            )
+            assert report.review_state == CLAIM_REVIEW_REQUIRED
+
+
+def test_conflicting_integrity_aliases_rejected(subtests) -> None:
+    for mapping in [False, True]:
+        with subtests.test(mapping=mapping):
+            with pytest.raises(ValueError, match="conflicting"):
+                if mapping:
+                    review_claim_conflicts(
+                        [{"claim_id": "claim", "evidence_ids": ["a"]}],
+                        source_integrity_records=[
+                            {
+                                "record_id": "a",
+                                "status": "verified",
+                                "integrity_status": "mismatch",
+                            }
+                        ],
+                    )
+                else:
+                    SourceIntegrityRecord(
+                        "a", status="verified", integrity_status="mismatch"
+                    )
 
 
 def test_cyclic_nested_inputs_are_bounded() -> None:

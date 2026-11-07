@@ -58,11 +58,14 @@ def test_brief_threat_model_mitigations_link_to_existing_tests() -> None:
     _assert_brief_mitigation_test_links(markdown, root=ROOT)
 
 
-@pytest.mark.parametrize("surface", ["Python", "CLI", "REST", "MCP", "OpenMedKit"])
-def test_brief_threat_model_declares_each_surface_boundary(surface: str) -> None:
-    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
-    boundaries = markdown.split("### Surface boundaries\n", 1)[-1].split("\n### ", 1)[0]
-    assert re.search(rf"(?m)^\| {surface} \|", boundaries)
+def test_brief_threat_model_declares_each_surface_boundary(subtests) -> None:
+    for surface in ["Python", "CLI", "REST", "MCP", "OpenMedKit"]:
+        with subtests.test(surface=surface):
+            markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+            boundaries = markdown.split("### Surface boundaries\n", 1)[-1].split(
+                "\n### ", 1
+            )[0]
+            assert re.search(rf"(?m)^\| {surface} \|", boundaries)
 
 
 def test_brief_threat_model_repository_citations_resolve() -> None:
@@ -323,15 +326,11 @@ def test_v31_migration_examples_run_offline_without_models_or_source_output(
     assert "org.example" not in output
 
 
-@pytest.mark.parametrize(
-    "markdown",
-    ["No examples.", "```python\nprint('unclassified')\n```\n"],
-)
-def test_migration_examples_require_explicit_execution_classification(
-    markdown: str,
-) -> None:
-    with pytest.raises(ValueError):
-        _migration_python_examples(markdown)
+def test_migration_examples_require_explicit_execution_classification(subtests) -> None:
+    for markdown in ["No examples.", "```python\nprint('unclassified')\n```\n"]:
+        with subtests.test(markdown=markdown):
+            with pytest.raises(ValueError):
+                _migration_python_examples(markdown)
 
 
 def test_migration_fragment_compiles_without_executing_application_effects() -> None:
@@ -412,21 +411,22 @@ def test_governance_overview_covers_each_existing_contract_once() -> None:
     assert "docs/agent/index.html" in publication["expected_routes"]
 
 
-@pytest.mark.parametrize("mutation", ("missing", "duplicate", "anchor_duplicate"))
 def test_governance_overview_link_guard_rejects_missing_or_repeated_contracts(
-    mutation: str,
+    subtests,
 ) -> None:
-    paths = _governance_navigation() - {"agent/index.md"}
-    text = (DOCS / "agent/index.md").read_text()
-    if mutation == "missing":
-        text = re.sub(r"(?m)^- \[Signed capability grants\].*\n", "", text)
-    else:
-        target = "capability-grants.md" + (
-            "#verify" if mutation == "anchor_duplicate" else ""
-        )
-        text += f"\n[Repeated contract]({target})\n"
-    with pytest.raises(AssertionError, match="governance links"):
-        _assert_governance_links_once(text, paths)
+    for mutation in ("missing", "duplicate", "anchor_duplicate"):
+        with subtests.test(mutation=mutation):
+            paths = _governance_navigation() - {"agent/index.md"}
+            text = (DOCS / "agent/index.md").read_text()
+            if mutation == "missing":
+                text = re.sub(r"(?m)^- \[Signed capability grants\].*\n", "", text)
+            else:
+                target = "capability-grants.md" + (
+                    "#verify" if mutation == "anchor_duplicate" else ""
+                )
+                text += f"\n[Repeated contract]({target})\n"
+            with pytest.raises(AssertionError, match="governance links"):
+                _assert_governance_links_once(text, paths)
 
 
 def test_docs_build_excludes_local_demo_payloads() -> None:

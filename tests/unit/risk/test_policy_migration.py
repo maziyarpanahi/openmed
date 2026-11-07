@@ -138,34 +138,37 @@ def test_unknown_rule_values_are_reported_without_raw_values() -> None:
     assert "synthetic-pattern-b" not in serialized
 
 
-@pytest.mark.parametrize("label", ["NAME", "name", "EMAIL"])
-def test_rule_metadata_names_cannot_bypass_acknowledgement(label: str) -> None:
-    before = {"rules": {label: {"pattern": "synthetic-pattern-a"}}}
-    after = {"rules": {label: {"pattern": "synthetic-pattern-b"}}}
+def test_rule_metadata_names_cannot_bypass_acknowledgement(subtests) -> None:
+    for label in ["NAME", "name", "EMAIL"]:
+        with subtests.test(label=label):
+            before = {"rules": {label: {"pattern": "synthetic-pattern-a"}}}
+            after = {"rules": {label: {"pattern": "synthetic-pattern-b"}}}
 
-    report = compare_policy_versions(before, after)
+            report = compare_policy_versions(before, after)
 
-    assert report.classification is MigrationClassification.INCOMPATIBLE
-    assert report.requires_acknowledgement
-    with pytest.raises(PolicyMigrationAcknowledgementRequired):
-        check_policy_migration(before, after)
-    assert "synthetic-pattern" not in report.to_json()
+            assert report.classification is MigrationClassification.INCOMPATIBLE
+            assert report.requires_acknowledgement
+            with pytest.raises(PolicyMigrationAcknowledgementRequired):
+                check_policy_migration(before, after)
+            assert "synthetic-pattern" not in report.to_json()
 
 
-@pytest.mark.parametrize("key", ["schema_version", "version"])
-def test_schema_version_changes_fail_closed(key: str) -> None:
-    before = _policy()
-    after = copy.deepcopy(before)
-    before[key] = 1
-    after[key] = 2
+def test_schema_version_changes_fail_closed(subtests) -> None:
+    for key in ["schema_version", "version"]:
+        with subtests.test(key=key):
+            before = _policy()
+            after = copy.deepcopy(before)
+            before[key] = 1
+            after[key] = 2
 
-    report = compare_policy_versions(before, after)
+            report = compare_policy_versions(before, after)
 
-    assert report.classification == MigrationClassification.INCOMPATIBLE
-    assert any(
-        change.reason == "policy schema version changed" for change in report.changes
-    )
-    assert report.requires_acknowledgement is True
+            assert report.classification == MigrationClassification.INCOMPATIBLE
+            assert any(
+                change.reason == "policy schema version changed"
+                for change in report.changes
+            )
+            assert report.requires_acknowledgement is True
 
 
 def test_boolean_and_numeric_type_changes_fail_closed() -> None:
@@ -236,16 +239,14 @@ def test_recall_floor_and_confidence_directions_are_classified_safely() -> None:
     assert weaker_report.classification == MigrationClassification.INCOMPATIBLE
 
 
-@pytest.mark.parametrize(
-    "document",
-    [
+def test_noncanonical_json_is_rejected(subtests) -> None:
+    for document in [
         '{"schema_version":1,"schema_version":2}',
         '{"schema_version":NaN}',
-    ],
-)
-def test_noncanonical_json_is_rejected(document: str) -> None:
-    with pytest.raises(PolicyMigrationError):
-        compare_policy_versions(document, _policy())
+    ]:
+        with subtests.test(document=document):
+            with pytest.raises(PolicyMigrationError):
+                compare_policy_versions(document, _policy())
 
 
 def test_policy_input_complexity_is_bounded() -> None:
@@ -342,31 +343,29 @@ def test_migration_export_preserves_redaction_change_classification() -> None:
     assert risk.MigrationClassification is MigrationClassification
 
 
-@pytest.mark.parametrize(
-    ("before_config", "after_config"),
-    [
+def test_versioned_policy_schema_weakening_requires_bound_acknowledgement(
+    subtests,
+) -> None:
+    for before_config, after_config in [
         ({"default_action": "redact"}, {"default_action": "mask"}),
         (
             {"recall_floors": {"critical": 1.0}},
             {"recall_floors": {"critical": 0.99}},
         ),
-    ],
-)
-def test_versioned_policy_schema_weakening_requires_bound_acknowledgement(
-    before_config: dict[str, object], after_config: dict[str, object]
-) -> None:
-    from openmed.risk.policy_schema import PrivacyPolicy
+    ]:
+        with subtests.test(before_config=before_config, after_config=after_config):
+            from openmed.risk.policy_schema import PrivacyPolicy
 
-    before = PrivacyPolicy.from_mapping(before_config).to_dict()
-    after = PrivacyPolicy.from_mapping(after_config).to_dict()
-    report = compare_policy_versions(before, after)
+            before = PrivacyPolicy.from_mapping(before_config).to_dict()
+            after = PrivacyPolicy.from_mapping(after_config).to_dict()
+            report = compare_policy_versions(before, after)
 
-    assert report.classification == MigrationClassification.INCOMPATIBLE
-    assert report.requires_acknowledgement is True
-    with pytest.raises(PolicyMigrationAcknowledgementRequired):
-        check_policy_migration(before, after)
-    approved = check_policy_migration(
-        before, after, acknowledgement_token=report.acknowledgement_token
-    )
-    assert approved.approved is True
-    assert approved.after_digest == report.after_digest
+            assert report.classification == MigrationClassification.INCOMPATIBLE
+            assert report.requires_acknowledgement is True
+            with pytest.raises(PolicyMigrationAcknowledgementRequired):
+                check_policy_migration(before, after)
+            approved = check_policy_migration(
+                before, after, acknowledgement_token=report.acknowledgement_token
+            )
+            assert approved.approved is True
+            assert approved.after_digest == report.after_digest
