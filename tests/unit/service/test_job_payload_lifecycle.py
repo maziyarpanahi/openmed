@@ -94,6 +94,7 @@ class RecordingSender:
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
         self.calls.append(
             {
@@ -102,6 +103,7 @@ class RecordingSender:
                 "secret": secret,
                 "max_attempts": max_attempts,
                 "backoff_seconds": backoff_seconds,
+                "delivery_id": delivery_id,
             }
         )
         return self.result
@@ -402,6 +404,78 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
     retry_metadata = json.dumps(queue.get(job_id)["webhook_delivery"])
     _assert_no_sentinels(retry_metadata)
     assert "label_histogram" not in retry_metadata
+    queue.shutdown()
+
+
+def test_retries_and_restarts_reuse_the_sealed_delivery_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clock = Clock()
+    sender = RecordingSender(
+        WebhookDeliveryResult(
+            success=False,
+            attempts=2,
+            status_code=503,
+            delivery_id="dlv_sender_supplied_value",
+        )
+    )
+    first = _queue(
+        monkeypatch,
+        tmp_path,
+        clock=clock,
+        payload_store=_encrypted_store(tmp_path, clock),
+        sender=sender,
+    )
+    job_id = first.submit(_request())["id"]
+    first._run_job(first._executor.work[0])
+    record = first.get(job_id)
+    terminal_ref = record["payloads"]["terminal_event"]["ref"]
+    delivery_id = record["webhook_delivery"]["delivery_id"]
+    assert delivery_id.startswith("dlv_")
+    assert sender.calls[0]["delivery_id"] == delivery_id
+
+    first._deliver_terminal_event(job_id, first.payloads._index[terminal_ref])
+    assert sender.calls[1]["delivery_id"] == delivery_id
+    first.shutdown = lambda: None  # type: ignore[method-assign]
+
+    # After a restart the terminal event, and so the delivery id, is reread.
+    second = _queue(
+        monkeypatch,
+        tmp_path,
+        clock=clock,
+        payload_store=_encrypted_store(tmp_path, clock),
+        sender=sender,
+    )
+    second._deliver_terminal_event(job_id, second.payloads._index[terminal_ref])
+
+    assert sender.calls[2]["delivery_id"] == delivery_id
+    delivery = second.get(job_id)["webhook_delivery"]
+    assert delivery["delivery_id"] == delivery_id
+    assert delivery["payload_ref"] == terminal_ref
+    _assert_no_sentinels(json.dumps(delivery))
+    _assert_no_sentinels(_all_bytes(tmp_path))
+    second.shutdown()
+
+
+def test_a_terminal_event_without_a_valid_delivery_id_is_damaged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    queue = _queue(monkeypatch, tmp_path, clock=Clock())
+    event = {
+        "delivery": {
+            "url": URL_SENTINEL,
+            "secret": SECRET_SENTINEL,
+            "max_attempts": 1,
+            "backoff_seconds": 0,
+            "delivery_id": "not a delivery id",
+        },
+        "body": {"event": "job.done"},
+    }
+
+    with pytest.raises(job_payloads.JobPayloadError) as damaged:
+        queue._send_webhook(event)
+    assert damaged.value.code == "payload_damaged"
+    assert queue.webhook_sender.calls == []
     queue.shutdown()
 
 

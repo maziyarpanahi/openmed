@@ -11,6 +11,7 @@ under an explicit, bounded retention deadline.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import functools
 import json
 import os
@@ -46,6 +47,7 @@ from .job_payloads import (
 )
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
+from .signing import new_delivery_id, normalize_delivery_id
 from .webhooks import WebhookDeliveryResult, deliver_webhook
 
 SERVICE_JOBS_STORE_ENV_VAR = "OPENMED_SERVICE_JOBS_STORE_PATH"
@@ -361,7 +363,10 @@ class DeidentifyJobQueue:
         runtime: Service runtime used to run model requests.
         store: Job metadata store.
         max_workers: Bounded worker count.
-        webhook_sender: Callable that delivers one signed webhook.
+        webhook_sender: Callable that delivers one signed webhook. It is called
+            like :func:`~openmed.service.webhooks.deliver_webhook` with ``url``,
+            ``payload``, ``secret``, ``max_attempts``, ``backoff_seconds``, and
+            the stable ``delivery_id`` sealed with the terminal event.
         clock: Source of timezone-aware UTC timestamps.
         payload_store: Payload store; defaults to a memory-only store.
     """
@@ -656,6 +661,9 @@ class DeidentifyJobQueue:
                     "secret": webhook.secret,
                     "max_attempts": webhook.max_attempts,
                     "backoff_seconds": webhook.backoff_seconds,
+                    # Sealed with the event so every retry, including one
+                    # after a restart, reuses the same delivery identity.
+                    "delivery_id": new_delivery_id(),
                 },
                 "body": webhook_payload(final_record),
             }
@@ -737,25 +745,29 @@ class DeidentifyJobQueue:
             secret = str(delivery["secret"])
             max_attempts = int(delivery["max_attempts"])
             backoff_seconds = float(delivery["backoff_seconds"])
+            delivery_id = normalize_delivery_id(delivery["delivery_id"])
         except (KeyError, TypeError, ValueError):
             raise JobPayloadError("payload_damaged") from None
         try:
-            return self.webhook_sender(
+            result = self.webhook_sender(
                 url,
                 body,
                 secret=secret,
                 max_attempts=max_attempts,
                 backoff_seconds=backoff_seconds,
+                delivery_id=delivery_id,
             )
         except Exception:
             # Sender exceptions can carry endpoints or response content; only a
             # controlled code is recorded.
-            return WebhookDeliveryResult(
+            result = WebhookDeliveryResult(
                 success=False,
                 attempts=0,
                 status_code=None,
                 error=WEBHOOK_SENDER_FAILED,
             )
+        # The sealed delivery id is authoritative even for custom senders.
+        return dataclasses.replace(result, delivery_id=delivery_id)
 
     def _mark_cancelled(self, job_id: str) -> None:
         with self._record_lock:

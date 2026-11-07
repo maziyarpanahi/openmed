@@ -770,15 +770,28 @@ type JobWebhookMetadata struct {
 	BackoffSeconds float64 `json:"backoff_seconds"`
 }
 
-// JobWebhookDelivery reports the outcome of a webhook delivery attempt.
-// Error is a value-free code; PayloadRef names the immutable terminal-event
-// payload the delivery used.
-type JobWebhookDelivery struct {
-	Success    bool    `json:"success"`
-	Attempts   int     `json:"attempts"`
+// JobWebhookAttemptReceipt is the value-free record of one delivery attempt.
+// KeyID is a public signing key id, never key material.
+type JobWebhookAttemptReceipt struct {
+	Attempt    int     `json:"attempt"`
+	KeyID      *string `json:"key_id"`
+	SignedAt   *int64  `json:"signed_at"`
 	StatusCode *int    `json:"status_code"`
 	Error      *string `json:"error"`
-	PayloadRef *string `json:"payload_ref,omitempty"`
+}
+
+// JobWebhookDelivery reports the outcome of a webhook delivery attempt.
+// Error is a value-free code; DeliveryID is the opaque id sent on every retry;
+// PayloadRef names the immutable terminal-event payload the delivery used.
+type JobWebhookDelivery struct {
+	Success          bool                       `json:"success"`
+	Attempts         int                        `json:"attempts"`
+	StatusCode       *int                       `json:"status_code"`
+	Error            *string                    `json:"error"`
+	DeliveryID       *string                    `json:"delivery_id,omitempty"`
+	SignatureVersion *string                    `json:"signature_version,omitempty"`
+	AttemptReceipts  []JobWebhookAttemptReceipt `json:"attempt_receipts,omitempty"`
+	PayloadRef       *string                    `json:"payload_ref,omitempty"`
 }
 
 // JobErrorSummary describes a job-level error with a value-free code.

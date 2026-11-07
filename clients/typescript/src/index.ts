@@ -617,12 +617,26 @@ export interface JobWebhookMetadata {
   backoff_seconds: number;
 }
 
+export interface JobWebhookAttemptReceipt {
+  attempt: number;
+  /** Public signing key id; never key material. */
+  key_id: string | null;
+  signed_at: number | null;
+  status_code: number | null;
+  error: string | null;
+}
+
 export interface JobWebhookDelivery {
   success: boolean;
   attempts: number;
   status_code: number | null;
   /** Value-free code such as "HTTP 500", "timeout" or "transport_error". */
   error: string | null;
+  /** Opaque id sent as X-OpenMed-Delivery-Id on every retry. */
+  delivery_id?: string;
+  /** Webhook signature scheme version, such as "v2". */
+  signature_version?: string | null;
+  attempt_receipts?: JobWebhookAttemptReceipt[];
   /** Opaque reference to the immutable terminal-event payload. */
   payload_ref?: string | null;
 }
