@@ -682,7 +682,12 @@
             self.modelDirectoryURL = modelDirectoryURL
         }
 
+        /// Loads Maple from a complete local model directory.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any file or MLX access.
         public init(modelDirectoryURL: URL) async throws {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let missing = Self.missingRequiredFiles(in: modelDirectoryURL)
             guard missing.isEmpty else {
                 throw OpenMedMapleRuntimeError.missingFiles(missing)

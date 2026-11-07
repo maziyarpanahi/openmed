@@ -56,6 +56,7 @@
         }
 
         func testLocalArtifactGeneratesCoherentTextAndImageAnswers() async throws {
+            try skipUnlessMLXCanRun()
             let environment = ProcessInfo.processInfo.environment
             guard let artifactPath = environment["OPENMED_COMPASS_MLX_ARTIFACT"] else {
                 throw XCTSkip(

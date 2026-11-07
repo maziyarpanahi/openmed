@@ -54,11 +54,15 @@
         }
 
         /// Load a public or authenticated OpenMed model from Hugging Face Hub.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any download or MLX access.
         public static func load(
             modelID: String = defaultModelID,
             revision: String = "main",
             progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let modelDirectory = try await OpenMedHubDownloader().download(
                 id: modelID,
                 revision: revision,
@@ -73,9 +77,13 @@
         }
 
         /// Strictly load an already downloaded OpenMed model directory.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any file or MLX access.
         public static func load(
             modelDirectory: URL
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let container = try await OpenMedCompassLoader.loadContainer(
                 from: modelDirectory
             )
