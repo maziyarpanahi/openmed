@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add executed OpenPHI-Vision synthetic leakage controls and immutable EdgeHealthBench device profiles with separate privacy, quality, utility, abstention, parity and measured resource gates (#3205).
 
+- Add aligned offline Python and OpenMedKit non-ECG waveform acquisition
+  contracts for PPG, respiration, pressure and capnography, with controlled
+  quality states, content-free reports and explicit reviewer confirmation.
+  These engineering checks expose no derived vital signs or alarms (#3840).
+
 - Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
 
 - Mute timed identifiers in a separate local PCM buffer under the original retention deadline; uncertain alignment withholds the entire derivative (#3838).
@@ -97,6 +102,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generate bounded non-diagnostic waveform stimuli with declared event timing and synthetic device metadata (#2850).
 
+- Offline synthetic dialogue rendering through licensed local speech adapters,
+  sample-exact PHI chunks and word timing manifests, a model-free waveform fixture,
+  and seeded noise, gain, overlap and bandpass augmentation provenance (#3831).
+
 - Generate reproducible synthetic DICOM files with paired metadata, burned-in identifier masks, annotation and ruler geometry, native pixel roundtrips and source-bound privacy-mask lineage (#2849).
 
 - Compare packet-scoped identity digests, page numbering, rendered pixels, template anchors and continuation cues across document pages; preserve original evidence and masks when splitting or quarantining inconsistent groups (#2805).
@@ -115,6 +124,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extract review-only ECG rate, PR, QRS and QT candidates from freshly quality-gated samples, retaining original lead fiducials and algorithm provenance while withholding ambiguous or disagreeing measurements (#2809).
 
+- Local, metadata-only ambient correction ledgers in Python and OpenMedKit,
+  with revision-bound authority, dependent claim invalidation, deterministic
+  replay, and explicit review guards on current exports (#3682).
+
 - Assemble ambient note drafts from finalized, PHI-screened, role-reviewed transcript evidence with original-offset citations, local claim verification, conflict holds and current clinician-custody checks before local export (#2816).
 
 - Own bounded transient audio buffers, enforce non-renewable session deadlines, and verify lifecycle cleanup of declared buffers and enrolled local files with value-free receipts and conservative crash recovery (#2818).
@@ -128,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
 - Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
+
+- Bounded, offline DICOM ECG multiplex decoding with physical calibration,
+  source-coded channels, relative skew, withheld annotation counts, static
+  rejection codes and explicit reviewer confirmation (#3825).
 
 - Record actual DICOM decoding and display transforms in reproducible digest chains, bind downstream image regions and local VLM evidence to their pixels, and reject stale or unreproducible evidence (#2801).
 
@@ -169,6 +186,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
 
+- Added deterministic synthetic malformed PDF and DICOM header fixtures with
+  recorded pre-decode boundaries, expected reason codes and payload digests,
+  plus offline regression tests (#3094).
+
 - Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
   declared file-meta transfer syntaxes into closed native, optional-decoder,
   review, and unsupported outcomes with stable reason codes, and reports no
@@ -178,6 +199,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
 
 - Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
+
+- Offline critical transcript-token classification and value-free confirmation
+  holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
+  reviewer receipts, guarded export permits and unchanged local dosing checks.
 
 - Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
 
@@ -196,6 +221,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
 
 ### Security
+
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
 
 - Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
   archive-safety limits before parsing, verify actual member sizes with bounded

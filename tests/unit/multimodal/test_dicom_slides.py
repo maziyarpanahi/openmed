@@ -14,6 +14,7 @@ from openmed.multimodal.dicom import (
     deidentify_dicom_headers,
     redact_dicom_pixels,
 )
+from openmed.multimodal.redaction_admission import RedactionAdmissionError
 
 pydicom = pytest.importorskip("pydicom")
 from pydicom.dataset import FileDataset, FileMetaDataset
@@ -167,7 +168,7 @@ def test_label_with_extra_decoded_pixels_cannot_be_retained(tmp_path):
     ds.NumberOfFrames = 1
     ds.PixelData *= 2
     ds.save_as(source, enforce_file_format=True)
-    with pytest.raises(ValueError, match="dicom_slide_pixel_coverage_incomplete"):
+    with pytest.raises(RedactionAdmissionError) as caught:
         redact_dicom_pixels(
             source,
             policy={
@@ -177,4 +178,6 @@ def test_label_with_extra_decoded_pixels_cannot_be_retained(tmp_path):
                 "ocr_engine": object(),
             },
         )
+    assert caught.value.reason_code == "frame_count_mismatch"
+    assert caught.value.observed == 2
     assert not output.exists()
