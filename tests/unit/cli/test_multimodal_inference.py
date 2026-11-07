@@ -374,12 +374,26 @@ def test_signals_restore_host_handlers(arguments, monkeypatch):
     ],
 )
 def test_parse_errors_never_echo_submitted_values(argv, capsys):
-    with pytest.raises(SystemExit) as caught:
-        cli_main(argv)
-    assert caught.value.code == 2
+    if argv[1] == "draft":
+        with pytest.raises(SystemExit) as caught:
+            cli_main(argv)
+        assert caught.value.code == 2
+    else:
+        assert cli_main(argv) == 2
     captured = capsys.readouterr()
-    assert json.loads(captured.out)["error"]["code"] == "invalid_arguments"
+    report = json.loads(captured.out)
+    if argv[1] == "draft":
+        assert report["error"]["code"] == "invalid_arguments"
+    else:
+        assert report["reason"] == "invalid_arguments"
     assert SENSITIVE not in captured.out + captured.err
+
+
+def test_multimodal_help_lists_preflight_and_inference(capsys):
+    assert cli_main(["multimodal", "--help"]) == 0
+    output = capsys.readouterr().out
+    for command in ("preflight", "process-document", "transcribe", "draft"):
+        assert command in output
 
 
 def test_cancel_failure_still_attempts_close(arguments, monkeypatch):

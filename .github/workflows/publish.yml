@@ -227,22 +227,11 @@ jobs:
           echo "Matching openmed@$npm_version is already published; skipping npm upload."
           echo "exists=true" >> "$GITHUB_OUTPUT"
 
-      - name: Verify npm credentials
-        if: steps.npm-release.outputs.exists != 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_ACCESS_TOKEN is not configured in the npm environment."
-            exit 1
-          fi
-
       - name: Publish npm package with provenance
         if: steps.npm-release.outputs.exists != 'true'
         working-directory: js/openmedkit-web
+        # npm exchanges this job's GitHub OIDC identity with the trusted publisher.
         run: npm publish --ignore-scripts --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
   evidence:
     name: Sign and attach release evidence
     needs: [provenance, publish]

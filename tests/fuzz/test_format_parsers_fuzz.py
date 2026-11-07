@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis import target as hypothesis_target
 
@@ -505,6 +505,7 @@ def test_seed_corpus_declares_every_scope_format() -> None:
         assert seed.stat().st_size > 0
 
 
+@pytest.mark.slow
 def test_minimal_seeds_parse_for_available_targets() -> None:
     with _ParserWorker() as worker:
         for parser_target in _TARGETS:
@@ -518,6 +519,7 @@ def test_minimal_seeds_parse_for_available_targets() -> None:
             assert status == "ok", f"{parser_target.key} rejected its valid seed"
 
 
+@pytest.mark.slow
 def test_truncated_seeds_do_not_crash_registered_parsers() -> None:
     with _ParserWorker() as worker:
         for parser_target in _TARGETS:
@@ -527,6 +529,7 @@ def test_truncated_seeds_do_not_crash_registered_parsers() -> None:
                 _assert_no_crash(worker, parser_target, seed[: max(cutoff, 0)])
 
 
+@pytest.mark.slow
 def test_malformed_email_address_header_does_not_crash_registered_parser() -> None:
     parser_target = next(
         target for target in _TARGETS if target.key == "document:eml:.eml"
@@ -540,6 +543,7 @@ def test_malformed_email_address_header_does_not_crash_registered_parser() -> No
     assert status == "ok"
 
 
+@pytest.mark.slow
 def test_nested_group_email_address_header_does_not_crash_registered_parser() -> None:
     parser_target = next(
         target for target in _TARGETS if target.key == "document:eml:.eml"
@@ -553,9 +557,13 @@ def test_nested_group_email_address_header_does_not_crash_registered_parser() ->
     assert status == "ok"
 
 
+@pytest.mark.slow
 def test_registered_format_parsers_resist_mutated_input() -> None:
     with _ParserWorker() as worker:
-
+        # The worker enforces separate dispatch and parser execution timeouts.
+        # Hypothesis also times parent-side scheduling and queue round trips,
+        # which can exceed its deadline on loaded runners without a parser hang.
+        @settings(deadline=None)
         @given(case=_mutated_inputs())
         def exercise(case: tuple[_ParserTarget, bytes]) -> None:
             parser_target, data = case
@@ -576,6 +584,29 @@ def test_registered_format_parsers_resist_mutated_input() -> None:
         exercise()
 
 
+@pytest.mark.slow
+def test_harness_tolerates_dispatch_beyond_hypothesis_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parser_target = _TARGETS_BY_KEY["document:rtf:.rtf"]
+    case = (parser_target, _seed_bytes(parser_target))
+    monkeypatch.setattr(sys.modules[__name__], "_mutated_inputs", lambda: st.just(case))
+    run = _ParserWorker.run
+    deadline = settings.default.deadline
+    assert deadline is not None
+
+    def delayed_run(
+        worker: _ParserWorker, target_key: str, data: bytes
+    ) -> tuple[str, str]:
+        # Simulate scheduling latency before the worker accepts a request.
+        time.sleep(deadline.total_seconds() * 1.5)
+        return run(worker, target_key, data)
+
+    monkeypatch.setattr(_ParserWorker, "run", delayed_run)
+    test_registered_format_parsers_resist_mutated_input()
+
+
+@pytest.mark.slow
 def test_harness_catches_deliberately_broken_offset_map() -> None:
     with _ParserWorker() as worker:
         status, detail = worker.run("__broken_offset_map__", b"synthetic")
@@ -584,6 +615,7 @@ def test_harness_catches_deliberately_broken_offset_map() -> None:
     assert "AssertionError" in detail
 
 
+@pytest.mark.slow
 def test_harness_excludes_worker_dispatch_from_parser_budget() -> None:
     with _ParserWorker(timeout=0.05) as worker:
         status, detail = worker.run("__delayed_dispatch__", b"synthetic")
@@ -591,10 +623,12 @@ def test_harness_excludes_worker_dispatch_from_parser_budget() -> None:
     assert (status, detail) == ("ok", "")
 
 
+@pytest.mark.slow
 def test_harness_terminates_parser_that_exceeds_time_budget() -> None:
     with _ParserWorker(timeout=0.05) as worker:
         with pytest.raises(AssertionError, match="exceeded the 0.050s parser budget"):
             worker.run("__hang__", b"synthetic")
+        assert not worker._process.is_alive()
 
 
 # Explicit inventory of every public governance from_json classmethod.
@@ -672,6 +706,9 @@ def _governance_json_inputs(draw: st.DrawFn) -> str | bytes:
 
 
 @pytest.mark.parametrize("module_name,class_name", _GOVERNANCE_JSON_TARGETS)
+# Payloads reach 1 MiB or 100,000 nesting levels, which take hundreds of
+# milliseconds to parse on a loaded runner. Five seconds still catches a hang.
+@settings(deadline=5000)
 @given(payload=_governance_json_inputs())
 def test_public_governance_parsers_return_only_typed_errors(
     module_name: str, class_name: str, payload: str | bytes

@@ -153,10 +153,8 @@ class _Discard:
         pass
 
 
-def add_multimodal_inference_commands(subparsers: argparse._SubParsersAction) -> None:
-    """Register explicit document, transcription and draft file commands."""
-    group = subparsers.add_parser("multimodal", help="Explicit local media tasks.")
-    tasks = group.add_subparsers(dest="multimodal_task", required=True)
+def add_multimodal_inference_commands(tasks: argparse._SubParsersAction) -> None:
+    """Register document, transcription and draft tasks on the multimodal group."""
     for task in LocalTask:
         parser = tasks.add_parser(task.value, help=f"Run local {task.value}.")
         parser.add_argument("media", type=Path, help="Explicit local source file.")
@@ -179,7 +177,12 @@ def protect_multimodal_diagnostics(
         parser: Top-level parser; only this invocation's error handlers are changed.
         argv: Explicit arguments, used only to select controlled command/JSON output.
     """
-    if "multimodal" not in argv:
+    root_commands = next(
+        action.choices
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    if next((value for value in argv if value in root_commands), None) != "multimodal":
         return
     safe_args = argparse.Namespace(command="multimodal", json_output="--json" in argv)
 
@@ -187,14 +190,12 @@ def protect_multimodal_diagnostics(
         raise SystemExit(emit_error(safe_args, _error("invalid_arguments")))
 
     setattr(parser, "error", error)
-    for action in parser._actions:
+    group = root_commands["multimodal"]
+    setattr(group, "error", error)
+    for action in group._actions:
         if isinstance(action, argparse._SubParsersAction):
-            group = action.choices["multimodal"]
-            setattr(group, "error", error)
-            for task_action in group._actions:
-                if isinstance(task_action, argparse._SubParsersAction):
-                    for leaf in task_action.choices.values():
-                        setattr(leaf, "error", error)
+            for leaf in action.choices.values():
+                setattr(leaf, "error", error)
 
 
 def _error(code: str) -> CliError:

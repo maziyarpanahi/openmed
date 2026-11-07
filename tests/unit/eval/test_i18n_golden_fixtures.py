@@ -55,6 +55,10 @@ _MAX_NOTES_PER_LANGUAGE = 5
 # not yet carry a postcode span. They are still covered by the offset-recovery
 # and checksum tests; backfilling a ZIPCODE span for each is a separate task.
 _LEGACY_INCOMPLETE_LANGUAGES = frozenset({"ko", "ms", "tl"})
+
+# Packs that ship no street-address or postcode pattern for a country without a
+# national postcode system. Their fixtures must still cover every other family.
+_ADDRESS_FAMILY_EXEMPTIONS = {"rw": frozenset({"STREET_ADDRESS", "ZIPCODE"})}
 _NON_PII_FIXTURE_PREFIXES = ("relations_",)
 
 
@@ -151,7 +155,8 @@ def test_i18n_fixture_exercises_the_five_pattern_families(path: Path):
     if path.stem in _LEGACY_INCOMPLETE_LANGUAGES:
         pytest.skip(f"{path.name} predates the five-families convention (OM-100)")
     labels = {span["label"] for row in _load_rows(path) for span in row["gold_spans"]}
-    missing = _REQUIRED_LABELS - labels
+    exempt = _ADDRESS_FAMILY_EXEMPTIONS.get(path.stem, frozenset())
+    missing = _REQUIRED_LABELS - exempt - labels
     assert not missing, f"{path.name} is missing span families: {sorted(missing)}"
 
 

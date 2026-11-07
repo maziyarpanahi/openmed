@@ -80,6 +80,7 @@ from .contract import (
     VALIDATION_ERROR_MESSAGE,
 )
 from .gates import add_gates_command
+from .i18n_check import add_i18n_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
 from .repro import add_repro_command
@@ -579,9 +580,15 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     add_agent_self_check_command(subparsers)
+    from .synthetic import add_synthetic_command
+
+    add_synthetic_command(subparsers)
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
+    from .multimodal_preflight import add_multimodal_preflight_command
+
+    add_multimodal_preflight_command(subparsers)
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
@@ -604,13 +611,13 @@ def build_parser() -> argparse.ArgumentParser:
     from .clinical import add_clinical_command
 
     add_brief_command(subparsers)
-    from .multimodal_inference import add_multimodal_inference_commands
-
-    add_multimodal_inference_commands(subparsers)
     add_clinical_command(subparsers)
     from .nli_qualification import add_nli_qualification_command
 
     add_nli_qualification_command(subparsers)
+    from .decision_qualification import add_decision_qualification_command
+
+    add_decision_qualification_command(subparsers)
     from .clinical_review import add_clinical_review_commands
 
     add_clinical_review_commands(subparsers)
@@ -633,6 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
 
@@ -2884,6 +2892,14 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
             "recorded in the BenchmarkReport."
         ),
     )
+    pii_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Exit non-zero when the seeded openmed-synth corpus or its "
+            "surrogate providers drift from the published receipt."
+        ),
+    )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
     clinical_parser = benchmark_sub.add_parser(
@@ -3286,6 +3302,19 @@ def main(
             command_position += 1
         else:
             break
+    multimodal_help = arguments in (["multimodal", "-h"], ["multimodal", "--help"])
+    if arguments[command_position : command_position + 1] == ["multimodal"]:
+        from .multimodal_inference import LocalTask
+        from .multimodal_preflight import run_multimodal_preflight_cli
+
+        local_task = not command_position and arguments[1:2] in (
+            [task.value] for task in LocalTask
+        )
+        if not local_task and not multimodal_help:
+            # Preserve the guarded preflight parser and reject ambient configuration.
+            return run_multimodal_preflight_cli(
+                ["invalid"] if command_position else arguments[1:]
+            )
     if command_position > 0 and arguments[command_position : command_position + 2] == [
         "agents",
         "workflow",
@@ -3304,7 +3333,12 @@ def main(
     from .multimodal_inference import protect_multimodal_diagnostics
 
     protect_multimodal_diagnostics(parser, arguments)
-    args = parse_clinical_args(parser, arguments)
+    try:
+        args = parse_clinical_args(parser, arguments)
+    except SystemExit as exc:
+        if multimodal_help and exc.code == 0:
+            return 0
+        raise
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
@@ -5644,8 +5678,12 @@ def _handle_fhir_validate(args: argparse.Namespace) -> int:
         "outcome": outcome,
     }
     human = json.dumps(outcome, indent=2, sort_keys=True)
-    return_code = emit(args, payload, human=human)
-    return 1 if blocking else return_code
+    return emit(
+        args,
+        payload,
+        human=human,
+        outcome="check_failed" if blocking else "completed",
+    )
 
 
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
@@ -6247,6 +6285,28 @@ def _handle_eval_load_test(args: argparse.Namespace) -> int:
     return emit(args, data, human=json.dumps(data, indent=2))
 
 
+def _report_synthetic_provider_drift(
+    metadata: Mapping[str, Any], *, strict: bool
+) -> None:
+    """Warn, or fail in strict mode, when a seeded suite's providers drift."""
+    from openmed.training.synthetic.provider_versions import PROVIDER_VERSION_DRIFT
+
+    drift = metadata.get("provider_drift")
+    if not isinstance(drift, MappingABC) or drift.get("status") != "drift":
+        return
+    changed = ", ".join(str(label) for label in drift.get("changed", ()))
+    message = (
+        f"{PROVIDER_VERSION_DRIFT}: the regenerated openmed-synth corpus or its "
+        f"surrogate providers differ from the published receipt "
+        f"({changed or 'unspecified'}). Results are not comparable with the "
+        "published corpus; reproduce it with the locked dependency set "
+        "(uv sync --frozen)."
+    )
+    if strict:
+        raise CliError(message, code=PROVIDER_VERSION_DRIFT, exit_code=EXIT_ERROR)
+    sys.stderr.write(f"Warning: {message}\n")
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -6330,6 +6390,10 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     metadata = dict(metadata)
     metadata.setdefault("benchmark_domain", "pii")
     metadata.setdefault("source_suite", suite)
+    if suite == OPENMED_SYNTH:
+        _report_synthetic_provider_drift(
+            metadata, strict=bool(getattr(args, "strict", False))
+        )
 
     if args.checkpoint_manifest is not None:
         try:
@@ -7883,12 +7947,12 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         if item.get("hint"):
             human_lines.append(f"      Hint: {item['hint']}")
 
-    emit(
+    return emit(
         args,
         {"checks": results, "has_failure": has_fail},
         human="\n".join(human_lines),
+        outcome="check_failed" if has_fail else "completed",
     )
-    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:

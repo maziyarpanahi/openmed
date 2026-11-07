@@ -211,15 +211,16 @@ def test_isolated_bands_are_detected_without_page_dimensions() -> None:
     assert inferred.text == with_dimensions.text
 
 
-@pytest.mark.parametrize("size", [PageSize(500, 700), RotationPageSize(500, 700)])
-def test_page_size_contracts_keep_layout_geometry(size: object) -> None:
-    result = _clinical_page()
-    sized = parse_layout(
-        OcrResult(words=result.words, metadata={"page_dimensions": {0: size}})
-    )
+def test_page_size_contracts_keep_layout_geometry(subtests) -> None:
+    for size in [PageSize(500, 700), RotationPageSize(500, 700)]:
+        with subtests.test(size=size):
+            result = _clinical_page()
+            sized = parse_layout(
+                OcrResult(words=result.words, metadata={"page_dimensions": {0: size}})
+            )
 
-    assert sized.text == parse_layout(result).text
-    assert len(sized.headers) == len(sized.footers) == 1
+            assert sized.text == parse_layout(result).text
+            assert len(sized.headers) == len(sized.footers) == 1
 
 
 def test_synthetic_layout_quality_exceeds_acceptance_thresholds() -> None:
@@ -267,10 +268,11 @@ def test_layout_preserves_low_confidence_and_rejects_unbounded_pixels() -> None:
     assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1, True])
-def test_layout_rejects_ambiguous_grouping_tolerance(value: float) -> None:
-    with pytest.raises(ValueError, match="column_gap"):
-        parse_layout(_clinical_page(), column_gap=value)
+def test_layout_rejects_ambiguous_grouping_tolerance(subtests) -> None:
+    for value in [float("nan"), float("inf"), -1, True]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="column_gap"):
+                parse_layout(_clinical_page(), column_gap=value)
 
 
 def test_layout_rejects_fractional_page_and_negative_box_without_text() -> None:
@@ -283,16 +285,20 @@ def test_layout_rejects_fractional_page_and_negative_box_without_text() -> None:
         assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)
 
 
-@pytest.mark.parametrize("confidence", [True, -0.1, 1.1])
-def test_layout_rejects_invalid_confidence(confidence):
-    with pytest.raises(ValueError):
-        parse_layout(OcrResult(words=(OcrWord("synthetic", (1, 1, 5, 5), confidence),)))
+def test_layout_rejects_invalid_confidence(subtests):
+    for confidence in [True, -0.1, 1.1]:
+        with subtests.test(confidence=confidence):
+            with pytest.raises(ValueError):
+                parse_layout(
+                    OcrResult(words=(OcrWord("synthetic", (1, 1, 5, 5), confidence),))
+                )
 
 
-@pytest.mark.parametrize("text", [None, 123])
-def test_layout_rejects_nontext_words(text):
-    with pytest.raises(ValueError):
-        parse_layout(OcrResult(words=({"text": text, "bbox": (1, 1, 5, 5)},)))
+def test_layout_rejects_nontext_words(subtests):
+    for text in [None, 123]:
+        with subtests.test(text=text):
+            with pytest.raises(ValueError):
+                parse_layout(OcrResult(words=({"text": text, "bbox": (1, 1, 5, 5)},)))
 
 
 def test_layout_rejects_boolean_coordinates():
@@ -361,11 +367,12 @@ def test_layout_page_dimension_alias_conflict_is_rejected():
         parse_layout(result)
 
 
-@pytest.mark.parametrize("start", [True, 0.5])
-def test_layout_projection_rejects_noninteger_offsets(start):
-    document = parse_layout(_clinical_page())
-    with pytest.raises(ValueError):
-        document.spans_for_range(start, 5)
+def test_layout_projection_rejects_noninteger_offsets(subtests):
+    for start in [True, 0.5]:
+        with subtests.test(start=start):
+            document = parse_layout(_clinical_page())
+            with pytest.raises(ValueError):
+                document.spans_for_range(start, 5)
 
 
 def test_layout_reverse_projection_rejects_fractional_page():

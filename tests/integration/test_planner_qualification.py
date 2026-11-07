@@ -21,36 +21,49 @@ from tests.unit.eval.test_planner_qualification import (
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize(
-    "planner,exit_code,hostile_rate",
-    [(compliant_planner, 0, 0.0), (injected_planner, 1, 1.0)],
-)
-def test_command_is_offline_and_never_dispatches(
-    monkeypatch, tmp_path, planner, exit_code, hostile_rate, capsys
-):
-    attempts = []
+def test_command_is_offline_and_never_dispatches(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for planner, exit_code, hostile_rate in [
+        (compliant_planner, 0, 0.0),
+        (injected_planner, 1, 1.0),
+    ]:
+        with subtests.test(
+            planner=planner, exit_code=exit_code, hostile_rate=hostile_rate
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                attempts = []
 
-    def forbidden(*args, **kwargs):
-        attempts.append("side_effect")
-        raise AssertionError("network_or_tool_execution")
+                def forbidden(*args, **kwargs):
+                    attempts.append("side_effect")
+                    raise AssertionError("network_or_tool_execution")
 
-    monkeypatch.setattr(socket, "socket", forbidden)
-    monkeypatch.setattr(socket, "create_connection", forbidden)
-    monkeypatch.setattr(socket, "getaddrinfo", forbidden)
-    monkeypatch.setattr(grants, "dispatch_with_capability_grant", forbidden)
-    monkeypatch.setattr(tokens, "dispatch_with_approval_token", forbidden)
-    module = ModuleType("synthetic_planner")
-    module.propose = planner
-    monkeypatch.setitem(sys.modules, module.__name__, module)
-    output = tmp_path / "qualification.json"
-    assert (
-        main(["--planner", "synthetic_planner:propose", "--output", str(output)])
-        == exit_code
-    )
-    report = json.loads(output.read_text())
-    assert report["rates"]["hostile_instruction_compliance"] == hostile_rate
-    assert attempts == []
-    assert capsys.readouterr().out == ""
+                monkeypatch.setattr(socket, "socket", forbidden)
+                monkeypatch.setattr(socket, "create_connection", forbidden)
+                monkeypatch.setattr(socket, "getaddrinfo", forbidden)
+                monkeypatch.setattr(grants, "dispatch_with_capability_grant", forbidden)
+                monkeypatch.setattr(tokens, "dispatch_with_approval_token", forbidden)
+                module = ModuleType("synthetic_planner")
+                module.propose = planner
+                monkeypatch.setitem(sys.modules, module.__name__, module)
+                output = tmp_path / "qualification.json"
+                assert (
+                    main(
+                        [
+                            "--planner",
+                            "synthetic_planner:propose",
+                            "--output",
+                            str(output),
+                        ]
+                    )
+                    == exit_code
+                )
+                report = json.loads(output.read_text())
+                assert report["rates"]["hostile_instruction_compliance"] == hostile_rate
+                assert attempts == []
+                assert capsys.readouterr().out == ""
 
 
 def test_real_governance_verifiers_are_used_without_callbacks(monkeypatch):
@@ -78,18 +91,28 @@ def test_real_governance_verifiers_are_used_without_callbacks(monkeypatch):
     assert counts == {"grant": 8, "projection": 8, "approval": 1}
 
 
-@pytest.mark.parametrize(
-    "reference", ["private/path:secret", "missing_private_module:secret"]
-)
-def test_command_errors_do_not_echo_private_references(
-    monkeypatch, tmp_path, capsys, reference
-):
-    assert (
-        main(["--planner", reference, "--output", str(tmp_path / "report.json")]) == 2
-    )
-    captured = capsys.readouterr()
-    assert reference not in captured.err
-    assert not (tmp_path / "report.json").exists()
+def test_command_errors_do_not_echo_private_references(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for reference in ["private/path:secret", "missing_private_module:secret"]:
+        with subtests.test(reference=reference):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                assert (
+                    main(
+                        [
+                            "--planner",
+                            reference,
+                            "--output",
+                            str(tmp_path / "report.json"),
+                        ]
+                    )
+                    == 2
+                )
+                captured = capsys.readouterr()
+                assert reference not in captured.err
+                assert not (tmp_path / "report.json").exists()
 
 
 def test_import_and_planner_output_are_discarded(monkeypatch, tmp_path, capsys):
