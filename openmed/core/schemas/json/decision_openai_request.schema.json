@@ -1,0 +1,175 @@
+{
+  "$id": "https://openmed.dev/schemas/decision-openai-request/1.2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "input": {
+      "description": "Text input; messages and media are refused.",
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    },
+    "model": {
+      "description": "Must name the model the service decides with.",
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    },
+    "questions": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "instructions": {
+                "anyOf": [
+                  {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Optional question wording passed to the backend."
+              },
+              "name": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                "type": "string"
+              },
+              "type": {
+                "const": "predicate"
+              }
+            },
+            "required": [
+              "type",
+              "name"
+            ]
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "choices": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "anyOf": [
+                        {
+                          "maxLength": 1024,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 2,
+                "type": "array"
+              },
+              "instructions": {
+                "anyOf": [
+                  {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Optional question wording passed to the backend."
+              },
+              "name": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                "type": "string"
+              },
+              "type": {
+                "const": "choice"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "choices"
+            ]
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "instructions": {
+                "anyOf": [
+                  {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Optional question wording passed to the backend."
+              },
+              "levels": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {
+                      "maxLength": 256,
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "label"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 2,
+                "type": "array"
+              },
+              "name": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                "type": "string"
+              },
+              "type": {
+                "const": "score"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "levels"
+            ]
+          }
+        ],
+        "type": "object"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "model",
+    "input",
+    "questions"
+  ],
+  "title": "OpenAI-compatible Decisions Request",
+  "type": "object"
+}

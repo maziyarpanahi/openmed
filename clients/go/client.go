@@ -353,9 +353,10 @@ type PrivacyGatewayRequest struct {
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
 }
 
-// FixedOptionDecisionRequest is the request body for POST /v1/decisions.
-// The fields after CompatibilityPolicy are optional schema 1.1.0 fields;
-// Questions holds named question objects for DecisionQuestionSet requests.
+// FixedOptionDecisionRequest is the OpenMed request body for POST
+// /v1/decisions. The fields after CompatibilityPolicy are optional extension
+// fields (schema 1.1.0, and 1.2.0 for Media); Questions holds named question
+// objects for DecisionQuestionSet requests.
 type FixedOptionDecisionRequest struct {
 	Mode                DecisionMode `json:"mode"`
 	InputText           string       `json:"input_text"`
@@ -374,6 +375,15 @@ type FixedOptionDecisionRequest struct {
 	Media               []JSONObject `json:"media,omitempty"`
 	InputFormat         string       `json:"input_format,omitempty"`
 	MaxInputChars       int          `json:"max_input_chars,omitempty"`
+}
+
+// OpenAIDecisionsRequest is the text-only OpenAI-compatible Decisions body
+// for POST /v1/decisions. Model must name the model the service decides with;
+// Questions holds predicate, choice or score question objects.
+type OpenAIDecisionsRequest struct {
+	Model     string       `json:"model"`
+	Input     string       `json:"input"`
+	Questions []JSONObject `json:"questions"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -634,8 +644,8 @@ type DecisionQuestionResult struct {
 }
 
 // FixedOptionDecisionResult is the calibrated, explicitly review-only result
-// returned by POST /v1/decisions. Schema 1.1.0 results also carry
-// LevelScores, ExpectedLevel and Questions.
+// returned by POST /v1/decisions for an OpenMed request. Schema 1.1.0 and
+// later results also carry LevelScores, ExpectedLevel and Questions.
 type FixedOptionDecisionResult struct {
 	Mode                DecisionMode             `json:"mode"`
 	State               DecisionState            `json:"state"`
@@ -660,6 +670,31 @@ type FixedOptionDecisionResult struct {
 	SchemaVersion       string                   `json:"schema_version"`
 	CompatibilityPolicy string                   `json:"compatibility_policy"`
 	Extensions          JSONObject               `json:"extensions"`
+}
+
+// OpenAIDecisionsAnswer is one answer of an OpenAI-compatible Decisions
+// response. Predicate answers set Probability, choice answers Choice and
+// score answers Score; a question that did not succeed carries a nil
+// selection plus its OpenMed State and Code.
+type OpenAIDecisionsAnswer struct {
+	Type          string         `json:"type"`
+	Name          string         `json:"name"`
+	Probability   *float64       `json:"probability,omitempty"`
+	Choice        *string        `json:"choice,omitempty"`
+	Score         *float64       `json:"score,omitempty"`
+	Confidence    *float64       `json:"confidence,omitempty"`
+	Probabilities []JSONObject   `json:"probabilities,omitempty"`
+	State         *DecisionState `json:"state,omitempty"`
+	Code          *string        `json:"code,omitempty"`
+}
+
+// OpenAIDecisionsResponse is returned by POST /v1/decisions for an
+// OpenAI-compatible body. OpenMed carries the review requirement, advisory,
+// calibration, backend provenance and schema version of the result.
+type OpenAIDecisionsResponse struct {
+	Model   string                  `json:"model"`
+	Answers []OpenAIDecisionsAnswer `json:"answers"`
+	OpenMed JSONObject              `json:"openmed,omitempty"`
 }
 
 // HealthResponse is returned by /health.
@@ -1427,9 +1462,19 @@ func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest) (*JSONObje
 	return &out, nil
 }
 
-// Decision calls POST /v1/decisions.
+// Decision calls POST /v1/decisions with an OpenMed decision request.
 func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
 	var out FixedOptionDecisionResult
+	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// OpenAIDecisions calls POST /v1/decisions with an OpenAI-compatible
+// Decisions body; the service answers in the same shape.
+func (c *Client) OpenAIDecisions(ctx context.Context, req OpenAIDecisionsRequest) (*OpenAIDecisionsResponse, error) {
+	var out OpenAIDecisionsResponse
 	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
 		return nil, err
 	}

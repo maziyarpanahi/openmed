@@ -15,6 +15,7 @@ from openmed.structured.decision import (
 from openmed.structured.decision import (
     decision_request_schema,
 )
+from openmed.structured.decision_interop import openai_decisions_request_schema
 
 from .governed_workflows import WorkflowReference, WorkflowView
 from .journey_client_generated import (
@@ -318,6 +319,11 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         method="POST",
         path="/v1/decisions",
         request_fields=frozenset(decision_request_schema()["properties"]),
+    ),
+    "openai_decisions": ClientEndpoint(
+        method="POST",
+        path="/v1/decisions",
+        request_fields=frozenset(openai_decisions_request_schema()["properties"]),
     ),
     "unload_model": ClientEndpoint(
         method="POST",
@@ -725,6 +731,38 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
             "POST",
             "/v1/decisions",
             json=payload,
+            request_id=request_id,
+        )
+
+    def openai_decisions(
+        self,
+        request: Mapping[str, Any],
+        *,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Send an OpenAI-compatible Decisions body to ``POST /v1/decisions``.
+
+        The service answers in the same shape: ``model``, one entry per
+        question under ``answers``, and an ``openmed`` object carrying the
+        review requirement, advisory, calibration and backend provenance.
+
+        Args:
+            request: ``{"model": str, "input": str, "questions": [question]}``;
+                ``model`` must name the model the service decides with.
+            request_id: Optional correlation identifier for this call.
+
+        Returns:
+            The OpenAI-compatible Decisions response.
+
+        Raises:
+            OpenMedAPIError: If the service refuses the body, for example with
+                ``decision_request_ambiguous`` or ``model_not_served``.
+        """
+
+        return self._request(
+            "POST",
+            "/v1/decisions",
+            json=dict(request),
             request_id=request_id,
         )
 

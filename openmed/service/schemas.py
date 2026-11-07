@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import StrictStr
 
@@ -42,6 +42,15 @@ from openmed.structured.decision import (
 from openmed.structured.decision import (
     MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
 )
+from openmed.structured.decision_interop import (
+    MAX_MODEL_ID_CHARS as DECISION_MAX_MODEL_ID_CHARS,
+)
+from openmed.structured.decision_interop import (
+    DecisionRequestShape,
+    DecisionRequestShapeError,
+    decision_request_shape,
+    openai_decisions_request_schema,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
@@ -54,13 +63,23 @@ from .keep_alive import parse_keep_alive
 from .limits import get_max_text_length
 
 try:
-    from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+    from pydantic import (
+        BaseModel,
+        ConfigDict,
+        Discriminator,
+        Field,
+        Tag,
+        field_validator,
+        model_validator,
+    )
 
     PYDANTIC_V2 = True
 except ImportError:  # pragma: no cover
     from pydantic import BaseModel, Field, root_validator, validator
 
     ConfigDict = None  # type: ignore[assignment]
+    Discriminator = None  # type: ignore[assignment]
+    Tag = None  # type: ignore[assignment]
     field_validator = None  # type: ignore[assignment]
     model_validator = None  # type: ignore[assignment]
     PYDANTIC_V2 = False
@@ -1103,7 +1122,7 @@ class FixedOptionDecisionRequest(_StrictModel):
         ge=DECISION_MIN_TIMEOUT_MS,
         le=DECISION_MAX_TIMEOUT_MS,
     )
-    schema_version: Optional[Literal["1.0.0", "1.1.0"]] = None
+    schema_version: Optional[Literal["1.0.0", "1.1.0", "1.2.0"]] = None
     compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
     question_id: Optional[str] = None
     instructions: Optional[str] = None
@@ -1149,6 +1168,86 @@ class FixedOptionDecisionRequest(_StrictModel):
                 values.get("max_input_chars"),
             )
             return values
+
+
+class OpenAIDecisionsRequest(_StrictModel):
+    """Text-only OpenAI-compatible Decisions body for ``POST /v1/decisions``.
+
+    The OpenAPI component is the canonical OpenAI-compatible request schema.
+    The converter performs the full validation of each question; the service
+    applies the default policy fields and input bound.
+    """
+
+    model: str = Field(min_length=1, max_length=DECISION_MAX_MODEL_ID_CHARS)
+    input: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS, repr=False)
+    questions: list[dict[str, Any]] = Field(
+        repr=False,
+        **(
+            {"min_length": 1, "max_length": DECISION_MAX_QUESTIONS}
+            if PYDANTIC_V2
+            else {"min_items": 1, "max_items": DECISION_MAX_QUESTIONS}
+        ),
+    )
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=openai_decisions_request_schema(),
+        )
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = openai_decisions_request_schema()
+
+
+_DECISION_REQUEST_MODELS: dict[DecisionRequestShape, type[_StrictModel]] = {
+    DecisionRequestShape.OPENMED: FixedOptionDecisionRequest,
+    DecisionRequestShape.OPENAI_DECISIONS: OpenAIDecisionsRequest,
+}
+
+
+def _decision_body_shape(value: Any) -> Optional[str]:
+    """Return the ``POST /v1/decisions`` union tag of a body or parsed model.
+
+    ``None`` marks a body without one recognisable shape; the route refuses
+    those bodies with a controlled error before validation reaches this tag.
+    """
+
+    for shape, model in _DECISION_REQUEST_MODELS.items():
+        if isinstance(value, model):
+            return shape.value
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        return decision_request_shape(value).value
+    except DecisionRequestShapeError:
+        return None
+
+
+if PYDANTIC_V2:
+    DecisionsRequestBody = Annotated[
+        Union[
+            Annotated[
+                FixedOptionDecisionRequest,
+                Tag(DecisionRequestShape.OPENMED.value),
+            ],
+            Annotated[
+                OpenAIDecisionsRequest,
+                Tag(DecisionRequestShape.OPENAI_DECISIONS.value),
+            ],
+        ],
+        Discriminator(
+            _decision_body_shape,
+            custom_error_type="decision_body_type",
+            custom_error_message="Input should be a decision request object",
+        ),
+    ]
+else:  # pragma: no cover
+    DecisionsRequestBody = Union[  # type: ignore[misc]
+        FixedOptionDecisionRequest,
+        OpenAIDecisionsRequest,
+    ]
 
 
 class GroundCandidateResponse(_StrictModel):
