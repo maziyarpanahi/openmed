@@ -77,3 +77,26 @@ The fixture's original bytes literal is deliberately outside the owner's cleanup
 ## Validation
 
 Run `.venv/bin/python -m pytest tests/unit/multimodal/streaming/privacy/test_audio_retention.py -q`. Synthetic tests inspect actual overwritten buffers and removed files, cancellation during inference, provider errors, deadlines and clock failures, resource limits, incomplete inventories, failed cleanup retries, file replacement and link attacks, unexpected entries, conservative restart recovery, malformed checkpoints and value-free offline reports. POSIX file tests are platform-scoped; portable buffer tests and unsupported-file-adapter rejection run on every supported Python platform.
+
+## Mute identifiers in a retained utterance
+
+Use `mute_retained_clip` from `openmed.multimodal.streaming.privacy.audio_muting` to create a second, verified buffer inside an existing retention session. Declare both source and destination as separate expected buffers before capture. The destination inherits the same deadline and cleanup inventory. No file or export is created. The source stays intact until its ordinary destruction.
+
+Use one complete, already screened utterance per clip, in interleaved signed 16-bit little-endian PCM. WAV containers, compressed audio and unknown filter delay are not accepted as PCM lineage. The host must verify the codec, frame count, channel layout, stream origin and synchronization, bind the capture digest to that utterance, and establish that retention is permitted. Mislabeling a partial transcript as complete can leave identifiers outside its scope. Muting known spans does not prove that a detector found every identifier, and does not anonymize a speaker's voice.
+
+At the trusted screening handoff, keep the `ReleasedSpeechSegment` from `WithholdingBuffer` and its `screened_segment_digest(release)` together with the capture's SHA-256. Pin those digests there, not from untrusted input later. Construct `RetainedClipAlignment` with them, the session reference, source and ASR rates, source frames/channels, and the stream-relative millisecond origin of target frame zero. Only declare `TimingEvidence.TOKENS` for reliable, synchronized timing. Each known identifier must be completely covered; a partial word uses the entire token. Mapping rounds outwards in the ASR and source frame domains, pads in source frames, and merges overlaps. Every channel in each reported half-open frame range is verified silent; samples outside those ranges are verified unchanged.
+
+If only the bounds of the **complete utterance** are known reliably, select `TimingEvidence.SEGMENT` explicitly: a single identifier mutes the entire clip. `UNCERTAIN` refuses the whole operation. There is no automatic switch to a weaker timing source or partial output on a missing span.
+
+```python
+from openmed.multimodal.streaming.privacy.audio_muting import mute_retained_clip
+
+# retention already owns source_ref; destination_ref was reserved in its inventory.
+report = mute_retained_clip(
+    retention, source_ref, destination_ref, alignment, release, padding_ms=30,
+)
+# Safe evidence contains frame ranges, counts and digests only.
+evidence = report.to_json()
+# Protected access uses retention.infer(destination_ref, trusted_local_consumer).
+# retention.finish() accounts for both original and derived buffers.
+```
