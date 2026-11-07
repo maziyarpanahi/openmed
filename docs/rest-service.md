@@ -69,6 +69,12 @@ Keep this loopback bind for local use. Before exposing the service on a network,
 configure [authentication](serving/authentication.md), TLS at the ingress or
 reverse proxy, and an exact trusted-host allowlist.
 
+With `OPENMED_PROFILE` unset the service runs under the production
+[security profile](serving/security-profile.md): until authentication is
+configured, `/readyz` reports `security_profile_invalid` and other routes answer
+`503`. For local exploration, prefix these commands with `OPENMED_PROFILE=dev`.
+Run `openmed service preflight` to see which controls a configuration passes.
+
 The reference launcher configures `StructuredJsonLogFormatter` for
 `openmed.service.access` and disables `uvicorn.access`. It emits exactly one
 structured record per request (method, route template, status, duration,

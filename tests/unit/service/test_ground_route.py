@@ -18,6 +18,13 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "openmed/eval/golden/fixtures/grounding_vocab_synthetic.jsonl"
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 @pytest.fixture()
 def grounding_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     cache_dir = tmp_path / "grounding"

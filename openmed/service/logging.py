@@ -334,6 +334,12 @@ def main() -> None:
     )
     parser.add_argument("--forwarded-allow-ips")
     options = vars(parser.parse_args())
+    from .security_profile import LISTEN_HOST_ENV_VAR, LISTEN_TLS_ENV_VAR
+
+    # The security-profile self-check reads the real bind address and
+    # transport from here; worker processes inherit the environment.
+    os.environ[LISTEN_HOST_ENV_VAR] = str(options["host"])
+    os.environ[LISTEN_TLS_ENV_VAR] = "true" if options["ssl_certfile"] else "false"
     log_config = {
         "version": 1,
         "disable_existing_loggers": False,

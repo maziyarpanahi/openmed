@@ -33,6 +33,13 @@ BODY = {
 HEADERS = {"X-API-Key": "example-synthetic-key"}
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 def configured(monkeypatch, *, scopes=("decisions:write", "pii:write"), burst=20):
     # Exercise the real service admission and warm pool without installing
     # optional Transformers weights for a fake de-identifier.

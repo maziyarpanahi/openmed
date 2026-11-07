@@ -131,7 +131,11 @@ egress-capable network after images and model artifacts are prepared.
 
 The default port mapping is `127.0.0.1:8080:8080`. Changing
 `OPENMED_BIND_ADDRESS` requires authentication, TLS, and an explicit trusted
-host policy. A remote integration requires a separately declared network and
+host policy. The bundle defaults to `OPENMED_PROFILE=prod`, whose
+[security profile](../serving/security-profile.md) keeps the API closed until
+authentication is configured and, because the bundle enables Journey storage,
+until Journey principal binding and encryption ship; set
+`OPENMED_PROFILE=dev` to evaluate it locally. A remote integration requires a separately declared network and
 a documented egress allowlist. Telemetry is opt-in and must remain value-free.
 
 ## Backup and restore

@@ -767,6 +767,12 @@ class JourneyResourceCatalog:
 
         return self._snapshot_digest
 
+    @property
+    def record_count(self) -> int:
+        """Return how many resource versions the catalog serves."""
+
+        return len(self._records)
+
     def list_resources(
         self,
         query: JourneyResourceQuery,

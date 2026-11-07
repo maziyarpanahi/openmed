@@ -589,6 +589,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .multimodal_preflight import add_multimodal_preflight_command
 
     add_multimodal_preflight_command(subparsers)
+    from .service_preflight import add_service_preflight_command
+
+    add_service_preflight_command(subparsers)
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
