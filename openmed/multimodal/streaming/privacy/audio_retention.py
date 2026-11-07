@@ -378,6 +378,49 @@ class AudioRetentionSession:
                 self.finish(SessionEnd.FAILURE)
                 raise AudioRetentionError("audio_capture_failed")
 
+    def _derive_buffer(
+        self,
+        session_ref: str,
+        source_ref: str,
+        destination_ref: str,
+        expected_bytes: int,
+        render: Callable[[memoryview, memoryview], _T],
+    ) -> _T:
+        """Render into a new owned buffer; never expose an unverified derivative.
+
+        Only trusted package renderers may use this primitive. They run under
+        the inventory lock, may not re-enter the session, and must not retain
+        views. Check the non-renewable deadline again before making it usable.
+        """
+        with self._lock:
+            self._active()
+            _require(session_ref == self._session_ref and source_ref != destination_ref)
+            source = self._artifact(source_ref)
+            destination = self._artifact(destination_ref)
+            _require(source.buffer is not None and len(source.buffer) == expected_bytes)
+            _require(
+                destination.expected.kind is ArtifactKind.BUFFER
+                and not destination.used
+            )
+            self._reserve(expected_bytes)
+            assert source.buffer is not None
+            try:
+                destination.buffer = bytearray(expected_bytes)
+                destination.size = expected_bytes
+                with (
+                    memoryview(source.buffer).toreadonly() as original,
+                    memoryview(destination.buffer) as output,
+                ):
+                    report = render(original, output)
+                destination.used = True
+            except BaseException:
+                self.finish(SessionEnd.FAILURE)
+            else:
+                if self.expire():
+                    raise AudioRetentionError("audio_result_discarded")
+                return report
+            raise AudioRetentionError("audio_derivation_failed")
+
     def _reserve(self, size: int) -> None:
         if size > self._policy.max_bytes - self._owned_bytes:
             self._violations.add("byte_limit")
