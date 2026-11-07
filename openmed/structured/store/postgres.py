@@ -22,6 +22,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 from openmed.clinical.journey_contracts import canonical_digest
 
+from .encryption import PLAINTEXT_JOURNEY_CODEC
 from .local import (
     LocalStoreError,
     SQLiteJourneyStore,
@@ -573,6 +574,8 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         self.policy = policy or AllowAllStoragePolicy()
         self._lock = threading.RLock()
         self._closed = False
+        # Payload columns stay plaintext; see ``migrate_to_encrypted``.
+        self._payload_codec = PLAINTEXT_JOURNEY_CODEC
         self._raw_connection = connection
         self._connection = cast(Any, _PostgresConnectionAdapter(connection))
         self._migration_report = PostgresMigrationReport(
@@ -638,6 +641,20 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         except Exception:
             return StoreResult.outcome(StoreState.FAILURE, "postgres_connect_failed")
         return cls.open(connection, schema=schema, policy=policy)
+
+    @classmethod
+    def migrate_to_encrypted(  # type: ignore[override]
+        cls,
+        *args: Any,
+        **kwargs: Any,
+    ) -> StoreResult[Any]:
+        """Report that application-layer payload encryption is SQLite-only.
+
+        PostgreSQL payload columns are not sealed by OpenMed; rely on the
+        server's access controls and storage encryption.
+        """
+
+        return StoreResult.outcome(StoreState.UNSUPPORTED, "encryption_unsupported")
 
     @property
     def migration_report(self) -> PostgresMigrationReport:

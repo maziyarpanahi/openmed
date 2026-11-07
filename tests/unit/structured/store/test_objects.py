@@ -20,10 +20,14 @@ from openmed.structured.store import (
     ComposedJourneyStore,
     DenyStorageOperations,
     FsspecArtifactStore,
+    JourneyStoreEncryption,
     ObjectStoreNamespace,
     SQLiteJourneyStore,
     StoreState,
 )
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 CONTENT = b"synthetic object journey artifact"
 RECORDED_AT = "2026-01-02T03:04:05Z"
@@ -167,7 +171,9 @@ def test_composed_store_commits_metadata_and_compensates_failure(
         "memory://journey/composed",
         allowed_protocols=frozenset({"memory"}),
     )
-    metadata = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    metadata = SQLiteJourneyStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
     store = ComposedJourneyStore(artifacts, metadata)
     locator = EvidenceLocator(
         locator_id="evidence_cccccccccccccccc",
@@ -243,7 +249,9 @@ def test_composed_store_keeps_blob_when_commit_status_is_unknown(
         "memory://journey/unknown-commit",
         allowed_protocols=frozenset({"memory"}),
     )
-    metadata = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    metadata = SQLiteJourneyStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    )
     store = ComposedJourneyStore(artifacts, metadata)
     original_transaction = metadata.transaction
 
