@@ -8,11 +8,20 @@ import com.openmed.openmedkit.ocr.OcrBoundingBox
 import com.openmed.openmedkit.ocr.OcrImage
 import com.openmed.openmedkit.ocr.OcrResult
 import com.openmed.openmedkit.ocr.OcrToken
+import com.openmed.openmedkit.ocr.FakeOcrAdapter
 import com.openmed.openmedkit.ocr.SyntheticImages
 import java.io.File
+import java.security.MessageDigest
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -107,8 +116,8 @@ class DocumentIntakeTest {
                 ocrResult(
                     text = "Synthetic image",
                     tokens = listOf(
-                        token("Synthetic", 0, 9, page = 0),
-                        token("image", 10, 15, page = 0),
+                        token("Synthetic", 0, 9, page = 0, bbox = OcrBoundingBox(0, 0, 1, 2)),
+                        token("image", 10, 15, page = 0, bbox = OcrBoundingBox(1, 0, 2, 2)),
                     ),
                 ),
             ),
@@ -155,6 +164,12 @@ class DocumentIntakeTest {
             assertEquals(40 to 20, image.width to image.height)
             assertEquals(20, result.pages.single().width)
             assertEquals(40, result.pages.single().height)
+            // Evidence stays in stored pixels; the upright OCR box maps back.
+            val evidence = requireNotNull(result.evidence)
+            val page = requireNotNull(evidence.pages.single().evidence)
+            assertEquals(listOf(40.0, 20.0), listOf(page.width, page.height))
+            assertEquals(90, page.rotationDegrees)
+            assertEquals(DocumentBox(0.0, 13.0, 10.0, 20.0), evidence.regions.single().sourceBox)
         } finally {
             rotatedJpeg.delete()
         }
@@ -175,7 +190,7 @@ class DocumentIntakeTest {
                 OcrImage.fromBitmap(bitmap, rotationDegrees = 270)
             },
         )
-        val uri = Uri.parse("content://synthetic.documents/page.png")
+        val uri = Uri.fromFile(resourceFile("sample_document_image.png"))
 
         val result = intake.extract(uri)
 
@@ -194,6 +209,225 @@ class DocumentIntakeTest {
             val jpeg = jpegWithExifOrientation(width = 2, height = 2, orientation = orientation)
             assertEquals(degrees, exifRotationDegrees(jpeg.inputStream()))
         }
+    }
+
+    @Test
+    fun extractAttachesEvidenceThatMapsSpansBackToPages() = runBlocking {
+        val samplePdf = resourceFile("sample_multipage.pdf")
+        val adapter = QueueOcrAdapter(
+            listOf(
+                ocrResult(text = "Page one", tokens = listOf(token("Page", 0, 4, page = 0))),
+                ocrResult(text = "Beta", tokens = listOf(token("Beta", 0, 4, page = 0))),
+            ),
+        )
+        val result = DocumentIntake(context, adapter, pdfPageSource = FixturePdfPageSource())
+            .extract(Uri.fromFile(samplePdf))
+
+        val evidence = requireNotNull(result.evidence)
+        assertEquals(DocumentIntakeOutcome.COMPLETE, evidence.outcome)
+        assertEquals(result.text, evidence.text)
+        assertEquals(sha256(samplePdf.readBytes()), evidence.sourceDigest)
+        val betaStart = result.text.indexOf("Beta")
+        val region = evidence.regionsForUtf16Span(betaStart, betaStart + 4).single()
+        assertEquals(1, region.page)
+        assertEquals(DocumentBox(0.0, 0.0, 4.0, 10.0), region.sourceBox)
+        assertEquals(DocumentSpatialUnit.PIXEL, region.evidence.unit)
+        assertEquals("complete", result.metadata["outcome"])
+    }
+
+    @Test
+    fun croppedRotatedImageEvidenceUsesOriginalPixels() = runBlocking {
+        // A 30x10 cut from (10, 20)-(40, 30) of a 100x50 original, turned 90 degrees for OCR.
+        val bitmap = Bitmap.createBitmap(30, 10, Bitmap.Config.ARGB_8888)
+        val source = object : DocumentImageSource {
+            override suspend fun load(context: Context, uri: Uri) =
+                OcrImage.fromBitmap(bitmap, rotationDegrees = 90)
+
+            override suspend fun loadPage(context: Context, uri: Uri) =
+                DocumentImagePage(
+                    image = load(context, uri),
+                    geometry = DocumentPageGeometry(
+                        width = 100.0,
+                        height = 50.0,
+                        rotationDegrees = 90,
+                        crop = DocumentBox(10.0, 20.0, 40.0, 30.0),
+                    ),
+                )
+        }
+        val adapter = QueueOcrAdapter(
+            listOf(
+                ocrResult(
+                    text = "Word",
+                    tokens = listOf(token("Word", 0, 4, page = 0, bbox = OcrBoundingBox(2, 4, 8, 10))),
+                ),
+            ),
+        )
+
+        val report = DocumentIntake(context, adapter, imageSource = source)
+            .intake(Uri.fromFile(resourceFile("sample_document_image.png")))
+
+        assertEquals(DocumentIntakeOutcome.COMPLETE, report.outcome)
+        val region = report.evidence.regions.single()
+        assertEquals(DocumentBox(14.0, 22.0, 20.0, 28.0), region.sourceBox)
+        assertEquals(DocumentBox(22.0, 14.0, 28.0, 20.0), region.evidence.displayBox)
+        assertEquals(
+            DocumentBox(10.0, 20.0, 40.0, 30.0),
+            report.evidence.pages.single().cropEvidence?.sourceBox,
+        )
+        assertTrue(bitmap.isRecycled)
+    }
+
+    @Test
+    fun missingPagesAndPermissionLossAreExplicitPartialOutcomes() = runBlocking {
+        val uri = Uri.fromFile(resourceFile("sample_multipage.pdf"))
+        val source = ScriptedPdfPageSource(
+            listOf(
+                Step.Page(0),
+                Step.Missing(1),
+                Step.Page(2),
+                Step.Fail(SecurityException("synthetic-private-path")),
+                Step.Page(4),
+            ),
+        )
+        val adapter = QueueOcrAdapter(
+            listOf(
+                ocrResult(text = "One", tokens = listOf(token("One", 0, 3, page = 0))),
+                ocrResult(text = "Three", tokens = listOf(token("Three", 0, 5, page = 0))),
+            ),
+        )
+        val intake = DocumentIntake(context, adapter, pdfPageSource = source)
+
+        val report = intake.intake(uri)
+
+        assertEquals(DocumentIntakeOutcome.PARTIAL, report.outcome)
+        assertEquals(
+            listOf(DocumentIntakeReason.PAGE_MISSING, DocumentIntakeReason.PERMISSION_LOST),
+            report.reasons,
+        )
+        assertEquals(
+            listOf(
+                DocumentPageStatus.MAPPED,
+                DocumentPageStatus.HELD,
+                DocumentPageStatus.MAPPED,
+                DocumentPageStatus.HELD,
+            ),
+            report.evidence.pages.map { it.status },
+        )
+        assertEquals("One\n\nThree", report.result?.text)
+        assertEquals(listOf(0, 2), report.result?.pages?.map { it.page })
+        assertEquals(listOf(0, 2), source.requested)
+        assertTrue(source.closed)
+        assertTrue(source.bitmaps.all { it.isRecycled })
+        assertFalse(report.toString().contains("synthetic-private-path"))
+
+        val error = assertFailsWith<DocumentIntakeException> {
+            DocumentIntake(context, FakeOcrAdapter(), pdfPageSource = ScriptedPdfPageSource(source.script))
+                .extract(uri)
+        }
+        assertEquals(DocumentIntakeOutcome.PARTIAL, error.outcome)
+        assertEquals("page_missing,permission_lost", error.message)
+    }
+
+    @Test
+    fun documentLevelFailuresAreRefusedWithValueFreeReasons() = runBlocking {
+        val uri = Uri.fromFile(resourceFile("sample_multipage.pdf"))
+        fun intake(vararg steps: Step) =
+            DocumentIntake(
+                context = context,
+                ocrAdapter = FakeOcrAdapter(),
+                pdfPageSource = ScriptedPdfPageSource(steps.toList()),
+            )
+
+        val denied = intake(Step.Fail(SecurityException("synthetic-private-path"))).intake(uri)
+        assertEquals(DocumentIntakeOutcome.REFUSED, denied.outcome)
+        assertEquals(listOf(DocumentIntakeReason.PERMISSION_DENIED), denied.reasons)
+        assertNull(denied.result)
+        assertFalse(denied.toString().contains("synthetic-private-path"))
+        val locked = intake(Step.Fail(DocumentIntakeException(DocumentIntakeReason.DOCUMENT_LOCKED)))
+        assertEquals(listOf(DocumentIntakeReason.DOCUMENT_LOCKED), locked.intake(uri).reasons)
+        assertEquals(listOf(DocumentIntakeReason.EMPTY_DOCUMENT), intake().intake(uri).reasons)
+
+        val tooLarge = ScriptedPdfPageSource(listOf(Step.Page(0)))
+        val limited = DocumentIntake(
+            context = context,
+            ocrAdapter = FakeOcrAdapter(),
+            pdfPageSource = tooLarge,
+            limits = DocumentIntakeLimits(maxDocumentBytes = 8),
+        ).intake(uri)
+        assertEquals(listOf(DocumentIntakeReason.SIZE_LIMIT), limited.reasons)
+        assertTrue(tooLarge.requested.isEmpty())
+
+        val missing = Uri.fromFile(File(context.cacheDir, "missing-synthetic.pdf"))
+        assertEquals(
+            listOf(DocumentIntakeReason.PERMISSION_DENIED),
+            intake(Step.Page(0)).intake(missing).reasons,
+        )
+        val text = Uri.fromFile(File(context.cacheDir, "synthetic.txt"))
+        val error = assertFailsWith<DocumentIntakeException> { intake(Step.Page(0)).extract(text) }
+        assertEquals("unsupported_document", error.message)
+        assertEquals(DocumentIntakeReason.UNSUPPORTED_DOCUMENT, error.reason)
+    }
+
+    @Test
+    fun pageLimitAndRecognitionFailuresHoldPages() = runBlocking {
+        val uri = Uri.fromFile(resourceFile("sample_multipage.pdf"))
+        val source = ScriptedPdfPageSource((0..3).map { Step.Page(it) })
+        var calls = 0
+        val adapter = OcrAdapter {
+            if (calls++ == 1) {
+                throw IllegalStateException("synthetic-engine-detail")
+            }
+            ocrResult(text = "Ok", tokens = listOf(token("Ok", 0, 2, page = 0)))
+        }
+
+        val report = DocumentIntake(
+            context = context,
+            ocrAdapter = adapter,
+            pdfPageSource = source,
+            limits = DocumentIntakeLimits(maxPages = 2),
+        ).intake(uri)
+
+        assertEquals(DocumentIntakeOutcome.PARTIAL, report.outcome)
+        assertEquals(
+            listOf(DocumentIntakeReason.PAGE_LIMIT, DocumentIntakeReason.RECOGNITION_FAILED),
+            report.reasons,
+        )
+        assertEquals(listOf(0, 1, 2), source.requested)
+        assertEquals("Ok", report.result?.text)
+        assertTrue(source.closed)
+        assertTrue(source.bitmaps.all { it.isRecycled })
+        assertFalse(report.toString().contains("synthetic-engine-detail"))
+    }
+
+    @Test
+    fun cancellationReleasesHandlesAndBitmapsWithoutWritingStorage() = runBlocking {
+        val storage = listOfNotNull(
+            context.cacheDir,
+            context.filesDir,
+            context.noBackupFilesDir,
+            context.externalCacheDir,
+        )
+        fun snapshot() = storage.map { dir -> dir.listFiles()?.map { it.name }?.sorted() }
+        val before = snapshot()
+        val uri = Uri.fromFile(resourceFile("sample_multipage.pdf"))
+        val source = ScriptedPdfPageSource((0..2).map { Step.Page(it) })
+        var calls = 0
+        val adapter = OcrAdapter {
+            if (calls++ == 1) {
+                currentCoroutineContext().cancel()
+                awaitCancellation()
+            }
+            ocrResult(text = "Ok", tokens = listOf(token("Ok", 0, 2, page = 0)))
+        }
+
+        val job = async { DocumentIntake(context, adapter, pdfPageSource = source).intake(uri) }
+
+        assertFailsWith<CancellationException> { job.await() }
+        assertEquals(listOf(0, 1), source.requested)
+        assertTrue(source.closed)
+        assertEquals(2, source.bitmaps.size)
+        assertTrue(source.bitmaps.all { it.isRecycled })
+        assertEquals(before, snapshot())
     }
 
     private fun resourceFile(name: String): File =
@@ -235,13 +469,19 @@ class DocumentIntakeTest {
     private fun ocrResult(text: String, tokens: List<OcrToken>): OcrResult =
         OcrResult(text = text, words = tokens, metadata = mapOf("engine" to "fixture"))
 
-    private fun token(text: String, start: Int, end: Int, page: Int): OcrToken =
+    private fun token(
+        text: String,
+        start: Int,
+        end: Int,
+        page: Int,
+        bbox: OcrBoundingBox? = OcrBoundingBox(start, page * 100, end, page * 100 + 10),
+    ): OcrToken =
         OcrToken(
             text = text,
             start = start,
             end = end,
             confidence = 0.99f,
-            bbox = OcrBoundingBox(start, page * 100, end, page * 100 + 10),
+            bbox = bbox,
             page = page,
         )
 
@@ -261,6 +501,62 @@ class DocumentIntakeTest {
         override suspend fun recognize(image: OcrImage): OcrResult {
             _calls += image
             return results[index++]
+        }
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+
+    private sealed class Step {
+        data class Page(val index: Int) : Step()
+
+        data class Missing(val index: Int) : Step()
+
+        data class Fail(val error: Exception) : Step()
+    }
+
+    /** Emits scripted page events, tracking renders, bitmaps and the open handle. */
+    private class ScriptedPdfPageSource(val script: List<Step>) : PdfPageSource {
+        val requested = mutableListOf<Int>()
+        val bitmaps = mutableListOf<Bitmap>()
+        var closed = false
+
+        override suspend fun renderEach(
+            context: Context,
+            uri: Uri,
+            block: suspend (RenderedPdfPage) -> Unit,
+        ) {
+            throw UnsupportedOperationException("renderPages is used")
+        }
+
+        override suspend fun renderPages(
+            context: Context,
+            uri: Uri,
+            block: suspend (PdfPageEvent) -> Unit,
+        ) {
+            try {
+                for (step in script) {
+                    when (step) {
+                        is Step.Page -> {
+                            requested += step.index
+                            val bitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+                            bitmaps += bitmap
+                            try {
+                                block(PdfPageEvent.Rendered(RenderedPdfPage(step.index, bitmap)))
+                            } finally {
+                                bitmap.recycle()
+                            }
+                        }
+                        is Step.Missing -> block(
+                            PdfPageEvent.Unavailable(step.index, DocumentIntakeReason.PAGE_MISSING),
+                        )
+                        is Step.Fail -> throw step.error
+                    }
+                }
+            } finally {
+                closed = true
+            }
         }
     }
 
