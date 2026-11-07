@@ -298,6 +298,7 @@ private val LABEL_ALIASES = mapOf(
     "time" to "TIME",
     "age" to "AGE",
     "mrn" to "ID_NUM",
+    "medicalrecordnumber" to "ID_NUM",
     "idnum" to "ID_NUM",
     "id" to "ID_NUM",
     "ssn" to "SSN",

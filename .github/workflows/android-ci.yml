@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
@@ -13,6 +15,8 @@ on:
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
@@ -48,12 +52,13 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
 
-    - name: Run Android offset-contract parity suite
+    - name: Run Android offset-contract and span-equivalence parity suites
       working-directory: android
       run: >-
         ./gradlew :openmedkit:testDebugUnitTest
         --tests '*OffsetContractParityTest'
         --tests '*IcuSegmentationFallbackTest'
+        --tests '*SpanEquivalenceTest'
         --stacktrace
 
     - name: Verify Android library budgets

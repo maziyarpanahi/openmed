@@ -10,6 +10,8 @@ on:
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'swift/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
@@ -24,6 +26,8 @@ on:
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'swift/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
@@ -59,6 +63,9 @@ jobs:
 
     - name: Test Unicode scalar offset parity fixture
       run: swift test --filter OffsetContractParityTests
+
+    - name: Test Swift-Kotlin span-equivalence fixture
+      run: swift test --filter SpanEquivalenceParityTests
 
   build-ios:
     name: Build for iOS
