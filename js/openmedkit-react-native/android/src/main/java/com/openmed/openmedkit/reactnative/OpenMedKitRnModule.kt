@@ -1,8 +1,6 @@
 package com.openmed.openmedkit.reactnative
 
-import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -10,7 +8,6 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.module.annotations.ReactModule
-import com.facebook.react.uimanager.ViewManager
 import com.openmed.openmedkit.DeidentifiedSpanAction
 import com.openmed.openmedkit.EntityPrediction
 import com.openmed.openmedkit.OpenMedBackend
@@ -25,6 +22,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+/**
+ * React Native bridge module exposing OpenMedKit Android as `OpenMedKitRN`.
+ *
+ * Promise rejections carry a stable error code and a value-free message: input
+ * text, file paths, option values and underlying exception messages never cross
+ * the bridge.
+ */
 @ReactModule(name = OpenMedKitRnModule.NAME)
 class OpenMedKitRnModule(
     reactContext: ReactApplicationContext,
@@ -59,8 +63,8 @@ class OpenMedKitRnModule(
                     return@launch
                 }
 
-                require(backendName == "onnx") {
-                    "unsupported OpenMedKit Android backend: $backendName"
+                if (backendName != "onnx") {
+                    throw BridgeException("unsupported OpenMedKit Android backend")
                 }
                 runtime = OpenMedKit(
                     OpenMedBackend(
@@ -79,7 +83,7 @@ class OpenMedKitRnModule(
                     },
                 )
             } catch (error: Throwable) {
-                promise.reject("openmedkit_load_failed", error.message, error)
+                promise.reject("openmedkit_load_failed", valueFreeMessage(error))
             }
         }
     }
@@ -107,7 +111,7 @@ class OpenMedKitRnModule(
                     ),
                 )
             } catch (error: Throwable) {
-                promise.reject("openmedkit_analyze_failed", error.message, error)
+                promise.reject("openmedkit_analyze_failed", valueFreeMessage(error))
             }
         }
     }
@@ -136,7 +140,7 @@ class OpenMedKitRnModule(
                     ),
                 )
             } catch (error: Throwable) {
-                promise.reject("openmedkit_extract_failed", error.message, error)
+                promise.reject("openmedkit_extract_failed", valueFreeMessage(error))
             }
         }
     }
@@ -171,13 +175,13 @@ class OpenMedKitRnModule(
                     },
                 )
             } catch (error: Throwable) {
-                promise.reject("openmedkit_deidentify_failed", error.message, error)
+                promise.reject("openmedkit_deidentify_failed", valueFreeMessage(error))
             }
         }
     }
 
     private fun requireRuntime(): OpenMedKit =
-        runtime ?: throw IllegalStateException("OpenMedKit model is not loaded")
+        runtime ?: throw BridgeException("OpenMedKit model is not loaded")
 
     private fun entityArray(
         entities: List<EntityPrediction>,
@@ -307,14 +311,23 @@ class OpenMedKitRnModule(
     }
 
     private fun ReadableMap.requiredString(key: String): String =
-        requireNotNull(string(key)) { "missing required OpenMedKit bridge option: $key" }
-            .also { require(it.isNotBlank()) { "$key must not be blank" } }
+        string(key)?.takeIf { it.isNotBlank() }
+            ?: throw BridgeException("missing required OpenMedKit bridge option: $key")
 
     private fun ReadableMap.string(key: String): String? =
         if (hasKey(key) && !isNull(key)) getString(key) else null
 
     companion object {
         const val NAME = "OpenMedKitRN"
+
+        private const val NATIVE_CALL_FAILED = "OpenMedKit native call failed"
+
+        /**
+         * Only bridge-authored messages, which never embed caller values, are
+         * forwarded; every other failure collapses to one fixed message.
+         */
+        private fun valueFreeMessage(error: Throwable): String =
+            (error as? BridgeException)?.message ?: NATIVE_CALL_FAILED
 
         private val clinicalConceptLabels = setOf(
             "MICROORGANISM",
@@ -373,15 +386,8 @@ class OpenMedKitRnModule(
     }
 }
 
-class OpenMedKitRnPackage : ReactPackage {
-    override fun createNativeModules(
-        reactContext: ReactApplicationContext,
-    ): List<NativeModule> = listOf(OpenMedKitRnModule(reactContext))
-
-    override fun createViewManagers(
-        reactContext: ReactApplicationContext,
-    ): List<ViewManager<*, *>> = emptyList()
-}
+/** Bridge-authored failure whose message is a fixed, value-free string. */
+private class BridgeException(message: String) : RuntimeException(message)
 
 private class BridgeOptions(options: ReadableMap?) {
     val confidenceThreshold: Float =
@@ -404,8 +410,10 @@ private class BridgeOptions(options: ReadableMap?) {
         }
     val hashSecret: ByteArray =
         if (options?.hasKey("hashSecret") == true && !options.isNull("hashSecret")) {
-            val secret = requireNotNull(options.getString("hashSecret"))
-            require(secret.isNotEmpty()) { "hashSecret must not be empty" }
+            val secret = options.getString("hashSecret")
+            if (secret.isNullOrEmpty()) {
+                throw BridgeException("hashSecret must not be empty")
+            }
             secret.toByteArray(Charsets.UTF_8)
         } else {
             ByteArray(32).also { SecureRandom().nextBytes(it) }

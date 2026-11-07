@@ -10,7 +10,7 @@
   ],
   "packagePeerDependencies": {
     "react": ">=18",
-    "react-native": ">=0.74"
+    "react-native": ">=0.77"
   },
   "packagePeerDependenciesMeta": {
     "react": {
