@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedSpeech",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {
+    "OpenMedSpeech.CoreMLSpeechEngine": [
+      "class OpenMedSpeech.CoreMLSpeechEngine",
+      "conformance OpenMedSpeech.CoreMLSpeechEngine: Actor",
+      "conformance OpenMedSpeech.CoreMLSpeechEngine: LocalSpeechEngine",
+      "conformance OpenMedSpeech.CoreMLSpeechEngine: Sendable"
+    ],
+    "OpenMedSpeech.CoreMLSpeechEngine.decode": [
+      "func OpenMedSpeech.CoreMLSpeechEngine.decode(_: OpenMedKit.SpeechPCMBuffer, progress: (Swift.Int, OpenMedKit.SpeechRecognition) -> Swift.Bool) async throws -> OpenMedKit.SpeechRecognition"
+    ],
+    "OpenMedSpeech.CoreMLSpeechEngine.load": [
+      "static func OpenMedSpeech.CoreMLSpeechEngine.load(artifact: OpenMedSpeech.VerifiedSpeechArtifact?, compute: OpenMedSpeech.SpeechCompute = default) async throws -> OpenMedSpeech.CoreMLSpeechEngine"
+    ],
+    "OpenMedSpeech.CoreMLSpeechEngine.localOnly": [
+      "nonisolated var OpenMedSpeech.CoreMLSpeechEngine.localOnly: Swift.Bool { get }"
+    ],
+    "OpenMedSpeech.CoreMLSpeechEngine.provenance": [
+      "nonisolated var OpenMedSpeech.CoreMLSpeechEngine.provenance: OpenMedKit.SpeechEngineProvenance { get }"
+    ],
+    "OpenMedSpeech.CoreMLSpeechEngine.shutdown": [
+      "func OpenMedSpeech.CoreMLSpeechEngine.shutdown() async -> ()"
+    ],
+    "OpenMedSpeech.SpeechArtifactFile": [
+      "conformance OpenMedSpeech.SpeechArtifactFile: Sendable",
+      "struct OpenMedSpeech.SpeechArtifactFile"
+    ],
+    "OpenMedSpeech.SpeechArtifactFile.byteCount": [
+      "var OpenMedSpeech.SpeechArtifactFile.byteCount: Swift.Int { get }"
+    ],
+    "OpenMedSpeech.SpeechArtifactFile.path": [
+      "var OpenMedSpeech.SpeechArtifactFile.path: Swift.String { get }"
+    ],
+    "OpenMedSpeech.SpeechArtifactFile.sha256": [
+      "var OpenMedSpeech.SpeechArtifactFile.sha256: Swift.String { get }"
+    ],
+    "OpenMedSpeech.SpeechCompute": [
+      "conformance OpenMedSpeech.SpeechCompute: Equatable",
+      "conformance OpenMedSpeech.SpeechCompute: Hashable",
+      "conformance OpenMedSpeech.SpeechCompute: RawRepresentable",
+      "conformance OpenMedSpeech.SpeechCompute: Sendable",
+      "enum OpenMedSpeech.SpeechCompute raw(String)"
+    ],
+    "OpenMedSpeech.SpeechCompute.cpuAndGPU": [
+      "case OpenMedSpeech.SpeechCompute.cpuAndGPU"
+    ],
+    "OpenMedSpeech.SpeechCompute.cpuAndNeuralEngine": [
+      "case OpenMedSpeech.SpeechCompute.cpuAndNeuralEngine"
+    ],
+    "OpenMedSpeech.SpeechCompute.cpuOnly": [
+      "case OpenMedSpeech.SpeechCompute.cpuOnly"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact": [
+      "conformance OpenMedSpeech.VerifiedSpeechArtifact: CustomDebugStringConvertible",
+      "conformance OpenMedSpeech.VerifiedSpeechArtifact: CustomStringConvertible",
+      "conformance OpenMedSpeech.VerifiedSpeechArtifact: Sendable",
+      "struct OpenMedSpeech.VerifiedSpeechArtifact"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.debugDescription": [
+      "var OpenMedSpeech.VerifiedSpeechArtifact.debugDescription: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.description": [
+      "var OpenMedSpeech.VerifiedSpeechArtifact.description: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.files": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.files: [OpenMedSpeech.SpeechArtifactFile] { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.fingerprint": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.fingerprint: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.modelCardSHA256": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.modelCardSHA256: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.modelRepository": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.modelRepository: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.modelRevision": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.modelRevision: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.modelSubdirectory": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.modelSubdirectory: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.runtimeRevision": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.runtimeRevision: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.tokenizerRepository": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.tokenizerRepository: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.tokenizerRevision": [
+      "static var OpenMedSpeech.VerifiedSpeechArtifact.tokenizerRevision: Swift.String { get }"
+    ],
+    "OpenMedSpeech.VerifiedSpeechArtifact.verifyTinyEnglish": [
+      "static func OpenMedSpeech.VerifiedSpeechArtifact.verifyTinyEnglish(at: Foundation.URL) throws -> OpenMedSpeech.VerifiedSpeechArtifact"
+    ]
+  }
+}

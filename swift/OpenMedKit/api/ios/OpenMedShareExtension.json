@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedShareExtension",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {
+    "OpenMedShareExtension.RedactionShareViewController": [
+      "class OpenMedShareExtension.RedactionShareViewController",
+      "conformance OpenMedShareExtension.RedactionShareViewController: CVarArg",
+      "conformance OpenMedShareExtension.RedactionShareViewController: CustomDebugStringConvertible",
+      "conformance OpenMedShareExtension.RedactionShareViewController: CustomStringConvertible",
+      "conformance OpenMedShareExtension.RedactionShareViewController: Equatable",
+      "conformance OpenMedShareExtension.RedactionShareViewController: Hashable",
+      "conformance OpenMedShareExtension.RedactionShareViewController: NSCoding",
+      "conformance OpenMedShareExtension.RedactionShareViewController: NSExtensionRequestHandling",
+      "conformance OpenMedShareExtension.RedactionShareViewController: NSObjectProtocol",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIActivityItemsConfigurationProviding",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIAppearanceContainer",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIContentContainer",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIFocusEnvironment",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIPasteConfigurationSupporting",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIPickerViewDataSource",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIPickerViewDelegate",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIResponderStandardEditActions",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIStateRestoring",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UITraitChangeObservable",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UITraitEnvironment",
+      "conformance OpenMedShareExtension.RedactionShareViewController: UIUserActivityRestoring"
+    ],
+    "OpenMedShareExtension.RedactionShareViewController.numberOfComponents": [
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.numberOfComponents(in: UIKit.UIPickerView) -> Swift.Int"
+    ],
+    "OpenMedShareExtension.RedactionShareViewController.pickerView": [
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, numberOfRowsInComponent: Swift.Int) -> Swift.Int",
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, titleForRow: Swift.Int, forComponent: Swift.Int) -> Swift.String?"
+    ],
+    "OpenMedShareExtension.RedactionShareViewController.viewDidLoad": [
+      "func OpenMedShareExtension.RedactionShareViewController.viewDidLoad() -> ()"
+    ]
+  }
+}
