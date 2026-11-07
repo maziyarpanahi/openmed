@@ -546,6 +546,34 @@ jobs:
       run: |
         uv run pytest tests/unit/interop/test_spacy_component.py -q
 
+  openmedkit-kit-parity:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: |
+          js/openmedkit-web/package-lock.json
+          js/openmedkit-react-native/package-lock.json
+          js/openmedkit-electron/package-lock.json
+
+    - name: Install OpenMedKit JavaScript package dependencies
+      run: |
+        npm ci --prefix js/openmedkit-web
+        npm ci --prefix js/openmedkit-react-native
+        npm ci --prefix js/openmedkit-electron
+
+    - name: Run web, React Native, and Electron kit-parity gates
+      run: |
+        npm --prefix js/openmedkit-web test
+        npm --prefix js/openmedkit-react-native test
+        npm --prefix js/openmedkit-electron test
+
   browser-extension:
     needs: repo-policy
     runs-on: ubuntu-latest

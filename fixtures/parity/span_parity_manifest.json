@@ -35,5 +35,51 @@
       "workflow": ".github/workflows/android-ci.yml",
       "gate": "--tests '*SpanEquivalenceTest'"
     }
-  ]
+  ],
+  "kit_parity": {
+    "path": "tests/fixtures/parity/kit_parity_vectors.json",
+    "schema": "openmed.kit_parity_vectors",
+    "version": 1,
+    "profile": "openmed.kit_parity_result",
+    "profile_version": 1,
+    "sha256": "7cdba47da1c5bfb055ba5417db5f130b4ba711fbdfd08666fe223fd412cab7de",
+    "consumers": [
+      {
+        "surface": "python",
+        "test": "tests/unit/parity/test_kit_parity_vectors.py",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "pytest"
+      },
+      {
+        "surface": "swift",
+        "test": "swift/OpenMedKit/Tests/OpenMedKitTests/KitParityVectorTests.swift",
+        "workflow": ".github/workflows/swift-test.yml",
+        "gate": "swift test --filter KitParityVectorTests"
+      },
+      {
+        "surface": "kotlin",
+        "test": "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/KitParityVectorTest.kt",
+        "workflow": ".github/workflows/android-ci.yml",
+        "gate": "--tests '*KitParityVectorTest'"
+      },
+      {
+        "surface": "web",
+        "test": "tests/web/test_kit_parity.spec.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-web test"
+      },
+      {
+        "surface": "react-native",
+        "test": "tests/mobile/test_rn_kit_parity.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-react-native test"
+      },
+      {
+        "surface": "electron",
+        "test": "tests/web/test_electron_kit_parity.spec.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-electron test"
+      }
+    ]
+  }
 }

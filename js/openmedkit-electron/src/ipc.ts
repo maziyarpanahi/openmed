@@ -1,6 +1,12 @@
 import {
   CANONICAL_LABELS,
+  KitParityError,
   POLICY_LABELS,
+  confidenceToPpm,
+  utf16ToScalarOffset,
+  validateKitParityResult,
+  type KitParityResult,
+  type KitParitySpan,
   type OpenMedSpan,
 } from "openmed";
 
@@ -145,6 +151,54 @@ export function redactTextWithSpans(
       redacted.slice(span.end);
   }
   return redacted;
+}
+
+/**
+ * Project renderer-safe spans into the kit-parity result profile.
+ *
+ * Renderer spans carry JavaScript UTF-16 offsets and no action or
+ * replacement: `redactTextWithSpans` always redacts each span to
+ * `[canonical_label]`. The projection therefore reports action `redact` with
+ * that replacement, converts offsets to Unicode scalar offsets against
+ * `text`, and omits `confidence_ppm` for a `null` score.
+ */
+export function toRendererKitParityResult(
+  text: string,
+  spans: readonly RendererOpenMedSpan[],
+): KitParityResult {
+  const deidentifiedText = redactTextWithSpans(text, spans);
+  const projected: KitParitySpan[] = spans.map((span, index) => {
+    const path = `$.spans[${index}]`;
+    const record: KitParitySpan = {
+      label: span.entity_type,
+      canonical_label: span.canonical_label,
+      action: "redact",
+      start: rendererScalarOffset(text, span.start, `${path}.start`),
+      end: rendererScalarOffset(text, span.end, `${path}.end`),
+      replacement: `[${span.canonical_label}]`,
+    };
+    if (span.score !== null) {
+      record.confidence_ppm = confidenceToPpm(span.score);
+    }
+    return record;
+  });
+  const result: KitParityResult = {
+    deidentified_text: deidentifiedText,
+    spans: projected,
+  };
+  validateKitParityResult(result);
+  return result;
+}
+
+function rendererScalarOffset(text: string, offset: number, path: string): number {
+  try {
+    return utf16ToScalarOffset(text, offset);
+  } catch (error) {
+    if (error instanceof KitParityError) {
+      throw new KitParityError(error.code, path);
+    }
+    throw error;
+  }
 }
 
 export function assertElectronDeidentifyRequest(
