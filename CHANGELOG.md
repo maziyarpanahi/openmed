@@ -197,11 +197,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
-  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
-  printer settings and presentation template text; refuse unsupported hidden
-  carriers with category/count/digest evidence and preserve destinations.
-
 - Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
   archive-safety limits before parsing, verify actual member sizes with bounded
   decompression, and report archive failures using content-free codes/counts
@@ -213,6 +208,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   token IDs. Callers must supply a local guard and asset provenance to release text.
 
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
+
+- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
+  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
+  printer settings and presentation template text; refuse unsupported hidden
+  carriers with category/count/digest evidence and preserve destinations (#3810).
 
 ## [3.2.0] - 2026-10-30
 

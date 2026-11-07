@@ -384,26 +384,37 @@ def verify_ooxml(data: bytes, *, covered_text: Coverage | None = None) -> None:
         raise OoxmlResidualError(findings)
 
 
+def _read_package(stream: BinaryIO) -> bytes:
+    snapshot = io.BytesIO()
+    remaining = _MAX_PACKAGE_BYTES + 1
+    while remaining:
+        size = min(64 * 1024, remaining)
+        block = stream.read(size)
+        if not isinstance(block, bytes) or len(block) > size:
+            raise ArchiveDocumentError("archive_invalid")
+        if not block:
+            return snapshot.getvalue()
+        snapshot.write(block)
+        remaining -= len(block)
+    raise ArchiveDocumentError("archive_byte_limit")
+
+
 def _read_source(source: str | Path | BinaryIO) -> bytes:
     """Read one bounded snapshot for extraction, coverage, and redaction."""
     try:
         if isinstance(source, (str, os.PathLike)):
             with open(source, "rb") as stream:
-                data = stream.read(_MAX_PACKAGE_BYTES + 1)
-        else:
-            position = source.tell()
-            try:
-                source.seek(0)
-                data = source.read(_MAX_PACKAGE_BYTES + 1)
-            finally:
-                source.seek(position)
+                return _read_package(stream)
+        position = source.tell()
+        try:
+            source.seek(0)
+            return _read_package(source)
+        finally:
+            source.seek(position)
+    except ArchiveDocumentError:
+        raise
     except (AttributeError, OSError, TypeError, ValueError):
         raise ArchiveDocumentError("archive_invalid") from None
-    if not isinstance(data, bytes):
-        raise ArchiveDocumentError("archive_invalid")
-    if len(data) > _MAX_PACKAGE_BYTES:
-        raise ArchiveDocumentError("archive_byte_limit")
-    return data
 
 
 def _check_source(data: bytes, coverage: Coverage) -> bytes:
