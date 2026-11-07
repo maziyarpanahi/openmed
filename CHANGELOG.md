@@ -258,6 +258,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
 
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry checks. Structured vision results carry
+  the fixed catalog notice (#3828).
+
 ### Security
 
 - Enforce conservative, policy-selectable asset limits before Python image,
@@ -269,10 +275,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decompression, and report archive failures using content-free codes/counts
   (#3812).
 
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
   token IDs. Callers must supply a local guard and asset provenance to release text.
+
+- Local barcode, QR and DataMatrix region detection across image, DICOM pixel
+  and PDF raster redaction, with a caller-installed optional ZXing backend,
+  deterministic fake, payload-free coverage reports, explicit unavailable
+  coverage policy and residual-code verification.
 
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
 

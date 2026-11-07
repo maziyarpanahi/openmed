@@ -100,6 +100,16 @@ from .chw_forms import (
     parse_xform_path,
     redact_chw_form,
 )
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegion,
+    CodeRegionDetector,
+    FakeCodeRegionDetector,
+    ZXingCodeRegionDetector,
+    detect_code_regions,
+)
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomDeidentificationError,
@@ -258,6 +268,18 @@ from .metadata_scrub import (
     assert_metadata_clean,
     scrub_metadata,
     verify_metadata,
+)
+from .notices import (
+    NOTICE_CATALOG,
+    NOTICE_RESULT_TYPES,
+    DraftReviewResult,
+    MeasurementReviewResult,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
+    VisualDescriptionResult,
+    validate_notice_registry,
 )
 
 # Importing the OCR module registers remaining OCR-only image-format handlers
@@ -437,6 +459,14 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "CodeCoverageReport",
+    "CodeDetectionError",
+    "CodeDetectionPolicy",
+    "CodeRegion",
+    "CodeRegionDetector",
+    "FakeCodeRegionDetector",
+    "ZXingCodeRegionDetector",
+    "detect_code_regions",
     "SESSION_SCHEMA_VERSION",
     "AssetHandle",
     "DocumentProvider",
@@ -682,6 +712,16 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "NOTICE_CATALOG",
+    "NOTICE_RESULT_TYPES",
+    "DraftReviewResult",
+    "MeasurementReviewResult",
+    "MultimodalNotice",
+    "MultimodalNoticeError",
+    "NoticeBoundOutput",
+    "NoticeKind",
+    "VisualDescriptionResult",
+    "validate_notice_registry",
     "PROCESSING_DIFF_SCHEMA_VERSION",
     "AbstentionDelta",
     "DigestChange",

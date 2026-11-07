@@ -23,6 +23,14 @@ from typing import Any, Sequence
 
 from .asset_limits import MOBILE_V1, LimitProfile
 from .base import ExtractedDocument, register_handler
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+    merge_code_coverage,
+)
 from .exceptions import MissingDependencyError
 from .redaction_admission import (
     RedactionAdmissionError,
@@ -75,6 +83,8 @@ class DicomHeaderDeidPolicy:
     retain_patient_characteristics: bool = False
     retain_uids: bool = False
     detector: Any = None
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -167,23 +177,32 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
+    code_detector: CodeRegionDetector | None = field(default=None, kw_only=True)
+    code_detection_policy: CodeDetectionPolicy = field(
+        default="coverage_incomplete", kw_only=True
+    )
     overlay_mode: str = "remove"
     redact_encapsulated_documents: bool = False
     document_policy: Any = None
     document_models: Any = None
     asset_limit_profile: LimitProfile = MOBILE_V1
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
 class DicomPixelFinding:
-    """Audit-safe description of one OCR-projected pixel redaction."""
+    """Audit-safe OCR or code-region pixel redaction.
+
+    Code findings have no text or model confidence; those fields are null.
+    """
 
     frame_index: int
     bbox: tuple[int, int, int, int]
     label: str
-    confidence: float
-    text_sha256: str
-    text_length: int
+    confidence: float | None
+    text_sha256: str | None
+    text_length: int | None
     sources: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -208,6 +227,7 @@ class DicomResidualTextReport:
 
     frame_count: int
     residuals: tuple[DicomPixelFinding, ...] = ()
+    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
 
     @property
     def residual_entity_count(self) -> int:
@@ -219,7 +239,7 @@ class DicomResidualTextReport:
     def passed(self) -> bool:
         """Whether residual OCR found zero PHI."""
 
-        return self.residual_entity_count == 0
+        return self.residual_entity_count == 0 and not self.code_coverage.regions
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable residual report."""
@@ -229,6 +249,7 @@ class DicomResidualTextReport:
             "passed": self.passed,
             "residual_entity_count": self.residual_entity_count,
             "residuals": [finding.to_dict() for finding in self.residuals],
+            "code_coverage": self.code_coverage.to_dict(),
         }
 
 
@@ -241,9 +262,14 @@ class DicomPixelRedactionResult:
     frames_processed: int
     findings: tuple[DicomPixelFinding, ...]
     residual_report: DicomResidualTextReport
+    code_coverage: CodeCoverageReport = field(
+        default_factory=CodeCoverageReport, kw_only=True
+    )
     carrier_actions: tuple[DicomHeaderAction, ...] = ()
     pixel_status: DicomPixelStatus = DicomPixelStatus.NOT_CLEANED
     _processed_document_digests: tuple[str, ...] = field(default=(), repr=False)
+    residual_verified: bool = False
+    pixel_sha256: str | None = None
 
     @property
     def redaction_count(self) -> int:
@@ -258,6 +284,7 @@ class DicomPixelRedactionResult:
         frame_counts = Counter(finding.frame_index for finding in self.findings)
         return {
             "type": "dicom_pixel_ocr_redaction",
+            "code_coverage": self.code_coverage.to_dict(),
             "source_path_sha256": _hash_value(str(self.source_path)),
             "output_path_sha256": _hash_value(str(self.output_path)),
             "source_suffix": self.source_path.suffix.lower(),
@@ -270,6 +297,8 @@ class DicomPixelRedactionResult:
             },
             "findings": [finding.to_dict() for finding in self.findings],
             "residual_report": self.residual_report.to_dict(),
+            "residual_verified": self.residual_verified,
+            "pixel_sha256": self.pixel_sha256,
             "carrier_actions": [action.to_dict() for action in self.carrier_actions],
             "pixel_status": self.pixel_status.value,
         }
@@ -1651,6 +1680,7 @@ def deidentify_dicom_headers(
     path: str | Path,
     *,
     policy: Any | None = None,
+    slide_pixel_redaction: DicomPixelRedactionResult | None = None,
 ) -> DicomHeaderDeidResult:
     """De-identify DICOM headers and write a de-identified DICOM file.
 
@@ -1658,7 +1688,9 @@ def deidentify_dicom_headers(
     exposing equivalent attributes. When no ``output_path`` is supplied, the
     source file is rewritten in place.
     """
-    return _deidentify_headers(path, policy=policy)
+    return _deidentify_headers(
+        path, policy=policy, slide_pixel_redaction=slide_pixel_redaction
+    )
 
 
 def _deidentify_headers(
@@ -1667,6 +1699,7 @@ def _deidentify_headers(
     policy: Any | None,
     processed_document_digests: tuple[str, ...] = (),
     dataset: Any = None,
+    slide_pixel_redaction: DicomPixelRedactionResult | None = None,
 ) -> DicomHeaderDeidResult:
 
     pydicom = _import_pydicom()
@@ -1710,6 +1743,7 @@ def _deidentify_headers(
 
     if dataset is None:
         dataset = pydicom.dcmread(source, force=True)
+    _guard_slide_headers(dataset, resolved_policy, slide_pixel_redaction)
     pixel_status = _pixel_coverage(dataset)
     if resolved_policy.fail_on_unclean_pixels and (
         pixel_status is DicomPixelStatus.NOT_CLEANED
@@ -1757,12 +1791,17 @@ def redact_dicom_pixels(
     fail_on_residual: bool | None = None,
     custom_recognizer: Any = None,
     lang: str | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy | None = None,
 ) -> DicomPixelRedactionResult:
     """Redact burned-in PHI text from DICOM pixels using OCR bboxes.
 
     Header values from the source DICOM seed a per-image custom recognizer
     before header de-identification clears them. Returned reports intentionally
     exclude raw OCR/header text and carry hashes, labels, bboxes, and counts.
+    Code regions from ``code_detector`` (or the optional local ZXing backend)
+    are always blacked out. ``code_detection_policy`` selects fail-closed or
+    explicit incomplete coverage when detection is unavailable.
     """
     result, _dataset = _redact_pixels(
         path,
@@ -1777,6 +1816,8 @@ def redact_dicom_pixels(
         fail_on_residual=fail_on_residual,
         custom_recognizer=custom_recognizer,
         lang=lang,
+        code_detector=code_detector,
+        code_detection_policy=code_detection_policy,
     )
     return result
 
@@ -1795,6 +1836,8 @@ def _redact_pixels(
     fail_on_residual: bool | None = None,
     custom_recognizer: Any = None,
     lang: str | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy | None = None,
     save: bool = True,
 ) -> tuple[DicomPixelRedactionResult, Any]:
 
@@ -1813,6 +1856,15 @@ def _redact_pixels(
         fail_on_residual=fail_on_residual,
         custom_recognizer=custom_recognizer,
     )
+    resolved_policy = replace(
+        resolved_policy,
+        code_detector=code_detector
+        if code_detector is not None
+        else resolved_policy.code_detector,
+        code_detection_policy=code_detection_policy
+        if code_detection_policy is not None
+        else resolved_policy.code_detection_policy,
+    )
     destination = (
         Path(resolved_policy.output_path)
         if resolved_policy.output_path is not None
@@ -1821,6 +1873,16 @@ def _redact_pixels(
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     dataset = pydicom.dcmread(source, force=True)
+    associated_slide = _slide_instance_role(dataset) in {"label", "overview"}
+    if associated_slide and not (
+        resolved_policy.keep_slide_associated_images is True
+        and resolved_policy.reviewer_confirmed is True
+        and resolved_policy.verify_residual
+        and resolved_policy.fail_on_residual
+        and resolved_policy.ocr_engine is not None
+        and "PixelData" in dataset
+    ):
+        raise ValueError("dicom_slide_associated_image_refused")
     context = _Context(date_shift_days=0, keep_year=False, uid_salt=b"unused")
     if "FloatPixelData" in dataset or "DoubleFloatPixelData" in dataset:
         raise DicomDeidentificationError("pixel_data_unsupported")
@@ -1860,8 +1922,14 @@ def _redact_pixels(
     _decompress_pixel_data(dataset)
     pixel_array = _copy_pixel_array(dataset, limit_profile=limit_profile)
     frame_views = _iter_pixel_frames(pixel_array, dataset, limit_profile=limit_profile)
+    if associated_slide and (
+        len(frame_views) != 1
+        or pixel_array.size != dataset.Rows * dataset.Columns * dataset.SamplesPerPixel
+    ):
+        raise ValueError("dicom_slide_pixel_coverage_incomplete")
     _burn_overlay_planes(frame_views, overlays, dataset)
     findings: list[DicomPixelFinding] = []
+    code_reports = []
 
     for frame_index, frame in enumerate(frame_views):
         frame_findings = _detect_frame_pixel_findings(
@@ -1872,6 +1940,25 @@ def _redact_pixels(
             model_name=model,
             header_recognizer=header_recognizer,
             lang=lang,
+        )
+        code_report = detect_code_regions(
+            _frame_for_ocr(frame, dataset),
+            detector=resolved_policy.code_detector,
+            policy=resolved_policy.code_detection_policy,
+            page=frame_index,
+        )
+        code_reports.append(code_report)
+        frame_findings += tuple(
+            DicomPixelFinding(
+                frame_index,
+                region.bbox,
+                "CODE_REGION",
+                None,
+                None,
+                None,
+                ("code_region",),
+            )
+            for region in code_report.regions
         )
         for finding in frame_findings:
             _blackout_bbox(frame, finding.bbox, dataset)
@@ -1910,13 +1997,62 @@ def _redact_pixels(
     return DicomPixelRedactionResult(
         source_path=source,
         output_path=destination,
+        code_coverage=merge_code_coverage(code_reports),
         frames_processed=len(frame_views),
         findings=tuple(findings),
         residual_report=residual_report,
+        residual_verified=resolved_policy.verify_residual,
+        pixel_sha256=hashlib.sha256(dataset.PixelData).hexdigest(),
         carrier_actions=tuple(context.actions),
         pixel_status=pixel_status,
         _processed_document_digests=tuple(sorted(context.processed_document_digests)),
     ), dataset
+
+
+def _slide_instance_role(dataset: Any) -> str | None:
+    if str(getattr(dataset, "SOPClassUID", "")) != "1.2.840.10008.5.1.4.1.1.77.1.6":
+        return None
+    image_type = getattr(dataset, "ImageType", ()) or ()
+    if isinstance(image_type, str):
+        image_type = image_type.split("\\")
+    if len(image_type) < 3 or str(image_type[2]) not in {
+        "VOLUME",
+        "THUMBNAIL",
+        "LABEL",
+        "OVERVIEW",
+    }:
+        raise ValueError("dicom_slide_image_type_unknown")
+    role = str(image_type[2]).lower()
+    if role in {"label", "overview"} and getattr(dataset, "NumberOfFrames", 1) != 1:
+        raise ValueError("dicom_slide_frame_count_invalid")
+    # A mislabeled volume with an explicit specimen label is not safe to retain.
+    if (
+        role in {"volume", "thumbnail"}
+        and str(getattr(dataset, "SpecimenLabelInImage", "NO")) != "NO"
+    ):
+        raise ValueError("dicom_slide_image_type_unknown")
+    return role
+
+
+def _guard_slide_headers(
+    dataset: Any,
+    policy: DicomHeaderDeidPolicy,
+    pixels: DicomPixelRedactionResult | None,
+) -> None:
+    if _slide_instance_role(dataset) not in {"label", "overview"}:
+        return
+    if not (
+        policy.keep_slide_associated_images is True
+        and policy.reviewer_confirmed is True
+        and pixels is not None
+        and pixels.frames_processed == 1
+        and pixels.residual_verified
+        and pixels.residual_report.passed
+        and pixels.residual_report.frame_count == pixels.frames_processed
+        and "PixelData" in dataset
+        and pixels.pixel_sha256 == hashlib.sha256(dataset.PixelData).hexdigest()
+    ):
+        raise ValueError("dicom_slide_associated_image_refused")
 
 
 def _import_pydicom() -> Any:
@@ -1945,6 +2081,10 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
     if isinstance(policy, Mapping):
         return DicomPixelRedactionPolicy(
             output_path=policy.get("pixel_output_path", policy.get("output_path")),
+            code_detector=policy.get("code_detector"),
+            code_detection_policy=policy.get(
+                "code_detection_policy", "coverage_incomplete"
+            ),
             ocr_engine=policy.get("ocr_engine"),
             model_name=(
                 policy.get("pii_model_name")
@@ -1958,6 +2098,9 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
             verify_residual=bool(policy.get("verify_residual", True)),
             fail_on_residual=bool(policy.get("fail_on_residual", True)),
             custom_recognizer=policy.get("custom_recognizer"),
+            keep_slide_associated_images=policy.get("keep_slide_associated_images")
+            is True,
+            reviewer_confirmed=policy.get("reviewer_confirmed") is True,
             **_carrier_policy_fields(policy),
         )
     return DicomPixelRedactionPolicy(
@@ -1965,6 +2108,10 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
             policy,
             "pixel_output_path",
             getattr(policy, "output_path", None),
+        ),
+        code_detector=getattr(policy, "code_detector", None),
+        code_detection_policy=getattr(
+            policy, "code_detection_policy", "coverage_incomplete"
         ),
         ocr_engine=getattr(policy, "ocr_engine", None),
         model_name=(
@@ -1979,6 +2126,11 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
         verify_residual=bool(getattr(policy, "verify_residual", True)),
         fail_on_residual=bool(getattr(policy, "fail_on_residual", True)),
         custom_recognizer=getattr(policy, "custom_recognizer", None),
+        keep_slide_associated_images=getattr(
+            policy, "keep_slide_associated_images", False
+        )
+        is True,
+        reviewer_confirmed=getattr(policy, "reviewer_confirmed", False) is True,
         **_carrier_policy_fields(policy),
     )
 
@@ -1996,6 +2148,8 @@ def _override_pixel_policy(
     custom_recognizer: Any,
 ) -> DicomPixelRedactionPolicy:
     return DicomPixelRedactionPolicy(
+        code_detector=policy.code_detector,
+        code_detection_policy=policy.code_detection_policy,
         output_path=output_path if output_path is not None else policy.output_path,
         ocr_engine=ocr_engine if ocr_engine is not None else policy.ocr_engine,
         model_name=model_name if model_name is not None else policy.model_name,
@@ -2017,6 +2171,8 @@ def _override_pixel_policy(
             if fail_on_residual is not None
             else policy.fail_on_residual
         ),
+        keep_slide_associated_images=policy.keep_slide_associated_images,
+        reviewer_confirmed=policy.reviewer_confirmed,
         custom_recognizer=(
             custom_recognizer
             if custom_recognizer is not None
@@ -2043,6 +2199,9 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
             date_shift_secret=policy.get("date_shift_secret"),
             uid_salt=policy.get("uid_salt", _DEFAULT_UID_SALT),
             keep_year=bool(policy.get("keep_year", False)),
+            keep_slide_associated_images=policy.get("keep_slide_associated_images")
+            is True,
+            reviewer_confirmed=policy.get("reviewer_confirmed") is True,
             fail_on_unclean_pixels=bool(policy.get("fail_on_unclean_pixels", False)),
             **_profile_policy_fields(policy),
             **_carrier_policy_fields(policy, pixel=False),
@@ -2055,6 +2214,11 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
         date_shift_secret=getattr(policy, "date_shift_secret", None),
         uid_salt=getattr(policy, "uid_salt", _DEFAULT_UID_SALT),
         keep_year=bool(getattr(policy, "keep_year", False)),
+        keep_slide_associated_images=getattr(
+            policy, "keep_slide_associated_images", False
+        )
+        is True,
+        reviewer_confirmed=getattr(policy, "reviewer_confirmed", False) is True,
         fail_on_unclean_pixels=bool(getattr(policy, "fail_on_unclean_pixels", False)),
         **_profile_policy_fields(policy),
         **_carrier_policy_fields(policy, pixel=False),
@@ -2606,6 +2770,7 @@ def _residual_text_report(
     lang: str | None,
 ) -> DicomResidualTextReport:
     residuals: list[DicomPixelFinding] = []
+    code_reports = []
     for frame_index, frame in enumerate(frame_views):
         residuals.extend(
             _detect_frame_pixel_findings(
@@ -2618,7 +2783,17 @@ def _residual_text_report(
                 lang=lang,
             )
         )
+        code_report = detect_code_regions(
+            _frame_for_ocr(frame, dataset),
+            detector=policy.code_detector,
+            policy=policy.code_detection_policy,
+            page=frame_index,
+        )
+        if policy.fail_on_residual:
+            assert_no_residual_codes(code_report)
+        code_reports.append(code_report)
     return DicomResidualTextReport(
+        code_coverage=merge_code_coverage(code_reports),
         frame_count=len(frame_views),
         residuals=tuple(residuals),
     )
@@ -3637,6 +3812,7 @@ def _dicom_handler(
         policy=header_policy,
         processed_document_digests=pixel_result._processed_document_digests,
         dataset=dataset,
+        slide_pixel_redaction=pixel_result,
     )
     return ExtractedDocument(
         text="",
