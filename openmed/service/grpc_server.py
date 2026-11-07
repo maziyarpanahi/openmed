@@ -13,6 +13,7 @@ from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
 from .grpc_security import (
+    GrpcCredentialReloader,
     GrpcServerCredentials,
     GrpcStartupError,
     GrpcTLSConfig,
@@ -139,6 +140,7 @@ def create_grpc_server(
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
     interceptors: Sequence[grpc.ServerInterceptor] = (),
+    options: Sequence[tuple[str, Any]] = (),
 ) -> grpc.Server:
     """Create an unbound grpcio server with the OpenMed service registered.
 
@@ -146,6 +148,8 @@ def create_grpc_server(
         runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
         max_workers: Worker threads for the synchronous server.
         interceptors: Server interceptors applied to every RPC, in order.
+        options: Extra grpcio channel arguments, such as the connection-age
+            options from :meth:`GrpcCredentialReloader.server_options`.
 
     Returns:
         A server with no listener. Bind it with
@@ -154,6 +158,7 @@ def create_grpc_server(
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         interceptors=tuple(interceptors),
+        options=tuple(options),
     )
     openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(
         OpenMedGrpcServicer(runtime),
@@ -167,9 +172,10 @@ def serve(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
-    tls: GrpcTLSConfig | GrpcServerCredentials | None = None,
+    tls: GrpcTLSConfig | GrpcServerCredentials | GrpcCredentialReloader | None = None,
     allow_insecure_remote_dev: bool = False,
     interceptors: Sequence[grpc.ServerInterceptor] = (),
+    options: Sequence[tuple[str, Any]] = (),
 ) -> grpc.Server:
     """Validate the listener, bind it, start the server and return it.
 
@@ -181,11 +187,15 @@ def serve(
         address: The gRPC bind address. Defaults to ``127.0.0.1:50051``.
         runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
         max_workers: Worker threads for the synchronous server.
-        tls: Server TLS files (or pre-validated credentials). Supplying a
-            client CA enables mutual TLS.
+        tls: Server TLS files, pre-validated credentials, or a
+            :class:`GrpcCredentialReloader` whose credentials can be reloaded
+            for new connections without a restart. Supplying a client CA
+            enables mutual TLS.
         allow_insecure_remote_dev: Development-only override for plaintext on
             a non-loopback address; refused outside ``dev``/``test``.
         interceptors: Server interceptors applied to every RPC, in order.
+        options: Extra grpcio channel arguments. A reloader's
+            connection-age options are appended automatically.
 
     Returns:
         A started server that is listening on the requested address.
@@ -200,8 +210,14 @@ def serve(
         allow_insecure_remote_dev=allow_insecure_remote_dev,
         profile=runtime.profile if runtime is not None else None,
     )
+    server_options = tuple(options)
+    if isinstance(tls, GrpcCredentialReloader):
+        server_options += tls.server_options()
     server = create_grpc_server(
-        runtime=runtime, max_workers=max_workers, interceptors=interceptors
+        runtime=runtime,
+        max_workers=max_workers,
+        interceptors=interceptors,
+        options=server_options,
     )
     try:
         bind_grpc_listener(server, listener)

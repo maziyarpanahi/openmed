@@ -10,6 +10,10 @@ optional credential category, and at most a certificate SHA-256 fingerprint.
 Errors never include file paths, PEM bytes, private-key material, addresses, or
 request content, and the underlying exception context is suppressed so that a
 traceback cannot reveal them either.
+
+:class:`GrpcCredentialReloader` serves the same TLS/mTLS listener from a
+:class:`~openmed.service.tls_reload.TLSCredentialProvider`, so certificates,
+keys and client CAs can be rotated for new connections without a restart.
 """
 
 from __future__ import annotations
@@ -17,8 +21,11 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import logging
+import math
 import os
 import re
+import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +37,20 @@ from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import serialization
 
 from openmed.core.config import PROFILE_ENV_VAR
+
+from .tls_reload import (
+    DEFAULT_MIN_REMAINING_VALIDITY_SECONDS,
+    DEFAULT_TRUST_OVERLAP_SECONDS,
+    TLS_CATEGORY_CERTIFICATE_CHAIN,
+    TLS_REASON_INCOMPLETE,
+    TLSActivationMaterial,
+    TLSCredentialError,
+    TLSCredentialProvider,
+    TLSCredentialSnapshot,
+    TLSCredentialSource,
+    TLSReadiness,
+    TLSReloadResult,
+)
 
 StrPath = Union[str, "os.PathLike[str]"]
 
@@ -81,6 +102,9 @@ GRPC_CREDENTIAL_CATEGORIES = frozenset(
 
 INSECURE_DEV_OVERRIDE_PROFILES = frozenset({"dev", "test"})
 MAX_CREDENTIAL_FILE_BYTES = 1024 * 1024
+DEFAULT_GRPC_MAX_CONNECTION_AGE_SECONDS = 3600.0
+DEFAULT_GRPC_CONNECTION_GRACE_SECONDS = 300.0
+MAX_GRPC_CONNECTION_AGE_SECONDS = 7 * 86_400.0
 
 TRANSPORT_PLAINTEXT = "plaintext"
 TRANSPORT_TLS = "tls"
@@ -331,7 +355,9 @@ def load_grpc_server_credentials(
 def resolve_grpc_listener(
     address: str,
     *,
-    tls: Union[GrpcTLSConfig, GrpcServerCredentials, None] = None,
+    tls: Union[
+        GrpcTLSConfig, GrpcServerCredentials, "GrpcCredentialReloader", None
+    ] = None,
     allow_insecure_remote_dev: bool = False,
     profile: Optional[str] = None,
 ) -> GrpcListener:
@@ -339,8 +365,9 @@ def resolve_grpc_listener(
 
     Args:
         address: The gRPC bind address.
-        tls: TLS file configuration to load and validate, or credentials that
-            were already validated. ``None`` requests a plaintext listener.
+        tls: TLS file configuration to load and validate, credentials that
+            were already validated, or a :class:`GrpcCredentialReloader` for
+            hot-reloadable credentials. ``None`` requests a plaintext listener.
         allow_insecure_remote_dev: Development-only override that permits a
             plaintext listener on a non-loopback address.
         profile: OpenMed profile name. Defaults to ``OPENMED_PROFILE``, which
@@ -370,6 +397,10 @@ def resolve_grpc_listener(
 
     if isinstance(tls, GrpcServerCredentials):
         return GrpcListener(address=address, loopback=loopback, credentials=tls)
+    if isinstance(tls, GrpcCredentialReloader):
+        return GrpcListener(
+            address=address, loopback=loopback, credentials=tls.credentials
+        )
     if isinstance(tls, GrpcTLSConfig):
         return GrpcListener(
             address=address,
@@ -420,6 +451,242 @@ def bind_grpc_listener(server: grpc.Server, listener: GrpcListener) -> int:
     if type(port) is not int or port <= 0:
         raise GrpcStartupError(GRPC_REASON_BIND_FAILED, category=CATEGORY_LISTENER)
     return port
+
+
+@dataclass(frozen=True, eq=False)
+class _GrpcCertificateConfigs:
+    steady: grpc.ServerCertificateConfiguration = field(repr=False)
+    overlap: Optional[grpc.ServerCertificateConfiguration] = field(repr=False)
+
+
+def _build_grpc_certificate_configs(
+    material: TLSActivationMaterial,
+) -> _GrpcCertificateConfigs:
+    if material.certificate_chain_pem is None or material.private_key_pem is None:
+        raise ValueError("server material is required")
+    pairs = [(material.private_key_pem, material.certificate_chain_pem)]
+    roots = material.client_ca_pem or None
+    steady = grpc.ssl_server_certificate_configuration(pairs, root_certificates=roots)
+    overlap = None
+    if roots is not None and material.overlap_client_ca_pem:
+        overlap = grpc.ssl_server_certificate_configuration(
+            pairs,
+            root_certificates=roots.rstrip(b"\n")
+            + b"\n"
+            + material.overlap_client_ca_pem,
+        )
+    return _GrpcCertificateConfigs(steady=steady, overlap=overlap)
+
+
+class GrpcCredentialReloader:
+    """Hot-reloadable gRPC server credentials over one credential provider.
+
+    grpcio asks the reloader for a certificate configuration on every new TLS
+    handshake (``grpc.dynamic_ssl_server_credentials``). The reloader answers
+    with the active generation, including the previous client CA while a
+    trust overlap is in force, and otherwise tells grpcio to keep what it has.
+    Established connections keep the generation they were accepted under.
+    The client-certificate requirement is fixed when the listener is created,
+    so a candidate that would change it is refused.
+
+    Old-generation connections are retired by the server options from
+    :meth:`server_options`: grpcio sends ``GOAWAY`` once a connection reaches
+    ``max_connection_age_seconds`` and cancels RPCs still running after
+    ``connection_grace_seconds`` with ``UNAVAILABLE``, which clients may retry
+    on a fresh connection that uses the active generation.
+
+    Args:
+        tls: Server TLS files for every generation.
+        trust_overlap_seconds: Bounded window during which clients issued by
+            the outgoing client CA may still open new connections.
+        min_remaining_validity_seconds: Candidates whose server certificate
+            expires sooner than this are refused.
+        max_connection_age_seconds: Maximum lifetime of one connection, which
+            bounds how long an old generation keeps serving. ``None`` leaves
+            connection age unbounded.
+        connection_grace_seconds: Time in-flight RPCs get to finish after a
+            connection reaches its maximum age.
+        clock: Returns the current time; defaults to UTC wall time.
+
+    Raises:
+        TLSCredentialError: If the initial material is refused or no server
+            certificate and key are configured.
+        ValueError: If a connection age or grace value is out of range.
+    """
+
+    def __init__(
+        self,
+        tls: Union[GrpcTLSConfig, TLSCredentialSource],
+        *,
+        trust_overlap_seconds: float = DEFAULT_TRUST_OVERLAP_SECONDS,
+        min_remaining_validity_seconds: float = DEFAULT_MIN_REMAINING_VALIDITY_SECONDS,
+        max_connection_age_seconds: Optional[
+            float
+        ] = DEFAULT_GRPC_MAX_CONNECTION_AGE_SECONDS,
+        connection_grace_seconds: float = DEFAULT_GRPC_CONNECTION_GRACE_SECONDS,
+        clock: Optional[Callable[[], datetime]] = None,
+    ) -> None:
+        source = _credential_source(tls)
+        self._max_age_ms = (
+            None
+            if max_connection_age_seconds is None
+            else _connection_milliseconds(max_connection_age_seconds)
+        )
+        self._grace_ms = _connection_milliseconds(connection_grace_seconds)
+        self.provider = TLSCredentialProvider(
+            source,
+            trust_overlap_seconds=trust_overlap_seconds,
+            min_remaining_validity_seconds=min_remaining_validity_seconds,
+            activation_hooks={"grpc": _build_grpc_certificate_configs},
+            clock=clock,
+        )
+        snapshot = self.provider.snapshot()
+        self._fetch_lock = threading.Lock()
+        self._installed = _installed_key(snapshot)
+        self._switches = 0
+        self._server_credentials = grpc.dynamic_ssl_server_credentials(
+            _select_certificate_config(snapshot),
+            self._fetch_certificate_configuration,
+            require_client_authentication=snapshot.active.require_client_cert,
+        )
+
+    @property
+    def credentials(self) -> GrpcServerCredentials:
+        """Return bindable credentials described by the active generation."""
+        active = self.provider.active
+        fingerprint = active.certificate_sha256
+        not_valid_after = active.certificate_not_valid_after
+        if fingerprint is None or not_valid_after is None:
+            raise TLSCredentialError(
+                TLS_REASON_INCOMPLETE, category=TLS_CATEGORY_CERTIFICATE_CHAIN
+            )
+        return GrpcServerCredentials(
+            server_credentials=self._server_credentials,
+            certificate_sha256=fingerprint,
+            certificate_not_valid_after=not_valid_after,
+            client_ca_sha256=active.client_ca_sha256,
+            require_client_cert=active.require_client_cert,
+        )
+
+    @property
+    def installed_generation_id(self) -> str:
+        """Return the generation most recently handed to grpcio."""
+        return self._installed[0]
+
+    def reload(
+        self, tls: Union[GrpcTLSConfig, TLSCredentialSource, None] = None
+    ) -> TLSReloadResult:
+        """Validate and activate the configured material for new connections.
+
+        Args:
+            tls: Optional replacement file locations; see
+                :meth:`TLSCredentialProvider.reload`.
+
+        Returns:
+            The typed, value-free outcome; failures keep the active generation.
+        """
+        source = _as_source(tls) if isinstance(tls, GrpcTLSConfig) else tls
+        return self.provider.reload(source)
+
+    def readiness(self) -> TLSReadiness:
+        """Report whether a complete, allowed generation is serving."""
+        return self.provider.readiness()
+
+    def watched_files(self) -> tuple[Path, ...]:
+        """Return the configured credential files for metadata polling."""
+        return self.provider.watched_files()
+
+    def server_options(self) -> tuple[tuple[str, int], ...]:
+        """Return grpcio server options that retire old-generation connections.
+
+        Returns:
+            ``grpc.max_connection_age_ms`` and ``grpc.max_connection_age_grace_ms``
+            when a maximum age is configured, otherwise an empty tuple.
+        """
+        if self._max_age_ms is None:
+            return ()
+        return (
+            ("grpc.max_connection_age_ms", self._max_age_ms),
+            ("grpc.max_connection_age_grace_ms", self._grace_ms),
+        )
+
+    def report(self) -> dict[str, Any]:
+        """Return a value-free summary of generations and handshake switches."""
+        report = self.provider.report()
+        report["installed_generation_id"] = self.installed_generation_id
+        report["handshake_config_switches"] = self._switches
+        report["max_connection_age_seconds"] = (
+            self._max_age_ms / 1000 if self._max_age_ms is not None else None
+        )
+        report["connection_grace_seconds"] = self._grace_ms / 1000
+        return report
+
+    def _fetch_certificate_configuration(
+        self,
+    ) -> Optional[grpc.ServerCertificateConfiguration]:
+        try:
+            snapshot = self.provider.snapshot()
+            key = _installed_key(snapshot)
+            with self._fetch_lock:
+                if key == self._installed:
+                    return None
+                config = _select_certificate_config(snapshot)
+                self._installed = key
+                self._switches += 1
+            return config
+        except Exception:
+            # Never raise into grpcio: keep the configuration it already has.
+            return None
+
+
+def _credential_source(
+    tls: Union[GrpcTLSConfig, TLSCredentialSource],
+) -> TLSCredentialSource:
+    if isinstance(tls, TLSCredentialSource):
+        source = tls
+    elif isinstance(tls, GrpcTLSConfig):
+        source = _as_source(tls)
+    else:
+        raise TLSCredentialError(
+            TLS_REASON_INCOMPLETE, category=TLS_CATEGORY_CERTIFICATE_CHAIN
+        )
+    if source.certificate_chain_file is None and source.private_key_file is None:
+        raise TLSCredentialError(
+            TLS_REASON_INCOMPLETE, category=TLS_CATEGORY_CERTIFICATE_CHAIN
+        )
+    return source
+
+
+def _as_source(config: GrpcTLSConfig) -> TLSCredentialSource:
+    return TLSCredentialSource(
+        certificate_chain_file=config.certificate_chain_file,
+        private_key_file=config.private_key_file,
+        client_ca_file=config.client_ca_file,
+        require_client_cert=config.require_client_cert,
+    )
+
+
+def _installed_key(snapshot: TLSCredentialSnapshot) -> tuple[str, bool]:
+    configs = snapshot.artifacts["grpc"]
+    overlap = snapshot.overlap is not None and configs.overlap is not None
+    return (snapshot.active.generation_id, overlap)
+
+
+def _select_certificate_config(
+    snapshot: TLSCredentialSnapshot,
+) -> grpc.ServerCertificateConfiguration:
+    configs = snapshot.artifacts["grpc"]
+    if snapshot.overlap is not None and configs.overlap is not None:
+        return configs.overlap
+    return configs.steady
+
+
+def _connection_milliseconds(seconds: Any) -> int:
+    if type(seconds) not in (int, float) or not math.isfinite(seconds):
+        raise ValueError("connection age must be a finite number of seconds")
+    if not 0 < seconds <= MAX_GRPC_CONNECTION_AGE_SECONDS:
+        raise ValueError("connection age is outside the supported range")
+    return max(1, int(seconds * 1000))
 
 
 def certificate_sha256(certificate: x509.Certificate) -> str:
@@ -575,6 +842,8 @@ __all__ = [
     "CATEGORY_LISTENER",
     "CATEGORY_OVERRIDE",
     "CATEGORY_PRIVATE_KEY",
+    "DEFAULT_GRPC_CONNECTION_GRACE_SECONDS",
+    "DEFAULT_GRPC_MAX_CONNECTION_AGE_SECONDS",
     "GRPC_CREDENTIAL_CATEGORIES",
     "GRPC_REASON_ADDRESS_INVALID",
     "GRPC_REASON_BIND_FAILED",
@@ -588,12 +857,14 @@ __all__ = [
     "GRPC_REASON_TLS_MALFORMED",
     "GRPC_REASON_TLS_UNREADABLE",
     "GRPC_STARTUP_REASON_CODES",
+    "GrpcCredentialReloader",
     "GrpcListener",
     "GrpcServerCredentials",
     "GrpcStartupError",
     "GrpcTLSConfig",
     "INSECURE_DEV_OVERRIDE_PROFILES",
     "MAX_CREDENTIAL_FILE_BYTES",
+    "MAX_GRPC_CONNECTION_AGE_SECONDS",
     "TRANSPORT_MTLS",
     "TRANSPORT_PLAINTEXT",
     "TRANSPORT_TLS",
