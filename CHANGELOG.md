@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document multimodal dependency licenses through the existing offline inventory,
+  with separate guidance for the Tesseract binary and TCIA collection terms (#257).
+
 - Add an optional pinned Core ML English speech adapter for OpenMedKit, with bounded PCM ownership, incremental hypotheses, acoustic timing, explicit compute refusals and cancellation that fences late results (#3823).
 
 - Session-scoped opaque voice embedding handles in Python and OpenMedKit, with

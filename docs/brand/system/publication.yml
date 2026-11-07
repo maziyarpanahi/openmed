@@ -778,6 +778,7 @@ classification:
     - contributing/reproducible-dependencies.md
     - security/policy-impact.md
     - security/license-inventory.md
+    - compliance/multimodal-dependency-licenses.md
     - security/exception-taxonomy.md
     - security/budget-migrations.md
     - security/policy-simulation.md
