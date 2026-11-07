@@ -54,3 +54,7 @@ Applications that need typed token tensors, a `run(tokens) -> logits` contract,
 separate WebGPU and WASM model artifacts, parity/recall certification, and
 per-device timing should use the production
 [WebGPU Token-Classification Runtime](webgpu.md).
+
+The [OpenMedKit portable-kit threat model](../security/openmedkit-threat-model.md)
+lists the browser, Electron and Tauri trust boundaries, the controls this loader
+provides and the gaps that are still open.
