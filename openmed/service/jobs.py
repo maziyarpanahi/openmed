@@ -17,6 +17,14 @@ from typing import Any, Callable, Optional
 import openmed
 from openmed.core.audit import hash_text
 
+from .job_admission import (
+    DEFAULT_MAX_DOCUMENTS_PER_JOB,
+    DEFAULT_MAX_PENDING_JOBS,
+    DEFAULT_MAX_QUEUED_TEXT_BYTES,
+    JobAdmission,
+    JobAdmissionLimits,
+    JobCost,
+)
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
 from .webhooks import WebhookDeliveryResult, deliver_webhook
@@ -24,6 +32,9 @@ from .webhooks import WebhookDeliveryResult, deliver_webhook
 SERVICE_JOBS_STORE_ENV_VAR = "OPENMED_SERVICE_JOBS_STORE_PATH"
 SERVICE_JOBS_TTL_ENV_VAR = "OPENMED_SERVICE_JOBS_TTL_SECONDS"
 SERVICE_JOBS_WORKERS_ENV_VAR = "OPENMED_SERVICE_JOBS_WORKERS"
+SERVICE_JOBS_MAX_PENDING_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_PENDING"
+SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES"
+SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_DOCUMENTS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
 TERMINAL_STATUSES = frozenset({"done", "failed"})
@@ -89,6 +100,53 @@ def parse_jobs_workers(raw_value: Optional[str]) -> int:
         raw_value,
         env_var=SERVICE_JOBS_WORKERS_ENV_VAR,
         default=DEFAULT_JOBS_WORKERS,
+    )
+
+
+def parse_job_admission_limits(
+    *,
+    max_pending: Optional[str] = None,
+    max_queued_bytes: Optional[str] = None,
+    max_documents: Optional[str] = None,
+) -> JobAdmissionLimits:
+    """Parse async job submission ceilings from raw environment values.
+
+    Args:
+        max_pending: Raw ``OPENMED_SERVICE_JOBS_MAX_PENDING`` value.
+        max_queued_bytes: Raw ``OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES`` value.
+        max_documents: Raw ``OPENMED_SERVICE_JOBS_MAX_DOCUMENTS`` value.
+
+    Returns:
+        Admission limits, using safe defaults for unset or blank values.
+
+    Raises:
+        ValueError: If a set value is not a positive integer.
+    """
+    return JobAdmissionLimits(
+        max_pending_jobs=_parse_positive_int(
+            max_pending,
+            env_var=SERVICE_JOBS_MAX_PENDING_ENV_VAR,
+            default=DEFAULT_MAX_PENDING_JOBS,
+        ),
+        max_queued_text_bytes=_parse_positive_int(
+            max_queued_bytes,
+            env_var=SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR,
+            default=DEFAULT_MAX_QUEUED_TEXT_BYTES,
+        ),
+        max_documents_per_job=_parse_positive_int(
+            max_documents,
+            env_var=SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR,
+            default=DEFAULT_MAX_DOCUMENTS_PER_JOB,
+        ),
+    )
+
+
+def job_admission_limits_from_env() -> JobAdmissionLimits:
+    """Return async job submission ceilings from the environment."""
+    return parse_job_admission_limits(
+        max_pending=os.getenv(SERVICE_JOBS_MAX_PENDING_ENV_VAR),
+        max_queued_bytes=os.getenv(SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR),
+        max_documents=os.getenv(SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR),
     )
 
 
@@ -224,7 +282,12 @@ def _parse_timestamp(raw_value: Any) -> datetime:
 
 
 class DeidentifyJobQueue:
-    """Bounded local worker pool for async de-identification jobs."""
+    """Bounded local worker pool for async de-identification jobs.
+
+    Submissions pass :class:`~openmed.service.job_admission.JobAdmission`
+    before any metadata is persisted, so pending jobs, their queued text bytes
+    and documents per job stay within configured ceilings.
+    """
 
     def __init__(
         self,
@@ -234,11 +297,17 @@ class DeidentifyJobQueue:
         max_workers: int = DEFAULT_JOBS_WORKERS,
         webhook_sender: WebhookSender = deliver_webhook,
         clock: Callable[[], datetime] = _utc_now,
+        admission: Optional[JobAdmission] = None,
     ) -> None:
         self.runtime = runtime
         self.store = store
         self.webhook_sender = webhook_sender
         self.clock = clock
+        self.admission = (
+            JobAdmission(metrics=getattr(runtime, "metrics", None))
+            if admission is None
+            else admission
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
             thread_name_prefix="openmed-job",
@@ -257,17 +326,47 @@ class DeidentifyJobQueue:
             runtime,
             store=store,
             max_workers=parse_jobs_workers(os.getenv(SERVICE_JOBS_WORKERS_ENV_VAR)),
+            admission=JobAdmission(
+                job_admission_limits_from_env(),
+                metrics=getattr(runtime, "metrics", None),
+            ),
         )
 
     def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        """Submit one de-identification job and return its initial metadata."""
+        """Submit one de-identification job and return its initial metadata.
+
+        Capacity is reserved before the record is created. A rejected
+        submission persists no record and queues no work. The reservation is
+        released when the job's work finishes, fails or is cancelled.
+
+        Args:
+            payload: The validated job request.
+
+        Returns:
+            The initial job record.
+
+        Raises:
+            JobLimitExceededError: If the job exceeds a per-job ceiling.
+            JobQueueFullError: If the pending-job queue is at capacity.
+            RuntimeError: If the queue is shutting down.
+        """
         self.runtime.validate_served_model(payload.model_name)
+        cost = JobCost.for_texts(document.text for document in payload.documents)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
-            record = self._new_record(payload)
-            self.store.create(record)
-            self._executor.submit(self._run_job, _JobWorkItem(record["id"], payload))
+            reservation = self.admission.reserve(cost)
+            try:
+                record = self._new_record(payload)
+                self.store.create(record)
+                future = self._executor.submit(
+                    self._run_job, _JobWorkItem(record["id"], payload)
+                )
+            except BaseException:
+                reservation.release()
+                raise
+            # Runs on completion, failure or cancellation, including shutdown.
+            future.add_done_callback(reservation.release)
             return _copy_record(record)
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:

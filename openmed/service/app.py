@@ -67,6 +67,7 @@ from .bulk_data import (
 )
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
+from .job_admission import JobAdmissionError
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -1108,6 +1109,22 @@ def create_app(
             exc.error_code,
             str(exc),
             details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(JobAdmissionError)
+    async def _job_admission_handler(
+        _: Request,
+        exc: JobAdmissionError,
+    ) -> JSONResponse:
+        headers = None
+        if exc.retry_after_seconds is not None:
+            headers = {"Retry-After": format_retry_after(exc.retry_after_seconds)}
+        return _error_response(
+            exc.status_code,
+            exc.error_code,
+            exc.message,
+            details=exc.to_details(),
+            headers=headers,
         )
 
     @app.exception_handler(CircuitBreakerOpenError)

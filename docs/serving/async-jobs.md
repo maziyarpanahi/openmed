@@ -31,6 +31,59 @@ curl -s http://127.0.0.1:8080/jobs \
 The response uses HTTP `202` and includes `id`, `status`, `progress_percent`,
 `document_count`, and `status_url`.
 
+## Capacity Limits
+
+Each pending job keeps its raw documents in memory until a worker finishes it,
+so submissions are admitted against fixed ceilings before any job metadata is
+written. A pending job is one that is queued or running.
+
+| Variable | Default | Bounds |
+|---|---|---|
+| `OPENMED_SERVICE_JOBS_MAX_PENDING` | `64` | Jobs queued or running at once |
+| `OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES` | `67108864` (64 MiB) | UTF-8 bytes of document text held by all pending jobs |
+| `OPENMED_SERVICE_JOBS_MAX_DOCUMENTS` | `1000` | Documents in one job |
+
+Each value must be a positive integer; an invalid value stops the service at
+startup. A rejected submission creates no job record and queues no work.
+
+When the pending-job or queued-byte ceiling is reached, `POST /jobs` returns
+`503` with a `Retry-After` header and a value-free error. Retry the same
+request after the hinted delay:
+
+```json
+{
+  "error": {
+    "code": "job_queue_full",
+    "message": "Job queue is full. Retry later.",
+    "details": {"reason": "pending_jobs", "limit": 64, "retry_after_seconds": 5}
+  }
+}
+```
+
+`details.reason` is `pending_jobs` or `queued_text_bytes`.
+
+A job that can never fit returns `422` instead, and retrying it unchanged will
+not succeed:
+
+- `job_too_many_documents` (`reason: documents_per_job`): the job has more
+  documents than `OPENMED_SERVICE_JOBS_MAX_DOCUMENTS`. Split it into smaller
+  jobs.
+- `job_too_large` (`reason: job_text_bytes`): the job's text alone is larger
+  than `OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES`.
+
+Rejections carry only the code, reason, and configured limit. They never echo
+document text or document ids.
+
+When `OPENMED_SERVICE_METRICS_ENABLED` is on, `GET /metrics` exposes two
+unlabelled aggregate gauges:
+
+- `openmed_service_job_queue_depth`: jobs queued or running.
+- `openmed_service_job_queue_text_bytes`: UTF-8 bytes of document text held by
+  those jobs.
+
+Capacity is returned when a job finishes, fails, or is cancelled at shutdown,
+so both gauges return to `0` once the queue drains.
+
 ## Poll Status
 
 ```bash
@@ -109,6 +162,7 @@ python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `OPENMED_SERVICE_JOBS_TTL_SECONDS` controls terminal metadata cleanup.
-`OPENMED_SERVICE_JOBS_WORKERS` bounds concurrent job execution. The local
+`OPENMED_SERVICE_JOBS_WORKERS` bounds concurrent job execution; see
+[Capacity Limits](#capacity-limits) for the submission ceilings. The local
 backend is intended for one service process and does not provide multi-node
 distribution.
