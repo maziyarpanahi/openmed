@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generate bounded non-diagnostic waveform stimuli with declared event timing and synthetic device metadata (#2850).
 
+- Offline synthetic dialogue rendering through licensed local speech adapters,
+  sample-exact PHI chunks and word timing manifests, a model-free waveform fixture,
+  and seeded noise, gain, overlap and bandpass augmentation provenance (#3831).
+
 - Generate reproducible synthetic DICOM files with paired metadata, burned-in identifier masks, annotation and ruler geometry, native pixel roundtrips and source-bound privacy-mask lineage (#2849).
 
 - Compare packet-scoped identity digests, page numbering, rendered pixels, template anchors and continuation cues across document pages; preserve original evidence and masks when splitting or quarantining inconsistent groups (#2805).
