@@ -22,6 +22,13 @@ from tests.unit.service.test_rest_client import SyncASGITransport
 REVIEW_ID = "a" * 64
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 def setup_review():
     value, context = fixture_context()
     provider = lambda text, review_id: (value, context)
