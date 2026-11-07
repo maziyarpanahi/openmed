@@ -462,6 +462,7 @@ nav:
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
       - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
+      - Cross-modal Clock Alignment: multimodal/cross-modal-clock-alignment.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
@@ -476,6 +477,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
+      - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md
       - Script Tokenization Audit: evaluation/script-tokenization.md
       - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
@@ -500,6 +503,7 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
       - Transcript Accuracy: evaluation/transcript-accuracy.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
