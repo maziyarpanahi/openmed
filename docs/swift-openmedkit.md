@@ -609,3 +609,106 @@ The optional `OpenMedSpeech` product provides a pinned Core ML English speech ad
 ## Thermal admission for multimodal work
 
 `MultimodalThermalSession` can gate a local operation against current Apple thermal state, queue age and measured latency. See [Apple session admission](multimodal/thermal-latency-gates.md#apple-session-admission) for the policy table, recovery behavior and value-free evidence.
+
+## Keychain-backed policy and bundle trust secrets
+
+Policy secrets, such as the surrogate or hash keys a de-identification policy
+uses, and portable-bundle trust material, such as verification public keys or
+pins, stay out of model bundles, caches and policy files. Code depends on the
+small `OpenMedSecretProvider` protocol and passes opaque
+`OpenMedSecretReference` values. `OpenMedKeychainSecretProvider` is the bundled
+Apple implementation. It mirrors the custody boundary of the Python
+[surrogate-key providers](security/surrogate-key-providers.md) and does not
+change any surrogate algorithm.
+
+```swift
+let configuration = try OpenMedKeychainConfiguration(
+    service: "org.example.openmed.secrets",
+    accessGroup: .applicationDefault,            // or .named("TEAMID.org.example.shared")
+    accessibility: .whenUnlockedThisDeviceOnly,  // the default
+    userAuthentication: .notRequired             // or .userPresence, .biometryCurrentSet, ...
+)
+let provider = OpenMedKeychainSecretProvider(configuration: configuration)
+let reference = try OpenMedSecretReference(purpose: .policySecret, label: "study-a.hash-key")
+
+// The caller supplies the bytes; the provider never generates a key.
+let stored = try provider.put(callerManagedKey, for: reference)  // version 1
+let key = try provider.get(reference, expectedVersion: stored.version)
+// Pass key.bytes straight to the local operation; never log, cache or export them.
+let rotated = try provider.rotate(reference, to: nextCallerManagedKey, expectedVersion: 1)
+```
+
+The configuration is explicit. The access group has no default, and only the
+`ThisDeviceOnly` accessibility classes are offered (`whenUnlockedThisDeviceOnly`,
+`whenPasscodeSetThisDeviceOnly`, `afterFirstUnlockThisDeviceOnly`). Every call
+sends `kSecAttrSynchronizable = false` and `kSecUseDataProtectionKeychain = true`,
+including on macOS, so items never sync through iCloud Keychain and never land in
+a legacy file keychain. A `userAuthentication` other than `notRequired` stores
+the item with a `SecAccessControl` built from the configured class and the
+matching `SecAccessControlCreateFlags`, instead of `kSecAttrAccessible`.
+
+A reference hashes its purpose and caller label with SHA-256 and does not keep
+the label. The Keychain account is `omk.secret.v1.<digest>`, and descriptions
+show only `ref:` plus 16 hexadecimal characters. References encode as
+`{"purpose", "digest"}`, so a portable policy can name a secret without holding
+it. Use configuration names as labels, never patient or user data.
+`OpenMedSecretValue` is not `Codable`, and its description, debug description
+and mirror report the reference fingerprint, version and byte count only.
+Receipts, metadata and protection reports are `Codable` and value-free.
+
+| Operation | Result |
+| --- | --- |
+| `put(_:for:)` | Stores version 1. An existing item fails with `secret_duplicate` and is not overwritten. |
+| `get(_:expectedVersion:)` | Returns the bytes. With an expected version, a different stored version fails with `secret_rotated` instead of returning it. |
+| `metadata(for:)` | Returns the version from attributes only, without reading the bytes. |
+| `rotate(_:to:expectedVersion:)` | Replaces the bytes only if the item is still at the expected version. |
+| `delete(_:)` | Returns `deleted` or `already_absent`. |
+| `protectionReport()` | States the configured protection and whether this device can provide it. |
+
+Rotation is a compare-and-swap: the update matches the metadata the provider
+just read, so a concurrent rotation makes it miss and the call fails with
+`secret_rotated` rather than overwriting. The Keychain keeps only the current
+version. Store earlier material under its own reference first if it must stay
+readable.
+
+Every failure is an `OpenMedSecretProviderError` with a fixed `secret_*` code
+and no secret bytes, labels, service or account strings, access groups or
+platform messages. There is no plaintext, cached or weaker-protection fallback:
+
+- `secret_missing`: no item exists for the reference.
+- `secret_locked`: the device is locked or the system did not allow interaction
+  (`errSecInteractionNotAllowed`).
+- `secret_invalidated`: the item's attributes are readable but its bytes are
+  not, for example when a `biometryCurrentSet` item no longer opens after an
+  enrollment change, or its stored metadata is malformed or names another
+  purpose. Some OS versions report an invalidated item as
+  `secret_authentication_failed` instead.
+- `secret_rotated`: the stored version is not the one the caller expected.
+- `secret_protection_mismatch`: the item's accessibility class, sync flag or
+  recorded user-authentication mode differs from the configuration.
+- `secret_unsupported`: a write needs a passcode or biometry the device cannot
+  provide now, or the platform rejects the configuration. The write is refused
+  before any `SecItem` call rather than stored with weaker protection.
+- `secret_missing_entitlement` / `secret_unavailable`: the process cannot use
+  the data-protection Keychain at all.
+- `secret_user_canceled`, `secret_authentication_failed`, `secret_duplicate`,
+  `secret_invalid_*` and `secret_unexpected_status` cover the remaining cases.
+
+`protectionReport()` probes `LocalAuthentication` without a prompt and reports
+`not_requested`, `available`, `passcode_not_set`, `biometry_not_available`,
+`biometry_not_enrolled`, `biometry_lockout`, `unsupported_platform` or
+`unknown`. Biometry is `unsupported_platform` on watchOS. The report always
+sets `secureHardwareClaimed` to `false`. The items are generic passwords
+protected by OS data protection, not Secure Enclave keys, and the adapter makes
+no claim that a secret is held in, or never leaves, secure hardware.
+
+Calls can block or show a system authentication prompt, so make them off the
+main thread. Tests inject `OpenMedKeychainItemClient`, which wraps
+`SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate` and `SecItemDelete`, and
+`OpenMedLocalAuthenticationProbe`. The package tests use an in-memory fake to
+cover missing, locked, invalidated, rotated, mismatched and unsupported items.
+Set `OPENMED_KEYCHAIN_INTEGRATION=1` to run the optional system-Keychain round
+trip. An unsigned `swift test` runner on macOS lacks the data-protection
+Keychain entitlement, so that test skips with `secret_missing_entitlement`
+there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
+physical device and is not covered by the package tests.
