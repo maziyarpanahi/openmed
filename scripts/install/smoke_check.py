@@ -43,6 +43,20 @@ _SAFE_VERSION_RE = re.compile(rf"^{_SAFE_VERSION_PATTERN}$")
 _HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 BRIEF_PROFILES = ("core", "adapters")
 BRIEF_RESOURCE = "core/schemas/json/clinical_review_packet.schema.json"
+# Generated protobuf modules the gRPC transport imports at runtime.
+PROTO_STUBS = (
+    "service/proto/generated/kserve_v2_pb2.py",
+    "service/proto/generated/openmed_pb2.py",
+    "service/proto/generated/openmed_pb2_grpc.py",
+)
+ADAPTER_CHECKS = (
+    "brief_rest_client",
+    "brief_mcp",
+    "rest_pii_extract",
+    "graphql_query",
+    "grpc_stubs",
+    "grpc_loopback",
+)
 BRIEF_CHECKS = (
     "installed_origin",
     "packaged_resources",
@@ -50,10 +64,29 @@ BRIEF_CHECKS = (
     "missing_runtime",
     "privacy_sentinel",
     "brief_cli",
-    "brief_rest_client",
-    "brief_mcp",
+    *ADAPTER_CHECKS,
     "no_network",
 )
+# Each control installs a disposable artifact copy without the named resources
+# and must then fail at exactly one check: (resources, probe profile, check).
+NEGATIVE_CONTROLS = {
+    "missing_resource": ((BRIEF_RESOURCE,), "core", "packaged_resources"),
+    "missing_proto_stubs": (PROTO_STUBS, "adapters", "grpc_stubs"),
+}
+ADAPTER_EXTRAS = "[cli,service,mcp]"
+GRPC_TIMEOUT_SECONDS = 30
+_SERVICE_TEXT = "Synthetic service marker OM-SMOKE-0002"
+_SERVICE_MARKER = "OM-SMOKE-0002"
+_SERVICE_LABEL = "ID_NUM"
+_SERVICE_SPANS = (
+    (
+        _SERVICE_LABEL,
+        _SERVICE_TEXT.index(_SERVICE_MARKER),
+        _SERVICE_TEXT.index(_SERVICE_MARKER) + len(_SERVICE_MARKER),
+    ),
+)
+# A public-identifier shape, so the served-set policy (not syntax) refuses it.
+_UNSERVED_MODEL = "synthetic/unserved-model"
 
 # The probe carries only a synthetic marker. It emits hashes and offsets, never
 # the marker itself, so captured child output remains safe for release logs.
@@ -309,6 +342,181 @@ def _probe_rest(value, provider, expected, loop) -> None:
     loop.run_until_complete(transport.aclose())
 
 
+class _SyntheticPIIPipeline:
+    """Token-classification stand-in that tags only the synthetic marker."""
+
+    openmed_max_length = 512
+    tokenizer = None
+
+    def __call__(self, inputs, **kwargs):
+        def predict(text):
+            start = text.find(_SERVICE_MARKER)
+            if start < 0:
+                return []
+            end = start + len(_SERVICE_MARKER)
+            return [
+                dict(
+                    entity_group=_SERVICE_LABEL,
+                    score=0.99,
+                    word=_SERVICE_MARKER,
+                    start=start,
+                    end=end,
+                )
+            ]
+
+        if isinstance(inputs, list):
+            return [predict(text) for text in inputs]
+        return predict(inputs)
+
+
+class _SyntheticPIILoader:
+    """Model-loader double: no weights, tokenizer, cache, or download is used."""
+
+    def __init__(self, config) -> None:
+        self.config = config
+        self.loaded: list[str] = []
+
+    def resolve_model_name(self, model_name: str) -> str:
+        return model_name
+
+    def create_pipeline(self, model_name: str, **kwargs) -> _SyntheticPIIPipeline:
+        self.loaded.append(model_name)
+        return _SyntheticPIIPipeline()
+
+    def loaded_models(self) -> dict[str, Any]:
+        return {}
+
+
+def _entity_spans(entities) -> tuple[tuple[str, int, int], ...]:
+    return tuple((item["label"], item["start"], item["end"]) for item in entities)
+
+
+def _post_in_memory(app, loop, path: str, payloads) -> list:
+    """POST each payload through ASGI in memory and return the responses."""
+    import httpx
+
+    transport = httpx.ASGITransport(app=app)
+
+    async def send():
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://127.0.0.1"
+        ) as client:
+            return [await client.post(path, json=payload) for payload in payloads]
+
+    try:
+        return loop.run_until_complete(send())
+    finally:
+        loop.run_until_complete(transport.aclose())
+
+
+def _probe_rest_pii(app, loop) -> tuple[tuple[str, int, int], ...]:
+    """Extract the synthetic marker over REST and refuse an unserved model."""
+    accepted, refused = _post_in_memory(
+        app,
+        loop,
+        "/pii/extract",
+        (
+            dict(text=_SERVICE_TEXT),
+            dict(text=_SERVICE_TEXT, model_name=_UNSERVED_MODEL),
+        ),
+    )
+    assert accepted.status_code == 200
+    spans = _entity_spans(accepted.json()["entities"])
+    assert spans == _SERVICE_SPANS
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "model_not_served"
+    assert _SERVICE_MARKER not in refused.text
+    return spans
+
+
+def _probe_graphql(app, loop) -> None:
+    """Run one GraphQL query through the same app and shared runtime."""
+    query = (
+        "query($input: DeidentifyInput!) "
+        "{ deidentify(input: $input) { deidentifiedText } }"
+    )
+    (response,) = _post_in_memory(
+        app,
+        loop,
+        "/graphql",
+        (dict(query=query, variables=dict(input=dict(text=_SERVICE_TEXT))),),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "errors" not in payload
+    assert payload["data"]["deidentify"]["deidentifiedText"] == (
+        _SERVICE_TEXT.replace(_SERVICE_MARKER, f"[{_SERVICE_LABEL}]")
+    )
+
+
+def _check_proto_stubs(root: Path) -> None:
+    """Require the packaged generated stubs, imported from the installed tree."""
+    from importlib.resources import files
+
+    for resource in PROTO_STUBS:
+        assert files("openmed").joinpath(resource).is_file()
+    from openmed.service.proto.generated import (
+        kserve_v2_pb2,
+        openmed_pb2,
+        openmed_pb2_grpc,
+    )
+
+    for module in (kserve_v2_pb2, openmed_pb2, openmed_pb2_grpc):
+        assert Path(module.__file__).resolve().is_relative_to(root)
+    service = openmed_pb2.DESCRIPTOR.services_by_name["OpenMedService"]
+    assert service.full_name == "openmed.service.v1.OpenMedService"
+    assert [method.name for method in service.methods] == [
+        "Analyze",
+        "Extract",
+        "Deidentify",
+        "StreamDeidentify",
+    ]
+    assert callable(openmed_pb2_grpc.OpenMedServiceStub)
+    assert kserve_v2_pb2.DESCRIPTOR.package == "openmed.kserve.v2"
+
+
+def _probe_grpc(runtime) -> tuple[tuple[str, int, int], ...]:
+    """Serve one unary RPC from a loopback-only server on an ephemeral port."""
+    import grpc
+
+    from openmed.service.grpc_server import create_grpc_server
+    from openmed.service.proto.generated import openmed_pb2, openmed_pb2_grpc
+
+    server = create_grpc_server(runtime=runtime, max_workers=1)
+    try:
+        # Bind explicitly; the probe never depends on the default address.
+        port = server.add_insecure_port("127.0.0.1:0")
+        assert port > 0
+        server.start()
+        with grpc.insecure_channel(
+            f"127.0.0.1:{port}", options=[("grpc.enable_http_proxy", 0)]
+        ) as channel:
+            grpc.channel_ready_future(channel).result(timeout=GRPC_TIMEOUT_SECONDS)
+            stub = openmed_pb2_grpc.OpenMedServiceStub(channel)
+            response = stub.Extract(
+                openmed_pb2.ExtractRequest(text=_SERVICE_TEXT),
+                timeout=GRPC_TIMEOUT_SECONDS,
+            )
+            spans = tuple(
+                (entity.label, entity.start, entity.end) for entity in response.entities
+            )
+            try:
+                stub.Extract(
+                    openmed_pb2.ExtractRequest(
+                        text=_SERVICE_TEXT, model_name=_UNSERVED_MODEL
+                    ),
+                    timeout=GRPC_TIMEOUT_SECONDS,
+                )
+            except grpc.RpcError as error:
+                assert error.code() is grpc.StatusCode.INVALID_ARGUMENT
+                assert error.details() == "model_not_served"
+            else:
+                raise AssertionError("unserved model accepted")
+    finally:
+        server.stop(None).wait(GRPC_TIMEOUT_SECONDS)
+    return spans
+
+
 def _run_brief_probe(profile: str, source_root: Path) -> SmokeReport:
     """Run only in an isolated child against a non-editable installation."""
     import asyncio
@@ -480,12 +688,37 @@ def _run_brief_probe(profile: str, source_root: Path) -> SmokeReport:
                     is True
                 )
                 checks.append(_passed(active))
+                active = "rest_pii_extract"
+                # Every service runtime built from here on gets the fake loader.
+                stack.enter_context(
+                    patch("openmed.service.runtime.ModelLoader", _SyntheticPIILoader)
+                )
+                from openmed.service.app import create_app
+
+                service_app = create_app()
+                spans = _probe_rest_pii(service_app, loop)
+                runtime = service_app.state.runtime
+                loader = runtime.get_model_loader()
+                assert isinstance(loader, _SyntheticPIILoader) and loader.loaded
+                assert set(loader.loaded) <= set(runtime.served_model_ids())
+                checks.append(_passed(active))
+                active = "graphql_query"
+                _probe_graphql(service_app, loop)
+                assert service_app.state.runtime is runtime
+                checks.append(_passed(active))
+                active = "grpc_stubs"
+                _check_proto_stubs(root)
+                checks.append(_passed(active))
+                active = "grpc_loopback"
+                # Same shared runtime, so the RPC must match the REST spans.
+                assert _probe_grpc(runtime) == spans
+                checks.append(_passed(active))
             active = "no_network"
             assert not network_attempts
             assert socket.socket.connect is blocked
-            assert (
-                marker not in captured.getvalue()
-                and "dehydration" not in captured.getvalue()
+            assert all(
+                value not in captured.getvalue()
+                for value in (marker, "dehydration", _SERVICE_MARKER)
             )
             # Imported package modules must also resolve to the installed tree.
             assert all(
@@ -839,16 +1072,20 @@ def run_smoke_check(
         return SmokeReport(status=status, checks=tuple(checks))
 
 
+def _expected_checks(profile: str) -> tuple[str, ...]:
+    """Return the ordered child checks a probe profile must report."""
+    if profile == "adapters":
+        return BRIEF_CHECKS
+    return tuple(name for name in BRIEF_CHECKS if name not in ADAPTER_CHECKS)
+
+
 def _brief_probe_results(result, profile: str) -> tuple[CheckResult, ...]:
     """Allow-list child fields; never relay arbitrary output or exceptions."""
     if result is None:
         return (_failed("brief_probe", "command_failed"),)
     try:
         payload = json.loads(result.stdout)
-        expected = list(BRIEF_CHECKS)
-        if profile == "core":
-            expected.remove("brief_rest_client")
-            expected.remove("brief_mcp")
+        expected = list(_expected_checks(profile))
         rows = payload["checks"]
         if not isinstance(rows, list) or not rows or len(rows) > len(expected):
             raise ValueError
@@ -874,22 +1111,35 @@ def _brief_probe_results(result, profile: str) -> tuple[CheckResult, ...]:
         return (_failed("brief_probe", "invalid_result"),)
 
 
-def _omit_brief_resource(artifact: Path, destination: Path) -> Path:
-    """Create a damaged artifact in a disposable directory for a negative control."""
+def _omit_packaged_resources(
+    artifact: Path, destination: Path, resources: Sequence[str]
+) -> Path:
+    """Create a damaged artifact in a disposable directory for a negative control.
+
+    Every named ``openmed/`` resource must be present exactly once, so a control
+    cannot pass against an artifact that already lacked it.
+    """
     import tarfile
     import zipfile
 
     target = destination / artifact.name
-    member_suffix = "openmed/" + BRIEF_RESOURCE
-    omitted = 0
+    suffixes = {"openmed/" + resource for resource in resources}
+    omitted = []
+
+    def matched(name: str, *, wheel: bool) -> str | None:
+        # Wheels hold package paths at the root; sdists under one project dir.
+        candidate = name if wheel else name.partition("/")[2]
+        return candidate if candidate in suffixes else None
+
     if artifact.suffix == ".whl":
         with (
             zipfile.ZipFile(artifact) as source,
             zipfile.ZipFile(target, "w") as output,
         ):
             for member in source.infolist():
-                if member.filename == member_suffix:
-                    omitted += 1
+                suffix = matched(member.filename, wheel=True)
+                if suffix is not None:
+                    omitted.append(suffix)
                 else:
                     output.writestr(member, source.read(member))
     else:
@@ -898,15 +1148,23 @@ def _omit_brief_resource(artifact: Path, destination: Path) -> Path:
             tarfile.open(target, "w:gz") as output,
         ):
             for member in source.getmembers():
-                if member.name.endswith("/" + member_suffix):
-                    omitted += 1
+                suffix = matched(member.name, wheel=False)
+                if suffix is not None:
+                    omitted.append(suffix)
                 else:
                     output.addfile(
                         member, source.extractfile(member) if member.isfile() else None
                     )
-    if omitted != 1:
+    if sorted(omitted) != sorted(suffixes):
         raise ValueError("invalid resource inventory")
     return target
+
+
+def _artifact_digest(artifact: Path) -> str:
+    import hashlib
+
+    with artifact.open("rb") as handle:
+        return "sha256:" + hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def run_artifact_checks(
@@ -916,6 +1174,8 @@ def run_artifact_checks(
 
     Only this explicit mode invokes uv and may download build/package dependencies.
     Each runtime probe still runs offline, outside the source and without weights.
+    Every row records the original artifact's SHA-256 digest; negative controls
+    install a damaged copy and pass only when the expected check rejects it.
     """
     artifacts = [list(directory.glob(pattern)) for pattern in ("*.whl", "*.tar.gz")]
     if any(len(matches) != 1 for matches in artifacts):
@@ -926,8 +1186,13 @@ def run_artifact_checks(
     rows = []
     for artifact_type, matches in zip(("wheel", "sdist"), artifacts):
         artifact = matches[0].resolve()
-        for profile in (*BRIEF_PROFILES, "missing_resource"):
-            row = dict(artifact=artifact_type, profile=profile, status="failed")
+        digest = _artifact_digest(artifact)
+        for profile in (*BRIEF_PROFILES, *NEGATIVE_CONTROLS):
+            row = dict(
+                artifact=artifact_type, digest=digest, profile=profile, status="failed"
+            )
+            control = NEGATIVE_CONTROLS.get(profile)
+            probe = profile if control is None else control[1]
             with tempfile.TemporaryDirectory(prefix="openmed-artifact-") as temporary:
                 root = Path(temporary)
                 env = root / "venv"
@@ -935,10 +1200,10 @@ def run_artifact_checks(
                     "Scripts/python.exe" if os.name == "nt" else "bin/python"
                 )
                 selected = artifact
-                if profile == "missing_resource":
-                    selected = _omit_brief_resource(artifact, root)
+                if control is not None:
+                    selected = _omit_packaged_resources(artifact, root, control[0])
                 requirement = str(selected) + (
-                    "[cli,service,mcp]" if profile == "adapters" else ""
+                    ADAPTER_EXTRAS if probe == "adapters" else ""
                 )
                 install = [uv, "pip", "install", "--python", str(python), requirement]
                 if constraints is not None:
@@ -967,21 +1232,18 @@ def run_artifact_checks(
                     row["reason"] = "installation_failed"
                 else:
                     report = run_smoke_check(
-                        python_executable=str(python),
-                        brief_profile="core"
-                        if profile == "missing_resource"
-                        else profile,
+                        python_executable=str(python), brief_profile=probe
                     )
-                    if profile == "missing_resource":
+                    if control is not None:
                         failed = [c for c in report.checks if c.status == "failed"]
                         passed = (
                             report.status == "failed"
                             and len(failed) == 1
-                            and failed[0].name == "packaged_resources"
+                            and failed[0].name == control[2]
                         )
                         row["status"] = "passed" if passed else "failed"
                         row["reason"] = (
-                            "missing_resource_rejected"
+                            f"{profile}_rejected"
                             if passed
                             else "negative_control_failed"
                         )
