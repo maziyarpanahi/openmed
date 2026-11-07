@@ -12,7 +12,6 @@ import io
 import json
 from dataclasses import dataclass, field
 from importlib.resources import files
-from types import SimpleNamespace
 from typing import Any, Iterator
 
 CATALOG_VERSION = "openphi-vision-v1"
@@ -122,13 +121,14 @@ def _render_page(
     from openmed.training.synthetic.burned_in import _fit_font, _import_pillow
 
     image_mod, draw_mod, font_mod = _import_pillow()
+
     # Force the same bundled face and shaping engine on every platform. The
     # existing helper never reaches its fallback because this face is present.
-    fixed_font_mod = SimpleNamespace(
-        truetype=lambda _name, size: font_mod.truetype(
+    def load_fixture_font(size: int) -> Any:
+        return font_mod.truetype(
             io.BytesIO(font_bytes), size, layout_engine=font_mod.Layout.BASIC
         )
-    )
+
     width, height = declaration["size"]
     image = image_mod.new("L", (width, height), color=0)
     boxes = []
@@ -137,12 +137,11 @@ def _render_page(
     for item in declaration["items"]:
         value = item["text"]
         x, y = item["origin"]
-        font, _, _, measured = _fit_font(
+        font, _, measured = _fit_font(
             image_mod,
             draw_mod,
-            fixed_font_mod,
+            load_font=load_fixture_font,
             text=value,
-            font_name="fixture-face",
             font_size=18,
             max_width=width - x,
             max_height=height - y,

@@ -120,20 +120,21 @@ def _records() -> tuple[object, ...]:
     )
 
 
-@pytest.mark.parametrize("record", _records())
-def test_all_contracts_have_canonical_strict_round_trip(record: object) -> None:
-    record_type = type(record)
-    encoded = record.to_json()  # type: ignore[attr-defined]
-    restored = record_type.from_json(encoded)
+def test_all_contracts_have_canonical_strict_round_trip(subtests) -> None:
+    for record in _records():
+        with subtests.test(record=record):
+            record_type = type(record)
+            encoded = record.to_json()  # type: ignore[attr-defined]
+            restored = record_type.from_json(encoded)
 
-    assert restored == record
-    assert restored.to_json() == encoded
-    assert restored.to_dict()["schema_version"] == INGESTION_SCHEMA_VERSION
+            assert restored == record
+            assert restored.to_json() == encoded
+            assert restored.to_dict()["schema_version"] == INGESTION_SCHEMA_VERSION
 
-    payload = restored.to_dict()
-    payload["unknown"] = True
-    with pytest.raises(IngestionContractError, match="missing or unknown"):
-        record_type.from_dict(payload)
+            payload = restored.to_dict()
+            payload["unknown"] = True
+            with pytest.raises(IngestionContractError, match="missing or unknown"):
+                record_type.from_dict(payload)
 
 
 def test_public_ingestion_records_validate_against_bundled_schemas() -> None:

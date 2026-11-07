@@ -146,7 +146,8 @@ def test_ground_route_is_throttled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     del grounding_cache
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    # One token per 100 s, so a slow first lookup cannot refill the bucket.
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "0.01")
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
 
     with TestClient(

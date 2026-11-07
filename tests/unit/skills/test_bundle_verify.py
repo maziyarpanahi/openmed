@@ -174,26 +174,27 @@ def test_manifest_validation_failure(tmp_path):
     assert result.reason == REASON_MANIFEST_MALFORMED
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_malformed_field_types_return_failure(subtests, tmp_path):
+    case_root = tmp_path
+    for field, value in [
         ("entry_points", None),
         ("entry_points", 1),
         ("files", None),
         ("files", []),
         ("signature_scheme", []),
         ("signature", None),
-    ],
-)
-def test_malformed_field_types_return_failure(tmp_path, field, value):
-    _, manifest = _make_bundle(tmp_path, {"main.py": "print('hi')\n"})
-    manifest[field] = value
-    _write_manifest(tmp_path, manifest)
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _, manifest = _make_bundle(tmp_path, {"main.py": "print('hi')\n"})
+            manifest[field] = value
+            _write_manifest(tmp_path, manifest)
 
-    result = verify_bundle(tmp_path)
+            result = verify_bundle(tmp_path)
 
-    assert result.valid is False
-    assert result.reason == REASON_MANIFEST_MALFORMED
+            assert result.valid is False
+            assert result.reason == REASON_MANIFEST_MALFORMED
 
 
 def test_non_mapping_manifest_returns_failure(tmp_path):

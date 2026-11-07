@@ -88,9 +88,8 @@ def test_normalization_is_order_independent_and_value_free() -> None:
     assert "discarded-choice" not in first.to_json()
 
 
-@pytest.mark.parametrize(
-    ("candidate", "category", "exit_code", "field"),
-    [
+def test_option_drift_uses_deterministic_exit_categories(subtests) -> None:
+    for candidate, category, exit_code, field in [
         (_surface(include_json=True), DriftCategory.ADDED, EXIT_ADDED, "added"),
         (_surface(required=False), DriftCategory.CHANGED, EXIT_CHANGED, "changed"),
         (
@@ -99,21 +98,17 @@ def test_normalization_is_order_independent_and_value_free() -> None:
             EXIT_REMOVED,
             "removed",
         ),
-    ],
-)
-def test_option_drift_uses_deterministic_exit_categories(
-    candidate: list[dict],
-    category: DriftCategory,
-    exit_code: int,
-    field: str,
-) -> None:
-    report = compare_help_surfaces(_surface(), candidate)
+    ]:
+        with subtests.test(
+            candidate=candidate, category=category, exit_code=exit_code, field=field
+        ):
+            report = compare_help_surfaces(_surface(), candidate)
 
-    assert report.category is category
-    assert report.exit_category is category
-    assert report.exit_code == exit_code
-    assert len(getattr(report, field)) == (1 if field != "removed" else 2)
-    assert report.to_dict()["category"] == category.value
+            assert report.category is category
+            assert report.exit_category is category
+            assert report.exit_code == exit_code
+            assert len(getattr(report, field)) == (1 if field != "removed" else 2)
+            assert report.to_dict()["category"] == category.value
 
 
 def test_mixed_option_and_command_drift_is_sorted_and_value_free() -> None:

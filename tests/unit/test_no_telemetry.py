@@ -25,6 +25,8 @@ import ast
 import socket
 from pathlib import Path
 
+import pytest
+
 from openmed.core.config import OpenMedConfig
 from openmed.core.offline import OFFLINE_ENV_VAR
 
@@ -64,6 +66,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "clinical/grounding/vocab.py": "opt-in clinical vocabulary download (offline-gated)",
     "clinical/trials/source.py": "explicit public clinical-trial metadata fetch",
     "core/offline.py": "the offline network-block guard itself (OM-005)",
+    "mlx/models/whisper.py": (
+        "isolated ASR worker installs socket and DNS denial; no network client, "
+        "endpoint, download path or remote fallback"
+    ),
     "deploy/journey.py": "explicit operator-configured worker/model readiness probes",
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",
@@ -71,6 +77,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "interop/openmrs.py": "opt-in facility-local OpenMRS HTTP client",
     "mcp/upstream_endpoint_policy.py": (
         "opt-in user-configured upstream endpoint policy and probe"
+    ),
+    "multimodal/decoder_guard.py": (
+        "private socket-denial control after kernel isolation; "
+        "public probes have no outbound operation"
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
@@ -88,6 +98,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
+    "structured/decision_server.py": (
+        "opt-in caller-configured loopback or Unix-socket decision server; "
+        "private-network hosts only by explicit operator approval for non-PHI"
+    ),
     "structured/store/postgres.py": "explicit caller-DSN PostgreSQL TLS context",
     "training/recipe.py": "opt-in training distributed rendezvous",
 }
@@ -311,6 +325,7 @@ def _rel(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_openmed_package_has_no_telemetry_indicators():
     offenders: dict[str, list[str]] = {}
     for path in _package_files():
@@ -325,6 +340,7 @@ def test_openmed_package_has_no_telemetry_indicators():
     assert offenders == {}, f"telemetry/analytics indicators found: {offenders!r}"
 
 
+@pytest.mark.slow
 def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     """Reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
     agent_source = (PACKAGE_ROOT / "agent" / "telemetry.py").read_text(encoding="utf-8")
@@ -383,6 +399,7 @@ def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     assert _telemetry_optout_envs(source) == []
 
 
+@pytest.mark.slow
 def test_network_surface_matches_reviewed_allowlist():
     discovered: dict[str, set[str]] = {}
     for path in _package_files():

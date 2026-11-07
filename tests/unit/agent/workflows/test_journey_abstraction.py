@@ -118,9 +118,8 @@ def test_explicit_approval_is_required_and_all_required_fields_are_checked():
     assert chain.uncertainty == pytest.approx(0.05)
 
 
-@pytest.mark.parametrize(
-    "case,expected",
-    [
+def test_distinct_coverage_blockers_cannot_be_approved_away(subtests):
+    for case, expected in [
         ("missing_fact", "missing_field_evidence"),
         ("missing_locator", "missing_locator_evidence"),
         ("non_text", "non_text_locator_evidence"),
@@ -132,78 +131,86 @@ def test_explicit_approval_is_required_and_all_required_fields_are_checked():
         ("artifact_subject", "subject_mismatch"),
         ("conflict", "conflicting_facts"),
         ("candidates", "conflicting_facts"),
-    ],
-)
-def test_distinct_coverage_blockers_cannot_be_approved_away(case, expected):
-    artifact, locator, fact = records()
-    changes = {}
-    if case == "missing_fact":
-        changes["facts"] = ()
-    elif case == "missing_locator":
-        changes["locators"] = ()
-    elif case == "non_text":
-        changes["locators"] = (
-            replace(
-                locator,
-                location_type="json_pointer",
-                location={"pointer": "/synthetic"},
-            ),
-        )
-    elif case == "missing_artifact":
-        changes["artifacts"] = ()
-    elif case == "generated":
-        changes["source_kinds"] = {artifact.artifact_id: SourceKind.GENERATED_TEXT}
-    elif case == "derived":
-        changes.update(
-            facts=(replace(fact, parent_fact_ids=("fact_bbbbbbbbbbbbbbbb",)),),
-            locators=(),
-        )
-    elif case == "unknown_origin":
-        changes["source_kinds"] = {}
-    elif case == "subject":
-        changes["facts"] = (replace(fact, subject_id="subject_bbbbbbbbbbbbbbbb"),)
-    elif case == "artifact_subject":
-        changes["artifacts"] = (
-            replace(artifact, subject_id="subject_bbbbbbbbbbbbbbbb"),
-        )
-    elif case == "conflict":
-        changes["conflicts"] = (
-            ConflictSet(
-                conflict_id="conflict_aaaaaaaaaaaaaaaa",
-                subject_id=SUBJECT,
-                conflict_type="value",
-                fact_ids=(fact.fact_id, "fact_bbbbbbbbbbbbbbbb"),
-                status="open",
-                detected_by="synthetic",
-                derivation_hash=sha256_digest("conflict"),
-            ),
-        )
-    elif case == "candidates":
-        other = replace(fact, fact_id="fact_bbbbbbbbbbbbbbbb", value="synthetic-other")
-        changes.update(
-            facts=(fact, other),
-            fields=(
-                AbstractionFieldBinding(
-                    FIELD, (fact.fact_id, other.fact_id), TransformationKind.RULE
-                ),
-            ),
-        )
-    pending = build(**changes)
-    if pending.chains:
-        changes["review_receipts"] = (approval(pending),)
-    evidence = build(**changes)
-    assert expected in codes(evidence)
-    with pytest.raises(AbstractionEvidenceError, match="evidence_not_finalizable"):
-        evidence.finalize((FIELD,))
-    # Persistent producer blockers apply even when the caller changes requirements.
-    assert expected in {
-        issue.code for issue in evidence.evaluate(("registry.stage",)).issues
-    }
+    ]:
+        with subtests.test(case=case, expected=expected):
+            artifact, locator, fact = records()
+            changes = {}
+            if case == "missing_fact":
+                changes["facts"] = ()
+            elif case == "missing_locator":
+                changes["locators"] = ()
+            elif case == "non_text":
+                changes["locators"] = (
+                    replace(
+                        locator,
+                        location_type="json_pointer",
+                        location={"pointer": "/synthetic"},
+                    ),
+                )
+            elif case == "missing_artifact":
+                changes["artifacts"] = ()
+            elif case == "generated":
+                changes["source_kinds"] = {
+                    artifact.artifact_id: SourceKind.GENERATED_TEXT
+                }
+            elif case == "derived":
+                changes.update(
+                    facts=(replace(fact, parent_fact_ids=("fact_bbbbbbbbbbbbbbbb",)),),
+                    locators=(),
+                )
+            elif case == "unknown_origin":
+                changes["source_kinds"] = {}
+            elif case == "subject":
+                changes["facts"] = (
+                    replace(fact, subject_id="subject_bbbbbbbbbbbbbbbb"),
+                )
+            elif case == "artifact_subject":
+                changes["artifacts"] = (
+                    replace(artifact, subject_id="subject_bbbbbbbbbbbbbbbb"),
+                )
+            elif case == "conflict":
+                changes["conflicts"] = (
+                    ConflictSet(
+                        conflict_id="conflict_aaaaaaaaaaaaaaaa",
+                        subject_id=SUBJECT,
+                        conflict_type="value",
+                        fact_ids=(fact.fact_id, "fact_bbbbbbbbbbbbbbbb"),
+                        status="open",
+                        detected_by="synthetic",
+                        derivation_hash=sha256_digest("conflict"),
+                    ),
+                )
+            elif case == "candidates":
+                other = replace(
+                    fact, fact_id="fact_bbbbbbbbbbbbbbbb", value="synthetic-other"
+                )
+                changes.update(
+                    facts=(fact, other),
+                    fields=(
+                        AbstractionFieldBinding(
+                            FIELD,
+                            (fact.fact_id, other.fact_id),
+                            TransformationKind.RULE,
+                        ),
+                    ),
+                )
+            pending = build(**changes)
+            if pending.chains:
+                changes["review_receipts"] = (approval(pending),)
+            evidence = build(**changes)
+            assert expected in codes(evidence)
+            with pytest.raises(
+                AbstractionEvidenceError, match="evidence_not_finalizable"
+            ):
+                evidence.finalize((FIELD,))
+            # Persistent producer blockers apply even when the caller changes requirements.
+            assert expected in {
+                issue.code for issue in evidence.evaluate(("registry.stage",)).issues
+            }
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
+def test_stale_review_receipts_fail_closed(subtests):
+    for case in [
         "value",
         "attributes",
         "span",
@@ -212,34 +219,41 @@ def test_distinct_coverage_blockers_cannot_be_approved_away(case, expected):
         "derivation",
         "snapshot",
         "kind",
-    ],
-)
-def test_stale_review_receipts_fail_closed(case):
-    artifact, locator, fact = records()
-    changes = {"review_receipts": (approval(build()),)}
-    if case == "value":
-        changes["facts"] = (replace(fact, value="synthetic-changed"),)
-    elif case == "attributes":
-        changes["facts"] = (
-            replace(fact, attributes={"private_value": "synthetic-changed"}),
-        )
-    elif case == "span":
-        changes["locators"] = (replace(locator, location={"start": 5, "end": 18}),)
-    elif case == "source":
-        changes["artifacts"] = (
-            replace(artifact, content_hash=sha256_digest("changed")),
-        )
-    elif case == "transform":
-        changes["locators"] = (replace(locator, transform={"step": "changed"}),)
-    elif case == "derivation":
-        changes["facts"] = (replace(fact, derivation_hash=sha256_digest("changed")),)
-    elif case == "snapshot":
-        changes["snapshot"] = JourneySnapshot.at(SUBJECT, 2)
-    elif case == "kind":
-        changes["fields"] = (
-            AbstractionFieldBinding(FIELD, (fact.fact_id,), TransformationKind.MODEL),
-        )
-    assert {"review_receipt_mismatch", "review_not_approved"} <= codes(build(**changes))
+    ]:
+        with subtests.test(case=case):
+            artifact, locator, fact = records()
+            changes = {"review_receipts": (approval(build()),)}
+            if case == "value":
+                changes["facts"] = (replace(fact, value="synthetic-changed"),)
+            elif case == "attributes":
+                changes["facts"] = (
+                    replace(fact, attributes={"private_value": "synthetic-changed"}),
+                )
+            elif case == "span":
+                changes["locators"] = (
+                    replace(locator, location={"start": 5, "end": 18}),
+                )
+            elif case == "source":
+                changes["artifacts"] = (
+                    replace(artifact, content_hash=sha256_digest("changed")),
+                )
+            elif case == "transform":
+                changes["locators"] = (replace(locator, transform={"step": "changed"}),)
+            elif case == "derivation":
+                changes["facts"] = (
+                    replace(fact, derivation_hash=sha256_digest("changed")),
+                )
+            elif case == "snapshot":
+                changes["snapshot"] = JourneySnapshot.at(SUBJECT, 2)
+            elif case == "kind":
+                changes["fields"] = (
+                    AbstractionFieldBinding(
+                        FIELD, (fact.fact_id,), TransformationKind.MODEL
+                    ),
+                )
+            assert {"review_receipt_mismatch", "review_not_approved"} <= codes(
+                build(**changes)
+            )
 
 
 def test_rejection_and_pending_receipts_never_approve():

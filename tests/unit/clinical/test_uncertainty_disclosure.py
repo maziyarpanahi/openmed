@@ -95,32 +95,30 @@ def test_missing_and_duplicate_fields_are_reported_without_values():
     assert "evidence.synthetic.002" not in repr(report)
 
 
-@pytest.mark.parametrize(
-    ("review_state", "display_hints"),
-    [
+def test_invalid_review_state_or_display_bound_is_flagged(subtests):
+    for review_state, display_hints in [
         ("clinical conclusion", {"max_chars": 120, "max_items": 2}),
         ("pending", {"max_chars": 0, "max_items": 2}),
         ("pending", {"max_chars": 120, "max_items": True}),
-    ],
-)
-def test_invalid_review_state_or_display_bound_is_flagged(review_state, display_hints):
-    claim = _complete_claim()
-    disclosure = claim["uncertainty_disclosure"]
-    assert isinstance(disclosure, dict)
-    disclosure["review_state"] = review_state
-    disclosure["display_hints"] = display_hints
+    ]:
+        with subtests.test(review_state=review_state, display_hints=display_hints):
+            claim = _complete_claim()
+            disclosure = claim["uncertainty_disclosure"]
+            assert isinstance(disclosure, dict)
+            disclosure["review_state"] = review_state
+            disclosure["display_hints"] = display_hints
 
-    report = audit_uncertainty_disclosures([claim])
-    issue_codes = report.findings[0].issue_codes
+            report = audit_uncertainty_disclosures([claim])
+            issue_codes = report.findings[0].issue_codes
 
-    if review_state == "clinical conclusion":
-        assert INVALID_REVIEW_STATE in issue_codes
-    else:
-        assert INVALID_REVIEW_STATE not in issue_codes
-    if display_hints["max_chars"] == 0 or display_hints["max_items"] is True:
-        assert INVALID_DISPLAY_HINTS in issue_codes
-    else:
-        assert INVALID_DISPLAY_HINTS not in issue_codes
+            if review_state == "clinical conclusion":
+                assert INVALID_REVIEW_STATE in issue_codes
+            else:
+                assert INVALID_REVIEW_STATE not in issue_codes
+            if display_hints["max_chars"] == 0 or display_hints["max_items"] is True:
+                assert INVALID_DISPLAY_HINTS in issue_codes
+            else:
+                assert INVALID_DISPLAY_HINTS not in issue_codes
 
 
 def test_required_categories_and_reference_count_are_structural_checks():
@@ -238,32 +236,32 @@ def test_claims_without_ids_still_have_order_independent_opaque_keys():
     )
 
 
-@pytest.mark.parametrize("key", ["sha256:" + "z" * 64, "sha256:" + "A" * 64, None])
-def test_finding_requires_canonical_hex_digest(key):
-    with pytest.raises(ValueError, match="opaque SHA-256"):
-        UncertaintyDisclosureFinding(key, (MISSING_REASON_CODES,))
+def test_finding_requires_canonical_hex_digest(subtests):
+    for key in ["sha256:" + "z" * 64, "sha256:" + "A" * 64, None]:
+        with subtests.test(key=key):
+            with pytest.raises(ValueError, match="opaque SHA-256"):
+                UncertaintyDisclosureFinding(key, (MISSING_REASON_CODES,))
 
 
-@pytest.mark.parametrize(
-    "hints",
-    [
+def test_optional_and_ambiguous_display_hints_are_invalid(subtests):
+    for hints in [
         {"max_chars": 240, "max_items": 4, "max_lines": 101},
         {"max_chars": 240, "max_items": 4, "max_lines": True},
         {"max_chars": 0, "max_length": 240, "max_items": 4},
-    ],
-)
-def test_optional_and_ambiguous_display_hints_are_invalid(hints):
-    claim = _complete_claim()
-    claim["uncertainty_disclosure"]["display_hints"] = hints
-    report = audit_uncertainty_disclosures([claim])
-    assert not report.is_complete
-    assert INVALID_DISPLAY_HINTS in report.findings[0].issue_codes
+    ]:
+        with subtests.test(hints=hints):
+            claim = _complete_claim()
+            claim["uncertainty_disclosure"]["display_hints"] = hints
+            report = audit_uncertainty_disclosures([claim])
+            assert not report.is_complete
+            assert INVALID_DISPLAY_HINTS in report.findings[0].issue_codes
 
 
-@pytest.mark.parametrize("count", [True, 0.5, "1"])
-def test_report_rejects_non_integer_counts(count):
-    with pytest.raises(ValueError, match="counts"):
-        UncertaintyDisclosureReport(count, count, (), {})
+def test_report_rejects_non_integer_counts(subtests):
+    for count in [True, 0.5, "1"]:
+        with subtests.test(count=count):
+            with pytest.raises(ValueError, match="counts"):
+                UncertaintyDisclosureReport(count, count, (), {})
 
 
 def test_report_rejects_counts_that_contradict_findings():

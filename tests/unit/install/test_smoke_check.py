@@ -124,6 +124,59 @@ def test_run_smoke_check_uses_offline_clean_environment(tmp_path: Path) -> None:
         assert call["cwd"] != Path.cwd()
 
 
+def test_only_the_brief_probe_gets_the_longer_child_timeout(tmp_path: Path) -> None:
+    timeouts: dict[str, float] = {}
+    python_executable = _fake_install_bin(tmp_path)
+
+    def runner(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if "--_brief-probe" in command:
+            timeouts["brief_probe"] = kwargs["timeout"]
+            return _completed(command, stdout="{}")
+        timeouts.setdefault("other", kwargs["timeout"])
+        assert kwargs["timeout"] == timeouts["other"]
+        if command[-1] == "--version":
+            return _completed(command, stdout="openmed 2.0.0\n")
+        if command[-3:] == ["models", "validate", "--json"]:
+            return _completed(
+                command,
+                stdout=json.dumps(
+                    {
+                        "ok": True,
+                        "data": {
+                            "ok": True,
+                            "violation_count": 0,
+                            "messages": ["manifest: OK (3 rows checked)"],
+                        },
+                    }
+                ),
+            )
+        return _completed(
+            command,
+            stdout=json.dumps(
+                {
+                    "change_count": 1,
+                    "document_hash": "sha256:" + "b" * 64,
+                    "entry_point_declared": True,
+                    "package_version": "2.0.0",
+                    "surface_hash": "sha256:" + "c" * 64,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+
+    smoke_check.run_smoke_check(
+        python_executable=str(python_executable),
+        runner=runner,
+        brief_profile="core",
+    )
+
+    assert timeouts == {
+        "brief_probe": smoke_check.BRIEF_PROBE_TIMEOUT_SECONDS,
+        "other": smoke_check.COMMAND_TIMEOUT_SECONDS,
+    }
+
+
 def test_manifest_check_rejects_failure_without_echoing_child_output() -> None:
     raw_sensitive_value = "synthetic-only-value-that-must-not-be-reported"
     result = _completed(
@@ -323,41 +376,53 @@ def test_unsafe_version_output_is_not_relayed(tmp_path: Path) -> None:
     }
 
 
-@pytest.mark.parametrize("profile", smoke_check.BRIEF_PROFILES)
-def test_brief_probe_report_requires_the_complete_ordered_contract(profile):
-    names = list(smoke_check.BRIEF_CHECKS)
-    if profile == "core":
-        names.remove("brief_rest_client")
-        names.remove("brief_mcp")
-    rows = [{"name": name, "status": "passed"} for name in names]
-    result = _completed([], stdout=json.dumps({"status": "passed", "checks": rows}))
-    assert [c.name for c in smoke_check._brief_probe_results(result, profile)] == names
-    rows.pop()
-    result = _completed([], stdout=json.dumps({"status": "passed", "checks": rows}))
-    assert smoke_check._brief_probe_results(result, profile)[-1].status == "failed"
+def test_brief_probe_report_requires_the_complete_ordered_contract(subtests):
+    for profile in smoke_check.BRIEF_PROFILES:
+        with subtests.test(profile=profile):
+            names = list(smoke_check.BRIEF_CHECKS)
+            if profile == "core":
+                names.remove("brief_rest_client")
+                names.remove("brief_mcp")
+            rows = [{"name": name, "status": "passed"} for name in names]
+            result = _completed(
+                [], stdout=json.dumps({"status": "passed", "checks": rows})
+            )
+            assert [
+                c.name for c in smoke_check._brief_probe_results(result, profile)
+            ] == names
+            rows.pop()
+            result = _completed(
+                [], stdout=json.dumps({"status": "passed", "checks": rows})
+            )
+            assert (
+                smoke_check._brief_probe_results(result, profile)[-1].status == "failed"
+            )
 
 
-@pytest.mark.parametrize("mutation", ["extra", "name", "reason", "status", "exit"])
-def test_brief_probe_rejects_unsafe_child_output(mutation):
-    secret = "synthetic-install-sensitive-value"
-    rows = [dict(name="installed_origin", status="failed", reason="contract_failed")]
-    payload = dict(status="failed", checks=rows)
-    code = 1
-    if mutation == "extra":
-        rows[0]["text"] = secret
-    elif mutation == "name":
-        rows[0]["name"] = secret
-    elif mutation == "reason":
-        rows[0]["reason"] = secret
-    elif mutation == "status":
-        payload["status"] = secret
-    else:
-        code = 0
-    checks = smoke_check._brief_probe_results(
-        _completed([], returncode=code, stdout=json.dumps(payload)), "core"
-    )
-    assert checks == (smoke_check._failed("brief_probe", "invalid_result"),)
-    assert secret not in json.dumps([check.to_dict() for check in checks])
+def test_brief_probe_rejects_unsafe_child_output(subtests):
+    for mutation in ["extra", "name", "reason", "status", "exit"]:
+        with subtests.test(mutation=mutation):
+            secret = "synthetic-install-sensitive-value"
+            rows = [
+                dict(name="installed_origin", status="failed", reason="contract_failed")
+            ]
+            payload = dict(status="failed", checks=rows)
+            code = 1
+            if mutation == "extra":
+                rows[0]["text"] = secret
+            elif mutation == "name":
+                rows[0]["name"] = secret
+            elif mutation == "reason":
+                rows[0]["reason"] = secret
+            elif mutation == "status":
+                payload["status"] = secret
+            else:
+                code = 0
+            checks = smoke_check._brief_probe_results(
+                _completed([], returncode=code, stdout=json.dumps(payload)), "core"
+            )
+            assert checks == (smoke_check._failed("brief_probe", "invalid_result"),)
+            assert secret not in json.dumps([check.to_dict() for check in checks])
 
 
 def test_brief_probe_preserves_a_specific_controlled_failure():
@@ -370,39 +435,43 @@ def test_brief_probe_preserves_a_specific_controlled_failure():
     assert smoke_check._brief_probe_results(result, "core") == tuple(rows)
 
 
-@pytest.mark.parametrize("kind", ["wheel", "sdist"])
-def test_missing_resource_control_changes_only_disposable_artifact(tmp_path, kind):
-    import hashlib
-    import io
-    import tarfile
-    import zipfile
+def test_missing_resource_control_changes_only_disposable_artifact(subtests, tmp_path):
+    case_root = tmp_path
+    for kind in ["wheel", "sdist"]:
+        with subtests.test(kind=kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            import hashlib
+            import io
+            import tarfile
+            import zipfile
 
-    name = "openmed/" + smoke_check.BRIEF_RESOURCE
-    data = b'{"synthetic": true}'
-    output = tmp_path / "control"
-    output.mkdir()
-    if kind == "wheel":
-        artifact = tmp_path / "openmed-0.0.0-py3-none-any.whl"
-        with zipfile.ZipFile(artifact, "w") as archive:
-            archive.writestr(name, data)
-            archive.writestr("openmed/__init__.py", b"")
-    else:
-        artifact = tmp_path / "openmed-0.0.0.tar.gz"
-        with tarfile.open(artifact, "w:gz") as archive:
-            for path, content in [(name, data), ("openmed/__init__.py", b"")]:
-                member = tarfile.TarInfo("openmed-0.0.0/" + path)
-                member.size = len(content)
-                archive.addfile(member, io.BytesIO(content))
-    before = hashlib.sha256(artifact.read_bytes()).hexdigest()
-    damaged = smoke_check._omit_brief_resource(artifact, output)
-    assert hashlib.sha256(artifact.read_bytes()).hexdigest() == before
-    assert damaged.parent == output
-    if kind == "wheel":
-        with zipfile.ZipFile(damaged) as archive:
-            assert archive.namelist() == ["openmed/__init__.py"]
-    else:
-        with tarfile.open(damaged, "r:gz") as archive:
-            assert archive.getnames() == ["openmed-0.0.0/openmed/__init__.py"]
+            name = "openmed/" + smoke_check.BRIEF_RESOURCE
+            data = b'{"synthetic": true}'
+            output = tmp_path / "control"
+            output.mkdir()
+            if kind == "wheel":
+                artifact = tmp_path / "openmed-0.0.0-py3-none-any.whl"
+                with zipfile.ZipFile(artifact, "w") as archive:
+                    archive.writestr(name, data)
+                    archive.writestr("openmed/__init__.py", b"")
+            else:
+                artifact = tmp_path / "openmed-0.0.0.tar.gz"
+                with tarfile.open(artifact, "w:gz") as archive:
+                    for path, content in [(name, data), ("openmed/__init__.py", b"")]:
+                        member = tarfile.TarInfo("openmed-0.0.0/" + path)
+                        member.size = len(content)
+                        archive.addfile(member, io.BytesIO(content))
+            before = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            damaged = smoke_check._omit_brief_resource(artifact, output)
+            assert hashlib.sha256(artifact.read_bytes()).hexdigest() == before
+            assert damaged.parent == output
+            if kind == "wheel":
+                with zipfile.ZipFile(damaged) as archive:
+                    assert archive.namelist() == ["openmed/__init__.py"]
+            else:
+                with tarfile.open(damaged, "r:gz") as archive:
+                    assert archive.getnames() == ["openmed-0.0.0/openmed/__init__.py"]
 
 
 def test_resource_control_cannot_succeed_when_resource_was_already_missing(tmp_path):

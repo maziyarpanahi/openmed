@@ -93,35 +93,38 @@ def test_empty_attributes_are_valid() -> None:
     assert attributes.to_dict() == {"schema_version": EVENT_ATTRIBUTES_SCHEMA_VERSION}
 
 
-@pytest.mark.parametrize("stage", EXECUTION_STAGES)
-def test_every_execution_stage_is_accepted(stage) -> None:
-    assert validate_event_attributes({"execution_stage": stage}) == {
-        "execution_stage": stage
-    }
+def test_every_execution_stage_is_accepted(subtests) -> None:
+    for stage in EXECUTION_STAGES:
+        with subtests.test(stage=stage):
+            assert validate_event_attributes({"execution_stage": stage}) == {
+                "execution_stage": stage
+            }
 
 
-@pytest.mark.parametrize("stage", ["", "Running", "tool-call", "unknown", 1, None])
-def test_unknown_execution_stages_fail_closed(stage) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({"execution_stage": stage})
-    assert (excinfo.value.code, excinfo.value.field_name) in {
-        ("unknown_execution_stage", "execution_stage"),
-        ("nested_value_not_allowed", "execution_stage"),
-    }
+def test_unknown_execution_stages_fail_closed(subtests) -> None:
+    for stage in ["", "Running", "tool-call", "unknown", 1, None]:
+        with subtests.test(stage=stage):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({"execution_stage": stage})
+            assert (excinfo.value.code, excinfo.value.field_name) in {
+                ("unknown_execution_stage", "execution_stage"),
+                ("nested_value_not_allowed", "execution_stage"),
+            }
 
 
-@pytest.mark.parametrize("outcome", list(OutcomeClass))
-def test_outcome_classes_accept_their_own_reason_codes(outcome) -> None:
-    from openmed.agent.outcomes import allowed_reason_codes
+def test_outcome_classes_accept_their_own_reason_codes(subtests) -> None:
+    for outcome in list(OutcomeClass):
+        with subtests.test(outcome=outcome):
+            from openmed.agent.outcomes import allowed_reason_codes
 
-    for reason in sorted(allowed_reason_codes(outcome)):
-        validated = validate_event_attributes(
-            {"outcome_class": outcome, "outcome_reason": reason}
-        )
-        assert validated == {
-            "outcome_class": outcome.value,
-            "outcome_reason": reason,
-        }
+            for reason in sorted(allowed_reason_codes(outcome)):
+                validated = validate_event_attributes(
+                    {"outcome_class": outcome, "outcome_reason": reason}
+                )
+                assert validated == {
+                    "outcome_class": outcome.value,
+                    "outcome_reason": reason,
+                }
 
 
 def test_reason_codes_from_another_class_fail_closed() -> None:
@@ -141,20 +144,22 @@ def test_a_reason_code_requires_its_outcome_class() -> None:
     assert excinfo.value.code == "outcome_class_required"
 
 
-@pytest.mark.parametrize("value", ["", "Success", "done", 1, None])
-def test_unknown_outcome_classes_fail_closed(value) -> None:
-    with pytest.raises(EventAttributeError, match="outcome_class"):
-        validate_event_attributes({"outcome_class": value})
+def test_unknown_outcome_classes_fail_closed(subtests) -> None:
+    for value in ["", "Success", "done", 1, None]:
+        with subtests.test(value=value):
+            with pytest.raises(EventAttributeError, match="outcome_class"):
+                validate_event_attributes({"outcome_class": value})
 
 
-@pytest.mark.parametrize("field", ["run_id", "action_id", "parent_action_id"])
-@pytest.mark.parametrize("value", ["", "run_x", ACTION_ID[:-1], 7, None])
-def test_invalid_correlation_identifiers_fail_closed(field, value) -> None:
-    payload = {field: RUN_ID if field == "run_id" else ACTION_ID}
-    payload[field] = value
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes(payload)
-    assert excinfo.value.field_name == field
+def test_invalid_correlation_identifiers_fail_closed(subtests) -> None:
+    for field in ["run_id", "action_id", "parent_action_id"]:
+        for value in ["", "run_x", ACTION_ID[:-1], 7, None]:
+            with subtests.test(field=field, value=value):
+                payload = {field: RUN_ID if field == "run_id" else ACTION_ID}
+                payload[field] = value
+                with pytest.raises(EventAttributeError) as excinfo:
+                    validate_event_attributes(payload)
+                assert excinfo.value.field_name == field
 
 
 def test_correlation_kinds_are_not_interchangeable() -> None:
@@ -164,16 +169,15 @@ def test_correlation_kinds_are_not_interchangeable() -> None:
         validate_event_attributes({"action_id": RUN_ID})
 
 
-@pytest.mark.parametrize(
-    "field", ["capability_id", "policy_id", "purpose_id", "workflow_id"]
-)
-def test_governance_identifier_kinds_are_enforced(field) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({field: "tool:openmed.agent/summarize"})
-    assert (excinfo.value.code, excinfo.value.field_name) == (
-        "invalid_identifier",
-        field,
-    )
+def test_governance_identifier_kinds_are_enforced(subtests) -> None:
+    for field in ["capability_id", "policy_id", "purpose_id", "workflow_id"]:
+        with subtests.test(field=field):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({field: "tool:openmed.agent/summarize"})
+            assert (excinfo.value.code, excinfo.value.field_name) == (
+                "invalid_identifier",
+                field,
+            )
 
 
 def test_a_tool_identifier_is_accepted_only_under_tool_id() -> None:
@@ -191,33 +195,39 @@ def test_a_serialized_schema_version_round_trips_without_becoming_an_attribute()
         validate_event_attributes({"schema_version": "openmed.agent.v0"})
 
 
-@pytest.mark.parametrize("field", ["input_digest", "output_digest", "artifact_digest"])
-@pytest.mark.parametrize(
-    "value",
-    ["", "sha256:" + "0" * 63, "sha256:" + "A" * 64, "md5:" + "0" * 32, "0" * 64, 7],
-)
-def test_invalid_digests_fail_closed(field, value) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({field: value})
-    assert excinfo.value.field_name == field
+def test_invalid_digests_fail_closed(subtests) -> None:
+    for field in ["input_digest", "output_digest", "artifact_digest"]:
+        for value in [
+            "",
+            "sha256:" + "0" * 63,
+            "sha256:" + "A" * 64,
+            "md5:" + "0" * 32,
+            "0" * 64,
+            7,
+        ]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(EventAttributeError) as excinfo:
+                    validate_event_attributes({field: value})
+                assert excinfo.value.field_name == field
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_counts_reject_booleans_and_floats(subtests) -> None:
+    for field in [
         "sequence_number",
         "attempt_number",
         "retry_count",
         "tool_call_count",
         "artifact_count",
-    ],
-)
-def test_counts_reject_booleans_and_floats(field) -> None:
-    for value in (True, False, 1.0, "1", None):
-        with pytest.raises(EventAttributeError) as excinfo:
-            validate_event_attributes({field: value})
-        assert excinfo.value.code in {"invalid_count", "nested_value_not_allowed"}
-        assert excinfo.value.field_name == field
+    ]:
+        with subtests.test(field=field):
+            for value in (True, False, 1.0, "1", None):
+                with pytest.raises(EventAttributeError) as excinfo:
+                    validate_event_attributes({field: value})
+                assert excinfo.value.code in {
+                    "invalid_count",
+                    "nested_value_not_allowed",
+                }
+                assert excinfo.value.field_name == field
 
 
 def test_counts_are_bounded() -> None:
@@ -240,52 +250,56 @@ def test_durations_accept_integers_and_finite_floats() -> None:
     )
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
-def test_non_finite_durations_fail_closed(value) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({"duration_ms": value})
-    assert (excinfo.value.code, excinfo.value.field_name) == (
-        "non_finite_number",
-        "duration_ms",
-    )
+def test_non_finite_durations_fail_closed(subtests) -> None:
+    for value in [float("nan"), float("inf"), float("-inf")]:
+        with subtests.test(value=value):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({"duration_ms": value})
+            assert (excinfo.value.code, excinfo.value.field_name) == (
+                "non_finite_number",
+                "duration_ms",
+            )
 
 
-@pytest.mark.parametrize("value", [-1, MAX_DURATION_MS + 1])
-def test_out_of_range_durations_fail_closed(value) -> None:
-    with pytest.raises(
-        EventAttributeError, match="^duration_ms: duration_out_of_range$"
-    ):
-        validate_event_attributes({"duration_ms": value})
+def test_out_of_range_durations_fail_closed(subtests) -> None:
+    for value in [-1, MAX_DURATION_MS + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                EventAttributeError, match="^duration_ms: duration_out_of_range$"
+            ):
+                validate_event_attributes({"duration_ms": value})
 
 
-@pytest.mark.parametrize("value", [True, "1", None])
-def test_invalid_duration_types_fail_closed(value) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({"duration_ms": value})
-    assert excinfo.value.code in {"invalid_duration", "non_finite_number"}
+def test_invalid_duration_types_fail_closed(subtests) -> None:
+    for value in [True, "1", None]:
+        with subtests.test(value=value):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({"duration_ms": value})
+            assert excinfo.value.code in {"invalid_duration", "non_finite_number"}
 
 
-@pytest.mark.parametrize("field", ["retryable", "redacted"])
-@pytest.mark.parametrize("value", [0, 1, "true", None])
-def test_flags_require_real_booleans(field, value) -> None:
-    with pytest.raises(EventAttributeError, match=f"^{field}: invalid_flag$"):
-        validate_event_attributes({field: value})
+def test_flags_require_real_booleans(subtests) -> None:
+    for field in ["retryable", "redacted"]:
+        for value in [0, 1, "true", None]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(
+                    EventAttributeError, match=f"^{field}: invalid_flag$"
+                ):
+                    validate_event_attributes({field: value})
 
 
-@pytest.mark.parametrize(
-    "key", ["stage", "count", "result", "step", "kind", "extra", "openmed"]
-)
-def test_unknown_keys_fail_without_echoing_the_key(key) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({key: 1})
-    assert excinfo.value.code == "unknown_attribute"
-    assert excinfo.value.field_name is None
-    assert key not in str(excinfo.value)
+def test_unknown_keys_fail_without_echoing_the_key(subtests) -> None:
+    for key in ["stage", "count", "result", "step", "kind", "extra", "openmed"]:
+        with subtests.test(key=key):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({key: 1})
+            assert excinfo.value.code == "unknown_attribute"
+            assert excinfo.value.field_name is None
+            assert key not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "key",
-    [
+def test_sensitive_keys_are_reported_as_a_distinct_class(subtests) -> None:
+    for key in [
         "prompt",
         "prompt_text",
         "tool_arguments",
@@ -304,24 +318,30 @@ def test_unknown_keys_fail_without_echoing_the_key(key) -> None:
         "phone_number",
         "message_body",
         "raw_input",
-    ],
-)
-def test_sensitive_keys_are_reported_as_a_distinct_class(key) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({key: "x"})
-    assert excinfo.value.code == "sensitive_attribute_key"
-    assert excinfo.value.field_name is None
-    assert key not in str(excinfo.value)
+    ]:
+        with subtests.test(key=key):
+            with pytest.raises(EventAttributeError) as excinfo:
+                validate_event_attributes({key: "x"})
+            assert excinfo.value.code == "sensitive_attribute_key"
+            assert excinfo.value.field_name is None
+            assert key not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "value", [{"a": 1}, [1, 2], (1, 2), {1, 2}, frozenset({1}), b"x", bytearray(b"x")]
-)
-def test_nested_and_binary_values_fail_closed(value) -> None:
-    with pytest.raises(
-        EventAttributeError, match="^retry_count: nested_value_not_allowed$"
-    ):
-        validate_event_attributes({"retry_count": value})
+def test_nested_and_binary_values_fail_closed(subtests) -> None:
+    for value in [
+        {"a": 1},
+        [1, 2],
+        (1, 2),
+        {1, 2},
+        frozenset({1}),
+        b"x",
+        bytearray(b"x"),
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                EventAttributeError, match="^retry_count: nested_value_not_allowed$"
+            ):
+                validate_event_attributes({"retry_count": value})
 
 
 def test_non_string_keys_fail_closed() -> None:
@@ -329,10 +349,11 @@ def test_non_string_keys_fail_closed() -> None:
         validate_event_attributes({7: 1})
 
 
-@pytest.mark.parametrize("value", ["abc", b"abc", 7, None, [("a", 1)]])
-def test_non_mapping_input_fails_closed(value) -> None:
-    with pytest.raises(EventAttributeError, match="^not_a_mapping$"):
-        validate_event_attributes(value)
+def test_non_mapping_input_fails_closed(subtests) -> None:
+    for value in ["abc", b"abc", 7, None, [("a", 1)]]:
+        with subtests.test(value=value):
+            with pytest.raises(EventAttributeError, match="^not_a_mapping$"):
+                validate_event_attributes(value)
 
 
 def test_oversized_mappings_fail_before_validation() -> None:
@@ -354,11 +375,12 @@ def test_duplicate_json_keys_fail_closed() -> None:
         EventAttributes.from_json('{"retryable": true, "retryable": false}')
 
 
-@pytest.mark.parametrize("payload", ["", "{", "[]", "null", "7", '"text"', 7, None])
-def test_malformed_json_fails_closed(payload) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        EventAttributes.from_json(payload)
-    assert excinfo.value.code in {"malformed_json", "not_a_mapping"}
+def test_malformed_json_fails_closed(subtests) -> None:
+    for payload in ["", "{", "[]", "null", "7", '"text"', 7, None]:
+        with subtests.test(payload=payload):
+            with pytest.raises(EventAttributeError) as excinfo:
+                EventAttributes.from_json(payload)
+            assert excinfo.value.code in {"malformed_json", "not_a_mapping"}
 
 
 def test_oversized_json_fails_before_parsing() -> None:
@@ -372,17 +394,18 @@ def test_invalid_schema_version_fails_closed() -> None:
         EventAttributes(values={}, schema_version="openmed.agent.event_attributes.v0")
 
 
-@pytest.mark.parametrize("sentinel", [SENTINEL_PROMPT, SENTINEL_BEARER, SENTINEL_PATH])
-@pytest.mark.parametrize("key", ["prompt", "tool_arguments", "run_id", "input_digest"])
-def test_sentinels_never_reach_output_or_exceptions(sentinel, key) -> None:
-    with pytest.raises(EventAttributeError) as excinfo:
-        validate_event_attributes({key: sentinel})
-    assert sentinel not in str(excinfo.value)
-    assert sentinel not in repr(excinfo.value)
-    assert excinfo.value.__cause__ is None
+def test_sentinels_never_reach_output_or_exceptions(subtests) -> None:
+    for sentinel in [SENTINEL_PROMPT, SENTINEL_BEARER, SENTINEL_PATH]:
+        for key in ["prompt", "tool_arguments", "run_id", "input_digest"]:
+            with subtests.test(sentinel=sentinel, key=key):
+                with pytest.raises(EventAttributeError) as excinfo:
+                    validate_event_attributes({key: sentinel})
+                assert sentinel not in str(excinfo.value)
+                assert sentinel not in repr(excinfo.value)
+                assert excinfo.value.__cause__ is None
 
-    attributes = EventAttributes.from_mapping({"run_id": RUN_ID})
-    assert sentinel not in attributes.to_json()
+                attributes = EventAttributes.from_mapping({"run_id": RUN_ID})
+                assert sentinel not in attributes.to_json()
 
 
 def test_event_attributes_are_available_from_the_public_agent_api() -> None:
@@ -407,10 +430,13 @@ def test_event_attributes_are_available_from_the_public_agent_api() -> None:
     assert exported.issubset(set(agent.__all__))
 
 
-def test_issue_3779_nightly_depth_failure_below_event_byte_limit_is_typed():
+def test_issue_3779_nightly_depth_failure_below_event_byte_limit_is_typed(
+    force_json_recursion_error,
+):
     secret = "synthetic-parser-private-sentinel"
     payload = "[" * 2000 + json.dumps(secret) + "]" * 2000
     assert len(payload.encode()) < MAX_ATTRIBUTE_JSON_BYTES
+    force_json_recursion_error(secret)
     with pytest.raises(EventAttributeError) as caught:
         EventAttributes.from_json(payload)
     assert caught.value.code == "malformed_json"
