@@ -372,6 +372,11 @@
     },
     {
       "classification": "operational",
+      "function": "run_reference_workflow",
+      "module": "openmed.multimodal.reference_workflow"
+    },
+    {
+      "classification": "operational",
       "function": "ThermalGate.release_speech",
       "module": "openmed.multimodal.runtime.thermal_gate"
     },
