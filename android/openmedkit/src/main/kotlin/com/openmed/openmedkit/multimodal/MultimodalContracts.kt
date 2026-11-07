@@ -19,6 +19,10 @@ class AssetManifest private constructor(
     val height: Int? get() = metadata["height"]?.content?.toInt()
     val frames: Int? get() = metadata["frames"]?.content?.toInt()
     val durationSeconds: Double? get() = metadata["duration_seconds"]?.content?.toDouble()
+    val channelCount: Int? get() = metadata["channel_count"]?.content?.toInt()
+    val sampleRateHz: Double? get() = metadata["sample_rate_hz"]?.content?.toDouble()
+    val samplesPerChannel: Int? get() = metadata["samples_per_channel"]?.content?.toInt()
+    val dicomSubprofile: String? get() = metadata["dicom_subprofile"]?.content
 
     /** Compact sorted JSON, matching Python AssetManifest.to_json(). */
     fun toJson(): String = ContractJson.encode(JsonObject(linkedMapOf(
@@ -31,21 +35,29 @@ class AssetManifest private constructor(
         /** Parse strict metadata only. Unknown fields and versions fail closed. */
         fun fromJson(payload: String): AssetManifest {
             val fields = ContractJson.parse(payload)
-            val numeric = setOf("pages", "width", "height", "frames", "duration_seconds")
-            ContractJson.fields(fields, setOf("asset_id", "media_type", "sha256", "byte_size"), numeric + "version")
+            val numeric = MetadataField.values().map { it.code }.toSet()
+            ContractJson.fields(fields, setOf("asset_id", "media_type", "sha256", "byte_size"), numeric + setOf("version", "dicom_subprofile"))
             if ("version" in fields) requireContract(ContractJson.int(fields["version"], COUNT_MAX).toInt() == 1)
             val id = ContractJson.string(fields["asset_id"])
             opaque(id, Regex("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}"))
             val media = ContractJson.string(fields["media_type"])
             opaque(media, Regex("[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*"))
-            requireContract(media in setOf("application/pdf", "application/dicom", "application/dicom+json", "video/mp4") ||
+            requireContract(media in setOf("application/pdf", "application/dicom", "application/dicom+json", "video/mp4", "application/edf", "application/wfdb") ||
                 media.startsWith("image/") || media.startsWith("audio/"))
             val digest = ContractJson.string(fields["sha256"])
             opaque(digest, DIGEST)
             val bytes = ContractJson.int(fields["byte_size"], BYTE_MAX, java.math.BigInteger.ONE).toLong()
             val values = numeric.filter { !absent(fields[it]) }.associateWith {
-                if (it == "duration_seconds") ContractJson.numeric(fields[it], COUNT_MAX, positive = true)
-                else JsonPrimitive(ContractJson.int(fields[it], COUNT_MAX, java.math.BigInteger.ONE).toInt())
+                if (it == "duration_seconds" || it == "sample_rate_hz") {
+                    ContractJson.numeric(fields[it], COUNT_MAX, positive = true)
+                } else {
+                    JsonPrimitive(ContractJson.int(fields[it], COUNT_MAX, java.math.BigInteger.ONE).toInt())
+                }
+            }.toMutableMap()
+            if (!absent(fields["dicom_subprofile"])) {
+                val subprofile = ContractJson.string(fields["dicom_subprofile"])
+                requireContract(media == "application/dicom" && subprofile in setOf("waveform", "non_pixel"))
+                values["dicom_subprofile"] = JsonPrimitive(subprofile)
             }
             return AssetManifest(id, media, digest, bytes, values)
         }
@@ -54,24 +66,36 @@ class AssetManifest private constructor(
 
 /** Closed set of manifest metadata fields. */
 enum class MetadataField(val code: String) {
-    DURATION_SECONDS("duration_seconds"), FRAMES("frames"), HEIGHT("height"), PAGES("pages"), WIDTH("width");
+    DURATION_SECONDS("duration_seconds"), FRAMES("frames"), HEIGHT("height"), PAGES("pages"), WIDTH("width"),
+    CHANNEL_COUNT("channel_count"), SAMPLE_RATE_HZ("sample_rate_hz"), SAMPLES_PER_CHANNEL("samples_per_channel");
 }
 
-/** Closed set of supported modalities. */
-enum class Modality(val code: String) { IMAGE("image"), PDF("pdf"), DICOM("dicom"), AUDIO("audio"), VIDEO("video") }
+private val waveformFields = setOf(
+    MetadataField.CHANNEL_COUNT, MetadataField.SAMPLE_RATE_HZ, MetadataField.SAMPLES_PER_CHANNEL,
+)
+private val legacyMetadataFields = MetadataField.values().toSet() - waveformFields
 
-/** A v1.0 profile reference, as serialized in Python PreflightReport.metadata_profile. */
+/** Closed set of supported modalities and their preflight profile versions. */
+enum class Modality(val code: String, internal val profileVersion: String = "1.0") {
+    IMAGE("image"), PDF("pdf"), DICOM("dicom"), AUDIO("audio"), VIDEO("video"),
+    WAVEFORM("waveform", "1.1"), DICOM_NON_PIXEL("dicom_non_pixel", "1.1"),
+}
+
+/** A v1.0 or v1.1 profile reference from Python PreflightReport.metadata_profile. */
 class ManifestProfile private constructor(val modality: Modality) {
-    val version: String get() = "1.0"
+    val version: String get() = modality.profileVersion
     val requiredFields: Set<MetadataField> get() = when (modality) {
         Modality.IMAGE -> setOf(MetadataField.WIDTH, MetadataField.HEIGHT)
         Modality.PDF -> setOf(MetadataField.PAGES)
         Modality.DICOM -> setOf(MetadataField.FRAMES, MetadataField.WIDTH, MetadataField.HEIGHT)
         Modality.AUDIO -> setOf(MetadataField.DURATION_SECONDS)
         Modality.VIDEO -> setOf(MetadataField.DURATION_SECONDS, MetadataField.FRAMES, MetadataField.HEIGHT, MetadataField.WIDTH)
+        Modality.WAVEFORM -> waveformFields + MetadataField.DURATION_SECONDS
+        Modality.DICOM_NON_PIXEL -> emptySet()
     }
     val optionalFields: Set<MetadataField> get() = emptySet()
-    val inapplicableFields: Set<MetadataField> get() = MetadataField.values().toSet() - requiredFields
+    val inapplicableFields: Set<MetadataField>
+        get() = (if (version == "1.0") legacyMetadataFields else MetadataField.values().toSet()) - requiredFields
 
     /** Return the deterministic, content-free JSON representation. */
     fun toJson(): String = ContractJson.encode(obj("modality" to text(modality.code), "version" to text(version)))
@@ -81,32 +105,62 @@ class ManifestProfile private constructor(val modality: Modality) {
         fun fromJson(payload: String): ManifestProfile {
             val fields = ContractJson.parse(payload)
             ContractJson.fields(fields, setOf("modality", "version"))
-            requireContract(ContractJson.string(fields["version"]) == "1.0")
             val modality = closed(fields["modality"], Modality.values()) { it.code }
+            requireContract(ContractJson.string(fields["version"]) == modality.profileVersion)
             return ManifestProfile(modality)
         }
     }
 }
 
-/** The five checks, in the Python preflight order. */
+/** Ordered checks used by generic and structural PDF preflight. */
 enum class PreflightCheck(val code: String) {
-    MANIFEST("manifest"), MEDIA_TYPE("media_type"), METADATA("metadata"), LIMITS("limits"), DIGEST("digest");
+    MANIFEST("manifest"), MEDIA_TYPE("media_type"), METADATA("metadata"), LIMITS("limits"), DIGEST("digest"),
+    PDF_CONTENT("pdf_content");
 }
 
 /** Controlled finding codes; check/field/value combinations are validated too. */
-enum class PreflightReason(val code: String) {
+enum class PreflightReason(val code: String, internal val pdfContent: Boolean = false) {
     MALFORMED_MANIFEST("malformed_manifest"), MISMATCH("mismatch"), UNKNOWN("unknown"),
     UNSUPPORTED_MODALITY("unsupported_modality"), BYTE_COUNT_MISMATCH("byte_count_mismatch"),
     SHA256_MISMATCH("sha256_mismatch"), NOT_EVALUATED("not_evaluated"),
     INAPPLICABLE_PRESENT("inapplicable_present"), INVALID_BOOLEAN("invalid_boolean"), INVALID_TYPE("invalid_type"),
     INVALID_ZERO("invalid_zero"), MISSING_REQUIRED("missing_required"), NON_FINITE_NUMERIC("non_finite_numeric"),
-    OUT_OF_RANGE("out_of_range"), LIMIT_EXCEEDED("limit_exceeded"), INSUFFICIENT_METADATA("insufficient_metadata");
+    OUT_OF_RANGE("out_of_range"), LIMIT_EXCEEDED("limit_exceeded"), INSUFFICIENT_METADATA("insufficient_metadata"),
+    SAMPLE_COUNT_MISMATCH("sample_count_mismatch"), ARITHMETIC_SATURATED("arithmetic_saturated"),
+    PDF_SIZE_LIMIT("pdf_size_limit", pdfContent = true),
+    PDF_HEADER_MISSING("pdf_header_missing", pdfContent = true),
+    PDF_ENCRYPTED("pdf_encrypted", pdfContent = true),
+    PDF_OBJECT_LIMIT("pdf_object_limit", pdfContent = true),
+    PDF_DECOMPRESSION_LIMIT("pdf_decompression_limit", pdfContent = true),
+    PDF_OBJECT_STREAM_UNSUPPORTED("pdf_object_stream_unsupported", pdfContent = true),
+    PDF_CATALOG_MISSING("pdf_catalog_missing", pdfContent = true),
+    PDF_PAGE_TREE_INVALID("pdf_page_tree_invalid", pdfContent = true),
+    PDF_PAGE_LIMIT("pdf_page_limit", pdfContent = true),
+    PAGE_COUNT_MISMATCH("page_count_mismatch", pdfContent = true),
+    MEDIA_BOX_MISSING("media_box_missing", pdfContent = true),
+    MEDIA_BOX_INVALID("media_box_invalid", pdfContent = true),
+    CROP_BOX_INVALID("crop_box_invalid", pdfContent = true),
+    CROP_BOX_OUTSIDE_MEDIA_BOX("crop_box_outside_media_box", pdfContent = true),
+    ROTATION_INVALID("rotation_invalid", pdfContent = true),
+    PDF_INVENTORY_INVALID("pdf_inventory_invalid", pdfContent = true),
+    PDF_ANNOTATIONS("pdf_annotations", pdfContent = true),
+    PDF_FORM_VALUES("pdf_form_values", pdfContent = true),
+    PDF_EMBEDDED_FILES("pdf_embedded_files", pdfContent = true),
+    PDF_XFA("pdf_xfa", pdfContent = true),
+    PDF_OPTIONAL_CONTENT("pdf_optional_content", pdfContent = true),
+    PDF_JAVASCRIPT("pdf_javascript", pdfContent = true),
+    PDF_OPEN_ACTION("pdf_open_action", pdfContent = true),
+    PDF_LAUNCH_ACTION("pdf_launch_action", pdfContent = true),
+    PDF_INCREMENTAL_REVISIONS("pdf_incremental_revisions", pdfContent = true),
+    PDF_MEDIA_TYPE_REQUIRED("pdf_media_type_required", pdfContent = true);
 }
 
 /** Closed field names used by metadata, limit, and digest findings. */
 enum class FindingField(val code: String) {
     BYTE_SIZE("byte_size"), PAGES("pages"), WIDTH("width"), HEIGHT("height"), FRAMES("frames"),
-    DURATION_SECONDS("duration_seconds"), PIXELS("pixels"), TOTAL_PIXELS("total_pixels"), SHA256("sha256");
+    DURATION_SECONDS("duration_seconds"), PIXELS("pixels"), TOTAL_PIXELS("total_pixels"), SHA256("sha256"),
+    CHANNEL_COUNT("channel_count"), SAMPLE_RATE_HZ("sample_rate_hz"),
+    SAMPLES_PER_CHANNEL("samples_per_channel"), TOTAL_SAMPLES("total_samples");
 }
 
 /** A bounded number retains integer/float spelling for byte-identical Python JSON. */
@@ -147,8 +201,14 @@ class PreflightFinding private constructor(
             var observed: FindingNumber? = null
             when (check) {
                 PreflightCheck.LIMITS -> {
-                    requireContract(field?.code in setOf("byte_size", "pages", "pixels", "total_pixels", "frames", "duration_seconds"))
-                    requireContract(reason in setOf(PreflightReason.LIMIT_EXCEEDED, PreflightReason.INSUFFICIENT_METADATA))
+                    requireContract(field?.code in setOf(
+                        "byte_size", "pages", "pixels", "total_pixels", "frames", "duration_seconds",
+                        "channel_count", "sample_rate_hz", "samples_per_channel", "total_samples",
+                    ))
+                    requireContract(reason in setOf(
+                        PreflightReason.LIMIT_EXCEEDED, PreflightReason.INSUFFICIENT_METADATA,
+                        PreflightReason.ARITHMETIC_SATURATED,
+                    ))
                     limit = FindingNumber(ContractJson.numeric(fields["limit"], PIXEL_MAX, positive = true))
                     if (!absent(fields["observed"])) observed = FindingNumber(ContractJson.numeric(fields["observed"], PIXEL_MAX))
                     requireContract(reason != PreflightReason.INSUFFICIENT_METADATA || observed == null)
@@ -160,7 +220,7 @@ class PreflightFinding private constructor(
                         requireContract(reason in setOf(
                             PreflightReason.INAPPLICABLE_PRESENT, PreflightReason.INVALID_BOOLEAN, PreflightReason.INVALID_TYPE,
                             PreflightReason.INVALID_ZERO, PreflightReason.MISSING_REQUIRED, PreflightReason.NON_FINITE_NUMERIC,
-                            PreflightReason.OUT_OF_RANGE,
+                            PreflightReason.OUT_OF_RANGE, PreflightReason.SAMPLE_COUNT_MISMATCH,
                         ))
                     }
                     requireContract(absent(fields["limit"]) && absent(fields["observed"]))
@@ -179,6 +239,10 @@ class PreflightFinding private constructor(
                         else -> requireContract(false)
                     }
                     if (reason != PreflightReason.BYTE_COUNT_MISMATCH) requireContract(absent(fields["limit"]) && absent(fields["observed"]))
+                }
+                PreflightCheck.PDF_CONTENT -> {
+                    requireContract(reason.pdfContent && field == null)
+                    requireContract(absent(fields["limit"]) && absent(fields["observed"]))
                 }
                 PreflightCheck.MANIFEST -> {
                     requireContract(reason == PreflightReason.MALFORMED_MANIFEST && field == null)

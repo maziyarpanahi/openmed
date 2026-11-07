@@ -13,6 +13,9 @@ The manifest is intentionally narrow. It records only:
 - `byte_size`
 - optional bounded counts: `pages`, `width`, `height`, `frames`,
   `duration_seconds`
+- optional waveform metadata: `channel_count`, `sample_rate_hz`,
+  `samples_per_channel`
+- optional controlled DICOM selector: `dicom_subprofile` (`waveform` or `non_pixel`)
 
 The validator rejects unknown fields, paths, URLs, and free-text fields such as
 descriptions or source metadata. Validation errors name the failed field or rule
@@ -47,3 +50,9 @@ payloads deterministically.
 
 The manifest does not read assets, perform OCR or inference, retain embedded
 metadata, or define model-specific tensor shapes.
+
+Waveform declarations add `application/edf` and `application/wfdb`; DICOM can
+opt into a waveform or non-pixel sub-profile. See [manifest profiles](manifest-profiles.md)
+for required metadata, consistency checks, bounds and byte-preflight limitations.
+All new fields are omitted when unset, preserving existing manifest v1 JSON.
+This additive manifest contract does not update the pending JSON Schema catalog.
