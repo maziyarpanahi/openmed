@@ -11,10 +11,11 @@ from openmed.core.labels import ID_NUM
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash, load_schema
 
 
-@pytest.mark.parametrize("key", ["", b""])
-def test_hmac_rejects_empty_explicit_keys(key):
-    with pytest.raises(ValueError, match="non-empty"):
-        hmac_text_hash("synthetic", key)
+def test_hmac_rejects_empty_explicit_keys(subtests):
+    for key in ["", b""]:
+        with subtests.test(key=key):
+            with pytest.raises(ValueError, match="non-empty"):
+                hmac_text_hash("synthetic", key)
 
 
 def test_hmac_preserves_explicit_utf8_and_byte_keys():

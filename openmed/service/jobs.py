@@ -261,6 +261,7 @@ class DeidentifyJobQueue:
 
     def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
         """Submit one de-identification job and return its initial metadata."""
+        self.runtime.validate_served_model(payload.model_name)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")

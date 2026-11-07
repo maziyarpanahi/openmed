@@ -20,6 +20,7 @@ from openmed.clinical.measures import (
     PopulationResult,
     PopulationState,
 )
+from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.structured.store import StoreResult, StoreState
 
 CARE_GAP_SCHEMA_VERSION: Final = "1.0.0"
@@ -980,7 +981,7 @@ def _timestamp(value: Any, name: str) -> str:
 
 
 def _time_key(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return parse_iso_datetime(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _enum(value: Any, enum_type: type[Enum], name: str) -> Any:

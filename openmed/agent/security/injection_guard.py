@@ -16,7 +16,7 @@ import os
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, Pattern
 
 InjectionGuardMode = Literal["allow", "strict"]
@@ -145,6 +145,7 @@ class InjectionFinding:
     start: int
     end: int
     severity: FindingSeverity
+    element_path: str | None = None
 
     def __post_init__(self) -> None:
         if self.start < 0 or self.end <= self.start:
@@ -154,12 +155,15 @@ class InjectionFinding:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the safe, text-free finding representation."""
-        return {
+        result = {
             "pattern_id": self.pattern_id,
             "start": self.start,
             "end": self.end,
             "severity": self.severity,
         }
+        if self.element_path is not None:
+            result["element_path"] = self.element_path
+        return result
 
     @property
     def offsets(self) -> tuple[int, int]:
@@ -175,9 +179,9 @@ class InjectionScan:
     audit or error responses because it never serializes either text value.
     """
 
-    text: str
+    text: str = field(repr=False)
     findings: tuple[InjectionFinding, ...]
-    quarantined_text: str
+    quarantined_text: str = field(repr=False)
     mode: InjectionGuardMode
 
     @property
@@ -208,7 +212,7 @@ class InjectionScan:
 class GuardedInput:
     """A recursively copied input prepared for safe tool dispatch."""
 
-    value: Any
+    value: Any = field(repr=False)
     findings: tuple[InjectionFinding, ...]
 
     @property
@@ -390,6 +394,11 @@ def _guard_value(
         scan = guard.scan(value)
         return scan.quarantined_text, list(scan.findings)
     if isinstance(value, Mapping):
+        if "resourceType" in value:
+            from openmed.interop.fhir_screening import screen_fhir_input
+
+            screened = screen_fhir_input(value, guard=guard)
+            return screened.value, list(screened.findings)
         guarded: dict[Any, Any] = {}
         findings: list[InjectionFinding] = []
         for key, child in value.items():
@@ -431,6 +440,7 @@ def _dedupe_findings(
                 finding.end,
                 finding.pattern_id,
                 finding.severity,
+                finding.element_path or "",
             ),
         )
     )
@@ -485,6 +495,15 @@ class InjectionGuard:
         if ordered_findings and self.mode == "strict":
             raise PromptInjectionDetected(ordered_findings)
         return GuardedInput(value=guarded, findings=ordered_findings)
+
+    def guard_fhir_input(self, value: Mapping[str, Any]) -> GuardedInput:
+        """Screen a FHIR read or Subscription resource before agent dispatch."""
+        from openmed.interop.fhir_screening import screen_fhir_input
+
+        screened = screen_fhir_input(value, guard=self)
+        if screened.flagged and self.mode == "strict":
+            raise PromptInjectionDetected(screened.findings)
+        return screened
 
     def guard_arguments(self, arguments: Mapping[str, Any]) -> GuardedInput:
         """Guard a JSON-like MCP argument mapping before handler dispatch."""

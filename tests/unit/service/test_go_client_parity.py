@@ -22,10 +22,16 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
+    ("post", "/v1/workflows/preflight"): "WorkflowPreflight",
+    ("post", "/v1/workflows/preview"): "WorkflowPreview",
+    ("post", "/v1/workflows/status"): "WorkflowStatus",
+    ("post", "/v1/workflows/review-receipts"): "WorkflowSubmitReceipt",
+    ("post", "/v1/workflows/cancel"): "WorkflowCancel",
     ("post", "/brief"): "Brief",
     ("post", "/analyze"): "Analyze",
     ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/v1/decisions"): "Decision",
+    ("post", "/v1/systemone"): "SystemOne",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
@@ -50,6 +56,9 @@ CLIENT_METHOD_BY_OPERATION = {
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
+    "GovernedWorkflowReference": "GovernedWorkflowReference",
+    "GovernedWorkflowMutation": "GovernedWorkflowMutation",
+    "GovernedWorkflowReview": "GovernedWorkflowReview",
     "BriefRequest": "BriefRequest",
     "AnalyzeRequest": "AnalyzeRequest",
     "CohortResolveRequest": "CohortResolveRequest",
@@ -57,6 +66,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
     "FixedOptionDecisionRequest": "FixedOptionDecisionRequest",
+    "SystemOneRequest": "SystemOneRequest",
     "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",

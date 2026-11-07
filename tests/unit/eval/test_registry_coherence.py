@@ -14,31 +14,34 @@ _MISSING_ID = "OpenMed/OpenMed-PII-SuperClinical-Large-434M"
 _SLOT = "pii::small::mlx-fp"
 
 
-@pytest.mark.parametrize("dangling", ["pointer", "lineage"])
 def test_manifest_coherence_fails_for_dangling_registry_targets(
-    tmp_path: Path,
-    dangling: str,
+    subtests, tmp_path
 ) -> None:
-    manifest = _write_manifest(tmp_path)
-    state = _state_payload()
-    if dangling == "pointer":
-        state["slots"][_SLOT]["pointers"]["canary"] = _MISSING_ID
-    else:
-        state["slots"][_SLOT]["lineage"] = [_edge(_REPO_ID, _MISSING_ID)]
-    state_path = tmp_path / "registry_state.json"
-    state_path.write_text(json.dumps(state), encoding="utf-8")
+    case_root = tmp_path
+    for dangling in ["pointer", "lineage"]:
+        with subtests.test(dangling=dangling):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            manifest = _write_manifest(tmp_path)
+            state = _state_payload()
+            if dangling == "pointer":
+                state["slots"][_SLOT]["pointers"]["canary"] = _MISSING_ID
+            else:
+                state["slots"][_SLOT]["lineage"] = [_edge(_REPO_ID, _MISSING_ID)]
+            state_path = tmp_path / "registry_state.json"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
 
-    check = _manifest_coherence_check(
-        _identity(),
-        {
-            "manifest_path": str(manifest),
-            "registry_state_path": str(state_path),
-        },
-    )
+            check = _manifest_coherence_check(
+                _identity(),
+                {
+                    "manifest_path": str(manifest),
+                    "registry_state_path": str(state_path),
+                },
+            )
 
-    assert check.passed is False
-    errors = check.details["mismatches"]["registry_state"]["errors"]
-    assert any("references missing manifest row" in error for error in errors)
+            assert check.passed is False
+            errors = check.details["mismatches"]["registry_state"]["errors"]
+            assert any("references missing manifest row" in error for error in errors)
 
 
 def test_manifest_coherence_accepts_resolved_registry_state(tmp_path: Path) -> None:

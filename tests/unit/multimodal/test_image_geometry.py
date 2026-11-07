@@ -17,9 +17,8 @@ from openmed.multimodal.image_geometry import (
 _UINT32_MAX = (1 << 31) - 1
 
 
-@pytest.mark.parametrize(
-    "width,height,pixels,ratio,orientation",
-    [
+def test_hand_calculations(subtests) -> None:
+    for width, height, pixels, ratio, orientation in [
         (4, 4, 16, (1, 1), Orientation.SQUARE),
         (3, 4, 12, (3, 4), Orientation.PORTRAIT),
         (4, 3, 12, (4, 3), Orientation.LANDSCAPE),
@@ -27,17 +26,22 @@ _UINT32_MAX = (1 << 31) - 1
         (1920, 1080, 2_073_600, (16, 9), Orientation.LANDSCAPE),
         (1080, 1920, 2_073_600, (9, 16), Orientation.PORTRAIT),
         (7, 5, 35, (7, 5), Orientation.LANDSCAPE),
-    ],
-)
-def test_hand_calculations(width, height, pixels, ratio, orientation) -> None:
-    result = derive_image_geometry(width, height)
-    assert result.width == width
-    assert result.height == height
-    assert result.pixel_count == pixels
-    assert (result.aspect_ratio_width, result.aspect_ratio_height) == ratio
-    assert result.orientation is orientation
-    assert result.bytes_per_pixel is None
-    assert result.estimated_bytes is None
+    ]:
+        with subtests.test(
+            width=width,
+            height=height,
+            pixels=pixels,
+            ratio=ratio,
+            orientation=orientation,
+        ):
+            result = derive_image_geometry(width, height)
+            assert result.width == width
+            assert result.height == height
+            assert result.pixel_count == pixels
+            assert (result.aspect_ratio_width, result.aspect_ratio_height) == ratio
+            assert result.orientation is orientation
+            assert result.bytes_per_pixel is None
+            assert result.estimated_bytes is None
 
 
 def test_largest_representable_dimensions_pass_hand_calculation() -> None:
@@ -60,9 +64,8 @@ def test_memory_estimate_matches_hand_calculation() -> None:
     assert result.bytes_per_pixel == 3
 
 
-@pytest.mark.parametrize(
-    "value,category_name",
-    [
+def test_invalid_widths_fail_closed(subtests) -> None:
+    for value, category_name in [
         (None, "missing"),
         (True, "boolean"),
         (False, "boolean"),
@@ -75,32 +78,29 @@ def test_memory_estimate_matches_hand_calculation() -> None:
         (0, "not_positive"),
         (-5, "not_positive"),
         (_UINT32_MAX + 1, "overflow"),
-    ],
-)
-def test_invalid_widths_fail_closed(value, category_name) -> None:
-    with pytest.raises(
-        ImageGeometryError, match=f"^image_geometry_width_{category_name}$"
-    ) as raised:
-        derive_image_geometry(value, 4)
-    assert raised.value.category == f"image_geometry_width_{category_name}"
-    assert str(raised.value) == f"image_geometry_width_{category_name}"
+    ]:
+        with subtests.test(value=value, category_name=category_name):
+            with pytest.raises(
+                ImageGeometryError, match=f"^image_geometry_width_{category_name}$"
+            ) as raised:
+                derive_image_geometry(value, 4)
+            assert raised.value.category == f"image_geometry_width_{category_name}"
+            assert str(raised.value) == f"image_geometry_width_{category_name}"
 
 
-@pytest.mark.parametrize(
-    "value,category_name",
-    [
+def test_invalid_heights_fail_closed(subtests) -> None:
+    for value, category_name in [
         (None, "missing"),
         (True, "boolean"),
         (float("nan"), "not_finite"),
         (0, "not_positive"),
         (_UINT32_MAX + 1, "overflow"),
-    ],
-)
-def test_invalid_heights_fail_closed(value, category_name) -> None:
-    with pytest.raises(
-        ImageGeometryError, match=f"^image_geometry_height_{category_name}$"
-    ):
-        derive_image_geometry(4, value)
+    ]:
+        with subtests.test(value=value, category_name=category_name):
+            with pytest.raises(
+                ImageGeometryError, match=f"^image_geometry_height_{category_name}$"
+            ):
+                derive_image_geometry(4, value)
 
 
 def test_pixel_limit_is_inclusive_and_checked_by_division() -> None:
@@ -148,21 +148,18 @@ def test_byte_estimate_is_overflow_checked() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "bytes_per_pixel",
-    [0, -1, True, 2.5, "3", [], 1025],
-)
-def test_invalid_bytes_per_pixel_fails_with_constant_message(
-    bytes_per_pixel,
-) -> None:
-    with pytest.raises(ValueError, match="^bytes_per_pixel"):
-        derive_image_geometry(4, 4, bytes_per_pixel=bytes_per_pixel)
+def test_invalid_bytes_per_pixel_fails_with_constant_message(subtests) -> None:
+    for bytes_per_pixel in [0, -1, True, 2.5, "3", [], 1025]:
+        with subtests.test(bytes_per_pixel=bytes_per_pixel):
+            with pytest.raises(ValueError, match="^bytes_per_pixel"):
+                derive_image_geometry(4, 4, bytes_per_pixel=bytes_per_pixel)
 
 
-@pytest.mark.parametrize("max_pixels", [None, True, 0, -1, 2.5, "10", []])
-def test_invalid_max_pixels_fails_with_constant_message(max_pixels) -> None:
-    with pytest.raises(ValueError, match="^max_pixels"):
-        derive_image_geometry(4, 4, max_pixels=max_pixels)
+def test_invalid_max_pixels_fails_with_constant_message(subtests) -> None:
+    for max_pixels in [None, True, 0, -1, 2.5, "10", []]:
+        with subtests.test(max_pixels=max_pixels):
+            with pytest.raises(ValueError, match="^max_pixels"):
+                derive_image_geometry(4, 4, max_pixels=max_pixels)
 
 
 def test_max_pixels_has_a_hard_range() -> None:
