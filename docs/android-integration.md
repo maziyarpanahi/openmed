@@ -239,6 +239,59 @@ never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
 
+## 16 KB page-size devices
+
+Some Android 15 and later devices use 16 KB memory pages. On those devices the
+dynamic linker cannot load a 64-bit native library unless every ELF `PT_LOAD`
+segment is aligned to at least 16 KB. Google Play also requires 16 KB support
+for new apps and updates that target Android 15 (API 35) or higher. Two separate
+conditions must hold for every `arm64-v8a` and `x86_64` library in your APK or
+App Bundle:
+
+- **ELF alignment.** Each `.so` must be linked with
+  `-Wl,-z,max-page-size=16384`. NDK r28 and newer do this by default; older NDKs
+  need the flag.
+- **Zip alignment.** An uncompressed `.so` must start on a 16 KB boundary inside
+  the APK. Android Gradle Plugin 8.5.1 and newer packages it that way.
+
+The native libraries that OpenMedKit pulls in have this status:
+
+| Library | Dependency | 64-bit ELF alignment |
+| --- | --- | --- |
+| `libonnxruntime.so`, `libonnxruntime4j_jni.so` | `com.microsoft.onnxruntime:onnxruntime-android:1.25.1` | 16 KB |
+| `libmlkit_google_ocr_pipeline.so` | `com.google.mlkit:text-recognition:16.0.1` | 16 KB |
+| `libdjl_tokenizer.so` | `ai.djl.android:tokenizer-native:0.33.0` | **4 KB** |
+
+`ai.djl.android:tokenizer-native` 0.33.0 is the newest release on Maven
+Central, and no 16 KB-aligned release exists yet
+([deepjavalibrary/djl#3815](https://github.com/deepjavalibrary/djl/issues/3815)).
+On a 16 KB page-size device the tokenizer library fails to load, so every
+model-backed OpenMedKit call fails when the tokenizer is constructed. Devices
+with 4 KB pages are not affected. OpenMedKit will move to the first
+16 KB-aligned DJL release. Until then, plan 16 KB device support and Play
+submissions around this gap.
+
+Check your own release build with the same offline checker the OpenMedKit
+build uses. It reads the ELF program headers of every `lib/<abi>/*.so` in an
+APK (or `jni/<abi>/*.so` in an AAR) and prints only library names, ABIs, and
+alignment values:
+
+```bash
+python3 scripts/android/check_elf_page_alignment.py \
+  --require-native-libraries app/build/outputs/apk/release/app-release.apk
+```
+
+It exits with status 1 when a 64-bit library is aligned below 16 KB. Pair it
+with `zipalign -c -P 16 4 app-release.apk` (Build-Tools 35 or newer) to check
+zip alignment. The [Android build README](https://github.com/maziyarpanahi/openmed/blob/master/android/README.md#16-kb-elf-alignment)
+describes the Gradle gates and the reviewed, expiring allowlist that covers the
+DJL tokenizer.
+
+The Flutter plugin builds `libopenmed_ffi.so` with
+`-Wl,-z,max-page-size=16384` and binds ONNX Runtime 1.25.1 on Android, so the
+plugin's own library and its ONNX Runtime dependency are 16 KB aligned on both
+64-bit ABIs. The Flutter CI job runs the checker on a consumer APK.
+
 ## Runnable demos and related guides
 
 - [`android/OpenMedDemo`](https://github.com/maziyarpanahi/openmed/tree/master/android/OpenMedDemo)

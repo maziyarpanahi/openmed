@@ -7,6 +7,7 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
@@ -74,6 +76,10 @@ jobs:
     - name: Verify 16 KB APK zip alignment
       working-directory: android
       run: ./gradlew verifyApkZipAlignment --stacktrace
+
+    - name: Verify 16 KB ELF alignment of APK native libraries
+      working-directory: android
+      run: ./gradlew verifyApkElfAlignment --stacktrace
 
     - name: Cross-check APK alignment with SDK zipalign
       shell: bash

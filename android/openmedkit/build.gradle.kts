@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.util.zip.ZipFile
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.tasks.testing.Test
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -245,10 +246,62 @@ val verifyReleaseAarSize by tasks.registering {
     }
 }
 
+// Android 15+ devices with 16 KB memory pages can only map 64-bit native
+// libraries whose ELF LOAD segments are aligned to at least 16 KB. OpenMedKit
+// ships no native code of its own, so the gate reads the release AAR together
+// with every resolved runtime dependency archive that packages `.so` files.
+// Reviewed, expiring exceptions live in gradle/native-page-alignment-allowlist.toml.
+val nativeAlignmentScript = repoRoot.resolve("scripts/android/check_elf_page_alignment.py")
+val nativeAlignmentAllowlist = rootProject.layout.projectDirectory.file(
+    "gradle/native-page-alignment-allowlist.toml",
+)
+val releaseRuntimeNativeArchives = objects.fileCollection()
+
+androidComponents {
+    onVariants(selector().withName("release")) { variant ->
+        releaseRuntimeNativeArchives.from(
+            variant.runtimeConfiguration.incoming.artifactView {
+                attributes {
+                    attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "aar")
+                }
+            }.files,
+        )
+    }
+}
+
+val verifyReleaseNativeLibraryAlignment by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Fails when a 64-bit native library in the release AAR or its " +
+        "runtime dependencies has ELF LOAD alignment below 16 KB."
+    dependsOn("bundleReleaseAar")
+    inputs.file(nativeAlignmentScript)
+    inputs.file(nativeAlignmentAllowlist)
+    inputs.file(releaseAar)
+    inputs.files(releaseRuntimeNativeArchives)
+    executable(pythonExecutable.get())
+    args(
+        nativeAlignmentScript.absolutePath,
+        "--min-alignment-kb",
+        "16",
+        "--allowlist",
+        nativeAlignmentAllowlist.asFile.absolutePath,
+        "--strict-allowlist",
+        "--require-native-libraries",
+    )
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(releaseAar.get().asFile.absolutePath) +
+                releaseRuntimeNativeArchives.files.map { it.absolutePath }.sorted()
+        },
+    )
+}
+
 tasks.register("verifyAndroidBudgets") {
     group = "verification"
-    description = "Runs the release AAR size and offline cold-start budget gates."
+    description = "Runs the release AAR size, 16 KB native alignment and offline " +
+        "cold-start budget gates."
     dependsOn(verifyReleaseAarSize, "testDebugUnitTest")
+    dependsOn(verifyReleaseNativeLibraryAlignment)
 }
 
 val verifyReleasePublicationVersion by tasks.registering {
