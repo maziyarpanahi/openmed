@@ -86,16 +86,19 @@ def test_duplicate_decision_keys_fail_closed_without_echo() -> None:
     assert sentinel not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["approved", "Patient Jane Doe", "Bearer synthetic-token", "/private/chart"],
-)
-def test_unknown_outcome_codes_fail_closed_without_echo(value: str) -> None:
-    with pytest.raises(PolicyMatrixError) as exc_info:
-        _row("invalid", value)
+def test_unknown_outcome_codes_fail_closed_without_echo(subtests) -> None:
+    for value in [
+        "approved",
+        "Patient Jane Doe",
+        "Bearer synthetic-token",
+        "/private/chart",
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(PolicyMatrixError) as exc_info:
+                _row("invalid", value)
 
-    assert exc_info.value.code == "unknown_outcome_code"
-    assert value not in str(exc_info.value)
+            assert exc_info.value.code == "unknown_outcome_code"
+            assert value not in str(exc_info.value)
 
 
 def test_matrix_schema_cannot_carry_sensitive_content() -> None:

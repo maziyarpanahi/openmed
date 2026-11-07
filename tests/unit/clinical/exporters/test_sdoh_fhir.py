@@ -87,53 +87,55 @@ def _export(records: Any, **overrides: Any):
     return to_sdoh_observations(records, **config)
 
 
-@pytest.mark.parametrize(
-    "determinant,domain",
-    [
+def test_reviewed_current_patient_exports_valid_declared_categories(subtests):
+    for determinant, domain in [
         ("food_insecurity", "food-insecurity"),
         ("housing", "housing-instability"),
         ("employment", "employment-status"),
-    ],
-)
-def test_reviewed_current_patient_exports_valid_declared_categories(
-    determinant, domain
-):
-    result = _export([_record(determinant, start="2026-01-01")])
-    observation = result.observations[0]
-    assert validate_resource(observation).is_valid
-    assert observation["status"] == "final"
-    assert [item["coding"][0]["code"] for item in observation["category"]] == [
-        "social-history",
-        "sdoh",
-        domain,
-    ]
-    assert (
-        observation["category"][2]["coding"][0]["version"]
-        == SDOH_FHIR_IG_VERSION
-        == "2.3.0"
-    )
-    assert observation["category"][1]["coding"][0]["version"] == "7.0.0"
-    assert observation["code"] == {
-        "coding": [{"system": _SYSTEM, "code": "assessment"}]
-    }
-    assert observation["valueCodeableConcept"]["coding"][0]["code"] == "positive"
-    assert observation["effectiveDateTime"] == "2026-01-01"
-    assert "profile" not in observation["meta"]
-    assert not result.losses
+    ]:
+        with subtests.test(determinant=determinant, domain=domain):
+            result = _export([_record(determinant, start="2026-01-01")])
+            observation = result.observations[0]
+            assert validate_resource(observation).is_valid
+            assert observation["status"] == "final"
+            assert [item["coding"][0]["code"] for item in observation["category"]] == [
+                "social-history",
+                "sdoh",
+                domain,
+            ]
+            assert (
+                observation["category"][2]["coding"][0]["version"]
+                == SDOH_FHIR_IG_VERSION
+                == "2.3.0"
+            )
+            assert observation["category"][1]["coding"][0]["version"] == "7.0.0"
+            assert observation["code"] == {
+                "coding": [{"system": _SYSTEM, "code": "assessment"}]
+            }
+            assert (
+                observation["valueCodeableConcept"]["coding"][0]["code"] == "positive"
+            )
+            assert observation["effectiveDateTime"] == "2026-01-01"
+            assert "profile" not in observation["meta"]
+            assert not result.losses
 
 
-@pytest.mark.parametrize("review", ["unreviewed", "needs_review"])
-@pytest.mark.parametrize("temporal", ["current", "historical", "future", "unknown"])
-def test_pending_review_and_temporal_states_never_become_final(review, temporal):
-    result = _export([_record(review=review, temporal=temporal)])
-    assert result.observations[0]["status"] == "preliminary"
-    assert not any(key.startswith("effective") for key in result.observations[0])
+def test_pending_review_and_temporal_states_never_become_final(subtests):
+    for review in ["unreviewed", "needs_review"]:
+        for temporal in ["current", "historical", "future", "unknown"]:
+            with subtests.test(review=review, temporal=temporal):
+                result = _export([_record(review=review, temporal=temporal)])
+                assert result.observations[0]["status"] == "preliminary"
+                assert not any(
+                    key.startswith("effective") for key in result.observations[0]
+                )
 
 
-@pytest.mark.parametrize("temporal", ["historical", "future", "unknown"])
-def test_reviewed_non_current_evidence_is_still_preliminary(temporal):
-    result = _export([_record(temporal=temporal)])
-    assert result.observations[0]["status"] == "preliminary"
+def test_reviewed_non_current_evidence_is_still_preliminary(subtests):
+    for temporal in ["historical", "future", "unknown"]:
+        with subtests.test(temporal=temporal):
+            result = _export([_record(temporal=temporal)])
+            assert result.observations[0]["status"] == "preliminary"
 
 
 def test_unresolved_temporal_review_is_preliminary_even_with_reviewed_assertion():
@@ -141,9 +143,8 @@ def test_unresolved_temporal_review_is_preliminary_even_with_reviewed_assertion(
     assert result.observations[0]["status"] == "preliminary"
 
 
-@pytest.mark.parametrize(
-    "record,code",
-    [
+def test_exclusions_are_explicit_and_skip_recorded_clock(subtests):
+    for record, code in [
         (_record(assertion="absent"), "negated_need"),
         (_record(assertion="unknown"), "assertion_unconfirmed"),
         (_record(assertion="uncertain"), "assertion_unconfirmed"),
@@ -155,16 +156,18 @@ def test_unresolved_temporal_review_is_preliminary_even_with_reviewed_assertion(
         (_record(review="unknown"), "review_refused"),
         (_record("tobacco"), "domain_unmapped"),
         (_record("other"), "domain_unmapped"),
-    ],
-)
-def test_exclusions_are_explicit_and_skip_recorded_clock(record, code):
-    def no_clock():
-        pytest.fail("no export means no recorded-clock call")
+    ]:
+        with subtests.test(record=record, code=code):
 
-    result = _export([record], clock=no_clock)
-    assert result.observations == result.provenance == ()
-    assert result.losses == ({"input_index": 0, "code": code, "excluded": True},)
-    assert result.to_dict()["excluded_count"] == 1
+            def no_clock():
+                pytest.fail("no export means no recorded-clock call")
+
+            result = _export([record], clock=no_clock)
+            assert result.observations == result.provenance == ()
+            assert result.losses == (
+                {"input_index": 0, "code": code, "excluded": True},
+            )
+            assert result.to_dict()["excluded_count"] == 1
 
 
 def test_missing_terminology_and_missing_answer_have_distinct_loss_semantics():
@@ -197,9 +200,8 @@ def test_sensitive_labels_propagate_to_observation_and_provenance():
     assert result.provenance[0]["meta"]["security"]
 
 
-@pytest.mark.parametrize(
-    "label",
-    [
+def test_incomplete_or_disallowed_use_is_refused(subtests):
+    for label in [
         SDOHSensitiveUseLabel(
             "sdoh", allowed_purposes=(SDOHPurpose.CARE_COORDINATION,)
         ),
@@ -207,12 +209,11 @@ def test_sensitive_labels_propagate_to_observation_and_provenance():
         SDOHSensitiveUseLabel(
             "sdoh", prohibited_automated_uses=(ProhibitedAutomatedUse.CARE_DENIAL,)
         ),
-    ],
-)
-def test_incomplete_or_disallowed_use_is_refused(label):
-    result = _export([_record(label=label)])
-    assert not result.observations
-    assert result.losses[0]["code"] == "sensitive_use_refused"
+    ]:
+        with subtests.test(label=label):
+            result = _export([_record(label=label)])
+            assert not result.observations
+            assert result.losses[0]["code"] == "sensitive_use_refused"
 
 
 def test_period_is_explicit_and_preserves_historical_preliminary_status():
@@ -230,9 +231,8 @@ def test_aware_effective_time_normalizes_without_wall_clock():
     assert result.observations[0]["effectiveDateTime"] == "2026-01-01T00:00:00Z"
 
 
-@pytest.mark.parametrize(
-    "start,end,temporal",
-    [
+def test_invalid_or_unanchored_calendar_data_is_controlled(subtests):
+    for start, end, temporal in [
         (_PRIVATE, None, "current"),
         ("2026-02-30", None, "current"),
         ("2026-01-01T00:00:00", None, "current"),
@@ -242,13 +242,12 @@ def test_aware_effective_time_normalizes_without_wall_clock():
         (None, "2026-01-02", "current"),
         ("2026-01-02", "2026-01-01", "current"),
         ("2026-01-01", "2026-01-02T00:00:00Z", "current"),
-    ],
-)
-def test_invalid_or_unanchored_calendar_data_is_controlled(start, end, temporal):
-    with pytest.raises(SDOHFHIRExportError) as error:
-        _record(start=start, end=end, temporal=temporal)
-    assert error.value.code == "invalid_effective_time"
-    assert error.value.__context__ is None and _PRIVATE not in str(error.value)
+    ]:
+        with subtests.test(start=start, end=end, temporal=temporal):
+            with pytest.raises(SDOHFHIRExportError) as error:
+                _record(start=start, end=end, temporal=temporal)
+            assert error.value.code == "invalid_effective_time"
+            assert error.value.__context__ is None and _PRIVATE not in str(error.value)
 
 
 def test_offsets_must_align_and_fit_fhir_unsigned_integer():
@@ -265,9 +264,8 @@ def test_offsets_must_align_and_fit_fhir_unsigned_integer():
         )
 
 
-@pytest.mark.parametrize(
-    "system,code",
-    [
+def test_invalid_bindings_echo_no_protected_values(subtests):
+    for system, code in [
         ("https://user:secret@synthetic.example/codes", "safe"),
         ("https://synthetic.example/codes?credential=private", "safe"),
         ("file:///private/source", "safe"),
@@ -275,18 +273,16 @@ def test_offsets_must_align_and_fit_fhir_unsigned_integer():
         (_SYSTEM, "x\u200b"),
         (_SYSTEM, "x" * 65),
         (_SYSTEM, "x/subject"),
-    ],
-)
-def test_invalid_bindings_echo_no_protected_values(system, code):
-    with pytest.raises(SDOHFHIRExportError) as error:
-        SDOHFHIRCode(system, code)
-    assert error.value.code == "invalid_code"
-    assert _PRIVATE not in repr(error.value)
+    ]:
+        with subtests.test(system=system, code=code):
+            with pytest.raises(SDOHFHIRExportError) as error:
+                SDOHFHIRCode(system, code)
+            assert error.value.code == "invalid_code"
+            assert _PRIVATE not in repr(error.value)
 
 
-@pytest.mark.parametrize(
-    "overrides,code",
-    [
+def test_bad_configuration_is_controlled_before_projection(subtests):
+    for overrides, code in [
         ({"subject_reference": "Patient/" + _PRIVATE}, "invalid_reference"),
         (
             {"source_reference": "https://private.example/DocumentReference/0042"},
@@ -300,18 +296,18 @@ def test_invalid_bindings_echo_no_protected_values(system, code):
             "invalid_terminology",
         ),
         ({"clock": None}, "invalid_clock"),
-    ],
-)
-def test_bad_configuration_is_controlled_before_projection(overrides, code):
-    with pytest.raises(SDOHFHIRExportError) as error:
-        _export([_record()], **overrides)
-    assert error.value.code == code and _PRIVATE not in repr(error.value)
+    ]:
+        with subtests.test(overrides=overrides, code=code):
+            with pytest.raises(SDOHFHIRExportError) as error:
+                _export([_record()], **overrides)
+            assert error.value.code == code and _PRIVATE not in repr(error.value)
 
 
-@pytest.mark.parametrize("records", ["private", [{}], [_record()] * 513])
-def test_records_are_typed_and_bounded(records):
-    with pytest.raises(SDOHFHIRExportError, match="invalid_input"):
-        _export(records)
+def test_records_are_typed_and_bounded(subtests):
+    for records in ["private", [{}], [_record()] * 513]:
+        with subtests.test(records=records):
+            with pytest.raises(SDOHFHIRExportError, match="invalid_input"):
+                _export(records)
 
 
 def test_clock_called_once_for_batch_and_failures_are_not_chained():
@@ -461,10 +457,11 @@ def test_per_record_answer_bindings_do_not_guess_from_shared_determinant():
     assert len({r["id"] for r in result.observations}) == 2
 
 
-@pytest.mark.parametrize("key", [True, -1, 1, 512, "private-key"])
-def test_terminology_indices_are_exact_bounded_integers(key):
-    with pytest.raises(SDOHFHIRExportError, match="invalid_terminology"):
-        _export([_record()], terminology={key: _BINDING})
+def test_terminology_indices_are_exact_bounded_integers(subtests):
+    for key in [True, -1, 1, 512, "private-key"]:
+        with subtests.test(key=key):
+            with pytest.raises(SDOHFHIRExportError, match="invalid_terminology"):
+                _export([_record()], terminology={key: _BINDING})
 
 
 def test_generic_housing_requires_explicit_domain_without_guessing():
@@ -525,27 +522,28 @@ class _PrivateCodeAlias(str):
         return hash(self.allowed)
 
 
-@pytest.mark.parametrize("axis", ["temporal", "experiencer"])
-def test_export_refuses_private_code_aliases(axis):
-    record = _record()
-    with pytest.raises(SDOHFHIRExportError) as caught:
-        if axis == "temporal":
-            record = replace(
-                record,
-                temporal=replace(
-                    record.temporal, temporal_class=_PrivateCodeAlias("current")
-                ),
-            )
-        else:
-            record = replace(
-                record,
-                experiencer=replace(
-                    record.experiencer, experiencer=_PrivateCodeAlias("patient")
-                ),
-            )
-        _export([record])
-    assert caught.value.code == "invalid_record"
-    assert caught.value.__context__ is None
+def test_export_refuses_private_code_aliases(subtests):
+    for axis in ["temporal", "experiencer"]:
+        with subtests.test(axis=axis):
+            record = _record()
+            with pytest.raises(SDOHFHIRExportError) as caught:
+                if axis == "temporal":
+                    record = replace(
+                        record,
+                        temporal=replace(
+                            record.temporal, temporal_class=_PrivateCodeAlias("current")
+                        ),
+                    )
+                else:
+                    record = replace(
+                        record,
+                        experiencer=replace(
+                            record.experiencer, experiencer=_PrivateCodeAlias("patient")
+                        ),
+                    )
+                _export([record])
+            assert caught.value.code == "invalid_record"
+            assert caught.value.__context__ is None
 
 
 @pytest.mark.parametrize("stage", ["len", "items", "get"])

@@ -187,22 +187,20 @@ def test_export_is_deterministic_and_does_not_open_network_sockets(
     assert first.export_json() == second.export_json()
 
 
-@pytest.mark.parametrize(
-    "operation",
-    [
+def test_invalid_typed_inputs_fail_without_exporting_values(subtests) -> None:
+    for operation in [
         lambda exporter: exporter.increment(CounterName.PIPELINE_RUNS, amount=0),
         lambda exporter: exporter.observe_latency_seconds(-1),
         lambda exporter: exporter.record_pipeline(latency_ms=1, latency_seconds=0.001),
-    ],
-)
-def test_invalid_typed_inputs_fail_without_exporting_values(operation) -> None:
-    exporter = NoPHITelemetryExporter()
+    ]:
+        with subtests.test(operation=operation):
+            exporter = NoPHITelemetryExporter()
 
-    with pytest.raises(TelemetrySchemaError):
-        operation(exporter)
+            with pytest.raises(TelemetrySchemaError):
+                operation(exporter)
 
-    assert exporter.export()["counters"] == []
-    assert exporter.export()["latencies"] == []
+            assert exporter.export()["counters"] == []
+            assert exporter.export()["latencies"] == []
 
 
 def test_pipeline_result_converts_stage_milliseconds_to_seconds() -> None:

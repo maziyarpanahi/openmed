@@ -152,9 +152,8 @@ def test_synthetic_round_trip_is_stable_and_value_free():
     assert repr(args["sealed"]) == "SealedSummaryReview(<redacted>)"
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_wrong_metadata_is_rejected(subtests):
+    for field, value in [
         ("schema_version", "unknown"),
         ("rubric_version", 2),
         ("rubric_version", True),
@@ -162,25 +161,25 @@ def test_synthetic_round_trip_is_stable_and_value_free():
         ("request_digest", artifact_digest("stale request")),
         ("evidence_kind", "reviewer"),
         ("review_evidence_digest", "missing"),
-    ],
-)
-def test_wrong_metadata_is_rejected(field, value):
-    _, _, bundle, args = vector()
-    bundle[field] = value
-    with pytest.raises(SummaryReviewError, match="^invalid_review_import$"):
-        import_summary_review(bundle, **args)
+    ]:
+        with subtests.test(field=field, value=value):
+            _, _, bundle, args = vector()
+            bundle[field] = value
+            with pytest.raises(SummaryReviewError, match="^invalid_review_import$"):
+                import_summary_review(bundle, **args)
 
 
-@pytest.mark.parametrize("field", ["claims", "evidence", "summary", "source"])
-def test_stale_evaluated_artifacts_are_rejected(field):
-    _, _, bundle, args = vector()
-    args = copy.deepcopy(args)
-    if field in ("summary", "source"):
-        args[field] += " Changed."
-    else:
-        args[field][0]["end"] -= 1
-    with pytest.raises(SummaryReviewError):
-        import_summary_review(bundle, **args)
+def test_stale_evaluated_artifacts_are_rejected(subtests):
+    for field in ["claims", "evidence", "summary", "source"]:
+        with subtests.test(field=field):
+            _, _, bundle, args = vector()
+            args = copy.deepcopy(args)
+            if field in ("summary", "source"):
+                args[field] += " Changed."
+            else:
+                args[field][0]["end"] -= 1
+            with pytest.raises(SummaryReviewError):
+                import_summary_review(bundle, **args)
 
 
 def test_duplicates_unknown_references_and_unblinded_fields_fail_closed():
@@ -201,47 +200,46 @@ def test_duplicates_unknown_references_and_unblinded_fields_fail_closed():
         assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "kind,state",
-    [
+def test_unevaluable_states_do_not_become_support(subtests):
+    for kind, state in [
         ("missing", "missing"),
         ("single", "incomplete"),
         ("disputed", "disputed"),
         ("unclear", "unclear"),
-    ],
-)
-def test_unevaluable_states_do_not_become_support(kind, state):
-    _, request, bundle, args = vector()
-    ref = request["reviews"][0]["review_ref"]
-    if kind in ("missing", "single"):
-        bundle["decisions"] = [
-            row
-            for row in bundle["decisions"]
-            if row["review_ref"] != ref
-            or (
-                kind == "single"
-                and row["reviewer_ref"] == artifact_digest("reviewer-one")
-            )
-        ]
-    else:
-        for row in bundle["decisions"]:
-            if row["review_ref"] == ref:
-                row["label"] = (
-                    "unclear"
-                    if kind == "unclear"
-                    else (
-                        "supports"
-                        if row["reviewer_ref"] == artifact_digest("reviewer-one")
-                        else "contradicts"
+    ]:
+        with subtests.test(kind=kind, state=state):
+            _, request, bundle, args = vector()
+            ref = request["reviews"][0]["review_ref"]
+            if kind in ("missing", "single"):
+                bundle["decisions"] = [
+                    row
+                    for row in bundle["decisions"]
+                    if row["review_ref"] != ref
+                    or (
+                        kind == "single"
+                        and row["reviewer_ref"] == artifact_digest("reviewer-one")
                     )
-                )
-                row["reason"] = (
-                    "clinical_interpretation" if kind == "disputed" else None
-                )
-    result = import_summary_review(bundle, **args)
-    assert not result.complete and not result.reviewer_evidence_available
-    assert result.to_dict()["states"][state] == 1
-    assert result.citation_support.support_recall == 0.5
+                ]
+            else:
+                for row in bundle["decisions"]:
+                    if row["review_ref"] == ref:
+                        row["label"] = (
+                            "unclear"
+                            if kind == "unclear"
+                            else (
+                                "supports"
+                                if row["reviewer_ref"]
+                                == artifact_digest("reviewer-one")
+                                else "contradicts"
+                            )
+                        )
+                        row["reason"] = (
+                            "clinical_interpretation" if kind == "disputed" else None
+                        )
+            result = import_summary_review(bundle, **args)
+            assert not result.complete and not result.reviewer_evidence_available
+            assert result.to_dict()["states"][state] == 1
+            assert result.citation_support.support_recall == 0.5
 
 
 def test_disagreement_requires_separate_complete_adjudication():
@@ -362,51 +360,60 @@ def test_sealed_document_can_be_reloaded_without_public_mapping_disclosure():
     )
 
 
-@pytest.mark.parametrize(
-    "change",
-    ["duplicate", "agreed", "missing", "single", "reason", "unknown", "malformed"],
-)
-def test_invalid_resolutions_and_disagreement_reasons_are_rejected(change):
-    _, request, bundle, args = vector()
-    ref = request["reviews"][0]["review_ref"]
-    resolution = dict(
-        review_ref=ref,
-        label="supports",
-        reason="evidence_quality",
-        adjudicator_ref=artifact_digest("separate-reviewer"),
-    )
-    for index, row in enumerate(bundle["decisions"]):
-        if row["review_ref"] == ref:
-            row["label"] = "supports" if index % 2 == 0 else "contradicts"
-            row["reason"] = "evidence_quality"
-    bundle["resolutions"] = [resolution]
-    if change == "duplicate":
-        bundle["resolutions"].append(resolution)
-    elif change == "agreed":
-        for row in bundle["decisions"]:
-            row["label"] = "supports"
-            row["reason"] = None
-    elif change in ("missing", "single"):
-        bundle["decisions"] = [] if change == "missing" else bundle["decisions"][:1]
-    elif change == "reason":
-        bundle["decisions"][0]["reason"] = None
-    elif change == "unknown":
-        resolution["review_ref"] = artifact_digest("unknown")
-    else:
-        resolution.pop("adjudicator_ref")
-    with pytest.raises(SummaryReviewError):
-        import_summary_review(bundle, **args)
+def test_invalid_resolutions_and_disagreement_reasons_are_rejected(subtests):
+    for change in [
+        "duplicate",
+        "agreed",
+        "missing",
+        "single",
+        "reason",
+        "unknown",
+        "malformed",
+    ]:
+        with subtests.test(change=change):
+            _, request, bundle, args = vector()
+            ref = request["reviews"][0]["review_ref"]
+            resolution = dict(
+                review_ref=ref,
+                label="supports",
+                reason="evidence_quality",
+                adjudicator_ref=artifact_digest("separate-reviewer"),
+            )
+            for index, row in enumerate(bundle["decisions"]):
+                if row["review_ref"] == ref:
+                    row["label"] = "supports" if index % 2 == 0 else "contradicts"
+                    row["reason"] = "evidence_quality"
+            bundle["resolutions"] = [resolution]
+            if change == "duplicate":
+                bundle["resolutions"].append(resolution)
+            elif change == "agreed":
+                for row in bundle["decisions"]:
+                    row["label"] = "supports"
+                    row["reason"] = None
+            elif change in ("missing", "single"):
+                bundle["decisions"] = (
+                    [] if change == "missing" else bundle["decisions"][:1]
+                )
+            elif change == "reason":
+                bundle["decisions"][0]["reason"] = None
+            elif change == "unknown":
+                resolution["review_ref"] = artifact_digest("unknown")
+            else:
+                resolution.pop("adjudicator_ref")
+            with pytest.raises(SummaryReviewError):
+                import_summary_review(bundle, **args)
 
 
-@pytest.mark.parametrize("label", ["contradicts", "irrelevant"])
-def test_non_supporting_consensus_is_retained(label):
-    _, _, bundle, args = vector(evidence_kind="reviewer")
-    for row in bundle["decisions"]:
-        row["label"] = label
-    result = import_summary_review(bundle, **args)
-    assert result.complete
-    assert result.citation_support.support_recall == 0
-    assert result.citation_support.adjudication.label_counts[label] == 2
+def test_non_supporting_consensus_is_retained(subtests):
+    for label in ["contradicts", "irrelevant"]:
+        with subtests.test(label=label):
+            _, _, bundle, args = vector(evidence_kind="reviewer")
+            for row in bundle["decisions"]:
+                row["label"] = label
+            result = import_summary_review(bundle, **args)
+            assert result.complete
+            assert result.citation_support.support_recall == 0
+            assert result.citation_support.adjudication.label_counts[label] == 2
 
 
 def test_same_length_artifact_changes_and_out_of_artifact_spans_are_rejected():
@@ -421,28 +428,28 @@ def test_same_length_artifact_changes_and_out_of_artifact_spans_are_rejected():
         export_summary_review(**inputs)
 
 
-@pytest.mark.parametrize(
-    "marker",
-    [
+def test_multilingual_private_values_do_not_reach_diagnostics(subtests):
+    for marker in [
         "Synthetic Patient",
         "张三合成病人",
         "مريض تجريبي",
         "/private/synthetic/patient",
         "synthetic@example.invalid",
-    ],
-)
-def test_multilingual_private_values_do_not_reach_diagnostics(marker):
-    import traceback
+    ]:
+        with subtests.test(marker=marker):
+            import traceback
 
-    inputs, _, bundle, args = vector()
-    inputs["bindings"][0] = replace(inputs["bindings"][0], candidate_identity=marker)
-    with pytest.raises(SummaryReviewError) as caught:
-        export_summary_review(**inputs)
-    assert marker not in "".join(traceback.format_exception(caught.value))
-    bundle["decisions"][0]["label"] = marker
-    with pytest.raises(SummaryReviewError) as caught:
-        import_summary_review(bundle, **args)
-    assert marker not in "".join(traceback.format_exception(caught.value))
+            inputs, _, bundle, args = vector()
+            inputs["bindings"][0] = replace(
+                inputs["bindings"][0], candidate_identity=marker
+            )
+            with pytest.raises(SummaryReviewError) as caught:
+                export_summary_review(**inputs)
+            assert marker not in "".join(traceback.format_exception(caught.value))
+            bundle["decisions"][0]["label"] = marker
+            with pytest.raises(SummaryReviewError) as caught:
+                import_summary_review(bundle, **args)
+            assert marker not in "".join(traceback.format_exception(caught.value))
 
 
 def test_no_network_and_bounded_collections(monkeypatch):

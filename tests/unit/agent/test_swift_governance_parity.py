@@ -441,19 +441,21 @@ def test_shared_vectors_regenerate_from_native_python_contracts() -> None:
     assert json.loads(FIXTURE.read_text()) == make_fixture()
 
 
-@pytest.mark.parametrize("row", json.loads(FIXTURE.read_text())["valid"])
-def test_python_consumes_shared_valid_vectors(row: dict[str, Any]) -> None:
-    parsed = _parse(row["kind"], row["json"])
-    assert parsed.to_json() == row["canonical_json"]
-    if hasattr(parsed, "authorizes_clinical_action"):
-        assert parsed.authorizes_clinical_action is False
+def test_python_consumes_shared_valid_vectors(subtests) -> None:
+    for row in json.loads(FIXTURE.read_text())["valid"]:
+        with subtests.test(row=row):
+            parsed = _parse(row["kind"], row["json"])
+            assert parsed.to_json() == row["canonical_json"]
+            if hasattr(parsed, "authorizes_clinical_action"):
+                assert parsed.authorizes_clinical_action is False
 
 
-@pytest.mark.parametrize("row", json.loads(FIXTURE.read_text())["negative"])
-def test_python_rejects_shared_malformed_vectors(row: dict[str, Any]) -> None:
-    with pytest.raises(ValueError) as caught:
-        _parse(row["kind"], row["json"])
-    assert "SYNTHETIC_SECRET_SENTINEL" not in str(caught.value)
+def test_python_rejects_shared_malformed_vectors(subtests) -> None:
+    for row in json.loads(FIXTURE.read_text())["negative"]:
+        with subtests.test(row=row):
+            with pytest.raises(ValueError) as caught:
+                _parse(row["kind"], row["json"])
+            assert "SYNTHETIC_SECRET_SENTINEL" not in str(caught.value)
 
 
 def test_local_default_does_not_trust_serialized_receipts() -> None:
@@ -551,31 +553,28 @@ def test_expiry_is_rechecked_after_local_authority_lookup() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "clock",
-    [
+def test_unavailable_clock_is_typed_and_value_free(subtests) -> None:
+    for clock in [
         lambda: True,
         lambda: -1,
         lambda: 1 << 63,
         lambda: (_ for _ in ()).throw(RuntimeError("SYNTHETIC_SECRET_SENTINEL")),
-    ],
-)
-def test_unavailable_clock_is_typed_and_value_free(clock: Any) -> None:
-    result = LocalApprovalEvidenceVerifier(clock=clock).verify(
-        _receipt(), action_digest=ACTION, reviewer_role=ROLE
-    )
-    assert result.reason_code is ApprovalEvidenceReason.CLOCK_UNAVAILABLE
-    assert "SYNTHETIC_SECRET_SENTINEL" not in repr(result)
+    ]:
+        with subtests.test(clock=clock):
+            result = LocalApprovalEvidenceVerifier(clock=clock).verify(
+                _receipt(), action_digest=ACTION, reviewer_role=ROLE
+            )
+            assert result.reason_code is ApprovalEvidenceReason.CLOCK_UNAVAILABLE
+            assert "SYNTHETIC_SECRET_SENTINEL" not in repr(result)
 
 
-@pytest.mark.parametrize(
-    "answer", [True, "recognized", None, ReceiptAuthority.RECOGNIZED]
-)
-def test_untyped_authority_result_fails_closed(answer: Any) -> None:
-    result = LocalApprovalEvidenceVerifier(lambda _: answer, clock=lambda: UNIX).verify(
-        _receipt(), action_digest=ACTION, reviewer_role=ROLE
-    )
-    assert result.reason_code is ApprovalEvidenceReason.AUTHORITY_UNAVAILABLE
+def test_untyped_authority_result_fails_closed(subtests) -> None:
+    for answer in [True, "recognized", None, ReceiptAuthority.RECOGNIZED]:
+        with subtests.test(answer=answer):
+            result = LocalApprovalEvidenceVerifier(
+                lambda _: answer, clock=lambda: UNIX
+            ).verify(_receipt(), action_digest=ACTION, reviewer_role=ROLE)
+            assert result.reason_code is ApprovalEvidenceReason.AUTHORITY_UNAVAILABLE
 
 
 @pytest.mark.parametrize("answer", [True, "yes", None])
@@ -609,14 +608,15 @@ def test_malformed_expected_metadata_has_value_free_diagnostics() -> None:
     assert "SYNTHETIC_SECRET_SENTINEL" not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "parse", [ApprovalEvidenceResult.from_json, parse_omop_review_preview]
-)
-def test_private_parser_context_is_discarded(parse: Any) -> None:
-    with pytest.raises(ApprovalEvidenceError) as caught:
-        parse('{"private":"PRIVATE-CANARY\\ud800"}'.replace("\\ud800", "\ud800"))
-    assert caught.value.__context__ is None
-    assert caught.value.__cause__ is None
+def test_private_parser_context_is_discarded(subtests) -> None:
+    for parse in [ApprovalEvidenceResult.from_json, parse_omop_review_preview]:
+        with subtests.test(parse=parse):
+            with pytest.raises(ApprovalEvidenceError) as caught:
+                parse(
+                    '{"private":"PRIVATE-CANARY\\ud800"}'.replace("\\ud800", "\ud800")
+                )
+            assert caught.value.__context__ is None
+            assert caught.value.__cause__ is None
 
 
 def test_closed_error_code_discards_private_values() -> None:

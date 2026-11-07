@@ -59,15 +59,16 @@ def test_batch_larger_than_the_document() -> None:
     assert spans(plan) == [(0, 3)]
 
 
-@pytest.mark.parametrize("pages", [1, 2, 7, 16, 31, 100])
-@pytest.mark.parametrize("size", [1, 2, 3, 5, 16])
-def test_batches_partition_the_document_exactly(pages, size) -> None:
-    plan = plan_page_batches(pages, max_pages_per_batch=size)
-    assert covered(plan) == list(range(pages))
-    assert all(batch.page_count <= size for batch in plan.batches)
-    assert [batch.batch_index for batch in plan.batches] == list(
-        range(plan.batch_count)
-    )
+def test_batches_partition_the_document_exactly(subtests) -> None:
+    for pages in [1, 2, 7, 16, 31, 100]:
+        for size in [1, 2, 3, 5, 16]:
+            with subtests.test(pages=pages, size=size):
+                plan = plan_page_batches(pages, max_pages_per_batch=size)
+                assert covered(plan) == list(range(pages))
+                assert all(batch.page_count <= size for batch in plan.batches)
+                assert [batch.batch_index for batch in plan.batches] == list(
+                    range(plan.batch_count)
+                )
 
 
 def test_pixel_budget_closes_a_batch_early() -> None:
@@ -234,22 +235,33 @@ def test_zero_pixel_budget_fails_closed() -> None:
         )
 
 
-@pytest.mark.parametrize("value", [True, False, 1.0, "4", None])
-def test_boolean_and_non_integer_parameters_fail_closed(value) -> None:
-    with pytest.raises(PageBatchError, match="^page_count_not_an_integer$"):
-        plan_page_batches(value, max_pages_per_batch=4)
-    with pytest.raises(PageBatchError, match="^page_batch_size_not_an_integer$"):
-        plan_page_batches(4, max_pages_per_batch=value)
-    with pytest.raises(PageBatchError, match="^page_batch_count_not_an_integer$"):
-        plan_page_batches(4, max_pages_per_batch=4, max_batches=value)
+def test_boolean_and_non_integer_parameters_fail_closed(subtests) -> None:
+    for value in [True, False, 1.0, "4", None]:
+        with subtests.test(value=value):
+            with pytest.raises(PageBatchError, match="^page_count_not_an_integer$"):
+                plan_page_batches(value, max_pages_per_batch=4)
+            with pytest.raises(
+                PageBatchError, match="^page_batch_size_not_an_integer$"
+            ):
+                plan_page_batches(4, max_pages_per_batch=value)
+            with pytest.raises(
+                PageBatchError, match="^page_batch_count_not_an_integer$"
+            ):
+                plan_page_batches(4, max_pages_per_batch=4, max_batches=value)
 
 
-@pytest.mark.parametrize("value", [True, False, 1.0, "4"])
-def test_non_integer_pixel_budgets_fail_closed(value) -> None:
-    with pytest.raises(PageBatchError, match="^page_pixel_budget_not_an_integer$"):
-        plan_page_batches(
-            1, max_pages_per_batch=1, page_pixels=[1], max_pixels_per_batch=value
-        )
+def test_non_integer_pixel_budgets_fail_closed(subtests) -> None:
+    for value in [True, False, 1.0, "4"]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                PageBatchError, match="^page_pixel_budget_not_an_integer$"
+            ):
+                plan_page_batches(
+                    1,
+                    max_pages_per_batch=1,
+                    page_pixels=[1],
+                    max_pixels_per_batch=value,
+                )
 
 
 def test_an_unset_pixel_budget_is_not_a_validation_error() -> None:
@@ -260,17 +272,15 @@ def test_an_unset_pixel_budget_is_not_a_validation_error() -> None:
     assert plan.batches[0].pixel_total == 3
 
 
-@pytest.mark.parametrize(
-    "pages,category",
-    [
+def test_out_of_range_page_counts_fail_closed(subtests) -> None:
+    for pages, category in [
         (-1, "page_count_out_of_range"),
         (MAX_DOCUMENT_PAGES + 1, "page_count_out_of_range"),
-    ],
-)
-def test_out_of_range_page_counts_fail_closed(pages, category) -> None:
-    with pytest.raises(PageBatchError) as excinfo:
-        plan_page_batches(pages, max_pages_per_batch=4)
-    assert excinfo.value.category == category
+    ]:
+        with subtests.test(pages=pages, category=category):
+            with pytest.raises(PageBatchError) as excinfo:
+                plan_page_batches(pages, max_pages_per_batch=4)
+            assert excinfo.value.category == category
 
 
 def test_overflowing_page_pixels_fail_closed() -> None:
@@ -282,16 +292,18 @@ def test_overflowing_page_pixels_fail_closed() -> None:
         plan_page_batches(1, max_pages_per_batch=1, page_pixels=[2**70])
 
 
-@pytest.mark.parametrize("value", [True, 1.5, "1", None])
-def test_non_integer_page_pixels_fail_closed(value) -> None:
-    with pytest.raises(PageBatchError, match="^page_pixels_not_an_integer$"):
-        plan_page_batches(1, max_pages_per_batch=1, page_pixels=[value])
+def test_non_integer_page_pixels_fail_closed(subtests) -> None:
+    for value in [True, 1.5, "1", None]:
+        with subtests.test(value=value):
+            with pytest.raises(PageBatchError, match="^page_pixels_not_an_integer$"):
+                plan_page_batches(1, max_pages_per_batch=1, page_pixels=[value])
 
 
-@pytest.mark.parametrize("value", ["abc", b"abc", 7])
-def test_invalid_page_pixel_containers_fail_closed(value) -> None:
-    with pytest.raises(PageBatchError, match="^page_pixels_invalid$"):
-        plan_page_batches(3, max_pages_per_batch=1, page_pixels=value)
+def test_invalid_page_pixel_containers_fail_closed(subtests) -> None:
+    for value in ["abc", b"abc", 7]:
+        with subtests.test(value=value):
+            with pytest.raises(PageBatchError, match="^page_pixels_invalid$"):
+                plan_page_batches(3, max_pages_per_batch=1, page_pixels=value)
 
 
 def test_page_pixel_length_must_match_the_page_count() -> None:
@@ -306,10 +318,13 @@ def test_a_pixel_budget_requires_page_pixels() -> None:
         plan_page_batches(3, max_pages_per_batch=1, max_pixels_per_batch=10)
 
 
-@pytest.mark.parametrize("value", ["", "Reject", "split", 0, None, True])
-def test_unsupported_oversize_policies_fail_closed(value) -> None:
-    with pytest.raises(PageBatchError, match="^page_oversize_policy_unsupported$"):
-        plan_page_batches(1, max_pages_per_batch=1, oversize_policy=value)
+def test_unsupported_oversize_policies_fail_closed(subtests) -> None:
+    for value in ["", "Reject", "split", 0, None, True]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                PageBatchError, match="^page_oversize_policy_unsupported$"
+            ):
+                plan_page_batches(1, max_pages_per_batch=1, oversize_policy=value)
 
 
 def test_oversize_policy_values_are_a_closed_vocabulary() -> None:

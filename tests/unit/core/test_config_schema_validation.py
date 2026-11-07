@@ -104,23 +104,22 @@ def test_from_dict_rejects_numeric_overflow_as_a_value_free_schema_error() -> No
     )
 
 
-@pytest.mark.parametrize(
-    ("contents", "bad_key"),
-    [
+def test_load_config_rejects_invalid_file_with_offending_key(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for contents, bad_key in [
         ('timeout = "slow"\n', "timeout"),
         ("typo_timeout = 30\n", "typo_timeout"),
-    ],
-)
-def test_load_config_rejects_invalid_file_with_offending_key(
-    tmp_path,
-    contents: str,
-    bad_key: str,
-) -> None:
-    path = tmp_path / "config.toml"
-    path.write_text(contents, encoding="utf-8")
+    ]:
+        with subtests.test(contents=contents, bad_key=bad_key):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "config.toml"
+            path.write_text(contents, encoding="utf-8")
 
-    with pytest.raises(ConfigValidationError, match=bad_key):
-        load_config_from_file(path)
+            with pytest.raises(ConfigValidationError, match=bad_key):
+                load_config_from_file(path)
 
 
 def test_schema_path_is_an_installed_json_resource() -> None:
