@@ -1,0 +1,254 @@
+{
+  "version": "1.0",
+  "truncation": {
+    "direction": "Right",
+    "max_length": 128,
+    "strategy": "LongestFirst",
+    "stride": 0
+  },
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "[PAD]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "[UNK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "[CLS]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "[SEP]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 4,
+      "content": "[MASK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": {
+    "type": "BertNormalizer",
+    "clean_text": true,
+    "handle_chinese_chars": true,
+    "strip_accents": null,
+    "lowercase": true
+  },
+  "pre_tokenizer": {
+    "type": "BertPreTokenizer"
+  },
+  "post_processor": {
+    "type": "TemplateProcessing",
+    "single": [
+      {
+        "SpecialToken": {
+          "id": "[CLS]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 0
+        }
+      }
+    ],
+    "pair": [
+      {
+        "SpecialToken": {
+          "id": "[CLS]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "B",
+          "type_id": 1
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 1
+        }
+      }
+    ],
+    "special_tokens": {
+      "[CLS]": {
+        "id": "[CLS]",
+        "ids": [
+          2
+        ],
+        "tokens": [
+          "[CLS]"
+        ]
+      },
+      "[SEP]": {
+        "id": "[SEP]",
+        "ids": [
+          3
+        ],
+        "tokens": [
+          "[SEP]"
+        ]
+      }
+    }
+  },
+  "decoder": {
+    "type": "WordPiece",
+    "prefix": "##",
+    "cleanup": true
+  },
+  "model": {
+    "type": "WordPiece",
+    "unk_token": "[UNK]",
+    "continuing_subword_prefix": "##",
+    "max_input_chars_per_word": 100,
+    "vocab": {
+      "[PAD]": 0,
+      "[UNK]": 1,
+      "[CLS]": 2,
+      "[SEP]": 3,
+      "[MASK]": 4,
+      "synth": 5,
+      "patient": 6,
+      "person": 7,
+      "clinic": 8,
+      "date": 9,
+      "note": 10,
+      "id": 11,
+      "alpha": 12,
+      "beta": 13,
+      "bravo": 14,
+      "seen": 15,
+      "at": 16,
+      "on": 17,
+      "ref": 18,
+      "via": 19,
+      "follow": 20,
+      "up": 21,
+      "a": 22,
+      "b": 23,
+      "c": 24,
+      "d": 25,
+      "e": 26,
+      "f": 27,
+      "g": 28,
+      "h": 29,
+      "i": 30,
+      "j": 31,
+      "k": 32,
+      "l": 33,
+      "m": 34,
+      "n": 35,
+      "o": 36,
+      "p": 37,
+      "q": 38,
+      "r": 39,
+      "s": 40,
+      "t": 41,
+      "u": 42,
+      "v": 43,
+      "w": 44,
+      "x": 45,
+      "y": 46,
+      "z": 47,
+      "0": 48,
+      "1": 49,
+      "2": 50,
+      "3": 51,
+      "4": 52,
+      "5": 53,
+      "6": 54,
+      "7": 55,
+      "8": 56,
+      "9": 57,
+      "_": 58,
+      "-": 59,
+      ".": 60,
+      ",": 61,
+      ":": 62,
+      "##a": 63,
+      "##b": 64,
+      "##c": 65,
+      "##d": 66,
+      "##e": 67,
+      "##f": 68,
+      "##g": 69,
+      "##h": 70,
+      "##i": 71,
+      "##j": 72,
+      "##k": 73,
+      "##l": 74,
+      "##m": 75,
+      "##n": 76,
+      "##o": 77,
+      "##p": 78,
+      "##q": 79,
+      "##r": 80,
+      "##s": 81,
+      "##t": 82,
+      "##u": 83,
+      "##v": 84,
+      "##w": 85,
+      "##x": 86,
+      "##y": 87,
+      "##z": 88,
+      "##0": 89,
+      "##1": 90,
+      "##2": 91,
+      "##3": 92,
+      "##4": 93,
+      "##5": 94,
+      "##6": 95,
+      "##7": 96,
+      "##8": 97,
+      "##9": 98
+    }
+  }
+}

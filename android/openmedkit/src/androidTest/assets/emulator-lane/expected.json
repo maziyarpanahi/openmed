@@ -1,0 +1,937 @@
+{
+  "format": "openmed-android-emulator-lane",
+  "format_version": 1,
+  "generator": "scripts/android/generate_emulator_lane_fixture.py",
+  "seed": 3939,
+  "model": {
+    "directory": "model",
+    "variant": "fp32",
+    "source_model_id": "synthetic/openmed-emulator-lane-tiny-bert",
+    "labels": [
+      "O",
+      "B-NAME",
+      "I-NAME",
+      "B-DATE",
+      "I-DATE",
+      "B-ID",
+      "I-ID"
+    ],
+    "architecture": {
+      "family": "bert",
+      "hidden_size": 32,
+      "num_hidden_layers": 2,
+      "num_attention_heads": 4,
+      "intermediate_size": 64,
+      "vocab_size": 99,
+      "max_position_embeddings": 128
+    },
+    "external_data": false,
+    "files": {
+      "model.onnx": {
+        "bytes": 145070,
+        "sha256": "4989ad8a490af2b51952dafcb2d61dad5760d9e3bf5f93127f67af6c69ac42be"
+      },
+      "tokenizer.json": {
+        "bytes": 4350,
+        "sha256": "8c1eef1d8105cdd6135987e4988fe08377a5ec586ea021355e07ff50ab012671"
+      },
+      "tokenizer_config.json": {
+        "bytes": 1264,
+        "sha256": "8d1b95a18268fee7e71310ebd221d3c8ee769610a992cb5566247aa890e2e2e8"
+      },
+      "id2label.json": {
+        "bytes": 113,
+        "sha256": "ec617a8135bfdc9f41fa8585c7302d06b4ef85aca3c385735634db3b2f4da508"
+      },
+      "config.json": {
+        "bytes": 2195,
+        "sha256": "f27638105f2494140d044cf5ce913418ce56016e52f0effbe9b0b129a65fec05"
+      },
+      "openmed-onnx.json": {
+        "bytes": 3780,
+        "sha256": "85a687d5d166b8a1b30c5e2253f6eeda833e706e59aee108cf5a4fccd5dccedf"
+      }
+    }
+  },
+  "reference": {
+    "runtime": "onnxruntime",
+    "provider": "CPUExecutionProvider",
+    "versions": {
+      "onnx": "1.21.0",
+      "onnxruntime": "1.23.2",
+      "tokenizers": "0.22.1",
+      "torch": "2.9.1",
+      "transformers": "4.57.1"
+    }
+  },
+  "contract": {
+    "offset_unit": "unicode_scalar",
+    "confidence_threshold": 0.5,
+    "token_ids": "exact",
+    "token_offsets": "exact",
+    "token_labels": "exact",
+    "token_score_tolerance": 0.0001,
+    "span_labels": "exact",
+    "span_boundaries": "exact",
+    "span_confidence_tolerance": 0.001,
+    "min_top2_logit_margin": 0.05,
+    "min_threshold_margin": 0.02
+  },
+  "cases": [
+    {
+      "id": "synth-lane-001",
+      "synthetic": true,
+      "phi_free": true,
+      "text": "SYNTH_PATIENT_ALPHA seen at SYNTH_CLINIC_BETA on 2099-01-02.",
+      "min_top2_logit_margin": 0.302136,
+      "tokens": [
+        {
+          "id": 2,
+          "start": 0,
+          "end": 0,
+          "special": true
+        },
+        {
+          "id": 5,
+          "start": 0,
+          "end": 5,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.955716
+        },
+        {
+          "id": 58,
+          "start": 5,
+          "end": 6,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.871395
+        },
+        {
+          "id": 6,
+          "start": 6,
+          "end": 13,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.462809
+        },
+        {
+          "id": 58,
+          "start": 13,
+          "end": 14,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.993707
+        },
+        {
+          "id": 12,
+          "start": 14,
+          "end": 19,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.999268
+        },
+        {
+          "id": 15,
+          "start": 20,
+          "end": 24,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.916516
+        },
+        {
+          "id": 16,
+          "start": 25,
+          "end": 27,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.760909
+        },
+        {
+          "id": 5,
+          "start": 28,
+          "end": 33,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.601833
+        },
+        {
+          "id": 58,
+          "start": 33,
+          "end": 34,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.766793
+        },
+        {
+          "id": 8,
+          "start": 34,
+          "end": 40,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.753487
+        },
+        {
+          "id": 58,
+          "start": 40,
+          "end": 41,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.520988
+        },
+        {
+          "id": 13,
+          "start": 41,
+          "end": 45,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.550204
+        },
+        {
+          "id": 17,
+          "start": 46,
+          "end": 48,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.728998
+        },
+        {
+          "id": 50,
+          "start": 49,
+          "end": 50,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.63785
+        },
+        {
+          "id": 89,
+          "start": 50,
+          "end": 51,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.884415
+        },
+        {
+          "id": 98,
+          "start": 51,
+          "end": 52,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.543879
+        },
+        {
+          "id": 98,
+          "start": 52,
+          "end": 53,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.997921
+        },
+        {
+          "id": 59,
+          "start": 53,
+          "end": 54,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.986293
+        },
+        {
+          "id": 48,
+          "start": 54,
+          "end": 55,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.943438
+        },
+        {
+          "id": 90,
+          "start": 55,
+          "end": 56,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.764132
+        },
+        {
+          "id": 59,
+          "start": 56,
+          "end": 57,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.739991
+        },
+        {
+          "id": 48,
+          "start": 57,
+          "end": 58,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.977928
+        },
+        {
+          "id": 91,
+          "start": 58,
+          "end": 59,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.68672
+        },
+        {
+          "id": 60,
+          "start": 59,
+          "end": 60,
+          "special": false,
+          "label_id": 5,
+          "label": "B-ID",
+          "score": 0.593655
+        },
+        {
+          "id": 3,
+          "start": 0,
+          "end": 0,
+          "special": true
+        }
+      ],
+      "spans": [
+        {
+          "label": "ID",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.913556
+        },
+        {
+          "label": "ID",
+          "start": 13,
+          "end": 14,
+          "confidence": 0.993707
+        },
+        {
+          "label": "NAME",
+          "start": 14,
+          "end": 24,
+          "confidence": 0.957892
+        },
+        {
+          "label": "DATE",
+          "start": 33,
+          "end": 40,
+          "confidence": 0.76014
+        },
+        {
+          "label": "ID",
+          "start": 40,
+          "end": 45,
+          "confidence": 0.535596
+        },
+        {
+          "label": "DATE",
+          "start": 46,
+          "end": 48,
+          "confidence": 0.728998
+        },
+        {
+          "label": "DATE",
+          "start": 49,
+          "end": 50,
+          "confidence": 0.63785
+        },
+        {
+          "label": "DATE",
+          "start": 50,
+          "end": 51,
+          "confidence": 0.884415
+        },
+        {
+          "label": "NAME",
+          "start": 51,
+          "end": 55,
+          "confidence": 0.867883
+        },
+        {
+          "label": "DATE",
+          "start": 55,
+          "end": 56,
+          "confidence": 0.764132
+        },
+        {
+          "label": "NAME",
+          "start": 56,
+          "end": 59,
+          "confidence": 0.801546
+        },
+        {
+          "label": "ID",
+          "start": 59,
+          "end": 60,
+          "confidence": 0.593655
+        }
+      ]
+    },
+    {
+      "id": "synth-lane-002",
+      "synthetic": true,
+      "phi_free": true,
+      "text": "Ref SYNTH_ID_7781, follow-up via SYNTH_NOTE_42.",
+      "min_top2_logit_margin": 0.169469,
+      "tokens": [
+        {
+          "id": 2,
+          "start": 0,
+          "end": 0,
+          "special": true
+        },
+        {
+          "id": 18,
+          "start": 0,
+          "end": 3,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.96219
+        },
+        {
+          "id": 5,
+          "start": 4,
+          "end": 9,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.948319
+        },
+        {
+          "id": 58,
+          "start": 9,
+          "end": 10,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.962969
+        },
+        {
+          "id": 11,
+          "start": 10,
+          "end": 12,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.8538
+        },
+        {
+          "id": 58,
+          "start": 12,
+          "end": 13,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.906781
+        },
+        {
+          "id": 55,
+          "start": 13,
+          "end": 14,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.632042
+        },
+        {
+          "id": 96,
+          "start": 14,
+          "end": 15,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.974892
+        },
+        {
+          "id": 97,
+          "start": 15,
+          "end": 16,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.995966
+        },
+        {
+          "id": 90,
+          "start": 16,
+          "end": 17,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.623484
+        },
+        {
+          "id": 61,
+          "start": 17,
+          "end": 18,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.970424
+        },
+        {
+          "id": 20,
+          "start": 19,
+          "end": 25,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.999804
+        },
+        {
+          "id": 59,
+          "start": 25,
+          "end": 26,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.998617
+        },
+        {
+          "id": 21,
+          "start": 26,
+          "end": 28,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.430056
+        },
+        {
+          "id": 19,
+          "start": 29,
+          "end": 32,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.967068
+        },
+        {
+          "id": 5,
+          "start": 33,
+          "end": 38,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.966796
+        },
+        {
+          "id": 58,
+          "start": 38,
+          "end": 39,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.964885
+        },
+        {
+          "id": 10,
+          "start": 39,
+          "end": 43,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.999968
+        },
+        {
+          "id": 58,
+          "start": 43,
+          "end": 44,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.856984
+        },
+        {
+          "id": 52,
+          "start": 44,
+          "end": 45,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.870547
+        },
+        {
+          "id": 91,
+          "start": 45,
+          "end": 46,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.620709
+        },
+        {
+          "id": 60,
+          "start": 46,
+          "end": 47,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.451182
+        },
+        {
+          "id": 3,
+          "start": 0,
+          "end": 0,
+          "special": true
+        }
+      ],
+      "spans": [
+        {
+          "label": "NAME",
+          "start": 0,
+          "end": 3,
+          "confidence": 0.96219
+        },
+        {
+          "label": "ID",
+          "start": 4,
+          "end": 10,
+          "confidence": 0.955644
+        },
+        {
+          "label": "ID",
+          "start": 12,
+          "end": 13,
+          "confidence": 0.906781
+        },
+        {
+          "label": "NAME",
+          "start": 13,
+          "end": 17,
+          "confidence": 0.806596
+        },
+        {
+          "label": "DATE",
+          "start": 17,
+          "end": 18,
+          "confidence": 0.970424
+        },
+        {
+          "label": "NAME",
+          "start": 19,
+          "end": 32,
+          "confidence": 0.848886
+        },
+        {
+          "label": "ID",
+          "start": 38,
+          "end": 39,
+          "confidence": 0.964885
+        },
+        {
+          "label": "NAME",
+          "start": 39,
+          "end": 43,
+          "confidence": 0.999968
+        },
+        {
+          "label": "ID",
+          "start": 43,
+          "end": 44,
+          "confidence": 0.856984
+        },
+        {
+          "label": "NAME",
+          "start": 44,
+          "end": 45,
+          "confidence": 0.870547
+        },
+        {
+          "label": "DATE",
+          "start": 45,
+          "end": 46,
+          "confidence": 0.620709
+        }
+      ]
+    },
+    {
+      "id": "synth-lane-003",
+      "synthetic": true,
+      "phi_free": true,
+      "text": "SYNTH_PERSON_BRAVO 😀 seen on SYNTH_DATE_2099Q1.",
+      "min_top2_logit_margin": 0.57086,
+      "tokens": [
+        {
+          "id": 2,
+          "start": 0,
+          "end": 0,
+          "special": true
+        },
+        {
+          "id": 5,
+          "start": 0,
+          "end": 5,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.955564
+        },
+        {
+          "id": 58,
+          "start": 5,
+          "end": 6,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.871672
+        },
+        {
+          "id": 7,
+          "start": 6,
+          "end": 12,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.595316
+        },
+        {
+          "id": 58,
+          "start": 12,
+          "end": 13,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.993708
+        },
+        {
+          "id": 14,
+          "start": 13,
+          "end": 18,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.76146
+        },
+        {
+          "id": 1,
+          "start": 19,
+          "end": 20,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.933212
+        },
+        {
+          "id": 15,
+          "start": 21,
+          "end": 25,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.98023
+        },
+        {
+          "id": 17,
+          "start": 26,
+          "end": 28,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.82137
+        },
+        {
+          "id": 5,
+          "start": 29,
+          "end": 34,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.951273
+        },
+        {
+          "id": 58,
+          "start": 34,
+          "end": 35,
+          "special": false,
+          "label_id": 4,
+          "label": "I-DATE",
+          "score": 0.926445
+        },
+        {
+          "id": 9,
+          "start": 35,
+          "end": 39,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.993317
+        },
+        {
+          "id": 58,
+          "start": 39,
+          "end": 40,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.84221
+        },
+        {
+          "id": 50,
+          "start": 40,
+          "end": 41,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.791554
+        },
+        {
+          "id": 89,
+          "start": 41,
+          "end": 42,
+          "special": false,
+          "label_id": 3,
+          "label": "B-DATE",
+          "score": 0.999335
+        },
+        {
+          "id": 98,
+          "start": 42,
+          "end": 43,
+          "special": false,
+          "label_id": 0,
+          "label": "O",
+          "score": 0.603459
+        },
+        {
+          "id": 98,
+          "start": 43,
+          "end": 44,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.545001
+        },
+        {
+          "id": 79,
+          "start": 44,
+          "end": 45,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.995902
+        },
+        {
+          "id": 90,
+          "start": 45,
+          "end": 46,
+          "special": false,
+          "label_id": 6,
+          "label": "I-ID",
+          "score": 0.552117
+        },
+        {
+          "id": 60,
+          "start": 46,
+          "end": 47,
+          "special": false,
+          "label_id": 2,
+          "label": "I-NAME",
+          "score": 0.963569
+        },
+        {
+          "id": 3,
+          "start": 0,
+          "end": 0,
+          "special": true
+        }
+      ],
+      "spans": [
+        {
+          "label": "ID",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.913618
+        },
+        {
+          "label": "DATE",
+          "start": 6,
+          "end": 12,
+          "confidence": 0.595316
+        },
+        {
+          "label": "ID",
+          "start": 12,
+          "end": 13,
+          "confidence": 0.993708
+        },
+        {
+          "label": "NAME",
+          "start": 13,
+          "end": 28,
+          "confidence": 0.874068
+        },
+        {
+          "label": "DATE",
+          "start": 34,
+          "end": 35,
+          "confidence": 0.926445
+        },
+        {
+          "label": "NAME",
+          "start": 35,
+          "end": 39,
+          "confidence": 0.993317
+        },
+        {
+          "label": "ID",
+          "start": 39,
+          "end": 40,
+          "confidence": 0.84221
+        },
+        {
+          "label": "DATE",
+          "start": 40,
+          "end": 41,
+          "confidence": 0.791554
+        },
+        {
+          "label": "DATE",
+          "start": 41,
+          "end": 42,
+          "confidence": 0.999335
+        },
+        {
+          "label": "NAME",
+          "start": 43,
+          "end": 45,
+          "confidence": 0.770451
+        },
+        {
+          "label": "ID",
+          "start": 45,
+          "end": 46,
+          "confidence": 0.552117
+        },
+        {
+          "label": "NAME",
+          "start": 46,
+          "end": 47,
+          "confidence": 0.963569
+        }
+      ]
+    }
+  ]
+}

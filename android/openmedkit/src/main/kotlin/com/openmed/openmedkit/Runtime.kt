@@ -147,7 +147,29 @@ class BackendOnnxTokenClassifier private constructor(
         require(backend.tokenizerJson.isFile) {
             "tokenizer.json does not exist: ${backend.tokenizerJson.path}"
         }
+        DjlTelemetry.optOut()
         return HuggingFaceTokenizer.newInstance(backend.modelDirectory.toPath())
+    }
+}
+
+/**
+ * Keeps the DJL tokenizer factory from opening network connections.
+ *
+ * Every `HuggingFaceTokenizer.newInstance` call first runs DJL's usage
+ * telemetry, which sends HTTP requests to the cloud instance-metadata address
+ * (and, when that answers, to a telemetry bucket) at most once a day per
+ * process. DJL skips that step only when its `OPT_OUT_TRACKING` switch is set.
+ * OpenMedKit sends no telemetry, so it sets the switch before loading a
+ * tokenizer. The switch is a JVM system property and also covers other DJL
+ * tokenizers created in the same process.
+ */
+internal object DjlTelemetry {
+    /** DJL's documented telemetry opt-out switch. */
+    internal const val OPT_OUT_PROPERTY = "OPT_OUT_TRACKING"
+
+    /** Disable DJL telemetry for this process. */
+    fun optOut() {
+        System.setProperty(OPT_OUT_PROPERTY, "true")
     }
 }
 

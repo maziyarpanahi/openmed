@@ -172,6 +172,13 @@ de-identification run locally. No model is fetched at inference time, input PHI
 is never uploaded or fetched from a service, and there is no cloud fallback.
 An offline app that ships its model does not need network permission at all.
 
+The DJL tokenizer library that OpenMedKit uses runs usage telemetry whenever a
+tokenizer is created: it sends HTTP requests to the cloud instance-metadata
+address unless DJL's `OPT_OUT_TRACKING` switch is set. OpenMedKit sets that JVM
+system property before it loads a tokenizer, so `OpenMedKit.fromDirectory(...)`
+opens no socket. The property also applies to any other DJL tokenizer created
+in the same process.
+
 ## Compose OCR, intake, and de-identification
 
 `DocumentIntake` accepts an image or PDF URI, uses the on-device
@@ -238,6 +245,80 @@ repository ID, status, and size. Application code must preserve that guarantee:
 never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
+
+## Emulator lane
+
+The JVM unit tests run under Robolectric, where the ONNX Runtime and DJL
+tokenizer native libraries are never loaded. The emulator lane runs the
+instrumented tests in `android/openmedkit/src/androidTest` on an Android
+emulator with the real native libraries and a tiny synthetic model:
+
+| Test | What it checks |
+| --- | --- |
+| `NativeRuntimePackagingTest` | The device has the lane's page size, and `libonnxruntime.so`, `libonnxruntime4j_jni.so` and `libdjl_tokenizer.so` load from the APK |
+| `OnnxRuntimeParityTest` | A CPU session over the fixture's token IDs gives the same per-token labels as Python ONNX Runtime, with scores within `1e-4` |
+| `TokenizerParityTest` | The DJL JNI tokenizer gives the same token IDs and Unicode scalar offsets as Python `tokenizers` |
+| `OpenMedKitFromDirectoryTest` | `OpenMedKit.fromDirectory(dir, "fp32")`, with its default execution-provider selection, returns the expected `analyzeText` and `extractPii` spans: the same labels and offsets, confidences within `1e-3` |
+| `OfflineGuardTest` | Negative controls for the offline checks below |
+
+The test APK removes the `INTERNET` permission that ML Kit's transport
+libraries merge in, so the kernel refuses every IPv4 and IPv6 socket of the test
+process. Each lane test also runs under `NoNetworkSocketRule`, which fails the
+test when a `java.net` socket is constructed or an IPv4/IPv6 socket descriptor
+is open before or after it.
+
+The fixture lives in `android/openmedkit/src/androidTest/assets/emulator-lane/`.
+`model/` holds a randomly initialised two-layer BERT token classifier (seeded,
+32 hidden units, labels `NAME`, `DATE` and `ID`) exported with the Android
+profile of `openmed.onnx.convert`: one `model.onnx` of about 145 KB with every
+weight inline, plus `tokenizer.json` and `id2label.json`. `expected.json` holds
+synthetic case text, the Python ONNX Runtime token predictions and the derived
+spans, with labels, offsets and scores only. One case contains a character
+outside the Basic Multilingual Plane, where Unicode scalar and UTF-16 offsets
+differ. The `EmulatorLaneFixtureContractTest` JVM test runs the Kotlin decoder
+over the recorded token predictions, so the expected spans cannot drift from the
+facade's aggregation rules. Regenerate or check the fixture with the `onnx`
+extra installed:
+
+```bash
+python scripts/android/generate_emulator_lane_fixture.py generate
+python scripts/android/generate_emulator_lane_fixture.py check
+```
+
+To run the lane locally, start an emulator or connect a device so that
+`adb devices` lists exactly one target, then run either the tests alone or the
+CI lane script, which also checks the page size and runs the negative control:
+
+```bash
+cd android && ./gradlew :openmedkit:connectedDebugAndroidTest
+scripts/android/run_emulator_lane.sh --lane local --page-size-kb 4 --negative-control
+```
+
+The negative control rebuilds the test APK with
+`-PopenmedNativePackagingFault=missing-native-libraries`, which strips the ONNX
+Runtime and tokenizer libraries from every ABI, and requires
+`NativeRuntimePackagingTest` to fail with `native_library_unloadable`. The
+property only changes the instrumented test APK.
+
+Each check writes one JSON record to logcat under the `OpenMedEmulatorLane` tag
+(`adb logcat -s OpenMedEmulatorLane:I`). Records contain only the lane name,
+case identifiers, check names, labels, offsets, outcomes, reason codes and
+timings. The lane script saves them, with the JUnit results, under
+`android/openmedkit/build/reports/emulator-lane/<lane>/`.
+
+The `emulator-lane` job in `.github/workflows/android-ci.yml` runs two lanes on
+KVM-accelerated `ubuntu-latest` runners:
+
+- `x86_64-api35`: the API 35 Google APIs x86_64 image with 4 KB pages, plus the
+  negative control.
+- `x86_64-api35-16kb`: the API 35 16 KB page-size Google APIs x86_64 image. DJL
+  `tokenizer-native` 0.33.0 ships `libdjl_tokenizer.so` with 4 KB LOAD-segment
+  alignment, which a 16 KB kernel refuses to load. This lane passes
+  `--known-unloadable djl_tokenizer`: the packaging test requires the load to
+  fail, and the tokenizer-dependent tests are skipped. ONNX Runtime, which is
+  16 KB aligned, is still checked. When a 16 KB aligned tokenizer build is
+  adopted, the packaging test fails with `known_blocker_resolved` and the
+  argument must be removed.
 
 ## Runnable demos and related guides
 

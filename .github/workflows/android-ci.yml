@@ -7,6 +7,8 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/generate_emulator_lane_fixture.py'
+      - 'scripts/android/run_emulator_lane.sh'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
@@ -15,8 +17,11 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/generate_emulator_lane_fixture.py'
+      - 'scripts/android/run_emulator_lane.sh'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -150,4 +155,85 @@ jobs:
           android/openmedkit/build/reports/tests/testDebugUnitTest/
           android/openmedkit/build/test-results/testDebugUnitTest/
           android/openmedkit/build/reports/budgets/
+        if-no-files-found: ignore
+
+  emulator-lane:
+    # Runs OpenMedKit's instrumented tests with the real ONNX Runtime Android
+    # and DJL tokenizer native libraries on hosted, KVM-accelerated emulators.
+    # Run locally with scripts/android/run_emulator_lane.sh (see
+    # docs/android-integration.md#emulator-lane).
+    name: Emulator lane (${{ matrix.lane }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One x86_64 API level from the supported range (minSdk 26 to 35),
+          # plus the negative control that strips the native libraries.
+          - lane: x86_64-api35
+            api-level: 35
+            target: google_apis
+            page-size-kb: 4
+            lane-args: --negative-control
+          # 16 KB page-size image. DJL tokenizer-native 0.33.0 ships
+          # libdjl_tokenizer.so with 4 KB LOAD-segment alignment, which a
+          # 16 KB kernel refuses to load. The lane requires that refusal to
+          # reproduce and skips the tokenizer-dependent tests; once a 16 KB
+          # aligned tokenizer build lands, the packaging test fails with
+          # known_blocker_resolved and --known-unloadable must be removed.
+          - lane: x86_64-api35-16kb
+            api-level: 35
+            target: google_apis_ps16k
+            page-size-kb: 16
+            lane-args: --known-unloadable djl_tokenizer
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Java
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      with:
+        distribution: temurin
+        java-version: '17'
+        cache: gradle
+        cache-dependency-path: |
+          android/*.gradle*
+          android/gradle.properties
+          android/gradle/libs.versions.toml
+          android/gradle/wrapper/gradle-wrapper.properties
+          android/**/build.gradle*
+
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Build OpenMedKit instrumented test APK
+      working-directory: android
+      run: ./gradlew :openmedkit:assembleDebugAndroidTest --stacktrace
+
+    - name: Run emulator lane
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+      env:
+        LANE: ${{ matrix.lane }}
+        PAGE_SIZE_KB: ${{ matrix.page-size-kb }}
+        LANE_ARGS: ${{ matrix.lane-args }}
+      with:
+        api-level: ${{ matrix.api-level }}
+        target: ${{ matrix.target }}
+        arch: x86_64
+        disable-animations: true
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+        script: scripts/android/run_emulator_lane.sh --lane "$LANE" --page-size-kb "$PAGE_SIZE_KB" $LANE_ARGS
+
+    - name: Upload emulator lane reports
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: android-emulator-lane-${{ matrix.lane }}
+        path: |
+          android/openmedkit/build/reports/emulator-lane/
+          android/openmedkit/build/reports/androidTests/connected/
         if-no-files-found: ignore

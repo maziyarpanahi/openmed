@@ -1,0 +1,180 @@
+{
+  "format": "openmed-onnx",
+  "format_version": 1,
+  "formats": [
+    "onnx-android"
+  ],
+  "task": "token-classification",
+  "family": "bert",
+  "source_model_id": "synthetic/openmed-emulator-lane-tiny-bert",
+  "config_path": "config.json",
+  "label_map_path": "id2label.json",
+  "artifacts": [
+    {
+      "format": "onnx-android",
+      "path": "model.onnx",
+      "precision": "float32",
+      "metadata": {
+        "profile": "android",
+        "opset": 18,
+        "execution_providers": [
+          "NNAPI",
+          "XNNPACK"
+        ],
+        "inputs": [
+          {
+            "name": "input_ids",
+            "dtype": "int64",
+            "axes": [
+              "batch",
+              "sequence"
+            ],
+            "shape": [
+              {
+                "kind": "dynamic",
+                "name": "batch"
+              },
+              {
+                "kind": "dynamic",
+                "name": "sequence"
+              }
+            ]
+          },
+          {
+            "name": "attention_mask",
+            "dtype": "int64",
+            "axes": [
+              "batch",
+              "sequence"
+            ],
+            "shape": [
+              {
+                "kind": "dynamic",
+                "name": "batch"
+              },
+              {
+                "kind": "dynamic",
+                "name": "sequence"
+              }
+            ]
+          },
+          {
+            "name": "token_type_ids",
+            "dtype": "int64",
+            "axes": [
+              "batch",
+              "sequence"
+            ],
+            "shape": [
+              {
+                "kind": "dynamic",
+                "name": "batch"
+              },
+              {
+                "kind": "dynamic",
+                "name": "sequence"
+              }
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "name": "logits",
+            "dtype": "float32",
+            "axes": [
+              "batch",
+              "sequence",
+              "labels"
+            ],
+            "shape": [
+              {
+                "kind": "dynamic",
+                "name": "batch"
+              },
+              {
+                "kind": "dynamic",
+                "name": "sequence"
+              },
+              {
+                "kind": "static",
+                "value": 7
+              }
+            ]
+          }
+        ],
+        "operators": [
+          "Identity",
+          "Shape",
+          "Constant",
+          "Gather",
+          "Unsqueeze",
+          "Slice",
+          "Add",
+          "LayerNormalization",
+          "Concat",
+          "Reshape",
+          "ConstantOfShape",
+          "Mul",
+          "Equal",
+          "Where",
+          "Expand",
+          "Cast",
+          "Sub",
+          "MatMul",
+          "Transpose",
+          "Sqrt",
+          "Div",
+          "Softmax",
+          "Erf"
+        ],
+        "unsupported_ops": [],
+        "warnings": []
+      }
+    }
+  ],
+  "minimum_opset": 18,
+  "max_sequence_length": 128,
+  "dynamic_shapes": {
+    "batch_axis": "dynamic",
+    "sequence_axis": "dynamic",
+    "shape_buckets": {
+      "strategy": "next_configured_bucket_or_exact",
+      "axes": {
+        "input": [
+          "batch",
+          "sequence"
+        ],
+        "output": [
+          "batch",
+          "sequence"
+        ]
+      },
+      "buckets": [
+        8,
+        16,
+        32,
+        64,
+        128,
+        256,
+        512,
+        1024,
+        2048
+      ],
+      "min_length": 8,
+      "max_length": 2048,
+      "overflow": "exact_length"
+    }
+  },
+  "optimization": {
+    "enabled": false
+  },
+  "validation": {},
+  "operator_fallbacks": [],
+  "tokenizer": {
+    "path": ".",
+    "files": [
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ]
+  }
+}
