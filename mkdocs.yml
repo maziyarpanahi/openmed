@@ -421,6 +421,8 @@ nav:
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
+      - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
+      - Local Edge VLM Provider: multimodal/edge-vlm-provider.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
@@ -438,8 +440,13 @@ nav:
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
       - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
+      - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
+      - Transcript Language Routing: multimodal/transcript-language-routing.md
+      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
+      - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
@@ -454,6 +461,7 @@ nav:
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
@@ -492,6 +500,7 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Transcript Accuracy: evaluation/transcript-accuracy.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
