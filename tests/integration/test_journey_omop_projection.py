@@ -22,7 +22,10 @@ from openmed.interop.omop import (
     project_clinical_facts_to_omop,
     validate_omop_fact_projection,
 )
-from openmed.structured.store import SQLiteJourneyStore
+from openmed.structured.store import JourneyStoreEncryption, SQLiteJourneyStore
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -65,7 +68,9 @@ def test_current_journey_facts_project_and_correct_without_duplicate_rows(
     tmp_path: Path,
 ) -> None:
     fixture, snapshot, inputs = _fixture_inputs()
-    store = SQLiteJourneyStore(tmp_path / "journey-omop.sqlite3")
+    store = SQLiteJourneyStore(
+        tmp_path / "journey-omop.sqlite3", encryption=PLAINTEXT_DEV
+    )
     artifact = ClinicalArtifact(
         artifact_id="artifact_aaaaaaaaaaaaaaaa",
         artifact_type="clinical_note",
