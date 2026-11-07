@@ -381,6 +381,7 @@ nav:
           - Synthetic Document Rendering: training/synthetic/document-rendering.md
           - Synthetic DICOM Overlays: training/synthetic/dicom-overlays.md
           - Synthetic Waveform Records: training/synthetic/waveform-records.md
+          - Synthetic Speech Timing: training/synthetic/speech-rendering.md
           - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
           - Synthetic FHIR Records: training/synthetic/fhir-records.md
           - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
@@ -407,6 +408,7 @@ nav:
       - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
+      - Synthetic Malformed Header Fixtures: multimodal/synthetic-malformed-fixtures.md
       - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
@@ -416,7 +418,9 @@ nav:
       - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
       - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
+      - Synthetic Preflight Fixtures: multimodal/preflight-fixtures.md
       - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
+      - Offline Media Task CLI: multimodal/inference-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
@@ -451,16 +455,20 @@ nav:
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Reviewed Ambient FHIR Documents: multimodal/ambient-fhir.md
       - Apple Audio Capture: multimodal/apple-audio-capture.md
       - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
+      - HEIF and M4A Header Preflight: multimodal/iso-bmff-preflight.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
       - EDF and EDF+ Reader: multimodal/edf-reader.md
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - Critical Transcript Token Holds: multimodal/transcript-holds.md
       - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
       - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - Non-ECG Waveform Acquisition: multimodal/physiological-waveforms.md
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
@@ -473,6 +481,7 @@ nav:
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
       - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
+      - Ambient Reviewer Corrections: multimodal/ambient-corrections.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -538,6 +547,7 @@ nav:
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
       - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM ECG Waveforms: multimodal/dicom-ecg-waveforms.md
       - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
       - DICOM pixel provenance: multimodal/vision/dicom-pixel-provenance.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md

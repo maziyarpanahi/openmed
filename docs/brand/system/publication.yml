@@ -441,6 +441,7 @@ classification:
     - training/synthetic/document-rendering.md
     - training/synthetic/dicom-overlays.md
     - training/synthetic/waveform-records.md
+    - training/synthetic/speech-rendering.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
@@ -467,6 +468,7 @@ classification:
     - i18n/locale-pack-conformance.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-geometry-preflight.md
+    - multimodal/synthetic-malformed-fixtures.md
     - multimodal/ocr-streaming.md
     - multimodal/asset-digests.md
     - multimodal/asset-manifests.md
@@ -476,7 +478,9 @@ classification:
     - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
     - multimodal/batch-preflight.md
+    - multimodal/preflight-fixtures.md
     - multimodal/preflight-cli.md
+    - multimodal/inference-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
@@ -511,16 +515,20 @@ classification:
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
     - multimodal/ambient-session-policy.md
+    - multimodal/ambient-fhir.md
     - multimodal/apple-audio-capture.md
     - multimodal/reference-workflow.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
+    - multimodal/iso-bmff-preflight.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
     - multimodal/edf-reader.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/transcript-holds.md
     - multimodal/streaming/asr-window-stitching.md
     - multimodal/ecg-lead-layout.md
+    - multimodal/physiological-waveforms.md
     - multimodal/ecg-annotation-privacy.md
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
@@ -533,6 +541,7 @@ classification:
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md
     - multimodal/streaming/ambient-note-evidence.md
+    - multimodal/ambient-corrections.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
@@ -598,6 +607,7 @@ classification:
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
     - multimodal/dicom-transfer-syntax-preflight.md
+    - multimodal/dicom-ecg-waveforms.md
     - multimodal/vision/dicom-series-sampling.md
     - multimodal/vision/dicom-pixel-provenance.md
     - evaluation/model-provenance-diff.md
