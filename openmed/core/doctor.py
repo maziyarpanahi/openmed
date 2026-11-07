@@ -10,6 +10,7 @@ import platform
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -101,6 +102,106 @@ def run_diagnostics() -> list[dict[str, Any]]:
     _check_manifest(checks)
     checks.extend(clinical_brief_readiness())
 
+    return checks
+
+
+def value_free_health_checks(
+    environ: Mapping[str, str] | None = None,
+) -> list[dict[str, str]]:
+    """Return doctor outcomes reduced to stable names, statuses and codes.
+
+    Unlike :func:`run_diagnostics`, the result never contains versions, paths,
+    endpoints, proxy addresses or environment values. It does not import
+    optional backends and does not read configuration or cache files, so a
+    bounded diagnostic bundle can include it as its health section.
+
+    Args:
+        environ: Environment snapshot; defaults to ``os.environ``.
+
+    Returns:
+        Check dictionaries with ``name``, ``status`` (``PASS``, ``WARN`` or
+        ``FAIL``) and a controlled ``code``.
+    """
+    env = os.environ if environ is None else environ
+    checks: list[dict[str, str]] = []
+
+    def add(name: str, ok: bool, ready: str, missing: str, failed: str) -> None:
+        checks.append(
+            {
+                "name": name,
+                "status": "PASS" if ok else failed,
+                "code": ready if ok else missing,
+            }
+        )
+
+    add(
+        "python_version",
+        sys.version_info[:2] >= MIN_PYTHON_VERSION,
+        "python_supported",
+        "python_unsupported",
+        "FAIL",
+    )
+    add(
+        "python_arch",
+        (platform.machine() or "unknown") in SUPPORTED_ARCHS,
+        "arch_supported",
+        "arch_unsupported",
+        "FAIL",
+    )
+    try:
+        fits = _effective_memory_bytes() >= LOW_RESOURCE_MIN_RAM_BYTES
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+        checks.append(
+            {"name": "low_resource_memory", "status": "WARN", "code": "memory_unknown"}
+        )
+    else:
+        add(
+            "low_resource_memory",
+            fits,
+            "memory_fits_low_resource",
+            "memory_below_low_resource",
+            "WARN",
+        )
+    add(
+        "hf_token",
+        any(
+            env.get(name)
+            for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN")
+        ),
+        "token_present",
+        "token_absent",
+        "WARN",
+    )
+    add(
+        "hf_endpoint",
+        _url_uses_https(env.get("HF_ENDPOINT") or DEFAULT_HF_ENDPOINT),
+        "endpoint_https",
+        "endpoint_not_https",
+        "WARN",
+    )
+    proxy = any(env.get(name) or env.get(name.lower()) for name in PROXY_ENV_VARS)
+    checks.append(
+        {
+            "name": "proxy",
+            "status": "PASS",
+            "code": "proxy_configured" if proxy else "proxy_not_configured",
+        }
+    )
+    offline = env_flag_enabled(env.get("OPENMED_OFFLINE"))
+    checks.append(
+        {
+            "name": "openmed_offline",
+            "status": "PASS",
+            "code": "offline_enabled" if offline else "offline_disabled",
+        }
+    )
+    add(
+        "manifest",
+        MANIFEST_PATH.exists(),
+        "manifest_present",
+        "manifest_missing",
+        "WARN",
+    )
     return checks
 
 
