@@ -129,8 +129,8 @@ print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 ### Python Vision-Language Quick Start
 
 Vision generations carry a mandatory [multimodal review notice](multimodal/notices.md).
-`generate()` returns notice plus text; when displaying `.text` from
-`generate_with_metadata()`, display `.notice` alongside it. Outputs are not
+`generate()` returns screened text. Use `generate_with_metadata().render_text()`
+to display text with its notice. Outputs are not
 diagnoses and require independent clinician review before consequential use.
 
 OpenMed includes a native Cohere Compass runtime for the North Micro Vision
@@ -147,11 +147,12 @@ text = model.generate(
     "Explain why local processing can improve clinical-document privacy.",
     max_tokens=96,
 )
-document = model.generate(
+document = model.generate_with_metadata(
     "List the visible medication and dose.",
     image="synthetic-clinical-note.png",
     max_tokens=128,
 )
+review_text = document.render_text()
 ```
 
 The first load downloads the selected artifact from Hugging Face. Pass a local

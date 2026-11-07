@@ -70,8 +70,12 @@ class VisionLanguageGeneration(NoticeBoundOutput):
     prompt_seconds: float
     generation_seconds: float
     peak_memory_gb: float
-    notice: MultimodalNotice
-    release_envelope: ProviderResultEnvelope | None = field(default=None, repr=False)
+    notice: MultimodalNotice = field(
+        init=False, default=NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION]
+    )
+    release_envelope: ProviderResultEnvelope | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         self._validate_notice()
@@ -572,11 +576,11 @@ class OpenMedMLXVisionLanguageModel:
             identifiers: Digest-only OCR/header/region identifier evidence.
 
         Returns:
-            The decoded assistant response together with its mandatory notice.
-            Use ``generate_with_metadata`` for separate protected text/notice fields.
+            The screened assistant response. Use ``generate_with_metadata``
+            and render its review notice when displaying the result.
         """
 
-        result = self.generate_with_metadata(
+        return self.generate_with_metadata(
             prompt,
             image=image,
             images=images,
@@ -588,8 +592,7 @@ class OpenMedMLXVisionLanguageModel:
             release_guard=release_guard,
             asset_digest=asset_digest,
             identifiers=identifiers,
-        )
-        return result.render_text() if result.text else ""
+        ).text
 
     def generate_with_metadata(
         self,
@@ -671,7 +674,7 @@ class OpenMedMLXVisionLanguageModel:
             asset_digest=asset_digest or "0" * 64,
             identifiers=identifiers,
         )
-        return VisionLanguageGeneration(
+        result = VisionLanguageGeneration(
             text=guarded.text or "",
             # Original token IDs can reconstruct PHI even after text redaction.
             token_ids=(),
@@ -680,9 +683,9 @@ class OpenMedMLXVisionLanguageModel:
             prompt_seconds=prompt_seconds,
             generation_seconds=generation_seconds,
             peak_memory_gb=float(mx.get_peak_memory()) / 1e9,
-            notice=NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION],
-            release_envelope=guarded.envelope,
         )
+        object.__setattr__(result, "release_envelope", guarded.envelope)
+        return result
 
 
 def generate_vision_text(

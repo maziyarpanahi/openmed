@@ -16,6 +16,18 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
     public var requiresReviewerConfirmation: Bool { true }
     public var isDiagnostic: Bool { false }
 
+    /// Attach the catalog notice to generation metadata supplied by existing callers.
+    public init(
+        text: String, tokenIDs: [Int] = [], promptTokenCount: Int,
+        generationTokenCount: Int, promptTime: TimeInterval, generationTime: TimeInterval,
+        releaseEnvelope: GeneratedTextProviderEnvelope? = nil
+    ) {
+        self.init(
+            text: text, tokenIDs: tokenIDs, promptTokenCount: promptTokenCount,
+            generationTokenCount: generationTokenCount, promptTime: promptTime,
+            generationTime: generationTime, peakMemoryGB: 0, releaseEnvelope: releaseEnvelope)
+    }
+
     /// Construct a generation only with the matching catalog notice.
     public init(
         text: String, tokenIDs: [Int] = [], promptTokenCount: Int,
@@ -24,10 +36,19 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
         releaseEnvelope: GeneratedTextProviderEnvelope? = nil
     ) throws {
         guard notice == Self.noticeKind.notice else { throw MultimodalNoticeError.invalidNotice }
-        guard tokenIDs.allSatisfy({ $0 >= 0 && $0 < 2_147_483_648 }),
-            promptTokenCount >= 0, generationTokenCount >= 0,
-            [promptTime, generationTime, peakMemoryGB].allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= 1e12 })
-        else { throw MultimodalNoticeError.invalidResult }
+        self.init(
+            text: text, tokenIDs: tokenIDs, promptTokenCount: promptTokenCount,
+            generationTokenCount: generationTokenCount, promptTime: promptTime,
+            generationTime: generationTime, peakMemoryGB: peakMemoryGB,
+            releaseEnvelope: releaseEnvelope)
+        guard hasValidMetadata else { throw MultimodalNoticeError.invalidResult }
+    }
+
+    private init(
+        text: String, tokenIDs: [Int], promptTokenCount: Int,
+        generationTokenCount: Int, promptTime: TimeInterval, generationTime: TimeInterval,
+        peakMemoryGB: Double, releaseEnvelope: GeneratedTextProviderEnvelope?
+    ) {
         self.text = text
         self.tokenIDs = tokenIDs
         self.promptTokenCount = promptTokenCount
@@ -35,8 +56,14 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
         self.promptTime = promptTime
         self.generationTime = generationTime
         self.peakMemoryGB = peakMemoryGB
-        self.notice = notice
+        self.notice = Self.noticeKind.notice
         self.releaseEnvelope = releaseEnvelope
+    }
+
+    private var hasValidMetadata: Bool {
+        tokenIDs.allSatisfy { $0 >= 0 && $0 < 2_147_483_648 }
+            && promptTokenCount >= 0 && generationTokenCount >= 0
+            && [promptTime, generationTime, peakMemoryGB].allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1e12 }
     }
 
     /// The catalog notice is safe to show in ordinary diagnostics.
@@ -95,6 +122,7 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
     }
 
     public func encode(to encoder: Encoder) throws {
+        guard hasValidMetadata else { throw MultimodalNoticeError.invalidResult }
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(Self.schemaVersion, forKey: .schemaVersion)
         try container.encode(text, forKey: .text)

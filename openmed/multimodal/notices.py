@@ -106,7 +106,7 @@ class NoticeBoundOutput:
     """Shared construction, wire and reviewer-confirmation guards.
 
     Concrete frozen dataclasses must declare their own ``NOTICE_KIND`` and a
-    required ``notice`` field, and call ``_validate_notice`` at construction.
+    required or fixed catalog ``notice``, and validate it at construction.
     JSON is a protected result surface, never a license to log clinical text.
     """
 
@@ -162,7 +162,8 @@ class NoticeBoundOutput:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Any:
         """Deserialize strictly; never repair a missing notice or safety flag."""
-        expected = {field.name for field in fields(cast(Any, cls))} | {
+        result_fields = fields(cast(Any, cls))
+        expected = {field.name for field in result_fields} | {
             "schema_version",
             "requires_reviewer_confirmation",
             "is_diagnostic",
@@ -175,9 +176,18 @@ class NoticeBoundOutput:
             or data["is_diagnostic"] is not False
         ):
             raise MultimodalNoticeError("result safety contract is invalid")
-        values = {field.name: data[field.name] for field in fields(cast(Any, cls))}
+        values = {field.name: data[field.name] for field in result_fields}
         values["notice"] = MultimodalNotice.from_dict(values["notice"])
-        return cls(**values)
+        result = cls(
+            **{field.name: values[field.name] for field in result_fields if field.init}
+        )
+        if any(
+            values[field.name] != getattr(result, field.name)
+            for field in result_fields
+            if not field.init
+        ):
+            raise MultimodalNoticeError("result fixed fields do not match")
+        return result
 
     @classmethod
     def from_json(cls, payload: str | bytes) -> Any:
@@ -284,9 +294,14 @@ def validate_notice_registry(result_types: Iterable[type]) -> None:
         notice_fields = [
             field for field in fields(cast(Any, result_type)) if field.name == "notice"
         ]
+        if len(notice_fields) != 1:
+            raise MultimodalNoticeError("covered result must require its notice")
+        notice_field = notice_fields[0]
+        expected = (
+            MISSING if notice_field.init else NOTICE_CATALOG[result_type.NOTICE_KIND]
+        )
         if (
-            len(notice_fields) != 1
-            or notice_fields[0].default is not MISSING
-            or notice_fields[0].default_factory is not MISSING
+            notice_field.default is not expected
+            or notice_field.default_factory is not MISSING
         ):
             raise MultimodalNoticeError("covered result must require its notice")

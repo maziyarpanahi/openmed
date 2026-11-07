@@ -20,7 +20,9 @@ def test_injected_offline_vision_generation_retains_notice(monkeypatch):
         lambda *a, **kw: generation,
     )
     model = object.__new__(OpenMedMLXVisionLanguageModel)
-    rendered = model.generate("Describe synthetic geometric shapes")
+    prompt = "Describe synthetic geometric shapes"
+    assert model.generate(prompt) == generation.text
+    rendered = model.generate_with_metadata(prompt).render_text()
     assert generation.notice.identifier in rendered
     assert generation.notice.text in rendered
     assert generation.text in rendered

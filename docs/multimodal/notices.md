@@ -62,7 +62,7 @@ input returns status 2 without reflecting payloads or private paths.
 
 ## Vision runtime and Swift parity
 
-Python `VisionLanguageGeneration` requires the visual-description notice and
+Python `VisionLanguageGeneration` carries the fixed visual-description notice and
 supports `to_dict`, `to_json`, `from_dict` and `from_json`. Use `render_text()`
 to display protected generated text with the notice. Ordinary string and debug
 rendering omit generated text and token IDs. Treat result JSON and rendered text
@@ -77,12 +77,10 @@ synthetic fixtures check the complete JSON objects, notice identifiers and text.
 Use `renderText()` to display protected text in Swift. Both runtimes expose
 the content-free release envelope separately from generation JSON.
 
-Python `generate()` and `generate_vision_text()` include the notice when the
-release guard permits text. Consumers needing raw protected content use
-`generate_with_metadata().text` and must display its `.notice` alongside it.
-Direct Python generation construction now requires `notice`; the Swift
-initializer also requires `notice` and is throwing. Existing unguarded generation
-JSON must not be silently repaired during decoding.
+Python `generate()` and `generate_vision_text()` return screened text. For a
+review display, call `generate_with_metadata().render_text()`. The existing
+Python constructor attaches the fixed catalog entry. Decoding in both languages
+requires an explicit, matching notice in the serialized result.
 
 ## Review, registry and privacy boundaries
 

@@ -81,6 +81,11 @@ def test_construction_requires_matching_notice(case):
             "is_diagnostic",
         }
     }
+    if cls is VisionLanguageGeneration:
+        assert cls(**kwargs).notice is NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION]
+        with pytest.raises(TypeError):
+            cls(**kwargs, notice=None)
+        return
     with pytest.raises(TypeError):
         cls(**kwargs)
     for invalid in (
