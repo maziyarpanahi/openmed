@@ -1391,6 +1391,9 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     "data-md-color-scheme",
     "slate",
   );
+  // Worker language requests can outlive page network idle after a reload.
+  // Finish initialization before navigation tears down the worker.
+  await waitForSearchReady(page);
 
   await page.goto("/docs/getting-started/", { waitUntil: "networkidle" });
   const copy = page.getByRole("button", { name: "Copy to clipboard" }).first();
@@ -1401,6 +1404,7 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
+  await waitForSearchReady(page);
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
