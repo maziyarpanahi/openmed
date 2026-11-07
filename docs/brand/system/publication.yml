@@ -523,6 +523,7 @@ classification:
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
     - multimodal/ecg-evidence-windows.md
+    - multimodal/openmedkit-contracts.md
     - multimodal/cross-modal-clock-alignment.md
     - multimodal/streaming/local-diarization.md
     - multimodal/streaming/speaker-aliases.md

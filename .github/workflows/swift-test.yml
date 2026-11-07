@@ -10,6 +10,7 @@ on:
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
@@ -20,6 +21,7 @@ on:
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/ambient_session_transitions.json'
 
 concurrency:
