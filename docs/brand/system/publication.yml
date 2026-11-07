@@ -442,6 +442,7 @@ classification:
     - training/synthetic/document-rendering.md
     - training/synthetic/dicom-overlays.md
     - training/synthetic/waveform-records.md
+    - training/synthetic/speech-rendering.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
@@ -519,6 +520,10 @@ classification:
     - multimodal/abstention-reasons.md
     - multimodal/batch-preflight.md
     - multimodal/preflight-cli.md
+    - multimodal/preflight-fixtures.md
+    - multimodal/synthetic-malformed-fixtures.md
+    - multimodal/iso-bmff-preflight.md
+    - multimodal/json-schemas.md
     - multimodal/pdf-geometry-preflight.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-redaction-fidelity.md
@@ -552,6 +557,7 @@ classification:
     - multimodal/dicom-transfer-syntax-preflight.md
     - multimodal/vision/dicom-series-sampling.md
     - multimodal/vision/dicom-pixel-provenance.md
+    - multimodal/dicom-ecg-waveforms.md
     - multimodal/ecg-waveform-contract.md
     - multimodal/ecg-lead-layout.md
     - multimodal/ecg-annotation-privacy.md
@@ -561,6 +567,7 @@ classification:
     - multimodal/aecg-reader.md
     - multimodal/edf-reader.md
     - multimodal/wfdb-reader.md
+    - multimodal/physiological-waveforms.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
@@ -575,6 +582,9 @@ classification:
     - multimodal/offline-asr-provider.md
     - multimodal/asr-hallucination-check.md
     - multimodal/transcript-language-routing.md
+    - multimodal/transcript-holds.md
+    - multimodal/ambient-corrections.md
+    - multimodal/ambient-fhir.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
@@ -605,6 +615,8 @@ classification:
     - multimodal/local-review.md
     - multimodal/openmedkit-contracts.md
     - multimodal/reference-workflow.md
+    - multimodal/notices.md
+    - multimodal/inference-cli.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
@@ -791,6 +803,7 @@ classification:
     - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
+    - security/threat-model-multimodal-ambient.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
     - security/policy-migrations.md
