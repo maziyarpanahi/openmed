@@ -410,6 +410,7 @@ nav:
       - OCR Through Memory: multimodal/ocr-streaming.md
       - Bounded Asset Digests: multimodal/asset-digests.md
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
+      - Multimodal Preflight JSON Schemas: multimodal/json-schemas.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
