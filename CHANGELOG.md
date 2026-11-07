@@ -179,6 +179,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
