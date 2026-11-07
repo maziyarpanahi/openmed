@@ -7,6 +7,7 @@ import json
 import httpx
 import pytest
 
+from openmed.service.egress import EgressPolicy
 from openmed.service.signing import (
     NONCE_HEADER,
     SIGNATURE_HEADER,
@@ -152,6 +153,14 @@ def test_outbound_webhook_carries_a_verifiable_signature() -> None:
         {"event": "job.done", "job_id": "abc", "status": "done"},
         secret="webhook-secret",
         client=client,
+        egress_policy=EgressPolicy.from_rules(
+            [
+                {
+                    "purposes": ["webhook"],
+                    "destination": "https://callbacks.example.test",
+                }
+            ]
+        ),
     )
 
     assert result.success is True

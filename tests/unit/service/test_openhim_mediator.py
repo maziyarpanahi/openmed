@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 import openmed
 from openmed.interop.gateway import assert_redacted
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.openhim_mediator import (
     DEFAULT_MEDIATOR_URN,
     OPENHIM_MEDIA_TYPE,
@@ -51,6 +52,23 @@ REPLACEMENTS = sorted(
     reverse=True,
 )
 service_app = importlib.import_module("openmed.service.app")
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_openhim_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    # OpenHIM egress is deny-by-default; allow only the synthetic core origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["openhim"],
+                    "destination": "https://openhim-core.example:8080",
+                    "allow_credentials": True,
+                }
+            ]
+        ),
+    )
 
 
 @dataclass

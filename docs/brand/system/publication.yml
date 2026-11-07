@@ -222,6 +222,7 @@ classification:
     - serving/authentication.md
     - serving/load-testing.md
     - serving/mtls.md
+    - serving/egress-policy.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md

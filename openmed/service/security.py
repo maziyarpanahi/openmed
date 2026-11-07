@@ -21,7 +21,13 @@ from typing import Any, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import Request as URLRequest
-from urllib.request import urlopen
+
+from .egress import (
+    EgressAdapter,
+    EgressOperation,
+    EgressPurpose,
+    egress_urlopen,
+)
 
 _LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _URL_SCHEMES = frozenset({"http", "https"})
@@ -509,7 +515,18 @@ def _default_metadata_fetcher(url: str) -> Mapping[str, Any]:
         method="GET",
     )
     try:
-        with urlopen(request, timeout=10) as response:  # noqa: S310 - URL is validated.
+        # The egress policy authorizes the URL and every redirect hop, ignores
+        # proxy settings, and pins the socket to checked addresses.
+        operation = EgressOperation(
+            EgressAdapter.MCP_METADATA,
+            bound_destinations=(url,),
+        )
+        with egress_urlopen(
+            operation,
+            request,
+            purpose=EgressPurpose.CONNECTOR_METADATA,
+            timeout=10,
+        ) as response:
             final_url = response.geturl()
             if not _same_resource(final_url, url):
                 raise MetadataDiscoveryError()

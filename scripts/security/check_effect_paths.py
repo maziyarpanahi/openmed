@@ -155,7 +155,8 @@ def _is_effect(node: ast.Call) -> bool:
         if name in {"request", "_request", "stream"}:
             return method not in {"GET", "HEAD", "OPTIONS"}
         return method != "SELECT"
-    if name in {"Request", "urlopen", "send"}:
+    # ``egress_urlopen`` is the policy-guarded ``urlopen`` and stays inventoried.
+    if name in {"Request", "urlopen", "egress_urlopen", "send"}:
         if name == "Request":
             keywords = {x.arg: x.value for x in node.keywords}
             method = _prefix(keywords.get("method"))

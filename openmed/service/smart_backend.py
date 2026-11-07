@@ -49,6 +49,18 @@ from openmed.interop.fhir.smart_refresh import (
 from openmed.interop.fhir_operations import Deidentifier
 from openmed.interop.smart_scope_audit import _granted_scope_tokens
 
+from .egress import (
+    EgressAdapter,
+    EgressCredential,
+    EgressDecision,
+    EgressDenied,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+    egress_async_http_client,
+    egress_scope,
+)
+
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 DEFAULT_BACKEND_SERVICES_SCOPE = "system/*.read"
 DEFAULT_EXPORT_PATH = "$export"
@@ -373,9 +385,11 @@ class SMARTBackendBulkIngestor:
         sleep: SleepCallable = asyncio.sleep,
         deidentifier: Deidentifier | None = None,
         clock: Callable[[], float] = time.time,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         self.config = config
         self._transport = transport
+        self._egress = _smart_egress_operation(config, egress_policy)
         self._clock = clock
         self._token_expires_at = 0
         self._token_issued_at = 0
@@ -399,10 +413,9 @@ class SMARTBackendBulkIngestor:
             configuration=_smart_checkpoint_configuration(self.config),
         )
 
-        async with httpx.AsyncClient(
+        async with egress_async_http_client(
             transport=self._transport,
             timeout=self.config.request_timeout_seconds,
-            follow_redirects=False,
         ) as client:
             token = await self._fetch_access_token(client)
             status_url = await self._kickoff_export(client, token)
@@ -435,14 +448,18 @@ class SMARTBackendBulkIngestor:
 
     async def _fetch_access_token(self, client: httpx.AsyncClient) -> str:
         self._token_expires_at = 0
-        self._assert_allowed_url(self.config.token_url)
+        decision = self._assert_allowed_url(
+            self.config.token_url,
+            purpose=EgressPurpose.SMART_TOKEN,
+            credential=EgressCredential.CLIENT_ASSERTION,
+        )
         failure = None
         token_response = None
         try:
             issued_at = _clock_now(self._clock)
             requested = _granted_scope_tokens(self.config.scope.split(" "))
             assertion = self._client_assertion_builder(self.config)
-            with _token_http_log_guard():
+            with _token_http_log_guard(), egress_scope(decision):
                 async with client.stream(
                     "POST",
                     self.config.token_url,
@@ -469,6 +486,8 @@ class SMARTBackendBulkIngestor:
             raise
         except SMARTTokenValidationError:
             failure = "token response invalid"
+        except EgressDenied:
+            raise
         except Exception:
             failure = "token endpoint unavailable"
         if failure is not None:
@@ -511,21 +530,22 @@ class SMARTBackendBulkIngestor:
         token: str,
     ) -> str:
         export_url = self._export_url()
-        self._assert_allowed_url(export_url)
+        decision = self._assert_allowed_url(export_url)
         self._assert_token_current()
         try:
-            response = await client.get(
-                export_url,
-                headers={
-                    "Accept": "application/fhir+json, application/json",
-                    "Authorization": f"Bearer {token}",
-                    "Prefer": "respond-async",
-                },
-                params={"_outputFormat": "application/fhir+ndjson"},
-            )
+            with egress_scope(decision):
+                response = await client.get(
+                    export_url,
+                    headers={
+                        "Accept": "application/fhir+json, application/json",
+                        "Authorization": f"Bearer {token}",
+                        "Prefer": "respond-async",
+                    },
+                    params={"_outputFormat": "application/fhir+ndjson"},
+                )
         except asyncio.CancelledError:
             raise
-        except SMARTBackendError:
+        except (SMARTBackendError, EgressDenied):
             raise
         except Exception:
             raise SMARTBackendError("bulk export kickoff unavailable") from None
@@ -550,19 +570,20 @@ class SMARTBackendBulkIngestor:
         status_url: str,
     ) -> BulkExportManifest:
         while True:
-            self._assert_allowed_url(status_url)
+            decision = self._assert_allowed_url(status_url)
             self._assert_token_current()
             try:
-                response = await client.get(
-                    status_url,
-                    headers={
-                        "Accept": "application/fhir+json, application/json",
-                        "Authorization": f"Bearer {token}",
-                    },
-                )
+                with egress_scope(decision):
+                    response = await client.get(
+                        status_url,
+                        headers={
+                            "Accept": "application/fhir+json, application/json",
+                            "Authorization": f"Bearer {token}",
+                        },
+                    )
             except asyncio.CancelledError:
                 raise
-            except SMARTBackendError:
+            except (SMARTBackendError, EgressDenied):
                 raise
             except Exception:
                 raise SMARTBackendError("bulk export status unavailable") from None
@@ -626,7 +647,7 @@ class SMARTBackendBulkIngestor:
         descriptor: BulkDataFileDescriptor,
         checkpoint: "_Checkpoint",
     ) -> SMARTBackendFileResult:
-        self._assert_allowed_url(descriptor.url)
+        decision = self._assert_allowed_url(descriptor.url)
         destination = self._destination_for(descriptor)
         partial = destination.with_name(f"{destination.name}.part")
         partial.unlink(missing_ok=True)
@@ -635,28 +656,29 @@ class SMARTBackendBulkIngestor:
         await self._enter_download()
         try:
             self._assert_token_current()
-            async with client.stream(
-                "GET",
-                descriptor.url,
-                headers={
-                    "Accept": (
-                        "application/fhir+ndjson, application/ndjson, "
-                        "application/x-ndjson, application/json"
-                    ),
-                    "Authorization": f"Bearer {token}",
-                },
-            ) as response:
-                _raise_for_status(response, "bulk export file")
-                summary = await deidentify_ndjson_async(
-                    response.aiter_lines(),
-                    partial,
-                    source=descriptor.source_label,
-                    destination=destination,
-                    policy=self.config.policy,
-                    method=self.config.method,
-                    deidentifier=self._deidentifier,
-                    max_buffered_resources=self.config.max_buffered_resources,
-                )
+            with egress_scope(decision):
+                async with client.stream(
+                    "GET",
+                    descriptor.url,
+                    headers={
+                        "Accept": (
+                            "application/fhir+ndjson, application/ndjson, "
+                            "application/x-ndjson, application/json"
+                        ),
+                        "Authorization": f"Bearer {token}",
+                    },
+                ) as response:
+                    _raise_for_status(response, "bulk export file")
+                    summary = await deidentify_ndjson_async(
+                        response.aiter_lines(),
+                        partial,
+                        source=descriptor.source_label,
+                        destination=destination,
+                        policy=self.config.policy,
+                        method=self.config.method,
+                        deidentifier=self._deidentifier,
+                        max_buffered_resources=self.config.max_buffered_resources,
+                    )
             os.replace(partial, destination)
         except BaseException:
             partial.unlink(missing_ok=True)
@@ -722,12 +744,15 @@ class SMARTBackendBulkIngestor:
         return self.config.output_path / descriptor.output_filename
 
     def _export_url(self) -> str:
-        base_url = self.config.fhir_base_url.rstrip("/") + "/"
-        if self.config.export_path.startswith(("http://", "https://")):
-            return self.config.export_path
-        return urljoin(base_url, self.config.export_path.lstrip("/"))
+        return _smart_export_url(self.config)
 
-    def _assert_allowed_url(self, url: str) -> None:
+    def _assert_allowed_url(
+        self,
+        url: str,
+        *,
+        purpose: EgressPurpose = EgressPurpose.FHIR_BULK,
+        credential: EgressCredential = EgressCredential.BEARER,
+    ) -> EgressDecision:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise SMARTBackendError("FHIR endpoint URL must be absolute HTTP(S)")
@@ -738,6 +763,12 @@ class SMARTBackendBulkIngestor:
             raise SMARTBackendError(
                 "bulk export referenced a URL outside configured FHIR origins"
             )
+        return self._egress.authorize(
+            url,
+            purpose=purpose,
+            credential=credential,
+            timeout_seconds=self.config.request_timeout_seconds,
+        )
 
 
 @dataclass
@@ -778,9 +809,11 @@ class SMARTBackendJobManager:
         *,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         client_assertion_builder: ClientAssertionBuilder | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
+        self._egress_policy = egress_policy
         self._jobs: dict[str, _JobRecord] = {}
 
     def start(
@@ -790,8 +823,14 @@ class SMARTBackendJobManager:
         deidentifier: Deidentifier | None = None,
         job_id: str | None = None,
     ) -> SMARTBackendJobStatus:
-        """Start one background ingestion job."""
+        """Start one background ingestion job.
 
+        Raises:
+            EgressDenied: When the egress policy refuses the configured token
+                or FHIR endpoints; nothing is started in that case.
+        """
+
+        authorize_smart_backend_config(config, egress_policy=self._egress_policy)
         run_id = job_id or uuid.uuid4().hex
         if run_id in self._jobs:
             raise ValueError("job_id already exists")
@@ -859,6 +898,7 @@ class SMARTBackendJobManager:
                 transport=self._transport,
                 client_assertion_builder=self._client_assertion_builder,
                 deidentifier=deidentifier,
+                egress_policy=self._egress_policy,
             )
             summary = await ingestor.run(job_id=job_id)
         except asyncio.CancelledError:
@@ -874,6 +914,57 @@ class SMARTBackendJobManager:
             record.status.status = "succeeded"
             record.status.summary = summary
             record.status.updated_at = time.time()
+
+
+def _smart_export_url(config: SMARTBackendConfig) -> str:
+    base_url = config.fhir_base_url.rstrip("/") + "/"
+    if config.export_path.startswith(("http://", "https://")):
+        return config.export_path
+    return urljoin(base_url, config.export_path.lstrip("/"))
+
+
+def _smart_egress_operation(
+    config: SMARTBackendConfig,
+    egress_policy: EgressPolicy | None,
+) -> EgressOperation:
+    return EgressOperation(
+        EgressAdapter.SMART_BACKEND,
+        policy=egress_policy,
+        bound_destinations=(config.fhir_base_url, config.token_url),
+    )
+
+
+def authorize_smart_backend_config(
+    config: SMARTBackendConfig,
+    *,
+    egress_policy: EgressPolicy | None = None,
+) -> None:
+    """Check the token and export endpoints against the egress policy.
+
+    Request-supplied endpoints are never authorized implicitly; each must
+    match an operator rule (or the permissive mode) before a job starts.
+
+    Args:
+        config: SMART backend configuration to check.
+        egress_policy: Policy to apply; defaults to the environment policy.
+
+    Raises:
+        EgressDenied: When either endpoint is refused.
+    """
+
+    operation = _smart_egress_operation(config, egress_policy)
+    operation.authorize(
+        config.token_url,
+        purpose=EgressPurpose.SMART_TOKEN,
+        credential=EgressCredential.CLIENT_ASSERTION,
+        timeout_seconds=config.request_timeout_seconds,
+    )
+    operation.authorize(
+        _smart_export_url(config),
+        purpose=EgressPurpose.FHIR_BULK,
+        credential=EgressCredential.BEARER,
+        timeout_seconds=config.request_timeout_seconds,
+    )
 
 
 def build_client_assertion(
@@ -1164,6 +1255,8 @@ def _require_nonblank(name: str, value: Any) -> None:
 def _sanitize_exception(exc: BaseException) -> str:
     if isinstance(exc, SMARTBackendError):
         return str(exc)
+    if isinstance(exc, EgressDenied):
+        return f"egress policy denied the request: {exc.reason_code}"
     if isinstance(exc, (httpx.HTTPError, OSError)):
         return "remote SMART endpoint unavailable"
     return f"{exc.__class__.__name__} during SMART backend ingestion"

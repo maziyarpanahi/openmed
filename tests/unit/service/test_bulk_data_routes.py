@@ -15,6 +15,29 @@ from fastapi.testclient import TestClient
 
 from openmed.service.app import create_app
 from openmed.service.bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_smart_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SMART egress is deny-by-default; allow only the synthetic test origins.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["smart_token"],
+                    "destination": "https://auth.example.test",
+                    "allow_credentials": True,
+                },
+                {
+                    "purposes": ["fhir_bulk"],
+                    "destination": "https://fhir.example.test",
+                    "allow_credentials": True,
+                },
+            ]
+        ),
+    )
 
 
 @dataclass

@@ -66,6 +66,7 @@ from .bulk_data import (
     FHIRBulkJobManager,
 )
 from .coalesce import RequestCoalescer, coalescing_key
+from .egress import EgressDenied, validate_egress_configuration
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
@@ -144,7 +145,11 @@ from .security_headers import (
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
 )
-from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
+from .smart_backend import (
+    SMARTBackendConfig,
+    SMARTBackendJobManager,
+    authorize_smart_backend_config,
+)
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import (
     ServiceBusyError,
@@ -843,6 +848,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
         validate_route_policies(fastapi_app)
+        validate_egress_configuration()
         runtime = ServiceRuntime.from_env(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
@@ -1072,6 +1078,18 @@ def create_app(
                 "wait_seconds": exc.wait_seconds,
                 "key": exc.key_by,
             },
+        )
+
+    @app.exception_handler(EgressDenied)
+    async def _egress_denied_handler(
+        _: Request,
+        exc: EgressDenied,
+    ) -> JSONResponse:
+        return _error_response(
+            403,
+            exc.error_code,
+            "Outbound destination is not permitted by the egress policy",
+            details={"reason": exc.reason_code},
         )
 
     @app.exception_handler(PrivacyGatewayConfigurationError)
@@ -1957,6 +1975,7 @@ def create_app(
         runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
         config = _smart_backend_config_from_payload(payload)
+        authorize_smart_backend_config(config)
         job_id = uuid.uuid4().hex
         _, output, checkpoint = request.app.state.bulk_storage.prepare(
             input_dir=None,
@@ -2667,7 +2686,7 @@ def _start_fhir_bulk_job(
     if payload.input_dir is not None and payload.source_dir is not None:
         raise BulkPathError("path_invalid")
     if not config.is_local:
-        config.to_smart_config()
+        authorize_smart_backend_config(config.to_smart_config())
     job_id = uuid.uuid4().hex
     source, output, checkpoint = request.app.state.bulk_storage.prepare(
         input_dir=payload.input_dir

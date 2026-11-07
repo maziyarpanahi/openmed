@@ -141,6 +141,15 @@ def _normalize_webhook_url(value: Any) -> str:
         raise ValueError("Webhook URL must not be blank")
     if not normalized.startswith(("http://", "https://")):
         raise ValueError("Webhook URL must start with http:// or https://")
+    from .egress import EgressDestinationError, parse_destination
+
+    try:
+        parse_destination(normalized)
+    except EgressDestinationError as exc:
+        raise ValueError(
+            "Webhook URL must be an absolute URL with a valid host and port and "
+            f"no user information ({exc.reason_code})"
+        ) from None
     return normalized
 
 

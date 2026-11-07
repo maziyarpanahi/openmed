@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import (
     NONCE_HEADER,
     NonceCache,
@@ -20,6 +22,17 @@ from openmed.service.webhooks import (
     deliver_webhook,
     sign_webhook_payload,
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [{"purposes": ["webhook"], "destination": "https://callbacks.example.test"}]
+        ),
+    )
 
 
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:

@@ -25,11 +25,13 @@ from openmed.interop.fhir.bulk import (
     _safe_resource_type,
 )
 
+from .egress import EgressDenied, EgressPolicy
 from .smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
     SMARTBackendError,
     SMARTBackendIngestionSummary,
+    authorize_smart_backend_config,
 )
 
 _PATH_CODES = frozenset(
@@ -299,9 +301,11 @@ class FHIRBulkJobManager:
         *,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         client_assertion_builder: Any = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
+        self._egress_policy = egress_policy
         self._jobs: dict[str, _JobRecord] = {}
 
     def start(
@@ -415,6 +419,7 @@ class FHIRBulkJobManager:
                     transport=self._transport,
                     client_assertion_builder=self._client_assertion_builder,
                     deidentifier=deidentifier,
+                    egress_policy=self._egress_policy,
                 )
                 summary = await ingestor.run(job_id=job_id)
                 result = _report_from_smart_summary(summary)
@@ -440,13 +445,15 @@ class FHIRBulkJobManager:
         record.status.manifest = manifest
         record.status.updated_at = time.time()
 
-    @staticmethod
-    def _validate_config(config: FHIRBulkJobConfig) -> None:
+    def _validate_config(self, config: FHIRBulkJobConfig) -> None:
         if config.is_local:
             if not str(config.input_dir).strip():
                 raise ValueError("input_dir must not be blank")
             return
-        config.to_smart_config()
+        authorize_smart_backend_config(
+            config.to_smart_config(),
+            egress_policy=self._egress_policy,
+        )
 
 
 def _manifest_from_local_report(report: FHIRBulkJobReport) -> dict[str, Any]:
@@ -540,6 +547,8 @@ def _safe_file_label(value: str | Path) -> str:
 def _safe_job_error(exc: BaseException) -> str:
     if isinstance(exc, SMARTBackendError):
         return str(exc)
+    if isinstance(exc, EgressDenied):
+        return f"egress policy denied the request: {exc.reason_code}"
     if isinstance(exc, (httpx.HTTPError, OSError)):
         return "remote SMART endpoint unavailable"
     if isinstance(exc, ValueError):

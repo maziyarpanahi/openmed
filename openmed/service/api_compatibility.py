@@ -39,6 +39,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "bad_request",
     "bulk_paths_disabled",
     "circuit_breaker_open",
+    "egress_denied",
     "forbidden",
     "grounding_invalid_request",
     "inbound_duplicate_mapping",

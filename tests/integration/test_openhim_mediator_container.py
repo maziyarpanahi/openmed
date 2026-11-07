@@ -115,6 +115,16 @@ def test_compose_example_registers_and_serves_heartbeat() -> None:
         "OPENMED_OPENHIM_USERNAME": "openhim@example.org",
         "OPENMED_OPENHIM_PASSWORD": "synthetic-password",
         "OPENMED_OPENHIM_ALLOW_INSECURE_HTTP": "true",
+        "OPENMED_EGRESS_RULES": json.dumps(
+            [
+                {
+                    "purposes": ["openhim"],
+                    "destination": "http://openhim-fixture:8081",
+                    "cidrs": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                    "allow_credentials": True,
+                }
+            ]
+        ),
     }
     compose = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
 
