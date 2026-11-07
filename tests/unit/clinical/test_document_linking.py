@@ -88,18 +88,16 @@ class TestLinkDocumentsSingleDoc:
 
 
 class TestInputValidation:
-    @pytest.mark.parametrize(
-        ("kwargs", "message"),
-        [
+    def test_invalid_options_fail_closed(self, subtests):
+        for kwargs, message in [
             ({"dup_threshold": -0.1}, "dup_threshold"),
             ({"amend_threshold": 1.1}, "amend_threshold"),
             ({"shingle_size": 0}, "shingle_size"),
             ({"num_hashes": 0}, "num_hashes"),
-        ],
-    )
-    def test_invalid_options_fail_closed(self, kwargs, message):
-        with pytest.raises(ValueError, match=message):
-            link_documents([_doc("d1", LONG_TEXT)], **kwargs)
+        ]:
+            with subtests.test(kwargs=kwargs, message=message):
+                with pytest.raises(ValueError, match=message):
+                    link_documents([_doc("d1", LONG_TEXT)], **kwargs)
 
     def test_duplicate_document_ids_are_rejected(self):
         with pytest.raises(ValueError, match="duplicate doc_id"):

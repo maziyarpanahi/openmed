@@ -1,0 +1,320 @@
+{
+  "cases": [
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 31,
+          "start": 25,
+          "status": "current"
+        }
+      ],
+      "text": "The patient is a current smoker."
+    },
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 30,
+          "start": 19,
+          "status": "none"
+        }
+      ],
+      "text": "The patient denies tobacco use."
+    },
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 30,
+          "start": 24,
+          "status": "past"
+        }
+      ],
+      "text": "The patient is a former smoker."
+    },
+    {
+      "gold": [],
+      "text": "The patient's father is a current smoker."
+    },
+    {
+      "gold": [
+        {
+          "category": "alcohol",
+          "end": 26,
+          "start": 12,
+          "status": "current"
+        }
+      ],
+      "text": "The patient drinks alcohol daily."
+    },
+    {
+      "gold": [
+        {
+          "category": "alcohol",
+          "end": 30,
+          "start": 19,
+          "status": "none"
+        }
+      ],
+      "text": "The patient denies alcohol use."
+    },
+    {
+      "gold": [
+        {
+          "category": "alcohol",
+          "end": 36,
+          "start": 29,
+          "status": "past"
+        }
+      ],
+      "text": "The patient stopped drinking alcohol."
+    },
+    {
+      "gold": [],
+      "text": "The patient's mother drinks alcohol daily."
+    },
+    {
+      "gold": [
+        {
+          "category": "drug",
+          "end": 24,
+          "start": 17,
+          "status": "current"
+        }
+      ],
+      "text": "The patient uses cocaine weekly."
+    },
+    {
+      "gold": [
+        {
+          "category": "drug",
+          "end": 31,
+          "start": 19,
+          "status": "none"
+        }
+      ],
+      "text": "The patient denies illicit drug use."
+    },
+    {
+      "gold": [
+        {
+          "category": "drug",
+          "end": 34,
+          "start": 28,
+          "status": "past"
+        }
+      ],
+      "text": "The patient previously used heroin."
+    },
+    {
+      "gold": [],
+      "text": "The patient's brother uses cocaine."
+    },
+    {
+      "gold": [
+        {
+          "category": "employment",
+          "end": 25,
+          "start": 15,
+          "status": "unemployed"
+        }
+      ],
+      "text": "The patient is unemployed."
+    },
+    {
+      "gold": [
+        {
+          "category": "employment",
+          "end": 29,
+          "start": 19,
+          "status": "never"
+        }
+      ],
+      "text": "The patient denies employment."
+    },
+    {
+      "gold": [
+        {
+          "category": "employment",
+          "end": 35,
+          "start": 16,
+          "status": "former"
+        }
+      ],
+      "text": "The patient was previously employed as a teacher."
+    },
+    {
+      "gold": [],
+      "text": "The patient's mother is unemployed."
+    },
+    {
+      "gold": [
+        {
+          "category": "living_status",
+          "end": 23,
+          "start": 12,
+          "status": "lives_alone"
+        }
+      ],
+      "text": "The patient lives alone."
+    },
+    {
+      "gold": [
+        {
+          "category": "living_status",
+          "end": 31,
+          "start": 19,
+          "status": "never"
+        }
+      ],
+      "text": "The patient denies homelessness."
+    },
+    {
+      "gold": [
+        {
+          "category": "living_status",
+          "end": 33,
+          "start": 16,
+          "status": "former"
+        }
+      ],
+      "text": "The patient was formerly homeless."
+    },
+    {
+      "gold": [],
+      "text": "The patient's father lives alone."
+    },
+    {
+      "gold": [
+        {
+          "category": "food_insecurity",
+          "end": 35,
+          "start": 20,
+          "status": "current"
+        }
+      ],
+      "text": "The patient reports food insecurity."
+    },
+    {
+      "gold": [
+        {
+          "category": "food_insecurity",
+          "end": 34,
+          "start": 19,
+          "status": "none"
+        }
+      ],
+      "text": "The patient denies food insecurity."
+    },
+    {
+      "gold": [
+        {
+          "category": "food_insecurity",
+          "end": 31,
+          "start": 16,
+          "status": "past"
+        }
+      ],
+      "text": "The patient had food insecurity years ago."
+    },
+    {
+      "gold": [],
+      "text": "The patient's sibling has food insecurity."
+    },
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 6,
+          "start": 0,
+          "status": "current"
+        }
+      ],
+      "text": "Smokes 1 pack per day."
+    },
+    {
+      "gold": [
+        {
+          "category": "drug",
+          "end": 14,
+          "start": 5,
+          "status": "current"
+        }
+      ],
+      "text": "Uses marijuana occasionally."
+    },
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 20,
+          "start": 10,
+          "status": "current"
+        }
+      ],
+      "text": "He smokes cigarettes daily."
+    },
+    {
+      "gold": [
+        {
+          "category": "employment",
+          "end": 17,
+          "start": 12,
+          "status": "employed"
+        }
+      ],
+      "text": "The patient works as a nurse."
+    },
+    {
+      "gold": [
+        {
+          "category": "living_status",
+          "end": 29,
+          "start": 12,
+          "status": "former"
+        }
+      ],
+      "text": "The patient lived with family in the past."
+    },
+    {
+      "gold": [
+        {
+          "category": "food_insecurity",
+          "end": 23,
+          "start": 12,
+          "status": "current"
+        }
+      ],
+      "text": "The patient skips meals due to lack of food."
+    },
+    {
+      "gold": [],
+      "text": "No social-history findings are documented."
+    },
+    {
+      "gold": [],
+      "text": "Screening for tobacco use?"
+    },
+    {
+      "gold": [
+        {
+          "category": "tobacco",
+          "end": 30,
+          "start": 19,
+          "status": "none"
+        },
+        {
+          "category": "drug",
+          "end": 47,
+          "start": 40,
+          "status": "current"
+        }
+      ],
+      "text": "The patient denies tobacco use but uses cocaine weekly."
+    }
+  ],
+  "contains_real_phi": false,
+  "schema_version": 1,
+  "synthetic": true
+}

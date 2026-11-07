@@ -187,6 +187,11 @@ def test_underdeclared_pdf_runtime_bound_precedes_page_work(monkeypatch, entry):
         "openmed.multimodal.documents_pdf_tables._find_tables",
         lambda page: visits.append("tables") or (),
     )
+    monkeypatch.setattr(
+        documents_pdf,
+        "_prepare_annotation_source",
+        lambda source, **_: SimpleNamespace(content=source.read(), report=()),
+    )
     with pytest.raises(RedactionAdmissionError) as raised:
         if entry == "extract":
             documents_pdf.extract_pdf(BytesIO(assets.pdf()), _limit_profile=profile)

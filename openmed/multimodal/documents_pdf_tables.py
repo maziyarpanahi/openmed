@@ -13,14 +13,16 @@ import importlib
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .asset_limits import LimitProfile
 from .base import ExtractedDocument, SourceSpan
 from .documents_pdf import (
     ProjectedRectangle,
     _coerce_entity,
+    _snapshot_pdf_source,
     extract_pdf,
     project_text_spans,
 )
@@ -251,7 +253,7 @@ class PdfRegions:
 
 
 def extract_pdf_regions(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     document: ExtractedDocument | None = None,
     *,
     _limit_profile: LimitProfile | None = None,
@@ -263,7 +265,12 @@ def extract_pdf_regions(
     that every structured offset refers to the exact same normalized character
     stream.
     """
-    flat_document = document if document is not None else extract_pdf(path)
+    if document is None:
+        content = _snapshot_pdf_source(path)
+        flat_document = extract_pdf(BytesIO(content))
+        path = BytesIO(content)
+    else:
+        flat_document = document
     pdfplumber = _import_pdfplumber()
     tables: list[TableRegion] = []
 
@@ -315,7 +322,7 @@ def extract_pdf_regions(
 
 
 def extract_pdf_tables(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     document: ExtractedDocument | None = None,
 ) -> tuple[TableRegion, ...]:
     """Return detected table regions with per-cell text and bboxes."""
@@ -323,7 +330,7 @@ def extract_pdf_tables(
 
 
 def extract_pdf_captions(
-    path_or_document: str | Path | ExtractedDocument,
+    path_or_document: str | Path | BinaryIO | ExtractedDocument,
     document: ExtractedDocument | None = None,
 ) -> tuple[CaptionRegion, ...]:
     """Return caption regions mapped to the flat PDF character stream."""

@@ -12,6 +12,8 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 3.2.0 Release Notes: release/v3.2.0.md
+      - Migrate from 3.1 to 3.2: migration/3.1-to-3.2.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
@@ -28,55 +30,89 @@ nav:
       - Machine-readable CLI Contract: cli/machine-contract.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
+  - Governed Agents:
+      - Overview: agent/index.md
+      - Migrate from 3.0 to 3.1: migration/3.0-to-3.1.md
+      - Authority and Minimum Data:
+          - Runtime Authority Revocation: agent/runtime-revocation.md
+          - SMART Token Custody: interop/smart-token-custody.md
+          - Signed Agent Capability Grants: agent/capability-grants.md
+          - Agent Capability Validity: agent/capability-validity.md
+          - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
+          - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
+          - Agent Governance Identifiers: agent/governance-identifiers.md
+          - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
+          - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
+          - Tool Argument Classification: agent/tool-argument-classification.md
+          - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
+          - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
+          - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+          - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
+      - Approvals and Previews:
+          - Clinical Side-Effect Previews: agent/side-effect-previews.md
+          - Reviewer Handoff Packets: agent/reviewer-handoffs.md
+          - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
+          - Single-use Human Approval Tokens: agent/human-approval-tokens.md
+          - Human-approval Receipt Failures: agent/human-approval-receipts.md
+      - Write-back and Execution:
+          - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+          - Effect Admission and Emergency Stop: agent/effect-admission.md
+          - Per-run Agent Resource Budgets: agent/resource-budgets.md
+          - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
+          - Bounded Approved FHIR Transactions: interop/fhir-transactions.md
+          - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+          - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
+          - Bounded Agent Scheduling: agent/bounded-scheduling.md
+          - Agent Action Graphs: agent/action-graphs.md
+          - Agent Action Execution Phases: agent/action-phases.md
+          - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
+          - SMART Scope Audit Examples: interop/smart-scope-audit.md
+          - Staged OMOP Mutations: interop/omop-staged-mutations.md
+          - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
+          - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
+      - Evidence:
+          - Agent Governance JSON Schemas: agent/json-schemas.md
+          - Agent Run Completion Invariants: agent/run-invariants.md
+          - Agent Action Ledger: agent/action-ledger.md
+          - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
+          - FHIR Write Origin Labels: interop/fhir-write-labels.md
+          - Agent Artifact References: agent/artifact-references.md
+          - Agent Event Correlation: agent/event-correlation.md
+          - Agent Event Attributes: agent/event-attributes.md
+          - Agent Event Sequences: agent/event-sequences.md
+          - Agent Outcome Reason Codes: agent/outcome-reasons.md
+          - Agent Error Envelopes: agent/error-envelopes.md
+          - Agent Timing Metadata: agent/timing-metadata.md
+          - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+          - Deterministic Agent Run Commitments: agent/run-commitments.md
+          - Privacy-safe Agent Run Diffs: agent/run-diffs.md
+          - Workflow Run Rollups: agent/workflow-rollups.md
+          - Agent Schema Compatibility: agent/schema-compatibility.md
+          - Evidence-grounded Query Planner: agent/evidence-query-planner.md
+          - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
+          - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
+          - Cohort Membership Explanations: agent/cohort-explanations.md
+          - Quality-Measure Evidence: agent/quality-measure-evidence.md
+          - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
+      - Recovery:
+          - Escalation Circuit Breakers: agent/escalation-circuit-breakers.md
+          - Deterministic Agent Replay: agent/deterministic-replay.md
+          - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
+          - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
+          - Durable Workflow Recovery: agent/workflow-recovery.md
+          - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
+          - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
+      - Evaluation:
+          - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+          - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
+          - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
+          - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Assurance:
+          - Offline Agent Governance Self-check: agent/self-check.md
+          - Agent Boundary Threat Model: security/agent-threat-model.md
+          - v3.1 Agent Deployment Assurance: compliance/v3.1-agent-assurance.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
-      - Agent Action Graphs: agent/action-graphs.md
-      - Agent Artifact References: agent/artifact-references.md
-      - Clinical Side-Effect Previews: agent/side-effect-previews.md
-      - Agent Action Execution Phases: agent/action-phases.md
-      - Signed Agent Capability Grants: agent/capability-grants.md
-      - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
-      - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
-      - Tool Argument Classification: agent/tool-argument-classification.md
-      - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
-      - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
-      - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
-      - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
-      - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
-      - Agent Governance Identifiers: agent/governance-identifiers.md
-      - Agent Capability Validity: agent/capability-validity.md
-      - Agent Event Correlation: agent/event-correlation.md
-      - Agent Error Envelopes: agent/error-envelopes.md
-      - Agent Event Attributes: agent/event-attributes.md
-      - Agent Event Sequences: agent/event-sequences.md
-      - Agent Outcome Reason Codes: agent/outcome-reasons.md
-      - Agent Governance JSON Schemas: agent/json-schemas.md
-      - Reviewer Handoff Packets: agent/reviewer-handoffs.md
-      - Escalation Circuit Breakers: agent/escalation-circuit-breakers.md
-      - Per-run Agent Resource Budgets: agent/resource-budgets.md
-      - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
-      - Single-use Human Approval Tokens: agent/human-approval-tokens.md
-      - Privacy-safe Agent Run Summaries: agent/run-summaries.md
-      - Deterministic Agent Run Commitments: agent/run-commitments.md
-      - Privacy-safe Agent Run Diffs: agent/run-diffs.md
-      - Workflow Run Rollups: agent/workflow-rollups.md
-      - Agent Run Completion Invariants: agent/run-invariants.md
-      - Agent Schema Compatibility: agent/schema-compatibility.md
-      - Agent Timing Metadata: agent/timing-metadata.md
-      - Evidence-grounded Query Planner: agent/evidence-query-planner.md
-      - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
-      - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
-      - Cohort Membership Explanations: agent/cohort-explanations.md
-      - Quality-Measure Evidence: agent/quality-measure-evidence.md
-      - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
-      - Human-approval Receipt Failures: agent/human-approval-receipts.md
-      - Durable Workflow Recovery: agent/workflow-recovery.md
-      - Runtime Authority Revocation: agent/runtime-revocation.md
-      - Guarded Workflow Dispatch: agent/guarded-dispatch.md
-      - Effect Admission and Emergency Stop: agent/effect-admission.md
-      - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
-      - Agent Action Ledger: agent/action-ledger.md
-      - Deterministic Agent Replay: agent/deterministic-replay.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -126,6 +162,7 @@ nav:
       - Guarded Clinical Intelligence:
           - Brief and Summarization:
               - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Local Backends and Typed Outcomes: clinical/local-backends.md
               - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
               - Section-Preserving Summary Planning: clinical/summary-section-planning.md
               - Synthetic Brief Walkthrough: demo/clinical-brief.md
@@ -179,6 +216,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
@@ -191,6 +229,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
@@ -285,6 +324,7 @@ nav:
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
+      - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
@@ -315,8 +355,40 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Parallel Corpus Governance: languages/parallel-corpus-governance.md
+      - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
-      - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic Data:
+          - Overview: training/synthetic/index.md
+          - Locale PHI Notes: training/synthetic/locale-phi.md
+          - Burned-in PHI Images: training/synthetic/burned-in.md
+          - Social-history Sections: training/synthetic/social-history.md
+          - Section-label Datasets: training/synthetic/section-labels.md
+          - Span Offset Projection: training/synthetic/offset-projection.md
+          - Translation Augmentation: training/synthetic/translation-augmentation.md
+          - SPDX License Identifiers: training/synthetic/license-identifiers.md
+          - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+          - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+          - Synthetic Split Planning: training/synthetic/split-planning.md
+          - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+          - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+          - Synthetic Release Capsules: training/synthetic/release-capsules.md
+          - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
+          - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
+          - Synthetic Medication Courses: training/synthetic/medication-courses.md
+          - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
+          - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Document Rendering: training/synthetic/document-rendering.md
+          - Synthetic DICOM Overlays: training/synthetic/dicom-overlays.md
+          - Synthetic Waveform Records: training/synthetic/waveform-records.md
+          - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+          - Synthetic FHIR Records: training/synthetic/fhir-records.md
+          - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+          - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+          - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
+          - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+          - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
+      - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -329,7 +401,10 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
@@ -338,46 +413,106 @@ nav:
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
+      - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
+      - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
+      - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
+      - Local Edge VLM Provider: multimodal/edge-vlm-provider.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
+      - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
+      - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
+      - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
+      - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+      - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
+      - Whole-slide Aggregation Provenance: multimodal/vision/whole-slide-provenance.md
+      - Image Quality and Abstention: multimodal/vision/quality-abstention.md
+      - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
+      - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
+      - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
+      - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
+      - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
+      - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
+      - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
+      - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
+      - Transcript Language Routing: multimodal/transcript-language-routing.md
+      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
+      - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
+      - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
+      - Local Audio Retention: multimodal/streaming/audio-retention.md
+      - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Apple Audio Capture: multimodal/apple-audio-capture.md
+      - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
+      - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
+      - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
+      - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
+      - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
+      - OpenMedKit Evidence Contracts: multimodal/openmedkit-contracts.md
+      - Local Multimodal Review: multimodal/local-review.md
+      - Cross-modal Clock Alignment: multimodal/cross-modal-clock-alignment.md
+      - Local Core ML Speech: multimodal/apple-speech.md
+      - Local Speaker Diarization: multimodal/streaming/local-diarization.md
+      - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
+      - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
+      - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
+      - HL7 aECG Reader: multimodal/aecg-reader.md
       - ODT/ODF Text Extraction: multimodal/odt-extraction.md
       - PPTX Redaction: multimodal/pptx-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
+      - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
+      - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
+      - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
-      - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
+      - Offline Planner Qualification: evaluation/planner-qualification.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
       - Document-type Calibration: evaluation/doctype-calibration.md
-      - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
       - Sealed Holdout Commitments: evaluation/holdout-commitments.md
       - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
-      - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
+      - Transcript Accuracy: evaluation/transcript-accuracy.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -389,6 +524,7 @@ nav:
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
+      - Language Adapter Distillation: languages/adapter-distillation.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
@@ -397,6 +533,9 @@ nav:
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
+      - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
+      - DICOM pixel provenance: multimodal/vision/dicom-pixel-provenance.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
@@ -404,6 +543,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md
@@ -420,11 +560,18 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
+      - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
+      - Multimodal Decoder Containment: security/multimodal-decoder-boundaries.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md
@@ -486,7 +633,6 @@ nav:
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
       - Reproducible Release Provenance: compliance/reproducible-release.md
-      - v3.1 Agent Deployment Assurance: compliance/v3.1-agent-assurance.md
       - v3.1 Clinician Review Protocol: compliance/v3.1-clinician-review.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
       - Audit Artifact Size Budgets: compliance/artifact-size-budgets.md
@@ -506,28 +652,13 @@ nav:
       - Breach Report Template: compliance/templates/breach-report-template.md
       - Privacy Release-Gate Aggregator: compliance/privacy-release-gate.md
       - FHIR and OMOP Interoperability: guides/fhir-omop-interoperability.md
-      - Staged OMOP Mutations: interop/omop-staged-mutations.md
-      - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
-      - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
-      - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
-      - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
       - Archive Extraction Safety: interop/archive-safety.md
       - FHIR Interop Helpers: fhir-interop.md
       - FHIR R5 Round-trip Fidelity: integrations/fhir-r5-fidelity.md
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
-      - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
-      - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
-      - Bounded Approved FHIR Transactions: interop/fhir-transactions.md
-      - FHIR Write Origin Labels: interop/fhir-write-labels.md
-      - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
-      - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
-      - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
-      - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
-      - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
-      - SMART Scope Audit Examples: interop/smart-scope-audit.md
-      - SMART Token Custody: interop/smart-token-custody.md
+      - FHIR Subscription Notification Intake: interop/fhir-subscription-notifications.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
@@ -593,13 +724,13 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
       - No-Telemetry Guarantee: security/no-telemetry.md
       - Policy Migration Reviews: security/policy-migrations.md
       - MCP Prompt Injection Guard: security/prompt-injection-guard.md
-      - Agent Boundary Threat Model: security/agent-threat-model.md
       - MCP Consent Receipts: security/mcp-consent-receipts.md
       - MCP Authorization Matrix: security/mcp-authorization-matrix.md
       - MCP Upstream Endpoint Policy: security/mcp-upstream-policy.md

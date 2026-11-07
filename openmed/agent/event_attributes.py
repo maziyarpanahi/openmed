@@ -183,7 +183,7 @@ class EventAttributes:
             raise EventAttributeError("payload_too_large")
         try:
             data = json.loads(payload, object_pairs_hook=_strict_json_object)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, RecursionError):
             pass
         except EventAttributeError:
             raise

@@ -221,6 +221,7 @@ def test_single_column_auto_output_is_identical_to_source_order(
 def test_redact_document_detects_on_reconstructed_text_and_projects_address(
     fake_two_column_pdf: None,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
     observed: list[str] = []

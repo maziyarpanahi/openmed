@@ -193,6 +193,7 @@ def test_missing_doctr_raises_actionable_import_error(monkeypatch):
     assert "openmed[multimodal]" in str(excinfo.value)
 
 
+@pytest.mark.slow
 def test_importing_ocr_module_does_not_import_doctr():
     result = subprocess.run(
         [

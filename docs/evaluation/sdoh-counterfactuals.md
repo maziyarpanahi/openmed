@@ -1,5 +1,8 @@
 # Synthetic SDOH counterfactual checks
 
+For precision, recall, status and trigger-offset scoring, see the
+[SDOH extraction benchmark](sdoh-extraction.md).
+
 `openmed.eval.sdoh_counterfactuals` checks whether changing non-causal age
 and pronoun context changes SDOH labels or confidence. It uses the local,
 deterministic social-history generator and keeps each pair's determinant

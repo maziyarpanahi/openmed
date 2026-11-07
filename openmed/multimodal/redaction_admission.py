@@ -408,6 +408,22 @@ def admit_pdf(source: Any, profile: LimitProfile, *, resolution: int = 150) -> i
         return report.page_count
 
 
+def snapshot_admitted_pdf(
+    source: Any, profile: LimitProfile, *, resolution: int = 150
+) -> bytes:
+    """Capture bounded PDF bytes, then admit the same input the decoder will use."""
+    with _source(source, profile, {"application/pdf"}) as (stream, _):
+        stream.seek(0, 2)
+        size = stream.tell()
+        check_limit(profile, "byte_size", size)
+        stream.seek(0)
+        content = stream.read(size + 1)
+        if type(content) is not bytes or len(content) != size:
+            raise RedactionAdmissionError("preflight_source_read_error")
+    admit_pdf(content, profile, resolution=resolution)
+    return content
+
+
 def admit_dicom(source: Any, profile: LimitProfile, pydicom: Any) -> None:
     """Read only numeric DICOM geometry through a bounded metadata transport."""
     with _source(source, profile, {"application/dicom"}) as pair:

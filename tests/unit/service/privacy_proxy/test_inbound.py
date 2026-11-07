@@ -75,9 +75,8 @@ def test_restore_structured_content_walks_nested_strings_and_keys():
     )
 
 
-@pytest.mark.parametrize(
-    ("response", "error_type", "reason_code"),
-    [
+def test_invalid_placeholders_fail_closed_without_mapping_values(subtests):
+    for response, error_type, reason_code in [
         (
             "Unknown <<OPENMED_PHI_NAME_AAAAAAAA_000001>>",
             UnknownPlaceholderError,
@@ -93,19 +92,16 @@ def test_restore_structured_content_walks_nested_strings_and_keys():
             DuplicatePlaceholderError,
             "duplicate_placeholder",
         ),
-    ],
-)
-def test_invalid_placeholders_fail_closed_without_mapping_values(
-    response: str,
-    error_type: type[ValueError],
-    reason_code: str,
-):
-    with pytest.raises(error_type) as exc_info:
-        restore_text(response, MAPPING)
+    ]:
+        with subtests.test(
+            response=response, error_type=error_type, reason_code=reason_code
+        ):
+            with pytest.raises(error_type) as exc_info:
+                restore_text(response, MAPPING)
 
-    assert exc_info.value.reason_code == reason_code
-    assert NAME_VALUE not in str(exc_info.value)
-    assert PHONE_VALUE not in str(exc_info.value)
+            assert exc_info.value.reason_code == reason_code
+            assert NAME_VALUE not in str(exc_info.value)
+            assert PHONE_VALUE not in str(exc_info.value)
 
 
 def test_duplicate_mapping_pairs_are_rejected_without_overwriting_state():

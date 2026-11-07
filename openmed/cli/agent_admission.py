@@ -85,6 +85,11 @@ def add_argparse_admission_commands(subparsers: argparse._SubParsersAction) -> N
     """Register admission commands on the production console-script parser."""
     agents = subparsers.add_parser("agents", help="Local-agent governance commands.")
     commands = agents.add_subparsers(dest="admission_operation")
+    _add_admission_subcommands(commands)
+
+
+def _add_admission_subcommands(commands: argparse._SubParsersAction) -> None:
+    """Register admission handlers on a shared agents command group."""
     for operation, help_text in (
         ("status", "Show content-free effect admission status."),
         ("stop", "Stop effects at their next boundary."),
@@ -98,7 +103,10 @@ def add_argparse_admission_commands(subparsers: argparse._SubParsersAction) -> N
             "--scope", default="global", help="Global or canonical workflow identifier."
         )
         command.set_defaults(
-            role="operator", initialize=False, handler=_handle_admission
+            role="operator",
+            initialize=False,
+            admission_operation=operation,
+            handler=_handle_admission,
         )
         if operation != "status":
             command.add_argument(

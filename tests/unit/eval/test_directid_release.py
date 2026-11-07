@@ -151,9 +151,8 @@ def test_failed_optional_int4_is_quarantined_without_blocking_int8() -> None:
     assert release.release_manifest["quarantined_formats"] == ["mlx-4bit"]
 
 
-@pytest.mark.parametrize(
-    ("gate", "updates", "reason"),
-    [
+def test_each_release_gate_quarantines_its_selected_artifact(subtests) -> None:
+    for gate, updates, reason in [
         (
             "G3",
             {"critical_leakage_count": 1, "residual_leakage_rate": 0.001},
@@ -177,29 +176,24 @@ def test_failed_optional_int4_is_quarantined_without_blocking_int8() -> None:
             },
             "selected format exceeds the Tiny-tier budget",
         ),
-    ],
-)
-def test_each_release_gate_quarantines_its_selected_artifact(
-    gate: str,
-    updates: dict[str, object],
-    reason: str,
-) -> None:
-    evidence = _release_evidence()
-    if gate == "G3":
-        evidence["directid"].update(updates)
-        evidence["directid"]["gate_evidence"]["G3"].update(updates)
-    else:
-        evidence["quantization"]["artifacts"][0].update(updates)
-        evidence["quantization"]["accepted_formats"] = []
-        evidence["quantization"]["quarantined_formats"] = ["mlx-8bit"]
+    ]:
+        with subtests.test(gate=gate, updates=updates, reason=reason):
+            evidence = _release_evidence()
+            if gate == "G3":
+                evidence["directid"].update(updates)
+                evidence["directid"]["gate_evidence"]["G3"].update(updates)
+            else:
+                evidence["quantization"]["artifacts"][0].update(updates)
+                evidence["quantization"]["accepted_formats"] = []
+                evidence["quantization"]["quarantined_formats"] = ["mlx-8bit"]
 
-    report = _build_gate_report(evidence)
+            report = _build_gate_report(evidence)
 
-    assert report.decision == QUARANTINED
-    check = next(item for item in report.gate_results if item.gate == gate)
-    assert check.passed is False
-    assert check.reason == reason
-    assert report.verify(SIGNING_KEY) is True
+            assert report.decision == QUARANTINED
+            check = next(item for item in report.gate_results if item.gate == gate)
+            assert check.passed is False
+            assert check.reason == reason
+            assert report.verify(SIGNING_KEY) is True
 
 
 def test_rejects_training_provenance_from_another_dataset() -> None:
