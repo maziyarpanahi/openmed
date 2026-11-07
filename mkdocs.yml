@@ -450,6 +450,7 @@ nav:
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Apple Audio Capture: multimodal/apple-audio-capture.md
       - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
@@ -477,6 +478,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenPHI-Vision Development Gates: evaluation/openphi-vision.md
+      - EdgeHealthBench Device Profiles: evaluation/edge-health-bench.md
       - Script Tokenization Audit: evaluation/script-tokenization.md
       - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
@@ -501,6 +504,7 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
       - Transcript Accuracy: evaluation/transcript-accuracy.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md

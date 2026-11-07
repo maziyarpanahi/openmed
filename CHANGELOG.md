@@ -11,7 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Connect synthetic image and audio inputs through bounded preflight, actual redaction, local fixture providers, evidence fusion, clock lineage, unresolved-speaker review and conservative owned-buffer cleanup, with cancellation and resource-failure controls (#3204).
 
+- Bind native Apple audio capture to explicit microphone permission and ambient consent, with interruption and cohort fences, bounded local PCM delivery, and owned-buffer cleanup accounting (#3680).
+
+- Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
+
+- Add executed OpenPHI-Vision synthetic leakage controls and immutable EdgeHealthBench device profiles with separate privacy, quality, utility, abstention, parity and measured resource gates (#3205).
+
 - Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
+
+- Mute timed identifiers in a separate local PCM buffer under the original retention deadline; uncertain alignment withholds the entire derivative (#3838).
 
 - Gate local OpenMedKit multimodal work on Apple thermal notifications, measured queue age and rolling latency, with explicit cadence/window limits, sustained cooling before recovery and value-free evidence (#3836).
 
