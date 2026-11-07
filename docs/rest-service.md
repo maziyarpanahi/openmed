@@ -727,7 +727,11 @@ Readiness response after startup preload completes:
 ```
 
 Before startup readiness, `/readyz` returns `503` with `error.code` set to
-`not_ready`.
+`not_ready`. With `OPENMED_SERVICE_REPLICA_MODE=multi`, it returns `503` with
+`error.code` set to `replica_unsafe_state` while an enabled replica-local
+component is neither disabled nor accepted; `error.details.components` lists
+the categories. See
+[Replica-local state](deploy/autoscaling.md#replica-local-state-and-safe-topologies).
 
 ### `GET /models/loaded`
 

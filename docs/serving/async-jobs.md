@@ -111,4 +111,7 @@ python -m openmed.service.logging --host 0.0.0.0 --port 8080
 `OPENMED_SERVICE_JOBS_TTL_SECONDS` controls terminal metadata cleanup.
 `OPENMED_SERVICE_JOBS_WORKERS` bounds concurrent job execution. The local
 backend is intended for one service process and does not provide multi-node
-distribution.
+distribution. With `OPENMED_SERVICE_REPLICA_MODE=multi`, the job routes return
+`503 replica_unsafe_state` and readiness stays false until `async_jobs` is
+disabled or explicitly accepted; see
+[Replica-local state](../deploy/autoscaling.md#replica-local-state-and-safe-topologies).

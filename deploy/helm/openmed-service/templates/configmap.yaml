@@ -7,6 +7,9 @@ metadata:
 data:
   OPENMED_PROFILE: {{ .Values.config.profile | quote }}
   OPENMED_CACHE_DIR: {{ .Values.config.cacheDir | quote }}
+  OPENMED_SERVICE_REPLICA_MODE: {{ include "openmed-service.replicaMode" . | quote }}
+  OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE: {{ join "," .Values.replicaState.accept | quote }}
+  OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE: {{ join "," .Values.replicaState.disable | quote }}
   OPENMED_SERVICE_PRELOAD_MODELS: {{ join "," .Values.config.preloadModels | quote }}
   OPENMED_SERVICE_MAX_RESIDENT_MODELS: {{ .Values.config.maxResidentModels | quote }}
   OPENMED_SERVICE_KEEP_ALIVE: {{ .Values.config.keepAlive | quote }}

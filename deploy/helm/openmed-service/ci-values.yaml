@@ -1,6 +1,17 @@
 # Synthetic values used by the Helm CI workflow to exercise non-default paths.
 replicaCount: 2
 
+# Two replicas render multi mode. Accept the per-replica limiters configured
+# below and turn off the replica-local job components so readiness can pass.
+replicaState:
+  accept:
+    - rate_limiter
+    - concurrency_limiter
+  disable:
+    - async_jobs
+    - fhir_bulk_jobs
+    - smart_backend_jobs
+
 image:
   repository: ghcr.io/maziyarpanahi/openmed
   tag: "v3.2.0"

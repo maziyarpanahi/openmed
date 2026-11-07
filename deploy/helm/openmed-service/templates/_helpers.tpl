@@ -71,6 +71,17 @@ Name of the model-cache PVC.
 {{- end -}}
 
 {{/*
+Replica mode: multi when more than one replica or an autoscaler can run.
+*/}}
+{{- define "openmed-service.replicaMode" -}}
+{{- if or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled -}}
+multi
+{{- else -}}
+single
+{{- end -}}
+{{- end -}}
+
+{{/*
 Trusted hosts needed for loopback probes and in-cluster Service DNS.
 */}}
 {{- define "openmed-service.trustedHosts" -}}

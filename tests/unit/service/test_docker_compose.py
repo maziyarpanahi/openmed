@@ -49,3 +49,10 @@ def test_docker_compose_persists_hf_and_openmed_model_cache():
         environment["OPENMED_SERVICE_MAX_RESIDENT_MODELS"]
         == "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
     )
+
+
+def test_docker_compose_declares_single_replica_mode():
+    service = _app_service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service
