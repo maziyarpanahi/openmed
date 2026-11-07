@@ -7,6 +7,7 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/release/check_native_api_migration.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/release/check_native_api_migration.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
@@ -26,6 +28,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  api-migration-policy:
+    name: Require migration notes for Kotlin API breaks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+    # A pull_request checkout is the merge commit; HEAD^1 is the base tip.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 2
+
+    - name: Compare Kotlin API baseline with docs/migration
+      run: >-
+        python3 scripts/release/check_native_api_migration.py
+        --platform kotlin --base HEAD^1 --head HEAD
+
   build-and-test:
     name: Build & Test Android OpenMedKit
     runs-on: ubuntu-latest
@@ -49,6 +67,11 @@ jobs:
     - name: Assemble OpenMedKit debug library
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
+
+    # Fails on any difference from api/openmedkit.api; run `apiDump` to refresh.
+    - name: Check OpenMedKit public API baseline
+      working-directory: android
+      run: ./gradlew :openmedkit:apiCheck --stacktrace
 
     - name: Run Android offset-contract parity suite
       working-directory: android

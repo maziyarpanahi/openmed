@@ -9,6 +9,8 @@ on:
       - 'Package.resolved'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/release/check_native_api_migration.py'
+      - 'scripts/release/swift_api_baseline.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -23,6 +25,8 @@ on:
       - 'Package.resolved'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/release/check_native_api_migration.py'
+      - 'scripts/release/swift_api_baseline.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -54,11 +58,72 @@ jobs:
     - name: Build documented root package
       run: swift build
 
+    - name: Check macOS Swift public API baseline
+      run: >-
+        python3 scripts/release/swift_api_baseline.py --platform macos --check
+        --write-current "$RUNNER_TEMP/swift-api-current/macos"
+
+    - name: Upload regenerated macOS Swift API baseline
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: swift-api-baseline-macos
+        path: ${{ runner.temp }}/swift-api-current/macos
+        if-no-files-found: ignore
+
     - name: Test documented root package
       run: swift test
 
     - name: Test Unicode scalar offset parity fixture
       run: swift test --filter OffsetContractParityTests
+
+  api-baseline-ios:
+    name: Check iOS Swift API baseline
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    # The iOS dump covers the UIKit-only Share and Action extension targets.
+    - name: Build documented root package for iOS simulator
+      run: |
+        xcodebuild build \
+          -scheme OpenMedKit-Package \
+          -destination 'generic/platform=iOS Simulator' \
+          -derivedDataPath .build/xcode-ios \
+          -skipPackagePluginValidation
+
+    - name: Check iOS Swift public API baseline
+      run: >-
+        python3 scripts/release/swift_api_baseline.py --platform ios --check
+        --write-current "$RUNNER_TEMP/swift-api-current/ios"
+
+    - name: Upload regenerated iOS Swift API baseline
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: swift-api-baseline-ios
+        path: ${{ runner.temp }}/swift-api-current/ios
+        if-no-files-found: ignore
+
+  api-migration-policy:
+    name: Require migration notes for Swift API breaks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+    # A pull_request checkout is the merge commit; HEAD^1 is the base tip.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 2
+
+    - name: Compare Swift API baselines with docs/migration
+      run: >-
+        python3 scripts/release/check_native_api_migration.py
+        --platform swift --base HEAD^1 --head HEAD
 
   build-ios:
     name: Build for iOS

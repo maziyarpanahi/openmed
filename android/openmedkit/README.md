@@ -15,6 +15,10 @@ repository and dependency declarations.
 - `src/main/AndroidManifest.xml` is intentionally minimal for the library.
 - `src/test/kotlin/com/openmed/openmedkit/` contains local JVM unit tests
   running with JUnit and Robolectric.
+- `api/openmedkit.api` is the committed public API baseline. CI runs
+  `./gradlew :openmedkit:apiCheck`; after an intended API change run
+  `./gradlew :openmedkit:apiDump` and see the
+  [baseline policy](../../docs/swift-kotlin-parity.md#public-api-baselines).
 
 ## Platform Baseline
 

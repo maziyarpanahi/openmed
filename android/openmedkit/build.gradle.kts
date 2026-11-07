@@ -6,6 +6,8 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    // Public API baseline: `apiDump` writes api/openmedkit.api, `apiCheck` gates it.
+    alias(libs.plugins.kotlinx.binary.compatibility.validator)
     `maven-publish`
     signing
 }

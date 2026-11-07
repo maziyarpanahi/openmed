@@ -1,0 +1,1344 @@
+public final class com/openmed/openmedkit/BackendOnnxTokenClassifier : com/openmed/openmedkit/OnnxTokenClassifier {
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;)V
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;)V
+	public fun close ()V
+	public final fun getAcceleratorSelection ()Lcom/openmed/openmedkit/onnx/AcceleratorSelection;
+	public fun predict (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun tokenOffsets (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/DeidentifiedSpanAction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;IIFLjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()F
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;IIFLjava/lang/String;)Lcom/openmed/openmedkit/DeidentifiedSpanAction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/DeidentifiedSpanAction;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;IIFLjava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/DeidentifiedSpanAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun getCanonicalLabel ()Ljava/lang/String;
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getStart ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/DeidentifyEngine {
+	public fun <init> ()V
+	public fun <init> (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun deidentify (Ljava/lang/String;Ljava/util/List;Lcom/openmed/openmedkit/policy/PolicyProfile;)Lcom/openmed/openmedkit/PolicyDeidentificationResult;
+}
+
+public final class com/openmed/openmedkit/EntityPrediction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;FII)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;FII)Lcom/openmed/openmedkit/EntityPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/EntityPrediction;Ljava/lang/String;Ljava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/EntityPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun snappedToGraphemeBoundaries (Ljava/lang/String;Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;)Lcom/openmed/openmedkit/EntityPrediction;
+	public static synthetic fun snappedToGraphemeBoundaries$default (Lcom/openmed/openmedkit/EntityPrediction;Ljava/lang/String;Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;ILjava/lang/Object;)Lcom/openmed/openmedkit/EntityPrediction;
+	public fun toString ()Ljava/lang/String;
+	public final fun utf16SpanIn (Ljava/lang/String;)Lcom/openmed/openmedkit/Utf16Span;
+}
+
+public abstract interface class com/openmed/openmedkit/OnnxTokenClassifier : java/io/Closeable {
+	public abstract fun close ()V
+	public abstract fun predict (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun tokenOffsets (Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OnnxTokenClassifier$DefaultImpls {
+	public static fun close (Lcom/openmed/openmedkit/OnnxTokenClassifier;)V
+	public static fun tokenOffsets (Lcom/openmed/openmedkit/OnnxTokenClassifier;Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OpenMed {
+	public fun <init> ()V
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun analyzeText (Ljava/lang/String;F)Ljava/util/List;
+	public static synthetic fun analyzeText$default (Lcom/openmed/openmedkit/OpenMed;Ljava/lang/String;FILjava/lang/Object;)Ljava/util/List;
+	public final fun extractPII (Ljava/lang/String;FZ)Ljava/util/List;
+	public static synthetic fun extractPII$default (Lcom/openmed/openmedkit/OpenMed;Ljava/lang/String;FZILjava/lang/Object;)Ljava/util/List;
+	public final fun extractPIIChunked (Ljava/lang/String;FIIZ)Ljava/util/List;
+	public static synthetic fun extractPIIChunked$default (Lcom/openmed/openmedkit/OpenMed;Ljava/lang/String;FIIZILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/OpenMedBackend {
+	public fun <init> (Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/io/File;
+	public final fun component2 ()Ljava/io/File;
+	public final fun component3 ()Ljava/io/File;
+	public final fun component4 ()Ljava/io/File;
+	public final fun component5 ()Ljava/io/File;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun copy (Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;)Lcom/openmed/openmedkit/OpenMedBackend;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/OpenMedBackend;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/io/File;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/OpenMedBackend;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId2Label ()Ljava/util/Map;
+	public final fun getId2LabelFile ()Ljava/io/File;
+	public final fun getModelDirectory ()Ljava/io/File;
+	public final fun getModelFile ()Ljava/io/File;
+	public final fun getTokenizerConfig ()Ljava/io/File;
+	public final fun getTokenizerJson ()Ljava/io/File;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/OpenMedKit : java/io/Closeable {
+	public static final field Companion Lcom/openmed/openmedkit/OpenMedKit$Companion;
+	public static final field VERSION Ljava/lang/String;
+	public fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/OnnxTokenClassifier;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/OpenMedBackend;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/TokenClassificationDecoder;Lcom/openmed/openmedkit/PiiEntityMerger;Lcom/openmed/openmedkit/DeidentifyEngine;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun analyzeText (Ljava/lang/String;FLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun analyzeText$default (Lcom/openmed/openmedkit/OpenMedKit;Ljava/lang/String;FLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public fun close ()V
+	public final fun deidentify (Ljava/lang/String;Ljava/lang/String;FZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun deidentify$default (Lcom/openmed/openmedkit/OpenMedKit;Ljava/lang/String;Ljava/lang/String;FZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun extractPii (Ljava/lang/String;FZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun extractPii$default (Lcom/openmed/openmedkit/OpenMedKit;Ljava/lang/String;FZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun extractPiiChunked (Ljava/lang/String;FIIZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun extractPiiChunked (Ljava/lang/String;IIZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun extractPiiChunked$default (Lcom/openmed/openmedkit/OpenMedKit;Ljava/lang/String;FIIZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun extractPiiChunked$default (Lcom/openmed/openmedkit/OpenMedKit;Ljava/lang/String;IIZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun fromDirectory (Ljava/io/File;Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedKit;
+}
+
+public final class com/openmed/openmedkit/OpenMedKit$Companion {
+	public final fun fromDirectory (Ljava/io/File;Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedKit;
+	public static synthetic fun fromDirectory$default (Lcom/openmed/openmedkit/OpenMedKit$Companion;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/OpenMedKit;
+}
+
+public final class com/openmed/openmedkit/OpenMedMLXModelCacheState : java/lang/Enum {
+	public static final field missing Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+	public static final field partial Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+	public static final field ready Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+	public static fun values ()[Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+}
+
+public final class com/openmed/openmedkit/OpenMedModelStore {
+	public static final field INSTANCE Lcom/openmed/openmedkit/OpenMedModelStore;
+	public static final fun cachedMLXModelDirectory (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Ljava/io/File;
+	public static synthetic fun cachedMLXModelDirectory$default (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;ILjava/lang/Object;)Ljava/io/File;
+	public static final fun downloadMLXModel (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Ljava/io/File;
+	public static synthetic fun downloadMLXModel$default (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;ILjava/lang/Object;)Ljava/io/File;
+	public static final fun isMLXModelCached (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Z
+	public static synthetic fun isMLXModelCached$default (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;ILjava/lang/Object;)Z
+	public static final fun mlxModelCacheState (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+	public static synthetic fun mlxModelCacheState$default (Ljava/lang/String;Ljava/lang/String;Ljava/io/File;ILjava/lang/Object;)Lcom/openmed/openmedkit/OpenMedMLXModelCacheState;
+}
+
+public final class com/openmed/openmedkit/OpenMedSpan {
+	public static final field Companion Lcom/openmed/openmedkit/OpenMedSpan$Companion;
+	public static final field SCHEMA_VERSION I
+	public fun <init> (IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;FI)V
+	public synthetic fun <init> (IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;FIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()F
+	public final fun component7 ()I
+	public final fun copy (IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;FI)Lcom/openmed/openmedkit/OpenMedSpan;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/OpenMedSpan;IILjava/lang/String;Ljava/lang/String;Ljava/lang/String;FIILjava/lang/Object;)Lcom/openmed/openmedkit/OpenMedSpan;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCanonicalLabel ()Ljava/lang/String;
+	public final fun getEnd ()I
+	public final fun getRawLabel ()Ljava/lang/String;
+	public final fun getSchemaVersion ()I
+	public final fun getScore ()F
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun toEntityPrediction ()Lcom/openmed/openmedkit/EntityPrediction;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/OpenMedSpan$Companion {
+	public final fun fromEntityPrediction (Lcom/openmed/openmedkit/EntityPrediction;Ljava/lang/String;)Lcom/openmed/openmedkit/OpenMedSpan;
+	public static synthetic fun fromEntityPrediction$default (Lcom/openmed/openmedkit/OpenMedSpan$Companion;Lcom/openmed/openmedkit/EntityPrediction;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/OpenMedSpan;
+}
+
+public final class com/openmed/openmedkit/PiiEntityMerger {
+	public fun <init> ()V
+	public final fun merge (Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/PolicyDeidentificationResult {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/openmed/openmedkit/PolicyDeidentificationResult;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/PolicyDeidentificationResult;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/PolicyDeidentificationResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActions ()Ljava/util/List;
+	public final fun getPolicyName ()Ljava/lang/String;
+	public final fun getRedactedText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/ScalarSpan {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/openmed/openmedkit/ScalarSpan;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/ScalarSpan;IIILjava/lang/Object;)Lcom/openmed/openmedkit/ScalarSpan;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getStart ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/SpanRepair {
+	public static final field INSTANCE Lcom/openmed/openmedkit/SpanRepair;
+	public final fun repair (Ljava/util/List;Ljava/lang/String;Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;)Ljava/util/List;
+	public static synthetic fun repair$default (Lcom/openmed/openmedkit/SpanRepair;Ljava/util/List;Ljava/lang/String;Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/TokenClassificationDecoder {
+	public fun <init> ()V
+	public fun <init> (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun decode (Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/TokenClassificationPrediction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;FII)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;FII)Lcom/openmed/openmedkit/TokenClassificationPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/TokenClassificationPrediction;Ljava/lang/String;Ljava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/TokenClassificationPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/UnicodeOffsetContract {
+	public static final field INSTANCE Lcom/openmed/openmedkit/UnicodeOffsetContract;
+	public static final fun isCodePointBoundary (Ljava/lang/String;I)Z
+	public static final fun replaceScalarSpan (Ljava/lang/String;IILjava/lang/String;)Ljava/lang/String;
+	public static final fun scalarLength (Ljava/lang/String;)I
+	public static final fun scalarToUtf16Index (Ljava/lang/String;I)I
+	public static final fun substring (Ljava/lang/String;II)Ljava/lang/String;
+	public static final fun utf16Span (Ljava/lang/String;II)Lcom/openmed/openmedkit/Utf16Span;
+	public static final fun utf16ToScalarOffset (Ljava/lang/String;I)I
+}
+
+public final class com/openmed/openmedkit/Utf16Span {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/openmed/openmedkit/Utf16Span;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/Utf16Span;IIILjava/lang/Object;)Lcom/openmed/openmedkit/Utf16Span;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getStart ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/cache/ModelCache {
+	public static final field Companion Lcom/openmed/openmedkit/cache/ModelCache$Companion;
+	public static final field DEFAULT_CACHE_BUDGET_BYTES J
+	public fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/cache/ModelCacheClock;)V
+	public synthetic fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/cache/ModelCacheClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/File;JLcom/openmed/openmedkit/cache/ModelCacheClock;)V
+	public synthetic fun <init> (Ljava/io/File;JLcom/openmed/openmedkit/cache/ModelCacheClock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun evict (Ljava/lang/String;)Z
+	public final fun isAvailable (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;)Z
+	public final fun isAvailable (Ljava/lang/String;)Z
+	public final fun modelDirectory (Ljava/lang/String;)Ljava/io/File;
+	public final fun sizeBytes (Ljava/lang/String;)J
+	public final fun totalSizeBytes ()J
+}
+
+public final class com/openmed/openmedkit/cache/ModelCache$Companion {
+}
+
+public abstract interface class com/openmed/openmedkit/cache/ModelCacheClock {
+	public abstract fun nowEpochMillis ()J
+}
+
+public final class com/openmed/openmedkit/cache/SystemModelCacheClock : com/openmed/openmedkit/cache/ModelCacheClock {
+	public static final field INSTANCE Lcom/openmed/openmedkit/cache/SystemModelCacheClock;
+	public fun nowEpochMillis ()J
+}
+
+public final class com/openmed/openmedkit/catalog/ModelCatalog {
+	public static final field ASSET_NAME Ljava/lang/String;
+	public static final field Companion Lcom/openmed/openmedkit/catalog/ModelCatalog$Companion;
+	public synthetic fun <init> (Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun byRepoId (Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
+	public final fun filter (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun filter$default (Lcom/openmed/openmedkit/catalog/ModelCatalog;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public final fun getEntries ()Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/catalog/ModelCatalog$Companion {
+	public final fun fromJsonLines (Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalog;
+	public final fun load (Landroid/content/Context;Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalog;
+	public static synthetic fun load$default (Lcom/openmed/openmedkit/catalog/ModelCatalog$Companion;Landroid/content/Context;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/catalog/ModelCatalog;
+	public final fun parse (Ljava/io/InputStream;)Lcom/openmed/openmedkit/catalog/ModelCatalog;
+}
+
+public final class com/openmed/openmedkit/catalog/ModelCatalogEntry {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Long;
+	public final fun component5 ()Ljava/util/List;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFormats ()Ljava/util/List;
+	public final fun getLanguages ()Ljava/util/List;
+	public final fun getLicense ()Ljava/lang/String;
+	public final fun getParamCount ()Ljava/lang/Long;
+	public final fun getRepoId ()Ljava/lang/String;
+	public final fun getReproducibilityHash ()Ljava/lang/String;
+	public final fun getTier ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/decode/AggregationStrategy : java/lang/Enum {
+	public static final field AVERAGE Lcom/openmed/openmedkit/decode/AggregationStrategy;
+	public static final field FIRST Lcom/openmed/openmedkit/decode/AggregationStrategy;
+	public static final field MAX Lcom/openmed/openmedkit/decode/AggregationStrategy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/decode/AggregationStrategy;
+	public static fun values ()[Lcom/openmed/openmedkit/decode/AggregationStrategy;
+}
+
+public final class com/openmed/openmedkit/decode/EntityPrediction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;FII)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;FII)Lcom/openmed/openmedkit/decode/EntityPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/decode/EntityPrediction;Ljava/lang/String;Ljava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/decode/EntityPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/decode/TokenClassificationDecoder {
+	public static final field INSTANCE Lcom/openmed/openmedkit/decode/TokenClassificationDecoder;
+	public final fun decodeEntities (Ljava/util/List;Ljava/lang/String;Lcom/openmed/openmedkit/decode/AggregationStrategy;)Ljava/util/List;
+	public static synthetic fun decodeEntities$default (Lcom/openmed/openmedkit/decode/TokenClassificationDecoder;Ljava/util/List;Ljava/lang/String;Lcom/openmed/openmedkit/decode/AggregationStrategy;ILjava/lang/Object;)Ljava/util/List;
+	public final fun repairEntitySpans (Ljava/util/List;Ljava/lang/String;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/decode/TokenPrediction {
+	public fun <init> (ILjava/lang/String;FII)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (ILjava/lang/String;FII)Lcom/openmed/openmedkit/decode/TokenPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/decode/TokenPrediction;ILjava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/decode/TokenPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndOffset ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getLabelId ()I
+	public final fun getScore ()F
+	public final fun getStartOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/deid/DeidentifyAction {
+	public fun <init> (Lcom/openmed/openmedkit/deid/OpenMedSpan;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;II)V
+	public final fun component1 ()Lcom/openmed/openmedkit/deid/OpenMedSpan;
+	public final fun component2 ()Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Lcom/openmed/openmedkit/deid/OpenMedSpan;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;II)Lcom/openmed/openmedkit/deid/DeidentifyAction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/deid/DeidentifyAction;Lcom/openmed/openmedkit/deid/OpenMedSpan;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;IIILjava/lang/Object;)Lcom/openmed/openmedkit/deid/DeidentifyAction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMethod ()Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public final fun getOutputEnd ()I
+	public final fun getOutputStart ()I
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getSpan ()Lcom/openmed/openmedkit/deid/OpenMedSpan;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/deid/DeidentifyEngine {
+	public static final field Companion Lcom/openmed/openmedkit/deid/DeidentifyEngine$Companion;
+	public fun <init> ()V
+	public fun <init> ([B)V
+	public synthetic fun <init> ([BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun deidentify (Ljava/lang/String;Ljava/util/List;Lcom/openmed/openmedkit/deid/DeidentifyMethod;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+	public final fun deidentify (Ljava/lang/String;Ljava/util/List;Ljava/util/Map;Lcom/openmed/openmedkit/deid/DeidentifyMethod;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+	public final fun deidentify (Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/functions/Function1;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+	public static synthetic fun deidentify$default (Lcom/openmed/openmedkit/deid/DeidentifyEngine;Ljava/lang/String;Ljava/util/List;Ljava/util/Map;Lcom/openmed/openmedkit/deid/DeidentifyMethod;ILjava/lang/Object;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+}
+
+public final class com/openmed/openmedkit/deid/DeidentifyEngine$Companion {
+	public final fun normalizeLabel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/deid/DeidentifyMethod : java/lang/Enum {
+	public static final field HASH Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public static final field MASK Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public static final field REMOVE Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public static final field REPLACE Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public static fun values ()[Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+}
+
+public final class com/openmed/openmedkit/deid/DeidentifyResult {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/deid/DeidentifyResult;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/deid/DeidentifyResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActions ()Ljava/util/List;
+	public final fun getAppliedSpans ()Ljava/util/List;
+	public final fun getRedactedText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/deid/OpenMedSpan {
+	public fun <init> (IILjava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;)V
+	public synthetic fun <init> (IILjava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/Double;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (IILjava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;)Lcom/openmed/openmedkit/deid/OpenMedSpan;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/deid/OpenMedSpan;IILjava/lang/String;Ljava/lang/Double;Ljava/lang/String;Lcom/openmed/openmedkit/deid/DeidentifyMethod;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/deid/OpenMedSpan;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/openmed/openmedkit/deid/DeidentifyMethod;
+	public final fun getCanonicalLabel ()Ljava/lang/String;
+	public final fun getEnd ()I
+	public final fun getReplacement ()Ljava/lang/String;
+	public final fun getScore ()Ljava/lang/Double;
+	public final fun getStart ()I
+	public final fun getTextHash ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/HttpHuggingFaceModelClient : com/openmed/openmedkit/download/HuggingFaceModelClient {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun downloadFile (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)V
+	public fun fetchModelInfo (Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;
+}
+
+public abstract interface class com/openmed/openmedkit/download/HuggingFaceModelClient {
+	public abstract fun downloadFile (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/io/File;)V
+	public abstract fun fetchModelInfo (Ljava/lang/String;Ljava/lang/String;)Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;
+}
+
+public final class com/openmed/openmedkit/download/HuggingFaceModelClient$DefaultImpls {
+	public static synthetic fun fetchModelInfo$default (Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;
+}
+
+public final class com/openmed/openmedkit/download/HuggingFaceModelFile {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/Long;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;)Lcom/openmed/openmedkit/download/HuggingFaceModelFile;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/download/HuggingFaceModelFile;Ljava/lang/String;Ljava/lang/Long;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/HuggingFaceModelFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPath ()Ljava/lang/String;
+	public final fun getSha256 ()Ljava/lang/String;
+	public final fun getSizeBytes ()Ljava/lang/Long;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/HuggingFaceModelInfo {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/HuggingFaceModelInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFiles ()Ljava/util/List;
+	public final fun getReleased ()Ljava/lang/String;
+	public final fun getRepoId ()Ljava/lang/String;
+	public final fun getRevisionSha ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadLogEvent {
+	public fun <init> (Ljava/lang/String;Lcom/openmed/openmedkit/download/ModelDownloadStatus;Ljava/lang/Long;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/String;Lcom/openmed/openmedkit/download/ModelDownloadStatus;Ljava/lang/Long;)Lcom/openmed/openmedkit/download/ModelDownloadLogEvent;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/download/ModelDownloadLogEvent;Ljava/lang/String;Lcom/openmed/openmedkit/download/ModelDownloadStatus;Ljava/lang/Long;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/ModelDownloadLogEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRepoId ()Ljava/lang/String;
+	public final fun getSizeBytes ()Ljava/lang/Long;
+	public final fun getStatus ()Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/openmed/openmedkit/download/ModelDownloadLogger {
+	public static final field Companion Lcom/openmed/openmedkit/download/ModelDownloadLogger$Companion;
+	public abstract fun log (Lcom/openmed/openmedkit/download/ModelDownloadLogEvent;)V
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadLogger$Companion {
+	public final fun getNONE ()Lcom/openmed/openmedkit/download/ModelDownloadLogger;
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadResult {
+	public fun <init> (Ljava/lang/String;Ljava/io/File;JIZLjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/io/File;
+	public final fun component3 ()J
+	public final fun component4 ()I
+	public final fun component5 ()Z
+	public final fun component6 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/io/File;JIZLjava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/download/ModelDownloadResult;Ljava/lang/String;Ljava/io/File;JIZLjava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDirectory ()Ljava/io/File;
+	public final fun getFilesDownloaded ()I
+	public final fun getFromCache ()Z
+	public final fun getIntegrityHash ()Ljava/lang/String;
+	public final fun getRepoId ()Ljava/lang/String;
+	public final fun getTotalSizeBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloadStatus : java/lang/Enum {
+	public static final field CACHE_HIT Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public static final field DOWNLOAD_COMPLETE Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public static final field DOWNLOAD_STARTED Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+	public static fun values ()[Lcom/openmed/openmedkit/download/ModelDownloadStatus;
+}
+
+public final class com/openmed/openmedkit/download/ModelDownloader {
+	public static final field DEFAULT_REVISION Ljava/lang/String;
+	public fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
+	public synthetic fun <init> (Landroid/content/Context;JLcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/cache/ModelCache;Lcom/openmed/openmedkit/download/HuggingFaceModelClient;Lcom/openmed/openmedkit/download/ModelDownloadLogger;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun download (Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
+	public static synthetic fun download$default (Lcom/openmed/openmedkit/download/ModelDownloader;Lcom/openmed/openmedkit/catalog/ModelCatalogEntry;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/download/ModelDownloadResult;
+}
+
+public final class com/openmed/openmedkit/download/ModelIntegrity {
+	public static final field INSTANCE Lcom/openmed/openmedkit/download/ModelIntegrity;
+	public final fun reproducibilityHash (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/download/ModelIntegrityException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/openmed/openmedkit/intake/DocumentInputKind : java/lang/Enum {
+	public static final field IMAGE Lcom/openmed/openmedkit/intake/DocumentInputKind;
+	public static final field PDF Lcom/openmed/openmedkit/intake/DocumentInputKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/intake/DocumentInputKind;
+	public static fun values ()[Lcom/openmed/openmedkit/intake/DocumentInputKind;
+}
+
+public final class com/openmed/openmedkit/intake/DocumentIntake {
+	public fun <init> (Landroid/content/Context;Lcom/openmed/openmedkit/ocr/OcrAdapter;Lcom/openmed/openmedkit/intake/PdfPageSource;Ljava/lang/String;)V
+	public synthetic fun <init> (Landroid/content/Context;Lcom/openmed/openmedkit/ocr/OcrAdapter;Lcom/openmed/openmedkit/intake/PdfPageSource;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun extract (Landroid/net/Uri;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/intake/DocumentIntakeResult {
+	public fun <init> (Ljava/lang/String;Lcom/openmed/openmedkit/intake/OffsetMap;Ljava/util/List;Ljava/util/List;Lcom/openmed/openmedkit/intake/DocumentInputKind;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/openmed/openmedkit/intake/OffsetMap;Ljava/util/List;Ljava/util/List;Lcom/openmed/openmedkit/intake/DocumentInputKind;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/openmed/openmedkit/intake/OffsetMap;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Lcom/openmed/openmedkit/intake/DocumentInputKind;
+	public final fun component6 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Lcom/openmed/openmedkit/intake/OffsetMap;Ljava/util/List;Ljava/util/List;Lcom/openmed/openmedkit/intake/DocumentInputKind;Ljava/util/Map;)Lcom/openmed/openmedkit/intake/DocumentIntakeResult;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/intake/DocumentIntakeResult;Ljava/lang/String;Lcom/openmed/openmedkit/intake/OffsetMap;Ljava/util/List;Ljava/util/List;Lcom/openmed/openmedkit/intake/DocumentInputKind;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/intake/DocumentIntakeResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getInputKind ()Lcom/openmed/openmedkit/intake/DocumentInputKind;
+	public final fun getMetadata ()Ljava/util/Map;
+	public final fun getOffsetMap ()Lcom/openmed/openmedkit/intake/OffsetMap;
+	public final fun getPages ()Ljava/util/List;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTokens ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/intake/DocumentPage {
+	public fun <init> (IIILjava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (IIILjava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun copy (IIILjava/lang/Integer;Ljava/lang/Integer;)Lcom/openmed/openmedkit/intake/DocumentPage;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/intake/DocumentPage;IIILjava/lang/Integer;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/openmed/openmedkit/intake/DocumentPage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getHeight ()Ljava/lang/Integer;
+	public final fun getPage ()I
+	public final fun getStart ()I
+	public final fun getWidth ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/intake/OffsetMap {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lcom/openmed/openmedkit/intake/OffsetMap;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/intake/OffsetMap;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/intake/OffsetMap;
+	public final fun entriesForSpan (II)Ljava/util/List;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun get (I)Lcom/openmed/openmedkit/intake/OffsetMapEntry;
+	public final fun getEntries ()Ljava/util/List;
+	public final fun getSize ()I
+	public fun hashCode ()I
+	public final fun pagesForSpan (II)Ljava/util/Set;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/intake/OffsetMapEntry {
+	public fun <init> (IIILjava/lang/Integer;Ljava/lang/Integer;Lcom/openmed/openmedkit/ocr/OcrBoundingBox;Lcom/openmed/openmedkit/intake/OffsetSource;)V
+	public synthetic fun <init> (IIILjava/lang/Integer;Ljava/lang/Integer;Lcom/openmed/openmedkit/ocr/OcrBoundingBox;Lcom/openmed/openmedkit/intake/OffsetSource;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun component6 ()Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public final fun component7 ()Lcom/openmed/openmedkit/intake/OffsetSource;
+	public final fun copy (IIILjava/lang/Integer;Ljava/lang/Integer;Lcom/openmed/openmedkit/ocr/OcrBoundingBox;Lcom/openmed/openmedkit/intake/OffsetSource;)Lcom/openmed/openmedkit/intake/OffsetMapEntry;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/intake/OffsetMapEntry;IIILjava/lang/Integer;Ljava/lang/Integer;Lcom/openmed/openmedkit/ocr/OcrBoundingBox;Lcom/openmed/openmedkit/intake/OffsetSource;ILjava/lang/Object;)Lcom/openmed/openmedkit/intake/OffsetMapEntry;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBbox ()Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public final fun getDocumentOffset ()I
+	public final fun getPage ()I
+	public final fun getPageOffset ()I
+	public final fun getSource ()Lcom/openmed/openmedkit/intake/OffsetSource;
+	public final fun getTokenEnd ()Ljava/lang/Integer;
+	public final fun getTokenStart ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/intake/OffsetSource : java/lang/Enum {
+	public static final field OCR_TEXT Lcom/openmed/openmedkit/intake/OffsetSource;
+	public static final field PAGE_SEPARATOR Lcom/openmed/openmedkit/intake/OffsetSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/intake/OffsetSource;
+	public static fun values ()[Lcom/openmed/openmedkit/intake/OffsetSource;
+}
+
+public final class com/openmed/openmedkit/intake/PdfPageRenderer : com/openmed/openmedkit/intake/PdfPageSource {
+	public fun <init> ()V
+	public fun <init> (F)V
+	public synthetic fun <init> (FILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun renderEach (Landroid/content/Context;Landroid/net/Uri;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/openmed/openmedkit/intake/PdfPageSource {
+	public abstract fun renderEach (Landroid/content/Context;Landroid/net/Uri;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/intake/RenderedPdfPage {
+	public fun <init> (ILandroid/graphics/Bitmap;)V
+	public final fun component1 ()I
+	public final fun component2 ()Landroid/graphics/Bitmap;
+	public final fun copy (ILandroid/graphics/Bitmap;)Lcom/openmed/openmedkit/intake/RenderedPdfPage;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/intake/RenderedPdfPage;ILandroid/graphics/Bitmap;ILjava/lang/Object;)Lcom/openmed/openmedkit/intake/RenderedPdfPage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBitmap ()Landroid/graphics/Bitmap;
+	public final fun getPage ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/DefaultPiiPatterns {
+	public static final field INSTANCE Lcom/openmed/openmedkit/merge/DefaultPiiPatterns;
+	public final fun getPatterns ()Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/merge/DominantLabel {
+	public fun <init> (Ljava/lang/String;F)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()F
+	public final fun copy (Ljava/lang/String;F)Lcom/openmed/openmedkit/merge/DominantLabel;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/merge/DominantLabel;Ljava/lang/String;FILjava/lang/Object;)Lcom/openmed/openmedkit/merge/DominantLabel;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAverageConfidence ()F
+	public final fun getLabel ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/EntityPrediction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;FII)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;FII)Lcom/openmed/openmedkit/merge/EntityPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/merge/EntityPrediction;Ljava/lang/String;Ljava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/merge/EntityPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/LabelNormalizer {
+	public static final field INSTANCE Lcom/openmed/openmedkit/merge/LabelNormalizer;
+	public static final fun isMoreSpecific (Ljava/lang/String;Ljava/lang/String;)Z
+	public static final fun normalizeLabel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/PiiEntityMerger {
+	public static final field INSTANCE Lcom/openmed/openmedkit/merge/PiiEntityMerger;
+	public static final fun calculateDominantLabel (Ljava/util/List;)Lcom/openmed/openmedkit/merge/DominantLabel;
+	public static final fun deduplicateOverlappingEntities (Ljava/util/List;)Ljava/util/List;
+	public static final fun findSemanticUnits (Ljava/lang/String;Ljava/util/List;)Ljava/util/List;
+	public static synthetic fun findSemanticUnits$default (Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ljava/util/List;
+	public final fun getDefaultPiiPatterns ()Ljava/util/List;
+	public static final fun isMoreSpecific (Ljava/lang/String;Ljava/lang/String;)Z
+	public static final fun mergePIIEntities (Ljava/util/List;Ljava/lang/String;ZZZZLjava/util/List;)Ljava/util/List;
+	public static synthetic fun mergePIIEntities$default (Ljava/util/List;Ljava/lang/String;ZZZZLjava/util/List;ILjava/lang/Object;)Ljava/util/List;
+	public static final fun mergePiiEntities (Ljava/util/List;Ljava/lang/String;ZZZZLjava/util/List;)Ljava/util/List;
+	public static synthetic fun mergePiiEntities$default (Ljava/util/List;Ljava/lang/String;ZZZZLjava/util/List;ILjava/lang/Object;)Ljava/util/List;
+	public static final fun normalizeLabel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/PiiValidators {
+	public static final field INSTANCE Lcom/openmed/openmedkit/merge/PiiValidators;
+	public static final fun validateLuhn (Ljava/lang/String;)Z
+	public static final fun validateNPI (Ljava/lang/String;)Z
+	public static final fun validatePhoneUS (Ljava/lang/String;)Z
+	public static final fun validateSSN (Ljava/lang/String;)Z
+}
+
+public final class com/openmed/openmedkit/merge/SemanticUnitMatch {
+	public fun <init> (IILjava/lang/String;FZ)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()F
+	public final fun component5 ()Z
+	public final fun copy (IILjava/lang/String;FZ)Lcom/openmed/openmedkit/merge/SemanticUnitMatch;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/merge/SemanticUnitMatch;IILjava/lang/String;FZILjava/lang/Object;)Lcom/openmed/openmedkit/merge/SemanticUnitMatch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getScore ()F
+	public final fun getStart ()I
+	public final fun getValidated ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/merge/SemanticUnitPattern {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/Integer;ZFFLjava/util/List;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/Integer;ZFFLjava/util/List;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Z
+	public final fun component6 ()F
+	public final fun component7 ()F
+	public final fun component8 ()Ljava/util/List;
+	public final fun component9 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/lang/Integer;ZFFLjava/util/List;Lkotlin/jvm/functions/Function1;)Lcom/openmed/openmedkit/merge/SemanticUnitPattern;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/merge/SemanticUnitPattern;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Integer;ZFFLjava/util/List;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/openmed/openmedkit/merge/SemanticUnitPattern;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBaseScore ()F
+	public final fun getCaptureGroup ()Ljava/lang/Integer;
+	public final fun getContextBoost ()F
+	public final fun getContextWords ()Ljava/util/List;
+	public final fun getEntityType ()Ljava/lang/String;
+	public final fun getMultiline ()Z
+	public final fun getPattern ()Ljava/lang/String;
+	public final fun getPriority ()I
+	public final fun getRegex ()Ljava/util/regex/Pattern;
+	public final fun getValidator ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/ocr/FakeOcrAdapter : com/openmed/openmedkit/ocr/OcrAdapter {
+	public fun <init> ()V
+	public fun <init> (Lcom/openmed/openmedkit/ocr/OcrResult;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/ocr/OcrResult;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCalls ()Ljava/util/List;
+	public fun recognize (Lcom/google/mlkit/vision/common/InputImage;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/ocr/MlKitOcrAdapter : com/openmed/openmedkit/ocr/OcrAdapter, java/io/Closeable {
+	public fun <init> ()V
+	public fun <init> (Lcom/google/mlkit/vision/text/TextRecognizer;)V
+	public synthetic fun <init> (Lcom/google/mlkit/vision/text/TextRecognizer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public fun recognize (Lcom/google/mlkit/vision/common/InputImage;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/openmed/openmedkit/ocr/OcrAdapter {
+	public abstract fun recognize (Lcom/google/mlkit/vision/common/InputImage;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/ocr/OcrBoundingBox {
+	public fun <init> (IIII)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun copy (IIII)Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/ocr/OcrBoundingBox;IIIIILjava/lang/Object;)Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBottom ()I
+	public final fun getLeft ()I
+	public final fun getRight ()I
+	public final fun getTop ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/ocr/OcrResult {
+	public static final field Companion Lcom/openmed/openmedkit/ocr/OcrResult$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/util/List;Ljava/util/Map;)Lcom/openmed/openmedkit/ocr/OcrResult;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/ocr/OcrResult;Ljava/lang/String;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/ocr/OcrResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMetadata ()Ljava/util/Map;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTokens ()Ljava/util/List;
+	public final fun getWords ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/ocr/OcrResult$Companion {
+	public final fun empty (Ljava/util/Map;)Lcom/openmed/openmedkit/ocr/OcrResult;
+	public static synthetic fun empty$default (Lcom/openmed/openmedkit/ocr/OcrResult$Companion;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/ocr/OcrResult;
+}
+
+public final class com/openmed/openmedkit/ocr/OcrToken {
+	public fun <init> (Ljava/lang/String;IIFLcom/openmed/openmedkit/ocr/OcrBoundingBox;I)V
+	public synthetic fun <init> (Ljava/lang/String;IIFLcom/openmed/openmedkit/ocr/OcrBoundingBox;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()F
+	public final fun component5 ()Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public final fun component6 ()I
+	public final fun copy (Ljava/lang/String;IIFLcom/openmed/openmedkit/ocr/OcrBoundingBox;I)Lcom/openmed/openmedkit/ocr/OcrToken;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/ocr/OcrToken;Ljava/lang/String;IIFLcom/openmed/openmedkit/ocr/OcrBoundingBox;IILjava/lang/Object;)Lcom/openmed/openmedkit/ocr/OcrToken;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBbox ()Lcom/openmed/openmedkit/ocr/OcrBoundingBox;
+	public final fun getConfidence ()F
+	public final fun getEnd ()I
+	public final fun getPage ()I
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorAttemptOutcome : java/lang/Enum {
+	public static final field NOT_AVAILABLE Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public static final field NO_SUPPORTED_OPERATORS Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public static final field SELECTED Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public static final field SESSION_CREATION_FAILED Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public static fun values ()[Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorConfig {
+	public static final field Companion Lcom/openmed/openmedkit/onnx/AcceleratorConfig$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;Ljava/util/Map;ZZILcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;)V
+	public synthetic fun <init> (Ljava/util/List;Ljava/util/Map;ZZILcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/Map;
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()I
+	public final fun component6 ()Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+	public final fun copy (Ljava/util/List;Ljava/util/Map;ZZILcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;)Lcom/openmed/openmedkit/onnx/AcceleratorConfig;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Ljava/util/List;Ljava/util/Map;ZZILcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;ILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIntraOpThreadCount ()I
+	public final fun getModelCoverage ()Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+	public final fun getNnapiAllowFp16 ()Z
+	public final fun getNnapiUseNchw ()Z
+	public final fun getPreferredProviders ()Ljava/util/List;
+	public final fun getQnnOptions ()Ljava/util/Map;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorConfig$Companion {
+	public final fun cpuOnly (I)Lcom/openmed/openmedkit/onnx/AcceleratorConfig;
+	public static synthetic fun cpuOnly$default (Lcom/openmed/openmedkit/onnx/AcceleratorConfig$Companion;IILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorConfig;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorOperatorCoverage {
+	public fun <init> (Ljava/lang/String;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun component5 ()Ljava/util/Set;
+	public final fun component6 ()Z
+	public final fun copy (Ljava/lang/String;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Z)Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;Ljava/lang/String;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;ZILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCpuFallbackOperators ()Ljava/util/Set;
+	public final fun getFamily ()Ljava/lang/String;
+	public final fun getFullyCovered ()Z
+	public final fun getKnown ()Z
+	public final fun getProvider ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun getProviderOperators ()Ljava/util/Set;
+	public final fun getRequiredOperators ()Ljava/util/Set;
+	public final fun getUsesCpuPartition ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorProvider : java/lang/Enum {
+	public static final field CPU Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public static final field NNAPI Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public static final field QNN Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public static fun values ()[Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorProviderAttempt {
+	public fun <init> (Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;)V
+	public final fun component1 ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun component2 ()Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public final fun copy (Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;)Lcom/openmed/openmedkit/onnx/AcceleratorProviderAttempt;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorProviderAttempt;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;ILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorProviderAttempt;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getOutcome ()Lcom/openmed/openmedkit/onnx/AcceleratorAttemptOutcome;
+	public final fun getProvider ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorSelection {
+	public fun <init> (Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;Ljava/util/List;)V
+	public final fun component1 ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun component3 ()Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;
+	public final fun component4 ()Ljava/util/List;
+	public final fun copy (Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;Ljava/util/List;)Lcom/openmed/openmedkit/onnx/AcceleratorSelection;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorSelection;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;Ljava/util/Set;Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;Ljava/util/List;ILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorSelection;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAttempts ()Ljava/util/List;
+	public final fun getAvailableProviders ()Ljava/util/Set;
+	public final fun getOperatorCoverage ()Lcom/openmed/openmedkit/onnx/AcceleratorOperatorCoverage;
+	public final fun getSelectedProvider ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public fun hashCode ()I
+	public final fun isAccelerated ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorSession : java/io/Closeable {
+	public synthetic fun <init> (Lcom/openmed/openmedkit/onnx/AcceleratorRuntimeComponents;Ljava/util/Map;Lcom/openmed/openmedkit/onnx/TensorElementType;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/File;Ljava/io/File;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> (Ljava/io/File;Ljava/io/File;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/File;Ljava/util/Map;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> (Ljava/io/File;Ljava/util/Map;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> ([BLjava/util/Map;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> ([BLjava/util/Map;Lcom/openmed/openmedkit/onnx/AcceleratorConfig;Lcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public final fun getSelection ()Lcom/openmed/openmedkit/onnx/AcceleratorSelection;
+	public final fun run ([I[ILjava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorSpanSignature {
+	public fun <init> (Ljava/lang/String;II)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;II)Lcom/openmed/openmedkit/onnx/AcceleratorSpanSignature;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorSpanSignature;Ljava/lang/String;IIILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorSpanSignature;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndOffset ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getStartOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AcceleratorValidationRecord {
+	public static final field RECALL_COMPARISON_EPSILON D
+	public fun <init> (Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;Ljava/util/List;Ljava/util/List;DDID)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;Ljava/util/List;Ljava/util/List;DDIDILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Ljava/util/List;
+	public final fun component4 ()D
+	public final fun component5 ()D
+	public final fun component6 ()I
+	public final fun component7 ()D
+	public final fun copy (Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;Ljava/util/List;Ljava/util/List;DDID)Lcom/openmed/openmedkit/onnx/AcceleratorValidationRecord;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/AcceleratorValidationRecord;Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;Ljava/util/List;Ljava/util/List;DDIDILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/AcceleratorValidationRecord;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBoundaryToleranceCharacters ()I
+	public final fun getCpuRecall ()D
+	public final fun getCpuSpans ()Ljava/util/List;
+	public final fun getDelegateRecall ()D
+	public final fun getDelegateSpans ()Ljava/util/List;
+	public final fun getLatency ()Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;
+	public final fun getMaxRecallDrop ()D
+	public final fun getPassed ()Z
+	public final fun getRecallDelta ()D
+	public final fun getRecallWithinTolerance ()Z
+	public final fun getSpansWithinTolerance ()Z
+	public fun hashCode ()I
+	public final fun requirePassing ()Lcom/openmed/openmedkit/onnx/AcceleratorValidationRecord;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/AndroidDeviceTier : java/lang/Enum {
+	public static final field DEVICE_FARM_STUB Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public static final field ENTRY Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public static final field FLAGSHIP Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public static final field MID_RANGE Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public static fun values ()[Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+}
+
+public final class com/openmed/openmedkit/onnx/DeviceTierLatencyRecord {
+	public fun <init> (Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;DDI)V
+	public final fun component1 ()Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public final fun component2 ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun component3 ()D
+	public final fun component4 ()D
+	public final fun component5 ()I
+	public final fun copy (Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;DDI)Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;Lcom/openmed/openmedkit/onnx/AcceleratorProvider;DDIILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/DeviceTierLatencyRecord;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCpuP50Milliseconds ()D
+	public final fun getDelegateP50Milliseconds ()D
+	public final fun getDeviceTier ()Lcom/openmed/openmedkit/onnx/AndroidDeviceTier;
+	public final fun getProvider ()Lcom/openmed/openmedkit/onnx/AcceleratorProvider;
+	public final fun getSampleCount ()I
+	public final fun getSpeedup ()D
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class com/openmed/openmedkit/onnx/InferenceError : java/lang/Exception {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class com/openmed/openmedkit/onnx/InferenceError$InvalidInput : com/openmed/openmedkit/onnx/InferenceError {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/openmed/openmedkit/onnx/InferenceError$InvalidOutput : com/openmed/openmedkit/onnx/InferenceError {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class com/openmed/openmedkit/onnx/InferenceError$MissingOutput : com/openmed/openmedkit/onnx/InferenceError {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun getOutputName ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/InferenceError$SessionCreation : com/openmed/openmedkit/onnx/InferenceError {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class com/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage {
+	public static final field Companion Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;)Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;Ljava/lang/String;Ljava/util/Set;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFamily ()Ljava/lang/String;
+	public final fun getRequiredOperators ()Ljava/util/Set;
+	public final fun getSupportedOperators ()Ljava/util/Map;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage$Companion {
+	public final fun fromManifest (Ljava/io/File;Ljava/lang/String;Ljava/util/Map;)Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+	public static synthetic fun fromManifest$default (Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage$Companion;Ljava/io/File;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/ModelFamilyOperatorCoverage;
+}
+
+public final class com/openmed/openmedkit/onnx/OnnxTokenClassifier : java/io/Closeable {
+	public fun <init> (Ljava/io/File;Ljava/io/File;ILcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> (Ljava/io/File;Ljava/io/File;ILcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/io/File;Ljava/util/Map;ILcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> (Ljava/io/File;Ljava/util/Map;ILcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> ([BLjava/io/File;ILcom/openmed/openmedkit/onnx/TensorElementType;)V
+	public synthetic fun <init> ([BLjava/io/File;ILcom/openmed/openmedkit/onnx/TensorElementType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun close ()V
+	public final fun run ([I[ILjava/util/List;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/openmed/openmedkit/onnx/TensorElementType : java/lang/Enum {
+	public static final field INT32 Lcom/openmed/openmedkit/onnx/TensorElementType;
+	public static final field INT64 Lcom/openmed/openmedkit/onnx/TensorElementType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/onnx/TensorElementType;
+	public static fun values ()[Lcom/openmed/openmedkit/onnx/TensorElementType;
+}
+
+public final class com/openmed/openmedkit/onnx/TokenOffset {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/openmed/openmedkit/onnx/TokenOffset;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/TokenOffset;IIILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/TokenOffset;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndOffset ()I
+	public final fun getStartOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/onnx/TokenPrediction {
+	public fun <init> (ILjava/lang/String;FII)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()F
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun copy (ILjava/lang/String;FII)Lcom/openmed/openmedkit/onnx/TokenPrediction;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/onnx/TokenPrediction;ILjava/lang/String;FIIILjava/lang/Object;)Lcom/openmed/openmedkit/onnx/TokenPrediction;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndOffset ()I
+	public final fun getLabel ()Ljava/lang/String;
+	public final fun getLabelId ()I
+	public final fun getScore ()F
+	public final fun getStartOffset ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/policy/PolicyAction : java/lang/Enum {
+	public static final field Companion Lcom/openmed/openmedkit/policy/PolicyAction$Companion;
+	public static final field HASH Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static final field KEEP Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static final field MASK Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static final field REDACT Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static final field REMOVE Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static final field REPLACE Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getRedactionEquivalent ()Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun getWireName ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/policy/PolicyAction;
+	public static fun values ()[Lcom/openmed/openmedkit/policy/PolicyAction;
+}
+
+public final class com/openmed/openmedkit/policy/PolicyAction$Companion {
+	public final fun fromWireName (Ljava/lang/String;)Lcom/openmed/openmedkit/policy/PolicyAction;
+}
+
+public final class com/openmed/openmedkit/policy/PolicyProfile {
+	public fun <init> (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;Ljava/lang/String;Ljava/lang/String;ZZZZLjava/util/List;Ljava/util/Map;Ljava/util/Map;)V
+	public final fun actionFor (Ljava/lang/String;)Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun canonicalLabel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun component1 ()I
+	public final fun component10 ()Z
+	public final fun component11 ()Z
+	public final fun component12 ()Ljava/util/List;
+	public final fun component13 ()Ljava/util/Map;
+	public final fun component14 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Z
+	public final fun component9 ()Z
+	public final fun copy (ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;Ljava/lang/String;Ljava/lang/String;ZZZZLjava/util/List;Ljava/util/Map;Ljava/util/Map;)Lcom/openmed/openmedkit/policy/PolicyProfile;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/policy/PolicyProfile;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/openmed/openmedkit/policy/PolicyAction;Ljava/lang/String;Ljava/lang/String;ZZZZLjava/util/List;Ljava/util/Map;Ljava/util/Map;ILjava/lang/Object;)Lcom/openmed/openmedkit/policy/PolicyProfile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActions ()Ljava/util/Map;
+	public final fun getArbitrationMode ()Ljava/lang/String;
+	public final fun getDefaultAction ()Lcom/openmed/openmedkit/policy/PolicyAction;
+	public final fun getDefaultActionBias ()Ljava/lang/String;
+	public final fun getForcedCascadeTiers ()Ljava/util/List;
+	public final fun getKeepMapping ()Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPolicyLabelActions ()Ljava/util/Map;
+	public final fun getPosture ()Ljava/lang/String;
+	public final fun getReversibleId ()Z
+	public final fun getSafetySweepMandatory ()Z
+	public final fun getSchemaVersion ()I
+	public final fun getStrictNoLeak ()Z
+	public final fun getThresholdProfile ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/policy/PolicyProfiles {
+	public static final field DEFAULT_PROFILE Ljava/lang/String;
+	public static final field INSTANCE Lcom/openmed/openmedkit/policy/PolicyProfiles;
+	public final fun canonicalLabel (Ljava/lang/String;)Ljava/lang/String;
+	public final fun canonicalProfileName (Ljava/lang/String;)Ljava/lang/String;
+	public final fun getBundledProfileNames ()Ljava/util/List;
+	public final fun load (Ljava/lang/String;)Lcom/openmed/openmedkit/policy/PolicyProfile;
+	public static synthetic fun load$default (Lcom/openmed/openmedkit/policy/PolicyProfiles;Ljava/lang/String;ILjava/lang/Object;)Lcom/openmed/openmedkit/policy/PolicyProfile;
+}
+
+public final class com/openmed/openmedkit/segmentation/AndroidIcuTextSegmentationAdapter : com/openmed/openmedkit/segmentation/TextSegmentationAdapter {
+	public fun <init> ()V
+	public fun graphemeBoundaries (Ljava/lang/String;Ljava/util/Locale;)[I
+	public fun wordBoundaries (Ljava/lang/String;Ljava/util/Locale;)[I
+}
+
+public final class com/openmed/openmedkit/segmentation/IcuTextSegmenter {
+	public static final field Companion Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter$Companion;
+	public fun <init> ()V
+	public fun <init> (Lcom/openmed/openmedkit/segmentation/TextSegmentationAdapter;)V
+	public synthetic fun <init> (Lcom/openmed/openmedkit/segmentation/TextSegmentationAdapter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun fallbackWordSegments (Ljava/lang/String;Ljava/util/Locale;)Ljava/util/List;
+	public static synthetic fun fallbackWordSegments$default (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;Ljava/lang/String;Ljava/util/Locale;ILjava/lang/Object;)Ljava/util/List;
+	public final fun graphemeSegments (Ljava/lang/String;Ljava/util/Locale;)Ljava/util/List;
+	public static synthetic fun graphemeSegments$default (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;Ljava/lang/String;Ljava/util/Locale;ILjava/lang/Object;)Ljava/util/List;
+	public final fun isGraphemeBoundary (Ljava/lang/String;ILjava/util/Locale;)Z
+	public static synthetic fun isGraphemeBoundary$default (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;Ljava/lang/String;ILjava/util/Locale;ILjava/lang/Object;)Z
+	public static final fun localeForText (Ljava/lang/String;)Ljava/util/Locale;
+	public static final fun requiresFallback (Ljava/lang/String;)Z
+	public final fun snapScalarSpan (Ljava/lang/String;IILjava/util/Locale;)Lcom/openmed/openmedkit/ScalarSpan;
+	public static synthetic fun snapScalarSpan$default (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;Ljava/lang/String;IILjava/util/Locale;ILjava/lang/Object;)Lcom/openmed/openmedkit/ScalarSpan;
+	public final fun wordSegments (Ljava/lang/String;Ljava/util/Locale;)Ljava/util/List;
+	public static synthetic fun wordSegments$default (Lcom/openmed/openmedkit/segmentation/IcuTextSegmenter;Ljava/lang/String;Ljava/util/Locale;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/segmentation/IcuTextSegmenter$Companion {
+	public final fun localeForText (Ljava/lang/String;)Ljava/util/Locale;
+	public final fun requiresFallback (Ljava/lang/String;)Z
+}
+
+public final class com/openmed/openmedkit/segmentation/ScalarTextSegment {
+	public fun <init> (Ljava/lang/String;II)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;II)Lcom/openmed/openmedkit/segmentation/ScalarTextSegment;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/segmentation/ScalarTextSegment;Ljava/lang/String;IIILjava/lang/Object;)Lcom/openmed/openmedkit/segmentation/ScalarTextSegment;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()I
+	public final fun getStart ()I
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/openmed/openmedkit/segmentation/TextSegmentationAdapter {
+	public abstract fun graphemeBoundaries (Ljava/lang/String;Ljava/util/Locale;)[I
+	public abstract fun wordBoundaries (Ljava/lang/String;Ljava/util/Locale;)[I
+}
+
+public final class com/openmed/openmedkit/segmentation/TextSegmentationAdapter$DefaultImpls {
+	public static synthetic fun graphemeBoundaries$default (Lcom/openmed/openmedkit/segmentation/TextSegmentationAdapter;Ljava/lang/String;Ljava/util/Locale;ILjava/lang/Object;)[I
+}
+

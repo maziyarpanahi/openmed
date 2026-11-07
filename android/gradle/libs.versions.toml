@@ -1,6 +1,8 @@
 [versions]
 agp = "8.7.3"
 kotlin = "2.0.21"
+# Build-time public API dump/check (apiDump, apiCheck); Apache-2.0.
+binary-compatibility-validator = "0.16.3"
 kotlinx-coroutines = "1.8.1"
 kotlinx-serialization-json = "1.5.1"
 mlkit-text-recognition = "16.0.1"
@@ -28,3 +30,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlinx-binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compatibility-validator" }

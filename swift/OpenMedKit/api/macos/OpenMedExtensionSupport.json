@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedExtensionSupport",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {
+    "OpenMedExtensionSupport.ExtensionInputBudget": [
+      "enum OpenMedExtensionSupport.ExtensionInputBudget"
+    ],
+    "OpenMedExtensionSupport.ExtensionInputBudget.maximumAggregateUTF8Bytes": [
+      "static var OpenMedExtensionSupport.ExtensionInputBudget.maximumAggregateUTF8Bytes: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionInputBudget.maximumItems": [
+      "static var OpenMedExtensionSupport.ExtensionInputBudget.maximumItems: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionInputBudget.validate": [
+      "static func OpenMedExtensionSupport.ExtensionInputBudget.validate(_: [Swift.String]) throws -> ()"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan": [
+      "conformance OpenMedExtensionSupport.ExtensionRedactedSpan: Equatable",
+      "conformance OpenMedExtensionSupport.ExtensionRedactedSpan: Sendable",
+      "struct OpenMedExtensionSupport.ExtensionRedactedSpan"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.action": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.action: OpenMedKit.PolicyAction { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.canonicalLabel": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.canonicalLabel: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.confidence": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.confidence: Swift.Float { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.end": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.end: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.init": [
+      "OpenMedExtensionSupport.ExtensionRedactedSpan.init(label: Swift.String, canonicalLabel: Swift.String, action: OpenMedKit.PolicyAction, start: Swift.Int, end: Swift.Int, confidence: Swift.Float, replacement: Swift.String?) -> OpenMedExtensionSupport.ExtensionRedactedSpan"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.label": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.label: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.replacement": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.replacement: Swift.String? { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactedSpan.start": [
+      "var OpenMedExtensionSupport.ExtensionRedactedSpan.start: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError": [
+      "conformance OpenMedExtensionSupport.ExtensionRedactionError: Equatable",
+      "conformance OpenMedExtensionSupport.ExtensionRedactionError: Error",
+      "conformance OpenMedExtensionSupport.ExtensionRedactionError: LocalizedError",
+      "conformance OpenMedExtensionSupport.ExtensionRedactionError: Sendable",
+      "enum OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.aggregateInputTooLarge": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.aggregateInputTooLarge: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.emptyInput": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.emptyInput"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.errorDescription": [
+      "var OpenMedExtensionSupport.ExtensionRedactionError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.inputBytesTooLarge": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.inputBytesTooLarge: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.inputTooLarge": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.inputTooLarge: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.invalidAsset": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.invalidAsset: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.invalidRedactionOutput": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.invalidRedactionOutput"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.missingAsset": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.missingAsset: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.missingPlainTextInput": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.missingPlainTextInput"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.modelAssetsTooLarge": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.modelAssetsTooLarge: (Swift.Int64, Swift.Int64) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.nonLocalAsset": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.nonLocalAsset: (Foundation.URL) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.tooManyAssetFiles": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.tooManyAssetFiles: (Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.tooManyInputItems": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.tooManyInputItems: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionError.unsupportedModelFormat": [
+      "case OpenMedExtensionSupport.ExtensionRedactionError.unsupportedModelFormat: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler": [
+      "final class OpenMedExtensionSupport.ExtensionRedactionHandler"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.Redact": [
+      "typealias OpenMedExtensionSupport.ExtensionRedactionHandler.Redact = (Swift.String, OpenMedKit.Policy) throws -> OpenMedKit.PolicyDeidentificationResult"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.defaultPolicyName": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.defaultPolicyName: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.init": [
+      "OpenMedExtensionSupport.ExtensionRedactionHandler.init(redact: OpenMedExtensionSupport.ExtensionRedactionHandler.Redact) -> OpenMedExtensionSupport.ExtensionRedactionHandler",
+      "convenience OpenMedExtensionSupport.ExtensionRedactionHandler.init(configuration: OpenMedExtensionSupport.NanoModelConfiguration) throws -> OpenMedExtensionSupport.ExtensionRedactionHandler"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.maximumAggregateInputUTF8Bytes": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.maximumAggregateInputUTF8Bytes: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputCharacters": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputCharacters: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputItems": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputItems: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputUTF8Bytes": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.maximumInputUTF8Bytes: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.maximumOutputUTF8Bytes": [
+      "static var OpenMedExtensionSupport.ExtensionRedactionHandler.maximumOutputUTF8Bytes: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.redact": [
+      "func OpenMedExtensionSupport.ExtensionRedactionHandler.redact(_: Swift.String, policyName: Swift.String = default) throws -> OpenMedExtensionSupport.ExtensionRedactionOutput",
+      "func OpenMedExtensionSupport.ExtensionRedactionHandler.redact(_: [Swift.String], policyName: Swift.String = default) throws -> [OpenMedExtensionSupport.ExtensionRedactionOutput]"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.validateInput": [
+      "static func OpenMedExtensionSupport.ExtensionRedactionHandler.validateInput(_: Swift.String) throws -> ()"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.validateInputs": [
+      "static func OpenMedExtensionSupport.ExtensionRedactionHandler.validateInputs(_: [Swift.String]) throws -> ()"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.withCleanup": [
+      "static func OpenMedExtensionSupport.ExtensionRedactionHandler.withCleanup<T>(makeHandler: () throws -> OpenMedExtensionSupport.ExtensionRedactionHandler, cleanup: () -> Swift.Void, operation: (OpenMedExtensionSupport.ExtensionRedactionHandler) throws -> T) throws -> T"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionHandler.withRuntime": [
+      "static func OpenMedExtensionSupport.ExtensionRedactionHandler.withRuntime<T>(configuration: OpenMedExtensionSupport.NanoModelConfiguration, operation: (OpenMedExtensionSupport.ExtensionRedactionHandler) throws -> T) throws -> T"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionOutput": [
+      "conformance OpenMedExtensionSupport.ExtensionRedactionOutput: Equatable",
+      "conformance OpenMedExtensionSupport.ExtensionRedactionOutput: Sendable",
+      "struct OpenMedExtensionSupport.ExtensionRedactionOutput"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionOutput.init": [
+      "OpenMedExtensionSupport.ExtensionRedactionOutput.init(redactedText: Swift.String, policyName: Swift.String, spans: [OpenMedExtensionSupport.ExtensionRedactedSpan]) -> OpenMedExtensionSupport.ExtensionRedactionOutput"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionOutput.policyName": [
+      "var OpenMedExtensionSupport.ExtensionRedactionOutput.policyName: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionOutput.redactedText": [
+      "var OpenMedExtensionSupport.ExtensionRedactionOutput.redactedText: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionRedactionOutput.spans": [
+      "var OpenMedExtensionSupport.ExtensionRedactionOutput.spans: [OpenMedExtensionSupport.ExtensionRedactedSpan] { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionSecurityPolicy": [
+      "enum OpenMedExtensionSupport.ExtensionSecurityPolicy"
+    ],
+    "OpenMedExtensionSupport.ExtensionSecurityPolicy.allowsNetworkAccess": [
+      "static var OpenMedExtensionSupport.ExtensionSecurityPolicy.allowsNetworkAccess: Swift.Bool { get }"
+    ],
+    "OpenMedExtensionSupport.ExtensionSecurityPolicy.modelAssetURLScheme": [
+      "static var OpenMedExtensionSupport.ExtensionSecurityPolicy.modelAssetURLScheme: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration": [
+      "conformance OpenMedExtensionSupport.NanoModelConfiguration: Sendable",
+      "struct OpenMedExtensionSupport.NanoModelConfiguration"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.bundled": [
+      "static func OpenMedExtensionSupport.NanoModelConfiguration.bundled(in: Foundation.Bundle = default) throws -> OpenMedExtensionSupport.NanoModelConfiguration"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.compiledModelName": [
+      "static var OpenMedExtensionSupport.NanoModelConfiguration.compiledModelName: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.id2labelURL": [
+      "var OpenMedExtensionSupport.NanoModelConfiguration.id2labelURL: Foundation.URL { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.init": [
+      "OpenMedExtensionSupport.NanoModelConfiguration.init(modelURL: Foundation.URL, id2labelURL: Foundation.URL, tokenizerFolderURL: Foundation.URL) throws -> OpenMedExtensionSupport.NanoModelConfiguration"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.maximumAssetFileCount": [
+      "static var OpenMedExtensionSupport.NanoModelConfiguration.maximumAssetFileCount: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.maximumSequenceLength": [
+      "static var OpenMedExtensionSupport.NanoModelConfiguration.maximumSequenceLength: Swift.Int { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.memoryBudget": [
+      "var OpenMedExtensionSupport.NanoModelConfiguration.memoryBudget: OpenMedExtensionSupport.NanoModelMemoryBudget { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.modelURL": [
+      "var OpenMedExtensionSupport.NanoModelConfiguration.modelURL: Foundation.URL { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.resourceDirectoryName": [
+      "static var OpenMedExtensionSupport.NanoModelConfiguration.resourceDirectoryName: Swift.String { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelConfiguration.tokenizerFolderURL": [
+      "var OpenMedExtensionSupport.NanoModelConfiguration.tokenizerFolderURL: Foundation.URL { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget": [
+      "conformance OpenMedExtensionSupport.NanoModelMemoryBudget: Equatable",
+      "conformance OpenMedExtensionSupport.NanoModelMemoryBudget: Sendable",
+      "struct OpenMedExtensionSupport.NanoModelMemoryBudget"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.estimatedPeakBytes": [
+      "var OpenMedExtensionSupport.NanoModelMemoryBudget.estimatedPeakBytes: Swift.Int64 { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.extensionWorkingSetEnvelopeBytes": [
+      "static var OpenMedExtensionSupport.NanoModelMemoryBudget.extensionWorkingSetEnvelopeBytes: Swift.Int64 { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.init": [
+      "OpenMedExtensionSupport.NanoModelMemoryBudget.init(modelAssetBytes: Swift.Int64) throws -> OpenMedExtensionSupport.NanoModelMemoryBudget"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.maximumEstimatedPeakBytes": [
+      "static var OpenMedExtensionSupport.NanoModelMemoryBudget.maximumEstimatedPeakBytes: Swift.Int64 { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.maximumModelAssetBytes": [
+      "static var OpenMedExtensionSupport.NanoModelMemoryBudget.maximumModelAssetBytes: Swift.Int64 { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.modelAssetBytes": [
+      "var OpenMedExtensionSupport.NanoModelMemoryBudget.modelAssetBytes: Swift.Int64 { get }"
+    ],
+    "OpenMedExtensionSupport.NanoModelMemoryBudget.runtimeHeadroomBytes": [
+      "static var OpenMedExtensionSupport.NanoModelMemoryBudget.runtimeHeadroomBytes: Swift.Int64 { get }"
+    ]
+  }
+}

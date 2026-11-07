@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "module": "OpenMedActionExtension",
+  "generator": "swift-api-digester -dump-sdk",
+  "symbols": {}
+}
