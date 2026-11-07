@@ -593,10 +593,27 @@ export interface SMARTBackendJobStatus {
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
+/** Keyed, domain-separated digest; values compare only within one key_id. */
+export interface KeyedDigest {
+  alg: "hmac-sha256";
+  key_id: string;
+  value: string;
+}
+
+/** How the digests in a job record were made; omitted digests are null. */
+export type JobDigests =
+  | { mode: "keyed"; alg: "hmac-sha256"; key_id: string; reason: null }
+  | {
+      mode: "omitted";
+      alg: null;
+      key_id: null;
+      reason: "digest_key_unconfigured" | "legacy_digests_removed";
+    };
+
 export interface JobDocumentMetadata {
   id: string;
   length: number;
-  text_hash: string;
+  text_digest: KeyedDigest | null;
 }
 
 export interface JobSpan {
@@ -604,13 +621,13 @@ export interface JobSpan {
   start: number;
   end: number;
   label: string;
-  text_hash: string;
+  text_digest: KeyedDigest | null;
   confidence: number | null;
 }
 
 export interface JobWebhookMetadata {
   configured: boolean;
-  url_hash: string;
+  url_digest: KeyedDigest | null;
   max_attempts: number;
   backoff_seconds: number;
 }
@@ -628,6 +645,8 @@ export interface JobErrorSummary {
 }
 
 export interface JobResponse {
+  /** 3 for records that carry keyed digests. */
+  schema_version: number;
   id: string;
   status: JobStatus;
   progress_percent: number;
@@ -635,6 +654,7 @@ export interface JobResponse {
   processed_count: number;
   failed_count: number;
   label_histogram: Record<string, number>;
+  digests: JobDigests;
   spans: JobSpan[];
   documents: JobDocumentMetadata[];
   error: JobErrorSummary | null;

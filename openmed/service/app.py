@@ -69,7 +69,12 @@ from .bulk_data import (
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
-from .jobs import OWNER_DIGEST_FIELD, DeidentifyJobQueue, job_response_payload
+from .jobs import (
+    OWNER_DIGEST_FIELD,
+    DeidentifyJobQueue,
+    JobDigestPolicy,
+    job_response_payload,
+)
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
@@ -561,7 +566,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     ):
         if existing_job_queue is not None:
             existing_job_queue.shutdown()
-        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
+        app.state.job_queue = DeidentifyJobQueue.from_env(
+            runtime,
+            digests=getattr(app.state, "job_digests", None),
+        )
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -739,7 +747,10 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     queue = getattr(request.app.state, "job_queue", None)
     if queue is None:
         runtime = _get_service_runtime(request)
-        queue = DeidentifyJobQueue.from_env(runtime)
+        queue = DeidentifyJobQueue.from_env(
+            runtime,
+            digests=getattr(request.app.state, "job_digests", None),
+        )
         request.app.state.job_queue = queue
     return queue
 
@@ -981,6 +992,8 @@ def create_app(
     app.state.job_ownership = JobOwnershipPolicy.from_env(
         authentication_enabled=app.state.auth.enabled or app.state.mtls.enabled
     )
+    # One deployment key serves owner, span, document and webhook URL digests.
+    app.state.job_digests = JobDigestPolicy.from_env(key=app.state.job_ownership.key)
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )

@@ -526,7 +526,8 @@ def test_job_store_writes_schema_version_and_rejects_unknown_versions(
     store_path = tmp_path / "jobs.json"
     store = jobs.LocalJobStore(store_path)
     store.create({"id": "synthetic", "status": "queued"})
-    assert json.loads(store_path.read_text(encoding="utf-8"))["schema_version"] == 2
+    stored = json.loads(store_path.read_text(encoding="utf-8"))
+    assert stored["schema_version"] == jobs.JOB_STORE_SCHEMA_VERSION == 3
 
     for version in (0, 99, "2", True):
         store_path.write_text(
