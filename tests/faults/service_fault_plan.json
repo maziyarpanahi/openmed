@@ -1,0 +1,666 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "service.v4.0",
+  "seed": 3601,
+  "cases": [
+    {
+      "case_id": "jobs-store.enospc-write",
+      "component": "service.jobs.local_store",
+      "category": "disk",
+      "fault": "enospc",
+      "injection_point": "disk.write",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.partial-write",
+      "component": "service.jobs.local_store",
+      "category": "disk",
+      "fault": "partial_write",
+      "injection_point": "disk.write",
+      "phase": "before_commit",
+      "trigger": {
+        "seeded": {
+          "min_call": 2,
+          "max_call": 12
+        }
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.eio-replace",
+      "component": "service.jobs.local_store",
+      "category": "disk",
+      "fault": "eio",
+      "injection_point": "disk.replace",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.eio-read-restart",
+      "component": "service.jobs.local_store",
+      "category": "disk",
+      "fault": "eio",
+      "injection_point": "disk.read",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "retryable",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.fsync-before-publish",
+      "component": "service.jobs.local_store",
+      "category": "disk",
+      "fault": "fsync_failure",
+      "injection_point": "disk.fsync",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true,
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "publish_not_fsynced"
+      }
+    },
+    {
+      "case_id": "jobs-store.kill-before-replace",
+      "component": "service.jobs.local_store",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "disk.replace",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect"
+    },
+    {
+      "case_id": "jobs-store.kill-before-replace-residue",
+      "component": "service.jobs.local_store",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "disk.replace",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "require_no_residue": true,
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "stale_publish_temp_not_swept"
+      }
+    },
+    {
+      "case_id": "jobs-store.kill-after-replace",
+      "component": "service.jobs.local_store",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "disk.replace",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.cancel-at-replace",
+      "component": "service.jobs.local_store",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "disk.replace",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "jobs-store.truncated-restart",
+      "component": "service.jobs.local_store",
+      "category": "corrupted_state",
+      "fault": "truncated_state",
+      "injection_point": "state.restart",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "quarantined"
+    },
+    {
+      "case_id": "jobs-store.garbled-restart",
+      "component": "service.jobs.local_store",
+      "category": "corrupted_state",
+      "fault": "garbled_state",
+      "injection_point": "state.restart",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "quarantined"
+    },
+    {
+      "case_id": "jobs-store.clock-jump-forward",
+      "component": "service.jobs.local_store",
+      "category": "clock",
+      "fault": "clock_jump_forward",
+      "injection_point": "clock.wall",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "parameters": {
+        "seconds": 3600
+      }
+    },
+    {
+      "case_id": "jobs-store.clock-jump-backward",
+      "component": "service.jobs.local_store",
+      "category": "clock",
+      "fault": "clock_jump_backward",
+      "injection_point": "clock.wall",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "parameters": {
+        "seconds": 3600
+      }
+    },
+    {
+      "case_id": "jobs-queue.webhook-refused",
+      "component": "service.jobs.queue",
+      "category": "network",
+      "fault": "connection_refused",
+      "injection_point": "network.request",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1,
+        "persistent": true
+      },
+      "expected_outcome": "committed_exactly_once"
+    },
+    {
+      "case_id": "jobs-queue.webhook-reset-then-retry",
+      "component": "service.jobs.queue",
+      "category": "network",
+      "fault": "connection_reset",
+      "injection_point": "network.request",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once"
+    },
+    {
+      "case_id": "jobs-queue.shutdown-cancels-queued",
+      "component": "service.jobs.queue",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "queue.shutdown",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "cancelled_job_left_queued"
+      }
+    },
+    {
+      "case_id": "jobs-queue.cancel-running",
+      "component": "service.jobs.queue",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "model.call",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "cancelled_job_left_running"
+      }
+    },
+    {
+      "case_id": "jobs-queue.kill-running-restart",
+      "component": "service.jobs.queue",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "model.call",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "restart_leaves_job_running"
+      }
+    },
+    {
+      "case_id": "jobs-queue.disk-full-worker",
+      "component": "service.jobs.queue",
+      "category": "disk",
+      "fault": "enospc",
+      "injection_point": "disk.write",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1,
+        "persistent": true
+      },
+      "expected_outcome": "committed_exactly_once",
+      "known_gap": {
+        "issue": 3574,
+        "reason_code": "worker_disk_failure_strands_job"
+      }
+    },
+    {
+      "case_id": "webhook.refused-first-attempt",
+      "component": "service.webhooks.delivery",
+      "category": "network",
+      "fault": "connection_refused",
+      "injection_point": "network.request",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once"
+    },
+    {
+      "case_id": "webhook.timeout-after-receipt",
+      "component": "service.webhooks.delivery",
+      "category": "network",
+      "fault": "timeout",
+      "injection_point": "network.request",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "retryable"
+    },
+    {
+      "case_id": "webhook.reset-every-attempt",
+      "component": "service.webhooks.delivery",
+      "category": "network",
+      "fault": "connection_reset",
+      "injection_point": "network.request",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1,
+        "persistent": true
+      },
+      "expected_outcome": "retryable"
+    },
+    {
+      "case_id": "webhook.refused-every-attempt",
+      "component": "service.webhooks.delivery",
+      "category": "network",
+      "fault": "connection_refused",
+      "injection_point": "network.request",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1,
+        "persistent": true
+      },
+      "expected_outcome": "retryable"
+    },
+    {
+      "case_id": "offline-guard.egress-denied",
+      "component": "core.offline.network_guard",
+      "category": "network",
+      "fault": "egress_denied",
+      "injection_point": "network.egress",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once"
+    },
+    {
+      "case_id": "offline-guard.cancel-nested-scope",
+      "component": "core.offline.network_guard",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "offline.scope",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "signing.receiver-clock-skew",
+      "component": "service.signing.verify",
+      "category": "clock",
+      "fault": "clock_skew",
+      "injection_point": "clock.wall",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "parameters": {
+        "seconds": 900
+      }
+    },
+    {
+      "case_id": "signing.clock-jump-backward-replay",
+      "component": "service.signing.verify",
+      "category": "clock",
+      "fault": "clock_jump_backward",
+      "injection_point": "clock.wall",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 2
+      },
+      "expected_outcome": "committed_exactly_once",
+      "parameters": {
+        "seconds": 120
+      }
+    },
+    {
+      "case_id": "signing.clock-jump-forward-replay",
+      "component": "service.signing.verify",
+      "category": "clock",
+      "fault": "clock_jump_forward",
+      "injection_point": "clock.wall",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 2
+      },
+      "expected_outcome": "committed_exactly_once",
+      "parameters": {
+        "seconds": 3600
+      }
+    },
+    {
+      "case_id": "breaker.monotonic-stall",
+      "component": "service.resilience.circuit_breaker",
+      "category": "clock",
+      "fault": "monotonic_stall",
+      "injection_point": "clock.monotonic",
+      "phase": "before_commit",
+      "trigger": {
+        "seeded": {
+          "min_call": 1,
+          "max_call": 2
+        }
+      },
+      "expected_outcome": "no_effect"
+    },
+    {
+      "case_id": "breaker.clock-jump-backward",
+      "component": "service.resilience.circuit_breaker",
+      "category": "clock",
+      "fault": "clock_jump_backward",
+      "injection_point": "clock.monotonic",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "parameters": {
+        "seconds": 3600
+      }
+    },
+    {
+      "case_id": "breaker.clock-jump-forward",
+      "component": "service.resilience.circuit_breaker",
+      "category": "clock",
+      "fault": "clock_jump_forward",
+      "injection_point": "clock.monotonic",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "parameters": {
+        "seconds": 3600
+      }
+    },
+    {
+      "case_id": "breaker.cancel-half-open-probe",
+      "component": "service.resilience.circuit_breaker",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "breaker.probe",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "gate.cancel-waiting-acquire",
+      "component": "service.throttle.concurrency_gate",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "gate.acquire",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "no_effect",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "gate.cancel-admitted-request",
+      "component": "service.throttle.concurrency_gate",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "request.call_next",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.enospc-write",
+      "component": "structured.store.artifacts",
+      "category": "disk",
+      "fault": "enospc",
+      "injection_point": "disk.write",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.partial-write",
+      "component": "structured.store.artifacts",
+      "category": "disk",
+      "fault": "partial_write",
+      "injection_point": "disk.write",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.fsync-failure",
+      "component": "structured.store.artifacts",
+      "category": "disk",
+      "fault": "fsync_failure",
+      "injection_point": "disk.fsync",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.eio-link",
+      "component": "structured.store.artifacts",
+      "category": "disk",
+      "fault": "eio",
+      "injection_point": "disk.link",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.kill-after-link",
+      "component": "structured.store.artifacts",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "disk.link",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once"
+    },
+    {
+      "case_id": "artifacts.eio-read-restart",
+      "component": "structured.store.artifacts",
+      "category": "disk",
+      "fault": "eio",
+      "injection_point": "disk.read",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "retryable",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "artifacts.garbled-restart",
+      "component": "structured.store.artifacts",
+      "category": "corrupted_state",
+      "fault": "garbled_state",
+      "injection_point": "state.restart",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "quarantined"
+    },
+    {
+      "case_id": "journey.kill-before-commit",
+      "component": "structured.store.journey",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "sqlite.commit",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "retryable"
+    },
+    {
+      "case_id": "journey.kill-after-commit",
+      "component": "structured.store.journey",
+      "category": "process",
+      "fault": "process_kill",
+      "injection_point": "sqlite.commit",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "committed_exactly_once",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "journey.eio-commit",
+      "component": "structured.store.journey",
+      "category": "disk",
+      "fault": "eio",
+      "injection_point": "sqlite.commit",
+      "phase": "during_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true
+    },
+    {
+      "case_id": "journey.cancel-auto-commit",
+      "component": "structured.store.journey",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "sqlite.commit",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "parameters": {
+        "operation": "put_artifact"
+      },
+      "require_no_residue": true
+    },
+    {
+      "case_id": "journey.cancel-ingest-commit",
+      "component": "structured.store.journey",
+      "category": "cancellation",
+      "fault": "cancellation",
+      "injection_point": "sqlite.commit",
+      "phase": "before_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "rolled_back",
+      "require_no_residue": true,
+      "known_gap": {
+        "issue": 3702,
+        "reason_code": "cancelled_ingest_orphans_blob"
+      }
+    },
+    {
+      "case_id": "journey.truncated-restart",
+      "component": "structured.store.journey",
+      "category": "corrupted_state",
+      "fault": "truncated_state",
+      "injection_point": "state.restart",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "quarantined"
+    },
+    {
+      "case_id": "journey.garbled-restart",
+      "component": "structured.store.journey",
+      "category": "corrupted_state",
+      "fault": "garbled_state",
+      "injection_point": "state.restart",
+      "phase": "after_commit",
+      "trigger": {
+        "at_call": 1
+      },
+      "expected_outcome": "quarantined"
+    }
+  ]
+}
