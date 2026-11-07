@@ -74,6 +74,8 @@ truth is the backend code, but the essentials are:
 
 ## See also
 
+- [OpenMedKit Support Matrix (v4.0)](openmedkit-support-matrix.md), which
+  reuses these families per kit surface, OS, runtime and precision
 - [MLX Backend](mlx-backend.md)
 - [MLX Quantized Export Certification](export-mlx-quant.md)
 - [CoreML Packaging](coreml-export.md)
