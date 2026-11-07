@@ -479,6 +479,7 @@ classification:
     - multimodal/preflight.md
     - multimodal/batch-preflight.md
     - multimodal/preflight-cli.md
+    - multimodal/inference-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md

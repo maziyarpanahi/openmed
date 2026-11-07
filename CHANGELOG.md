@@ -78,6 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffers and reviewer-confirmed handoff. Add the aligned on-device OpenMedKit
   converter and synthetic offline safety controls (#3673).
 
+- Explicit offline document, transcription and ambient-draft CLI adapters over
+  injected session services, with separate protected/evidence outputs, consent
+  and review gates, interruption cleanup and synthetic examples (#3678).
+
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
