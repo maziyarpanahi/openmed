@@ -79,7 +79,8 @@ def test_fixed_seed_reproduces_text_annotations_and_provenance() -> None:
     assert [item.to_dict() for item in first] == [item.to_dict() for item in second]
 
 
-@pytest.mark.parametrize("count", [-1, 1.5, True])
-def test_invalid_count_fails_closed(count: object) -> None:
-    with pytest.raises(ValueError, match="count"):
-        generate_social_history_examples(count)  # type: ignore[arg-type]
+def test_invalid_count_fails_closed(subtests) -> None:
+    for count in [-1, 1.5, True]:
+        with subtests.test(count=count):
+            with pytest.raises(ValueError, match="count"):
+                generate_social_history_examples(count)  # type: ignore[arg-type]

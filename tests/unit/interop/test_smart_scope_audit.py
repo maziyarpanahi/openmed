@@ -55,26 +55,26 @@ def test_reports_missing_and_excessive_atomic_operations() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("v1", "v2"),
-    [("read", "rs"), ("write", "cud"), ("*", "cruds")],
-)
-@pytest.mark.parametrize("context", ["patient", "user", "system"])
-def test_v1_permissions_are_explicit_v2_equivalents(v1, v2, context) -> None:
-    first, second = f"{context}/Observation.{v1}", f"{context}/Observation.{v2}"
-    assert normalize_smart_scope(first) == second
-    for required, declared in [(first, second), (second, first)]:
-        result = audit_smart_scopes(
-            workflow_id="synthetic",
-            required_scopes=[required],
-            declared_scopes=[declared],
-        )
-        assert result.status == "pass"
+def test_v1_permissions_are_explicit_v2_equivalents(subtests) -> None:
+    for v1, v2 in [("read", "rs"), ("write", "cud"), ("*", "cruds")]:
+        for context in ["patient", "user", "system"]:
+            with subtests.test(v1=v1, v2=v2, context=context):
+                first, second = (
+                    f"{context}/Observation.{v1}",
+                    f"{context}/Observation.{v2}",
+                )
+                assert normalize_smart_scope(first) == second
+                for required, declared in [(first, second), (second, first)]:
+                    result = audit_smart_scopes(
+                        workflow_id="synthetic",
+                        required_scopes=[required],
+                        declared_scopes=[declared],
+                    )
+                    assert result.status == "pass"
 
 
-@pytest.mark.parametrize(
-    ("required", "declared", "missing", "excessive"),
-    [
+def test_conservative_comparison_table(subtests) -> None:
+    for required, declared, missing, excessive in [
         ("patient/Observation.r", "patient/*.r", [], ["patient/*.r"]),
         ("patient/*.r", "patient/Observation.r", ["patient/*.r"], []),
         ("patient/*.read", "patient/*.rs", [], []),
@@ -126,20 +126,23 @@ def test_v1_permissions_are_explicit_v2_equivalents(v1, v2, context) -> None:
             ["patient/Observation.r"],
             ["fhirUser", "launch/patient", "offline_access", "openid"],
         ),
-    ],
-)
-def test_conservative_comparison_table(required, declared, missing, excessive) -> None:
-    result = audit_smart_scopes(
-        workflow_id="synthetic", required_scopes=required, declared_scopes=declared
-    )
-    # Query values never appear in evidence; compare the public base labels here.
-    assert [
-        scope.evidence_value.split("?")[0] for scope in result.missing_scopes
-    ] == missing
-    assert [
-        scope.evidence_value.split("?")[0] for scope in result.excessive_scopes
-    ] == excessive
-    assert (result.status == "pass") is (not missing and not excessive)
+    ]:
+        with subtests.test(
+            required=required, declared=declared, missing=missing, excessive=excessive
+        ):
+            result = audit_smart_scopes(
+                workflow_id="synthetic",
+                required_scopes=required,
+                declared_scopes=declared,
+            )
+            # Query values never appear in evidence; compare the public base labels here.
+            assert [
+                scope.evidence_value.split("?")[0] for scope in result.missing_scopes
+            ] == missing
+            assert [
+                scope.evidence_value.split("?")[0] for scope in result.excessive_scopes
+            ] == excessive
+            assert (result.status == "pass") is (not missing and not excessive)
 
 
 def test_mixed_scope_string_and_iterable_are_equivalent() -> None:
@@ -153,14 +156,13 @@ def test_mixed_scope_string_and_iterable_are_equivalent() -> None:
     assert parse_smart_scope("launch/patient").atoms() == frozenset()
 
 
-@pytest.mark.parametrize(
-    "scope", ["profile", "launch", "launch/encounter", "online_access"]
-)
-def test_other_recognized_non_clinical_scopes(scope) -> None:
-    parsed = parse_smart_scope(scope)
-    assert not parsed.is_clinical
-    assert parsed.value == scope
-    assert parsed.operations == ()
+def test_other_recognized_non_clinical_scopes(subtests) -> None:
+    for scope in ["profile", "launch", "launch/encounter", "online_access"]:
+        with subtests.test(scope=scope):
+            parsed = parse_smart_scope(scope)
+            assert not parsed.is_clinical
+            assert parsed.value == scope
+            assert parsed.operations == ()
 
 
 def test_union_of_operations_and_duplicates_is_deterministic() -> None:
@@ -222,9 +224,8 @@ def test_report_and_object_repr_hide_all_query_values_and_keys() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_invalid_scope_yields_value_free_finding_and_never_passes(subtests) -> None:
+    for value in [
         "",
         "unknown-synthetic-secret",
         "Bearer SYNTHETIC_SECRET",
@@ -245,27 +246,26 @@ def test_report_and_object_repr_hide_all_query_values_and_keys() -> None:
         "patient/Observation.r?category=lab&",
         "launch/private-secret",
         None,
-    ],
-)
-def test_invalid_scope_yields_value_free_finding_and_never_passes(value) -> None:
-    import json
+    ]:
+        with subtests.test(value=value):
+            import json
 
-    from openmed.interop.smart_scope_grammar import SmartScopeFinding
+            from openmed.interop.smart_scope_grammar import SmartScopeFinding
 
-    finding = parse_smart_scope(value)
-    assert isinstance(finding, SmartScopeFinding)
-    assert set(finding.to_dict()) == {"reason_code"}
-    result = audit_smart_scopes(
-        workflow_id="synthetic", required_scopes=[], declared_scopes=[value]
-    )
-    assert result.status == "invalid"
-    assert not result.declared_scopes
-    assert result.to_dict()["findings"] == [
-        {"reason_code": finding.reason_code, "source": "declared", "index": 0}
-    ]
-    if value:
-        assert value not in json.dumps(result.to_dict())
-    assert isinstance(normalize_smart_scope(value), SmartScopeFinding)
+            finding = parse_smart_scope(value)
+            assert isinstance(finding, SmartScopeFinding)
+            assert set(finding.to_dict()) == {"reason_code"}
+            result = audit_smart_scopes(
+                workflow_id="synthetic", required_scopes=[], declared_scopes=[value]
+            )
+            assert result.status == "invalid"
+            assert not result.declared_scopes
+            assert result.to_dict()["findings"] == [
+                {"reason_code": finding.reason_code, "source": "declared", "index": 0}
+            ]
+            if value:
+                assert value not in json.dumps(result.to_dict())
+            assert isinstance(normalize_smart_scope(value), SmartScopeFinding)
 
 
 def test_invalid_required_input_is_not_silently_dropped() -> None:
@@ -290,9 +290,8 @@ def test_shared_comparison_matches_audit_and_returns_no_invalid_permissions() ->
     assert shared.findings == audited.findings
 
 
-@pytest.mark.parametrize(
-    ("raw", "name", "context", "resource", "access"),
-    [
+def test_normalizes_smart_v2_scope(subtests) -> None:
+    for raw, name, context, resource, access in [
         (
             "patient/Observation.sr",
             "patient/Observation.rs",
@@ -306,21 +305,21 @@ def test_shared_comparison_matches_audit_and_returns_no_invalid_permissions() ->
         ("launch", "launch", "launch", None, ""),
         ("launch/patient", "launch/patient", "launch", None, ""),
         ("launch/encounter", "launch/encounter", "launch", None, ""),
-    ],
-)
-def test_normalizes_smart_v2_scope(raw, name, context, resource, access) -> None:
-    scope = parse_smart_scope_preflight(raw)
-    assert (scope.name, scope.context, scope.resource_type, scope.access) == (
-        name,
-        context,
-        resource,
-        frozenset(access),
-    )
+    ]:
+        with subtests.test(
+            raw=raw, name=name, context=context, resource=resource, access=access
+        ):
+            scope = parse_smart_scope_preflight(raw)
+            assert (scope.name, scope.context, scope.resource_type, scope.access) == (
+                name,
+                context,
+                resource,
+                frozenset(access),
+            )
 
 
-@pytest.mark.parametrize(
-    ("required", "requested", "missing", "excessive"),
-    [
+def test_audit_cases(subtests) -> None:
+    for required, requested, missing, excessive in [
         (["patient/Observation.rs"], ["patient/Observation.rs"], [], []),
         (
             ["patient/Observation.rs"],
@@ -347,15 +346,16 @@ def test_normalizes_smart_v2_scope(raw, name, context, resource, access) -> None
             [],
             ["user/Condition.r"],
         ),
-    ],
-)
-def test_audit_cases(required, requested, missing, excessive) -> None:
-    result = audit_smart_scope_preflight(
-        required_scopes=required, requested_scopes=requested
-    )
-    assert [item.scope for item in result.missing_scopes] == missing
-    assert [item.scope for item in result.excessive_scopes] == excessive
-    assert result.is_least_privilege is (not missing and not excessive)
+    ]:
+        with subtests.test(
+            required=required, requested=requested, missing=missing, excessive=excessive
+        ):
+            result = audit_smart_scope_preflight(
+                required_scopes=required, requested_scopes=requested
+            )
+            assert [item.scope for item in result.missing_scopes] == missing
+            assert [item.scope for item in result.excessive_scopes] == excessive
+            assert result.is_least_privilege is (not missing and not excessive)
 
 
 def test_reason_codes_and_output_are_stable_and_content_free() -> None:
@@ -393,21 +393,19 @@ def test_reason_codes_and_output_are_stable_and_content_free() -> None:
     assert "token" not in serialized and "http" not in serialized
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_unsupported_values_fail_without_echoing_input(subtests) -> None:
+    for value in [
         "patient/Observation.rr",
         "patient/Observation.",
         "patient/observation.r",
         "launch/custom-identifier",
         "https://example.invalid/token",
         "Bearer sensitive-value",
-    ],
-)
-def test_unsupported_values_fail_without_echoing_input(value: str) -> None:
-    with pytest.raises(ValueError) as error:
-        parse_smart_scope_preflight(value)
-    assert value not in str(error.value)
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError) as error:
+                parse_smart_scope_preflight(value)
+            assert value not in str(error.value)
 
 
 def test_input_order_and_duplicates_do_not_change_report() -> None:

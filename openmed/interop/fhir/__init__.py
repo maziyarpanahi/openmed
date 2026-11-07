@@ -102,6 +102,17 @@ from .server_validation import (
     FHIRValidationTransport,
     preflight_server_validation,
 )
+from .subscription_notifications import (
+    SubscriptionContentMode,
+    SubscriptionEvent,
+    SubscriptionFindingCode,
+    SubscriptionNotification,
+    SubscriptionNotificationError,
+    SubscriptionNotificationFinding,
+    SubscriptionNotificationType,
+    SubscriptionNotificationVersion,
+    parse_subscription_notification,
+)
 from .transactions import (
     ApprovedWriteEntry,
     AssembledTransaction,
@@ -230,6 +241,15 @@ _WRITE_CLIENT_EXPORTS = frozenset(
 )
 
 __all__ = [
+    "SubscriptionContentMode",
+    "SubscriptionEvent",
+    "SubscriptionFindingCode",
+    "SubscriptionNotification",
+    "SubscriptionNotificationError",
+    "SubscriptionNotificationFinding",
+    "SubscriptionNotificationType",
+    "SubscriptionNotificationVersion",
+    "parse_subscription_notification",
     "MAX_SERVER_VALIDATION_ISSUES",
     "MAX_SERVER_VALIDATION_RESOURCE_BYTES",
     "FHIRServerValidationIssue",

@@ -40,12 +40,13 @@ def controller(tmp_path: Path) -> EffectAdmissionController:
     return EffectAdmissionController(store)
 
 
-@pytest.mark.parametrize("workflow", [WORKFLOW, OTHER])
-def test_no_configuration_never_invokes_effect(workflow: WorkflowId) -> None:
-    effect = Mock()
-    with pytest.raises(AdmissionError, match="admission_disabled"):
-        dispatch_with_admission(effect, workflow_id=workflow)
-    effect.assert_not_called()
+def test_no_configuration_never_invokes_effect(subtests) -> None:
+    for workflow in [WORKFLOW, OTHER]:
+        with subtests.test(workflow=workflow):
+            effect = Mock()
+            with pytest.raises(AdmissionError, match="admission_disabled"):
+                dispatch_with_admission(effect, workflow_id=workflow)
+            effect.assert_not_called()
 
 
 def test_workflow_enable_admits_only_that_scope(
@@ -119,35 +120,45 @@ def test_receipts_are_signed_chained_and_content_free(
     }
 
 
-@pytest.mark.parametrize("file", ["ledger.db", "anchor.db"])
-@pytest.mark.parametrize("damage", ["missing", "corrupted", "rollback"])
 def test_missing_corrupted_or_rolled_back_state_fails_closed(
-    tmp_path: Path,
-    file: str,
-    damage: str,
+    subtests, tmp_path
 ) -> None:
-    store = store_at(tmp_path)
-    store.initialize(now=100)
-    original = (tmp_path / file).read_bytes()
-    controller = EffectAdmissionController(store)
-    controller.enable(now=101)
-    controller.stop(now=102)
-    target = tmp_path / file
-    if damage == "missing":
-        target.unlink()
-    elif damage == "corrupted":
-        target.write_bytes(b"synthetic-private-content; not a database")
-    else:
-        target.write_bytes(original)
-    for check in (controller, EffectAdmissionController(store_at(tmp_path))):
-        assert check.status(WORKFLOW).state is AdmissionState.STOPPED
-        with pytest.raises(AdmissionError, match="untrusted_state"):
-            check.require_admitted(WORKFLOW)
-        with pytest.raises(AdmissionError, match="untrusted_state"):
-            check.enable(now=103)
-    assert controller.status().generation >= 3
-    if file == "ledger.db":
-        assert EffectAdmissionController(store_at(tmp_path)).status().generation == 3
+    case_root = tmp_path
+    for file in ["ledger.db", "anchor.db"]:
+        for damage in ["missing", "corrupted", "rollback"]:
+            with subtests.test(file=file, damage=damage):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                store = store_at(tmp_path)
+                store.initialize(now=100)
+                original = (tmp_path / file).read_bytes()
+                controller = EffectAdmissionController(store)
+                controller.enable(now=101)
+                controller.stop(now=102)
+                target = tmp_path / file
+                if damage == "missing":
+                    target.unlink()
+                elif damage == "corrupted":
+                    target.write_bytes(b"synthetic-private-content; not a database")
+                else:
+                    target.write_bytes(original)
+                for check in (
+                    controller,
+                    EffectAdmissionController(store_at(tmp_path)),
+                ):
+                    assert check.status(WORKFLOW).state is AdmissionState.STOPPED
+                    with pytest.raises(AdmissionError, match="untrusted_state"):
+                        check.require_admitted(WORKFLOW)
+                    with pytest.raises(AdmissionError, match="untrusted_state"):
+                        check.enable(now=103)
+                assert controller.status().generation >= 3
+                if file == "ledger.db":
+                    assert (
+                        EffectAdmissionController(store_at(tmp_path))
+                        .status()
+                        .generation
+                        == 3
+                    )
 
 
 @pytest.mark.parametrize(
@@ -325,21 +336,23 @@ def test_unavailable_storage_and_short_keys_are_controlled(tmp_path: Path) -> No
     assert store.status().reason_code == "untrusted_state"
 
 
-@pytest.mark.parametrize(
-    "state", ["enabled", "stopped", None, {}, [], "synthetic-private-state"]
-)
 def test_invalid_transition_state_is_controlled_without_touching_generation(
-    tmp_path, state
+    subtests, tmp_path
 ):
-    store = store_at(tmp_path)
-    store.initialize(now=100)
-    before = store.status()
-    with pytest.raises(AdmissionError, match="invalid_transition") as caught:
-        store.transition(
-            state,
-            role=AdmissionRole.OPERATOR,
-            reason=AdmissionReason.EXPLICIT_ENABLE,
-            now=101,
-        )
-    assert str(caught.value) == "invalid_transition"
-    assert store.status() == before
+    case_root = tmp_path
+    for state in ["enabled", "stopped", None, {}, [], "synthetic-private-state"]:
+        with subtests.test(state=state):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            store = store_at(tmp_path)
+            store.initialize(now=100)
+            before = store.status()
+            with pytest.raises(AdmissionError, match="invalid_transition") as caught:
+                store.transition(
+                    state,
+                    role=AdmissionRole.OPERATOR,
+                    reason=AdmissionReason.EXPLICIT_ENABLE,
+                    now=101,
+                )
+            assert str(caught.value) == "invalid_transition"
+            assert store.status() == before

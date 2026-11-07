@@ -15,9 +15,8 @@ def mention(text, value, label):
     return dict(start=start, end=start + len(value), label=label, score=0.99)
 
 
-@pytest.mark.parametrize(
-    "phrase,expected",
-    [
+def test_german_dates_and_relative_spans_preserve_offsets(subtests):
+    for phrase, expected in [
         ("01.02.2026", "2026-02-01"),
         ("01/02/2026", "2026-02-01"),
         ("2026-02-01", "2026-02-01"),
@@ -29,35 +28,32 @@ def mention(text, value, label):
         ("in zwei Wochen", "2026-04-14"),
         ("vor einem Monat", "2026-02-28"),
         ("seit 2 Tagen", "2026-03-29/2026-03-31"),
-    ],
-)
-def test_german_dates_and_relative_spans_preserve_offsets(phrase, expected):
-    text = "🫀 Befund: " + phrase + "."
-    match = next(GERMAN_TIMEX_RE.finditer(text))
-    assert text[match.start() : match.end()] == phrase
-    result = normalize_temporal(
-        text, [(match.start(), match.end())], "2026-03-31", language="de"
-    )[0]
-    assert result.value == expected and result.text == phrase
-    assert result.span == (match.start(), match.end())
+    ]:
+        with subtests.test(phrase=phrase, expected=expected):
+            text = "🫀 Befund: " + phrase + "."
+            match = next(GERMAN_TIMEX_RE.finditer(text))
+            assert text[match.start() : match.end()] == phrase
+            result = normalize_temporal(
+                text, [(match.start(), match.end())], "2026-03-31", language="de"
+            )[0]
+            assert result.value == expected and result.text == phrase
+            assert result.span == (match.start(), match.end())
 
 
-@pytest.mark.parametrize(
-    "phrase,flag",
-    [
+def test_invalid_ambiguous_unanchored_or_wrong_language_never_invent_a_date(subtests):
+    for phrase, flag in [
         ("01.02.26", "ambiguous"),
         ("31.02.2026", "invalid"),
         ("2026-02-30", "invalid"),
         ("vor 3 Tagen", "unanchored"),
         ("gestern", "unanchored"),
         ("last week", "unsupported"),
-    ],
-)
-def test_invalid_ambiguous_unanchored_or_wrong_language_never_invent_a_date(
-    phrase, flag
-):
-    result = normalize_temporal(phrase, [(0, len(phrase))], None, language="de")[0]
-    assert result.value is None and flag in result.granularity_flags
+    ]:
+        with subtests.test(phrase=phrase, flag=flag):
+            result = normalize_temporal(
+                phrase, [(0, len(phrase))], None, language="de"
+            )[0]
+            assert result.value is None and flag in result.granularity_flags
 
 
 def test_language_changes_numeric_date_contract_without_changing_english_default():
@@ -71,24 +67,22 @@ def test_language_changes_numeric_date_contract_without_changing_english_default
         normalize_temporal(phrase, [(0, len(phrase))], None, language="fr")
 
 
-@pytest.mark.parametrize(
-    "cue,action",
-    [
+def test_german_medication_action_is_one_original_trigger(subtests):
+    for cue, action in [
         ("begonnen", "started"),
         ("wieder begonnen", "restarted"),
         ("abgesetzt", "stopped"),
         ("pausiert", "held"),
         ("reduziert", "decreased"),
-    ],
-)
-def test_german_medication_action_is_one_original_trigger(cue, action):
-    text = f"Metoprolol wurde {cue}."
-    frames = extract_medication_change_events(
-        text, [mention(text, "Metoprolol", "Drug")], language="de"
-    )
-    assert len(frames) == 1
-    trigger = frames[0].role_slots("action")[0]
-    assert trigger.value == action and text[trigger.start : trigger.end] == cue
+    ]:
+        with subtests.test(cue=cue, action=action):
+            text = f"Metoprolol wurde {cue}."
+            frames = extract_medication_change_events(
+                text, [mention(text, "Metoprolol", "Drug")], language="de"
+            )
+            assert len(frames) == 1
+            trigger = frames[0].role_slots("action")[0]
+            assert trigger.value == action and text[trigger.start : trigger.end] == cue
 
 
 def test_german_increase_keeps_explicit_old_and_new_dose_roles():
@@ -117,26 +111,24 @@ def test_german_lab_trend_has_analyte_and_trigger_evidence():
     assert frames[0].role_slots("analyte")[0].value == "CRP"
 
 
-@pytest.mark.parametrize(
-    "language,text,surface,expected_role",
-    [
+def test_explicit_dose_role_cannot_fill_its_missing_counterpart(subtests):
+    for language, text, surface, expected_role in [
         ("en", "Metoprolol increased from 25 mg to 50 mg.", "25 mg", "old_dose"),
         ("de", "Metoprolol von 25 mg auf 50 mg erhöht.", "50 mg", "new_dose"),
         ("en", "Metoprolol was reduced to 25 mg.", "25 mg", "new_dose"),
         ("de", "Metoprolol von 50 mg reduziert.", "50 mg", "old_dose"),
-    ],
-)
-def test_explicit_dose_role_cannot_fill_its_missing_counterpart(
-    language, text, surface, expected_role
-):
-    frame = extract_medication_change_events(
-        text,
-        [mention(text, "Metoprolol", "Drug"), mention(text, surface, "Dose")],
-        language=language,
-    )[0]
-    assert frame.role_slots(expected_role)[0].value == surface
-    other_role = "old_dose" if expected_role == "new_dose" else "new_dose"
-    assert not frame.role_slots(other_role)
+    ]:
+        with subtests.test(
+            language=language, text=text, surface=surface, expected_role=expected_role
+        ):
+            frame = extract_medication_change_events(
+                text,
+                [mention(text, "Metoprolol", "Drug"), mention(text, surface, "Dose")],
+                language=language,
+            )[0]
+            assert frame.role_slots(expected_role)[0].value == surface
+            other_role = "old_dose" if expected_role == "new_dose" else "new_dose"
+            assert not frame.role_slots(other_role)
 
 
 def test_continuation_and_other_language_are_not_silently_restarts():
