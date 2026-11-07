@@ -771,6 +771,7 @@ classification:
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
+    - runtimes/device-capabilities.md
     - faq.md
     - troubleshooting.md
     - onboarding.md

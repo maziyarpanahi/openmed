@@ -155,6 +155,65 @@ export type {
   VerifyPortableBundleInput,
 } from "./portable-bundle";
 
+export {
+  BUDGET_LADDER,
+  CPU_ARCHITECTURES,
+  DEVICE_CAPABILITIES_SCHEMA,
+  DEVICE_CAPABILITIES_SCHEMA_VERSION,
+  DEVICE_FEATURES,
+  DeviceCapabilityError,
+  MODEL_TIERS,
+  NETWORK_STATES,
+  PLATFORM_PROVIDERS,
+  PROVIDER_ACCELERATORS,
+  budgetBucket,
+  coarseOsVersion,
+  createDeviceCapabilityProfile,
+  deviceCapabilityProfileDigest,
+  parseDeviceCapabilityProfile,
+  probeWebDeviceCapabilities,
+  webDeviceCapabilityProfile,
+} from "./device-capabilities";
+export type {
+  AcceleratorKind,
+  DeviceCapabilityProfile,
+  DeviceCapabilityProfileInit,
+  DeviceCapabilityReason,
+  ExecutionProvider,
+  ModelTier,
+  NetworkState,
+  WebCapabilityProfileOptions,
+  WebDeviceCapabilityProbeOptions,
+} from "./device-capabilities";
+
+export {
+  DEFAULT_PROVIDERS,
+  EXECUTION_CONSTRAINTS_SCHEMA,
+  EXECUTION_EXTENSION,
+  EXECUTION_PLAN_REASONS,
+  EXECUTION_PLAN_SCHEMA,
+  EXECUTION_RESOLVER_VERSION,
+  ExecutionConstraintsError,
+  FORMAT_PROVIDERS,
+  computePlanKey,
+  createExecutionConstraints,
+  executionConstraintsDigest,
+  executionPlanInvalidation,
+  parseExecutionConstraints,
+  resolveExecutionPlan,
+  verificationDigest,
+} from "./execution-plan";
+export type {
+  ExecutionConstraints,
+  ExecutionConstraintsInit,
+  ExecutionPlan,
+  ExecutionPlanReason,
+  ExecutionPlanSkip,
+  ExecutionPlanStep,
+  PlanInvalidationInput,
+  ResolveExecutionPlanInput,
+} from "./execution-plan";
+
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
 const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;
