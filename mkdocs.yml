@@ -511,6 +511,7 @@ nav:
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
       - Transcript Accuracy: evaluation/transcript-accuracy.md
+      - Ambient Draft Evaluation: evaluation/ambient-drafts.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
