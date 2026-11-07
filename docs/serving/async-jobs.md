@@ -92,24 +92,38 @@ contains no raw PHI:
 Webhook requests include:
 
 - `X-OpenMed-Event`: `job.done` or `job.failed`
+- `X-OpenMed-Delivery-Id`: opaque id shared by every retry of this delivery
+- `X-OpenMed-Attempt`: attempt number, starting at `1`
 - `X-OpenMed-Timestamp`: Unix timestamp
 - `X-OpenMed-Nonce`: unique opaque request nonce
-- `X-OpenMed-Signature`: `sha256=<hmac>`
+- `X-OpenMed-Webhook-Signature`: `v2,kid=<key id>,sha256=<hmac>`
+- `X-OpenMed-Signature`: `sha256=<hmac>` (version 1, for older receivers)
 
-The signature uses the shared
-[HMAC request-signing scheme](request-signing.md), covering `POST`, the exact
-callback path and query, timestamp, nonce, and SHA-256 digest of the canonical
-JSON body. Each delivery attempt is signed independently with a fresh nonce, so
-retries remain compatible with receiver-side replay protection. Non-2xx
-responses and transport errors are retried with exponential backoff.
+The signatures use the shared
+[HMAC request-signing scheme](request-signing.md). Version 2 binds the key id,
+event, delivery id, and attempt number around the version 1 string, which
+covers `POST`, the exact callback path and query, timestamp, nonce, and SHA-256
+digest of the canonical JSON body. Each delivery attempt is signed
+independently with a fresh nonce, so retries remain compatible with
+receiver-side replay protection, and receivers can use
+`openmed.service.webhook_replay.WebhookReceiver` to apply a delivery once.
+Job webhooks are signed with the per-job `secret`; their key id is derived
+from it. Non-2xx responses and transport errors are retried with exponential
+backoff.
 
 The body is built once, when the job reaches its terminal state, and sealed
-into the job's terminal-event payload. Delivery and every retry read that
-immutable payload; they never rebuild the body from mutable job state.
+into the job's terminal-event payload together with the delivery id. Delivery
+and every retry, including one after a restart, read that immutable payload;
+they never rebuild the body from mutable job state or mint a new delivery id.
 `webhook_delivery` records `success`, `attempts`, `status_code`, a value-free
 `error` (`HTTP <status>`, `timeout`, `transport_error`,
-`webhook_sender_failed`, or a payload failure code), and `payload_ref`, the
+`signing_key_unavailable`, `webhook_sender_failed`, or a payload failure code),
+`delivery_id`, `signature_version`, `attempt_receipts` (attempt number, key id,
+signed time, status code, and error code per attempt), and `payload_ref`, the
 opaque reference of the terminal-event payload that was delivered.
+
+A custom `webhook_sender` passed to `DeidentifyJobQueue` is called with the
+same keywords as `deliver_webhook`, including the sealed `delivery_id`.
 
 ## Payload Protection and Retention
 

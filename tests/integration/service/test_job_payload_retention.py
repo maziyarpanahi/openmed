@@ -143,7 +143,9 @@ def test_encrypted_job_payloads_leave_no_plaintext_and_no_artifacts(
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
+        del delivery_id
         observed_payload_files.append(_tree_bytes(payload_dir))
         callbacks.append({"url": url, "secret": secret, "payload": payload})
         return WebhookDeliveryResult(success=True, attempts=1, status_code=204)

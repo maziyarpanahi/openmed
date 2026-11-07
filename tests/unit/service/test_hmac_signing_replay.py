@@ -8,17 +8,27 @@ import httpx
 import pytest
 
 from openmed.service.signing import (
+    ATTEMPT_HEADER,
+    DELIVERY_ID_HEADER,
+    EVENT_HEADER,
     NONCE_HEADER,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
+    WEBHOOK_SIGNATURE_HEADER,
     InvalidSignatureError,
     NonceCache,
     NonceCacheFullError,
     ReplayDetectedError,
     StaleTimestampError,
     canonical_signing_string,
+    new_delivery_id,
+    normalize_delivery_id,
+    parse_webhook_headers,
+    parse_webhook_signature,
     sign_request,
+    sign_webhook_request,
     verify_request_signature,
+    webhook_signing_string,
 )
 from openmed.service.webhooks import deliver_webhook
 
@@ -190,3 +200,174 @@ def test_explicit_empty_nonce_is_rejected() -> None:
 def test_nonce_cache_rejects_non_finite_window() -> None:
     with pytest.raises(ValueError):
         NonceCache(window_seconds=float("nan"))
+
+
+# --- Version 2 webhook-delivery contract (#3573) ---------------------------
+
+V2_BODY = b'{"event":"job.done","job_id":"synthetic-job","status":"done"}'
+V2_FIELDS = {
+    "key_id": "webhooks-2026-11",
+    "event": "job.done",
+    "delivery_id": "dlv_00000000000000000000000000000001",
+    "attempt": 2,
+}
+
+
+def test_v2_signing_string_wraps_the_unchanged_v1_canonical_string() -> None:
+    v1 = canonical_signing_string(
+        "post",
+        "/callbacks/openmed?source=jobs",
+        1_800_000_000,
+        "synthetic-attempt-nonce",
+        V2_BODY,
+    )
+    v2 = webhook_signing_string(
+        "post",
+        "/callbacks/openmed?source=jobs",
+        1_800_000_000,
+        "synthetic-attempt-nonce",
+        V2_BODY,
+        **V2_FIELDS,
+    )
+
+    assert v2 == (
+        b"OPENMED-WEBHOOK-HMAC-SHA256-V2\n"
+        b"key-id:webhooks-2026-11\n"
+        b"event:job.done\n"
+        b"delivery-id:dlv_00000000000000000000000000000001\n"
+        b"attempt:2\n" + v1
+    )
+    assert b"synthetic-job" not in v2
+
+
+def test_v2_signature_matches_the_published_test_vector() -> None:
+    headers = sign_webhook_request(
+        "POST",
+        "/callbacks/openmed?source=jobs",
+        V2_BODY,
+        secret="synthetic-webhook-secret",
+        timestamp=1_800_000_000,
+        nonce="synthetic-attempt-nonce",
+        **V2_FIELDS,
+    )
+
+    assert headers == {
+        EVENT_HEADER: "job.done",
+        DELIVERY_ID_HEADER: "dlv_00000000000000000000000000000001",
+        ATTEMPT_HEADER: "2",
+        TIMESTAMP_HEADER: "1800000000",
+        NONCE_HEADER: "synthetic-attempt-nonce",
+        WEBHOOK_SIGNATURE_HEADER: (
+            "v2,kid=webhooks-2026-11,"
+            "sha256=bf5c4494b17722c287c69ecf8b1c8ffa5425067eeafbadc80ffc57d08bc529a3"
+        ),
+    }
+
+
+def test_v2_legacy_header_is_the_v1_signature_with_the_same_key() -> None:
+    headers = sign_webhook_request(
+        "POST",
+        "/callbacks",
+        V2_BODY,
+        secret="synthetic-webhook-secret",
+        timestamp=1_800_000_000,
+        nonce="synthetic-attempt-nonce",
+        include_legacy_signature=True,
+        **V2_FIELDS,
+    )
+
+    assert verify_request_signature(
+        "POST",
+        "/callbacks",
+        V2_BODY,
+        headers,
+        secret="synthetic-webhook-secret",
+        nonce_cache=NonceCache(),
+        now=1_800_000_000,
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "sha256=" + "a" * 64,
+        "v2,kid=k1,sha256=" + "A" * 64,
+        "v2,kid=k1,sha256=" + "a" * 63,
+        "v2,kid=-bad,sha256=" + "a" * 64,
+        "v2;kid=k1;sha256=" + "a" * 64,
+        "v2,sha256=" + "a" * 64 + ",kid=k1",
+        "v0,kid=k1,sha256=" + "a" * 64,
+    ],
+)
+def test_malformed_v2_signature_values_are_rejected(value: str) -> None:
+    with pytest.raises(InvalidSignatureError):
+        parse_webhook_signature(value)
+
+
+def test_parse_webhook_signature_reports_unsupported_versions() -> None:
+    parsed = parse_webhook_signature("v3,kid=k1,sha256=" + "a" * 64)
+
+    assert parsed.version == "v3"
+    assert parsed.key_id == "k1"
+    assert "a" * 64 not in repr(parsed)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"attempt": 0},
+        {"attempt": 1001},
+        {"attempt": True},
+        {"delivery_id": "short"},
+        {"delivery_id": "dlv bad"},
+        {"event": ""},
+        {"event": "job done"},
+        {"key_id": "bad/key"},
+    ],
+)
+def test_v2_contract_fields_are_validated(overrides: dict[str, object]) -> None:
+    fields = {**V2_FIELDS, **overrides}
+    with pytest.raises((TypeError, ValueError)):
+        webhook_signing_string(
+            "POST",
+            "/callbacks",
+            1_800_000_000,
+            "nonce",
+            b"",
+            **fields,  # type: ignore[arg-type]
+        )
+
+
+def test_parse_webhook_headers_requires_every_header_exactly_once() -> None:
+    headers = sign_webhook_request(
+        "POST",
+        "/callbacks",
+        V2_BODY,
+        secret="synthetic-webhook-secret",
+        timestamp=1_800_000_000,
+        nonce="synthetic-attempt-nonce",
+        **V2_FIELDS,
+    )
+    parsed = parse_webhook_headers({name.lower(): v for name, v in headers.items()})
+    assert parsed.delivery_id == V2_FIELDS["delivery_id"]
+    assert parsed.attempt == 2
+
+    for missing in headers:
+        partial = {name: value for name, value in headers.items() if name != missing}
+        with pytest.raises(InvalidSignatureError):
+            parse_webhook_headers(partial)
+    with pytest.raises(InvalidSignatureError):
+        parse_webhook_headers({**headers, ATTEMPT_HEADER: "02"})
+    with pytest.raises(InvalidSignatureError):
+        parse_webhook_headers(
+            {**headers, DELIVERY_ID_HEADER.lower(): "dlv_duplicate_value_0001"}
+        )
+
+
+def test_new_delivery_ids_are_opaque_and_unique() -> None:
+    first, second = new_delivery_id(), new_delivery_id()
+
+    assert first != second
+    assert normalize_delivery_id(first) == first
+    assert first.startswith("dlv_") and len(first) == 36
