@@ -151,6 +151,17 @@ const status = await client.smartBackendIngestionStatus(job.job_id);
 const summary = await client.smartBackendIngestionSummary(job.job_id);
 ```
 
+Pass `{ idempotencyKey }` as the second argument to make a retried start
+return the original job instead of starting a second export. Keep one key per
+logical start, for example a UUID generated before the first attempt:
+
+```ts
+const retryKey = crypto.randomUUID();
+const job = await client.startSmartBackendIngestion(request, {
+  idempotencyKey: retryKey,
+});
+```
+
 Use `loadedModels()` to inspect cached model resources:
 
 ```ts

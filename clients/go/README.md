@@ -275,6 +275,7 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | `CreateJob` | `POST /jobs` |
 | `GetJob` | `GET /jobs/{job_id}` |
 | `StartSMARTBackendIngestion` | `POST /fhir/smart-backend/ingestions` |
+| `StartSMARTBackendIngestionWithIdempotencyKey` | `POST /fhir/smart-backend/ingestions` with `Idempotency-Key` |
 | `SMARTBackendIngestionStatus` | `GET /fhir/smart-backend/ingestions/{job_id}` |
 | `SMARTBackendIngestionSummary` | `GET /fhir/smart-backend/ingestions/{job_id}/summary` |
 

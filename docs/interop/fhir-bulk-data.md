@@ -157,3 +157,55 @@ by `max_inflight_downloads` and `max_buffered_resources`, and each file is
 written to a temporary sibling before an atomic rename. Keep credentials in
 the caller's secret-management system; do not put them in source-controlled
 fixtures or committed configuration.
+
+### Idempotent starts
+
+A client that loses the response to a start request should retry it with an
+`Idempotency-Key` header instead of starting a second export. The header is
+accepted by `POST /fhir/bulk/exports`, `POST /fhir/bulk/imports` and
+`POST /fhir/smart-backend/ingestions`:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8080/fhir/smart-backend/ingestions \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: 8e03978e-40d5-43e8-bc93-6894a57f9324" \
+  --data @smart-ingestion.json
+```
+
+- The key is 1-255 letters, digits or `._:~+/=-` characters, sent once, bare
+  or as a quoted string. Anything else returns `400 idempotency_key_invalid`
+  before any validation, storage reservation or job start.
+- A repeat with the same key and the same request returns the job the first
+  request created: the same status code, `Content-Location` and body as the
+  first response, plus `Idempotency-Replayed: true`. No second task is
+  scheduled and no second token, kickoff or download request reaches the
+  source FHIR server, even after the first job finished, failed or was
+  cancelled. Use a new key to start a new job.
+- The same key with a different request returns
+  `409 idempotency_key_conflict` with no side effect. While the first request
+  is still being processed, a duplicate returns `409
+  idempotency_key_in_progress` with `Retry-After: 1`.
+- Keys are scoped to the start route and to the authenticated principal (see
+  [Job Ownership](../serving/authentication.md#job-ownership)). Another
+  principal using the same key starts its own job and never learns that the
+  key was used. With authentication disabled, all callers share one scope.
+- "The same request" means every validated request field except
+  `private_key_pem`, after defaults are applied. Credentials are excluded, so
+  a retry with a rotated signing key still matches; paths and URLs are
+  included, so a different `output_dir` or FHIR server is a conflict.
+- Only accepted starts are remembered. A start rejected by request
+  validation or the storage checks (`400` or `422`) leaves the key unused, so
+  the corrected request can reuse it.
+
+The service stores neither the key nor any request field. Each manager keeps
+an in-memory entry of two keyed HMAC-SHA256 digests (route, owner and key; the
+non-credential request fields), the job id and the PHI-free initial status
+payload, under the deployment `OPENMED_SERVICE_DIGEST_KEY`. Entries expire
+after `OPENMED_SERVICE_IDEMPOTENCY_TTL_SECONDS` (default `86400`, at most
+seven days); each manager remembers at most
+`OPENMED_SERVICE_IDEMPOTENCY_MAX_KEYS` keys (default `1024`, at most
+`100000`) and evicts the oldest completed entry when full; if every entry
+is still being processed, a new key gets `503 idempotency_capacity_exhausted`
+with `Retry-After: 1`. Entries do not survive a restart. After expiry, eviction or a restart, a retried request is
+processed as new; its `output_dir` is still reserved by the first job, so it
+fails with `path_exists` instead of writing duplicate output.

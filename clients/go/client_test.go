@@ -505,6 +505,52 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 	}
 }
 
+func TestStartSMARTBackendIngestionSendsIdempotencyKey(t *testing.T) {
+	const key = "synthetic-retry-key-0001"
+	var received []string
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/fhir/smart-backend/ingestions" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		received = append(received, r.Header.Values("Idempotency-Key")...)
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Idempotency-Replayed", "true")
+		_, _ = io.WriteString(w, `{"job_id":"job-1","status":"running"}`)
+	})
+
+	status, err := client.StartSMARTBackendIngestionWithIdempotencyKey(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{OutputDir: "synthetic-out"},
+		key,
+	)
+	if err != nil {
+		t.Fatalf("StartSMARTBackendIngestionWithIdempotencyKey: %v", err)
+	}
+	if status.JobID != "job-1" {
+		t.Fatalf("job ID = %q", status.JobID)
+	}
+	if _, err := client.StartSMARTBackendIngestion(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{OutputDir: "synthetic-out"},
+	); err != nil {
+		t.Fatalf("StartSMARTBackendIngestion: %v", err)
+	}
+	if len(received) != 1 || received[0] != key {
+		t.Fatalf("Idempotency-Key values = %q, want one %q", received, key)
+	}
+
+	if _, err := client.StartSMARTBackendIngestionWithIdempotencyKey(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{},
+		"  ",
+	); err == nil {
+		t.Fatal("blank idempotency key was accepted")
+	}
+}
+
 func TestAnalyze(t *testing.T) {
 	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/analyze" {

@@ -371,6 +371,16 @@ export interface SMARTBackendIngestionRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+/** Options for job starts that deduplicate client retries. */
+export interface StartJobOptions {
+  /**
+   * Sent as `Idempotency-Key`. Retrying with the same key and request returns
+   * the original job instead of starting another export; reusing the key for
+   * a different request fails with `409 idempotency_key_conflict`.
+   */
+  idempotencyKey?: string;
+}
+
 export interface OMOPLoadRequest {
   records_jsonl: string;
   vocabulary_version?: string | null;
@@ -876,8 +886,13 @@ export class OpenMedClient {
 
   async startSmartBackendIngestion(
     request: SMARTBackendIngestionRequest,
+    options: StartJobOptions = {},
   ): Promise<SMARTBackendJobStatus> {
-    return this.post("/fhir/smart-backend/ingestions", request);
+    return this.post(
+      "/fhir/smart-backend/ingestions",
+      request,
+      idempotencyHeaders(options.idempotencyKey),
+    );
   }
 
   async smartBackendIngestionStatus(
@@ -912,10 +927,14 @@ export class OpenMedClient {
     return this.request<T>(path, { method: "GET" });
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(
+    path: string,
+    body: unknown,
+    headers: Record<string, string> = {},
+  ): Promise<T> {
     return this.request<T>(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify(body),
     });
   }
@@ -986,6 +1005,10 @@ function headersToRecord(headers?: HeadersInit): Record<string, string> {
   }
 
   return { ...(headers as Record<string, string>) };
+}
+
+function idempotencyHeaders(key: string | undefined): Record<string, string> {
+  return key === undefined ? {} : { "idempotency-key": key };
 }
 
 function smartBackendJobPath(template: string, jobId: string): string {
