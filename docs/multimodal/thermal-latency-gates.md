@@ -105,3 +105,37 @@ This method gates screening and release; it does not control microphone capture 
 `ThermalOutcome.value` contains protected output only on runtime clearance and is excluded from `repr`. `report_json` and `gate.to_json()` contain only controlled reason codes, counts, mode indices and aggregate p95 measurements. They contain no image bytes, speech text, prompts, patient identifiers, request digests, model names or filesystem paths. Do not serialize the protected value into logs or telemetry.
 
 Tests use synthetic providers, injected clocks and local sensor observations, including mid-call overheating, delayed results, exhausted fallback ladders, sensor outages, immutable provider pins and PHI screening. They establish controller behavior, not hardware performance, sensor accuracy, clinical safety or OCR/ASR/model quality.
+
+## Apple session admission
+
+`MultimodalThermalSession` applies a workload's declared timing budget to a trusted `LocalMultimodalWork` operation. Its default `AppleSystemThermalSource` reads `ProcessInfo.thermalState` and observes `thermalStateDidChangeNotification`. The gate also reads the current state before dispatch and before releasing a result. The monotonic clock and sensor can be injected for deterministic tests. All budgets and timestamps use milliseconds in the same monotonic clock domain; do not pass a wall-clock timestamp.
+
+| Apple state | Native admission policy |
+| --- | --- |
+| Nominal | Continue at the ordinary cadence and maximum window. |
+| Fair | Admit only after the declared reduced-cadence interval has elapsed since the last start. |
+| Serious | Enforce the reduced cadence and smaller declared window. |
+| Critical or unavailable | Pause and abstain. No provider is called. |
+
+This policy changes the admission of work on the same local provider. It never resizes an image, truncates a speech window, swaps models, or retries an input automatically. Pass `requestedWindowMs` for a time window so the controller can refuse an oversized submission. A provider declaring network use is refused. The caller must separately establish any model, capture-consent, privacy, or clinical-review requirements.
+
+For each operating mode the controller keeps a bounded, expiring history of execution durations. A rolling nearest-rank p95 above `maxLatencyMs` requires a stricter profile; if there is no eligible profile it abstains. Queue admission uses `maxQueueMs` and total output age uses `maxOutputAgeMs`. A worsening state takes effect immediately. Recovery to a less restrictive profile requires the target profile to stay unchanged for `recoveryMs`; a new pressure notification restarts that interval. An intervening escalation invalidates ongoing work even if the device cools before it returns. This governs cadence and window admission; it does not undo the Python gate's model-qualification downgrade floor.
+
+```swift
+import OpenMedKit
+
+func runLocal<Work: LocalMultimodalWork>(
+    _ work: Work, session: MultimodalThermalSession, queuedAtMs: UInt64
+) async -> Work.Output? {
+    let outcome = await session.run(work, queuedAtMilliseconds: queuedAtMs,
+                                    requestedWindowMs: 500)
+    // Only a cleared result reaches the local consumer. Do not log its value.
+    return outcome.value
+}
+```
+
+Construct one session per workload using an explicit `MultimodalThermalBudget` and call `close()` when the workload ends. Only one operation runs at a time; concurrent or premature work is refused. Capture the queue timestamp when enqueueing, not when dispatching. Admission and release use the Python gate's controlled reason codes: `ready`, `resources`, `queue_expired`, `output_expired`, `latency`, `observation_unavailable`, `clock_invalid`, `provider_rejected`, `closed`, and `operation_limit`. `evidence()` exposes thermal state, mode, reason, counts, last queue age and rolling latency; it contains no inputs, results, identifiers, absolute timestamps or device names. Returning a local value is not clinical approval or PHI release authorization.
+
+On supported MLX platforms, an already loaded `OpenMedVisionLanguageModel` exposes `generateIfAdmitted(_:localImageURL:maxTokens:temperature:releaseGuard:assetDigest:identifiers:queuedAtMilliseconds:in:)`. It feeds its existing local inference path through this gate and refuses remote image references before opening them. Use `load(modelDirectory:)` for an entirely offline model-loading path.
+
+Pass the same qualified local `releaseGuard`, source `assetDigest` and source-bound identifier digests used by direct generation. The thermal adapter forwards them for both text and local-image requests; the [generated-text guard](generated-text-guard.md) still controls release. A missing guard or asset digest withholds text, and identifier evidence from another source is refused. A thermal `ready` outcome may therefore contain a generation with empty text and a privacy abstention envelope. Inspect `releaseEnvelope` before consuming output; neither thermal clearance nor privacy screening replaces explicit human review.

@@ -319,7 +319,7 @@ def test_pack_catalog_does_not_mean_detector_is_installed():
 
 def test_shared_python_swift_synthetic_language_decisions():
     path = Path(__file__).parents[2] / "fixtures/multimodal/transcript_language.json"
-    for case in json.loads(path.read_text()):
+    for case in json.loads(path.read_text(encoding="utf-8")):
 
         def detector(text):
             return [
