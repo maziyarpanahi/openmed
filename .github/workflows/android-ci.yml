@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'scripts/android/check_apk_zip_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
@@ -13,6 +14,7 @@ on:
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
+      - 'scripts/android/check_apk_zip_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
@@ -35,7 +37,7 @@ jobs:
       uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
       with:
         distribution: temurin
-        java-version: '11'
+        java-version: '17'
         cache: gradle
         cache-dependency-path: |
           android/*.gradle*
@@ -59,6 +61,49 @@ jobs:
     - name: Verify Android library budgets
       working-directory: android
       run: ./gradlew :openmedkit:verifyAndroidBudgets --continue --stacktrace
+
+    - name: Assemble demo APKs
+      working-directory: android
+      run: >-
+        ./gradlew
+        :OpenMedDemo:app:assembleDebug
+        :OpenMedScanDemo:app:assembleDebug
+        :OpenMedMapleDemo:app:assembleDebug
+        --stacktrace
+
+    - name: Verify 16 KB APK zip alignment
+      working-directory: android
+      run: ./gradlew verifyApkZipAlignment --stacktrace
+
+    - name: Cross-check APK alignment with SDK zipalign
+      shell: bash
+      run: |
+        zipalign=""
+        while IFS= read -r candidate; do
+          usage="$("$candidate" 2>&1 || true)"
+          if [[ "$usage" == *"-P <pagesize_kb>"* ]]; then
+            zipalign="$candidate"
+            break
+          fi
+        done < <(ls -d "$ANDROID_HOME"/build-tools/*/zipalign | sort -V -r)
+        if [[ -z "$zipalign" ]]; then
+          echo "::error title=zipalign unavailable::Android build-tools 35 or newer is required."
+          exit 1
+        fi
+
+        shopt -s nullglob
+        apks=(
+          android/*/app/build/outputs/apk/debug/*.apk
+          android/openmedkit/build/outputs/apk/androidTest/debug/*.apk
+        )
+        if [[ ${#apks[@]} -ne 4 ]]; then
+          echo "::error title=Missing APKs::Expected 3 demo APKs and 1 OpenMedKit test APK."
+          exit 1
+        fi
+        for apk in "${apks[@]}"; do
+          "$zipalign" -c -P 16 4 "$apk"
+          echo "zipalign -c -P 16 4 passed: ${apk#android/}"
+        done
 
     - name: Publish Android budget summary
       if: always()

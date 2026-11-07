@@ -467,7 +467,7 @@ def test_jitpack_builds_the_latest_android_release_from_github():
     android_build = ANDROID_BUILD.read_text(encoding="utf-8")
     android_readme = ANDROID_README.read_text(encoding="utf-8")
 
-    assert config["jdk"] == ["openjdk11"]
+    assert config["jdk"] == ["openjdk17"]
     assert "https://astral.sh/uv/0.11.16/install.sh" in before_install[0]
     assert "uv python install 3.12" in before_install[1]
     assert "cd android" in install_command
