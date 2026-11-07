@@ -172,25 +172,26 @@ def test_checkpoint_contains_no_raw_identifiers_or_resource_body(tmp_path):
     )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_invalid_input_fails_without_echo(subtests, tmp_path):
+    case_root = tmp_path
+    for field, value in [
         ("subscription_id", ""),
         ("notification_id", "sensitive\nidentifier" * 100),
         ("resource_version", None),
         ("sequence", True),
         ("sequence", -1),
-    ],
-)
-def test_invalid_input_fails_without_echo(tmp_path, field, value):
-    event = _event(0)
-    event[field] = value
-    with SubscriptionCheckpoint(
-        tmp_path / "checkpoint.sqlite", secret=_SECRET
-    ) as store:
-        with pytest.raises(SubscriptionCheckpointError) as error:
-            store.claim(**event)
-    assert "sensitive" not in str(error.value)
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            event = _event(0)
+            event[field] = value
+            with SubscriptionCheckpoint(
+                tmp_path / "checkpoint.sqlite", secret=_SECRET
+            ) as store:
+                with pytest.raises(SubscriptionCheckpointError) as error:
+                    store.claim(**event)
+            assert "sensitive" not in str(error.value)
 
 
 def test_no_network_needed_and_distinct_streams(tmp_path, monkeypatch):
@@ -208,20 +209,26 @@ def test_no_network_needed_and_distinct_streams(tmp_path, monkeypatch):
         assert store.claim(**first).status == "claimed"
 
 
-@pytest.mark.parametrize(
-    "field",
-    ["subscription_id", "notification_id", "resource_id", "resource_version"],
-)
-def test_invalid_unicode_identity_is_value_free(tmp_path, field):
-    event = _event(0)
-    event[field] = "synthetic-private-marker-\ud800"
-    with SubscriptionCheckpoint(
-        tmp_path / "checkpoint.sqlite", secret=_SECRET
-    ) as store:
-        with pytest.raises(
-            SubscriptionCheckpointError, match="invalid_identity"
-        ) as caught:
-            store.claim(**event)
-    assert "synthetic-private-marker" not in str(caught.value)
-    assert caught.value.__cause__ is None
-    assert caught.value.__suppress_context__
+def test_invalid_unicode_identity_is_value_free(subtests, tmp_path):
+    case_root = tmp_path
+    for field in [
+        "subscription_id",
+        "notification_id",
+        "resource_id",
+        "resource_version",
+    ]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            event = _event(0)
+            event[field] = "synthetic-private-marker-\ud800"
+            with SubscriptionCheckpoint(
+                tmp_path / "checkpoint.sqlite", secret=_SECRET
+            ) as store:
+                with pytest.raises(
+                    SubscriptionCheckpointError, match="invalid_identity"
+                ) as caught:
+                    store.claim(**event)
+            assert "synthetic-private-marker" not in str(caught.value)
+            assert caught.value.__cause__ is None
+            assert caught.value.__suppress_context__

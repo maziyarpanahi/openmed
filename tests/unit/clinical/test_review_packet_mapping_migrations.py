@@ -93,22 +93,20 @@ def test_report_and_repr_never_contain_packet_values() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "packet",
-    [
+def test_migration_rejects_changes_that_would_overwrite_fields(subtests) -> None:
+    for packet in [
         {"schema_version": 1, "safety": "SYNTHETIC_LOCAL_REVIEW_VALUE"},
         {
             "schema_version": 1,
             "safety": {"privacy_scan_required": False},
         },
-    ],
-)
-def test_migration_rejects_changes_that_would_overwrite_fields(packet) -> None:
-    with pytest.raises(LossyReviewPacketMigrationError) as error:
-        migrate_review_packet(packet)
+    ]:
+        with subtests.test(packet=packet):
+            with pytest.raises(LossyReviewPacketMigrationError) as error:
+                migrate_review_packet(packet)
 
-    assert "SYNTHETIC_LOCAL_REVIEW_VALUE" not in str(error.value)
-    assert "False" not in str(error.value)
+            assert "SYNTHETIC_LOCAL_REVIEW_VALUE" not in str(error.value)
+            assert "False" not in str(error.value)
 
 
 def test_backward_and_unsupported_migrations_are_rejected_value_free() -> None:

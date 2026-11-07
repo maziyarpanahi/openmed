@@ -18,30 +18,56 @@ from tests.unit.service.test_brief_surfaces import REVIEW_ID, cli_args
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize("interruption", [KeyboardInterrupt, asyncio.CancelledError])
+def assert_cli_refusal(output, reason, *, expected=None, private_text=""):
+    response = json.loads(output)
+    assert response["ok"] is True
+    assert response["outcome"] == "refused"
+    data = response["data"]
+    assert set(data) == {"status", "refusal_reason", "summary_characters", "digest"}
+    assert data["status"] == "refused"
+    assert data["refusal_reason"] == reason
+    assert data["summary_characters"] == 0
+    if expected is not None:
+        assert data == {key: expected[key] for key in data}
+    assert "SYNTHETIC_PRIVATE_FAILURE" not in output
+    if private_text:
+        assert private_text not in output
+
+
 def test_cli_and_service_lookup_interruptions_share_empty_outcome(
-    tmp_path, capsys, interruption
+    subtests, tmp_path, capsys
 ):
-    value, _ = fixture_context()
+    case_root = tmp_path
+    for interruption in [KeyboardInterrupt, asyncio.CancelledError]:
+        with subtests.test(interruption=interruption):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            value, _ = fixture_context()
 
-    def provider(*_, cancellation):
-        assert isinstance(cancellation, BriefCancellation)
-        raise interruption("SYNTHETIC_PRIVATE_FAILURE")
+            def provider(*_, cancellation):
+                assert isinstance(cancellation, BriefCancellation)
+                raise interruption("SYNTHETIC_PRIVATE_FAILURE")
 
-    expected = brief_response(
-        value.original_text,
-        model="extractive",
-        review_id=REVIEW_ID,
-        context_provider=provider,
-        cancellation=BriefCancellation(),
-    )
-    assert expected["refusal_reason"] == "cancelled"
-    assert expected["summary"] == ""
-    args = cli_args(tmp_path, value.original_text)
-    assert handle_brief(args, context_provider=provider) == 1
-    assert json.loads(capsys.readouterr().out)["data"] == expected
-    assert not args.summary_output.exists()
-    assert not args.review_output.exists()
+            expected = brief_response(
+                value.original_text,
+                model="extractive",
+                review_id=REVIEW_ID,
+                context_provider=provider,
+                cancellation=BriefCancellation(),
+            )
+            assert expected["refusal_reason"] == "cancelled"
+            assert expected["summary"] == ""
+            args = cli_args(tmp_path, value.original_text)
+            assert handle_brief(args, context_provider=provider) == 1
+            assert_cli_refusal(
+                capsys.readouterr().out,
+                "cancelled",
+                expected=expected,
+                private_text=value.original_text,
+            )
+            assert not args.summary_output.exists()
+            assert not args.review_output.exists()
 
 
 def test_route_cancellation_stops_late_worker_before_generation(monkeypatch):
@@ -110,15 +136,16 @@ def test_cli_deadline_during_lookup_has_no_output_files(tmp_path, capsys, monkey
     args = cli_args(tmp_path, value.original_text)
     args.timeout_seconds = 1.0
     assert handle_brief(args, context_provider=provider) == 1
-    response = json.loads(capsys.readouterr().out)["data"]
-    assert response["refusal_reason"] == "deadline_exceeded"
-    assert response["summary"] == ""
+    assert_cli_refusal(
+        capsys.readouterr().out, "deadline_exceeded", private_text=value.original_text
+    )
     assert not args.summary_output.exists()
     assert not args.review_output.exists()
 
 
+@pytest.mark.parametrize("interrupted_path", ["summary.txt", "review.json"])
 def test_cli_interrupt_during_output_reservation_removes_owned_files(
-    tmp_path, capsys, monkeypatch
+    tmp_path, capsys, monkeypatch, interrupted_path
 ):
     import os
 
@@ -127,7 +154,7 @@ def test_cli_interrupt_during_output_reservation_removes_owned_files(
     original_open = os.open
 
     def interrupted_open(path, *args, **kwargs):
-        if path == tmp_path / "review.json":
+        if path == tmp_path / interrupted_path:
             raise KeyboardInterrupt("SYNTHETIC_PRIVATE_FAILURE")
         return original_open(path, *args, **kwargs)
 
@@ -135,6 +162,6 @@ def test_cli_interrupt_during_output_reservation_removes_owned_files(
     assert handle_brief(args, context_provider=lambda *_: (value, context)) == 1
     assert not args.summary_output.exists()
     assert not args.review_output.exists()
-    response = json.loads(capsys.readouterr().out)["data"]
-    assert response["refusal_reason"] == "cancelled"
-    assert response["summary"] == ""
+    assert_cli_refusal(
+        capsys.readouterr().out, "cancelled", private_text=value.original_text
+    )

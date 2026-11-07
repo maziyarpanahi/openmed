@@ -97,6 +97,9 @@ def build_app(*, governance_service=None):
     zero_app = typer.Typer(help="Zero-shot (GLiNER/GLiNER2) utilities.")
 
     add_agent_tools_command(app, typer, governance_service=governance_service)
+    from openmed.cli.multimodal_preflight import add_multimodal_preflight_typer_command
+
+    add_multimodal_preflight_typer_command(app, typer)
 
     # ------------------------------------------------------------------
     # analyze

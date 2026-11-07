@@ -129,6 +129,15 @@ def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
     }
 
 
+def request_scope_path(scope: Scope) -> str:
+    """Return the request path relative to the app that handles it."""
+    path = scope.get("path", "")
+    root = scope.get("root_path", "")
+    if root and path.startswith(root + "/"):
+        return path[len(root) :]
+    return path
+
+
 class CorrelationIdMiddleware:
     """Add request IDs and emit PHI-free structured access logs."""
 
@@ -150,7 +159,8 @@ class CorrelationIdMiddleware:
             await self.app(scope, receive, send)
             return
 
-        minimal_log = scope.get("path") in self.minimal_log_paths
+        path = request_scope_path(scope).rstrip("/")
+        minimal_log = path in self.minimal_log_paths
         # Experimental binary intake must not echo/log caller metadata carried
         # in a request ID, even if an ingress supplied it.
         request_id = str(uuid.uuid4()) if minimal_log else _request_id_from_scope(scope)
@@ -170,38 +180,41 @@ class CorrelationIdMiddleware:
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000
             try:
-                payload = {
-                    "method": str(scope.get("method", "")),
-                    "route": _route_template(scope),
-                    "status_code": status_code,
-                    "duration_ms": round(duration_ms, 3),
-                    "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
-                    "identity": scope.get(_IDENTITY_SCOPE_KEY),
-                    "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
-                    "request_id": request_id,
-                }
-                if _GROUNDING_INPUT_COUNT_SCOPE_KEY in scope:
-                    payload.update(
-                        {
-                            "grounding_input_count": scope[
-                                _GROUNDING_INPUT_COUNT_SCOPE_KEY
-                            ],
-                            "grounding_result_count": scope.get(
-                                _GROUNDING_RESULT_COUNT_SCOPE_KEY
-                            ),
-                            "grounding_systems": scope[_GROUNDING_SYSTEMS_SCOPE_KEY],
-                            "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
-                        }
-                    )
-                payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 if minimal_log:
                     payload = {
-                        "route": scope["path"],
+                        "route": path,
                         "outcome": scope.get("openmed.preflight_outcome", "rejected"),
                         "reason_codes": scope.get(
                             "openmed.preflight_reason_codes", (f"http_{status_code}",)
                         ),
                     }
+                else:
+                    payload = {
+                        "method": str(scope.get("method", "")),
+                        "route": _route_template(scope),
+                        "status_code": status_code,
+                        "duration_ms": round(duration_ms, 3),
+                        "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
+                        "identity": scope.get(_IDENTITY_SCOPE_KEY),
+                        "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
+                        "request_id": request_id,
+                    }
+                    if _GROUNDING_INPUT_COUNT_SCOPE_KEY in scope:
+                        payload.update(
+                            {
+                                "grounding_input_count": scope[
+                                    _GROUNDING_INPUT_COUNT_SCOPE_KEY
+                                ],
+                                "grounding_result_count": scope.get(
+                                    _GROUNDING_RESULT_COUNT_SCOPE_KEY
+                                ),
+                                "grounding_systems": scope[
+                                    _GROUNDING_SYSTEMS_SCOPE_KEY
+                                ],
+                                "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
+                            }
+                        )
+                    payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 emit_access_log(
                     self.logger,
                     self.log_config,

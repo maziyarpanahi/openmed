@@ -122,10 +122,11 @@ def test_provider_failures_never_echo_key_material():
     assert "synthetic-new-signing-key" not in str(error.value)
 
 
-@pytest.mark.parametrize("key_id", ["", "contains/slash", "<raw-key-material>"])
-def test_signer_rejects_unsafe_key_ids(key_id: str):
-    with pytest.raises(AuditKeyRotationError, match="non-secret"):
-        AuditKeyRotationSigner(key_id, _KEYS)
+def test_signer_rejects_unsafe_key_ids(subtests):
+    for key_id in ["", "contains/slash", "<raw-key-material>"]:
+        with subtests.test(key_id=key_id):
+            with pytest.raises(AuditKeyRotationError, match="non-secret"):
+                AuditKeyRotationSigner(key_id, _KEYS)
 
 
 def test_helper_signer_uses_caller_owned_provider():
@@ -139,23 +140,21 @@ def test_helper_signer_uses_caller_owned_provider():
     assert json.loads(signed.to_json())["signature"]["key_id"] == "audit-2026"
 
 
-@pytest.mark.parametrize(
-    "key",
-    [
+def test_signer_rejects_weak_oversized_or_mutable_key_material(subtests):
+    for key in [
         b"x" * (MIN_AUDIT_HMAC_KEY_BYTES - 1),
         b"x" * (MAX_AUDIT_HMAC_KEY_BYTES + 1),
         "x" * (MIN_AUDIT_HMAC_KEY_BYTES - 1),
         bytearray(b"x" * MIN_AUDIT_HMAC_KEY_BYTES),
-    ],
-)
-def test_signer_rejects_weak_oversized_or_mutable_key_material(key: object):
-    with pytest.raises(AuditKeyRotationError, match="key material") as error:
-        AuditKeyRotationSigner(
-            "audit-2026",
-            lambda _key_id: key,  # type: ignore[return-value]
-        ).sign(_report())
+    ]:
+        with subtests.test(key=key):
+            with pytest.raises(AuditKeyRotationError, match="key material") as error:
+                AuditKeyRotationSigner(
+                    "audit-2026",
+                    lambda _key_id: key,  # type: ignore[return-value]
+                ).sign(_report())
 
-    assert repr(key) not in str(error.value)
+            assert repr(key) not in str(error.value)
 
 
 def test_verifier_rejects_unbound_mapping_fields_before_provider_lookup():

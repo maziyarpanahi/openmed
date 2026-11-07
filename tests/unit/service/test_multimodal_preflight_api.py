@@ -8,6 +8,7 @@ import logging
 import tempfile
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from openmed.multimodal.preflight import preflight_asset
@@ -59,11 +60,13 @@ def offline_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def client(**kwargs):
-    return TestClient(
-        create_app(experimental_multimodal_preflight=True, **kwargs),
-        base_url="http://127.0.0.1",
-    )
+def client(*, prefix="", **kwargs):
+    app = create_app(experimental_multimodal_preflight=True, **kwargs)
+    if prefix:
+        mounted = FastAPI()
+        mounted.mount(prefix, app)
+        app = mounted
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 def test_default_app_does_not_register_route_or_openapi():
@@ -191,9 +194,10 @@ def test_duplicate_manifest_headers_are_rejected():
     assert response.json()["error"]["code"] == "malformed_manifest"
 
 
+@pytest.mark.parametrize("prefix", ["", "/openmed"])
 @pytest.mark.parametrize("log_format", ["json", "plain"])
 def test_logs_have_only_route_outcome_and_controlled_reasons(
-    caplog, monkeypatch, log_format
+    caplog, monkeypatch, log_format, prefix
 ):
     monkeypatch.setenv("OPENMED_SERVICE_LOG_FORMAT", log_format)
     monkeypatch.setenv("OPENMED_SERVICE_MAX_REQUEST_BYTES", str(len(PNG)))
@@ -206,20 +210,21 @@ def test_logs_have_only_route_outcome_and_controlled_reasons(
     }
     with (
         caplog.at_level(logging.INFO, logger="openmed.service.access"),
-        client() as transport,
+        client(prefix=prefix) as transport,
     ):
-        assert (
-            transport.post(PATH, headers=request_headers, content=PNG).status_code
-            == 200
-        )
+        response = transport.post(prefix + PATH, headers=request_headers, content=PNG)
+        assert response.status_code == 200
+        assert response.headers["X-Request-ID"] != CANARY
         invalid = {**data, "sha256": "0" * 64}
         assert (
-            transport.post(PATH, headers=headers(invalid), content=PNG).status_code
+            transport.post(
+                prefix + PATH, headers=headers(invalid), content=PNG
+            ).status_code
             == 422
         )
         assert (
             transport.post(
-                PATH, headers=request_headers, content=PNG + b"x"
+                prefix + PATH, headers=request_headers, content=PNG + b"x"
             ).status_code
             == 413
         )
@@ -241,14 +246,19 @@ def test_logs_have_only_route_outcome_and_controlled_reasons(
     assert hashlib.sha256(PNG).hexdigest() not in caplog.text
 
 
-def test_wrong_transport_and_configured_body_ceiling():
-    with client(max_request_body_bytes=len(PNG) - 1) as transport:
-        response = transport.post(PATH, headers=headers(manifest()), content=PNG)
+@pytest.mark.parametrize("prefix", ["", "/openmed"])
+def test_wrong_transport_and_configured_body_ceiling(prefix):
+    with client(prefix=prefix, max_request_body_bytes=len(PNG) - 1) as transport:
+        response = transport.post(
+            prefix + PATH, headers=headers(manifest()), content=PNG
+        )
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "payload_too_large"
-    with client() as transport:
+    with client(prefix=prefix) as transport:
         response = transport.post(
-            PATH, content=CANARY, headers={"content-type": "multipart/form-data"}
+            prefix + PATH,
+            content=CANARY,
+            headers={"content-type": "multipart/form-data"},
         )
     assert response.status_code == 415
     assert response.json()["error"]["code"] == "unsupported_media_type"

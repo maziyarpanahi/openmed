@@ -25,7 +25,8 @@ from typing import Any, Final
 
 from openmed.core.audit import AuditSignature, stable_hash
 
-JOURNEY_RELEASE_SCHEMA_VERSION: Final = "1.0.0"
+JOURNEY_RELEASE_SCHEMA_VERSION: Final = "1.1.0"
+_SUPPORTED_SCHEMA_VERSIONS: Final = frozenset({"1.0.0", "1.1.0"})
 JOURNEY_RELEASE_COMPATIBILITY_POLICY: Final = "same_major"
 JOURNEY_RELEASE_SIGNATURE_ALGORITHM: Final = "HMAC-SHA256"
 JOURNEY_RELEASE_READY: Final = "READY"
@@ -141,6 +142,18 @@ _REQUIRED_LIMITATIONS = frozenset(
     }
 )
 
+_PRIVACY_LEGACY_FIELDS: Final = frozenset(
+    {"critical_leakage_count", "evaluated_case_count", "raw_value_finding_count"}
+)
+_PRIVACY_CONSISTENCY_FIELDS: Final = frozenset(
+    {
+        "date_shift_inconsistency_count",
+        "surrogate_inconsistency_count",
+        "consistency_checked_format_count",
+        "consistency_unsupported_format_count",
+    }
+)
+
 _METRIC_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "schema": frozenset(
         {
@@ -162,9 +175,7 @@ _METRIC_FIELDS: Final[Mapping[str, frozenset[str]]] = {
             "unreviewed_high_risk_count",
         }
     ),
-    "privacy": frozenset(
-        {"critical_leakage_count", "evaluated_case_count", "raw_value_finding_count"}
-    ),
+    "privacy": _PRIVACY_LEGACY_FIELDS | _PRIVACY_CONSISTENCY_FIELDS,
     "interoperability": frozenset(
         {
             "conformance_failure_count",
@@ -230,7 +241,13 @@ _ZERO_BLOCKERS: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "provenance": ("broken_link_count", "unhashed_artifact_count"),
     "clinical_nlp": ("unreviewed_high_risk_count", "abstention_failure_count"),
-    "privacy": ("critical_leakage_count", "raw_value_finding_count"),
+    "privacy": (
+        "critical_leakage_count",
+        "raw_value_finding_count",
+        "date_shift_inconsistency_count",
+        "surrogate_inconsistency_count",
+        "consistency_unsupported_format_count",
+    ),
     "interoperability": (
         "conformance_failure_count",
         "roundtrip_loss_without_disclosure_count",
@@ -395,7 +412,7 @@ class JourneyReleasePacket:
     def verify(self, key: bytes | str) -> bool:
         """Return whether the packet digest and HMAC signature are intact."""
 
-        if self.schema_version != JOURNEY_RELEASE_SCHEMA_VERSION:
+        if self.schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
             return False
         if self.compatibility_policy != JOURNEY_RELEASE_COMPATIBILITY_POLICY:
             return False
@@ -710,7 +727,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     _require_exact_fields(manifest, _MANIFEST_FIELDS, "manifest")
-    if manifest["schema_version"] != JOURNEY_RELEASE_SCHEMA_VERSION:
+    if (
+        type(manifest["schema_version"]) is not str
+        or manifest["schema_version"] not in _SUPPORTED_SCHEMA_VERSIONS
+    ):
         raise JourneyReleaseError("unsupported Journey release schema_version")
     if manifest["compatibility_policy"] != JOURNEY_RELEASE_COMPATIBILITY_POLICY:
         raise JourneyReleaseError("unsupported Journey release compatibility_policy")
@@ -834,7 +854,10 @@ def _validate_gate_reports(items: list[Any]) -> list[dict[str, Any]]:
     for item in items:
         payload = _require_mapping(item, "gate report")
         _require_exact_fields(payload, _REPORT_FIELDS, "gate report")
-        if payload["schema_version"] != JOURNEY_RELEASE_SCHEMA_VERSION:
+        if (
+            type(payload["schema_version"]) is not str
+            or payload["schema_version"] not in _SUPPORTED_SCHEMA_VERSIONS
+        ):
             raise JourneyReleaseError("gate report schema_version is unsupported")
         if payload["compatibility_policy"] != JOURNEY_RELEASE_COMPATIBILITY_POLICY:
             raise JourneyReleaseError("gate report compatibility_policy is unsupported")
@@ -847,7 +870,7 @@ def _validate_gate_reports(items: list[Any]) -> list[dict[str, Any]]:
         state = str(payload["state"])
         if state not in JOURNEY_RELEASE_STATES:
             raise JourneyReleaseError("unknown release state")
-        metrics = _validate_metrics(gate, payload["metrics"])
+        metrics = _validate_metrics(gate, payload["metrics"], payload["schema_version"])
         reports.append(
             {
                 "compatibility_policy": JOURNEY_RELEASE_COMPATIBILITY_POLICY,
@@ -856,7 +879,7 @@ def _validate_gate_reports(items: list[Any]) -> list[dict[str, Any]]:
                     payload["generated_at"], f"{gate}.generated_at"
                 ),
                 "metrics": metrics,
-                "schema_version": JOURNEY_RELEASE_SCHEMA_VERSION,
+                "schema_version": payload["schema_version"],
                 "state": state,
             }
         )
@@ -867,9 +890,16 @@ def _validate_gate_reports(items: list[Any]) -> list[dict[str, Any]]:
     return sorted(reports, key=lambda item: order[item["gate"]])
 
 
-def _validate_metrics(gate: str, raw: Any) -> dict[str, int | float | str]:
+def _validate_metrics(
+    gate: str, raw: Any, schema_version: str
+) -> dict[str, int | float | str]:
     metrics = _require_mapping(raw, f"{gate}.metrics")
-    _require_exact_fields(metrics, _METRIC_FIELDS[gate], f"{gate}.metrics")
+    fields = (
+        _PRIVACY_LEGACY_FIELDS
+        if gate == "privacy" and schema_version == "1.0.0"
+        else _METRIC_FIELDS[gate]
+    )
+    _require_exact_fields(metrics, fields, f"{gate}.metrics")
     result: dict[str, int | float | str] = {}
     for key, value in metrics.items():
         name = str(key)
@@ -1073,13 +1103,22 @@ def _evaluate_gate_reports(
         elif age > max_age_seconds:
             blockers.append("artifact_stale")
         for metric in _ZERO_BLOCKERS[gate]:
-            if metrics[metric] != 0:
+            if metric not in metrics:
+                blockers.append(f"missing:{metric}")
+            elif metrics[metric] != 0:
                 blockers.append(f"nonzero:{metric}")
         for metric in _POSITIVE_COUNTS[gate]:
             if metrics[metric] <= 0:
                 blockers.append(f"empty:{metric}")
         if gate == "performance":
             blockers.extend(_performance_blockers(metrics))
+        if gate == "privacy":
+            checked = metrics.get("consistency_checked_format_count")
+            unsupported = metrics.get("consistency_unsupported_format_count")
+            if checked is None:
+                blockers.append("missing:consistency_checked_format_count")
+            elif checked != 5 or unsupported != 0:
+                blockers.append("consistency_coverage_incomplete")
         results.append(
             JourneyGateResult(
                 gate=gate,

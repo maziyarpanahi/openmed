@@ -80,6 +80,7 @@ from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
+    request_scope_path,
     service_log_config_from_env,
     set_access_log_brief,
     set_access_log_grounding,
@@ -136,6 +137,7 @@ from .schemas import (
     PrivacyGatewayRequest,
     ProfileRequest,
     SMARTBackendIngestionRequest,
+    SystemOneRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -145,7 +147,12 @@ from .security_headers import (
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
-from .throttle import ServiceThrottle, format_retry_after
+from .throttle import (
+    ServiceBusyError,
+    ServiceThrottle,
+    current_request_work,
+    format_retry_after,
+)
 from .tracing import (
     OpenTelemetryMiddleware,
     operational_trace_attributes,
@@ -167,6 +174,7 @@ _MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
 _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
 _MANIFEST_HEADER = "X-OpenMed-Manifest"
 _MAX_MANIFEST_HEADER_BYTES = 8192
+_SYSTEM_ONE_PATH = "/v1/systemone"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -189,6 +197,9 @@ class _AnalyzeBatchJob:
 @dataclass(frozen=True)
 class _PIIExtractBatchJob:
     payload: PIIExtractRequest
+
+
+_SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 
 
 class ServiceTimeoutError(RuntimeError):
@@ -221,7 +232,7 @@ class _BoundedRequestBodyMiddleware:
         if (
             scope["type"] != "http"
             or scope.get("method") not in {"POST", "PUT", "PATCH"}
-            or scope.get("path") not in self.limited_paths
+            or request_scope_path(scope).rstrip("/") not in self.limited_paths
         ):
             await self.app(scope, receive, send)
             return
@@ -609,32 +620,90 @@ async def _run_with_timeout(
     operation: Any,
 ) -> Any:
     """Run blocking service work in a threadpool under the profile timeout."""
-    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
-    if timeout_seconds <= 0:
-        return await run_in_threadpool(operation)
+    work = current_request_work()
 
-    try:
-        return await asyncio.wait_for(
-            run_in_threadpool(operation),
-            timeout=float(timeout_seconds),
-        )
-    except asyncio.TimeoutError as exc:
-        raise ServiceTimeoutError(timeout_seconds) from exc
+    async def model_work() -> Any:
+        release_slot = await work.acquire_model_slot() if work is not None else None
+        try:
+            return await run_in_threadpool(operation)
+        finally:
+            if release_slot is not None:
+                release_slot()
+
+    return await _await_with_timeout(runtime, model_work())
+
+
+def _track_service_work(awaitable: Any) -> asyncio.Future[Any]:
+    """Keep a strong reference and consume late failures without logging input."""
+    task = asyncio.ensure_future(awaitable)
+    _SERVICE_WORK_TASKS.add(task)
+
+    def completed(future: asyncio.Future[Any]) -> None:
+        _SERVICE_WORK_TASKS.discard(future)
+        if not future.cancelled():
+            future.exception()
+
+    task.add_done_callback(completed)
+    work = current_request_work()
+    if work is not None:
+        work.track(task)
+    return task
 
 
 async def _await_with_timeout(
     runtime: ServiceRuntime,
     awaitable: Any,
+    *,
+    cancel_on_timeout: bool = False,
 ) -> Any:
-    """Await async service work under the profile timeout."""
+    """Bound the client wait without cancelling work that still owns capacity."""
+    task = _track_service_work(awaitable)
     timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    wait = task if cancel_on_timeout else asyncio.shield(task)
     if timeout_seconds <= 0:
-        return await awaitable
+        return await wait
 
     try:
-        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+        return await asyncio.wait_for(wait, timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
         raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+async def _submit_with_timeout(
+    runtime: ServiceRuntime,
+    batcher: DynamicBatcher,
+    item: Any,
+    *,
+    priority: str,
+    priority_handle: BatchPriorityHandle,
+) -> Any:
+    """Cancel abandoned queued jobs while retaining ownership of dispatches."""
+    work_done = asyncio.get_running_loop().create_future()
+    _track_service_work(work_done)
+    started = False
+
+    async def submit() -> Any:
+        nonlocal started
+        started = True
+        return await batcher.submit(
+            item,
+            priority=priority,
+            priority_handle=priority_handle,
+            work_done=work_done,
+        )
+
+    task = asyncio.create_task(submit())
+
+    def completed_before_start(future: asyncio.Future[Any]) -> None:
+        if not started and not work_done.done():
+            work_done.set_result(None)
+
+    task.add_done_callback(completed_before_start)
+    return await _await_with_timeout(
+        runtime,
+        task,
+        cancel_on_timeout=True,
+    )
 
 
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
@@ -710,11 +779,15 @@ async def _run_maybe_coalesced(
             "openmed.coalescing.enabled": True,
         },
     ):
-        return await coalescer.run(
-            coalescing_key(endpoint, payload),
-            operation,
-            priority=priority,
-            on_priority_upgrade=on_priority_upgrade,
+        return await asyncio.shield(
+            _track_service_work(
+                coalescer.run(
+                    coalescing_key(endpoint, payload),
+                    operation,
+                    priority=priority,
+                    on_priority_upgrade=on_priority_upgrade,
+                )
+            )
         )
 
 
@@ -883,6 +956,10 @@ def create_app(
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
     app.state.operational_limits = request_limits_from_env()
+    app.state.system_one_enabled = os.getenv(
+        "OPENMED_SERVICE_SYSTEM_ONE", ""
+    ).strip().lower() in {"true", "1", "yes"}
+    app.state.system_one_audit_key = os.urandom(32)
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
@@ -984,7 +1061,15 @@ def create_app(
             try:
                 return await call_next(request)
             finally:
-                state.inflight = getattr(state, "inflight", 0) - 1
+
+                def release_inflight() -> None:
+                    state.inflight = getattr(state, "inflight", 0) - 1
+
+                work = current_request_work()
+                if work is None:
+                    release_inflight()
+                else:
+                    work.on_finished(release_inflight)
         return await call_next(request)
 
     if app.state.metrics is not None:
@@ -1046,14 +1131,19 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Question IDs and unknown JSON keys may themselves contain PHI. Use the
+        # matched route so mounted services receive the same content-free error.
+        protected_route = (
+            getattr(request.scope.get("route"), "path", None) == _SYSTEM_ONE_PATH
+        )
         return _error_response(
             422,
             "validation_error",
             "Request validation failed",
-            details=_format_validation_details(exc),
+            details=None if protected_route else _format_validation_details(exc),
         )
 
     @app.exception_handler(ServiceTimeoutError)
@@ -1071,6 +1161,19 @@ def create_app(
         exc: BackpressureError,
     ) -> JSONResponse:
         return _backpressure_response(exc)
+
+    @app.exception_handler(ServiceBusyError)
+    async def _service_busy_handler(_: Request, exc: ServiceBusyError) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "max_concurrency": exc.max_concurrency,
+                "wait_seconds": exc.wait_seconds,
+                "key": exc.key_by,
+            },
+        )
 
     @app.exception_handler(PrivacyGatewayConfigurationError)
     async def _privacy_gateway_config_handler(
@@ -1280,11 +1383,19 @@ def create_app(
     ) -> Dict[str, Any]:
         """Evaluate a bounded local decision and return a typed review result."""
 
+        # Only caller-set fields reach the core contract, so a request without
+        # 1.1.0 fields still resolves to schema 1.0.0.
         body = (
-            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload.dict(exclude_unset=True)
         )
         try:
-            decision_request = CoreDecisionRequest.from_dict(body)
+            # Optional video preflight and metadata scrubbing must not block
+            # the event loop serving unrelated requests.
+            decision_request = await run_in_threadpool(
+                CoreDecisionRequest.from_dict, body
+            )
         except (DecisionError, TypeError, ValueError) as exc:
             raise InputError(
                 "Invalid fixed-option decision request.",
@@ -1310,6 +1421,101 @@ def create_app(
             ),
         )
         return result.to_dict()
+
+    @app.post(
+        _SYSTEM_ONE_PATH,
+        tags=["decision"],
+        response_model=None,
+        responses={
+            200: {
+                "description": "System One answers plus an OpenMed decision ID.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["decision_id", "model", "answers"],
+                            "properties": {
+                                "decision_id": {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$",
+                                },
+                                "model": {"type": "string"},
+                                "answers": {"type": "object"},
+                            },
+                        }
+                    }
+                },
+            },
+            404: {"description": "Route disabled (default)."},
+            422: {"description": "De-identification refused; nothing forwarded."},
+        },
+    )
+    async def private_system_one(payload: SystemOneRequest, request: Request):
+        """De-identify state and every question before scoring with the configured local backend."""
+        from openmed.core.offline import is_local_only
+
+        from .system_one import (
+            SystemOneInputError,
+            SystemOnePrivacyError,
+            protect_and_decide,
+        )
+
+        app_state = request.app.state
+        if not app_state.system_one_enabled:
+            raise HTTPException(status_code=404, detail="System One route is disabled.")
+        runtime = _get_service_runtime(request)
+        if not (
+            app_state.auth.config.enabled
+            and runtime.throttle.rate_limit_enabled
+            and is_local_only(runtime.config)
+        ):
+            return _error_response(
+                503,
+                "privacy_gateway_not_configured",
+                "Local-only mode, service authentication and rate limits are required.",
+            )
+
+        def clean(text: str):
+            model = (
+                runtime.config.pii_model
+                or "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+            )
+            return runtime.run_model_request(
+                model,
+                None,
+                lambda: openmed.deidentify(
+                    text,
+                    method="mask",
+                    model_name=model,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    keep_mapping=False,
+                    use_safety_sweep=True,
+                ),
+            )
+
+        try:
+            return await run_in_threadpool(
+                protect_and_decide,
+                {"state": payload.state, "questions": payload.questions},
+                cleaner=clean,
+                backend=app_state.decision_backend,
+                policy=app_state.decision_access_policy,
+                profiles=app_state.decision_calibration_profiles,
+                audit_key=app_state.system_one_audit_key,
+            )
+        except SystemOneInputError:
+            return _error_response(400, "bad_request", "Invalid System One request.")
+        except SystemOnePrivacyError:
+            return _error_response(
+                422, "outbound_redaction_failed", "Unable to de-identify the request."
+            )
+        except Exception:
+            return _error_response(
+                503,
+                "not_ready",
+                "The local decision backend is unavailable.",
+            )
 
     if openhim_settings.enabled:
 
@@ -1412,13 +1618,12 @@ def create_app(
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_analyze_batcher(request).submit(
-                        _AnalyzeBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_analyze_batcher(request),
+                    _AnalyzeBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1458,13 +1663,12 @@ def create_app(
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_pii_extract_batcher(request).submit(
-                        _PIIExtractBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_pii_extract_batcher(request),
+                    _PIIExtractBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
