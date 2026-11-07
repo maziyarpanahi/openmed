@@ -8,9 +8,14 @@ patient-care action.
 
 Schema 1.1.0 adds optional fields only: per-question instructions, option
 descriptions, a named question set over one input, ordered score levels with an
-expected-level output, JSON inputs, and a configurable input bound. Requests
-that use none of them resolve to schema 1.0.0 and produce results that are
-identical to the 1.0.0 contract.
+expected-level output, JSON inputs, and a configurable input bound. Schema
+1.2.0 adds optional verified local ``media`` and widens backend license
+provenance to a bounded license expression plus an optional license digest.
+
+A request that omits ``schema_version`` resolves to the lowest version that
+carries every field it uses: 1.0.0 for the base fields, 1.1.0 for the question
+fields and 1.2.0 for media. Requests and results of an older version therefore
+keep deciding and rendering exactly as they did under that version.
 """
 
 from __future__ import annotations
@@ -37,10 +42,14 @@ from .decision_media import (
     parse_media,
 )
 
-DECISION_SCHEMA_VERSION: Final = "1.1.0"
+DECISION_SCHEMA_VERSION: Final = "1.2.0"
 DECISION_BASE_SCHEMA_VERSION: Final = "1.0.0"
+# The first versions that carry the question fields and media.
+_QUESTION_SCHEMA_VERSION: Final = "1.1.0"
+_MEDIA_SCHEMA_VERSION: Final = "1.2.0"
 SUPPORTED_DECISION_SCHEMA_VERSIONS: Final = (
     DECISION_BASE_SCHEMA_VERSION,
+    _QUESTION_SCHEMA_VERSION,
     DECISION_SCHEMA_VERSION,
 )
 DECISION_POLICY_VERSION: Final = "1.0.0"
@@ -87,6 +96,8 @@ _SCHEMA_FILES: Final = MappingProxyType(
     {
         "decision_request": "decision_request.schema.json",
         "decision_result": "decision_result.schema.json",
+        "decision_openai_request": "decision_openai_request.schema.json",
+        "decision_openai_response": "decision_openai_response.schema.json",
     }
 )
 
@@ -481,8 +492,9 @@ class DecisionRequest:
     """One bounded request shared by Python, REST, and MCP.
 
     The first nine fields are the 1.0.0 contract. The remaining fields are
-    optional 1.1.0 extensions; a request that leaves them unset and does not
-    declare ``schema_version`` resolves to 1.0.0 and behaves exactly as before.
+    optional extensions: the question fields arrived in 1.1.0 and ``media`` in
+    1.2.0. A request that leaves them unset and does not declare
+    ``schema_version`` resolves to 1.0.0 and behaves exactly as before.
 
     Attributes:
         mode: Decision shape, or ``question_set`` for several named questions.
@@ -493,8 +505,9 @@ class DecisionRequest:
         purpose: Controlled access-policy purpose.
         calibration_id: Calibration profile applied to every question.
         timeout_ms: Backend budget for the whole request.
-        schema_version: Declared contract version. ``None`` resolves to 1.1.0
-            when an extension field is set and to 1.0.0 otherwise.
+        schema_version: Declared contract version. ``None`` resolves to the
+            lowest version carrying every field set: 1.2.0 with ``media``,
+            1.1.0 with another extension field and 1.0.0 otherwise.
         compatibility_policy: Always ``same_major``.
         question_id: Optional identifier for a single-question request.
         instructions: Optional question wording for a single-question request.
@@ -573,31 +586,39 @@ class DecisionRequest:
         _controlled(self.namespace, "namespace")
         _controlled(self.purpose, "purpose")
         _controlled(self.calibration_id, "calibration_id")
-        uses_extensions = (
+        uses_question_fields = (
             mode is DecisionMode.QUESTION_SET
             or question_id is not None
             or descriptions is not None
             or instructions is not None
             or bool(levels)
-            or bool(self.media)
             or input_format is not DecisionInputFormat.TEXT
             or max_input_chars is not None
         )
+        uses_media = bool(self.media)
         schema_version = self.schema_version
         if schema_version is None:
-            schema_version = (
-                DECISION_SCHEMA_VERSION
-                if uses_extensions
-                else DECISION_BASE_SCHEMA_VERSION
-            )
+            if uses_media:
+                schema_version = _MEDIA_SCHEMA_VERSION
+            elif uses_question_fields:
+                schema_version = _QUESTION_SCHEMA_VERSION
+            else:
+                schema_version = DECISION_BASE_SCHEMA_VERSION
         _semantic_version(schema_version, "decision schema version")
         if schema_version.split(".", 1)[0] != "1":
             raise DecisionUnsupportedError(
                 "decision request schema major is unsupported"
             )
-        if uses_extensions and _is_base_version(_contract_version(schema_version)):
+        contract_version = _contract_version(schema_version)
+        if uses_question_fields and _is_base_version(contract_version):
             raise DecisionUnsupportedError(
-                f"decision request fields require schema {DECISION_SCHEMA_VERSION}"
+                f"decision request fields require schema {_QUESTION_SCHEMA_VERSION}"
+            )
+        if uses_media and _version_key(contract_version) < _version_key(
+            _MEDIA_SCHEMA_VERSION
+        ):
+            raise DecisionUnsupportedError(
+                f"decision media requires schema {_MEDIA_SCHEMA_VERSION}"
             )
         if self.compatibility_policy != DECISION_COMPATIBILITY_POLICY:
             raise DecisionUnsupportedError(
@@ -746,7 +767,7 @@ class DecisionRequest:
         if not isinstance(question, DecisionQuestion):
             raise TypeError("question must be a DecisionQuestion")
         schema_version = (
-            DECISION_SCHEMA_VERSION
+            _QUESTION_SCHEMA_VERSION
             if _is_base_version(self.contract_version)
             else str(self.schema_version)
         )
@@ -1408,7 +1429,7 @@ class DecisionResult:
             or self.expected_level is not None
         ):
             raise DecisionError(
-                f"question sets and score levels require schema {DECISION_SCHEMA_VERSION}"
+                f"question sets and score levels require schema {_QUESTION_SCHEMA_VERSION}"
             )
         warnings, review = _validated_review(self.warnings, self.review)
         object.__setattr__(self, "mode", mode)
@@ -2024,9 +2045,10 @@ def _question_definition_properties() -> dict[str, Any]:
 def decision_request_schema() -> dict[str, Any]:
     """Return the canonical request JSON Schema.
 
-    The schema accepts every 1.0.0 request unchanged. A request that declares
-    ``schema_version`` 1.0.0 cannot use the 1.1.0 fields, and the input stays
-    bounded to 8,192 characters unless ``max_input_chars`` raises the bound.
+    The schema accepts every 1.0.0 and 1.1.0 request unchanged. A request that
+    declares ``schema_version`` 1.0.0 cannot use the extension fields, one that
+    declares 1.1.0 cannot carry ``media``, and the input stays bounded to 8,192
+    characters unless ``max_input_chars`` raises the bound.
     """
 
     question_id = {"type": "string", "pattern": _QUESTION_ID_RE.pattern}
@@ -2089,6 +2111,15 @@ def decision_request_schema() -> dict[str, Any]:
                 },
             },
             {
+                "if": {
+                    "required": ["schema_version"],
+                    "properties": {
+                        "schema_version": {"const": _QUESTION_SCHEMA_VERSION}
+                    },
+                },
+                "then": {"not": {"required": ["media"]}},
+            },
+            {
                 "if": {"not": {"required": ["max_input_chars"]}},
                 "then": {"properties": {"input_text": {"maxLength": MAX_INPUT_CHARS}}},
             },
@@ -2129,9 +2160,10 @@ def decision_request_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": list(SUPPORTED_DECISION_SCHEMA_VERSIONS),
                 "description": (
-                    f"Omitted, it resolves to {DECISION_SCHEMA_VERSION} when a "
-                    f"{DECISION_SCHEMA_VERSION} field is present and to "
-                    f"{DECISION_BASE_SCHEMA_VERSION} otherwise."
+                    "Omitted, it resolves to the lowest version carrying every "
+                    f"field present: {_MEDIA_SCHEMA_VERSION} with media, "
+                    f"{_QUESTION_SCHEMA_VERSION} with another extension field "
+                    f"and {DECISION_BASE_SCHEMA_VERSION} otherwise."
                 ),
             },
             "compatibility_policy": {
@@ -2202,8 +2234,11 @@ def decision_request_schema() -> dict[str, Any]:
 def decision_result_schema() -> dict[str, Any]:
     """Return the canonical result JSON Schema.
 
-    1.0.0 results keep exactly the 1.0.0 fields. 1.1.0 results always carry
-    ``questions``, ``level_scores`` and ``expected_level``.
+    1.0.0 results keep exactly the 1.0.0 fields. 1.1.0 and later results
+    always carry ``questions``, ``level_scores`` and ``expected_level``. Backend
+    provenance (a bounded license expression and an optional ``license_sha256``)
+    describes the backend rather than the request, so the 1.2.0 document allows
+    it in results of every 1.x version.
     """
 
     nullable_number = {"type": ["number", "null"], "minimum": 0, "maximum": 1}
@@ -2498,8 +2533,9 @@ def migrate_decision_result(
 
     Downgrading to 1.0.0 moves non-empty ``questions``, ``level_scores`` and
     ``expected_level`` values into ``extensions`` and drops their empty
-    defaults. Upgrading to 1.1.0 lifts them back out of ``extensions`` or adds
-    the empty defaults, so a downgrade followed by an upgrade is lossless.
+    defaults. Upgrading to 1.1.0 or later lifts them back out of
+    ``extensions`` or adds the empty defaults, so a downgrade followed by an
+    upgrade is lossless. Results have the same fields at 1.1.0 and 1.2.0.
 
     Args:
         payload: A serialized decision result.
@@ -2522,7 +2558,7 @@ def migrate_decision_result(
     downgrade = _is_base_version(target)
     if downgrade and payload.get("mode") == DecisionMode.QUESTION_SET.value:
         raise DecisionUnsupportedError(
-            f"question-set results require schema {DECISION_SCHEMA_VERSION}"
+            f"question-set results require schema {_QUESTION_SCHEMA_VERSION}"
         )
     known = set(decision_result_schema()["properties"])
     if downgrade:

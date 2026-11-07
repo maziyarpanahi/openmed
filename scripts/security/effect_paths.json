@@ -487,6 +487,11 @@
     },
     {
       "classification": "operational",
+      "function": "OpenMedClient.openai_decisions",
+      "module": "openmed.service.client"
+    },
+    {
+      "classification": "operational",
       "function": "CorrelationIdMiddleware.__call__.send_with_request_id",
       "module": "openmed.service.logging"
     },

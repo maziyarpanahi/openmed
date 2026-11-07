@@ -685,9 +685,11 @@ Evaluates a bounded caller-supplied choice, ordering, multi-label, boolean, or
 scalar request and returns calibrated confidence, backend identity, typed
 abstention and failure states, and mandatory review metadata. The default
 backend is local and deterministic; operators can inject a permissively
-licensed encoder, cross-encoder, or small specialist backend. See the
-[fixed-option decision API](./api/fixed-option-decisions.md) for the canonical
-schemas, limits, and client examples.
+licensed encoder, cross-encoder, or small specialist backend. The route also
+accepts the text-only OpenAI-compatible Decisions body and answers in that
+shape; see [one route, two request shapes](./api/fixed-option-decisions.md#one-route-two-request-shapes).
+See the [fixed-option decision API](./api/fixed-option-decisions.md) for the
+canonical schemas, limits, and client examples.
 
 ### `GET /health`
 

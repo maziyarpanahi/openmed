@@ -278,6 +278,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "loaded_models",
         "journey_resources",
         "decision",
+        "openai_decisions",
         "system_one",
         "unload_model",
         "unload_all_models",
@@ -291,7 +292,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
             assert "requestBody" not in operation
             continue
 
-        schema = _request_body_schema(spec, operation)
+        schema = _request_body_schema(spec, operation, endpoint.request_fields)
         assert endpoint.request_fields == set(schema["properties"])
 
         if method_name.startswith("workflow_"):
@@ -314,7 +315,10 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
             )
             continue
 
-        request_type = request_types[method_name]
+        request_type = request_types.get(method_name)
+        if request_type is None:
+            # Mapping-only bodies: the OpenAPI component is the whole contract.
+            continue
         required_fields = {
             field.name
             for field in fields(request_type)
@@ -541,8 +545,24 @@ def test_client_pii_language_literal_matches_core() -> None:
 def _request_body_schema(
     spec: dict[str, Any],
     operation: dict[str, Any],
+    request_fields: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    if "oneOf" in schema:
+        # A negotiated body: each client method sends exactly one variant.
+        variants = [
+            _request_body_schema(
+                spec, {"requestBody": {"content": {"application/json": {"schema": v}}}}
+            )
+            for v in schema["oneOf"]
+        ]
+        matches = [
+            variant
+            for variant in variants
+            if set(variant.get("properties", {})) == set(request_fields or ())
+        ]
+        assert len(matches) == 1, "client fields must match one body variant"
+        return matches[0]
     ref = schema.get("$ref")
     if ref is None:
         return schema

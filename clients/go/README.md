@@ -126,6 +126,20 @@ func main() {
 	}
 	fmt.Println("decision state:", decision.State, "choice:", decision.Choice)
 
+	// The same route accepts an OpenAI-compatible Decisions body and answers
+	// in that shape. Model must name the model the service decides with.
+	answers, err := client.OpenAIDecisions(ctx, openmed.OpenAIDecisionsRequest{
+		Model: "openmed/deterministic-fixed-option",
+		Input: "Synthetic review priority is urgent.",
+		Questions: []openmed.JSONObject{
+			{"type": "predicate", "name": "urgent"},
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("answers:", len(answers.Answers), "review:", answers.OpenMed["review"])
+
 	// Inspect loaded models and unload one.
 	loaded, err := client.LoadedModels(ctx)
 	if err != nil {

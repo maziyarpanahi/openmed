@@ -1,0 +1,2161 @@
+{
+  "cases": [
+    {
+      "name": "question_set_mixed_states",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_format": "json",
+        "input_text": "{\"note\": \"Synthetic priority is urgent; severity is high.\"}",
+        "mode": "question_set",
+        "namespace": "default",
+        "options": [],
+        "purpose": "care_review",
+        "questions": [
+          {
+            "instructions": "Which synthetic priority applies?",
+            "mode": "fixed_choice",
+            "option_descriptions": [
+              "Synthetic same-day review",
+              null
+            ],
+            "options": [
+              "urgent",
+              "routine"
+            ],
+            "question_id": "priority"
+          },
+          {
+            "mode": "boolean_choice",
+            "options": [
+              "true",
+              "false"
+            ],
+            "question_id": "flag"
+          },
+          {
+            "levels": [
+              "Low",
+              "High"
+            ],
+            "mode": "scalar_score",
+            "options": [],
+            "question_id": "severity"
+          }
+        ],
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": "question_set_partial",
+        "compatibility_policy": "same_major",
+        "confidence": null,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": null,
+        "mode": "question_set",
+        "option_scores": [],
+        "questions": [
+          {
+            "choice": null,
+            "choices": [],
+            "code": "backend_unsupported",
+            "confidence": null,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": null,
+            "mode": "fixed_choice",
+            "option_scores": [],
+            "question_id": "priority",
+            "ranking": [],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review",
+                "backend_unsupported"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "unsupported",
+            "warnings": [
+              "human_review_required",
+              "backend_unsupported"
+            ]
+          },
+          {
+            "choice": null,
+            "choices": [],
+            "code": "low_confidence",
+            "confidence": 0.05,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": 0.0,
+            "mode": "boolean_choice",
+            "option_scores": [
+              {
+                "index": 0,
+                "option": "true",
+                "score": 0.05
+              },
+              {
+                "index": 1,
+                "option": "false",
+                "score": 0.05
+              }
+            ],
+            "question_id": "flag",
+            "ranking": [
+              "true",
+              "false"
+            ],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review",
+                "low_confidence"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "abstained",
+            "warnings": [
+              "human_review_required",
+              "low_confidence"
+            ]
+          },
+          {
+            "choice": null,
+            "choices": [],
+            "code": null,
+            "confidence": 0.9523809523809523,
+            "expected_level": 0.9523809523809523,
+            "level_scores": [
+              {
+                "index": 0,
+                "level": "Low",
+                "score": 0.05
+              },
+              {
+                "index": 1,
+                "level": "High",
+                "score": 1.0
+              }
+            ],
+            "margin": null,
+            "mode": "scalar_score",
+            "option_scores": [],
+            "question_id": "severity",
+            "ranking": [],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": 0.9523809523809523,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          }
+        ],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review",
+            "question_set_partial"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "partial",
+        "warnings": [
+          "human_review_required",
+          "question_set_partial"
+        ]
+      }
+    },
+    {
+      "name": "question_set_all_success",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic review priority is urgent; synthetic queue is billing.",
+        "mode": "question_set",
+        "namespace": "default",
+        "options": [],
+        "purpose": "care_review",
+        "questions": [
+          {
+            "mode": "fixed_choice",
+            "options": [
+              "urgent",
+              "routine"
+            ],
+            "question_id": "priority"
+          },
+          {
+            "mode": "fixed_choice",
+            "options": [
+              "billing",
+              "scheduling"
+            ],
+            "question_id": "queue"
+          }
+        ],
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": null,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": null,
+        "mode": "question_set",
+        "option_scores": [],
+        "questions": [
+          {
+            "choice": "urgent",
+            "choices": [
+              "urgent"
+            ],
+            "code": null,
+            "confidence": 1.0,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": 0.95,
+            "mode": "fixed_choice",
+            "option_scores": [
+              {
+                "index": 0,
+                "option": "urgent",
+                "score": 1.0
+              },
+              {
+                "index": 1,
+                "option": "routine",
+                "score": 0.05
+              }
+            ],
+            "question_id": "priority",
+            "ranking": [
+              "urgent",
+              "routine"
+            ],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          },
+          {
+            "choice": "billing",
+            "choices": [
+              "billing"
+            ],
+            "code": null,
+            "confidence": 1.0,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": 0.95,
+            "mode": "fixed_choice",
+            "option_scores": [
+              {
+                "index": 0,
+                "option": "billing",
+                "score": 1.0
+              },
+              {
+                "index": 1,
+                "option": "scheduling",
+                "score": 0.05
+              }
+            ],
+            "question_id": "queue",
+            "ranking": [
+              "billing",
+              "scheduling"
+            ],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          }
+        ],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    },
+    {
+      "name": "named_fixed_choice",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic review priority is urgent.",
+        "mode": "fixed_choice",
+        "namespace": "default",
+        "options": [
+          "urgent",
+          "routine"
+        ],
+        "purpose": "care_review",
+        "question_id": "priority",
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": "urgent",
+        "choices": [
+          "urgent"
+        ],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": 1.0,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": 0.95,
+        "mode": "fixed_choice",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          }
+        ],
+        "questions": [],
+        "ranking": [
+          "urgent",
+          "routine"
+        ],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    },
+    {
+      "name": "levelled_scalar_score",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic severity is high.",
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "mode": "scalar_score",
+        "namespace": "default",
+        "options": [],
+        "purpose": "care_review",
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": 0.9090909090909091,
+        "expected_level": 1.8636363636363635,
+        "extensions": {},
+        "level_scores": [
+          {
+            "index": 0,
+            "level": "low",
+            "score": 0.05
+          },
+          {
+            "index": 1,
+            "level": "medium",
+            "score": 0.05
+          },
+          {
+            "index": 2,
+            "level": "high",
+            "score": 1.0
+          }
+        ],
+        "margin": null,
+        "mode": "scalar_score",
+        "option_scores": [],
+        "questions": [],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": 0.9318181818181818,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    },
+    {
+      "name": "raised_input_bound",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic eligibility flag is yes.",
+        "max_input_chars": 16384,
+        "mode": "boolean_choice",
+        "namespace": "default",
+        "options": [
+          "no",
+          "yes"
+        ],
+        "purpose": "care_review",
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": "yes",
+        "choices": [
+          "yes"
+        ],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": 1.0,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": 0.95,
+        "mode": "boolean_choice",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "no",
+            "score": 0.05
+          },
+          {
+            "index": 1,
+            "option": "yes",
+            "score": 1.0
+          }
+        ],
+        "questions": [],
+        "ranking": [
+          "yes",
+          "no"
+        ],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    },
+    {
+      "name": "json_input_multi_label",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_format": "json",
+        "input_text": "{\"labels\": \"synthetic billing and synthetic scheduling\"}",
+        "mode": "multi_label",
+        "namespace": "default",
+        "options": [
+          "billing",
+          "scheduling",
+          "pharmacy"
+        ],
+        "purpose": "care_review",
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": "billing",
+        "choices": [
+          "billing",
+          "scheduling"
+        ],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": 1.0,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": 0.0,
+        "mode": "multi_label",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "billing",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "scheduling",
+            "score": 1.0
+          },
+          {
+            "index": 2,
+            "option": "pharmacy",
+            "score": 0.05
+          }
+        ],
+        "questions": [],
+        "ranking": [
+          "billing",
+          "scheduling",
+          "pharmacy"
+        ],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    },
+    {
+      "name": "question_set_namespace_denied",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic review priority is urgent.",
+        "mode": "question_set",
+        "namespace": "restricted",
+        "options": [],
+        "purpose": "care_review",
+        "questions": [
+          {
+            "mode": "fixed_choice",
+            "options": [
+              "urgent",
+              "routine"
+            ],
+            "question_id": "priority"
+          }
+        ],
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": false,
+          "code": "namespace_denied",
+          "namespace": "restricted",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": "namespace_denied",
+        "compatibility_policy": "same_major",
+        "confidence": null,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": null,
+        "mode": "question_set",
+        "option_scores": [],
+        "questions": [
+          {
+            "choice": null,
+            "choices": [],
+            "code": "namespace_denied",
+            "confidence": null,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": null,
+            "mode": "fixed_choice",
+            "option_scores": [],
+            "question_id": "priority",
+            "ranking": [],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review",
+                "namespace_denied"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "denied",
+            "warnings": [
+              "human_review_required",
+              "namespace_denied"
+            ]
+          }
+        ],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review",
+            "namespace_denied"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "denied",
+        "warnings": [
+          "human_review_required",
+          "namespace_denied"
+        ]
+      }
+    },
+    {
+      "name": "question_set_ordered_preference",
+      "request": {
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "compatibility_policy": "same_major",
+        "input_text": "Synthetic review priority is urgent.",
+        "mode": "question_set",
+        "namespace": "default",
+        "options": [],
+        "purpose": "analytics",
+        "questions": [
+          {
+            "mode": "ordered_preference",
+            "options": [
+              "routine",
+              "urgent"
+            ],
+            "question_id": "priority"
+          }
+        ],
+        "schema_version": "1.1.0",
+        "timeout_ms": 5000
+      },
+      "result": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "analytics"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": null,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": null,
+        "mode": "question_set",
+        "option_scores": [],
+        "questions": [
+          {
+            "choice": "urgent",
+            "choices": [
+              "urgent"
+            ],
+            "code": null,
+            "confidence": 1.0,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": 0.95,
+            "mode": "ordered_preference",
+            "option_scores": [
+              {
+                "index": 0,
+                "option": "routine",
+                "score": 0.05
+              },
+              {
+                "index": 1,
+                "option": "urgent",
+                "score": 1.0
+              }
+            ],
+            "question_id": "priority",
+            "ranking": [
+              "urgent",
+              "routine"
+            ],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          }
+        ],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      }
+    }
+  ],
+  "description": "Synthetic requests and results frozen from the 1.1.0 fixed-option decision contract as published in OpenMed 3.2.0. They must keep validating and deciding exactly as recorded.",
+  "request_schema": {
+    "$id": "https://openmed.dev/schemas/decision-request/1.1.0",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "scalar_score"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "maxItems": 0
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "boolean_choice"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "maxItems": 2,
+              "minItems": 2
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "enum": [
+                "fixed_choice",
+                "ordered_preference",
+                "multi_label"
+              ]
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "maxItems": 64,
+              "minItems": 2
+            }
+          }
+        }
+      },
+      {
+        "else": {
+          "not": {
+            "required": [
+              "levels"
+            ]
+          }
+        },
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "scalar_score"
+            }
+          }
+        }
+      },
+      {
+        "else": {
+          "not": {
+            "required": [
+              "questions"
+            ]
+          }
+        },
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "question_set"
+            }
+          }
+        },
+        "then": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "question_id"
+                ]
+              },
+              {
+                "required": [
+                  "instructions"
+                ]
+              },
+              {
+                "required": [
+                  "option_descriptions"
+                ]
+              },
+              {
+                "required": [
+                  "levels"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "options": {
+              "maxItems": 0
+            }
+          },
+          "required": [
+            "questions"
+          ]
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "schema_version": {
+              "const": "1.0.0"
+            }
+          },
+          "required": [
+            "schema_version"
+          ]
+        },
+        "then": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "question_id"
+                ]
+              },
+              {
+                "required": [
+                  "instructions"
+                ]
+              },
+              {
+                "required": [
+                  "option_descriptions"
+                ]
+              },
+              {
+                "required": [
+                  "levels"
+                ]
+              },
+              {
+                "required": [
+                  "questions"
+                ]
+              },
+              {
+                "required": [
+                  "input_format"
+                ]
+              },
+              {
+                "required": [
+                  "max_input_chars"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "mode": {
+              "not": {
+                "const": "question_set"
+              }
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "not": {
+            "required": [
+              "max_input_chars"
+            ]
+          }
+        },
+        "then": {
+          "properties": {
+            "input_text": {
+              "maxLength": 8192
+            }
+          }
+        }
+      }
+    ],
+    "properties": {
+      "calibration_id": {
+        "default": "openmed.synthetic.fixed_option.v1",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "type": "string"
+      },
+      "compatibility_policy": {
+        "const": "same_major",
+        "default": "same_major",
+        "type": "string"
+      },
+      "input_format": {
+        "default": "text",
+        "enum": [
+          "text",
+          "json"
+        ],
+        "type": "string"
+      },
+      "input_text": {
+        "maxLength": 131072,
+        "minLength": 1,
+        "type": "string"
+      },
+      "instructions": {
+        "anyOf": [
+          {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Optional question wording passed to the backend."
+      },
+      "levels": {
+        "description": "Ordered scalar_score levels, lowest first.",
+        "items": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxItems": 64,
+        "minItems": 2,
+        "type": "array"
+      },
+      "max_input_chars": {
+        "description": "Input character bound; 8192 when omitted.",
+        "maximum": 131072,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "mode": {
+        "enum": [
+          "fixed_choice",
+          "boolean_choice",
+          "ordered_preference",
+          "scalar_score",
+          "multi_label",
+          "question_set"
+        ],
+        "type": "string"
+      },
+      "namespace": {
+        "default": "default",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "type": "string"
+      },
+      "option_descriptions": {
+        "description": "Optional descriptions aligned with options; null marks an option without a description.",
+        "items": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "options": {
+        "default": [],
+        "items": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "purpose": {
+        "default": "care_review",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "type": "string"
+      },
+      "question_id": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+        "type": "string"
+      },
+      "questions": {
+        "description": "Named questions scored against the one input.",
+        "items": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "scalar_score"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "options": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "boolean_choice"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "options": {
+                    "maxItems": 2,
+                    "minItems": 2
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "enum": [
+                      "fixed_choice",
+                      "ordered_preference",
+                      "multi_label"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "options": {
+                    "maxItems": 64,
+                    "minItems": 2
+                  }
+                }
+              }
+            },
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "levels"
+                  ]
+                }
+              },
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "scalar_score"
+                  }
+                }
+              }
+            }
+          ],
+          "properties": {
+            "instructions": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional question wording passed to the backend."
+            },
+            "levels": {
+              "description": "Ordered scalar_score levels, lowest first.",
+              "items": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "minItems": 2,
+              "type": "array"
+            },
+            "mode": {
+              "enum": [
+                "fixed_choice",
+                "boolean_choice",
+                "ordered_preference",
+                "scalar_score",
+                "multi_label"
+              ],
+              "type": "string"
+            },
+            "option_descriptions": {
+              "description": "Optional descriptions aligned with options; null marks an option without a description.",
+              "items": {
+                "anyOf": [
+                  {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "options": {
+              "default": [],
+              "items": {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "question_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "question_id",
+            "mode"
+          ],
+          "type": "object"
+        },
+        "maxItems": 32,
+        "minItems": 1,
+        "type": "array"
+      },
+      "schema_version": {
+        "description": "Omitted, it resolves to 1.1.0 when a 1.1.0 field is present and to 1.0.0 otherwise.",
+        "enum": [
+          "1.0.0",
+          "1.1.0"
+        ],
+        "type": "string"
+      },
+      "timeout_ms": {
+        "default": 5000,
+        "maximum": 30000,
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    "required": [
+      "mode",
+      "input_text"
+    ],
+    "title": "OpenMed Fixed-Option Decision Request",
+    "type": "object"
+  },
+  "result_schema": {
+    "$id": "https://openmed.dev/schemas/decision-result/1.1.0",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "allOf": [
+      {
+        "else": {
+          "required": [
+            "questions",
+            "level_scores",
+            "expected_level"
+          ]
+        },
+        "if": {
+          "properties": {
+            "schema_version": {
+              "const": "1.0.0"
+            }
+          }
+        },
+        "then": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "questions"
+                ]
+              },
+              {
+                "required": [
+                  "level_scores"
+                ]
+              },
+              {
+                "required": [
+                  "expected_level"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "mode": {
+              "not": {
+                "const": "question_set"
+              }
+            }
+          }
+        }
+      },
+      {
+        "else": {
+          "properties": {
+            "questions": {
+              "maxItems": 0
+            }
+          }
+        },
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "question_set"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "questions": {
+              "minItems": 1
+            }
+          }
+        }
+      },
+      {
+        "else": {
+          "properties": {
+            "expected_level": {
+              "type": "null"
+            },
+            "level_scores": {
+              "maxItems": 0
+            }
+          }
+        },
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "scalar_score"
+            }
+          }
+        }
+      }
+    ],
+    "properties": {
+      "access": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "namespace": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "policy_version": {
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+            "type": "string"
+          },
+          "purpose": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed",
+          "code",
+          "namespace",
+          "purpose",
+          "policy_version"
+        ],
+        "type": "object"
+      },
+      "advisory": {
+        "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "type": "string"
+      },
+      "autonomous_action": {
+        "const": false,
+        "type": "boolean"
+      },
+      "backend": {
+        "additionalProperties": false,
+        "properties": {
+          "backend_id": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "deterministic": {
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "deterministic",
+              "encoder",
+              "cross_encoder",
+              "specialist"
+            ],
+            "type": "string"
+          },
+          "license_id": {
+            "enum": [
+              "Apache-2.0",
+              "BSD-2-Clause",
+              "BSD-3-Clause",
+              "MIT",
+              "MPL-2.0"
+            ],
+            "type": "string"
+          },
+          "local": {
+            "const": true,
+            "type": "boolean"
+          },
+          "model_id": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "revision": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "runtime": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend_id",
+          "kind",
+          "runtime",
+          "model_id",
+          "revision",
+          "license_id",
+          "local",
+          "deterministic"
+        ],
+        "type": "object"
+      },
+      "calibration": {
+        "additionalProperties": false,
+        "properties": {
+          "calibration_id": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "in_domain_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "method": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "minimum_confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "minimum_margin": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "multi_label_threshold": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "out_of_domain_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calibration_id",
+          "version",
+          "method",
+          "minimum_confidence",
+          "minimum_margin",
+          "multi_label_threshold",
+          "in_domain_digest",
+          "out_of_domain_digest"
+        ],
+        "type": "object"
+      },
+      "choice": {
+        "maxLength": 256,
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "choices": {
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "code": {
+        "anyOf": [
+          {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "compatibility_policy": {
+        "const": "same_major",
+        "type": "string"
+      },
+      "confidence": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "expected_level": {
+        "maximum": 63,
+        "minimum": 0,
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "extensions": {
+        "type": "object"
+      },
+      "level_scores": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "index": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "level": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "score": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "index",
+            "level",
+            "score"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "margin": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "mode": {
+        "enum": [
+          "fixed_choice",
+          "boolean_choice",
+          "ordered_preference",
+          "scalar_score",
+          "multi_label",
+          "question_set"
+        ],
+        "type": "string"
+      },
+      "option_scores": {
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "index": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "option": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "score": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          "required": [
+            "index",
+            "option",
+            "score"
+          ],
+          "type": "object"
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "questions": {
+        "items": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "properties": {
+                  "expected_level": {
+                    "type": "null"
+                  },
+                  "level_scores": {
+                    "maxItems": 0
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "scalar_score"
+                  }
+                }
+              }
+            }
+          ],
+          "properties": {
+            "choice": {
+              "maxLength": 256,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "choices": {
+              "items": {
+                "maxLength": 256,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "code": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "expected_level": {
+              "maximum": 63,
+              "minimum": 0,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "level_scores": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "index": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "level": {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "score": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "index",
+                  "level",
+                  "score"
+                ],
+                "type": "object"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "margin": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "mode": {
+              "enum": [
+                "fixed_choice",
+                "boolean_choice",
+                "ordered_preference",
+                "scalar_score",
+                "multi_label"
+              ],
+              "type": "string"
+            },
+            "option_scores": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "index": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "option": {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "score": {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "index",
+                  "option",
+                  "score"
+                ],
+                "type": "object"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "question_id": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+              "type": "string"
+            },
+            "ranking": {
+              "items": {
+                "maxLength": 256,
+                "type": "string"
+              },
+              "maxItems": 64,
+              "type": "array"
+            },
+            "review": {
+              "additionalProperties": false,
+              "properties": {
+                "reasons": {
+                  "items": {
+                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                    "type": "string"
+                  },
+                  "maxItems": 32,
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "required": {
+                  "const": true,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "required",
+                "reasons"
+              ],
+              "type": "object"
+            },
+            "scalar_score": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "state": {
+              "enum": [
+                "success",
+                "abstained",
+                "partial",
+                "unknown",
+                "conflict",
+                "unsupported",
+                "denied",
+                "failure"
+              ],
+              "type": "string"
+            },
+            "warnings": {
+              "items": {
+                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array",
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "question_id",
+            "mode",
+            "state",
+            "code",
+            "option_scores",
+            "choice",
+            "choices",
+            "ranking",
+            "scalar_score",
+            "confidence",
+            "margin",
+            "level_scores",
+            "expected_level",
+            "warnings",
+            "review"
+          ],
+          "type": "object"
+        },
+        "maxItems": 32,
+        "type": "array"
+      },
+      "ranking": {
+        "items": {
+          "maxLength": 256,
+          "type": "string"
+        },
+        "maxItems": 64,
+        "type": "array"
+      },
+      "review": {
+        "additionalProperties": false,
+        "properties": {
+          "reasons": {
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "required": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "required",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "scalar_score": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": [
+          "number",
+          "null"
+        ]
+      },
+      "schema_version": {
+        "enum": [
+          "1.0.0",
+          "1.1.0"
+        ],
+        "type": "string"
+      },
+      "state": {
+        "enum": [
+          "success",
+          "abstained",
+          "partial",
+          "unknown",
+          "conflict",
+          "unsupported",
+          "denied",
+          "failure"
+        ],
+        "type": "string"
+      },
+      "warnings": {
+        "items": {
+          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+          "type": "string"
+        },
+        "maxItems": 32,
+        "type": "array",
+        "uniqueItems": true
+      }
+    },
+    "required": [
+      "mode",
+      "state",
+      "code",
+      "option_scores",
+      "choice",
+      "choices",
+      "ranking",
+      "scalar_score",
+      "confidence",
+      "margin",
+      "calibration",
+      "backend",
+      "access",
+      "warnings",
+      "review",
+      "advisory",
+      "autonomous_action",
+      "schema_version",
+      "compatibility_policy",
+      "extensions"
+    ],
+    "title": "OpenMed Fixed-Option Decision Result",
+    "type": "object"
+  }
+}
