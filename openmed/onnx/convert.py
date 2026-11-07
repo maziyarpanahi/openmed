@@ -81,6 +81,8 @@ MINIMUM_TOKEN_CLASSIFICATION_OPSET = 18
 DEFAULT_SHAPE_BUCKETS = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
 DEFAULT_DYNAMIC_VALIDATION_LENGTHS = DEFAULT_SHAPE_BUCKETS
 DEFAULT_EXECUTION_PROVIDERS = ("CPUExecutionProvider",)
+# Tensors smaller than this many bytes stay inline in the graph protobuf.
+EXTERNAL_DATA_SIZE_THRESHOLD = 1024
 
 _FUSION_OPTION_ATTRS = {
     "attention_fusion": ("enable_attention",),
@@ -1348,22 +1350,29 @@ def _consolidate_external_onnx_data(path: Path) -> None:
     temporary_dir.mkdir()
 
     try:
+        # Small tensors stay inline: ONNX Runtime shape inference cannot read
+        # external constants such as Slice starts/ends, so a sidecar holding
+        # every tensor makes the graph unloadable from disk.
         onnx.save_model(
             model,
             str(temporary_path),
             save_as_external_data=True,
             all_tensors_to_one_file=True,
             location=sidecar_name,
-            size_threshold=0,
+            size_threshold=EXTERNAL_DATA_SIZE_THRESHOLD,
             convert_attribute=False,
         )
-        if not temporary_path.is_file() or not temporary_sidecar.is_file():
+        if not temporary_path.is_file():
+            raise RuntimeError("ONNX external-data consolidation was incomplete")
+        has_sidecar = temporary_sidecar.is_file()
+        if not has_sidecar and _has_external_initializers(onnx, temporary_path):
             raise RuntimeError("ONNX external-data consolidation was incomplete")
 
         if sidecar_path.exists():
             sidecar_path.replace(backup_sidecar)
         try:
-            temporary_sidecar.replace(sidecar_path)
+            if has_sidecar:
+                temporary_sidecar.replace(sidecar_path)
             temporary_path.replace(path)
         except Exception:
             sidecar_path.unlink(missing_ok=True)
@@ -1377,6 +1386,14 @@ def _consolidate_external_onnx_data(path: Path) -> None:
         old_path = (path.parent / location).resolve(strict=False)
         if old_path.parent == path.parent.resolve(strict=False):
             old_path.unlink(missing_ok=True)
+
+
+def _has_external_initializers(onnx_module: Any, path: Path) -> bool:
+    model = onnx_module.load(str(path), load_external_data=False)
+    return any(
+        tensor.data_location == onnx_module.TensorProto.EXTERNAL
+        for tensor in model.graph.initializer
+    )
 
 
 def _copy_missing_model_metadata(target: Any, source: Any) -> None:
