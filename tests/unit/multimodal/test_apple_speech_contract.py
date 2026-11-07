@@ -20,7 +20,7 @@ FIXTURE = (
 
 
 def test_swift_speech_vectors_preserve_shared_units_and_protected_text():
-    corpus = json.loads(FIXTURE.read_text())
+    corpus = json.loads(FIXTURE.read_text(encoding="utf-8"))
     row = corpus["segment"]
     tokens = tuple(TokenTime(**token) for token in row["token_times"])
     segment = FinalizedSegment(**(row | {"token_times": tokens}))
@@ -35,7 +35,7 @@ def test_swift_speech_vectors_preserve_shared_units_and_protected_text():
 
 
 def test_swift_provenance_vectors_match_python_validation():
-    corpus = json.loads(FIXTURE.read_text())
+    corpus = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
     def validate(row):
         ProviderProvenance(
