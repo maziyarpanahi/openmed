@@ -356,6 +356,11 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.generated_text_guard",
+      "function": "GeneratedTextGuard._detect.run",
+      "classification": "operational"
+    },
+    {
       "module": "openmed.multimodal.decoder_guard",
       "function": "probe_media",
       "classification": "operational"
@@ -389,6 +394,11 @@
       "classification": "operational",
       "function": "WithholdingBuffer.release_ready",
       "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
+    },
+    {
+      "classification": "operational",
+      "function": "AmbientSession.__exit__",
+      "module": "openmed.multimodal.streaming.session"
     },
     {
       "module": "openmed.onnx.streaming_loader",

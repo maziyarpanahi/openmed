@@ -601,3 +601,7 @@ text extraction, a synthetic clinical-document image, and a synthetic chart.
 The ordinary Swift package suite keeps offline processor/configuration tests and
 skips multi-gigabyte model execution unless the local artifact environment
 variables are explicitly supplied.
+
+## Thermal admission for multimodal work
+
+`MultimodalThermalSession` can gate a local operation against current Apple thermal state, queue age and measured latency. See [Apple session admission](multimodal/thermal-latency-gates.md#apple-session-admission) for the policy table, recovery behavior and value-free evidence.
