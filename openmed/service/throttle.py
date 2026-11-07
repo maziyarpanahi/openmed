@@ -1,9 +1,10 @@
-"""In-process throttling primitives for the OpenMed REST service."""
+"""In-process throttling primitives for the OpenMed REST and gRPC services."""
 
 from __future__ import annotations
 
 import asyncio
 import math
+import threading
 import time
 from collections.abc import Awaitable, Callable, Collection
 from contextvars import ContextVar
@@ -56,6 +57,7 @@ class TokenBucketRateLimiter:
         self.burst_size = int(burst_size)
         self._clock = clock
         self._lock = asyncio.Lock()
+        self._thread_lock = threading.Lock()
         self._buckets: dict[str, _BucketState] = {}
 
     @property
@@ -69,6 +71,24 @@ class TokenBucketRateLimiter:
             return RateLimitDecision(allowed=True)
 
         async with self._lock:
+            return self.try_consume(key)
+
+    def try_consume(self, key: str = GLOBAL_THROTTLE_KEY) -> RateLimitDecision:
+        """Consume one token for *key* without awaiting.
+
+        This is the thread-safe entry point for synchronous servers such as
+        the gRPC service, whose handlers run on worker threads.
+
+        Args:
+            key: Bucket key, usually a client identity or ``"global"``.
+
+        Returns:
+            Whether the request is admitted and, if not, when to retry.
+        """
+        if not self.enabled:
+            return RateLimitDecision(allowed=True)
+
+        with self._thread_lock:
             now = self._clock()
             bucket = self._buckets.get(key)
             if bucket is None:
@@ -159,6 +179,126 @@ class ConcurrencyGate:
         except asyncio.TimeoutError:
             return False
         return True
+
+
+class BlockingConcurrencyPermit:
+    """One held slot of a :class:`BlockingConcurrencyGate`, released once.
+
+    ``release`` is idempotent and thread-safe, so completion, cancellation and
+    error paths may all call it without double-releasing the slot.
+    """
+
+    def __init__(self, gate: "BlockingConcurrencyGate", key: str) -> None:
+        self._gate = gate
+        self._key = key
+        self._lock = threading.Lock()
+        self._released = False
+
+    @property
+    def released(self) -> bool:
+        """Return whether this permit has been released."""
+        return self._released
+
+    def release(self) -> bool:
+        """Release the slot if it is still held.
+
+        Returns:
+            ``True`` for the call that released the slot, ``False`` afterwards.
+        """
+        with self._lock:
+            if self._released:
+                return False
+            self._released = True
+        self._gate._release(self._key)
+        return True
+
+
+class BlockingConcurrencyGate:
+    """Thread-safe per-key concurrency bound for synchronous servers.
+
+    This is the worker-thread counterpart of :class:`ConcurrencyGate`; the gRPC
+    service uses it because grpcio runs handlers on a thread pool rather than
+    an event loop.
+    """
+
+    def __init__(self, *, max_concurrency: int, wait_seconds: float) -> None:
+        if max_concurrency < 0:
+            raise ValueError("max_concurrency must be greater than or equal to 0")
+        if wait_seconds < 0:
+            raise ValueError("wait_seconds must be greater than or equal to 0")
+
+        self.max_concurrency = int(max_concurrency)
+        self.wait_seconds = float(wait_seconds)
+        self._condition = threading.Condition()
+        self._in_flight: dict[str, int] = {}
+        self._acquired_total = 0
+        self._released_total = 0
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether concurrency limiting is active."""
+        return self.max_concurrency > 0
+
+    def acquire(
+        self,
+        key: str = GLOBAL_THROTTLE_KEY,
+        *,
+        timeout: Optional[float] = None,
+    ) -> Optional[BlockingConcurrencyPermit]:
+        """Acquire one slot for *key*, waiting at most the configured bound.
+
+        Args:
+            key: Bucket key, usually a client identity or ``"global"``.
+            timeout: Optional tighter wait bound in seconds, such as the time
+                left before the caller's deadline. The effective wait is the
+                smaller of this value and ``wait_seconds``.
+
+        Returns:
+            A held permit, or ``None`` when the gate is disabled or full.
+        """
+        if not self.enabled:
+            return None
+
+        wait = self.wait_seconds
+        if timeout is not None:
+            wait = max(0.0, min(wait, float(timeout)))
+        deadline = time.monotonic() + wait
+        with self._condition:
+            while self._in_flight.get(key, 0) >= self.max_concurrency:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self._condition.wait(remaining)
+            self._in_flight[key] = self._in_flight.get(key, 0) + 1
+            self._acquired_total += 1
+        return BlockingConcurrencyPermit(self, key)
+
+    def in_flight(self, key: Optional[str] = None) -> int:
+        """Return held slots for *key*, or across all keys when omitted."""
+        with self._condition:
+            if key is not None:
+                return self._in_flight.get(key, 0)
+            return sum(self._in_flight.values())
+
+    def counters(self) -> dict[str, int]:
+        """Return value-free acquire/release totals and the current in-flight."""
+        with self._condition:
+            return {
+                "acquired": self._acquired_total,
+                "released": self._released_total,
+                "in_flight": sum(self._in_flight.values()),
+            }
+
+    def _release(self, key: str) -> None:
+        with self._condition:
+            held = self._in_flight.get(key, 0)
+            if held <= 1:
+                self._in_flight.pop(key, None)
+            else:
+                self._in_flight[key] = held - 1
+            self._released_total += 1
+            # Waiters for other keys share the condition, so wake them all.
+            self._condition.notify_all()
 
 
 class ServiceBusyError(RuntimeError):

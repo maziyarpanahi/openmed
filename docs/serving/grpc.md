@@ -142,14 +142,18 @@ never include file paths, addresses, PEM text or key bytes.
 | `grpc_tls_certificate_expired` | The leaf certificate is past its `notAfter` |
 | `grpc_tls_certificate_not_yet_valid` | The leaf certificate is before its `notBefore` |
 | `grpc_bind_failed` | grpcio raised or reported that nothing was bound |
+| `grpc_auth_required` | A non-loopback listener has neither service authentication nor mutual TLS |
 
 ### Custom listeners
 
-`create_grpc_server()` returns an unbound server and accepts `interceptors`.
-Use `resolve_grpc_listener()` and `bind_grpc_listener()` to apply the same
-policy to a server you construct yourself. `GrpcListener.report()` returns a
-value-free summary (loopback, transport, override use, certificate and client
-CA fingerprints, and certificate expiry) for deployment self-checks.
+`create_grpc_server()` returns an unbound server and accepts `interceptors`,
+`policy` and `listener`. Use `resolve_grpc_listener()` and
+`bind_grpc_listener()` to apply the same policy to a server you construct
+yourself, and pass the listener to `create_grpc_server(listener=...)` so the
+authentication check and mutual-TLS principals apply. `GrpcListener.report()`
+returns a value-free summary (loopback, transport, override use, certificate
+and client CA fingerprints, and certificate expiry) for deployment
+self-checks.
 
 ### Certificate rotation
 
@@ -157,6 +161,125 @@ Certificates and keys are read once at startup. To rotate, write the new
 chain and key, then restart the process; the restart re-runs every validation
 above and a bad replacement fails startup instead of serving. In-place reload
 without a restart is not supported yet.
+
+## Authentication And Authorization
+
+Every server built by `serve()` or `create_grpc_server()` runs
+`GrpcSecurityInterceptor` before the servicer and before any interceptors you
+add. It reads the same settings as the REST service, so one environment
+configures both transports:
+
+- `OPENMED_SERVICE_AUTH_ENABLED`, `OPENMED_SERVICE_AUTH_API_KEYS`, the JWKS,
+  issuer, audience and lifetime settings, `OPENMED_SERVICE_AUTH_ROUTE_SCOPES`,
+  `OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT` and the failed-authentication rate
+  limit, described in [REST Service Authentication](authentication.md).
+- `OPENMED_SERVICE_MTLS_PRINCIPALS`, the certificate identity mappings
+  described in [Mutual TLS](mtls.md).
+
+Callers send exactly one credential in call metadata: `x-api-key: <key>`,
+`authorization: Bearer <jwt>` or `authorization: ApiKey <key>`. Duplicate
+entries, both kinds at once, `-bin` variants, empty values and non-printable
+values are refused as malformed. When the listener requires client
+certificates and no metadata credential is sent, the peer certificate is
+verified again against the listener's client CA bundle and mapped to a
+principal through the same mappings REST uses. Unmapped certificates get a
+fingerprint-derived subject with no scopes. Client certificates must be issued
+directly by a CA in that bundle, because grpcio exposes only the leaf.
+
+Each RPC requires the scopes of the REST route it mirrors, including any route
+scope override:
+
+| RPC | REST route | Default scope |
+| --- | --- | --- |
+| `Analyze` | `POST /analyze` | `analyze:write` |
+| `Extract` | `POST /pii/extract` | `pii:read` |
+| `Deidentify` | `POST /pii/deidentify` | `pii:write` |
+| `StreamDeidentify` | `POST /pii/deidentify/stream` | `pii:write` |
+
+All of these checks finish before any request text is parsed or any model
+runs. With neither service authentication nor a mutual-TLS listener, calls are
+anonymous. That loopback development mode is still available, but `serve()`
+refuses a non-loopback listener in that state with `grpc_auth_required`. The
+only exception is the `dev`/`test` plaintext override.
+
+```python
+metadata = (("authorization", f"Bearer {token}"),)
+response = stub.Deidentify(request, metadata=metadata, timeout=30)
+```
+
+## Resource Budgets
+
+`GrpcLimits` bounds every call. `GrpcLimits.from_env()` shares the REST
+budgets where one exists:
+
+| Limit | Default | Source |
+| --- | --- | --- |
+| `max_receive_message_bytes` | 16 MiB | `OPENMED_SERVICE_MAX_REQUEST_BYTES` |
+| `max_send_message_bytes` | 64 MiB | |
+| `max_text_chars` (also the total of all stream chunks) | 1,000,000 | `OPENMED_SERVICE_MAX_TEXT_LENGTH` |
+| `max_stream_chunks` | 4,096 | |
+| `max_stream_chunk_bytes` (UTF-8) | 128 KiB | |
+| `default_stream_buffer_chars` | 4,096 | |
+| `max_stream_buffer_chars` | 65,536 | |
+| `max_rpc_seconds` | the runtime `config.timeout` | |
+
+Message sizes are enforced by grpcio before the request reaches the
+application. Those rejections are `RESOURCE_EXHAUSTED` without an
+`openmed-reason` trailer. Text, chunk and buffer budgets are checked before
+chunks are copied or joined. A caller `max_buffer` above the cap is refused
+rather than trusted, and an unset `chunk_size` splits long text into chunks
+that always fit the per-chunk byte budget.
+
+Rate and concurrency limits use the REST settings
+(`OPENMED_SERVICE_RATE_LIMIT_RPS`, `OPENMED_SERVICE_RATE_LIMIT_BURST`,
+`OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`,
+`OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS` and `OPENMED_SERVICE_THROTTLE_KEY`).
+The `peer` key uses the gRPC peer host. The `x-forwarded-for` key reads that
+metadata entry.
+
+The effective deadline is the smaller of the client deadline and
+`max_rpc_seconds`. A concurrency permit is released exactly once, when the
+call's work settles:
+
+- a unary handler returns or raises;
+- a stream is exhausted, fails, is cancelled or passes its deadline.
+
+A cancelled stream stops at the next fragment boundary, and its model
+bookkeeping is released on the worker thread that ran it. A unary model call
+that is already running cannot be pre-empted. If it overruns the server
+budget, its result is discarded with `DEADLINE_EXCEEDED`.
+
+## Failure Reason Codes
+
+Refusals use canonical gRPC status codes. Each carries a stable reason in the
+`openmed-reason` trailing metadata. Status details are fixed strings. Metadata,
+tokens, request text, chunks, certificate contents and rejected values are
+never included.
+
+| Reason | Status |
+| --- | --- |
+| `authentication_required` | `UNAUTHENTICATED` |
+| `invalid_credentials` | `UNAUTHENTICATED` |
+| `credentials_malformed` | `UNAUTHENTICATED` |
+| `insufficient_scope` | `PERMISSION_DENIED` |
+| `auth_rate_limited` | `RESOURCE_EXHAUSTED` |
+| `rate_limited` | `RESOURCE_EXHAUSTED` |
+| `concurrency_limited` | `RESOURCE_EXHAUSTED` |
+| `text_too_long` | `RESOURCE_EXHAUSTED` |
+| `stream_too_many_chunks` | `RESOURCE_EXHAUSTED` |
+| `stream_chunk_too_large` | `RESOURCE_EXHAUSTED` |
+| `stream_buffer_too_large` | `RESOURCE_EXHAUSTED` |
+| `invalid_request` | `INVALID_ARGUMENT` |
+| `model_not_served` | `INVALID_ARGUMENT` |
+| `deadline_exceeded` | `DEADLINE_EXCEEDED` |
+| `internal_error` | `INTERNAL` |
+
+```python
+try:
+    stub.Deidentify(request, metadata=metadata, timeout=30)
+except grpc.RpcError as error:
+    reason = dict(error.trailing_metadata() or ()).get("openmed-reason")
+```
 
 ## Client Example
 

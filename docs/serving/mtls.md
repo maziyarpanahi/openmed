@@ -119,7 +119,10 @@ required before the JWT is evaluated.
 The gRPC service terminates TLS and mutual TLS itself through grpcio rather
 than through these REST settings. See
 [gRPC Service: Transport Security](grpc.md#transport-security) for its
-loopback default, `GrpcTLSConfig`, and startup reason codes.
+loopback default, `GrpcTLSConfig`, and startup reason codes. gRPC maps
+verified client certificates through the same
+`OPENMED_SERVICE_MTLS_PRINCIPALS` mappings, so one certificate resolves to the
+same principal and scopes on both transports.
 
 ## Logging and PHI safety
 

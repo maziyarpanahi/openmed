@@ -1,8 +1,14 @@
-"""gRPC service surface for OpenMed analysis and de-identification."""
+"""gRPC service surface for OpenMed analysis and de-identification.
+
+Every server built here installs
+:class:`~openmed.service.grpc_policy.GrpcSecurityInterceptor` ahead of any
+caller interceptors and applies the message-size limits of its
+:class:`~openmed.service.grpc_policy.GrpcLimits`.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from concurrent import futures
 from typing import Any, Callable
 
@@ -12,7 +18,21 @@ from google.protobuf import struct_pb2
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
+from .grpc_policy import (
+    REASON_INTERNAL_ERROR,
+    REASON_INVALID_REQUEST,
+    REASON_MODEL_NOT_SERVED,
+    GrpcLimits,
+    GrpcPolicyError,
+    GrpcSecurityInterceptor,
+    GrpcServicePolicy,
+    abort_rpc,
+    listener_client_ca_certificates,
+    require_authenticated_listener,
+    validate_grpc_rpc_policies,
+)
 from .grpc_security import (
+    GrpcListener,
     GrpcServerCredentials,
     GrpcStartupError,
     GrpcTLSConfig,
@@ -30,8 +50,23 @@ DEFAULT_GRPC_MAX_WORKERS = 10
 class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
     """Synchronous grpcio servicer backed by the shared service runtime."""
 
-    def __init__(self, runtime: ServiceRuntime | None = None) -> None:
+    def __init__(
+        self,
+        runtime: ServiceRuntime | None = None,
+        *,
+        limits: GrpcLimits | None = None,
+    ) -> None:
+        """Create the servicer.
+
+        Args:
+            runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
+            limits: Text and stream budgets checked before any parsing or
+                model work; defaults to :meth:`GrpcLimits.from_env`.
+        """
         self.runtime = runtime or ServiceRuntime.from_env()
+        self.limits = (
+            limits if limits is not None else GrpcLimits.from_env(runtime=self.runtime)
+        )
 
     def Analyze(self, request, context):
         """Run the OpenMed analyze endpoint over gRPC."""
@@ -55,10 +90,16 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         )
 
     def StreamDeidentify(self, request, context):
-        """Stream redacted text fragments for chunked de-identification."""
-        chunks = _stream_chunks(request)
-        fallback_text = "".join(chunks) if chunks else request.request.text
+        """Stream redacted text fragments for chunked de-identification.
+
+        Chunk count, chunk size, total text and the caller's ``max_buffer``
+        are checked against the server limits before chunks are joined,
+        parsed, or handed to a model.
+        """
         try:
+            chunks = self.limits.stream_chunks(request)
+            max_buffer = self.limits.stream_buffer(request.max_buffer)
+            fallback_text = "".join(chunks) if chunks else request.request.text
             payload = _parse_request(
                 lambda proto: _deidentify_request_from_proto(
                     proto,
@@ -66,16 +107,15 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
                 ),
                 request.request,
             )
-            max_buffer = int(request.max_buffer or 4096)
-            if max_buffer < 1:
-                raise ValueError("Invalid max_buffer")
+        except GrpcPolicyError as exc:
+            abort_rpc(context, exc.reason)
         except ValueError:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
+            abort_rpc(context, REASON_INVALID_REQUEST)
 
         try:
             model_key = self.runtime.begin_model_request(payload.model_name)
         except ModelNotServedError:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
+            abort_rpc(context, REASON_MODEL_NOT_SERVED)
         try:
             for event in deidentify_stream(
                 chunks,
@@ -97,13 +137,14 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
             ):
                 yield _stream_response(event)
         except ValueError:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
+            abort_rpc(context, REASON_INVALID_REQUEST)
         except Exception:
-            context.abort(grpc.StatusCode.INTERNAL, "Internal server error")
+            abort_rpc(context, REASON_INTERNAL_ERROR)
         finally:
             self.runtime.finish_model_request(model_key, payload.keep_alive)
 
     def _analyze(self, request) -> openmed_pb2.AnalyzeResponse:
+        self.limits.check_text(request.text)
         payload = _parse_request(_analyze_request_from_proto, request)
         return _analyze_response(
             self.runtime.run_model_request(
@@ -114,6 +155,7 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         )
 
     def _extract(self, request) -> openmed_pb2.ExtractResponse:
+        self.limits.check_text(request.text)
         payload = _parse_request(_extract_request_from_proto, request)
         return _extract_response(
             self.runtime.run_model_request(
@@ -124,6 +166,7 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         )
 
     def _deidentify(self, request) -> openmed_pb2.DeidentifyResponse:
+        self.limits.check_text(request.text)
         payload = _parse_request(_deidentify_request_from_proto, request)
         return _deidentify_response(
             self.runtime.run_model_request(
@@ -139,24 +182,53 @@ def create_grpc_server(
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
     interceptors: Sequence[grpc.ServerInterceptor] = (),
+    policy: GrpcServicePolicy | None = None,
+    listener: GrpcListener | None = None,
 ) -> grpc.Server:
     """Create an unbound grpcio server with the OpenMed service registered.
+
+    The server always runs :class:`GrpcSecurityInterceptor` first, then the
+    caller's interceptors, and applies the policy's message-size limits.
 
     Args:
         runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
         max_workers: Worker threads for the synchronous server.
-        interceptors: Server interceptors applied to every RPC, in order.
+        interceptors: Extra server interceptors applied to every RPC, in order,
+            after authentication and admission.
+        policy: Authentication, throttle and budget policy; defaults to
+            :meth:`GrpcServicePolicy.from_env`, which reads the same
+            environment as the REST service.
+        listener: The listener this server will be bound to. When given, a
+            listener that other hosts can reach is refused unless the policy
+            authenticates callers, and a mutual-TLS listener's client CAs
+            enable certificate principals.
 
     Returns:
         A server with no listener. Bind it with
         :func:`openmed.service.grpc_security.bind_grpc_listener`.
+
+    Raises:
+        GrpcStartupError: ``grpc_auth_required`` when ``listener`` is
+            reachable from other hosts and nothing authenticates callers.
     """
+    validate_grpc_rpc_policies()
+    runtime = runtime if runtime is not None else ServiceRuntime.from_env()
+    policy = (
+        policy if policy is not None else GrpcServicePolicy.from_env(runtime=runtime)
+    )
+    if listener is not None:
+        require_authenticated_listener(listener, policy)
+    security = GrpcSecurityInterceptor(
+        policy,
+        client_ca_certificates=listener_client_ca_certificates(listener),
+    )
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
-        interceptors=tuple(interceptors),
+        interceptors=(security, *interceptors),
+        options=policy.limits.server_options(),
     )
     openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(
-        OpenMedGrpcServicer(runtime),
+        OpenMedGrpcServicer(runtime, limits=policy.limits),
         server,
     )
     return server
@@ -170,12 +242,14 @@ def serve(
     tls: GrpcTLSConfig | GrpcServerCredentials | None = None,
     allow_insecure_remote_dev: bool = False,
     interceptors: Sequence[grpc.ServerInterceptor] = (),
+    policy: GrpcServicePolicy | None = None,
 ) -> grpc.Server:
     """Validate the listener, bind it, start the server and return it.
 
     The default address is loopback-only plaintext. Any non-loopback address
     requires ``tls`` unless ``allow_insecure_remote_dev`` is set under the
-    ``dev`` or ``test`` profile.
+    ``dev`` or ``test`` profile, and a non-loopback TLS listener also needs
+    caller authentication: service API keys or JWTs, or mutual TLS.
 
     Args:
         address: The gRPC bind address. Defaults to ``127.0.0.1:50051``.
@@ -185,14 +259,18 @@ def serve(
             client CA enables mutual TLS.
         allow_insecure_remote_dev: Development-only override for plaintext on
             a non-loopback address; refused outside ``dev``/``test``.
-        interceptors: Server interceptors applied to every RPC, in order.
+        interceptors: Extra server interceptors applied to every RPC, in order,
+            after authentication and admission.
+        policy: Authentication, throttle and budget policy; defaults to
+            :meth:`GrpcServicePolicy.from_env`.
 
     Returns:
         A started server that is listening on the requested address.
 
     Raises:
         GrpcStartupError: Before serving, when the listener policy refuses the
-            configuration, credentials are invalid, or binding fails.
+            configuration, credentials are invalid, a reachable listener has
+            no caller authentication, or binding fails.
     """
     listener = resolve_grpc_listener(
         address,
@@ -201,7 +279,11 @@ def serve(
         profile=runtime.profile if runtime is not None else None,
     )
     server = create_grpc_server(
-        runtime=runtime, max_workers=max_workers, interceptors=interceptors
+        runtime=runtime,
+        max_workers=max_workers,
+        interceptors=interceptors,
+        policy=policy,
+        listener=listener,
     )
     try:
         bind_grpc_listener(server, listener)
@@ -215,12 +297,14 @@ def serve(
 def _run_unary(context: grpc.ServicerContext, operation: Callable[[], Any]) -> Any:
     try:
         return operation()
+    except GrpcPolicyError as exc:
+        abort_rpc(context, exc.reason)
     except ModelNotServedError:
-        context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
+        abort_rpc(context, REASON_MODEL_NOT_SERVED)
     except ValueError:
-        context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
+        abort_rpc(context, REASON_INVALID_REQUEST)
     except Exception:
-        context.abort(grpc.StatusCode.INTERNAL, "Internal server error")
+        abort_rpc(context, REASON_INTERNAL_ERROR)
 
 
 def _parse_request(factory: Callable[[Any], Any], request: Any) -> Any:
@@ -490,21 +574,6 @@ def _json_safe_value(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     return str(value)
-
-
-def _stream_chunks(request) -> tuple[str, ...]:
-    if request.chunks:
-        return tuple(str(chunk) for chunk in request.chunks)
-    text = request.request.text
-    chunk_size = int(request.chunk_size or 0)
-    if chunk_size <= 0 or chunk_size >= len(text):
-        return (text,)
-    return tuple(_chunk_text(text, chunk_size))
-
-
-def _chunk_text(text: str, chunk_size: int) -> Iterable[str]:
-    for start in range(0, len(text), chunk_size):
-        yield text[start : start + chunk_size]
 
 
 __all__ = [
