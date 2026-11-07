@@ -55,16 +55,21 @@ def test_resolve_supported_model_type_accepts_architecture_hints():
     assert resolve_supported_model_type(config) == "deberta-v2"
 
 
-@pytest.mark.parametrize(
-    "model_type",
-    ["bert", "distilbert", "electra", "roberta", "xlm-roberta", "deberta-v2"],
-)
-def test_resolve_supported_model_type_accepts_supported_families(model_type: str):
-    from openmed.coreml.convert import resolve_supported_model_type
+def test_resolve_supported_model_type_accepts_supported_families(subtests):
+    for model_type in [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+    ]:
+        with subtests.test(model_type=model_type):
+            from openmed.coreml.convert import resolve_supported_model_type
 
-    config = types.SimpleNamespace(model_type=model_type, architectures=[])
+            config = types.SimpleNamespace(model_type=model_type, architectures=[])
 
-    assert resolve_supported_model_type(config) == model_type
+            assert resolve_supported_model_type(config) == model_type
 
 
 def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):

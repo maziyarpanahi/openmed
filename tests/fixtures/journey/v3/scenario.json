@@ -32,7 +32,7 @@
       "name": "note",
       "format": "text",
       "source_id": "source_textsynthetic001",
-      "payload": "Synthetic note: condition alpha active since 2026-01.",
+      "payload": "Synthetic note: condition alpha active since 2026-01. Patient SYNTH-001; interval 2026-01-02 to 2026-01-07.",
       "fact_profile": "condition",
       "fact": {
         "assertion": "affirmed",
@@ -54,7 +54,7 @@
       "name": "exchange",
       "format": "fhir_r4",
       "source_id": "source_fhirsynthetic001",
-      "payload": "{\"resourceType\":\"Condition\",\"id\":\"synthetic-condition\",\"clinicalStatus\":{\"text\":\"active\"},\"code\":{\"text\":\"condition alpha\"}}",
+      "payload": "{\"resourceType\":\"Condition\",\"id\":\"synthetic-condition\",\"clinicalStatus\":{\"text\":\"active\"},\"code\":{\"text\":\"condition alpha\"},\"subject\":{\"identifier\":{\"value\":\"SYNTH-001\"}},\"onsetPeriod\":{\"start\":\"2026-01-02\",\"end\":\"2026-01-07\"}}",
       "fact_profile": "condition",
       "fact": {
         "assertion": "affirmed",
@@ -76,7 +76,7 @@
       "name": "message",
       "format": "hl7v2",
       "source_id": "source_hl7synthetic0001",
-      "payload": "MSH|^~\\&|SYNTH|LAB|OPENMED|LOCAL|20260102030405||ORU^R01|MSG00001|P|2.5.1\rPID|1||SYNTHETIC-001\rOBX|1|TX|SYNTH-COND||condition alpha absent",
+      "payload": "MSH|^~\\&|SYNTH|LAB|OPENMED|LOCAL|20260102030405||ORU^R01|MSG00001|P|2.5.1\rPID|1||SYNTH-001\rOBX|1|TX|SYNTH-COND||condition alpha absent\rOBX|2|DT|SYNTH-START||20260102\rOBX|3|DT|SYNTH-END||20260107",
       "fact_profile": "condition",
       "fact": {
         "assertion": "negated",
@@ -98,7 +98,7 @@
       "name": "table",
       "format": "csv",
       "source_id": "source_tablesynthetic001",
-      "payload": "code,value,unit,status\nsynthetic-glucose,90,mg/dL,final\n",
+      "payload": "code,value,unit,status,patient,start,end\nsynthetic-glucose,90,mg/dL,final,SYNTH-001,2026-01-02,2026-01-07\n",
       "fact_profile": "laboratory",
       "fact": {
         "assertion": "affirmed",
@@ -123,7 +123,7 @@
       "format": "dicom_sr",
       "source_id": "source_dicomsynthetic001",
       "payload": "SYNTHETIC-DICOM-SR-BYTES-v1",
-      "document_text": "Synthetic imaging finding is uncertain.",
+      "document_text": "Synthetic imaging finding is uncertain. Patient SYNTH-001; interval 2026-01-02 to 2026-01-07.",
       "node_path": "1.1",
       "study_uid": "1.2.826.0.1.3680043.8.498.1",
       "series_uid": "1.2.826.0.1.3680043.8.498.2",
@@ -155,13 +155,17 @@
       {
         "id": "condition-alpha",
         "vocabulary": "synthetic",
-        "concept_ids": [2101],
+        "concept_ids": [
+          2101
+        ],
         "include_descendants": false
       },
       {
         "id": "corrected-lab",
         "vocabulary": "synthetic",
-        "concept_ids": [2102],
+        "concept_ids": [
+          2102
+        ],
         "include_descendants": false
       }
     ],

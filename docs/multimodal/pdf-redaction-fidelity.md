@@ -238,7 +238,8 @@ diagnostic or clinical decision system.
 
 `redact_image`, `redact_dicom_pixels`, `render_redacted_pdf` and
 `render_redacted_raster_pages` scan each source frame/page for codes independently
-of OCR. Every located code is treated as an identifier-bearing redaction region,
+of OCR. PDF output through `redact_document` also scans each rasterized page
+and records source and residual coverage in the result metadata. Every located code is treated as an identifier-bearing redaction region,
 including a symbol with an unreadable payload. Code boxes join the existing OCR
 or caller-selected boxes; PDF pixel boxes are converted to page points before
 text exclusion and layout verification. Image-only code regions keep their
@@ -252,7 +253,8 @@ Apple Foundation Models fallback.
 
 ### Local providers and availability policy
 
-All four entry points accept `code_detector` and `code_detection_policy`. The
+Pass `code_detector` and `code_detection_policy` as arguments to the image,
+DICOM and raster APIs, or as PDF redaction policy keys for `redact_document`. The
 policy defaults to `"coverage_incomplete"`: a missing or failing detector produces
 an explicit `coverage_incomplete: true` in the code coverage report, rather than
 claiming codes were absent. Select `"fail_closed"` to reject unavailable detection

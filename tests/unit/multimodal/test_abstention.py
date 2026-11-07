@@ -32,6 +32,34 @@ VALID_RECORDS = (
     (AbstentionStage.POST_PROCESS, AbstentionReason.TEMPORAL_INSTABILITY),
 )
 
+V1_RECORDS = VALID_RECORDS
+NEW_CODE_STAGES = {
+    AbstentionReason.CONSENT_UNAVAILABLE: (AbstentionStage.PREFLIGHT,),
+    AbstentionReason.CONSENT_WITHDRAWN: tuple(AbstentionStage),
+    AbstentionReason.CAPTURE_INTERRUPTED: (
+        AbstentionStage.DECODE,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.LANGUAGE_UNSUPPORTED: (
+        AbstentionStage.PREFLIGHT,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.LANGUAGE_UNCERTAIN: (
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.POLICY_REFUSED: (
+        AbstentionStage.PREFLIGHT,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+}
+VALID_RECORDS += tuple(
+    (stage, reason) for reason, stages in NEW_CODE_STAGES.items() for stage in stages
+)
+
 INVALID_RECORDS = tuple(
     (stage, reason)
     for stage in AbstentionStage
@@ -62,14 +90,12 @@ def test_abstention_contract_is_available_from_public_multimodal_api() -> None:
     assert issubclass(AbstentionValidationError, ValueError)
 
 
-@pytest.mark.parametrize(("stage", "reason"), VALID_RECORDS)
-def test_every_stage_and_reason_round_trips(
-    stage: AbstentionStage,
-    reason: AbstentionReason,
-) -> None:
-    record = AbstentionRecord(stage=stage, reason=reason)
+def test_every_stage_and_reason_round_trips(subtests) -> None:
+    for stage, reason in VALID_RECORDS:
+        with subtests.test(stage=stage, reason=reason):
+            record = AbstentionRecord(stage=stage, reason=reason)
 
-    assert AbstentionRecord.from_json(record.to_json()) == record
+            assert AbstentionRecord.from_json(record.to_json()) == record
 
 
 def test_json_is_deterministic_and_metadata_only() -> None:
@@ -88,21 +114,15 @@ def test_json_is_deterministic_and_metadata_only() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("stage", "reason"),
-    INVALID_RECORDS,
-)
-def test_invalid_stage_reason_combinations_fail_closed(
-    stage: AbstentionStage,
-    reason: AbstentionReason,
-) -> None:
-    with pytest.raises(ValueError, match="reason is not valid for stage"):
-        AbstentionRecord(stage=stage, reason=reason)
+def test_invalid_stage_reason_combinations_fail_closed(subtests) -> None:
+    for stage, reason in INVALID_RECORDS:
+        with subtests.test(stage=stage, reason=reason):
+            with pytest.raises(ValueError, match="reason is not valid for stage"):
+                AbstentionRecord(stage=stage, reason=reason)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    (
+def test_invalid_payloads_do_not_echo_submitted_content(subtests) -> None:
+    for payload in (
         {
             "schema_version": 1,
             "stage": "secret-stage-raw-ocr-text",
@@ -119,31 +139,69 @@ def test_invalid_stage_reason_combinations_fail_closed(
             "reason": "unsupported_media",
             "transcript": "secret-transcript",
         },
-    ),
-)
-def test_invalid_payloads_do_not_echo_submitted_content(payload: object) -> None:
-    submitted = json.dumps(payload)
+    ):
+        with subtests.test(payload=payload):
+            submitted = json.dumps(payload)
 
-    with pytest.raises(ValueError) as exc_info:
-        AbstentionRecord.from_json(submitted)
+            with pytest.raises(ValueError) as exc_info:
+                AbstentionRecord.from_json(submitted)
 
-    assert "secret" not in str(exc_info.value)
-    assert "raw-ocr-text" not in str(exc_info.value)
-    assert "dicom-value" not in str(exc_info.value)
-    assert "secret-transcript" not in str(exc_info.value)
+            assert "secret" not in str(exc_info.value)
+            assert "raw-ocr-text" not in str(exc_info.value)
+            assert "dicom-value" not in str(exc_info.value)
+            assert "secret-transcript" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    (
+def test_malformed_or_incomplete_payloads_fail_closed(subtests) -> None:
+    for payload in (
         "not-json",
         "[]",
         '{"schema_version":1,"stage":"preflight","stage":"decode",'
         '"reason":"unsupported_media"}',
         '{"schema_version":2,"stage":"preflight","reason":"unsupported_media"}',
         '{"schema_version":1,"stage":"preflight"}',
-    ),
-)
-def test_malformed_or_incomplete_payloads_fail_closed(payload: str) -> None:
-    with pytest.raises(ValueError):
-        AbstentionRecord.from_json(payload)
+    ):
+        with subtests.test(payload=payload):
+            with pytest.raises(ValueError):
+                AbstentionRecord.from_json(payload)
+
+
+@pytest.mark.parametrize(("stage", "reason"), V1_RECORDS)
+def test_all_legacy_records_are_byte_identical(stage, reason) -> None:
+    golden = (
+        '{"schema_version":1,"stage":"'
+        + stage.value
+        + '","reason":"'
+        + reason.value
+        + '"}'
+    )
+    assert AbstentionRecord(stage, reason).to_json().encode() == golden.encode()
+    assert AbstentionRecord.from_json(golden).to_json() == golden
+
+
+@pytest.mark.parametrize("reason", NEW_CODE_STAGES)
+def test_new_codes_use_v2_and_have_no_content_fields(reason) -> None:
+    record = AbstentionRecord(NEW_CODE_STAGES[reason][0], reason)
+    assert record.schema_version == 2
+    assert record.to_dict() == {
+        "schema_version": 2,
+        "stage": record.stage.value,
+        "reason": reason.value,
+    }
+    for field in ("message", "transcript", "language", "consent", "path"):
+        payload = record.to_dict() | {field: "SYNTHETIC_PRIVATE_SENTINEL"}
+        with pytest.raises(ValueError) as caught:
+            AbstentionRecord.from_dict(payload)
+        assert "SYNTHETIC_PRIVATE_SENTINEL" not in str(caught.value)
+
+
+@pytest.mark.parametrize(("stage", "reason"), VALID_RECORDS)
+@pytest.mark.parametrize("version", [None, True, 0, 1, 2, 3, "2"])
+def test_wire_versions_must_match_reason(stage, reason, version) -> None:
+    payload = {"stage": stage.value, "reason": reason.value, "schema_version": version}
+    required = 2 if reason in NEW_CODE_STAGES else 1
+    if type(version) is int and version == required:
+        assert AbstentionRecord.from_dict(payload).schema_version == required
+    else:
+        with pytest.raises(ValueError, match="schema_version is unsupported"):
+            AbstentionRecord.from_dict(payload)

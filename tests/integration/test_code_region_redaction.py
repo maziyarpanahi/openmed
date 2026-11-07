@@ -126,3 +126,30 @@ def test_image_only_pdf_codes_keep_text_evidence_truthful(codes, tmp_path):
         not region.source_text_required for region in result.text_removal.regions
     )
     assert result.text_removal.passed and result.residual_code_coverage.clean
+
+
+def test_pdf_document_write_back_redacts_codes_and_reports_coverage(codes, tmp_path):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    pytest.importorskip("pikepdf")
+    pdfplumber = pytest.importorskip("pdfplumber")
+    source = tmp_path / "codes.pdf"
+    codes.save(source, format="PDF", resolution=144)
+    output = tmp_path / "redacted.pdf"
+    detector = ZXingCodeRegionDetector()
+    result = _pdf_handler(
+        source,
+        policy={
+            "output_path": output,
+            "code_detector": detector,
+            "code_detection_policy": "fail_closed",
+        },
+    )
+    assert result.metadata["code_coverage"]["count"] >= 3
+    assert not result.metadata["residual_code_coverage"]["coverage_incomplete"]
+    with pdfplumber.open(output) as pdf:
+        assert detect_code_regions(
+            pdf.pages[0].to_image(resolution=150).original,
+            detector=detector,
+            policy="fail_closed",
+        ).clean

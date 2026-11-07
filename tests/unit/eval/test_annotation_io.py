@@ -54,9 +54,8 @@ def test_brat_round_trip_preserves_offsets_and_labels(tmp_path) -> None:
     assert format_brat(task.text, task.spans).startswith("T1\tPERSON 8 16\tJane Roe")
 
 
-@pytest.mark.parametrize(
-    ("annotations", "message"),
-    [
+def test_malformed_brat_has_actionable_line_errors(subtests) -> None:
+    for annotations, message in [
         ("T1 PERSON 0 7 Patient", "three tab-separated fields"),
         ("T1\tPERSON zero 7\tPatient", "offsets must be integers"),
         ("T1\tPERSON 0 70\tPatient", "0 <= start < end"),
@@ -64,24 +63,20 @@ def test_brat_round_trip_preserves_offsets_and_labels(tmp_path) -> None:
         ("T1\tUNMAPPED 8 16\tJane Roe", "unknown label"),
         ("R1\tRelated Arg1:T1 Arg2:T2\tunused", "only text-bound IDs"),
         ("T1\tPERSON 8 12;13 16\tJane Roe", "discontinuous spans"),
-    ],
-)
-def test_malformed_brat_has_actionable_line_errors(
-    annotations: str,
-    message: str,
-) -> None:
-    with pytest.raises(AnnotationValidationError) as exc_info:
-        parse_brat(
-            _TEXT,
-            annotations,
-            doc_id="synthetic-note-1",
-            hash_secret=_SECRET,
-        )
+    ]:
+        with subtests.test(annotations=annotations, message=message):
+            with pytest.raises(AnnotationValidationError) as exc_info:
+                parse_brat(
+                    _TEXT,
+                    annotations,
+                    doc_id="synthetic-note-1",
+                    hash_secret=_SECRET,
+                )
 
-    rendered = str(exc_info.value)
-    assert "Invalid BRAT standoff data" in rendered
-    assert "line 1" in rendered
-    assert message in rendered
+            rendered = str(exc_info.value)
+            assert "Invalid BRAT standoff data" in rendered
+            assert "line 1" in rendered
+            assert message in rendered
 
 
 def test_brat_collects_multiple_validation_issues() -> None:
@@ -100,19 +95,18 @@ def test_brat_collects_multiple_validation_issues() -> None:
     assert "line 2" in str(exc_info.value)
 
 
-@pytest.mark.parametrize("hash_secret", ["", b""])
-def test_annotation_import_rejects_empty_hash_secret(
-    hash_secret: str | bytes,
-) -> None:
-    with pytest.raises(
-        AnnotationValidationError, match="hash_secret must be non-empty"
-    ):
-        parse_brat(
-            _TEXT,
-            "T1\tPERSON 8 16\tJane Roe\n",
-            doc_id="synthetic-note-1",
-            hash_secret=hash_secret,
-        )
+def test_annotation_import_rejects_empty_hash_secret(subtests) -> None:
+    for hash_secret in ["", b""]:
+        with subtests.test(hash_secret=hash_secret):
+            with pytest.raises(
+                AnnotationValidationError, match="hash_secret must be non-empty"
+            ):
+                parse_brat(
+                    _TEXT,
+                    "T1\tPERSON 8 16\tJane Roe\n",
+                    doc_id="synthetic-note-1",
+                    hash_secret=hash_secret,
+                )
 
 
 def test_conll_round_trip_preserves_offsets_and_labels(tmp_path) -> None:
@@ -168,9 +162,8 @@ def test_conll_accepts_traditional_extra_columns_and_bilou() -> None:
     assert _offset_labels(spans) == _offset_labels(_spans())
 
 
-@pytest.mark.parametrize(
-    ("columns", "message"),
-    [
+def test_malformed_conll_has_actionable_errors(subtests) -> None:
+    for columns, message in [
         ("Patient\n", "at least TOKEN and TAG"),
         (
             "Patient O\nJane I-PERSON\nRoe O\nvisited O\non O\n"
@@ -183,16 +176,15 @@ def test_conll_accepts_traditional_extra_columns_and_bilou() -> None:
             "2025 O\n- O\n03 O\n- O\n02 O\n. O\n",
             "BIO/BIOES/BILOU",
         ),
-    ],
-)
-def test_malformed_conll_has_actionable_errors(columns: str, message: str) -> None:
-    with pytest.raises(AnnotationValidationError, match=message):
-        parse_conll(
-            _TEXT,
-            columns,
-            doc_id="synthetic-note-1",
-            hash_secret=_SECRET,
-        )
+    ]:
+        with subtests.test(columns=columns, message=message):
+            with pytest.raises(AnnotationValidationError, match=message):
+                parse_conll(
+                    _TEXT,
+                    columns,
+                    doc_id="synthetic-note-1",
+                    hash_secret=_SECRET,
+                )
 
 
 def test_conll_rejects_overlapping_spans() -> None:
