@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffer destruction on pause, withdrawal, cancellation and finalization.
   Serialization, persistence and cross-session comparison are refused.
 
+- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
+  with digest-bound clinician confirmation, evidence/speaker references,
+  freshness and correction holds, and counts-only conversion-loss reports.
+
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
 
 - Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
