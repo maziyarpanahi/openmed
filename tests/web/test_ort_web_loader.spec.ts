@@ -12,7 +12,10 @@ import {
   type OrtFeeds,
   type OrtInferenceSession,
   type OrtResults,
+  type OrtSessionCreateOptions,
   type OrtWebCapabilityProfile,
+  type OrtWebExternalDataOptions,
+  type OrtWebExternalDataShard,
   type OrtWebRuntime,
   type TokenClassificationOutput,
 } from "../../js/openmedkit-web/src/index";
@@ -102,19 +105,172 @@ test("rejects remote model and wasm asset paths", async () => {
   );
 });
 
-test("rejects UNC and remote-host file asset paths", () => {
+test("rejects UNC and remote-host file asset paths", async () => {
   for (const path of [
     "\\\\models.example.invalid\\share\\model.onnx",
     "file://models.example.invalid/share/model.onnx",
     "file:////models.example.invalid/share/model.onnx",
+    "\u0000https://models.example.invalid/model.onnx",
+    "\u001f//models.example.invalid/model.onnx",
   ]) {
     assert.throws(() => assertOfflineAssetPath(path), /local\/offline/);
+  }
+  for (const [modelPath, assetPath] of [
+    ["\u0000https://cdn.example.invalid/model.onnx", "/models/openmed/ort/"],
+    ["/models/openmed/model.onnx", "\u001f//cdn.example.invalid/ort/"],
+  ]) {
+    await assert.rejects(
+      () =>
+        loadOrtWebSession({
+          modelPath: modelPath!,
+          assetPath: assetPath!,
+          runtime: () => {
+            throw new Error("runtime must not be imported");
+          },
+          capabilities: basicWasmProfile,
+          cache: new Map(),
+        }),
+      valueFreeError(/local\/offline/),
+    );
   }
 
   assert.equal(
     assertOfflineAssetPath("file:///models/openmed/model.onnx"),
     "file:///models/openmed/model.onnx",
   );
+});
+
+test("forwards local external-data shards and keys the cache by shard", async () => {
+  const cache = new Map();
+  const runtime = createRuntime(["wasm"]);
+  const load = (shards: OrtWebExternalDataShard[]) =>
+    loadOrtWebSession({
+      modelPath: "/models/openmed/model.onnx",
+      assetPath: "/models/openmed/ort/",
+      runtime,
+      capabilities: basicWasmProfile,
+      externalData: { shards },
+      cache,
+    });
+  const localShards = [
+    externalDataShard(0, "/models/openmed/model.onnx.data.000"),
+    externalDataShard(1, "./model.onnx.data.001"),
+  ];
+
+  const first = await load(localShards);
+  const otherShards = await load([
+    localShards[0]!,
+    externalDataShard(1, "./other/model.onnx.data.001"),
+  ]);
+  const repeated = await load(localShards);
+
+  assert.deepEqual(runtime.createCalls[0]?.options.externalData, [
+    { path: "model.onnx.data.000", data: "/models/openmed/model.onnx.data.000" },
+    { path: "model.onnx.data.001", data: "./model.onnx.data.001" },
+  ]);
+  assert.notEqual(first.cacheKey, otherShards.cacheKey);
+  assert.notEqual(first.session, otherShards.session);
+  assert.equal(first.session, repeated.session);
+  assert.equal(runtime.createCalls.length, 2);
+});
+
+test("rejects remote and query-bearing shards before importing the runtime", async () => {
+  let imports = 0;
+  for (const location of [
+    "https://cdn.example.invalid/model.onnx.data.000",
+    "//cdn.example.invalid/model.onnx.data.000",
+    "/\\cdn.example.invalid/model.onnx.data.000",
+    "/\t/cdn.example.invalid/model.onnx.data.000",
+    "ht\ttps://cdn.example.invalid/model.onnx.data.000",
+    "\u0000https://cdn.example.invalid/model.onnx.data.000",
+    "\u001f//cdn.example.invalid/model.onnx.data.000",
+    "https://user:secret@cdn.example.invalid/model.onnx.data.000",
+    "file://user:secret@localhost/models/model.onnx.data.000",
+    "/models/openmed/model.onnx.data.000?token=secret",
+  ]) {
+    await assert.rejects(
+      () =>
+        loadOrtWebSession({
+          modelPath: "/models/openmed/model.onnx",
+          assetPath: "/models/openmed/ort/",
+          runtime: () => {
+            imports += 1;
+            return createRuntime(["wasm"]);
+          },
+          capabilities: basicWasmProfile,
+          externalData: { shards: [externalDataShard(0, location)] },
+          cache: new Map(),
+        }),
+      valueFreeError(/external data shard 0 location/),
+    );
+  }
+  assert.equal(imports, 0);
+});
+
+test("rejects untyped sessionOptions external data with a value-free error", async () => {
+  const runtime = createRuntime(["wasm"]);
+  await assert.rejects(
+    () =>
+      loadOrtWebSession({
+        modelPath: "/models/openmed/model.onnx",
+        assetPath: "/models/openmed/ort/",
+        runtime,
+        capabilities: basicWasmProfile,
+        sessionOptions: {
+          externalData: [
+            {
+              path: "model.onnx.data",
+              data: "https://cdn.example.invalid/model.onnx.data",
+            },
+          ],
+        },
+        cache: new Map(),
+      }),
+    valueFreeError(/must use the typed externalData option/),
+  );
+  assert.equal(runtime.createCalls.length, 0);
+});
+
+test("enforces declared shard and total byte limits before session creation", async () => {
+  const runtime = createRuntime(["wasm"]);
+  const load = (externalData: OrtWebExternalDataOptions) =>
+    loadOrtWebSession({
+      modelPath: "/models/openmed/model.onnx",
+      assetPath: "/models/openmed/ort/",
+      runtime,
+      capabilities: basicWasmProfile,
+      externalData,
+      cache: new Map(),
+    });
+  const shard = (index: number, byteLength: number) => ({
+    ...externalDataShard(index, `/models/openmed/model.onnx.data.00${index}`),
+    byteLength,
+  });
+
+  await assert.rejects(
+    () => load({ shards: [shard(0, 2 ** 31)] }),
+    valueFreeError(/shard 0 exceeds the per-shard byte limit/),
+  );
+  await assert.rejects(
+    () => load({ shards: [shard(0, 100), shard(1, 101)], maxShardBytes: 100 }),
+    valueFreeError(/shard 1 exceeds the per-shard byte limit/),
+  );
+  await assert.rejects(
+    () => load({ shards: [shard(0, 100), shard(1, 51)], maxTotalBytes: 150 }),
+    valueFreeError(/exceeds the total byte limit/),
+  );
+  await assert.rejects(
+    () => load({ shards: [shard(0, -1)] }),
+    valueFreeError(/byteLength must be a positive integer/),
+  );
+  assert.equal(runtime.createCalls.length, 0);
+
+  await load({
+    shards: [shard(0, 100), shard(1, 50)],
+    maxShardBytes: 100,
+    maxTotalBytes: 150,
+  });
+  assert.equal(runtime.createCalls.length, 1);
 });
 
 test("does not fetch when loading local offline assets", async () => {
@@ -191,7 +347,7 @@ test("synthetic note spans are identical across wasm and WebGPU loaders", async 
 function createRuntime(expectedProviders: OrtExecutionProvider[]) {
   const createCalls: {
     modelPath: string;
-    options: { executionProviders?: OrtExecutionProvider[] };
+    options: OrtSessionCreateOptions;
   }[] = [];
   const runtime: OrtWebRuntime & { createCalls: typeof createCalls } = {
     env: {},
@@ -205,6 +361,22 @@ function createRuntime(expectedProviders: OrtExecutionProvider[]) {
     },
   };
   return runtime;
+}
+
+function externalDataShard(
+  index: number,
+  location: string,
+): OrtWebExternalDataShard {
+  return { path: `model.onnx.data.00${index}`, location, byteLength: 1024 };
+}
+
+function valueFreeError(pattern: RegExp) {
+  return (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, pattern);
+    assert.doesNotMatch(error.message, /example|secret|token|model\.onnx|\/models/);
+    return true;
+  };
 }
 
 function createSyntheticSession(): OrtInferenceSession {

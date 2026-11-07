@@ -83,6 +83,13 @@ modelPath: {
 }
 ```
 
+Graphs whose weights live in external-data shards pass them through the typed
+`externalData` option described in the
+[ONNX Runtime Web loader guide](onnxruntime-web.md#sharded-external-data). As
+with `sessionOptions`, the same shards are passed to the WebGPU graph and to
+the WASM fallback graph. Invalid shard locations, oversized shards, and
+`sessionOptions.externalData` are rejected before any session is created.
+
 ## Capability and fallback behavior
 
 `probeOrtWebCapabilities()` distinguishes API exposure from an adapter that can
