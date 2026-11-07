@@ -59,11 +59,18 @@ PERMISSIVE_LICENSES = frozenset(
         "hpnd",
         "isc",
         "mit",
+        "mit-0",
         "mpl-2-0",
+        "unicode-3-0",
         "unlicense",
         "zlib",
     }
 )
+
+# SPDX license exceptions that only add permissions to the license they modify.
+# ``Apache-2.0 WITH Swift-exception`` is Apple's runtime library exception for
+# Swift packages; ``LLVM-exception`` is the equivalent LLVM project grant.
+PERMISSIVE_LICENSE_EXCEPTIONS = frozenset({"llvm-exception", "swift-exception"})
 
 RESTRICTED_LICENSES = frozenset(
     {
@@ -223,13 +230,28 @@ def _normalize_license_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.casefold()).strip("-")
 
 
-def classify_license(license_expression: object) -> str:
+def classify_license(
+    license_expression: object,
+    *,
+    permissive_licenses: frozenset[str] = PERMISSIVE_LICENSES,
+) -> str:
     """Classify a license expression using only the local allowlists.
 
     Compound expressions are conservative: a restricted token wins over an
     unknown token, and an unknown token wins over an otherwise permissive
     expression.  This makes ``MIT OR GPL-3.0-only`` restricted rather than
-    silently treating the first option as approval.
+    silently treating the first option as approval.  ``WITH`` is accepted only
+    directly after a license identifier and only for an exception listed in
+    ``PERMISSIVE_LICENSE_EXCEPTIONS``.
+
+    Args:
+        license_expression: SPDX-like expression from a reviewed inventory.
+        permissive_licenses: Normalized license tokens treated as permissive.
+            Callers may widen the default allowlist for a narrower scope, such
+            as development-only tooling that never ships.
+
+    Returns:
+        One of the ``LicenseClass`` values.
     """
 
     if not isinstance(license_expression, str):
@@ -254,8 +276,17 @@ def classify_license(license_expression: object) -> str:
         return LicenseClass.UNKNOWN
     license_tokens: list[str] = []
     expecting_license = True
+    expecting_exception = False
+    after_license_identifier = False
     depth = 0
     for raw_token in raw_tokens:
+        if expecting_exception:
+            # WITH requires a separately reviewed exception, not another license.
+            if _normalize_license_token(raw_token) not in PERMISSIVE_LICENSE_EXCEPTIONS:
+                return LicenseClass.UNKNOWN
+            expecting_exception = False
+            after_license_identifier = False
+            continue
         if raw_token == "(":
             if not expecting_license:
                 return LicenseClass.UNKNOWN
@@ -265,25 +296,32 @@ def classify_license(license_expression: object) -> str:
             if expecting_license or depth == 0:
                 return LicenseClass.UNKNOWN
             depth -= 1
+            after_license_identifier = False
             continue
         token = _normalize_license_token(raw_token)
+        if token == "with":
+            if not after_license_identifier:
+                return LicenseClass.UNKNOWN
+            expecting_exception = True
+            continue
         is_operator = token in LICENSE_OPERATORS
-        # WITH requires a separately reviewed exception, not another license.
-        if token == "with" or expecting_license == is_operator:
+        if expecting_license == is_operator:
             return LicenseClass.UNKNOWN
         if is_operator:
             expecting_license = True
+            after_license_identifier = False
         else:
             license_tokens.append(token)
             expecting_license = False
-    if expecting_license or depth:
+            after_license_identifier = True
+    if expecting_license or expecting_exception or depth:
         return LicenseClass.UNKNOWN
     if not license_tokens:
         return LicenseClass.UNKNOWN
 
     if any(token in RESTRICTED_LICENSES for token in license_tokens):
         return LicenseClass.RESTRICTED
-    if any(token not in PERMISSIVE_LICENSES for token in license_tokens):
+    if any(token not in permissive_licenses for token in license_tokens):
         return LicenseClass.UNKNOWN
     return LicenseClass.PERMISSIVE
 
