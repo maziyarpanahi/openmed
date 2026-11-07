@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
+.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test ort-browser-lane docs-deploy
 
 UV ?= uv
 
@@ -98,6 +98,15 @@ docs-browser-test: docs-stage ## Run the pinned Chromium, Firefox, and WebKit br
 	npm exec --prefix tests/browser/brand -- playwright install chromium firefox webkit
 	@echo "🧭 Running the cross-browser Pages matrix..."
 	npm --prefix tests/browser/brand test
+
+ort-browser-lane: ## Run exported token-classification graphs on ONNX Runtime Web
+	$(UV) run --extra dev --extra onnx --frozen python -m openmed.onnx.browser_lane prepare
+	npm ci --prefix js/openmedkit-web
+	npm --prefix js/openmedkit-web run build
+	npm ci --prefix tests/browser/ort-lane
+	npm exec --prefix tests/browser/ort-lane -- playwright install chromium
+	npm --prefix tests/browser/ort-lane test
+	$(UV) run --extra dev --frozen python -m openmed.onnx.browser_lane check
 
 docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages (gh-pages branch)
 	@echo "🚀 Deploying documentation to GitHub Pages..."
