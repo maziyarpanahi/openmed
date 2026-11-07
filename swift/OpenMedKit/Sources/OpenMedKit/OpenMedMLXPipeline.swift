@@ -2,14 +2,70 @@
     import Foundation
     import MLX
 
-    enum OpenMedMLXRuntimeError: LocalizedError {
+    /// Errors raised before an OpenMedKit MLX runtime touches MLX.
+    ///
+    /// Every MLX entry point (token classification, zero-shot, Privacy Filter,
+    /// Maple and Compass) throws ``unsupportedPlatform`` on the iOS Simulator
+    /// and on Intel Macs instead of reaching mlx-swift, which aborts the
+    /// process there. The error carries no path, model identifier or input.
+    public enum OpenMedMLXRuntimeError: LocalizedError, Equatable, Sendable {
+        /// MLX cannot run in this process: use a physical iPhone or iPad, an
+        /// Apple silicon Mac, or the CoreML backend.
         case unsupportedPlatform
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .unsupportedPlatform:
                 return "Swift MLX inference requires Apple Silicon macOS or a real iPhone/iPad device."
             }
+        }
+    }
+
+    /// The single gate every MLX entry point checks before it creates an
+    /// array, a model or a container.
+    ///
+    /// mlx-swift aborts the process on the iOS Simulator while it searches
+    /// app bundles for its Metal library, so a Simulator build must refuse
+    /// with ``OpenMedMLXRuntimeError/unsupportedPlatform`` instead.
+    enum OpenMedMLXRuntimeSupport {
+        /// Test seam: makes the current task behave like an iOS Simulator
+        /// build. It can only withdraw MLX support, never grant it.
+        @TaskLocal static var simulatesSimulator = false
+
+        /// Whether MLX kernels can run in the current task.
+        static var isSupported: Bool {
+            supportsMLX(
+                isSimulator: isSimulatorBuild || simulatesSimulator,
+                isAppleSilicon: isAppleSiliconBuild
+            )
+        }
+
+        /// MLX needs Apple silicon and cannot run on any simulator.
+        static func supportsMLX(isSimulator: Bool, isAppleSilicon: Bool) -> Bool {
+            isAppleSilicon && !isSimulator
+        }
+
+        /// Throws the typed unsupported error when MLX cannot run.
+        static func requireSupported() throws {
+            guard isSupported else {
+                throw OpenMedMLXRuntimeError.unsupportedPlatform
+            }
+        }
+
+        private static var isSimulatorBuild: Bool {
+            #if targetEnvironment(simulator)
+                true
+            #else
+                false
+            #endif
+        }
+
+        private static var isAppleSiliconBuild: Bool {
+            #if arch(arm64) || arch(arm64e)
+                true
+            #else
+                false
+            #endif
         }
     }
 
@@ -105,13 +161,7 @@
         }
 
         static var isRuntimeSupported: Bool {
-            #if targetEnvironment(simulator)
-                false
-            #elseif arch(arm64) || arch(arm64e)
-                true
-            #else
-                false
-            #endif
+            OpenMedMLXRuntimeSupport.isSupported
         }
     }
 #endif

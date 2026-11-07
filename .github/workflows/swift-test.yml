@@ -173,3 +173,70 @@ jobs:
         xcrun simctl spawn "$VISION_DEVICE" "$platform/Library/Xcode/Agents/xctest" \
           -XCTest OpenMedKitTests.WatchVisionParityTests "$bundle" 2>&1 | tee "$RUNNER_TEMP/openmed-vision-parity.log"
         grep -Eq 'Executed [1-9][0-9]* tests?, with 0 failures' "$RUNNER_TEMP/openmed-vision-parity.log"
+
+  test-ios-simulator:
+    name: Test iOS Simulator
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    - name: Select available iOS simulator
+      id: destination
+      shell: bash
+      run: |
+        set -euo pipefail
+        udid="$(
+          xcrun simctl list devices available --json |
+            jq -r '[
+              .devices | to_entries[] |
+              select(.key | contains("iOS")) |
+              .value[] |
+              select(.isAvailable == true and (.name | startswith("iPhone"))) |
+              .udid
+            ][0] // empty'
+        )"
+        test -n "$udid"
+        echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+    # MLX cannot run on the Simulator. Its entry points refuse with
+    # OpenMedMLXRuntimeError.unsupportedPlatform and MLX-dependent tests skip,
+    # so CoreML, policy, offset and extension tests run here instead.
+    - name: Run OpenMedKit and extension tests on the iOS Simulator
+      working-directory: swift/OpenMedKit
+      shell: bash
+      run: |
+        set -euo pipefail
+        xcodebuild test \
+          -scheme OpenMedKit-Package \
+          -destination 'platform=iOS Simulator,id=${{ steps.destination.outputs.udid }}' \
+          -only-testing:OpenMedKitTests \
+          -only-testing:ExtensionTests \
+          -skipPackagePluginValidation 2>&1 | tee "$RUNNER_TEMP/openmed-ios-simulator-tests.log"
+
+    - name: Report tests skipped on the iOS Simulator
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        log="$RUNNER_TEMP/openmed-ios-simulator-tests.log"
+        skipped="$RUNNER_TEMP/openmed-ios-simulator-skipped.txt"
+        test -f "$log"
+        { grep -E '\] : Test skipped - ' "$log" || true; } |
+          sed -E 's/.*-\[[^. ]+\.([^ ]+) ([^]]+)\] : Test skipped - (.*)$/\1.\2: \3/' |
+          sort -u > "$skipped"
+        {
+          echo "### Tests skipped on the iOS Simulator"
+          echo
+          if [ -s "$skipped" ]; then sed 's/^/- /' "$skipped"; else echo "None."; fi
+        } >> "$GITHUB_STEP_SUMMARY"
+        cat "$skipped"
+        # MLX-dependent tests must be reported as skipped, never run or crash.
+        grep -Fq 'MLX cannot run on the iOS Simulator' "$skipped"
+        if grep -Fq 'Restarting after unexpected exit, crash, or test timeout' "$log"; then
+          echo "A test crashed the iOS Simulator test runner." >&2
+          exit 1
+        fi
