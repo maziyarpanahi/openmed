@@ -34,6 +34,7 @@ from typing import IO, Any
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_USAGE = 2
+_OUTCOME_COMMANDS = frozenset({"brief", "doctor", "fhir validate"})
 
 
 class CliError(Exception):
@@ -88,21 +89,26 @@ def emit(
     *,
     human: str | None = None,
     stream: IO[str] | None = None,
+    outcome: str | None = None,
 ) -> int:
-    """Write a success result and return :data:`EXIT_OK`.
+    """Write a completed-command result and return its outcome exit status.
 
     In ``--json`` mode a ``{"ok", "command", "data"}`` envelope is written to
     ``stream`` (stdout by default). Otherwise ``human`` is written verbatim (a
     trailing newline is added when missing); ``None`` writes nothing.
     """
 
+    if outcome not in {None, "completed", "refused", "check_failed"}:
+        raise ValueError("invalid CLI outcome")
     out = stream if stream is not None else sys.stdout
     if wants_json(args):
         envelope = {"ok": True, "command": command_path(args), "data": payload}
+        if outcome is not None:
+            envelope["outcome"] = outcome
         out.write(_dump(envelope) + "\n")
     elif human is not None:
         out.write(human if human.endswith("\n") else human + "\n")
-    return EXIT_OK
+    return EXIT_ERROR if outcome in {"refused", "check_failed"} else EXIT_OK
 
 
 def emit_error(
@@ -125,6 +131,8 @@ def emit_error(
             "command": command_path(args),
             "error": {"code": error.code, "message": error.message},
         }
+        if command_path(args) in _OUTCOME_COMMANDS:
+            envelope["outcome"] = "failed"
         out.write(_dump(envelope) + "\n")
     else:
         err = text_stream if text_stream is not None else sys.stderr

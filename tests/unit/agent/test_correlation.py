@@ -61,9 +61,8 @@ def test_default_generation_produces_canonical_opaque_ids() -> None:
     assert action_id.value not in repr(action_id)
 
 
-@pytest.mark.parametrize(
-    ("identifier_type", "value", "expected_code"),
-    [
+def test_malformed_or_wrong_kind_ids_fail_closed(subtests) -> None:
+    for identifier_type, value, expected_code in [
         (RunId, f"{RUN_ID_PREFIX}{'A' * 32}", "invalid_identifier"),
         (RunId, f"{RUN_ID_PREFIX}{'0' * 31}", "invalid_identifier"),
         (RunId, f"{RUN_ID_PREFIX}{'0' * 33}", "invalid_identifier"),
@@ -72,40 +71,33 @@ def test_default_generation_produces_canonical_opaque_ids() -> None:
         (ActionId, f"{RUN_ID_PREFIX}{'0' * 32}", "wrong_identifier_kind"),
         (ActionId, True, "invalid_identifier"),
         (ActionId, 1, "invalid_identifier"),
-    ],
-)
-def test_malformed_or_wrong_kind_ids_fail_closed(
-    identifier_type: type[RunId] | type[ActionId],
-    value: Any,
-    expected_code: str,
-) -> None:
-    with pytest.raises(CorrelationIdError) as caught:
-        identifier_type.parse(value)
+    ]:
+        with subtests.test(
+            identifier_type=identifier_type, value=value, expected_code=expected_code
+        ):
+            with pytest.raises(CorrelationIdError) as caught:
+                identifier_type.parse(value)
 
-    assert caught.value.code == expected_code
-    assert repr(value) not in str(caught.value)
+            assert caught.value.code == expected_code
+            assert repr(value) not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "token_source",
-    [
+def test_invalid_injected_token_sources_fail_without_retaining_values(subtests) -> None:
+    for token_source in [
         None,
         fixed_token(b"short"),
         fixed_token(b"x" * 17),
         lambda _: "not-bytes",
-    ],
-)
-def test_invalid_injected_token_sources_fail_without_retaining_values(
-    token_source: Any,
-) -> None:
-    source = "not-callable" if token_source is None else token_source
+    ]:
+        with subtests.test(token_source=token_source):
+            source = "not-callable" if token_source is None else token_source
 
-    with pytest.raises(CorrelationIdError) as caught:
-        RunId.generate(token_source=source)
+            with pytest.raises(CorrelationIdError) as caught:
+                RunId.generate(token_source=source)
 
-    assert caught.value.code == "invalid_token_source"
-    assert "not-bytes" not in str(caught.value)
-    assert "short" not in str(caught.value)
+            assert caught.value.code == "invalid_token_source"
+            assert "not-bytes" not in str(caught.value)
+            assert "short" not in str(caught.value)
 
 
 def test_token_source_exception_is_replaced_with_value_free_error() -> None:
@@ -155,9 +147,8 @@ def test_root_action_serializes_an_explicit_null_parent() -> None:
     assert correlation.to_dict()["parent_action_id"] is None
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_parent_child_fields_reject_wrong_identifier_kinds(subtests) -> None:
+    for payload in [
         {
             "run_id": f"{ACTION_ID_PREFIX}{ACTION_TOKEN.hex()}",
             "action_id": f"{ACTION_ID_PREFIX}{RUN_TOKEN.hex()}",
@@ -171,24 +162,21 @@ def test_root_action_serializes_an_explicit_null_parent() -> None:
             "action_id": f"{ACTION_ID_PREFIX}{ACTION_TOKEN.hex()}",
             "parent_action_id": f"{RUN_ID_PREFIX}{PARENT_TOKEN.hex()}",
         },
-    ],
-)
-def test_parent_child_fields_reject_wrong_identifier_kinds(
-    payload: dict[str, str],
-) -> None:
-    with pytest.raises(CorrelationIdError) as caught:
-        ActionCorrelation.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(CorrelationIdError) as caught:
+                ActionCorrelation.from_dict(payload)
 
-    assert caught.value.code == "wrong_identifier_kind"
-    expected_field = next(
-        field_name
-        for field_name in ("run_id", "action_id", "parent_action_id")
-        if field_name in payload
-        and payload[field_name].startswith(
-            ACTION_ID_PREFIX if field_name == "run_id" else RUN_ID_PREFIX
-        )
-    )
-    assert caught.value.field_name == expected_field
+            assert caught.value.code == "wrong_identifier_kind"
+            expected_field = next(
+                field_name
+                for field_name in ("run_id", "action_id", "parent_action_id")
+                if field_name in payload
+                and payload[field_name].startswith(
+                    ACTION_ID_PREFIX if field_name == "run_id" else RUN_ID_PREFIX
+                )
+            )
+            assert caught.value.field_name == expected_field
 
 
 def test_action_cannot_parent_itself() -> None:
@@ -205,18 +193,16 @@ def test_action_cannot_parent_itself() -> None:
     assert action_id.value not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_missing_and_non_mapping_payloads_fail_closed(subtests) -> None:
+    for payload in [
         {},
         {"run_id": f"{RUN_ID_PREFIX}{RUN_TOKEN.hex()}"},
         [RUN_ID_PREFIX, ACTION_ID_PREFIX],
         "not-a-mapping",
-    ],
-)
-def test_missing_and_non_mapping_payloads_fail_closed(payload: Any) -> None:
-    with pytest.raises(CorrelationIdError):
-        ActionCorrelation.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(CorrelationIdError):
+                ActionCorrelation.from_dict(payload)
 
 
 def test_unknown_fields_and_versions_fail_without_echoing_values() -> None:
@@ -242,12 +228,13 @@ def test_unknown_fields_and_versions_fail_without_echoing_values() -> None:
     assert sentinel not in str(caught.value)
 
 
-@pytest.mark.parametrize("payload", ["{", b"\xff", 42])
-def test_malformed_json_fails_closed(payload: Any) -> None:
-    with pytest.raises(CorrelationIdError) as caught:
-        ActionCorrelation.from_json(payload)
+def test_malformed_json_fails_closed(subtests) -> None:
+    for payload in ["{", b"\xff", 42]:
+        with subtests.test(payload=payload):
+            with pytest.raises(CorrelationIdError) as caught:
+                ActionCorrelation.from_json(payload)
 
-    assert caught.value.code == "malformed_json"
+            assert caught.value.code == "malformed_json"
 
 
 def test_duplicate_json_fields_fail_closed() -> None:

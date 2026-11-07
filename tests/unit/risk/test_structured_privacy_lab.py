@@ -197,22 +197,24 @@ def test_dp_aggregate_is_reproducible_and_rejects_row_level_input():
         )
 
 
-@pytest.mark.parametrize("value", [782341.125, {"synthetic_count": 782341.125}])
-def test_dp_release_never_retains_reconstruction_material(value, caplog):
-    release = release_aggregate(
-        value,
-        ledger=AggregateDPBudgetLedger(max_epsilon=1.0, max_delta=0.0),
-        epsilon=0.5,
-        seed="synthetic-seed-only",
-    )
-    for record in (release.to_dict(), asdict(release), vars(release)):
-        assert "noise" not in record
-        assert "seed_digest" not in record
-        assert record["value"] != value
-        serialized = json.dumps(record, default=asdict)
-        assert "782341.125" not in serialized
-        assert "synthetic-seed-only" not in serialized
-    assert "782341.125" not in repr(release) + caplog.text
+def test_dp_release_never_retains_reconstruction_material(subtests, caplog):
+    for value in [782341.125, {"synthetic_count": 782341.125}]:
+        with subtests.test(value=value):
+            caplog.clear()
+            release = release_aggregate(
+                value,
+                ledger=AggregateDPBudgetLedger(max_epsilon=1.0, max_delta=0.0),
+                epsilon=0.5,
+                seed="synthetic-seed-only",
+            )
+            for record in (release.to_dict(), asdict(release), vars(release)):
+                assert "noise" not in record
+                assert "seed_digest" not in record
+                assert record["value"] != value
+                serialized = json.dumps(record, default=asdict)
+                assert "782341.125" not in serialized
+                assert "synthetic-seed-only" not in serialized
+            assert "782341.125" not in repr(release) + caplog.text
 
 
 def test_dp_release_defaults_to_system_randomness_without_seed_evidence():

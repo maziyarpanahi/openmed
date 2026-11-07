@@ -419,22 +419,20 @@ def test_elm_library_digest_and_result_digest_tampering_are_rejected() -> None:
         MeasureSubjectResult.from_dict(payload)
 
 
-@pytest.mark.parametrize(
-    "endpoint",
-    [
+def test_service_adapter_rejects_malformed_or_nonlocal_plaintext_endpoints(subtests):
+    for endpoint in [
         "http://localhost.evil.invalid/evaluate",
         "http://127.0.0.1.evil.invalid/evaluate",
         "http://localhost@evil.invalid/evaluate",
         "https:///missing-host",
-    ],
-)
-def test_service_adapter_rejects_malformed_or_nonlocal_plaintext_endpoints(endpoint):
-    with pytest.raises(ValueError):
-        ServiceCqlElmAdapter(
-            endpoint,
-            lambda *args: b"{}",
-            config=CqlElmAdapterConfig(supported_features=()),
-        )
+    ]:
+        with subtests.test(endpoint=endpoint):
+            with pytest.raises(ValueError):
+                ServiceCqlElmAdapter(
+                    endpoint,
+                    lambda *args: b"{}",
+                    config=CqlElmAdapterConfig(supported_features=()),
+                )
 
 
 def test_subprocess_output_limit_is_enforced_before_timeout() -> None:

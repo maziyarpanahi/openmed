@@ -409,9 +409,8 @@ def test_saved_artifact_tampering_requires_canonical_reconstruction() -> None:
     assert PopulationRiskAssessment.from_dict(reconstructed.to_dict()) == reconstructed
 
 
-@pytest.mark.parametrize(
-    ("changes", "message"),
-    (
+def test_rehashed_artifact_rejects_impossible_aggregate_relationships(subtests) -> None:
+    for changes, message in (
         (
             {"achieved_k_map": 4},
             "achieved_k_map cannot exceed reference_unit_count",
@@ -469,25 +468,21 @@ def test_saved_artifact_tampering_requires_canonical_reconstruction() -> None:
             {"mean_exact_linkage_risk": 0.9},
             "mean exact-linkage risk is below the aggregate count bound",
         ),
-    ),
-)
-def test_rehashed_artifact_rejects_impossible_aggregate_relationships(
-    changes: dict[str, object],
-    message: str,
-) -> None:
-    assessment = assess_population_risk(
-        [{"age": 30}, {"age": 30}, {"age": 50}],
-        [{"age": 30}, {"age": 40}, {"age": 40}],
-        ("age",),
-        target_k_map=1,
-        max_delta_presence=1.0,
-    )
-    tampered: dict[str, object] = assessment.to_dict()
-    tampered.update(changes)
-    _rehash_population_payload(tampered)
+    ):
+        with subtests.test(changes=changes, message=message):
+            assessment = assess_population_risk(
+                [{"age": 30}, {"age": 30}, {"age": 50}],
+                [{"age": 30}, {"age": 40}, {"age": 40}],
+                ("age",),
+                target_k_map=1,
+                max_delta_presence=1.0,
+            )
+            tampered: dict[str, object] = assessment.to_dict()
+            tampered.update(changes)
+            _rehash_population_payload(tampered)
 
-    with pytest.raises(ValueError, match=message):
-        PopulationRiskAssessment.from_dict(tampered)
+            with pytest.raises(ValueError, match=message):
+                PopulationRiskAssessment.from_dict(tampered)
 
 
 def test_rehashed_artifact_rejects_unsupported_matched_profile_k_map() -> None:
@@ -651,30 +646,26 @@ def test_safe_unicode_and_punctuation_column_names_are_supported() -> None:
     assert assessment.meets_policy is True
 
 
-@pytest.mark.parametrize(
-    ("sample", "reference_population", "message"),
-    (
+def test_invalid_rows_are_rejected(subtests) -> None:
+    for sample, reference_population, message in (
         ([], [{"age": 30}], "sample must contain"),
         ([{"age": 30}], [], "reference_population must contain"),
         ([{}], [{"age": 30}], "empty row"),
         ([{"other": 30}], [{"age": 30}], "quasi-identifier"),
         ([{"age": 30}], [{"other": 30}], "quasi-identifier"),
         ([{"age": 30, "extra": ["nested"]}], [{"age": 30}], "unsupported"),
-    ),
-)
-def test_invalid_rows_are_rejected(
-    sample: list[dict[str, object]],
-    reference_population: list[dict[str, object]],
-    message: str,
-) -> None:
-    with pytest.raises((TypeError, ValueError), match=message):
-        assess_population_risk(
-            sample,
-            reference_population,
-            ("age",),
-            target_k_map=1,
-            max_delta_presence=1.0,
-        )
+    ):
+        with subtests.test(
+            sample=sample, reference_population=reference_population, message=message
+        ):
+            with pytest.raises((TypeError, ValueError), match=message):
+                assess_population_risk(
+                    sample,
+                    reference_population,
+                    ("age",),
+                    target_k_map=1,
+                    max_delta_presence=1.0,
+                )
 
 
 def test_invalid_privacy_unit_models_are_rejected() -> None:
@@ -709,9 +700,8 @@ def test_invalid_privacy_unit_models_are_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("sample_unit", "population_unit", "message"),
-    (
+def test_keyed_privacy_units_require_canonical_non_whitespace_values(subtests) -> None:
+    for sample_unit, population_unit, message in (
         (" ", "population-a", "sample privacy unit.*non-empty"),
         ("\tpatient-a", "population-a", "sample privacy unit.*surrounding"),
         ("patient-a ", "population-a", "sample privacy unit.*surrounding"),
@@ -724,70 +714,59 @@ def test_invalid_privacy_unit_models_are_rejected() -> None:
             b" population-a",
             "reference_population privacy unit.*surrounding",
         ),
-    ),
-)
-def test_keyed_privacy_units_require_canonical_non_whitespace_values(
-    sample_unit: object,
-    population_unit: object,
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        assess_population_risk(
-            [{"sample_id": sample_unit, "age": 30}],
-            [{"population_id": population_unit, "age": 30}],
-            ("age",),
-            sample_privacy_unit="sample_id",
-            population_privacy_unit="population_id",
-            target_k_map=1,
-            max_delta_presence=1.0,
-        )
+    ):
+        with subtests.test(
+            sample_unit=sample_unit, population_unit=population_unit, message=message
+        ):
+            with pytest.raises(ValueError, match=message):
+                assess_population_risk(
+                    [{"sample_id": sample_unit, "age": 30}],
+                    [{"population_id": population_unit, "age": 30}],
+                    ("age",),
+                    sample_privacy_unit="sample_id",
+                    population_privacy_unit="population_id",
+                    target_k_map=1,
+                    max_delta_presence=1.0,
+                )
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    (
+def test_population_policy_thresholds_must_be_explicit(subtests) -> None:
+    for kwargs, message in (
         ({}, "target_k_map must be explicitly set"),
         ({"target_k_map": 1}, "max_delta_presence must be explicitly set"),
         ({"max_delta_presence": 1.0}, "target_k_map must be explicitly set"),
-    ),
-)
-def test_population_policy_thresholds_must_be_explicit(
-    kwargs: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        assess_population_risk(
-            [{"age": 30}],
-            [{"age": 30}],
-            ("age",),
-            **kwargs,  # type: ignore[arg-type]
-        )
+    ):
+        with subtests.test(kwargs=kwargs, message=message):
+            with pytest.raises(ValueError, match=message):
+                assess_population_risk(
+                    [{"age": 30}],
+                    [{"age": 30}],
+                    ("age",),
+                    **kwargs,  # type: ignore[arg-type]
+                )
 
 
-@pytest.mark.parametrize("target_k_map", (True, 0, -1, 1.5))
-def test_invalid_k_map_threshold_is_rejected(target_k_map: object) -> None:
-    with pytest.raises(ValueError, match="target_k_map"):
-        assess_population_risk(
-            [{"age": 30}],
-            [{"age": 30}],
-            ("age",),
-            target_k_map=target_k_map,  # type: ignore[arg-type]
-            max_delta_presence=1.0,
-        )
+def test_invalid_k_map_threshold_is_rejected(subtests) -> None:
+    for target_k_map in (True, 0, -1, 1.5):
+        with subtests.test(target_k_map=target_k_map):
+            with pytest.raises(ValueError, match="target_k_map"):
+                assess_population_risk(
+                    [{"age": 30}],
+                    [{"age": 30}],
+                    ("age",),
+                    target_k_map=target_k_map,  # type: ignore[arg-type]
+                    max_delta_presence=1.0,
+                )
 
 
-@pytest.mark.parametrize(
-    "max_delta_presence",
-    (True, -0.01, 1.01, math.inf, math.nan, "0.5"),
-)
-def test_invalid_delta_presence_threshold_is_rejected(
-    max_delta_presence: object,
-) -> None:
-    with pytest.raises(ValueError, match="max_delta_presence"):
-        assess_population_risk(
-            [{"age": 30}],
-            [{"age": 30}],
-            ("age",),
-            target_k_map=1,
-            max_delta_presence=max_delta_presence,  # type: ignore[arg-type]
-        )
+def test_invalid_delta_presence_threshold_is_rejected(subtests) -> None:
+    for max_delta_presence in (True, -0.01, 1.01, math.inf, math.nan, "0.5"):
+        with subtests.test(max_delta_presence=max_delta_presence):
+            with pytest.raises(ValueError, match="max_delta_presence"):
+                assess_population_risk(
+                    [{"age": 30}],
+                    [{"age": 30}],
+                    ("age",),
+                    target_k_map=1,
+                    max_delta_presence=max_delta_presence,  # type: ignore[arg-type]
+                )

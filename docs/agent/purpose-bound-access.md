@@ -154,11 +154,12 @@ clinical validator.
 ```python
 from openmed.agent.permissions import dispatch_with_authorized_results
 
-# expected_scope, output_schema and local_read are reviewed local bindings.
-# request.record_selectors exactly covers expected_scope.selectors().
+# result_ticket, result_request, expected_scope, output_schema and local_read
+# come from the trusted host. This distinct result request covers exactly
+# expected_scope.selectors(); the earlier single-selector request does not.
 result = dispatch_with_authorized_results(
-    ticket,
-    request,
+    result_ticket,
+    result_request,
     AccessTicketVerifier(),
     scope=expected_scope,
     schema=output_schema,
@@ -259,7 +260,7 @@ from openmed.agent.permissions import (
     preview_with_fhir_write_scope,
 )
 
-# resolver, selector_key, ticket, request, and proposed_resource are provided
+# resolver, selector_key, write_ticket, write_request, and proposed_resource are provided
 # by the trusted local application. The payload and resolver are synthetic
 # in tests; no model inference or server connection is required.
 guard = FHIRWriteScopeVerifier(
@@ -271,8 +272,8 @@ guard = FHIRWriteScopeVerifier(
 )
 preview = preview_with_fhir_write_scope(
     proposed_resource,
-    ticket,
-    request,
+    write_ticket,
+    write_request,
     guard,
     lambda: render_local_preview(proposed_resource),
 )
@@ -311,4 +312,91 @@ checks; verification does not create an approval receipt or authorize execution.
 
 ```text
 .venv/bin/python -m pytest tests/unit/agent/permissions/test_fhir_write_scope.py tests/unit/interop/test_fhir_reference_integrity.py tests/integration/agent/test_fhir_write_scope_boundary.py -q
+```
+
+## Record access decisions
+
+Every call to `AccessTicketVerifier.verify()` creates exactly one `AccessEvent`
+for the authorization decision, including missing, expired, mismatched and
+out-of-scope tickets. The default `MemoryAccessEventSink` retains events on
+`verifier.sink.events` for the lifetime of that verifier. Hosts should inject a
+sink with appropriate retention for long-running workflows. No network call or
+filesystem write is required by the default verifier.
+
+```python
+import os
+
+from openmed.agent.permissions import (
+    AccessEventError, AccessTicketVerifier, LocalAccessEventSink,
+)
+
+# The host chooses a protected local directory; this is a synthetic path.
+sink = LocalAccessEventSink("synthetic-access-events.jsonl")
+verifier = AccessTicketVerifier(sink=sink, clock=lambda: 1_999_999_999)
+if os.name == "posix":
+    verifier.verify(ticket, request)
+    head = sink.verify_chain()
+    counts = sink.export_counts()
+    assert counts["outcomes"] == {"allow": 1}
+else:
+    # Windows hosts must supply a durable AccessEventSink.
+    try:
+        verifier.verify(ticket, request)
+    except AccessEventError as error:
+        assert error.code == "sink_unavailable"
+    else:
+        raise AssertionError("unsupported sink authorized access")
+```
+
+An injected `AccessEventSink` implements `emit(event)`, called once before
+verification returns authority or raises a denial. Sink failures raise a
+value-free `AccessEventError("sink_unavailable")` and block dispatch without
+retry. Do not retry an uncertain write: the sink may have persisted before
+raising. This is not a transaction with the tool's data store.
+
+Events contain an opaque requesting run ID, **developer-authored** purpose and
+tool/action codes, requested data-class codes and selector count, outcome
+(`allow`/`deny`), denial code and verification epoch seconds. Governance codes
+must contain no patient identifiers or values. Tickets, selector kinds/digests,
+record identifiers, arguments, results, credentials and source payloads are
+excluded.
+
+Events bind the requested scope, including denials, without copying wider ticket
+authority. Malformed requests emit `invalid_request` without scope metadata or a
+timestamp. Invalid/unavailable clocks emit denial with `timestamp=None`.
+Pre-verification construction errors and invalid dispatch callbacks emit no events.
+
+Events record authorization; an authorized read that later fails still emits
+`allow`. Each verification call emits its own event. This Python extension leaves
+the action ledger, Journey audit format, result authorization and Swift contracts
+unchanged. It adds no cloud fallback or clinical action.
+
+### Local chain and aggregate export
+
+`LocalAccessEventSink` writes canonical JSON lines containing an event, sequence,
+previous digest and SHA-256 digest. It verifies the full chain before append,
+flushes and fsyncs before returning, and uses a POSIX advisory lock across
+cooperating writers and sink instances. New files use mode 0600; symlinks and
+non-regular files are refused. Only this durable sink requires POSIX. Hosts
+protect directories, existing permissions, retention and backups, and prevent
+file replacement or rotation during writes. Diagnostics omit private paths and
+parser payloads.
+
+`verify_chain()` returns the chain head or a controlled error for corruption,
+modification, interior deletion, reordering, duplicates or partial writes. Use
+`verify_chain(expected_head=head)` with an independently saved head to detect
+suffix truncation. Malformed, deeply nested JSON yields a controlled code without
+retaining the parser exception. Without an independent anchor, the chain cannot
+detect an attacker rewriting the log and recomputing its digests. It supplies no
+signatures or compliance guarantee.
+
+`export_counts()` verifies the chain, then counts events, requested selectors,
+outcomes, denial reasons, purposes, data classes and tool/actions. It omits run
+IDs and per-record metadata. Data-class counts measure decisions containing each
+class; selector counts include denied requests. Neither measures returned records.
+
+Focused offline validation:
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/permissions/test_access_tickets.py tests/unit/agent/permissions/test_access_events.py tests/integration/agent/test_access_event_log.py -q
 ```

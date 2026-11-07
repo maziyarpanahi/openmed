@@ -9,6 +9,7 @@ from openmed.interop import adapter_spec, available_adapters, get_adapter
 from openmed.interop.hl7v2 import (
     DEFAULT_FIELD_MAP,
     HL7FieldRule,
+    HL7V2Encoding,
     parse_hl7v2,
     redact_hl7v2,
 )
@@ -16,71 +17,73 @@ from openmed.interop.hl7v2 import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-@pytest.mark.parametrize("message_type", ["ADT^A40", "ORU^R01"])
-def test_default_map_covers_relatives_aliases_prior_ids_and_visit_ids(message_type):
-    import json
+def test_default_map_covers_relatives_aliases_prior_ids_and_visit_ids(subtests):
+    for message_type in ["ADT^A40", "ORU^R01"]:
+        with subtests.test(message_type=message_type):
+            import json
 
-    source_fields = {
-        6: "MaternalSynthetic",
-        9: "AliasSynthetic",
-        14: "555-0139",
-        20: "LicenseSynthetic",
-        21: "MotherIDSynthetic",
-    }
-    message = "\r".join(
-        [
-            f"MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||{message_type}|SYNTHETIC|P|2.5",
-            segment("PID", 21, source_fields),
-            segment("MRG", 7, {i: f"PriorSynthetic{i}" for i in range(1, 8)}),
-            segment("PV1", 19, {19: "VisitSynthetic"}),
-            "ZPX|CustomPrivateValue|otherSynthetic",
-            "OBX|1|NM|LAB^SYNTHETIC||7.1|mg/dL",
-        ]
-    )
-    report = {}
-    result = redact_hl7v2(message, date_shift_days=1, coverage_report=report)
-    for value in (
-        *source_fields.values(),
-        *(f"PriorSynthetic{i}" for i in range(1, 8)),
-        "VisitSynthetic",
-    ):
-        assert value not in result
-    assert parse_hl7v2(result).encoding == parse_hl7v2(message).encoding
-    assert "7.1|mg/dL" in result
-    assert "ZPX|CustomPrivateValue|otherSynthetic" in result
-    assert "CustomPrivateValue" not in json.dumps(report)
-    assert {
-        row["field"] for row in report["unmapped_fields"] if row["segment"] == "ZPX"
-    } == {1, 2}
-    assert all(
-        set(row) == {"segment_index", "segment", "field", "length"}
-        for row in report["unmapped_fields"]
-    )
+            source_fields = {
+                6: "MaternalSynthetic",
+                9: "AliasSynthetic",
+                14: "555-0139",
+                20: "LicenseSynthetic",
+                21: "MotherIDSynthetic",
+            }
+            message = "\r".join(
+                [
+                    f"MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||{message_type}|SYNTHETIC|P|2.5",
+                    segment("PID", 21, source_fields),
+                    segment("MRG", 7, {i: f"PriorSynthetic{i}" for i in range(1, 8)}),
+                    segment("PV1", 19, {19: "VisitSynthetic"}),
+                    "ZPX|CustomPrivateValue|otherSynthetic",
+                    "OBX|1|NM|LAB^SYNTHETIC||7.1|mg/dL",
+                ]
+            )
+            report = {}
+            result = redact_hl7v2(message, date_shift_days=1, coverage_report=report)
+            for value in (
+                *source_fields.values(),
+                *(f"PriorSynthetic{i}" for i in range(1, 8)),
+                "VisitSynthetic",
+            ):
+                assert value not in result
+            assert parse_hl7v2(result).encoding == parse_hl7v2(message).encoding
+            assert "7.1|mg/dL" in result
+            assert "ZPX|CustomPrivateValue|otherSynthetic" in result
+            assert "CustomPrivateValue" not in json.dumps(report)
+            assert {
+                row["field"]
+                for row in report["unmapped_fields"]
+                if row["segment"] == "ZPX"
+            } == {1, 2}
+            assert all(
+                set(row) == {"segment_index", "segment", "field", "length"}
+                for row in report["unmapped_fields"]
+            )
 
 
-@pytest.mark.parametrize(
-    ("segment_name", "position"), [("PID", 11), ("NK1", 4), ("GT1", 5), ("IN1", 19)]
-)
-def test_xad_components_keep_type_shape_and_repetitions(segment_name, position):
-    import re
+def test_xad_components_keep_type_shape_and_repetitions(subtests):
+    for segment_name, position in [("PID", 11), ("NK1", 4), ("GT1", 5), ("IN1", 19)]:
+        with subtests.test(segment_name=segment_name, position=position):
+            import re
 
-    address = "123 Synthetic Street^Apartment 24^SourceCity^CA^94105-1234^US^H"
-    message = (
-        "MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||ADT^A40|SYNTHETIC|P|2.5\r"
-        + segment(segment_name, position, {position: address + "~" + address})
-    )
-    output = redact_hl7v2(message, date_shift_days=1, seed=32)
-    value = parse_hl7v2(output).segments[1].get_field(position)
-    first, second = value.split("~")
-    assert first == second
-    parts = first.split("^")
-    assert len(parts) == 7
-    assert all(a != b for a, b in zip(parts[:6], address.split("^")[:6]))
-    assert not any(char.isdigit() for char in parts[2])
-    assert re.fullmatch(r"[A-Z]{2}", parts[3])
-    assert re.fullmatch(r"[0-9]{5}-[0-9]{4}", parts[4])
-    assert re.fullmatch(r"[A-Z]{2}", parts[5])
-    assert parts[6] == "H"
+            address = "123 Synthetic Street^Apartment 24^SourceCity^CA^94105-1234^US^H"
+            message = (
+                "MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||ADT^A40|SYNTHETIC|P|2.5\r"
+                + segment(segment_name, position, {position: address + "~" + address})
+            )
+            output = redact_hl7v2(message, date_shift_days=1, seed=32)
+            value = parse_hl7v2(output).segments[1].get_field(position)
+            first, second = value.split("~")
+            assert first == second
+            parts = first.split("^")
+            assert len(parts) == 7
+            assert all(a != b for a, b in zip(parts[:6], address.split("^")[:6]))
+            assert not any(char.isdigit() for char in parts[2])
+            assert re.fullmatch(r"[A-Z]{2}", parts[3])
+            assert re.fullmatch(r"[0-9]{5}-[0-9]{4}", parts[4])
+            assert re.fullmatch(r"[A-Z]{2}", parts[5])
+            assert parts[6] == "H"
 
 
 def fake_deidentifier(text: str, **kwargs):
@@ -113,10 +116,11 @@ def test_registry_loads_hl7v2_adapter_lazily():
     assert hasattr(adapter, "redact_hl7v2")
 
 
-@pytest.mark.parametrize("message", ["MSH|", "MSH|^", "MSH|^~\\&X|"])
-def test_parser_rejects_invalid_msh_2_length(message: str) -> None:
-    with pytest.raises(ValueError, match="exactly four encoding characters"):
-        parse_hl7v2(message)
+def test_parser_rejects_invalid_msh_2_length(subtests) -> None:
+    for message in ["MSH|", "MSH|^", "MSH|^~\\&X|"]:
+        with subtests.test(message=message):
+            with pytest.raises(ValueError, match="exactly four encoding characters"):
+                parse_hl7v2(message)
 
 
 def test_redacts_synthetic_adt_pid_and_nk1_fields():
@@ -305,9 +309,8 @@ BLANK_LINE_BASE = "\n".join(
 )
 
 
-@pytest.mark.parametrize(
-    ("label", "message"),
-    [
+def test_serialize_round_trips_messages_containing_blank_lines(subtests) -> None:
+    for label, message in [
         ("no blank lines", BLANK_LINE_BASE),
         ("leading blank line", "\n" + BLANK_LINE_BASE),
         ("interior blank line", BLANK_LINE_BASE.replace("|F\n", "|F\n\n")),
@@ -319,12 +322,9 @@ BLANK_LINE_BASE = "\n".join(
         ("no trailing separator", BLANK_LINE_BASE.rstrip("\n")),
         ("carriage-return separators", BLANK_LINE_BASE.replace("\n", "\r")),
         ("CRLF separators", BLANK_LINE_BASE.replace("\n", "\r\n")),
-    ],
-)
-def test_serialize_round_trips_messages_containing_blank_lines(
-    label: str, message: str
-) -> None:
-    assert parse_hl7v2(message).serialize() == message, label
+    ]:
+        with subtests.test(label=label, message=message):
+            assert parse_hl7v2(message).serialize() == message, label
 
 
 def test_blank_lines_are_not_parsed_as_segments():
@@ -353,3 +353,38 @@ def test_serialize_ignores_blank_line_positions_beyond_the_segment_list():
     parsed.blank_line_positions = (99,)
 
     assert parsed.serialize() == BLANK_LINE_BASE
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        HL7V2Encoding(),
+        HL7V2Encoding(
+            field="#", component="$", repetition="*", escape="?", subcomponent="%"
+        ),
+    ],
+    ids=["default", "alternate"],
+)
+def test_generated_messages_round_trip_and_keep_framing_after_redaction(encoding):
+    from openmed.training.synthetic.hl7v2_messages import (
+        HL7V2SynthesisConfig,
+        generate_hl7v2_messages,
+    )
+
+    messages = generate_hl7v2_messages(
+        6,
+        seed=11,
+        config=HL7V2SynthesisConfig(encoding=encoding, escape_probability=1.0),
+    )
+
+    for message in messages:
+        parsed = parse_hl7v2(message.text)
+        assert parsed.serialize() == message.text
+        redacted = parse_hl7v2(
+            redact_hl7v2(
+                message.text, deidentifier=fake_deidentifier, date_shift_days=2
+            )
+        )
+        assert redacted.encoding == encoding
+        assert redacted.segment_names() == parsed.segment_names()
+        assert redacted.trailing_separator
