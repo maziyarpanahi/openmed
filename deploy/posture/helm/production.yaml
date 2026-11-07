@@ -1,0 +1,48 @@
+# Synthetic production overlay for the openmed-service chart. It sets every
+# production-critical value the chart cannot default and passes the deploy
+# posture contract (see docs/deploy/security-posture.md). Secrets are
+# references only: create the referenced Secret yourself.
+#
+# The security contexts and the /tmp volume restate what #3916 makes the chart
+# default; keep them until that change ships.
+config:
+  trustedHosts:
+    - api.example.test
+  throttle:
+    maxConcurrency: 4
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+extraEnv:
+  - name: OPENMED_SERVICE_AUTH_ENABLED
+    value: "true"
+  - name: OPENMED_SERVICE_AUTH_API_KEYS
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: api-keys
+  - name: OPENMED_SERVICE_SERVED_MODELS
+    value: pii_detection_superclinical
+
+extraVolumes:
+  - name: tmp
+    emptyDir:
+      sizeLimit: 512Mi
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp

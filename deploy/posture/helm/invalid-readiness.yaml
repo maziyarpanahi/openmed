@@ -1,0 +1,5 @@
+# Negative control: points the readiness probe at the liveness endpoint, so a
+# service that fails its security profile would still receive traffic.
+probes:
+  readiness:
+    path: /livez

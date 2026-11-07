@@ -223,6 +223,7 @@ classification:
     - serving/load-testing.md
     - serving/mtls.md
     - serving/security-profile.md
+    - deploy/security-posture.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md
