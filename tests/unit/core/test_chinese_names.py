@@ -10,6 +10,8 @@ from collections import defaultdict
 from importlib import resources
 from pathlib import Path
 
+import pytest
+
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import resolve_locale
 from openmed.core.pii import _build_deidentification_result
@@ -54,6 +56,7 @@ def test_surname_gazetteer_is_large_packaged_and_explicitly_licensed():
     assert all(len(surname) in {1, 2} for surname in CHINESE_SURNAMES)
 
 
+@pytest.mark.slow
 def test_fresh_pii_i18n_import_does_not_cycle_through_clinical_api():
     code = """
 from openmed.core.pii_i18n import CHINESE_SURNAMES

@@ -105,29 +105,27 @@ def test_commitment_rejects_empty_or_non_digest_items_without_echoing_values() -
     assert sensitive_value not in str(raised.value)
 
 
-@pytest.mark.parametrize("manifest_kind", HOLDOUT_MANIFEST_KINDS)
-@pytest.mark.parametrize("item_index", (0, 3, 4))
-def test_selective_proof_verifies_each_manifest_and_odd_tree_position(
-    manifest_kind: str,
-    item_index: int,
-) -> None:
-    manifests = _manifests()
-    commitment = commit_holdout_manifests("audit-v1", manifests)
+def test_selective_proof_verifies_each_manifest_and_odd_tree_position(subtests) -> None:
+    for manifest_kind in HOLDOUT_MANIFEST_KINDS:
+        for item_index in (0, 3, 4):
+            with subtests.test(manifest_kind=manifest_kind, item_index=item_index):
+                manifests = _manifests()
+                commitment = commit_holdout_manifests("audit-v1", manifests)
 
-    proof = create_inclusion_proof(
-        commitment,
-        manifest_kind,
-        item_index,
-        manifests[manifest_kind],
-    )
-    verification = verify_inclusion_proof(commitment, proof)
+                proof = create_inclusion_proof(
+                    commitment,
+                    manifest_kind,
+                    item_index,
+                    manifests[manifest_kind],
+                )
+                verification = verify_inclusion_proof(commitment, proof)
 
-    assert verification.valid is True
-    assert verification.reason_codes == (REASON_VALID,)
-    assert proof.manifest_kind == manifest_kind
-    assert proof.item_index == item_index
-    assert proof.item_digest == manifests[manifest_kind][item_index]
-    assert len(proof.sibling_digests) == 3
+                assert verification.valid is True
+                assert verification.reason_codes == (REASON_VALID,)
+                assert proof.manifest_kind == manifest_kind
+                assert proof.item_index == item_index
+                assert proof.item_digest == manifests[manifest_kind][item_index]
+                assert len(proof.sibling_digests) == 3
 
 
 def test_proof_generation_requires_the_committed_private_manifest() -> None:

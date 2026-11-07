@@ -130,25 +130,23 @@ def test_register_udf_requires_optional_snowflake_extra(monkeypatch):
         snowflake_udf.register_udf(object())
 
 
-@pytest.mark.parametrize(
-    ("value", "literal"),
-    [
+def test_sql_literals_preserve_values_and_quote_boundaries(subtests):
+    for value, literal in [
         (r"@stage/helpers\new.py", r"'@stage/helpers\\new.py'"),
         (r"@stage/owner\'s.py", r"'@stage/owner\\''s.py'"),
         ("@stage/line\nbreak.py", r"'@stage/line\nbreak.py'"),
         (r"@stage/file\'); SELECT 1; --", r"'@stage/file\\''); SELECT 1; --'"),
-    ],
-)
-def test_sql_literals_preserve_values_and_quote_boundaries(value, literal):
-    sql = snowflake_udf.generate_create_function_sql(
-        packages=["openmed", value],
-        imports=[value],
-        handler=value,
-    )
+    ]:
+        with subtests.test(value=value, literal=literal):
+            sql = snowflake_udf.generate_create_function_sql(
+                packages=["openmed", value],
+                imports=[value],
+                handler=value,
+            )
 
-    assert f"PACKAGES = ('openmed', {literal})" in sql
-    assert f"IMPORTS = ({literal})" in sql
-    assert sql.endswith(f"HANDLER = {literal};")
+            assert f"PACKAGES = ('openmed', {literal})" in sql
+            assert f"IMPORTS = ({literal})" in sql
+            assert sql.endswith(f"HANDLER = {literal};")
 
 
 @pytest.mark.integration
@@ -176,3 +174,42 @@ def test_real_snowpark_local_registration_accepts_one_nullable_input(monkeypatch
         rows = frame.select(call_udf("OPENMED_DEIDENTIFY", col("TEXT"))).collect()
 
     assert [row[0] for row in rows] == [None, "[NAME]"]
+
+
+@pytest.mark.integration
+def test_real_connector_cache_persists_with_secure_filelock(tmp_path):
+    cache_module = pytest.importorskip("snowflake.connector.cache")
+    cache_path = str(tmp_path / "synthetic-cache")
+    cache = cache_module.SFDictFileCache(cache_path)
+    cache["synthetic"] = "value"
+    cache.save()
+    reloaded = cache_module.SFDictFileCache(cache_path)
+    assert reloaded["synthetic"] == "value"
+
+
+@pytest.mark.integration
+def test_real_connector_cache_keeps_contended_writes_out(tmp_path):
+    cache_module = pytest.importorskip("snowflake.connector.cache")
+    filelock = pytest.importorskip("filelock")
+    cache_path = tmp_path / "synthetic-cache"
+    cache = cache_module.SFDictFileCache(str(cache_path), file_timeout=0)
+    with filelock.FileLock(cache._file_lock_path):
+        cache["synthetic"] = "value"
+        assert cache.save() is False
+        assert not cache_path.exists()
+    assert cache.save() is True
+    assert cache_module.SFDictFileCache(str(cache_path))["synthetic"] == "value"
+
+
+@pytest.mark.integration
+def test_real_connector_crl_cache_lock_excludes_other_writers(tmp_path):
+    crl_module = pytest.importorskip("snowflake.connector.crl_cache")
+    filelock = pytest.importorskip("filelock")
+    cache = crl_module.CRLFileCache(cache_dir=tmp_path)
+    lock = cache._get_crl_file_lock(tmp_path / "synthetic.der")
+    contender = filelock.FileLock(lock.lock_file, timeout=0)
+    with lock:
+        with pytest.raises(filelock.Timeout):
+            contender.acquire()
+    with contender:
+        assert contender.is_locked
