@@ -417,6 +417,7 @@ nav:
       - Multimodal Preflight Report: multimodal/preflight.md
       - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
       - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
+      - Offline Media Task CLI: multimodal/inference-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
