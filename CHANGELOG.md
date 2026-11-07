@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Route finalized transcripts by language confidence in Python and OpenMedKit, with installed-pack detectors, token-boundary code-switch splits, exact source offsets and explicit review before release (#3819).
 
+- Optional bounded local audio sample conversion for ASR, with explicit channel
+  policy, anti-alias filtering, PCM16 output, rational timing lineage, protected
+  buffers and reviewer-confirmed handoff. Add the aligned on-device OpenMedKit
+  converter and synthetic offline safety controls (#3673).
+
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
@@ -54,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add bounded local speaker-diarization observations and an optional CPU adapter with explicit acoustic uncertainty, pinned caller-supplied artifacts, cancellation and alias lineage; clinical roles remain separate (#3676).
 
 - Reconcile fixed overlapping ASR outputs by exact token/timing evidence, preserving ambiguous alternatives and explicit gaps, emitting existing transcript revision events, and retaining PHI-withholding control over release (#3675).
+
+- Generate bounded non-diagnostic waveform stimuli with declared event timing and synthetic device metadata (#2850).
 
 - Generate reproducible synthetic DICOM files with paired metadata, burned-in identifier masks, annotation and ruler geometry, native pixel roundtrips and source-bound privacy-mask lineage (#2849).
 
@@ -147,19 +154,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
   token IDs. Callers must supply a local guard and asset provenance to release text.
 
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
-
-### Fixed
-
-- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
-  archive-safety limits before parsing, verify actual member sizes with bounded
-  decompression, and report archive failures using content-free codes/counts
-  (#3812).
 
 ## [3.2.0] - 2026-10-30
 

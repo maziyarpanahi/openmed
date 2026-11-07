@@ -380,6 +380,7 @@ nav:
           - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
           - Synthetic Document Rendering: training/synthetic/document-rendering.md
           - Synthetic DICOM Overlays: training/synthetic/dicom-overlays.md
+          - Synthetic Waveform Records: training/synthetic/waveform-records.md
           - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
           - Synthetic FHIR Records: training/synthetic/fhir-records.md
           - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
