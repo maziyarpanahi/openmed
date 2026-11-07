@@ -24,6 +24,7 @@ from openmed.structured.store import (
     FsspecArtifactStore,
     MigrationHealth,
     PostgresJourneyStore,
+    StoreResult,
     StoreState,
 )
 
@@ -99,11 +100,34 @@ def _open_store(
     *,
     schema: str,
 ) -> tuple[PostgresJourneyStore | None, ComponentHealth, ComponentHealth]:
-    result = PostgresJourneyStore.connect(
-        dsn,
-        schema=schema,
-        connect_options={"connect_timeout": 3},
+    return assess_store_open(
+        PostgresJourneyStore.connect(
+            dsn,
+            schema=schema,
+            connect_options={"connect_timeout": 3},
+        )
     )
+
+
+def assess_store_open(
+    result: StoreResult[PostgresJourneyStore],
+) -> tuple[PostgresJourneyStore | None, ComponentHealth, ComponentHealth]:
+    """Map one attempted store open to migration and store health.
+
+    This is the single readiness rule shared by ``migrate``, ``probe``, the
+    worker, and the offline migration rehearsal: the store is ready only when
+    the open succeeded, every migration is verified, and the schema version
+    equals the target.  A failed, pending, drifted, or unsupported migration
+    keeps readiness false.
+
+    Args:
+        result: Outcome of :meth:`PostgresJourneyStore.open` or ``connect``.
+
+    Returns:
+        The open store (the caller closes it) or ``None``, then the
+        migration and store component health.
+    """
+
     if not result.ok or result.value is None:
         state = (
             ComponentState.INCOMPATIBLE
@@ -235,7 +259,27 @@ def probe_deployment(
 def run_migrations(dsn: str, *, schema: str = DEFAULT_SCHEMA) -> DeploymentHealth:
     """Apply and verify the append-only PostgreSQL migration chain."""
 
-    store, migration, store_health = _open_store(dsn, schema=schema)
+    return migration_health(
+        PostgresJourneyStore.connect(
+            dsn,
+            schema=schema,
+            connect_options={"connect_timeout": 3},
+        )
+    )
+
+
+def migration_health(result: StoreResult[PostgresJourneyStore]) -> DeploymentHealth:
+    """Return the ``migrate`` command's health for one attempted store open.
+
+    Args:
+        result: Outcome of :meth:`PostgresJourneyStore.open` or ``connect``.
+            A successfully opened store is closed.
+
+    Returns:
+        Deployment health with only the migration and store planes enabled.
+    """
+
+    store, migration, store_health = assess_store_open(result)
     if store is not None:
         store.close()
     return DeploymentHealth(
