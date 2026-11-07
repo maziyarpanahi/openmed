@@ -107,10 +107,11 @@ assert decision.reviewed_text(reviewer_confirmed=True) == "Patient ███. Pa
 print(transcript_language_report([decision]))  # counts, never transcript text
 ```
 
-When the pending offline ASR contract is integrated, map its finalized segment
+When integrating the offline ASR contract, map its finalized segment
 index/text and optional `language.language`/`language.confidence_ppm` to these
 arguments, converting parts per million to `[0, 1]`. This adapter owns no timing,
-revision, consent or buffer contract and does not copy the pending ASR types.
+revision, consent or buffer contract and does not replace the ASR session's
+privacy and stability gates.
 
 OpenMedKit provides `TranscriptLanguageHypothesis`, `TranscriptPHISpan`,
 `TranscriptLanguageRouter(installedPackCodes:detectors:candidateLanguages:
