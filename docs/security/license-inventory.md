@@ -53,7 +53,7 @@ a dependency also declared in another extra.
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
 | `filelock` | Optional locking profiles; 3.20.3 uses Unlicense, 4.x MIT | `MIT OR Unlicense` |
-| `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliclass`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
+| `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-asr`, `edge-sbc`, `gliclass`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
 | `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
 | `langgraph-sdk` | `agents, langgraph` | `MIT` |
 | `pymongo` | `beam` | `Apache-2.0` |
@@ -88,9 +88,10 @@ a dependency also declared in another extra.
 | `mkdocs-minify-plugin` | `docs` | `MIT` |
 | `mkdocs-static-i18n` | `docs` | `MIT` |
 | `mkdocstrings` | `docs` | `ISC` |
-| `mlx` | `mlx` | `MIT` |
+| `mlx` | `edge-asr`, `mlx` | `MIT` |
 | `mlx-lm` | `mlx` | `MIT` |
 | `mlx-vlm` | `edge-vlm` | `MIT` |
+| `mlx-whisper` | `edge-asr`; local ASR runtime, separate user-supplied weights | `MIT` |
 | `nbformat` | `notebook` | `BSD-3-Clause` |
 | `nncf` | `openvino` | `Apache-2.0` |
 | `numpy` | `duckdb, edge-diarization, grounding, multimodal, onnx-runtime` | `BSD-3-Clause` |
@@ -147,7 +148,7 @@ a dependency also declared in another extra.
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `torch` | `awq, coreml, gliclass, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
+| `torch` | `awq, coreml, edge-asr, gliclass, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, edge-vlm, gliclass, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |
