@@ -5,11 +5,13 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import sqlite3
 from copy import deepcopy
 from typing import Any
 
 import pytest
 
+from openmed.agent.approvals import ApprovalNonceStoreError, SQLiteApprovalNonceStore
 from openmed.mcp.consent_receipts import (
     ConsentReceiptBindingError,
     ConsentReceiptExpiredError,
@@ -17,6 +19,7 @@ from openmed.mcp.consent_receipts import (
     ConsentReceiptPolicy,
     ConsentReceiptReplayError,
     ConsentReceiptRequiredError,
+    ConsentReceiptStoreError,
     ConsentReceiptVerificationResult,
     ConsentReceiptVerifier,
     MappingConsentKeyProvider,
@@ -34,6 +37,127 @@ _ARGUMENTS = {
     "clinical_text": "synthetic clinical text must not be retained",
     "bearer": "synthetic-bearer-value",
 }
+
+
+def test_injected_store_survives_reopen_and_retains_only_digest_and_expiry(tmp_path):
+    path = tmp_path / "claims.db"
+    clock = [1_000.1]
+    keys = MappingConsentKeyProvider({"synthetic": _KEY})
+    receipt = _issuer(clock).issue(
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+        expires_at=1_060.2,
+    )
+    first = ConsentReceiptVerifier(
+        keys,
+        clock=lambda: clock[0],
+        consumption_store=SQLiteApprovalNonceStore(path),
+    )
+    with pytest.raises(ConsentReceiptBindingError):
+        first.verify(receipt, _CLIENT, "wrong-tool", _RESOURCE, _SCOPE, _ARGUMENTS)
+    first.verify(receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS)
+    clock[0] = 1_060.1
+    reopened = ConsentReceiptVerifier(
+        keys,
+        clock=lambda: clock[0],
+        consumption_store=SQLiteApprovalNonceStore(path),
+    )
+    with pytest.raises(ConsentReceiptReplayError):
+        reopened.verify(receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS)
+    assert first.is_consumed(receipt.receipt_id)
+    assert not reopened.is_consumed(receipt.receipt_id)  # snapshots stay local
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute("SELECT * FROM nonce_claims").fetchall()
+        assert len(rows) == 1
+        assert rows[0][0].startswith("sha256:")
+        assert rows[0][1] == 1_061  # round up, never purge while still valid
+    for canary in (
+        receipt.receipt_id,
+        receipt.signature,
+        receipt.to_json(),
+        receipt.argument_digest,
+        _KEY,
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        *_ARGUMENTS.values(),
+    ):
+        if isinstance(canary, str):
+            assert canary.encode() not in path.read_bytes()
+
+
+@pytest.mark.parametrize("failure", ["raise", "invalid_result", "corrupt"])
+def test_consumption_store_failure_denies_policy_and_result(tmp_path, failure):
+    class BrokenStore:
+        def claim(self, *args, **kwargs):
+            if failure == "raise":
+                raise RuntimeError("synthetic private path or payload")
+            return "true"
+
+    store = BrokenStore()
+    if failure == "corrupt":
+        path = tmp_path / "claims.db"
+        store = SQLiteApprovalNonceStore(path)
+        path.write_bytes(b"truncated")
+    clock = [1_000.0]
+    receipt = _issuer(clock).issue(
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+        ttl_seconds=60,
+    )
+    verifier = ConsentReceiptVerifier(
+        MappingConsentKeyProvider({"synthetic": _KEY}),
+        clock=lambda: clock[0],
+        consumption_store=store,
+    )
+    assert verifier.verify_result(
+        receipt,
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+    ) == ConsentReceiptVerificationResult(False, "nonce_store_unavailable")
+    assert verifier.consumed_receipt_ids == frozenset()
+    audit = []
+    policy = ConsentReceiptPolicy(
+        verifier,
+        _CLIENT,
+        _RESOURCE,
+        _SCOPE,
+        audit_sink=audit.append,
+    )
+    with pytest.raises(ConsentReceiptStoreError) as error:
+        policy.authorize(tool=_TOOL, arguments=_ARGUMENTS, receipt=receipt)
+    assert isinstance(error.value, ApprovalNonceStoreError)
+    assert "private" not in str(error.value)
+    assert audit[-1]["outcome"] == "denied"
+    assert audit[-1]["reason"] == "nonce_store_unavailable"
+
+
+def test_in_memory_default_stays_process_local():
+    clock = [1_000.0]
+    receipt = _issuer(clock).issue(
+        _CLIENT,
+        _TOOL,
+        _RESOURCE,
+        _SCOPE,
+        _ARGUMENTS,
+        ttl_seconds=60,
+    )
+    for _ in range(2):
+        verifier = ConsentReceiptVerifier(
+            MappingConsentKeyProvider({"synthetic": _KEY}),
+            clock=lambda: clock[0],
+        )
+        verifier.verify(receipt, _CLIENT, _TOOL, _RESOURCE, _SCOPE, _ARGUMENTS)
 
 
 def _issuer(clock: list[float]) -> ConsentReceiptIssuer:

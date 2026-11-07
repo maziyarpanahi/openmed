@@ -307,17 +307,18 @@ def test_request_body_limit_runs_before_json_parsing() -> None:
     assert SYNTHETIC_SECRET not in response.text
 
 
-@pytest.mark.parametrize("seed", [True, False, "1", 1.5])
-def test_seed_rejects_coercion(seed: object) -> None:
-    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(
-            "/redact/text",
-            json={"text": SYNTHETIC_TEXT, "seed": seed},
-        )
+def test_seed_rejects_coercion(subtests) -> None:
+    for seed in [True, False, "1", 1.5]:
+        with subtests.test(seed=seed):
+            with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+                response = client.post(
+                    "/redact/text",
+                    json={"text": SYNTHETIC_TEXT, "seed": seed},
+                )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "validation_error"
-    assert SYNTHETIC_TEXT not in response.text
+            assert response.status_code == 422
+            assert response.json()["error"]["code"] == "validation_error"
+            assert SYNTHETIC_TEXT not in response.text
 
 
 def test_seed_rejects_values_outside_the_portable_integer_range() -> None:

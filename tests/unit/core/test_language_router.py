@@ -330,6 +330,7 @@ def test_optional_lid_is_lazy_and_missing_package_falls_back(monkeypatch):
     assert decision.runs[0].source == "stdlib:pack-priority"
 
 
+@pytest.mark.slow
 def test_core_module_imports_when_optional_lid_is_uninstalled():
     program = """
 import builtins
