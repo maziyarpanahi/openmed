@@ -1,9 +1,15 @@
 import { decodeBioTokenSpans } from "./decoder";
-import { loadOnnxModel, loadTokenClassificationPipeline } from "./model-loader";
+import {
+  assertLocalModelReference,
+  loadOnnxModel,
+  loadTokenClassificationPipeline,
+} from "./model-loader";
+import { resolveOfflineOnly } from "./offline";
 import {
   OPENMED_SPAN_SCHEMA_VERSION,
   type DeidentifyOptions,
   type ExtractPiiOptions,
+  type LoadModelOptions,
   type ModelLoader,
   type OpenMedDeidentifyResult,
   type OpenMedSpan,
@@ -24,6 +30,7 @@ export type {
   LoadModelOptions,
   LoadOnnxModelOptions,
   ModelLoader,
+  OnnxWasmPaths,
   OpenMedOnnxVariant,
   OpenMedDeidentifyResult,
   OpenMedSpan,
@@ -54,6 +61,8 @@ export {
   loadOnnxModel,
   loadTokenClassificationPipeline,
 } from "./model-loader";
+export { OpenMedOfflineError, isOfflineOnly, setOfflineOnly } from "./offline";
+export type { OpenMedOfflineErrorCode } from "./offline";
 export {
   detectOrtWebCapabilities,
   probeOrtWebCapabilities,
@@ -128,12 +137,15 @@ export type {
 
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
+/** Hub commit of `DEFAULT_MODEL_ID` that the default path requests. */
+export const DEFAULT_MODEL_REVISION = "79f7db205869b1be4be23ac4f42aa95bdedc5aee";
 const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;
 
 export async function extractPii(
   text: string,
   options: ExtractPiiOptions = {},
 ): Promise<OpenMedSpan[]> {
+  options = withAcquisitionPolicy(options);
   const hashSecret =
     options.hashSecret == null
       ? await ephemeralHashSecret()
@@ -193,6 +205,26 @@ function defaultModelLoaderFor(model: string): ModelLoader {
   return ONNX_ANDROID_REPO_PATTERN.test(model)
     ? loadOnnxModel
     : loadTokenClassificationPipeline;
+}
+
+/** Pin the default model and refuse remote references before any loader runs. */
+function withAcquisitionPolicy(options: ExtractPiiOptions): ExtractPiiOptions {
+  if (options.pipeline !== undefined) {
+    return options;
+  }
+  const model = options.model ?? DEFAULT_MODEL_ID;
+  const loaderOptions: LoadModelOptions = { ...options.loaderOptions };
+  if (
+    resolveOfflineOnly(options.offlineOnly) ||
+    loaderOptions.offlineOnly === true
+  ) {
+    assertLocalModelReference(model);
+    loaderOptions.offlineOnly = true;
+  }
+  if (model === DEFAULT_MODEL_ID && loaderOptions.revision === undefined) {
+    loaderOptions.revision = DEFAULT_MODEL_REVISION;
+  }
+  return { ...options, loaderOptions };
 }
 
 export async function deidentify(

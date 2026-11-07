@@ -3,6 +3,7 @@ import type {
   TokenClassificationOutput,
   TokenClassificationPipeline,
 } from "../types";
+import { isOfflineOnly, OpenMedOfflineError } from "../offline";
 import {
   detectOrtWebCapabilities,
   selectOrtWebBackend,
@@ -122,6 +123,11 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
     return trimmed;
   }
+  // URL parsers fold "\" into "/" and drop tab/CR/LF, so outside Windows drive
+  // paths these characters make a path non-canonical; refuse them outright.
+  if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) {
+    throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
+  }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)) {
     if (!trimmed.startsWith("file://")) {
       throw new Error(
@@ -195,7 +201,9 @@ export async function loadOrtWebSession(
     if (cache.get(cacheKey) === promise) {
       cache.delete(cacheKey);
     }
-    throw error;
+    throw isOfflineOnly()
+      ? new OpenMedOfflineError("local_assets_unavailable")
+      : error;
   });
   cache.set(cacheKey, promise);
   return promise;

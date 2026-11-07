@@ -142,6 +142,29 @@ test("does not fetch when loading local offline assets", async () => {
   assert.equal(runtime.createCalls[0]?.modelPath, "/models/openmed/model.onnx");
 });
 
+test("rejects backslash-mixed and control-character path prefixes", () => {
+  for (const path of [
+    "/\\models.example.invalid/share/model.onnx",
+    "\\/models.example.invalid/share/model.onnx",
+    "/\t/models.example.invalid/share/model.onnx",
+    "/\n/models.example.invalid/share/model.onnx",
+    "\u0000//models.example.invalid/share/model.onnx",
+    "models\\openmed\\model.onnx",
+    "file:\\\\models.example.invalid\\share\\model.onnx",
+  ]) {
+    assert.throws(() => assertOfflineAssetPath(path), /local\/offline/);
+  }
+
+  for (const path of [
+    "/models/openmed/model.onnx",
+    "./models/openmed/model.onnx",
+    "C:\\models\\openmed\\model.onnx",
+    "file:///models/openmed/model.onnx",
+  ]) {
+    assert.equal(assertOfflineAssetPath(path), path);
+  }
+});
+
 test("synthetic note spans are identical across wasm and WebGPU loaders", async () => {
   const note = "Patient Alice Nguyen emailed alice@example.org.";
   const tokenizer = (text: string): OrtFeeds => ({

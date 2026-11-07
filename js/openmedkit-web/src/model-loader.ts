@@ -1,7 +1,17 @@
+import {
+  failClosedWhenOffline,
+  OpenMedOfflineError,
+  resolveOfflineOnly,
+} from "./offline";
 import { alignTokenOffsets } from "./offsets";
+import {
+  assertOfflineAssetPath,
+  normalizeOrtAssetPath,
+} from "./runtime/ort-web-loader";
 import type {
   LoadModelOptions,
   LoadOnnxModelOptions,
+  OnnxWasmPaths,
   RawTokenClassificationEntity,
   RawTransformersRuntime,
   TokenClassificationPipeline,
@@ -34,7 +44,14 @@ export async function loadTokenClassificationPipeline(
   model: string,
   options: LoadModelOptions = {},
 ): Promise<TokenClassificationPipeline> {
+  const offlineOnly = resolveOfflineOnly(options.offlineOnly);
+  if (offlineOnly || isLocalModelReference(model)) {
+    // Explicit local paths and offline-only loads never fall back to the Hub.
+    assertLocalModelReference(model);
+    options = { ...options, localFilesOnly: true, allowRemoteModels: false };
+  }
   const runtime = await resolveRuntime(options.runtime);
+  configureLocalRuntimeAssets(runtime, options.wasmPaths, offlineOnly);
   const localReference = isLocalModelReference(model);
   const localFilesOnly = options.localFilesOnly ?? localReference;
   const allowRemoteModels = options.allowRemoteModels ?? !localFilesOnly;
@@ -56,10 +73,8 @@ export async function loadTokenClassificationPipeline(
       local_files_only: localFilesOnly,
       localFilesOnly,
     };
-    const pipeline = await runtime.pipeline(
-      "token-classification",
-      model,
-      pipelineOptions,
+    const pipeline = await failClosedWhenOffline(offlineOnly, () =>
+      runtime.pipeline("token-classification", model, pipelineOptions),
     );
     // Preserve runtime properties and resource disposal while normalizing calls.
     return new Proxy(pipeline, {
@@ -128,4 +143,120 @@ async function resolveRuntime(
       { cause: error },
     );
   }
+}
+
+/** Throw unless `model` is a canonical local path; the error never names it. */
+export function assertLocalModelReference(model: string): void {
+  if (!isLocalModelReference(model) || !isLocalLocation(model)) {
+    throw new OpenMedOfflineError("remote_model_refused");
+  }
+}
+
+/**
+ * Point ONNX Runtime Web at caller-supplied local WebAssembly assets and, in
+ * offline-only mode, refuse runtime settings that would fetch from a CDN or
+ * another host. Transformers.js defaults `wasmPaths` to jsDelivr in browsers.
+ */
+function configureLocalRuntimeAssets(
+  runtime: RawTransformersRuntime,
+  wasmPaths: OnnxWasmPaths | undefined,
+  offlineOnly: boolean,
+): void {
+  const localWasmPaths =
+    wasmPaths === undefined ? undefined : toLocalWasmPaths(wasmPaths);
+  const env = runtime.env;
+  if (env === undefined) {
+    return;
+  }
+  if (offlineOnly) {
+    const { localModelPath } = env;
+    const remoteModelPath =
+      localModelPath !== undefined &&
+      localModelPath !== "" &&
+      (typeof localModelPath !== "string" || !isLocalLocation(localModelPath));
+    const remoteWasmPaths =
+      localWasmPaths === undefined &&
+      !isLocalWasmPaths(onnxWasmEnv(env, false)?.wasmPaths);
+    if (remoteModelPath || remoteWasmPaths) {
+      throw new OpenMedOfflineError("remote_asset_refused");
+    }
+  }
+  if (localWasmPaths !== undefined) {
+    // ONNX Runtime reads this once, when its WebAssembly backend starts.
+    onnxWasmEnv(env, true)!.wasmPaths = localWasmPaths;
+  }
+}
+
+function toLocalWasmPaths(paths: OnnxWasmPaths): OnnxWasmPaths {
+  if (typeof paths !== "string" && (typeof paths !== "object" || paths === null)) {
+    throw new TypeError("wasmPaths must be a string or an object of strings.");
+  }
+  try {
+    if (typeof paths === "string") {
+      return normalizeOrtAssetPath(paths);
+    }
+    const local: { mjs?: string; wasm?: string } = {};
+    if (paths.mjs !== undefined) {
+      local.mjs = assertOfflineAssetPath(paths.mjs, "wasm asset path");
+    }
+    if (paths.wasm !== undefined) {
+      local.wasm = assertOfflineAssetPath(paths.wasm, "wasm asset path");
+    }
+    return local;
+  } catch {
+    throw new OpenMedOfflineError("remote_asset_refused");
+  }
+}
+
+function isLocalWasmPaths(value: unknown): boolean {
+  if (value === undefined || value === "") {
+    return true;
+  }
+  if (typeof value === "string") {
+    return isLocalWasmLocation(value);
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.values(value).every(
+      (entry) =>
+        entry === undefined ||
+        (typeof entry === "string" && isLocalWasmLocation(entry)),
+    );
+  }
+  return false;
+}
+
+function isLocalWasmLocation(location: string): boolean {
+  // Transformers.js swaps a cached WebAssembly factory in as a blob: URL.
+  return location.startsWith("blob:") || isLocalLocation(location);
+}
+
+function isLocalLocation(path: string): boolean {
+  try {
+    assertOfflineAssetPath(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function onnxWasmEnv(
+  env: NonNullable<RawTransformersRuntime["env"]>,
+  create: boolean,
+): Record<string, unknown> | undefined {
+  let node: Record<string, unknown> = env;
+  for (const key of ["backends", "onnx", "wasm"]) {
+    const child = node[key];
+    if (typeof child === "object" && child !== null) {
+      node = child as Record<string, unknown>;
+    } else if (create) {
+      node = node[key] = {};
+    } else {
+      return undefined;
+    }
+  }
+  return node;
 }
