@@ -243,6 +243,40 @@ def hash_api_key(api_key: str) -> str:
     return f"sha256:{digest}"
 
 
+PRINCIPAL_DIGEST_MIN_KEY_BYTES = 32
+
+
+def principal_digest(principal: AuthPrincipal, *, key: bytes) -> str:
+    """Return a keyed, opaque digest of one authenticated principal.
+
+    The digest binds the credential type and subject so audit records can
+    correlate decisions for the same caller without storing the raw identity.
+    The deployment key prevents dictionary reversal of low-entropy subjects.
+
+    Args:
+        principal: Authenticated principal attached by the auth or mTLS layer.
+        key: Secret digest key of at least 32 bytes.
+
+    Returns:
+        A ``hmac-sha256:<hex>`` digest that never contains the subject.
+
+    Raises:
+        ValueError: If the key is too short or the principal is malformed.
+    """
+    if type(key) is not bytes or len(key) < PRINCIPAL_DIGEST_MIN_KEY_BYTES:
+        raise ValueError("principal digest key must be at least 32 bytes")
+    if not isinstance(principal.subject, str) or not isinstance(
+        principal.credential_type, str
+    ):
+        raise ValueError("principal digest requires a typed principal")
+    material = json.dumps(
+        [principal.credential_type, principal.subject],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    return "hmac-sha256:" + hmac.new(key, material, hashlib.sha256).hexdigest()
+
+
 def parse_service_auth_config() -> ServiceAuthConfig:
     """Read authentication settings from the current process environment."""
     enabled = parse_bool(

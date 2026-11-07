@@ -68,11 +68,15 @@ from .bulk_data import (
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
+from .journey_access import (
+    JourneyAccessContextProvider,
+    JourneyAccessGate,
+    JourneyAccessRequest,
+)
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
     JourneyResourceKind,
-    JourneyResourceQuery,
     parse_access_attributes,
     parse_resource_fields,
 )
@@ -750,6 +754,14 @@ def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
     return catalog
 
 
+def _get_journey_access_gate(request: Request) -> JourneyAccessGate:
+    gate = getattr(request.app.state, "journey_access", None)
+    if not isinstance(gate, JourneyAccessGate):
+        gate = JourneyAccessGate.from_env()
+        request.app.state.journey_access = gate
+    return gate
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -825,6 +837,7 @@ def create_app(
     workflow_service: Optional[WorkflowGovernanceService] = None,
     workflow_policy: Optional[WorkflowHTTPPolicy] = None,
     workflow_clock: Optional[Callable[[], int]] = None,
+    journey_access_context_provider: Optional[JourneyAccessContextProvider] = None,
 ) -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app.
 
@@ -833,6 +846,9 @@ def create_app(
         workflow_service: Trusted local custody service for workflow routes.
         workflow_policy: Server-owned workflow opt-ins; disabled by default.
         workflow_clock: Integer Unix-seconds source for receipt validity checks.
+        journey_access_context_provider: Operator hook that resolves the
+            authoritative Journey access context for authenticated principals.
+            Defaults to the grants in ``OPENMED_SERVICE_JOURNEY_GRANTS``.
 
     Returns:
         Configured application, without starting its lifespan or an effect executor.
@@ -936,6 +952,9 @@ def create_app(
     app.state.openhim_deidentifier = None
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.journey_access = JourneyAccessGate.from_env(
+        provider=journey_access_context_provider
+    )
     app.state.operational_limits = request_limits_from_env()
     app.state.system_one_enabled = os.getenv(
         "OPENMED_SERVICE_SYSTEM_ONE", ""
@@ -1225,26 +1244,33 @@ def create_app(
     async def list_journey_resources(
         request: Request,
         resource_type: JourneyResourceKind,
-        namespace: str = "default",
-        purpose: str = "care_review",
-        role: str = "clinician",
+        namespace: Optional[str] = None,
+        purpose: Optional[str] = None,
+        role: Optional[str] = None,
         attributes: Optional[str] = Query(default=None, max_length=1024),
-        consent_state: str = "active",
-        export_policy: str = "metadata_only",
+        consent_state: Optional[str] = None,
+        export_policy: Optional[str] = None,
         first: int = Query(default=20, ge=1, le=100),
         after: Optional[str] = Query(default=None, max_length=2048),
         fields: Optional[str] = Query(default=None, max_length=1024),
     ) -> Dict[str, Any]:
-        """List a bounded, policy-filtered page of versioned Journey resources."""
+        """List a bounded, principal-bound page of versioned Journey resources.
+
+        Access context comes from the authenticated principal. The namespace,
+        purpose, role, attribute, consent, and export parameters may only
+        narrow that context; anything wider returns a typed denied page.
+        """
 
         catalog = _get_journey_resource_catalog(request)
         policy = getattr(request.app.state, "journey_access_policy", None)
-        query = JourneyResourceQuery(
+        access_request = JourneyAccessRequest(
             resource_type=resource_type,
             namespace=namespace,
             purpose=purpose,
             role=role,
-            attributes=parse_access_attributes(attributes),
+            attributes=(
+                None if attributes is None else parse_access_attributes(attributes)
+            ),
             consent_state=consent_state,
             export_policy=export_policy,
             first=first,
@@ -1252,7 +1278,13 @@ def create_app(
             fields=parse_resource_fields(fields),
         )
         started_at = time.perf_counter()
-        page = catalog.list_resources(query, policy=policy)
+        page = _get_journey_access_gate(request).list_resources(
+            catalog,
+            access_request,
+            principal=request.scope.get("openmed.auth"),
+            policy=policy,
+            transport="rest",
+        )
         event = OperationalEvent(
             category=OperationalCategory.QUERY,
             operation="list",
@@ -2040,6 +2072,7 @@ def create_app(
         app,
         runtime_getter=_get_service_runtime,
         resource_getter=_get_journey_resource_catalog,
+        access_getter=_get_journey_access_gate,
     )
 
     from .workflow_routes import WorkflowBoundaryMiddleware, mount_workflow_routes
