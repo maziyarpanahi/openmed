@@ -44,9 +44,34 @@ Android release component as an AAR. Public consumers do not need GitHub
 credentials. Use a commit coordinate only when intentionally testing an
 unreleased build.
 
+## Toolchain Requirements
+
+| Component | Requirement |
+| --- | --- |
+| Build JDK | 17 (required by Android Gradle Plugin 8) |
+| Gradle | 8.11.1 through the checked-in wrapper; `gradle-wrapper.properties` pins the distribution SHA-256 |
+| Android Gradle Plugin | 8.7.3 (8.5.1 or newer is required for 16 KB zip alignment) |
+| Kotlin | 2.0.21, with the Compose compiler Gradle plugin for the demos |
+| Android SDK | Platform 35 (`compileSdk 35`); Build-Tools 35 or newer only for the optional `zipalign` cross-check |
+| Library `minSdk` | 26 |
+| Demo `targetSdk` | 35, the Google Play target level for new apps and updates |
+| Library bytecode | Java 11 |
+
+Plugin and library versions live in `gradle/libs.versions.toml`. The library
+sets no `targetSdk` for consumers; its test APK and lint use 35. Applications
+that consume OpenMedKit need Kotlin 1.9 or newer, because the AAR carries
+Kotlin 2.0 metadata and depends on `kotlin-stdlib` 2.0. The AAR declares no
+minimum compile SDK or Android Gradle Plugin version for consumers.
+
+Compared with the earlier AGP 7.4 / Kotlin 1.8 build, the public API and the
+packaged consumer rules (`proguard.txt`) are unchanged with two exceptions: the
+AAR no longer ships the generated `org.openmed.openmedkit.BuildConfig` class
+(AGP 8 stops generating it by default, and OpenMedKit never used it), and public
+enums gain the Kotlin 2 `getEntries()` accessor.
+
 ## Build Locally
 
-Install JDK 11 and Android SDK Platform 33, then run:
+Install JDK 17 and Android SDK Platform 35, then run:
 
 ```bash
 cd android
@@ -71,10 +96,33 @@ OpenMed group on JitPack. Dependency and plugin versions are declared in
 `gradle/libs.versions.toml`; avoid hardcoding library versions in module build
 files.
 
-The library currently targets SDK 33 and sets `minSdk` to 26. Android 8.0 is the
+The library compiles against SDK 35 and sets `minSdk` to 26. Android 8.0 is the
 baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
+
+## 16 KB Zip Alignment
+
+Devices with 16 KB memory pages map uncompressed native libraries straight from
+the APK only when each `.so` entry starts on a 16 KB boundary. Android Gradle
+Plugin 8.5.1 and newer packages them that way. The build verifies every debug
+demo APK and the OpenMedKit instrumented test APK:
+
+```bash
+cd android
+./gradlew verifyApkZipAlignment
+```
+
+Each application variant also has its own task, for example
+`:OpenMedMapleDemo:app:verifyReleaseApkZipAlignment`, and the library has
+`:openmedkit:verifyDebugAndroidTestApkZipAlignment`. The tasks run
+`scripts/android/check_apk_zip_alignment.py`, which applies the same rules as
+`zipalign -c -P 16 4`: stored `.so` entries must be 16 KB aligned, other stored
+entries 4-byte aligned, and compressed entries are skipped. A task fails when an
+APK has no uncompressed native libraries, so the gate cannot pass vacuously. The
+Android CI job repeats the check with the SDK's `zipalign` (Build-Tools 35 or
+newer). This covers zip alignment only; the ELF segment alignment of the native
+libraries themselves is a separate check.
 
 ## R8 And ProGuard
 
