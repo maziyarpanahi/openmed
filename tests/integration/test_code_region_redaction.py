@@ -21,20 +21,27 @@ pytestmark = pytest.mark.integration
 def codes():
     zxing = pytest.importorskip("zxingcpp")
     Image = pytest.importorskip("PIL.Image")
-    canvas = Image.new("RGB", (1024, 512), "white")
-    for name, position in [
-        ("Code128", (20, 20)),
-        ("QRCode", (20, 200)),
-        ("DataMatrix", (280, 200)),
-    ]:
-        pixels = zxing.write_barcode(
-            getattr(zxing.BarcodeFormat, name),
-            "SYNTHETIC-MRN-3816",
-            width=240,
-            height=120 if name == "Code128" else 180,
-        )
-        symbol = Image.fromarray(pixels).convert("RGB")
-        canvas.paste(symbol, position)
+    symbols = [
+        Image.fromarray(
+            zxing.create_barcode(
+                "SYNTHETIC-MRN-3816", getattr(zxing.BarcodeFormat, name)
+            ).to_image(scale=3)
+        ).convert("RGB")
+        for name in ("Code128", "QRCode", "DataMatrix")
+    ]
+    gap = 20
+    canvas = Image.new(
+        "RGB",
+        (
+            max(symbol.width for symbol in symbols) + 2 * gap,
+            sum(symbol.height for symbol in symbols) + (len(symbols) + 1) * gap,
+        ),
+        "white",
+    )
+    top = gap
+    for symbol in symbols:
+        canvas.paste(symbol, (gap, top))
+        top += symbol.height + gap
     return canvas
 
 
