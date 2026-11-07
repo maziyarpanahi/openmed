@@ -384,6 +384,9 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
   device-isolated caches, offline loading, exact spans, and disease-label
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
+- Ship privacy manifests with the OpenMedKit and extension products, declare
+  the scan demo's user defaults access, and fail CI when Swift sources use an
+  undeclared required-reason API (#3946).
 
 ### Fixed
 

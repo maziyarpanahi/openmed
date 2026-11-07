@@ -207,6 +207,27 @@ Then add the product:
 )
 ```
 
+### Privacy Manifests
+
+The `OpenMedKit`, `OpenMedExtensionSupport`, `OpenMedShareExtension` and
+`OpenMedActionExtension` products each ship a `PrivacyInfo.xcprivacy` at the
+root of their resource bundle. The manifests declare no tracking, no tracking
+domains and no collected data types. The kit sources use no required-reason
+APIs, so the accessed API lists are empty. The scan demo declares user defaults
+access with reason `CA92.1` for its saved engine choice and clinical presets.
+
+CI runs an offline scan that maps Apple's required-reason API symbols in the
+kit and scan demo Swift sources to their categories: file timestamps, system
+boot time, disk space, active keyboards and user defaults, including SwiftUI
+`@AppStorage`. Comments and string-literal text are ignored, but code inside
+string interpolation is scanned. The scan fails when a category is used without
+an approved reason in the covering manifest, when a kit target has no manifest,
+or when a manifest declares tracking or collected data:
+
+```bash
+python scripts/release/check_privacy_manifests.py
+```
+
 ## Quick Start: Swift MLX
 
 This is the new on-device path for supported OpenMed MLX artifacts.
