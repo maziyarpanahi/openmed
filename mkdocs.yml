@@ -154,6 +154,7 @@ nav:
       - Helm Deployment: deploy/helm.md
       - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md
+      - Zero-Downtime Upgrades: deploy/upgrades.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md

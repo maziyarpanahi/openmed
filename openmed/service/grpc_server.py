@@ -12,6 +12,11 @@ from google.protobuf import struct_pb2
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
+from .compatibility import (
+    CURRENT_CONTRACT,
+    PEER_CONTRACT_METADATA_KEY,
+    peer_contract_decision,
+)
 from .proto.generated import openmed_pb2, openmed_pb2_grpc
 from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
@@ -49,6 +54,7 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
 
     def StreamDeidentify(self, request, context):
         """Stream redacted text fragments for chunked de-identification."""
+        _abort_incompatible_peer(context)
         chunks = _stream_chunks(request)
         fallback_text = "".join(chunks) if chunks else request.request.text
         try:
@@ -154,7 +160,33 @@ def serve(
     return server
 
 
+def _peer_rejection(context: Any) -> tuple[grpc.StatusCode, str] | None:
+    """Return a typed refusal for an announced peer outside the window."""
+    metadata = getattr(context, "invocation_metadata", None)
+    if not callable(metadata):
+        return None
+    values = [
+        value for key, value in (metadata() or ()) if key == PEER_CONTRACT_METADATA_KEY
+    ]
+    if not values:
+        return None
+    decision = peer_contract_decision(CURRENT_CONTRACT, values)
+    if decision.compatible:
+        return None
+    if decision.code == "peer_contract_malformed":
+        return grpc.StatusCode.INVALID_ARGUMENT, decision.code
+    return grpc.StatusCode.FAILED_PRECONDITION, decision.code
+
+
+def _abort_incompatible_peer(context: Any) -> None:
+    rejection = _peer_rejection(context)
+    if rejection is not None:
+        context.abort(*rejection)
+
+
 def _run_unary(context: grpc.ServicerContext, operation: Callable[[], Any]) -> Any:
+    # Refuse incompatible peers before parsing, loading or processing anything.
+    _abort_incompatible_peer(context)
     try:
         return operation()
     except ModelNotServedError:

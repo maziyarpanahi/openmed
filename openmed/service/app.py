@@ -50,6 +50,7 @@ from .auth import (
     ServiceAuth,
     parse_service_auth_config,
     request_needs_admission,
+    route_key_for_request,
     validate_route_policies,
 )
 from .batcher import (
@@ -66,6 +67,17 @@ from .bulk_data import (
     FHIRBulkJobManager,
 )
 from .coalesce import RequestCoalescer, coalescing_key
+from .compatibility import (
+    CURRENT_CONTRACT,
+    JOB_STORE_COMPONENT,
+    PEER_CONTRACT_HEADER,
+    CompatibilityGate,
+    IncompatibleStateError,
+    SchemaObservation,
+    job_store_observation,
+    local_descriptor,
+    peer_contract_decision,
+)
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
@@ -175,6 +187,7 @@ _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
 _MANIFEST_HEADER = "X-OpenMed-Manifest"
 _MAX_MANIFEST_HEADER_BYTES = 8192
 _SYSTEM_ONE_PATH = "/v1/systemone"
+_COMPATIBILITY_PATH = "/v1/compatibility"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -759,6 +772,74 @@ def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
     return catalog
 
 
+def _create_compatibility_gate(
+    app: FastAPI, runtime: ServiceRuntime
+) -> CompatibilityGate:
+    """Gate readiness on the persisted state this process shares with peers."""
+
+    def job_store_probe() -> SchemaObservation:
+        queue = getattr(app.state, "job_queue", None)
+        if queue is None:
+            return SchemaObservation.absent()
+        return job_store_observation(queue.store.path)
+
+    return CompatibilityGate(
+        local_descriptor(runtime),
+        {JOB_STORE_COMPONENT: job_store_probe},
+    )
+
+
+def _get_compatibility_gate(request: Request) -> CompatibilityGate:
+    gate = getattr(request.app.state, "compatibility", None)
+    if gate is None:
+        gate = _create_compatibility_gate(request.app, _get_service_runtime(request))
+        request.app.state.compatibility = gate
+    return gate
+
+
+def _incompatible_state_response(blocking: Mapping[str, Any]) -> JSONResponse:
+    return _error_response(
+        503,
+        "incompatible_state",
+        "Persisted state is outside this build's compatibility window",
+        details={
+            "components": {
+                name: {"state": item.state.value, "reason": item.code}
+                for name, item in sorted(blocking.items())
+            }
+        },
+    )
+
+
+def _peer_contract_rejection(request: Request) -> Optional[JSONResponse]:
+    """Refuse an announced peer outside the window before any processing."""
+    values = request.headers.getlist(PEER_CONTRACT_HEADER)
+    if not values or request.url.path == _COMPATIBILITY_PATH:
+        return None
+    policy = ROUTE_POLICIES.get(route_key_for_request(request))
+    if policy is None or policy.admission == "probe":
+        return None
+    decision = peer_contract_decision(CURRENT_CONTRACT, values)
+    if decision.compatible:
+        return None
+    if decision.code == "peer_contract_malformed":
+        return _error_response(
+            400,
+            "peer_contract_malformed",
+            "Peer contract header is malformed",
+            details=None,
+        )
+    return _error_response(
+        409,
+        "peer_incompatible",
+        "Peer build is outside this build's compatibility window",
+        details={
+            "reason": decision.code,
+            "peer_contract": CURRENT_CONTRACT.peer_contract,
+        },
+    )
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -866,6 +947,10 @@ def create_app(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.compatibility = _create_compatibility_gate(
+            fastapi_app, runtime
+        )
+        await run_in_threadpool(fastapi_app.state.compatibility.report, force=True)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
             fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
         if getattr(fastapi_app.state, "fhir_bulk_jobs", None) is None:
@@ -1048,6 +1133,9 @@ def create_app(
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
+        peer_rejection = _peer_contract_rejection(request)
+        if peer_rejection is not None:
+            return peer_rejection
         if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
@@ -1153,6 +1241,18 @@ def create_app(
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(IncompatibleStateError)
+    async def _incompatible_state_handler(
+        _: Request,
+        exc: IncompatibleStateError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "incompatible_state",
+            "Persisted state is outside this build's compatibility window",
+            details=exc.to_details(),
         )
 
     @app.exception_handler(BackpressureError)
@@ -1309,14 +1409,31 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz(request: Request):
-        if getattr(request.app.state, "ready", False):
-            return {"status": "ready", "service": SERVICE_NAME}
-        return _error_response(
-            503,
-            "not_ready",
-            "Service preload has not completed",
-            details=None,
-        )
+        if not getattr(request.app.state, "ready", False):
+            return _error_response(
+                503,
+                "not_ready",
+                "Service preload has not completed",
+                details=None,
+            )
+        report = await run_in_threadpool(_get_compatibility_gate(request).report)
+        if not report.ready:
+            return _incompatible_state_response(report.blocking())
+        return {"status": "ready", "service": SERVICE_NAME}
+
+    @app.get(_COMPATIBILITY_PATH, include_in_schema=False)
+    async def compatibility(request: Request) -> Dict[str, Any]:
+        """Publish the value-free contract and persisted-state compatibility."""
+        snapshot = await run_in_threadpool(_get_compatibility_gate(request).snapshot)
+        return {
+            **snapshot,
+            "service": SERVICE_NAME,
+            "admission": (
+                "draining"
+                if getattr(request.app.state, "shutting_down", False)
+                else "open"
+            ),
+        }
 
     @app.get(
         "/v1/journey/resources",
