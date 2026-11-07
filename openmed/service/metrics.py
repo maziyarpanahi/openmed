@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import os
 import threading
-from typing import Mapping
+from typing import Any, Mapping
 
 from .operational import OperationalEvent
 
@@ -392,6 +392,45 @@ class PrometheusMetricsRegistry:
             self._operational_duration_sum[key] = (
                 self._operational_duration_sum.get(key, 0.0) + event.duration_seconds
             )
+
+    def diagnostic_snapshot(self) -> dict[str, Any]:
+        """Return value-free aggregates for a diagnostic bundle.
+
+        Route labels are collapsed into HTTP status classes, so the snapshot
+        carries only closed-vocabulary keys and integer counts.
+
+        Returns:
+            A mapping with request status-class counts, operational event
+            counts by category, operation and state, circuit-breaker state
+            counts, and shedding, rejection and in-flight counters.
+        """
+        with self._lock:
+            status_classes: dict[str, int] = {}
+            for (_route, status), count in self._request_total.items():
+                if len(status) == 3 and status[0] in "12345" and status.isdigit():
+                    key = f"status_{status[0]}xx"
+                else:
+                    key = "status_other"
+                status_classes[key] = status_classes.get(key, 0) + count
+            operational: dict[str, dict[str, dict[str, int]]] = {}
+            for (category, operation, state), count in sorted(
+                self._operational_total.items()
+            ):
+                operational.setdefault(category, {}).setdefault(operation, {})[
+                    state
+                ] = count
+            return {
+                "request_status_classes": dict(sorted(status_classes.items())),
+                "operational": operational,
+                "circuit_breaker": dict(self._circuit_breaker_state_counts),
+                "inflight_requests": int(self._inflight_requests),
+                "orphaned_work": int(self._orphaned_work),
+                "batch_shed_total": int(sum(self._batch_shed_total.values())),
+                "admission_shed_total": int(sum(self._admission_shed_total.values())),
+                "model_rejection_total": int(self._model_rejection_total),
+                "model_load_total": int(self._model_load_total),
+                "model_eviction_total": int(self._model_eviction_total),
+            }
 
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
