@@ -7,7 +7,13 @@ import pytest
 
 from openmed.multimodal.abstention import AbstentionRecord
 from openmed.multimodal.asset_manifest import AssetManifest
-from openmed.multimodal.manifest_profiles import AUDIO_V1, DICOM_V1, IMAGE_V1, PDF_V1
+from openmed.multimodal.manifest_profiles import (
+    AUDIO_V1,
+    DICOM_V1,
+    IMAGE_V1,
+    PDF_V1,
+    VIDEO_V1,
+)
 from openmed.multimodal.preflight import PreflightFinding
 from openmed.multimodal.provider_result import ProviderResultEnvelope
 
@@ -15,7 +21,7 @@ FIXTURE = (
     Path(__file__).resolve().parents[2] / "fixtures/parity/multimodal_contracts_v1.json"
 )
 VECTORS = json.loads(FIXTURE.read_text(encoding="utf-8"))
-PROFILES = {p.modality: p for p in (IMAGE_V1, PDF_V1, DICOM_V1, AUDIO_V1)}
+PROFILES = {p.modality: p for p in (IMAGE_V1, PDF_V1, DICOM_V1, AUDIO_V1, VIDEO_V1)}
 
 
 @pytest.mark.parametrize("vector", VECTORS["cases"])
@@ -87,6 +93,7 @@ def test_vectors_are_versioned_synthetic_and_closed():
             "abstention_code",
             "duration_ms",
             "count_metadata",
+            "guard_metadata",
         },
     }
     for case in VECTORS["cases"]:

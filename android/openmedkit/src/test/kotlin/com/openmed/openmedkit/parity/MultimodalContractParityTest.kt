@@ -56,7 +56,7 @@ class MultimodalContractParityTest {
     fun sharedVectorsRoundTripByteIdentically() {
         assertEquals(1, fixture.getValue("version").jsonPrimitive.int)
         assertTrue(fixture.getValue("synthetic").jsonPrimitive.boolean)
-        assertEquals(106, vectors.size)
+        assertEquals(132, vectors.size)
         for (vector in vectors) {
             val expected = payload(vector)
             assertContentEquals(expected.toByteArray(Charsets.UTF_8), parse(kind(vector), expected).toByteArray(Charsets.UTF_8))
@@ -104,15 +104,28 @@ class MultimodalContractParityTest {
         rejected("provider_result", provider + ("output_digest" to JsonPrimitive("a".repeat(64))))
         rejected("provider_result", first("provider_result") - "output_digest")
         rejected("provider_result", first("provider_result") + ("count_metadata" to buildJsonObject { put("unknown", 1) }))
+        val guarded = Json.parseToJsonElement(payload(vectors.first {
+            kind(it) == "provider_result" && payload(it).contains("\"decision\":\"redact\"")
+        })).jsonObject
+        val guard = guarded.getValue("guard_metadata").jsonObject
+        rejected("provider_result", guarded + ("guard_metadata" to JsonObject(guard + ("decision" to JsonPrimitive("withhold")))))
+        rejected("provider_result", guarded + ("guard_metadata" to JsonObject(guard + ("text" to JsonPrimitive("SYNTH_PRIVATE_SENTINEL")))))
+        rejected("provider_result", guarded + ("schema_version" to JsonPrimitive("openmed.multimodal.provider_result.v2")))
         val allowed = mapOf(
-            "preflight" to setOf("unsupported_media", "resource_limit", "provider_unavailable"),
-            "decode" to setOf("malformed_media", "resource_limit", "low_quality"),
-            "inference" to setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "provider_unavailable"),
-            "post_process" to setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability"),
+            "preflight" to setOf("unsupported_media", "resource_limit", "provider_unavailable", "consent_unavailable", "consent_withdrawn", "language_unsupported", "policy_refused"),
+            "decode" to setOf("malformed_media", "resource_limit", "low_quality", "consent_withdrawn", "capture_interrupted"),
+            "inference" to setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "provider_unavailable", "consent_withdrawn", "capture_interrupted", "language_unsupported", "language_uncertain", "policy_refused"),
+            "post_process" to setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "consent_withdrawn", "capture_interrupted", "language_unsupported", "language_uncertain", "policy_refused"),
         )
         for ((stage, reasons) in allowed) for (reason in AbstentionReason.values()) {
-            val fields = first("abstention_record") + mapOf("stage" to JsonPrimitive(stage), "reason" to JsonPrimitive(reason.code))
-            if (reason.code in reasons) parse("abstention_record", JsonObject(fields).toString()) else rejected("abstention_record", fields)
+            val fields = first("abstention_record") + mapOf(
+                "stage" to JsonPrimitive(stage), "reason" to JsonPrimitive(reason.code),
+                "schema_version" to JsonPrimitive(reason.schemaVersion),
+            )
+            if (reason.code in reasons) {
+                parse("abstention_record", JsonObject(fields).toString())
+                rejected("abstention_record", fields + ("schema_version" to JsonPrimitive(3 - reason.schemaVersion)))
+            } else rejected("abstention_record", fields)
         }
         for (vector in vectors.filter { kind(it) == "preflight_finding" }) {
             val fields = Json.parseToJsonElement(payload(vector)).jsonObject
@@ -179,6 +192,7 @@ class MultimodalContractParityTest {
             Modality.PDF to setOf(MetadataField.PAGES),
             Modality.DICOM to setOf(MetadataField.FRAMES, MetadataField.WIDTH, MetadataField.HEIGHT),
             Modality.AUDIO to setOf(MetadataField.DURATION_SECONDS),
+            Modality.VIDEO to setOf(MetadataField.DURATION_SECONDS, MetadataField.FRAMES, MetadataField.HEIGHT, MetadataField.WIDTH),
         )
         for ((modality, expected) in required) {
             val profile = ManifestProfile.fromJson("{\"modality\":\"${modality.code}\",\"version\":\"1.0\"}")
@@ -189,7 +203,7 @@ class MultimodalContractParityTest {
             ManifestProfile::class.java to setOf("modality"),
             PreflightFinding::class.java to setOf("check", "reasonCode", "fieldName", "limit", "observed"),
             AbstentionRecord::class.java to setOf("stage", "reason"),
-            ProviderResultEnvelope::class.java to setOf("providerId", "modelId", "inputDigest", "outputDigest", "outcome", "abstentionCode", "duration", "counts"),
+            ProviderResultEnvelope::class.java to setOf("providerId", "modelId", "inputDigest", "outputDigest", "outcome", "abstentionCode", "duration", "counts", "guard"),
         )
         val forbidden = setOf("path", "url", "text", "message", "transcript", "prompt", "credentials", "payload", "source")
         for ((type, allowed) in fields) {

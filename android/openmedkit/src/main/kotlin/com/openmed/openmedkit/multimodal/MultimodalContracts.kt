@@ -38,7 +38,7 @@ class AssetManifest private constructor(
             opaque(id, Regex("[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}"))
             val media = ContractJson.string(fields["media_type"])
             opaque(media, Regex("[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*"))
-            requireContract(media in setOf("application/pdf", "application/dicom", "application/dicom+json") ||
+            requireContract(media in setOf("application/pdf", "application/dicom", "application/dicom+json", "video/mp4") ||
                 media.startsWith("image/") || media.startsWith("audio/"))
             val digest = ContractJson.string(fields["sha256"])
             opaque(digest, DIGEST)
@@ -58,7 +58,7 @@ enum class MetadataField(val code: String) {
 }
 
 /** Closed set of supported modalities. */
-enum class Modality(val code: String) { IMAGE("image"), PDF("pdf"), DICOM("dicom"), AUDIO("audio") }
+enum class Modality(val code: String) { IMAGE("image"), PDF("pdf"), DICOM("dicom"), AUDIO("audio"), VIDEO("video") }
 
 /** A v1.0 profile reference, as serialized in Python PreflightReport.metadata_profile. */
 class ManifestProfile private constructor(val modality: Modality) {
@@ -68,6 +68,7 @@ class ManifestProfile private constructor(val modality: Modality) {
         Modality.PDF -> setOf(MetadataField.PAGES)
         Modality.DICOM -> setOf(MetadataField.FRAMES, MetadataField.WIDTH, MetadataField.HEIGHT)
         Modality.AUDIO -> setOf(MetadataField.DURATION_SECONDS)
+        Modality.VIDEO -> setOf(MetadataField.DURATION_SECONDS, MetadataField.FRAMES, MetadataField.HEIGHT, MetadataField.WIDTH)
     }
     val optionalFields: Set<MetadataField> get() = emptySet()
     val inapplicableFields: Set<MetadataField> get() = MetadataField.values().toSet() - requiredFields
@@ -199,15 +200,21 @@ enum class AbstentionStage(val code: String) {
 }
 
 /** Stable metadata-only abstention reasons. */
-enum class AbstentionReason(val code: String) {
+enum class AbstentionReason(val code: String, val schemaVersion: Int = 1) {
     UNSUPPORTED_MEDIA("unsupported_media"), MALFORMED_MEDIA("malformed_media"), RESOURCE_LIMIT("resource_limit"),
     LOW_QUALITY("low_quality"), PHI_UNCERTAINTY("phi_uncertainty"), SPEAKER_UNCERTAINTY("speaker_uncertainty"),
-    TEMPORAL_INSTABILITY("temporal_instability"), PROVIDER_UNAVAILABLE("provider_unavailable");
+    TEMPORAL_INSTABILITY("temporal_instability"), PROVIDER_UNAVAILABLE("provider_unavailable"),
+    CONSENT_UNAVAILABLE("consent_unavailable", 2),
+    CONSENT_WITHDRAWN("consent_withdrawn", 2),
+    CAPTURE_INTERRUPTED("capture_interrupted", 2),
+    LANGUAGE_UNSUPPORTED("language_unsupported", 2),
+    LANGUAGE_UNCERTAIN("language_uncertain", 2),
+    POLICY_REFUSED("policy_refused", 2);
 }
 
-/** A v1 abstention record with the Python stage/reason invariants. */
+/** A versioned abstention record with the Python stage/reason invariants. */
 class AbstentionRecord private constructor(val stage: AbstentionStage, val reason: AbstentionReason) {
-    val schemaVersion: Int get() = 1
+    val schemaVersion: Int get() = reason.schemaVersion
     /** Return the deterministic, content-free JSON representation. */
     fun toJson(): String = ContractJson.encode(obj(
         "schema_version" to JsonPrimitive(schemaVersion), "stage" to text(stage.code), "reason" to text(reason.code),
@@ -218,14 +225,14 @@ class AbstentionRecord private constructor(val stage: AbstentionStage, val reaso
         fun fromJson(payload: String): AbstentionRecord {
             val fields = ContractJson.parse(payload)
             ContractJson.fields(fields, setOf("schema_version", "stage", "reason"))
-            requireContract(ContractJson.int(fields["schema_version"], COUNT_MAX).toInt() == 1)
             val stage = closed(fields["stage"], AbstentionStage.values()) { it.code }
             val reason = closed(fields["reason"], AbstentionReason.values()) { it.code }
+            requireContract(ContractJson.int(fields["schema_version"], COUNT_MAX).toInt() == reason.schemaVersion)
             val allowed = when (stage) {
-                AbstentionStage.PREFLIGHT -> setOf("unsupported_media", "resource_limit", "provider_unavailable")
-                AbstentionStage.DECODE -> setOf("malformed_media", "resource_limit", "low_quality")
-                AbstentionStage.INFERENCE -> setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "provider_unavailable")
-                AbstentionStage.POST_PROCESS -> setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability")
+                AbstentionStage.PREFLIGHT -> setOf("unsupported_media", "resource_limit", "provider_unavailable", "consent_unavailable", "consent_withdrawn", "language_unsupported", "policy_refused")
+                AbstentionStage.DECODE -> setOf("malformed_media", "resource_limit", "low_quality", "consent_withdrawn", "capture_interrupted")
+                AbstentionStage.INFERENCE -> setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "provider_unavailable", "consent_withdrawn", "capture_interrupted", "language_unsupported", "language_uncertain", "policy_refused")
+                AbstentionStage.POST_PROCESS -> setOf("resource_limit", "low_quality", "phi_uncertainty", "speaker_uncertainty", "temporal_instability", "consent_withdrawn", "capture_interrupted", "language_unsupported", "language_uncertain", "policy_refused")
             }
             requireContract(reason.code in allowed)
             return AbstentionRecord(stage, reason)
@@ -244,7 +251,7 @@ enum class ProviderCount(val code: String) {
     OUTPUT_ITEMS("output_items"), PAGE_COUNT("page_count"), SAMPLE_COUNT("sample_count"), SEGMENT_COUNT("segment_count"), TOKEN_COUNT("token_count");
 }
 
-/** Experimental v1 provider envelope; contains no clinical output or review decision. */
+/** Experimental versioned provider evidence with no clinical output. */
 class ProviderResultEnvelope private constructor(
     val providerId: String,
     val modelId: String,
@@ -254,26 +261,31 @@ class ProviderResultEnvelope private constructor(
     val abstentionCode: AbstentionReason?,
     private val duration: JsonPrimitive,
     private val counts: Map<ProviderCount, Long>,
+    private val guard: Map<String, String>,
 ) {
-    val schemaVersion: String get() = "openmed.multimodal.provider_result.v1"
+    val schemaVersion: String get() = "openmed.multimodal.provider_result.v${abstentionCode?.schemaVersion ?: 1}"
+    val guardMetadata: Map<String, String> get() = guard.toMap()
     val durationMs: Double get() = duration.content.toDouble()
     val countMetadata: Map<ProviderCount, Long> get() = counts.toMap()
 
     /** Return the deterministic, content-free JSON representation. */
-    fun toJson(): String = ContractJson.encode(obj(
-        "schema_version" to text(schemaVersion), "provider_id" to text(providerId), "model_id" to text(modelId),
-        "input_digest" to text(inputDigest), "output_digest" to text(outputDigest), "outcome" to text(outcome.code),
-        "abstention_code" to text(abstentionCode?.code), "duration_ms" to duration,
-        "count_metadata" to JsonObject(counts.mapKeys { it.key.code }.mapValues { JsonPrimitive(it.value) }),
-    ), sorted = true)
+    fun toJson(): String {
+        val fields = obj(
+            "schema_version" to text(schemaVersion), "provider_id" to text(providerId), "model_id" to text(modelId),
+            "input_digest" to text(inputDigest), "output_digest" to text(outputDigest), "outcome" to text(outcome.code),
+            "abstention_code" to text(abstentionCode?.code), "duration_ms" to duration,
+            "count_metadata" to JsonObject(counts.mapKeys { it.key.code }.mapValues { JsonPrimitive(it.value) }),
+        ).toMutableMap()
+        if (guard.isNotEmpty()) fields["guard_metadata"] = JsonObject(guard.mapValues { JsonPrimitive(it.value) })
+        return ContractJson.encode(JsonObject(fields), sorted = true)
+    }
 
     companion object {
         /** Parse bounded strict JSON without retaining rejected content. */
         fun fromJson(payload: String): ProviderResultEnvelope {
             val fields = ContractJson.parse(payload)
             ContractJson.fields(fields, setOf("schema_version", "provider_id", "model_id", "input_digest", "outcome", "duration_ms"),
-                setOf("output_digest", "abstention_code", "count_metadata"))
-            requireContract(ContractJson.string(fields["schema_version"]) == "openmed.multimodal.provider_result.v1")
+                setOf("output_digest", "abstention_code", "count_metadata", "guard_metadata"))
             fun identifier(name: String): String {
                 val value = ContractJson.string(fields[name])
                 opaque(value, Regex("[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?"))
@@ -299,7 +311,24 @@ class ProviderResultEnvelope private constructor(
                 val key = closed(JsonPrimitive(it.key), ProviderCount.values()) { item -> item.code }
                 key to ContractJson.int(it.value, BYTE_MAX).toLong()
             }
-            return ProviderResultEnvelope(provider, model, input, output, outcome, reason, duration, counts)
+            val guardField = fields["guard_metadata"] ?: JsonObject(emptyMap())
+            requireContract(guardField is JsonObject)
+            val guard = (guardField as JsonObject).mapValues { ContractJson.string(it.value) }
+            if (guard.isNotEmpty()) {
+                val digestKeys = setOf("detector_version_digest", "policy_digest", "report_digest")
+                requireContract(guard.keys == digestKeys + "decision")
+                for (key in digestKeys) requireContract(DIGEST.matches(guard.getValue(key)))
+                when (guard.getValue("decision")) {
+                    "pass", "redact" -> requireContract(outcome == ProviderResultOutcome.SUCCESS)
+                    "withhold", "abstain" -> requireContract(
+                        outcome == ProviderResultOutcome.ABSTENTION && reason == AbstentionReason.PHI_UNCERTAINTY,
+                    )
+                    else -> requireContract(false)
+                }
+            }
+            val envelope = ProviderResultEnvelope(provider, model, input, output, outcome, reason, duration, counts, guard)
+            requireContract(ContractJson.string(fields["schema_version"]) == envelope.schemaVersion)
+            return envelope
         }
     }
 }

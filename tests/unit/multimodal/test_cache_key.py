@@ -60,29 +60,22 @@ def test_equivalent_option_mappings_produce_identical_keys() -> None:
     assert first == second
 
 
-@pytest.mark.parametrize(
-    ("field", "replacement"),
-    [
+def test_every_declared_processing_version_changes_the_key(subtests) -> None:
+    for field, replacement in [
         ("asset_digest", "b" * 64),
         ("media_type", "image/jpeg"),
         ("provider_version", "doctr-1.1"),
         ("model_version", "vision-2.2"),
         ("policy_version", "redact-v4"),
-    ],
-)
-def test_every_declared_processing_version_changes_the_key(
-    field: str,
-    replacement: str,
-) -> None:
-    assert _key() != _key(**{field: replacement})
+    ]:
+        with subtests.test(field=field, replacement=replacement):
+            assert _key() != _key(**{field: replacement})
 
 
-@pytest.mark.parametrize(
-    "version",
-    ["ocr-v2", "vision-2.1.0", "policy-3.0.0-rc1"],
-)
-def test_processing_versions_use_a_bounded_version_grammar(version: str) -> None:
-    assert _key(provider_version=version)
+def test_processing_versions_use_a_bounded_version_grammar(subtests) -> None:
+    for version in ["ocr-v2", "vision-2.1.0", "policy-3.0.0-rc1"]:
+        with subtests.test(version=version):
+            assert _key(provider_version=version)
 
 
 def test_preprocessing_option_changes_invalidate_the_key() -> None:
@@ -101,9 +94,8 @@ def test_asset_digest_result_and_hex_string_are_equivalent() -> None:
     assert _key(asset_digest=digest) == _key(asset_digest=DIGEST)
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
+def test_every_allowlisted_option_is_accepted(subtests) -> None:
+    for name, value in [
         ("channel_mode", "mono"),
         ("color_mode", "rgb"),
         ("orientation_mode", "normalize"),
@@ -114,13 +106,12 @@ def test_asset_digest_result_and_hex_string_are_equivalent() -> None:
         ("sample_rate_hz", 16_000),
         ("target_height", 512),
         ("target_width", 512),
-    ],
-)
-def test_every_allowlisted_option_is_accepted(name: str, value: object) -> None:
-    assert re.fullmatch(
-        r"openmed-multimodal-v1:[0-9a-f]{64}",
-        _key(preprocessing_options={name: value}),
-    )
+    ]:
+        with subtests.test(name=name, value=value):
+            assert re.fullmatch(
+                r"openmed-multimodal-v1:[0-9a-f]{64}",
+                _key(preprocessing_options={name: value}),
+            )
 
 
 def test_exported_option_allowlists_are_read_only() -> None:
@@ -130,42 +121,37 @@ def test_exported_option_allowlists_are_read_only() -> None:
         NUMERIC_PREPROCESSING_OPTIONS["unsafe"] = (int, 0.0, 1.0)  # type: ignore[index]
 
 
-@pytest.mark.parametrize(
-    "asset_digest",
-    [
+def test_invalid_digests_fail_without_echoing_values(subtests) -> None:
+    for asset_digest in [
         "A" * 64,
         "a" * 63,
         "g" * 64,
         b"raw asset bytes",
         "/srv/charts/patient.dcm",
-    ],
-)
-def test_invalid_digests_fail_without_echoing_values(asset_digest: object) -> None:
-    with pytest.raises(MultimodalCacheKeyError) as error:
-        _key(asset_digest=asset_digest)
-    assert str(asset_digest) not in str(error.value)
+    ]:
+        with subtests.test(asset_digest=asset_digest):
+            with pytest.raises(MultimodalCacheKeyError) as error:
+                _key(asset_digest=asset_digest)
+            assert str(asset_digest) not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "media_type",
-    [
+def test_invalid_media_types_fail_without_echoing_values(subtests) -> None:
+    for media_type in [
         "Image/PNG",
         "text/plain",
         "image/png; patient=synthetic",
         "https://internal.invalid/image/png",
         "/srv/charts/patient.png",
         b"image/png",
-    ],
-)
-def test_invalid_media_types_fail_without_echoing_values(media_type: object) -> None:
-    with pytest.raises(MultimodalCacheKeyError) as error:
-        _key(media_type=media_type)
-    assert str(media_type) not in str(error.value)
+    ]:
+        with subtests.test(media_type=media_type):
+            with pytest.raises(MultimodalCacheKeyError) as error:
+                _key(media_type=media_type)
+            assert str(media_type) not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "unsafe",
-    [
+def test_unsafe_processing_versions_are_rejected_without_echo(subtests) -> None:
+    for unsafe in [
         "Patient Jane synthetic chart text",
         "/srv/charts/patient-123",
         "https://internal.invalid/model",
@@ -178,24 +164,20 @@ def test_invalid_media_types_fail_without_echoing_values(media_type: object) -> 
         b"raw-version-bytes",
         "",
         "v" * 65,
-    ],
-)
-@pytest.mark.parametrize(
-    "field",
-    ["provider_version", "model_version", "policy_version"],
-)
-def test_unsafe_processing_versions_are_rejected_without_echo(
-    field: str,
-    unsafe: object,
-) -> None:
-    with pytest.raises(MultimodalCacheKeyError) as error:
-        _key(**{field: unsafe})
-    assert not isinstance(unsafe, str) or not unsafe or unsafe not in str(error.value)
+    ]:
+        for field in ["provider_version", "model_version", "policy_version"]:
+            with subtests.test(unsafe=unsafe, field=field):
+                with pytest.raises(MultimodalCacheKeyError) as error:
+                    _key(**{field: unsafe})
+                assert (
+                    not isinstance(unsafe, str)
+                    or not unsafe
+                    or unsafe not in str(error.value)
+                )
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
+def test_unsafe_or_unbounded_options_fail_closed(subtests) -> None:
+    for options in [
         {"unknown_option": 1},
         {"resize_mode": "Patient Jane chart text"},
         {"resize_mode": "/srv/charts/patient.png"},
@@ -210,16 +192,13 @@ def test_unsafe_processing_versions_are_rejected_without_echo(
         {"clip_duration_seconds": float("inf")},
         {"clip_duration_seconds": 0},
         {"clip_duration_seconds": 86_401},
-    ],
-)
-def test_unsafe_or_unbounded_options_fail_closed(
-    options: Mapping[str, object],
-) -> None:
-    sentinel = next(iter(options.values()))
+    ]:
+        with subtests.test(options=options):
+            sentinel = next(iter(options.values()))
 
-    with pytest.raises(MultimodalCacheKeyError) as error:
-        _key(preprocessing_options=options)
-    assert str(sentinel) not in str(error.value)
+            with pytest.raises(MultimodalCacheKeyError) as error:
+                _key(preprocessing_options=options)
+            assert str(sentinel) not in str(error.value)
 
 
 def test_options_mapping_is_not_mutated() -> None:

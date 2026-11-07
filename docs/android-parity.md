@@ -92,13 +92,16 @@ media, align intake, or render UI.
 | `AssetManifest` | `AssetManifest` | integer `version: 1` (defaults to 1 if omitted) |
 | `ManifestProfile` | `PreflightReport.metadata_profile` | string `version: "1.0"` |
 | `PreflightFinding` | `PreflightFinding.to_dict()` | inherited from the containing preflight report v1; no standalone version field |
-| `AbstentionRecord` | `AbstentionRecord` | integer `schema_version: 1` |
-| `ProviderResultEnvelope` | `ProviderResultEnvelope` | `openmed.multimodal.provider_result.v1` |
+| `AbstentionRecord` | `AbstentionRecord` | integer schema version selected by the reason code (1 or 2) |
+| `ProviderResultEnvelope` | `ProviderResultEnvelope` | provider result v1 or v2, selected by the abstention reason |
 
 Call `Type.fromJson(payload)` to construct a validated instance, and `toJson()`
 to serialize it. Profile references carry only modality and version; their
 required, optional, and inapplicable field sets come from the existing Python
 v1.0 profiles. No new profile wire schema or preflight orchestration is added.
+
+Provider guard metadata accepts only the release decision and three SHA-256
+digests. The parser rejects a decision that conflicts with the outcome.
 Asset and provider JSON use sorted keys; finding, profile-reference, and
 abstention JSON preserve the Python field order. Numeric JSON preserves the
 integer/float distinction, binary64 shortest-roundtrip spelling, and signed

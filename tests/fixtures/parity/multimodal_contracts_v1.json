@@ -425,6 +425,110 @@
     {
       "kind": "preflight_finding",
       "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"duration_seconds\",\"limit\":6.189700196426902e+26,\"observed\":6.189700196426902e+26}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synthetic-video\",\"byte_size\":192,\"duration_seconds\":1.0,\"frames\":16,\"height\":24,\"media_type\":\"video/mp4\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1,\"width\":32}"
+    },
+    {
+      "kind": "manifest_profile",
+      "canonical_json": "{\"modality\":\"video\",\"version\":\"1.0\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"preflight\",\"reason\":\"consent_unavailable\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"preflight\",\"reason\":\"consent_withdrawn\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"preflight\",\"reason\":\"language_unsupported\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"preflight\",\"reason\":\"policy_refused\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"decode\",\"reason\":\"consent_withdrawn\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"decode\",\"reason\":\"capture_interrupted\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"inference\",\"reason\":\"consent_withdrawn\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"inference\",\"reason\":\"capture_interrupted\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"inference\",\"reason\":\"language_unsupported\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"inference\",\"reason\":\"language_uncertain\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"inference\",\"reason\":\"policy_refused\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"post_process\",\"reason\":\"consent_withdrawn\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"post_process\",\"reason\":\"capture_interrupted\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"post_process\",\"reason\":\"language_unsupported\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"post_process\",\"reason\":\"language_uncertain\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":2,\"stage\":\"post_process\",\"reason\":\"policy_refused\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"consent_unavailable\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"consent_withdrawn\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"capture_interrupted\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"language_unsupported\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"language_uncertain\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"policy_refused\",\"count_metadata\":{},\"duration_ms\":2.0,\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v2\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":2.0,\"guard_metadata\":{\"decision\":\"redact\",\"detector_version_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"policy_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"report_digest\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"success\",\"output_digest\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"phi_uncertainty\",\"count_metadata\":{},\"duration_ms\":2.0,\"guard_metadata\":{\"decision\":\"withhold\",\"detector_version_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"policy_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"report_digest\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
     }
   ]
 }
