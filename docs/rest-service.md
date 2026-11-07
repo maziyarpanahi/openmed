@@ -391,6 +391,67 @@ and the service waits up to this timeout for in-flight `/analyze`,
 `/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
 `/privacy-gateway/complete` requests to finish. The default is `30`.
 
+Request-body time limits and connection bounds:
+
+```bash
+OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS=60 \
+OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS=10 \
+OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND=1024 \
+OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+| Variable | Default | Bound |
+| --- | --- | --- |
+| `OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS` | `60` | Total time to receive one request body. |
+| `OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS` | `10` | Time allowed before the minimum rate applies. |
+| `OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND` | `1024` | Minimum average body rate; `0` keeps only the total deadline. |
+| `OPENMED_SERVICE_LIMIT_CONCURRENCY` | `128` | Connections or tasks per worker process before Uvicorn answers `503`. |
+| `OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE` | `5` | Seconds an idle HTTP keep-alive connection stays open. |
+| `OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN` | `30` | Seconds shutdown waits for open connections before cancelling them. |
+
+Every `POST`, `PUT`, and `PATCH` body is buffered before route parsing or
+model execution, and it must arrive within these bounds. After the grace allowance, each received byte extends the
+allowance by `1 / OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND` seconds,
+so a stalled body is rejected once the grace runs out and a trickling body is
+rejected as soon as it falls behind the minimum rate. A steady upload is
+limited only by the total deadline and the request-size limit. A rejected body
+returns `408` with error code `request_body_timeout` and `Connection: close`.
+Buffered chunks are released before that response is sent, and the response,
+logs, and counters never contain body content or client addresses. The same
+bounds apply to `/v1/workflows/*` bodies.
+
+The reference launcher passes the connection bounds to Uvicorn. The matching
+`--limit-concurrency`, `--timeout-keep-alive`, and `--timeout-graceful-shutdown`
+flags override the environment. Each value must be a positive integer.
+Uvicorn counts open connections, including idle keep-alive ones, and running
+tasks. At the limit, it answers `503 Service Unavailable` in plain text without
+calling the application. With the default 16 MiB request-size limit, the
+default of 128 bounds buffered request bodies to about 2 GiB per worker.
+`OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE` is the HTTP idle-connection timeout,
+separate from the model keep-alive `OPENMED_SERVICE_KEEP_ALIVE`. If a load
+balancer reuses upstream connections, keep its idle timeout below this value.
+Keep `OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN` below the orchestrator's stop
+grace period (45 seconds in the Helm chart and the Compose bundle). The
+application drain that follows waits only for work that outlived its request,
+for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+
+Uvicorn does not time out a connection that never finishes sending its request
+headers. Bound header read time and per-client connections at the reverse
+proxy or ingress in front of a network-exposed service. Custom ASGI launchers
+must set equivalent limits themselves.
+
+With metrics enabled, `/metrics` also exposes
+`openmed_service_request_body_timeout_total`, labelled only by `reason`
+(`deadline` or `min_rate`), and the unlabelled
+`openmed_service_connection_rejected_total`. Uvicorn rejects connections before
+the application runs, so the reference launcher counts its fixed
+connection-limit warning with
+`openmed.service.request_limits.ConnectionLimitLogFilter` on the
+`uvicorn.error` logger. Both counters are per worker process.
+
 Optional pull-only Prometheus metrics endpoint:
 
 ```bash

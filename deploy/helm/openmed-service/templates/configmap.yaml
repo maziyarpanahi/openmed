@@ -22,6 +22,12 @@ data:
   OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS: {{ .Values.config.batching.maxQueueWaitMs | quote }}
   OPENMED_SERVICE_COALESCING_ENABLED: {{ .Values.config.coalescing.enabled | quote }}
   OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS: {{ .Values.config.shutdownDrainSeconds | quote }}
+  OPENMED_SERVICE_LIMIT_CONCURRENCY: {{ .Values.config.transport.limitConcurrency | int64 | quote }}
+  OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE: {{ .Values.config.transport.timeoutKeepAliveSeconds | int64 | quote }}
+  OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN: {{ .Values.config.transport.timeoutGracefulShutdownSeconds | int64 | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS: {{ .Values.config.transport.requestBodyTimeoutSeconds | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS: {{ .Values.config.transport.requestBodyGraceSeconds | quote }}
+  OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND: {{ .Values.config.transport.requestBodyMinBytesPerSecond | int64 | quote }}
   OPENMED_SERVICE_METRICS_ENABLED: {{ .Values.config.metrics.enabled | quote }}
   OPENMED_SERVICE_RATE_LIMIT_RPS: {{ .Values.config.throttle.rateLimitRps | quote }}
   OPENMED_SERVICE_RATE_LIMIT_BURST: {{ .Values.config.throttle.rateLimitBurst | quote }}

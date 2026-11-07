@@ -134,6 +134,20 @@ The default port mapping is `127.0.0.1:8080:8080`. Changing
 host policy. A remote integration requires a separately declared network and
 a documented egress allowlist. Telemetry is opt-in and must remain value-free.
 
+## Connection and request-body bounds
+
+The `openmed` service sets `OPENMED_SERVICE_LIMIT_CONCURRENCY=128`,
+`OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5`, and
+`OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30` for the reference launcher, and
+`OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS=60`,
+`OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS=10`, and
+`OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND=1024` for request bodies.
+Override any of them in the shell that runs Compose. Keep the graceful-shutdown
+timeout below the service's `45s` stop grace period. A stalled or trickling
+upload returns `408 request_body_timeout`, and connections beyond the limit
+receive `503`. The [REST service guide](../rest-service.md) describes each
+bound.
+
 ## Backup and restore
 
 Use application-consistent backups: stop admission and the worker, wait for

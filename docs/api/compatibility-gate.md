@@ -31,7 +31,7 @@ The service error envelope currently exposes these stable categories:
 `offline_snapshot_unavailable`, `openmed_error`, `policy_error`,
 `privacy_gateway_blocked`, `privacy_gateway_error`,
 `privacy_gateway_not_configured`, `privacy_gateway_reidentification_error`,
-`privacy_gateway_transport_error`, `rate_limited`,
+`privacy_gateway_transport_error`, `rate_limited`, `request_body_timeout`,
 `restricted_terminology_unconfigured`, `service_busy`, `snapshot_invalid`,
 `timeout`, and `validation_error`. The taxonomy subset and HTTP/MCP mapping are
 documented in [Structured public errors](errors.md).

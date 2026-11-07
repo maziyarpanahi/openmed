@@ -152,6 +152,12 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `config.batching.maxQueueWaitMs` | `1000` | `OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS`. |
 | `config.coalescing.enabled` | `false` | `OPENMED_SERVICE_COALESCING_ENABLED`. |
 | `config.shutdownDrainSeconds` | `30` | `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`. |
+| `config.transport.limitConcurrency` | `128` | `OPENMED_SERVICE_LIMIT_CONCURRENCY`; connections or tasks per worker before `503`. |
+| `config.transport.timeoutKeepAliveSeconds` | `5` | `OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE`; idle HTTP keep-alive seconds. |
+| `config.transport.timeoutGracefulShutdownSeconds` | `30` | `OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN`; keep it below `terminationGracePeriodSeconds`. |
+| `config.transport.requestBodyTimeoutSeconds` | `60` | `OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS`; total body receive time. |
+| `config.transport.requestBodyGraceSeconds` | `10` | `OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS`; time before the minimum rate applies. |
+| `config.transport.requestBodyMinBytesPerSecond` | `1024` | `OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND`; `0` keeps only the total deadline. |
 | `config.metrics.enabled` | `false` | `OPENMED_SERVICE_METRICS_ENABLED`. |
 | `config.throttle.rateLimitRps` | `0` | `OPENMED_SERVICE_RATE_LIMIT_RPS`; `0` disables rate limiting. |
 | `config.throttle.rateLimitBurst` | `0` | `OPENMED_SERVICE_RATE_LIMIT_BURST`. |

@@ -77,6 +77,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "replacement_state_error",
     "replacement_state_limit",
     "replacement_state_not_found",
+    "request_body_timeout",
     "restricted_terminology_unconfigured",
     "service_busy",
     "snapshot_invalid",
