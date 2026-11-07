@@ -21,6 +21,8 @@ final class MultimodalNoticeTests: XCTestCase {
                 XCTAssertEqual(generation.notice, MultimodalNoticeKind.visualDescription.notice)
                 XCTAssertTrue(generation.description.contains(generation.notice.text))
                 XCTAssertTrue(generation.description.contains(generation.notice.identifier))
+                XCTAssertFalse(generation.description.contains(generation.text))
+                XCTAssertTrue(generation.renderText().contains(generation.text))
                 XCTAssertThrowsError(try generation.requireReviewerConfirmation(reviewerConfirmed: false))
                 try generation.requireReviewerConfirmation(reviewerConfirmed: true)
                 output = try JSONEncoder().encode(generation)

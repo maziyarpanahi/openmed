@@ -12,6 +12,7 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
     public let generationTime: TimeInterval
     public let peakMemoryGB: Double
     public let notice: MultimodalNotice
+    public let releaseEnvelope: GeneratedTextProviderEnvelope?
     public var requiresReviewerConfirmation: Bool { true }
     public var isDiagnostic: Bool { false }
 
@@ -19,7 +20,8 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
     public init(
         text: String, tokenIDs: [Int] = [], promptTokenCount: Int,
         generationTokenCount: Int, promptTime: TimeInterval, generationTime: TimeInterval,
-        peakMemoryGB: Double = 0, notice: MultimodalNotice
+        peakMemoryGB: Double = 0, notice: MultimodalNotice,
+        releaseEnvelope: GeneratedTextProviderEnvelope? = nil
     ) throws {
         guard notice == Self.noticeKind.notice else { throw MultimodalNoticeError.invalidNotice }
         guard tokenIDs.allSatisfy({ $0 >= 0 && $0 < 2_147_483_648 }),
@@ -34,10 +36,14 @@ public struct OpenMedVisionLanguageGeneration: Codable, Sendable, CustomStringCo
         self.generationTime = generationTime
         self.peakMemoryGB = peakMemoryGB
         self.notice = notice
+        self.releaseEnvelope = releaseEnvelope
     }
 
+    /// The catalog notice is safe to show in ordinary diagnostics.
+    public var description: String { "[\(notice.identifier)] \(notice.text)" }
+
     /// Protected display text including the mandatory notice; never log this string.
-    public var description: String { "[\(notice.identifier)] \(notice.text)\n\n\(text)" }
+    public func renderText() -> String { "[\(notice.identifier)] \(notice.text)\n\n\(text)" }
 
     /// Content-free diagnostic rendering excludes generated text and token values.
     public var debugDescription: String {

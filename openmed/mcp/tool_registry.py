@@ -21,6 +21,11 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.mcp.governed_workflows import (
+    GOVERNED_MCP_OPERATIONS,
+    GOVERNED_MCP_REQUEST_SCHEMA,
+    GOVERNED_MCP_RESULT_SCHEMA,
+)
 from openmed.service.brief import brief_response_schema
 from openmed.service.journey_workflows import (
     JOURNEY_WORKFLOW_DEFINITIONS,
@@ -1868,8 +1873,8 @@ def _decision_tool_spec() -> ToolSpec:
         _parameter(
             "schema_version",
             properties["schema_version"],
-            str,
-            DECISION_SCHEMA_VERSION,
+            Optional[str],
+            None,
         ),
         _parameter(
             "compatibility_policy",
@@ -1877,13 +1882,37 @@ def _decision_tool_spec() -> ToolSpec:
             str,
             DECISION_COMPATIBILITY_POLICY,
         ),
+        _parameter("question_id", properties["question_id"], Optional[str], None),
+        _parameter("instructions", properties["instructions"], Optional[str], None),
+        _parameter(
+            "option_descriptions",
+            properties["option_descriptions"],
+            Optional[Sequence[Optional[str]]],
+            None,
+        ),
+        _parameter("levels", properties["levels"], Sequence[str], ()),
+        _parameter(
+            "questions",
+            properties["questions"],
+            Sequence[Mapping[str, Any]],
+            (),
+        ),
+        _parameter("media", properties["media"], Sequence[Mapping[str, Any]], ()),
+        _parameter("input_format", properties["input_format"], str, "text"),
+        _parameter(
+            "max_input_chars",
+            properties["max_input_chars"],
+            Optional[int],
+            None,
+        ),
     )
     spec = _tool_spec(
         name="openmed_decide",
         title="Evaluate Fixed-Option Decision",
         description=(
-            "Score bounded caller-supplied choices locally, apply calibrated "
-            "abstention, and return an explicitly review-only decision result."
+            "Score bounded caller-supplied choices, or a named question set over "
+            "one input, locally; apply calibrated abstention per question, and "
+            "return an explicitly review-only decision result."
         ),
         read_only_hint=True,
         destructive_hint=False,
@@ -1894,10 +1923,39 @@ def _decision_tool_spec() -> ToolSpec:
     )
     for metadata_key in ("$id", "$schema", "title"):
         request_contract.pop(metadata_key, None)
-    return replace(spec, input_schema=request_contract)
+    return replace(
+        spec,
+        input_schema=request_contract,
+        version=DECISION_SCHEMA_VERSION,
+    )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    *(
+        _tool_spec(
+            name=name,
+            title="Governed Workflow " + operation.replace("_", " ").title(),
+            description=(
+                "Observe service-custodied workflow metadata without approval "
+                "tokens, reviewer claims or clinical values. "
+                + (
+                    "Request a human handoff with server-held, single-use consent; "
+                    "this does not approve or execute an action."
+                    if operation == "request_review"
+                    else "This operation performs no writes."
+                )
+            ),
+            read_only_hint=operation != "request_review",
+            destructive_hint=False,
+            idempotent_hint=operation != "request_review",
+            open_world_hint=False,
+            parameters=(
+                _parameter("request", GOVERNED_MCP_REQUEST_SCHEMA, dict[str, Any]),
+            ),
+            output_schema=GOVERNED_MCP_RESULT_SCHEMA,
+        )
+        for name, operation in GOVERNED_MCP_OPERATIONS.items()
+    ),
     _tool_spec(
         name="openmed_brief",
         title="Build Guarded Clinical Brief",

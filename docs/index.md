@@ -7,10 +7,15 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-The OpenMed `3.0.0` candidate adds versioned longitudinal Journey contracts and guarded local
-clinical interfaces, with documented Python, Swift, Kotlin/Android, JavaScript,
-REST, and local deployment surfaces. Feature availability is platform-specific.
-Review the [2.5-to-3.0 migration guide](migration/2.5-to-3.0.md) before upgrading.
+The OpenMed `3.2.0` candidate adds multilingual privacy patterns, native
+calendars and surrogates, synthetic clinical dataset tooling, and optional
+local GLiFormer, GLiNER2.5, GLiClass and decision-server backends. These new
+runtime and data-generation capabilities are primarily Python APIs; existing
+Swift, Kotlin/Android, JavaScript and service contracts retain their documented
+platform coverage. Review the [3.1-to-3.2 migration guide](migration/3.1-to-3.2.md)
+for the Python 3.11 minimum, rendering requirements and decision schema
+compatibility. Low-resource cohort languages remain experimental until their
+independent review and graduation gates pass.
 New-model training and checkpoint publication are optional research, not feature
 or SDK-release prerequisites. The candidate combines policy-aware de-identification,
 expanded clinical and structured-data
@@ -90,7 +95,8 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 3.0.0 Migration Guide](./migration/2.5-to-3.0.md) – intended post-publication coordinates, compatibility guidance and validation requirements; not a publication claim. See the [feature map](./feature-map.md) for capability and platform coverage.
+- [OpenMed 3.2.0 Release Notes](./release/v3.2.0.md) – candidate scope, intended post-publication coordinates and validation requirements. See the [feature map](./feature-map.md) for capability and platform coverage.
+- [OpenMed 3.2.0 Migration Guide](./migration/3.1-to-3.2.md) – interpreter requirements, rendering changes and retained decision contracts.
 - [OpenMed 2.5.0 Release Notes](./release/v2.5.0.md) – historical coverage and installation coordinates for the previous stable release.
 - [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – historical major-version contract and v2 baseline.
 - [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – historical Swift packaging, Android release hardening, and dependency-security fixes for the final 1.9 patch.
@@ -106,7 +112,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 3.0.0 Migration Guide](./migration/2.5-to-3.0.md) – review contract changes and validation requirements before upgrading.
+3. [OpenMed 3.2.0 Migration Guide](./migration/3.1-to-3.2.md) – review contract changes and validation requirements before upgrading.
 4. Core guides:
     - [Analyze Text Helper](./analyze-text.md) for single-call inference.
     - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

@@ -50,17 +50,52 @@
             return OpenMedVisionLanguageModel(container: container)
         }
 
+        /// Gate generation on an already loaded local model before inference and
+        /// before releasing its output. Remote image references are refused before
+        /// opening them. Enqueue time uses the thermal session's monotonic clock.
+        /// Pass the same source-bound privacy context as for direct generation.
+        /// Missing guard or asset context keeps generated text withheld.
+        public func generateIfAdmitted(
+            _ prompt: String, localImageURL: URL? = nil, maxTokens: Int = 256,
+            temperature: Float = 0, releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil, identifiers: [GeneratedIdentifierDigest] = [],
+            queuedAtMilliseconds: UInt64, in session: MultimodalThermalSession
+        ) async -> MultimodalAdmissionOutcome<OpenMedVisionLanguageGeneration> {
+            let work = ThermalVisionWork(
+                imageURL: localImageURL, releaseGuard: releaseGuard,
+                assetDigest: assetDigest, identifiers: identifiers
+            ) { guardInstance, sourceDigest, sourceIdentifiers in
+                if let localImageURL {
+                    return try await self.generate(
+                        prompt, imageURL: localImageURL, maxTokens: maxTokens,
+                        temperature: temperature, releaseGuard: guardInstance,
+                        assetDigest: sourceDigest, identifiers: sourceIdentifiers)
+                }
+                return try await self.generate(
+                    prompt, maxTokens: maxTokens, temperature: temperature,
+                    releaseGuard: guardInstance, assetDigest: sourceDigest,
+                    identifiers: sourceIdentifiers)
+            }
+            return await session.run(work, queuedAtMilliseconds: queuedAtMilliseconds)
+        }
+
         /// Generate from text only.
         public func generate(
             _ prompt: String,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -69,13 +104,19 @@
             _ prompt: String,
             imageURL: URL,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.url(imageURL)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -84,13 +125,19 @@
             _ prompt: String,
             image: CIImage,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.ciImage(image)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -99,7 +146,10 @@
             _ prompt: String,
             images: [UserInput.Image],
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             guard maxTokens > 0 else {
                 throw OpenMedCompassError.invalidGenerationLimit(maxTokens)
@@ -109,14 +159,20 @@
             return try await generate(
                 prepared: prepared,
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
         private func generate(
             prepared: consuming sending LMInput,
             maxTokens: Int,
-            temperature: Float
+            temperature: Float,
+            releaseGuard: GeneratedTextGuard?,
+            assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest]
         ) async throws -> OpenMedVisionLanguageGeneration {
             let parameters = GenerateParameters(
                 maxTokens: maxTokens,
@@ -145,17 +201,43 @@
                 }
             }
             let text = await container.decode(tokenIds: tokenIDs)
+            let guardInstance = assetDigest == nil ? nil : releaseGuard
+            let guarded = (guardInstance ?? GeneratedTextGuard(detector: nil)).release(
+                text.trimmingCharacters(in: .whitespacesAndNewlines),
+                assetDigest: assetDigest ?? String(repeating: "0", count: 64),
+                identifiers: identifiers
+            )
             return try OpenMedVisionLanguageGeneration(
-                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                tokenIDs: tokenIDs,
+                text: guarded.text ?? "",
+                tokenIDs: [],
                 promptTokenCount: completion?.promptTokenCount ?? 0,
                 generationTokenCount: completion?.generationTokenCount ?? 0,
                 promptTime: completion?.promptTime ?? 0,
                 generationTime: completion?.generateTime ?? 0,
-                notice: MultimodalNoticeKind.visualDescription.notice
+                notice: MultimodalNoticeKind.visualDescription.notice,
+                releaseEnvelope: guarded.envelope
             )
         }
 
+    }
+
+    struct ThermalVisionWork: LocalMultimodalWork {
+        let requiresNetwork: Bool
+        let generate: @Sendable () async throws -> OpenMedVisionLanguageGeneration
+        init(imageURL: URL?, generate: @escaping @Sendable () async throws -> OpenMedVisionLanguageGeneration) {
+            requiresNetwork = imageURL.map { !$0.isFileURL || ![nil, "", "localhost"].contains($0.host?.lowercased()) } ?? false
+            self.generate = generate
+        }
+        init(
+            imageURL: URL?, releaseGuard: GeneratedTextGuard?, assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest],
+            generate: @escaping @Sendable (GeneratedTextGuard?, String?, [GeneratedIdentifierDigest]) async throws -> OpenMedVisionLanguageGeneration
+        ) {
+            self.init(imageURL: imageURL) {
+                try await generate(releaseGuard, assetDigest, identifiers)
+            }
+        }
+        func run(profile: MultimodalWorkProfile) async throws -> OpenMedVisionLanguageGeneration { try await generate() }
     }
 
     enum OpenMedCompassError: LocalizedError {

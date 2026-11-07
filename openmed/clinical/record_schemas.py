@@ -362,6 +362,16 @@ def _check_offset_invariants(name: str, record: Mapping[str, Any]) -> None:
             raise ClinicalRecordSchemaError(
                 "reviewed-local metadata violates its contract"
             )
+    if name in {"brief_audit", "brief_response"} and "generation_contract" in record:
+        bindings = record["claim_bindings"]
+        citations = record["citations"]
+        if len(bindings) != len(citations) or any(
+            binding["claim_index"] != index or citation["claim_index"] != index
+            for index, (binding, citation) in enumerate(zip(bindings, citations))
+        ):
+            raise ClinicalRecordSchemaError(
+                "claim bindings do not match the citation sequence"
+            )
 
 
 def validate_clinical_record(name: str, record: Any) -> None:

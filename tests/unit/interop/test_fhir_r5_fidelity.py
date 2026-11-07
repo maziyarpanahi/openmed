@@ -271,20 +271,18 @@ def test_untrusted_keys_cycles_and_depth_fail_without_value_disclosure():
         assert secret not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_untrusted_path_declarations_fail_without_value_disclosure(subtests):
+    for path in [
         "entry[0].resource.RAW-SYNTHETIC-PATIENT",
         "entry[0]RAW-SYNTHETIC-PATIENT.resource",
         "/entry/0/resource/RAW-SYNTHETIC-PATIENT",
-    ],
-)
-def test_untrusted_path_declarations_fail_without_value_disclosure(path: str):
-    with pytest.raises(FHIRR5FidelityError) as exc_info:
-        diff_fhir_r5_bundles(_bundle(), _bundle(), ignored_paths=[path])
+    ]:
+        with subtests.test(path=path):
+            with pytest.raises(FHIRR5FidelityError) as exc_info:
+                diff_fhir_r5_bundles(_bundle(), _bundle(), ignored_paths=[path])
 
-    assert str(exc_info.value) == "FHIR R5 bundles could not be compared safely"
-    assert "RAW-SYNTHETIC-PATIENT" not in str(exc_info.value)
+            assert str(exc_info.value) == "FHIR R5 bundles could not be compared safely"
+            assert "RAW-SYNTHETIC-PATIENT" not in str(exc_info.value)
 
 
 def test_public_report_types_reject_untrusted_metadata():

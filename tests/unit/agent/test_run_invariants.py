@@ -92,38 +92,36 @@ def sample(
     )
 
 
-@pytest.mark.parametrize(
-    ("kind", "phase"),
-    [
+def test_clean_end_states_pass(subtests) -> None:
+    for kind, phase in [
         (OutcomeClass.SUCCESS, "completed"),
         (OutcomeClass.ABSTAINED, "aborted"),
         (OutcomeClass.REVIEW_REQUIRED, "aborted"),
         (OutcomeClass.POLICY_DENIED, "aborted"),
         (OutcomeClass.FAILED, "aborted"),
-    ],
-)
-def test_clean_end_states_pass(kind: OutcomeClass, phase: str) -> None:
-    run = sample(kind, phase=phase)
-    if kind is OutcomeClass.POLICY_DENIED:
-        denial = ErrorEnvelope.for_code(
-            "policy_denied", stage=ErrorStage.TOOL_CALL, run_id=RUN.serialize()
-        )
-        action_denial = ErrorEnvelope.for_code(
-            "policy_denied",
-            stage=ErrorStage.TOOL_CALL,
-            run_id=RUN.serialize(),
-            action_id=ACTION.serialize(),
-        )
-        run = replace(
-            run,
-            error=denial,
-            actions=(replace(run.actions[0], error=action_denial),),
-        )
-    report = check_run_invariants(run)
-    assert report.is_valid
-    assert report.to_json() == (
-        '{"findings":[],"schema_version":"openmed.agent.run_invariants.v1"}'
-    )
+    ]:
+        with subtests.test(kind=kind, phase=phase):
+            run = sample(kind, phase=phase)
+            if kind is OutcomeClass.POLICY_DENIED:
+                denial = ErrorEnvelope.for_code(
+                    "policy_denied", stage=ErrorStage.TOOL_CALL, run_id=RUN.serialize()
+                )
+                action_denial = ErrorEnvelope.for_code(
+                    "policy_denied",
+                    stage=ErrorStage.TOOL_CALL,
+                    run_id=RUN.serialize(),
+                    action_id=ACTION.serialize(),
+                )
+                run = replace(
+                    run,
+                    error=denial,
+                    actions=(replace(run.actions[0], error=action_denial),),
+                )
+            report = check_run_invariants(run)
+            assert report.is_valid
+            assert report.to_json() == (
+                '{"findings":[],"schema_version":"openmed.agent.run_invariants.v1"}'
+            )
 
 
 def test_reviewed_completion_uses_final_metadata_without_claiming_review_proof() -> (

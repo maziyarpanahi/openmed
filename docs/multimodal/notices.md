@@ -63,10 +63,10 @@ input returns status 2 without reflecting payloads or private paths.
 ## Vision runtime and Swift parity
 
 Python `VisionLanguageGeneration` requires the visual-description notice and
-supports `to_dict`, `to_json`, `from_dict` and `from_json`. Its `render_text` and
-`str` include the notice with generated text. Text and token IDs are excluded
-from diagnostic `repr`, but result JSON and rendered text remain protected
-content: never place them in logs, caches or evidence artifacts.
+supports `to_dict`, `to_json`, `from_dict` and `from_json`. Use `render_text()`
+to display protected generated text with the notice. Ordinary string and debug
+rendering omit generated text and token IDs. Treat result JSON and rendered text
+as protected content.
 
 OpenMedKit exposes `MultimodalNoticeKind`, `MultimodalNotice`, and the immutable
 `Codable` `MultimodalReviewResult`. Its initializer requires `kind`, `outputDigest`
@@ -74,16 +74,22 @@ and the matching `notice`. OpenMedKit `OpenMedVisionLanguageGeneration` requires
 the visual-description notice and uses the same generation wire keys as Python.
 Both runtimes attach the catalog notice when producing a generation. Shared
 synthetic fixtures check the complete JSON objects, notice identifiers and text.
-Swift diagnostic reflection excludes protected generation text and token values.
+Use `renderText()` to display protected text in Swift. Both runtimes expose
+the content-free release envelope separately from generation JSON.
 
-Migration: Python `generate()` and `generate_vision_text()` now return notice plus
-generated text. Consumers needing raw protected content use
+Python `generate()` and `generate_vision_text()` include the notice when the
+release guard permits text. Consumers needing raw protected content use
 `generate_with_metadata().text` and must display its `.notice` alongside it.
 Direct Python generation construction now requires `notice`; the Swift
 initializer also requires `notice` and is throwing. Existing unguarded generation
 JSON must not be silently repaired during decoding.
 
 ## Review, registry and privacy boundaries
+
+Existing ECG measurements, slide feature aggregates, image-quality assessments,
+vision results and ambient notes expose their catalog entry as `review_notice`.
+Their audit payloads retain their existing format. Use the notice-bound review
+wrappers to serialize a result reference with its catalog notice.
 
 Every output advertises reviewer confirmation and non-diagnostic status. The
 confirmation method rejects false confirmation (and Python rejects truthy

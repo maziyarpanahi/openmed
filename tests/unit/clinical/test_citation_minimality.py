@@ -35,18 +35,16 @@ def _claim(source: str, value: str = "beta") -> AtomicClaim:
     return AtomicClaim(_reference("claim-1"), _span(source, value))
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
+def test_required_span_aliases_must_agree(subtests):
+    for extra in [
         {"minimal_span": [1, 3]},
         {"required_start": 1, "required_end": 3},
-    ],
-)
-def test_required_span_aliases_must_agree(extra):
-    with pytest.raises(CitationMinimalityError):
-        AtomicClaim.from_obj(
-            {"claim_id": _reference("c"), "required_span": [0, 2], **extra}
-        )
+    ]:
+        with subtests.test(extra=extra):
+            with pytest.raises(CitationMinimalityError):
+                AtomicClaim.from_obj(
+                    {"claim_id": _reference("c"), "required_span": [0, 2], **extra}
+                )
 
 
 def test_nested_offsets_must_agree_with_explicit_offsets():
@@ -348,16 +346,11 @@ def test_invalid_inputs_do_not_echo_sensitive_values() -> None:
     assert source not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    ("start", "end"),
-    [(-1, 2), (2, 2), (4, 3), (True, 2), (1, False)],
-)
-def test_invalid_span_offsets_fail_without_echoing_values(
-    start: object,
-    end: object,
-) -> None:
-    with pytest.raises(CitationMinimalityError, match="citation"):
-        CitationSpan(start, end)  # type: ignore[arg-type]
+def test_invalid_span_offsets_fail_without_echoing_values(subtests) -> None:
+    for start, end in [(-1, 2), (2, 2), (4, 3), (True, 2), (1, False)]:
+        with subtests.test(start=start, end=end):
+            with pytest.raises(CitationMinimalityError, match="citation"):
+                CitationSpan(start, end)  # type: ignore[arg-type]
 
 
 def test_invalid_policy_and_schema_values_fail_closed() -> None:

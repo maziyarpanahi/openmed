@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib
 import json
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -189,6 +190,8 @@ def test_vision_repr_excludes_protected_text_and_tokens():
         generation, text="Synthetic Ada synthetic-mrn-98765", token_ids=(98765,)
     )
     assert "Ada" not in repr(generation)
+    assert "Ada" not in str(generation)
+    assert "Ada" in generation.render_text()
     assert "98765" not in repr(generation)
     assert generation.notice == NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION]
 
@@ -240,8 +243,10 @@ def _assert_classified(discovered: set[str]) -> None:
     covered = {f"notices.{cls.__name__}" for cls in NOTICE_RESULT_TYPES.values()} | {
         "vlm.VisionLanguageGeneration"
     }
-    assert not discovered - covered - NON_CLINICAL_TYPES, (
-        "New public result requires notice classification"
+    covered.update(DECLARED_NOTICE_TYPES)
+    unclassified = discovered - covered - NON_CLINICAL_TYPES
+    assert not unclassified, (
+        f"New public result requires notice classification: {sorted(unclassified)}"
     )
     assert covered <= discovered
 
@@ -256,6 +261,12 @@ def test_every_public_multimodal_data_result_declares_notice_or_exemption():
     discovered |= _public_data_classes((ROOT / "openmed/mlx/vlm.py").read_text(), "vlm")
     _assert_classified(discovered)
     validate_notice_registry(RESULT_TYPES.values())
+    for name, kind in DECLARED_NOTICE_TYPES.items():
+        module, class_name = name.rsplit(".", 1)
+        result_type = getattr(
+            importlib.import_module(f"openmed.multimodal.{module}"), class_name
+        )
+        assert result_type.review_notice is NOTICE_CATALOG[kind]
 
 
 def test_inventory_detects_undeclared_new_measurement_result():
@@ -264,6 +275,19 @@ def test_inventory_detects_undeclared_new_measurement_result():
     )
     with pytest.raises(AssertionError, match="notice classification"):
         _assert_classified(discovered)
+
+
+DECLARED_NOTICE_TYPES = {
+    "ecg.interval_candidates.IntervalCandidates": NoticeKind.MEASUREMENT,
+    "ecg.interval_candidates.TimingCandidate": NoticeKind.MEASUREMENT,
+    "ecg.signal_quality.GatedMeasurement": NoticeKind.MEASUREMENT,
+    "streaming.ambient.note_evidence.AmbientNoteDraft": NoticeKind.DRAFT,
+    "streaming.ambient.note_evidence.ReviewedAmbientNote": NoticeKind.DRAFT,
+    "vision.dicom.series_sampler.SampledSeriesInference": NoticeKind.VISUAL_DESCRIPTION,
+    "vision.pathology.tile_provenance.SlideAggregation": NoticeKind.MEASUREMENT,
+    "vision.providers.base.VLMResult": NoticeKind.VISUAL_DESCRIPTION,
+    "vision.safety.quality_gate.QualityReport": NoticeKind.VISUAL_DESCRIPTION,
+}
 
 
 # Audited operational/ingestion types: geometry, transport metadata, provenance,
@@ -405,5 +429,283 @@ xlsx.XlsxCellRedaction
 xlsx.XlsxRedactionResult
 vlm.CompassImageBatch
 vlm.CompassPreparedInput
+aecg.AecgLead
+aecg.AecgLimits
+aecg.AecgRecord
+aecg.AecgSeries
+apple_contract.LocalMultimodalAdapter
+apple_contract.MultimodalPacket
+arbitration.ocr_vlm_router.AgreedValues
+arbitration.ocr_vlm_router.AgreementPolicy
+arbitration.ocr_vlm_router.ReadingCandidate
+arbitration.ocr_vlm_router.ReadingComparison
+arbitration.ocr_vlm_router.ReadingPair
+arbitration.ocr_vlm_router.RoutingReport
+asr_hallucination.AsrHypothesisSegment
+asr_hallucination.AsrSegmentStatistics
+asr_hallucination.HallucinationDecision
+asr_hallucination.HallucinationReport
+asr_hallucination.HallucinationThresholds
+asr_hallucination.VoiceActivityInterval
+asr_hallucination.VoiceActivityTimeline
+audio_sample_conversion.ConversionBudget
+audio_sample_conversion.ConversionReport
+audio_sample_conversion.ConvertedAudio
+batch_preflight.BatchAssetResult
+batch_preflight.BatchPreflightAsset
+batch_preflight.BatchPreflightFinding
+batch_preflight.BatchPreflightLimits
+batch_preflight.BatchPreflightReport
+bigtiff_metadata.BigTiffLevel
+bigtiff_metadata.BigTiffLimits
+bigtiff_metadata.BigTiffPyramid
+capability_matrix.CompatibilityEntry
+capability_matrix.ModalityCapability
+capability_matrix.ModalityProfile
+capability_matrix.ProviderCapabilityEnvelope
+decoder_guard.DecodeReport
+decoder_guard.DecoderLimits
+dicom_transfer_syntax.TransferSyntaxCapability
+dicom_transfer_syntax.TransferSyntaxReport
+ecg.annotation_privacy.AnnotationField
+ecg.annotation_privacy.AnnotationPage
+ecg.annotation_privacy.AnnotationPlan
+ecg.annotation_privacy.AnnotationPolicy
+ecg.annotation_privacy.AnnotationReview
+ecg.annotation_privacy.EcgAnnotationSource
+ecg.annotation_privacy.FieldRedaction
+ecg.annotation_privacy.LocalAnnotationDetector
+ecg.annotation_privacy.LocalAnnotationOcr
+ecg.annotation_privacy.PageRegion
+ecg.annotation_privacy.PixelRedaction
+ecg.annotation_privacy.RedactedEcgAnnotations
+ecg.evidence_windows.EcgEvidenceWindows
+ecg.evidence_windows.MeasurementWindow
+ecg.evidence_windows.WindowFiducial
+ecg.evidence_windows.WindowPolicy
+ecg.evidence_windows.WindowSamples
+ecg.interval_candidates.BeatEvidence
+ecg.interval_candidates.IntervalPolicy
+ecg.interval_candidates.LeadIntervals
+ecg.interval_candidates.SampleBound
+ecg.interval_candidates.SampleRange
+ecg.interval_candidates.WaveBoundary
+ecg.lead_layout.LeadFinding
+ecg.lead_layout.LeadLayout
+ecg.lead_layout.LeadLayoutReport
+ecg.lead_layout.LeadObservation
+ecg.lead_layout.LeadSlot
+ecg.signal_quality.AcquisitionEvidence
+ecg.signal_quality.CalibrationSegment
+ecg.signal_quality.LeadCalibration
+ecg.signal_quality.LeadQuality
+ecg.signal_quality.QualityFinding
+ecg.signal_quality.QualityLimits
+ecg.signal_quality.SignalQualityPolicy
+ecg.signal_quality.SignalQualityReport
+ecg.waveform.EcgLead
+ecg.waveform.EcgProvenance
+ecg.waveform.EcgWaveform
+edf.EdfAnnotation
+edf.EdfGap
+edf.EdfIdentityStatus
+edf.EdfLimits
+edf.EdfRecordWindow
+edf.EdfRecording
+edf.EdfSignal
+edf.EdfSignalWindow
+evidence.fused_graph.ClaimAssessment
+evidence.fused_graph.DerivationEdge
+evidence.fused_graph.EvidenceNode
+evidence.fused_graph.Finding
+evidence.fused_graph.FusedEvidenceGraph
+evidence.fused_graph.PageGeometry
+generated_text_guard.AssetIdentifierDigest
+generated_text_guard.GuardPolicy
+generated_text_guard.GuardedTextResult
+generated_text_guard.PHISpan
+preprocessing.PreprocessingEvidence
+preprocessing.PreprocessingOutput
+preprocessing.PreprocessingProfile
+preprocessing.PreprocessingQualification
+privacy.mask_lineage.Affine
+privacy.mask_lineage.CoordinateSpace
+privacy.mask_lineage.MaskLineageResult
+privacy.mask_lineage.MaskProjection
+privacy.mask_lineage.Rectangle
+privacy.mask_lineage.TransformStep
+privacy.pixel_coverage.LocalPixelDetector
+privacy.pixel_coverage.PixelCoverageLimits
+privacy.pixel_coverage.PixelCoverageResult
+privacy.pixel_coverage.PixelFrame
+privacy.pixel_coverage.PixelFramePlan
+privacy.pixel_coverage.PixelInspection
+provenance.clock_alignment.AlignmentPolicy
+provenance.clock_alignment.AlignmentResult
+provenance.clock_alignment.AudioChunkEvidence
+provenance.clock_alignment.AudioPlanEvidence
+provenance.clock_alignment.ClockAnchor
+provenance.clock_alignment.ClockBinding
+provenance.clock_alignment.ClockBreak
+provenance.clock_alignment.ClockCalibration
+provenance.clock_alignment.ClockEpoch
+provenance.clock_alignment.ClockFit
+provenance.clock_alignment.EcgEvidence
+provenance.clock_alignment.ImageEvidence
+provenance.clock_alignment.NanosecondBound
+provenance.clock_alignment.TranscriptEvidence
+reference_workflow.ReferenceInputs
+runtime.thermal_gate.EdgeBudget
+runtime.thermal_gate.LocalMode
+runtime.thermal_gate.PlatformObservation
+runtime.thermal_gate.ThermalOutcome
+runtime_session.AssetHandle
+runtime_session.ProviderLease
+runtime_session.SessionEvent
+runtime_session.SessionLimits
+runtime_session.SessionResult
+speech_endpoints.EndpointEvent
+speech_endpoints.LocalActivityDetector
+streaming.ambient.note_evidence.NoteCitation
+streaming.ambient.note_evidence.NoteExtractionRequest
+streaming.ambient.note_evidence.NoteExtractionStep
+streaming.ambient.note_evidence.NoteOffsetMapping
+streaming.ambient.note_evidence.NotePolicy
+streaming.ambient.note_evidence.NoteProposal
+streaming.ambient.note_evidence.NoteProviderDeclaration
+streaming.ambient.note_evidence.NoteSection
+streaming.ambient.note_evidence.NoteStatement
+streaming.ambient.note_evidence.NoteVerificationRequest
+streaming.ambient.note_evidence.NoteVerificationResult
+streaming.ambient.note_evidence.ScreenedRoleEvidence
+streaming.ambient.note_evidence.StatementSupport
+streaming.ambient.note_evidence.StatementVerification
+streaming.ambient.speaker_roles.ReviewedRoleSpan
+streaming.ambient.speaker_roles.RoleAssessment
+streaming.ambient.speaker_roles.RoleAttributionReview
+streaming.ambient.speaker_roles.RoleBoundDraft
+streaming.ambient.speaker_roles.RoleCheckedNote
+streaming.ambient.speaker_roles.RoleHypothesis
+streaming.ambient.speaker_roles.RoleObservation
+streaming.ambient.speaker_roles.RoleReport
+streaming.ambient.speaker_roles.TranscriptSource
+streaming.privacy.audio_muting.MutedAudioReport
+streaming.privacy.audio_muting.RetainedClipAlignment
+streaming.privacy.audio_retention.AudioRetentionAudit
+streaming.privacy.audio_retention.AudioRetentionPolicy
+streaming.privacy.audio_retention.DestructionReceipt
+streaming.privacy.audio_retention.ExpectedAudioArtifact
+streaming.privacy.withholding_buffer.PhiRedactionSpan
+streaming.privacy.withholding_buffer.PhiScreenDeclaration
+streaming.privacy.withholding_buffer.PhiScreenRequest
+streaming.privacy.withholding_buffer.PhiScreenResult
+streaming.privacy.withholding_buffer.ProtectedSpeechSegment
+streaming.privacy.withholding_buffer.RedactionMapping
+streaming.privacy.withholding_buffer.ReleasedSpeechSegment
+streaming.privacy.withholding_buffer.SegmentPhiDecision
+streaming.privacy.withholding_buffer.WithholdingPolicy
+streaming.providers.AsrUpdate
+streaming.providers.OfflineAsrPolicy
+streaming.providers.ScreenedAsrSegment
+streaming.session.AmbientReference
+streaming.session.AmbientReviewCopy
+streaming.session.AmbientSessionPolicy
+streaming.speech.diarization.AcousticTurn
+streaming.speech.diarization.DiarizationBatch
+streaming.speech.diarization.DiarizationRequest
+streaming.speech.providers.AudioChunk
+streaming.speech.providers.FinalizedSegment
+streaming.speech.providers.LanguageConfidence
+streaming.speech.providers.PartialHypothesis
+streaming.speech.providers.ProviderProvenance
+streaming.speech.providers.RegisteredSpeechProvider
+streaming.speech.providers.SpeechProviderDeclaration
+streaming.speech.providers.SpeechStreamLimits
+streaming.speech.providers.StreamingAsrSessionReport
+streaming.speech.providers.TokenTime
+streaming.speech.speaker_aliases.LineageEvent
+streaming.speech.speaker_aliases.RoleReview
+streaming.transcript.revision_ledger.MappedSpan
+streaming.transcript.revision_ledger.SpanReference
+streaming.transcript.revision_ledger.TranscriptToken
+streaming.transcript.window_stitching.AlignedWindow
+streaming.transcript.window_stitching.ReconciledWindows
+streaming.transcript.window_stitching.TranscriptEdit
+transcript_language.TranscriptLanguageDecision
+transcript_language.TranscriptLanguageRun
+transcript_language.TranscriptPHISpan
+vision.dicom.pixel_provenance.PixelHeader
+vision.dicom.pixel_provenance.PixelProvenance
+vision.dicom.pixel_provenance.PixelProvenanceLimits
+vision.dicom.pixel_provenance.PixelRenderSpec
+vision.dicom.pixel_provenance.PixelStage
+vision.dicom.pixel_provenance.ProvenancedFrame
+vision.dicom.pixel_provenance.ProvenancedInference
+vision.dicom.pixel_provenance.RegionProvenance
+vision.dicom.series_sampler.DisplayWindow
+vision.dicom.series_sampler.SampledFrameInference
+vision.dicom.series_sampler.SamplingPolicy
+vision.dicom.series_sampler.SeriesSamplingPlan
+vision.dicom.series_sampler.SourceFrame
+vision.documents.page_consistency.ConsistencyPolicy
+vision.documents.page_consistency.IdentityObservation
+vision.documents.page_consistency.PacketConsistency
+vision.documents.page_consistency.PageFinding
+vision.documents.page_consistency.PageGroup
+vision.documents.page_consistency.PageNumber
+vision.documents.page_consistency.PageObservation
+vision.documents.page_consistency.TextDigest
+vision.forms.field_grounding.FieldAssociation
+vision.forms.field_grounding.FormAssociationReview
+vision.forms.field_grounding.FormGroundingReport
+vision.forms.field_grounding.FormLabel
+vision.forms.field_grounding.FormSection
+vision.forms.field_grounding.FormValue
+vision.forms.field_grounding.GroundedFormExport
+vision.forms.field_grounding.GroundingPolicy
+vision.forms.field_grounding.ValueGrounding
+vision.forms.field_grounding.VisualForm
+vision.handwriting.uncertainty.HandwritingCandidate
+vision.handwriting.uncertainty.HandwritingExport
+vision.handwriting.uncertainty.HandwritingReview
+vision.handwriting.uncertainty.ReviewedHandwriting
+vision.handwriting.uncertainty.TranscriptionAlternative
+vision.pathology.slide_tiler.PyramidLevel
+vision.pathology.slide_tiler.SlideTile
+vision.pathology.slide_tiler.SlideTilePlan
+vision.pathology.slide_tiler.TilePolicy
+vision.pathology.slide_tiler.TissueMask
+vision.pathology.tile_provenance.TileFeatures
+vision.pathology.tile_provenance.TileTransform
+vision.providers.base.Confidence
+vision.providers.base.ImageInput
+vision.providers.base.ImageRegion
+vision.providers.base.LocalProviderMetadata
+vision.providers.base.Prompt
+vision.providers.base.RuntimeMetadata
+vision.providers.base.VLMRequest
+vision.providers.base.VisualEvidence
+vision.providers.local_assets.LocalVLMAssets
+vision.runtime.resource_planner.DeviceTier
+vision.runtime.resource_planner.PreprocessingPlan
+vision.runtime.resource_planner.TierCandidate
+vision.runtime.resource_planner.VLMExecutionPlan
+vision.runtime.resource_planner.VLMExecutionPolicy
+vision.runtime.resource_planner.VLMResourceEstimate
+vision.safety.instruction_injection.DocumentRegion
+vision.safety.instruction_injection.DocumentScreeningReport
+vision.safety.instruction_injection.InstructionCue
+vision.safety.instruction_injection.InstructionPolicy
+vision.safety.instruction_injection.PreparedDocumentPrompt
+vision.safety.instruction_injection.RegionAssessment
+vision.safety.instruction_injection.RegionRelease
+vision.safety.quality_gate.QualityMetrics
+vision.safety.quality_gate.QualityPolicy
+voice_embeddings.EmbeddingDestructionReceipt
+voice_embeddings.VoiceSimilarity
+wfdb.WfdbAnnotations
+wfdb.WfdbLimits
+wfdb.WfdbRecord
+wfdb.WfdbSignal
 """.split()
 )

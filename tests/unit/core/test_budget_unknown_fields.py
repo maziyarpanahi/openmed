@@ -9,9 +9,8 @@ from openmed.core.budget import RequestBudget, coerce_budget
 from openmed.core.errors import InputError
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_unknown_fields_raise_instead_of_being_ignored(subtests):
+    for payload in [
         {"max_wall_tme": 0.5},
         {"max_input_char": 10},
         {"timeout": 0.5},
@@ -19,11 +18,10 @@ from openmed.core.errors import InputError
         {"max_input_chars": 10, "unused": None},
         {42: 1},
         {None: 1},
-    ],
-)
-def test_unknown_fields_raise_instead_of_being_ignored(payload):
-    with pytest.raises(InputError):
-        coerce_budget(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(InputError):
+                coerce_budget(payload)
 
 
 def test_unknown_field_error_does_not_echo_keys_or_values():
@@ -35,18 +33,16 @@ def test_unknown_field_error_does_not_echo_keys_or_values():
     assert "max_input_chars" in rendered
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_explicit_unlimited_forms_are_preserved(subtests):
+    for payload in [
         None,
         {},
         {"max_wall_time": None},
         {"max_input_chars": None},
         {"max_wall_time": None, "max_input_chars": None},
-    ],
-)
-def test_explicit_unlimited_forms_are_preserved(payload):
-    assert coerce_budget(payload) is None
+    ]:
+        with subtests.test(payload=payload):
+            assert coerce_budget(payload) is None
 
 
 def test_valid_read_only_mapping_is_not_modified():
@@ -61,7 +57,8 @@ def test_existing_budget_identity_is_preserved():
     assert coerce_budget(budget) is budget
 
 
-@pytest.mark.parametrize("value", [0, -1, True, "bad", float("nan")])
-def test_known_value_validation_still_rejects_invalid_values(value):
-    with pytest.raises(InputError):
-        coerce_budget({"max_wall_time": value})
+def test_known_value_validation_still_rejects_invalid_values(subtests):
+    for value in [0, -1, True, "bad", float("nan")]:
+        with subtests.test(value=value):
+            with pytest.raises(InputError):
+                coerce_budget({"max_wall_time": value})

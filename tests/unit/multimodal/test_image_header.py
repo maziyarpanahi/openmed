@@ -74,9 +74,8 @@ def test_png_truecolor_header() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "color,depth,components",
-    [
+def test_png_color_types_and_depths(subtests) -> None:
+    for color, depth, components in [
         (0, 1, 1),
         (0, 16, 1),
         (2, 8, 3),
@@ -84,13 +83,12 @@ def test_png_truecolor_header() -> None:
         (3, 4, 1),
         (4, 8, 2),
         (6, 16, 4),
-    ],
-)
-def test_png_color_types_and_depths(color, depth, components) -> None:
-    header = read_png_header(png(color=color, depth=depth))
-    assert (header.color_type, header.bit_depth) == (color, depth)
-    assert header.component_count == components
-    assert header.image_format is ImageFormat.PNG
+    ]:
+        with subtests.test(color=color, depth=depth, components=components):
+            header = read_png_header(png(color=color, depth=depth))
+            assert (header.color_type, header.bit_depth) == (color, depth)
+            assert header.component_count == components
+            assert header.image_format is ImageFormat.PNG
 
 
 def test_png_adam7_interlace_is_categorical() -> None:
@@ -115,21 +113,29 @@ def test_baseline_jpeg_header() -> None:
     }
 
 
-@pytest.mark.parametrize("marker", [0xC2, 0xC6, 0xCA, 0xCE])
-def test_progressive_jpeg_frames_are_categorical(marker) -> None:
-    assert read_jpeg_header(jpeg(marker=marker)).progressive is True
+def test_progressive_jpeg_frames_are_categorical(subtests) -> None:
+    for marker in [0xC2, 0xC6, 0xCA, 0xCE]:
+        with subtests.test(marker=marker):
+            assert read_jpeg_header(jpeg(marker=marker)).progressive is True
 
 
-@pytest.mark.parametrize("marker", [0xC0, 0xC1, 0xC3, 0xC5, 0xC7, 0xC9, 0xCB, 0xCF])
-def test_sequential_jpeg_frames_are_categorical(marker) -> None:
-    assert read_jpeg_header(jpeg(marker=marker)).progressive is False
+def test_sequential_jpeg_frames_are_categorical(subtests) -> None:
+    for marker in [0xC0, 0xC1, 0xC3, 0xC5, 0xC7, 0xC9, 0xCB, 0xCF]:
+        with subtests.test(marker=marker):
+            assert read_jpeg_header(jpeg(marker=marker)).progressive is False
 
 
-@pytest.mark.parametrize("precision", [8, 12, 16])
-@pytest.mark.parametrize("components", [1, 3, 4])
-def test_jpeg_precision_and_component_counts(precision, components) -> None:
-    header = read_jpeg_header(jpeg(precision=precision, components=components))
-    assert (header.bit_depth, header.component_count) == (precision, components)
+def test_jpeg_precision_and_component_counts(subtests) -> None:
+    for precision in [8, 12, 16]:
+        for components in [1, 3, 4]:
+            with subtests.test(precision=precision, components=components):
+                header = read_jpeg_header(
+                    jpeg(precision=precision, components=components)
+                )
+                assert (header.bit_depth, header.component_count) == (
+                    precision,
+                    components,
+                )
 
 
 def test_jpeg_segments_before_the_frame_are_skipped() -> None:
@@ -149,15 +155,16 @@ def test_jpeg_fill_bytes_before_a_marker_are_tolerated() -> None:
     )
 
 
-@pytest.mark.parametrize("payload", [b"", b"\x89PNG", b"\xff", b"\xff\xd9", b"GIF89a"])
-def test_unsupported_or_short_signatures_fail_closed(payload) -> None:
-    with pytest.raises(ImageHeaderError) as excinfo:
-        read_image_header(payload)
-    assert excinfo.value.category in {
-        "image_signature_unsupported",
-        "image_header_truncated",
-        "jpeg_marker_invalid",
-    }
+def test_unsupported_or_short_signatures_fail_closed(subtests) -> None:
+    for payload in [b"", b"\x89PNG", b"\xff", b"\xff\xd9", b"GIF89a"]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ImageHeaderError) as excinfo:
+                read_image_header(payload)
+            assert excinfo.value.category in {
+                "image_signature_unsupported",
+                "image_header_truncated",
+                "jpeg_marker_invalid",
+            }
 
 
 def test_png_reader_rejects_a_jpeg_and_the_reverse() -> None:
@@ -191,12 +198,13 @@ def test_all_truncated_jpeg_boundaries_fail_closed() -> None:
         read_image_header(payload, max_header_bytes=len(payload) - 1)
 
 
-@pytest.mark.parametrize("width,height", [(0, 5), (7, 0), (0, 0)])
-def test_zero_sized_images_fail_closed(width, height) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_dimensions_invalid$"):
-        read_png_header(png(width=width, height=height))
-    with pytest.raises(ImageHeaderError, match="^jpeg_dimensions_invalid$"):
-        read_jpeg_header(jpeg(width=width, height=height))
+def test_zero_sized_images_fail_closed(subtests) -> None:
+    for width, height in [(0, 5), (7, 0), (0, 0)]:
+        with subtests.test(width=width, height=height):
+            with pytest.raises(ImageHeaderError, match="^png_dimensions_invalid$"):
+                read_png_header(png(width=width, height=height))
+            with pytest.raises(ImageHeaderError, match="^jpeg_dimensions_invalid$"):
+                read_jpeg_header(jpeg(width=width, height=height))
 
 
 def test_png_pixel_overflow_is_checked_by_division() -> None:
@@ -206,16 +214,18 @@ def test_png_pixel_overflow_is_checked_by_division() -> None:
         read_jpeg_header(jpeg(width=65535, height=65535), max_pixels=1000)
 
 
-@pytest.mark.parametrize("chunk", [b"iHDR", b"PLTE", b"IDAT", b"\x00\x00\x00\x00"])
-def test_png_requires_ihdr_first(chunk) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_ihdr_missing$"):
-        read_png_header(png(chunk=chunk))
+def test_png_requires_ihdr_first(subtests) -> None:
+    for chunk in [b"iHDR", b"PLTE", b"IDAT", b"\x00\x00\x00\x00"]:
+        with subtests.test(chunk=chunk):
+            with pytest.raises(ImageHeaderError, match="^png_ihdr_missing$"):
+                read_png_header(png(chunk=chunk))
 
 
-@pytest.mark.parametrize("length", [0, 12, 14, 0xFFFFFFFF])
-def test_png_invalid_ihdr_length_fails_closed(length) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_ihdr_length_invalid$"):
-        read_png_header(png(length=length))
+def test_png_invalid_ihdr_length_fails_closed(subtests) -> None:
+    for length in [0, 12, 14, 0xFFFFFFFF]:
+        with subtests.test(length=length):
+            with pytest.raises(ImageHeaderError, match="^png_ihdr_length_invalid$"):
+                read_png_header(png(length=length))
 
 
 def test_png_crc_mismatch_fails_closed() -> None:
@@ -223,28 +233,32 @@ def test_png_crc_mismatch_fails_closed() -> None:
         read_png_header(png(crc=0))
 
 
-@pytest.mark.parametrize("color", [1, 5, 7, 255])
-def test_png_unsupported_color_type_fails_closed(color) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_color_type_unsupported$"):
-        read_png_header(png(color=color))
+def test_png_unsupported_color_type_fails_closed(subtests) -> None:
+    for color in [1, 5, 7, 255]:
+        with subtests.test(color=color):
+            with pytest.raises(ImageHeaderError, match="^png_color_type_unsupported$"):
+                read_png_header(png(color=color))
 
 
-@pytest.mark.parametrize("color,depth", [(0, 0), (0, 3), (2, 4), (3, 16), (6, 1)])
-def test_png_unsupported_bit_depth_fails_closed(color, depth) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_bit_depth_unsupported$"):
-        read_png_header(png(color=color, depth=depth))
+def test_png_unsupported_bit_depth_fails_closed(subtests) -> None:
+    for color, depth in [(0, 0), (0, 3), (2, 4), (3, 16), (6, 1)]:
+        with subtests.test(color=color, depth=depth):
+            with pytest.raises(ImageHeaderError, match="^png_bit_depth_unsupported$"):
+                read_png_header(png(color=color, depth=depth))
 
 
-@pytest.mark.parametrize("field", ["compression", "filtering"])
-def test_png_unsupported_methods_fail_closed(field) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_method_unsupported$"):
-        read_png_header(png(**{field: 1}))
+def test_png_unsupported_methods_fail_closed(subtests) -> None:
+    for field in ["compression", "filtering"]:
+        with subtests.test(field=field):
+            with pytest.raises(ImageHeaderError, match="^png_method_unsupported$"):
+                read_png_header(png(**{field: 1}))
 
 
-@pytest.mark.parametrize("interlace", [2, 255])
-def test_png_unsupported_interlace_fails_closed(interlace) -> None:
-    with pytest.raises(ImageHeaderError, match="^png_interlace_unsupported$"):
-        read_png_header(png(interlace=interlace))
+def test_png_unsupported_interlace_fails_closed(subtests) -> None:
+    for interlace in [2, 255]:
+        with subtests.test(interlace=interlace):
+            with pytest.raises(ImageHeaderError, match="^png_interlace_unsupported$"):
+                read_png_header(png(interlace=interlace))
 
 
 def test_jpeg_without_a_frame_header_fails_closed() -> None:
@@ -259,23 +273,26 @@ def test_jpeg_nested_start_of_image_fails_closed() -> None:
         read_image_header(b"\xff\xd8\xff\xd8" + sof())
 
 
-@pytest.mark.parametrize("length", [0, 1])
-def test_jpeg_invalid_segment_length_fails_closed(length) -> None:
-    payload = b"\xff\xd8\xff\xe0" + struct.pack(">H", length) + sof()
-    with pytest.raises(ImageHeaderError, match="^jpeg_segment_length_invalid$"):
-        read_image_header(payload)
+def test_jpeg_invalid_segment_length_fails_closed(subtests) -> None:
+    for length in [0, 1]:
+        with subtests.test(length=length):
+            payload = b"\xff\xd8\xff\xe0" + struct.pack(">H", length) + sof()
+            with pytest.raises(ImageHeaderError, match="^jpeg_segment_length_invalid$"):
+                read_image_header(payload)
 
 
-@pytest.mark.parametrize("length", [2, 7, 10, 0xFFFF])
-def test_jpeg_invalid_frame_length_fails_closed(length) -> None:
-    with pytest.raises(ImageHeaderError, match="^jpeg_frame_length_invalid$"):
-        read_image_header(jpeg(length=length))
+def test_jpeg_invalid_frame_length_fails_closed(subtests) -> None:
+    for length in [2, 7, 10, 0xFFFF]:
+        with subtests.test(length=length):
+            with pytest.raises(ImageHeaderError, match="^jpeg_frame_length_invalid$"):
+                read_image_header(jpeg(length=length))
 
 
-@pytest.mark.parametrize("precision", [0, 17, 255])
-def test_jpeg_unsupported_precision_fails_closed(precision) -> None:
-    with pytest.raises(ImageHeaderError, match="^jpeg_precision_unsupported$"):
-        read_jpeg_header(jpeg(precision=precision))
+def test_jpeg_unsupported_precision_fails_closed(subtests) -> None:
+    for precision in [0, 17, 255]:
+        with subtests.test(precision=precision):
+            with pytest.raises(ImageHeaderError, match="^jpeg_precision_unsupported$"):
+                read_jpeg_header(jpeg(precision=precision))
 
 
 def test_jpeg_zero_component_frame_fails_closed() -> None:
@@ -283,10 +300,11 @@ def test_jpeg_zero_component_frame_fails_closed() -> None:
         read_jpeg_header(jpeg(components=0))
 
 
-@pytest.mark.parametrize("payload", [b"\xff\xd8\x00\xc0", b"\xff\xd8\xff\x00"])
-def test_jpeg_malformed_marker_fails_closed(payload) -> None:
-    with pytest.raises(ImageHeaderError, match="^jpeg_marker_invalid$"):
-        read_image_header(payload + b"\x00" * 32)
+def test_jpeg_malformed_marker_fails_closed(subtests) -> None:
+    for payload in [b"\xff\xd8\x00\xc0", b"\xff\xd8\xff\x00"]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ImageHeaderError, match="^jpeg_marker_invalid$"):
+                read_image_header(payload + b"\x00" * 32)
 
 
 def test_jpeg_marker_fill_run_is_bounded() -> None:
@@ -309,22 +327,24 @@ def test_jpeg_segment_skipping_stays_inside_the_header_budget() -> None:
         read_image_header(padded, max_header_bytes=1024)
 
 
-@pytest.mark.parametrize("payload_factory", [png, jpeg])
-def test_seekable_streams_are_restored_after_success(payload_factory) -> None:
-    stream = io.BytesIO(b"pad" + payload_factory())
-    stream.seek(3)
-    assert read_image_header(stream).width == 7
-    assert stream.tell() == 3
-    assert not stream.closed
+def test_seekable_streams_are_restored_after_success(subtests) -> None:
+    for payload_factory in [png, jpeg]:
+        with subtests.test(payload_factory=payload_factory):
+            stream = io.BytesIO(b"pad" + payload_factory())
+            stream.seek(3)
+            assert read_image_header(stream).width == 7
+            assert stream.tell() == 3
+            assert not stream.closed
 
 
-@pytest.mark.parametrize("payload_factory", [png, jpeg])
-def test_seekable_streams_are_restored_after_failure(payload_factory) -> None:
-    stream = io.BytesIO(payload_factory()[:6])
-    with pytest.raises(ImageHeaderError):
-        read_image_header(stream)
-    assert stream.tell() == 0
-    assert not stream.closed
+def test_seekable_streams_are_restored_after_failure(subtests) -> None:
+    for payload_factory in [png, jpeg]:
+        with subtests.test(payload_factory=payload_factory):
+            stream = io.BytesIO(payload_factory()[:6])
+            with pytest.raises(ImageHeaderError):
+                read_image_header(stream)
+            assert stream.tell() == 0
+            assert not stream.closed
 
 
 def test_short_reads_are_supported_without_overreading() -> None:
@@ -398,7 +418,7 @@ def test_headers_are_immutable_and_carry_no_pixels() -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("mode", ["L", "RGB", "RGBA", "P"])
 def test_pillow_generated_png_end_to_end(tmp_path, size, mode) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.png"
     Image.new(mode, size).save(path, format="PNG")
@@ -416,7 +436,7 @@ def test_pillow_generated_png_end_to_end(tmp_path, size, mode) -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("progressive", [False, True])
 def test_pillow_generated_jpeg_end_to_end(tmp_path, size, progressive) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.jpg"
     Image.new("RGB", size).save(path, format="JPEG", progressive=progressive)
