@@ -117,6 +117,12 @@ services:
           create_host_path: false
 ```
 
+Every OpenMed container has CPU and memory limits and a 512-process cap. The
+API and MCP containers default to 2 CPUs and 4 GiB, matching the Helm chart;
+raise them with `OPENMED_CPU_LIMIT` / `OPENMED_MEMORY_LIMIT` and
+`OPENMED_MCP_CPU_LIMIT` / `OPENMED_MCP_MEMORY_LIMIT` for larger models. The
+worker gets 1 CPU and 1 GiB, the migration and smoke jobs 0.5 CPU and 512 MiB.
+
 The local log driver rotates three 10 MiB files. Operational output contains
 states and counts only. It must never contain source text, artifact bytes,
 database connection strings, vault values, or request bodies.
@@ -135,7 +141,10 @@ host policy. The bundle defaults to `OPENMED_PROFILE=prod`, whose
 [security profile](../serving/security-profile.md) keeps the API closed until
 authentication is configured and, because the bundle enables Journey storage,
 until Journey principal binding and encryption ship; set
-`OPENMED_PROFILE=dev` to evaluate it locally. A remote integration requires a separately declared network and
+`OPENMED_PROFILE=dev` to evaluate it locally. The
+[deployment posture lane](security-posture.md) checks this file against the
+production contract offline, including the offline and telemetry flags of
+every OpenMed service. A remote integration requires a separately declared network and
 a documented egress allowlist. Telemetry is opt-in and must remain value-free.
 
 ## Backup and restore

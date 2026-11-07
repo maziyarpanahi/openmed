@@ -6,11 +6,23 @@ on:
     paths:
       - ".github/workflows/helm-lint.yml"
       - "deploy/helm/openmed-service/**"
+      - "deploy/posture/**"
+      - "deploy/openmed-compose.yaml"
+      - "deploy/docker/**"
+      - "openmed/deploy/posture.py"
+      - "openmed/service/security_profile.py"
+      - "tests/unit/deploy/test_deploy_posture*.py"
   pull_request:
     branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/helm-lint.yml"
       - "deploy/helm/openmed-service/**"
+      - "deploy/posture/**"
+      - "deploy/openmed-compose.yaml"
+      - "deploy/docker/**"
+      - "openmed/deploy/posture.py"
+      - "openmed/service/security_profile.py"
+      - "tests/unit/deploy/test_deploy_posture*.py"
   workflow_dispatch:
 
 concurrency:
@@ -56,3 +68,43 @@ jobs:
           grep -q "/readyz" rendered-default.yaml
           grep -q "model-cache" rendered-default.yaml
           grep -q "OPENMED_CACHE_DIR" rendered-default.yaml
+
+  deploy-posture-lane:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v3.15.3
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install dependencies
+        run: |
+          uv sync --frozen --extra dev --python 3.11
+
+      # Renders the default, CI, Journey, production-example and negative
+      # control values and the Compose bundle offline, then fails on any new
+      # or stale finding against the production security posture contract.
+      - name: Check rendered deployments against the posture contract
+        run: |
+          .venv/bin/python -m openmed.deploy.posture deploy/posture/lane.yaml
+
+      - name: Run posture contract tests
+        run: |
+          .venv/bin/python -m pytest tests/unit/deploy/test_deploy_posture.py \
+            tests/unit/deploy/test_deploy_posture_lane.py -q

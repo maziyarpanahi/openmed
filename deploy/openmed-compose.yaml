@@ -75,6 +75,8 @@ services:
 
   journey-migrate:
     <<: [*openmed-image, *openmed-security]
+    cpus: "0.5"
+    mem_limit: 512m
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["migrate"]
     environment:
@@ -88,6 +90,8 @@ services:
 
   journey-worker:
     <<: [*openmed-image, *openmed-security]
+    cpus: "1"
+    mem_limit: 1g
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["worker", "--host", "0.0.0.0", "--port", "8091"]
     environment:
@@ -121,6 +125,8 @@ services:
 
   openmed:
     <<: [*openmed-image, *openmed-security]
+    cpus: "${OPENMED_CPU_LIMIT:-2}"
+    mem_limit: "${OPENMED_MEMORY_LIMIT:-4g}"
     ports:
       - "${OPENMED_BIND_ADDRESS:-127.0.0.1}:${OPENMED_PORT:-8080}:8080"
     environment:
@@ -169,6 +175,8 @@ services:
 
   journey-golden:
     <<: [*openmed-image, *openmed-security]
+    cpus: "0.5"
+    mem_limit: 512m
     profiles: ["smoke"]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["golden"]
@@ -185,12 +193,13 @@ services:
 
   mcp:
     <<: [*openmed-image, *openmed-security]
+    cpus: "${OPENMED_MCP_CPU_LIMIT:-2}"
+    mem_limit: "${OPENMED_MCP_MEMORY_LIMIT:-4g}"
     profiles: ["mcp"]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.mcp.server"]
     command: ["--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8081"]
     environment:
       <<: *openmed-environment
-      OPENMED_MCP_ALLOW_INSECURE_LOCALHOST: "1"
     volumes:
       - openmed-cache:/cache
       - openmed-models:/models:ro

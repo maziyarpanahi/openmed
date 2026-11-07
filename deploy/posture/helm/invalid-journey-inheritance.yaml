@@ -1,0 +1,15 @@
+# Negative control, layered on journey.yaml: the API selects the development
+# profile and a different Journey schema than the worker and migration job.
+config:
+  profile: dev
+
+extraEnv:
+  - name: OPENMED_SERVICE_AUTH_ENABLED
+    value: "true"
+  - name: OPENMED_SERVICE_AUTH_API_KEYS
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: api-keys
+  - name: OPENMED_JOURNEY_SCHEMA
+    value: openmed_journey_api_only

@@ -38,6 +38,8 @@ spec:
                   key: {{ .Values.journey.database.secretKey | quote }}
             - name: OPENMED_JOURNEY_SCHEMA
               value: {{ .Values.journey.schema | quote }}
+            - name: DISABLE_TELEMETRY
+              value: "1"
           resources:
             {{- toYaml .Values.journey.migration.resources | nindent 12 }}
           securityContext:

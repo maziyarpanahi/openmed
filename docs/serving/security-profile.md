@@ -171,6 +171,13 @@ Deployments that enable Journey storage (the Compose bundle, or Helm with
 encryption at rest ship (#3549, #3550). Use `OPENMED_PROFILE=dev` to evaluate
 them locally.
 
+The [deployment posture lane](../deploy/security-posture.md) feeds the
+environment the chart and the Compose bundle render into these same checks
+before deployment, and adds deployment-only rules for security contexts,
+resource limits, readiness wiring, telemetry, development overrides and
+worker inheritance. `deploy/posture/helm/production.yaml` is a validated
+production overlay for the chart.
+
 ## Adding a check
 
 Features register their controls with `register_security_check()`, or replace

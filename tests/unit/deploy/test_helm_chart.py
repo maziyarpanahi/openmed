@@ -104,6 +104,8 @@ def test_default_render_configures_service_environment():
     )
     assert configmap["data"]["OPENMED_PROFILE"] == "prod"
     assert configmap["data"]["OPENMED_CACHE_DIR"] == "/root/.cache/huggingface/openmed"
+    for name in ("HF_HUB_DISABLE_TELEMETRY", "DISABLE_TELEMETRY", "DO_NOT_TRACK"):
+        assert configmap["data"][name] == "1"
     assert (
         "openmed-service.openmed.svc"
         in configmap["data"]["OPENMED_SERVICE_TRUSTED_HOSTS"]
@@ -165,6 +167,9 @@ def test_journey_profile_renders_migration_worker_storage_and_default_deny():
         "pre-install,pre-upgrade"
     )
     assert migration["spec"]["backoffLimit"] == 3
+    for workload in (api, migration):
+        env = workload["spec"]["template"]["spec"]["containers"][0]["env"]
+        assert {"name": "DISABLE_TELEMETRY", "value": "1"} in env
     assert (
         api["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"][
             "path"

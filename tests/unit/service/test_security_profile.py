@@ -856,6 +856,42 @@ def test_cli_preflight_matches_startup_report(
     assert envelope["data"]["blocking_checks"] == details["blocking_checks"]
 
 
+def test_preflight_evaluates_an_explicit_environment_and_restores_the_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "false")
+    monkeypatch.setenv("OPENMED_SERVICE_CORS_ORIGINS", "http://ui.example.test")
+    monkeypatch.setenv("UNRELATED_SETTING", "kept")
+    rendered = {
+        "OPENMED_PROFILE": "prod",
+        "OPENMED_SERVICE_AUTH_ENABLED": "true",
+        "OPENMED_SERVICE_AUTH_API_KEYS": _api_keys(),
+        "OPENMED_SERVICE_SERVED_MODELS": "pii_detection_superclinical",
+        "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY": "2",
+        "SYNTHETIC_NON_SERVICE_SETTING": "1",
+    }
+    monkeypatch.delenv("SYNTHETIC_NON_SERVICE_SETTING", raising=False)
+    before = dict(os.environ)
+
+    report = sp.run_service_preflight(
+        profile="prod", listen_host="127.0.0.1", listen_tls=False, environ=rendered
+    )
+
+    # Process OPENMED_* settings (auth off, a plaintext origin) are hidden.
+    assert report.ready is True
+    assert _result(report, "http.cors").reason == "cors_disabled"
+    assert dict(os.environ) == before
+    assert "SYNTHETIC_NON_SERVICE_SETTING" not in os.environ
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_API_KEYS", _api_keys())
+    report = sp.run_service_preflight(
+        profile="prod", listen_host="127.0.0.1", environ={"OPENMED_PROFILE": "prod"}
+    )
+    assert report.blocking_checks == ("auth.enabled",)
+    assert os.environ["OPENMED_SERVICE_AUTH_ENABLED"] == "true"
+
+
 def test_cli_preflight_human_output_and_unreadable_configuration(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

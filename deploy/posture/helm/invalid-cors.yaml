@@ -1,0 +1,4 @@
+# Negative control: a plaintext browser origin.
+config:
+  corsOrigins:
+    - http://clinic-ui.example.test

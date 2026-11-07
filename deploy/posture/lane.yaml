@@ -1,0 +1,393 @@
+# Deploy posture lane: every rendering below is evaluated offline against the
+# production security posture contract (openmed.deploy.posture). A target must
+# produce exactly its expected blocking findings: a new finding fails the lane,
+# and so does an expected finding that no longer occurs (remove it here when
+# the owning change lands). Run: python -m openmed.deploy.posture
+#
+# why:
+#   fail_closed       the shipped default cannot carry credentials; the runtime
+#                     self-check keeps the service unready until the operator
+#                     configures them
+#   known             a gap owned by an open pull request (owner_pr)
+#   negative_control  the defect a negative-control fixture introduces
+#
+# Paths are relative to this file. All values are synthetic.
+schema_version: openmed.deploy.posture_lane.v1
+
+helm:
+  chart: ../helm/openmed-service
+  release: openmed-service
+  namespace: openmed
+
+targets:
+  # --- Shipped Helm values -------------------------------------------------
+  - id: helm-default
+    platform: helm
+    purpose: shipped
+    values: []
+    expect:
+      - &default-auth
+        workload: Deployment/api
+        check: auth.enabled
+        reason: auth_disabled
+        why: fail_closed
+      - &api-root
+        workload: Deployment/api
+        check: deploy.security_context
+        reason: runs_as_root
+        why: known
+        owner_pr: 4443
+        issue: 3916
+      - &api-escalation
+        workload: Deployment/api
+        check: deploy.security_context
+        reason: privilege_escalation_allowed
+        why: known
+        owner_pr: 4443
+        issue: 3916
+      - &api-writable-root
+        workload: Deployment/api
+        check: deploy.security_context
+        reason: root_filesystem_writable
+        why: known
+        owner_pr: 4443
+        issue: 3916
+      - &api-capabilities
+        workload: Deployment/api
+        check: deploy.security_context
+        reason: capabilities_not_dropped
+        why: known
+        owner_pr: 4443
+        issue: 3916
+      - &api-seccomp
+        workload: Deployment/api
+        check: deploy.security_context
+        reason: seccomp_not_confined
+        why: known
+        owner_pr: 4443
+        issue: 3916
+
+  - id: helm-ci
+    platform: helm
+    purpose: shipped
+    values:
+      - ../helm/openmed-service/ci-values.yaml
+    expect:
+      - *default-auth
+      - *api-root
+      - *api-escalation
+      - *api-writable-root
+      - *api-capabilities
+      - *api-seccomp
+
+  - id: helm-journey
+    platform: helm
+    purpose: shipped
+    values:
+      - helm/journey.yaml
+    expect:
+      - *default-auth
+      - &journey-binding
+        workload: Deployment/api
+        check: journey.principal_binding
+        reason: control_not_implemented
+        why: known
+        owner_pr: 4437
+        issue: 3549
+      - &journey-encryption
+        workload: Deployment/api
+        check: journey.encryption_at_rest
+        reason: control_not_implemented
+        why: known
+        owner_pr: 4441
+        issue: 3550
+
+  # --- Validated production examples ----------------------------------------
+  - id: helm-production
+    platform: helm
+    purpose: example
+    values:
+      - helm/production.yaml
+    expect: []
+
+  - id: helm-production-journey
+    platform: helm
+    purpose: example
+    values:
+      - helm/production.yaml
+      - helm/journey.yaml
+    expect:
+      - *journey-binding
+      - *journey-encryption
+
+  # --- Helm negative controls (each layered on the production example) ------
+  - id: helm-invalid-dev-profile
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-dev-profile.yaml
+    expect:
+      - workload: Deployment/api
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+
+  - id: helm-invalid-auth-disabled
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-auth-disabled.yaml
+    expect:
+      - workload: Deployment/api
+        check: auth.enabled
+        reason: auth_disabled
+        why: negative_control
+      - workload: Deployment/api
+        check: auth.deny_by_default
+        reason: deny_by_default_disabled
+        why: negative_control
+
+  - id: helm-invalid-trusted-hosts
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-trusted-hosts.yaml
+    expect:
+      # The service refuses to parse a wildcard host, so it would not start.
+      - workload: Deployment/api
+        check: deploy.service_config
+        reason: service_config_invalid
+        why: negative_control
+
+  - id: helm-invalid-cors
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-cors.yaml
+    expect:
+      - workload: Deployment/api
+        check: http.cors
+        reason: cors_origin_not_https
+        why: negative_control
+
+  - id: helm-invalid-overrides
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-overrides.yaml
+    expect:
+      - workload: Deployment/api
+        check: deploy.environment
+        reason: setting_contradictory
+        setting: OPENMED_PROFILE
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.environment
+        reason: setting_contradictory
+        setting: HF_HUB_DISABLE_TELEMETRY
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.overrides
+        reason: insecure_override_enabled
+        setting: OPENMED_SKIP_MODEL_VERIFY
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.egress
+        reason: telemetry_contradictory
+        why: negative_control
+      - workload: Deployment/api
+        check: egress.configured_adapters
+        reason: control_not_implemented
+        why: negative_control
+
+  - id: helm-invalid-resources
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-resources.yaml
+    expect:
+      - workload: Deployment/api
+        check: deploy.resources
+        reason: cpu_limit_missing
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.resources
+        reason: memory_limit_missing
+        why: negative_control
+
+  - id: helm-invalid-readiness
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-readiness.yaml
+    expect:
+      - workload: Deployment/api
+        check: deploy.readiness
+        reason: readiness_not_wired
+        why: negative_control
+
+  - id: helm-invalid-security-context
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/invalid-security-context.yaml
+    expect:
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: runs_as_root
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: privilege_escalation_allowed
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: root_filesystem_writable
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: capabilities_not_dropped
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: capabilities_added
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: privileged_container
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.security_context
+        reason: host_path_mounted
+        why: negative_control
+
+  - id: helm-invalid-journey-inheritance
+    platform: helm
+    purpose: negative_control
+    values:
+      - helm/production.yaml
+      - helm/journey.yaml
+      - helm/invalid-journey-inheritance.yaml
+    expect:
+      - *journey-binding
+      - *journey-encryption
+      - workload: Deployment/api
+        check: deploy.environment
+        reason: setting_contradictory
+        setting: OPENMED_JOURNEY_SCHEMA
+        why: negative_control
+      - workload: Deployment/api
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: Deployment/journey-worker
+        check: deploy.inheritance
+        reason: security_profile_mismatch
+        why: negative_control
+      - workload: Deployment/journey-worker
+        check: deploy.inheritance
+        reason: inherited_setting_mismatch
+        setting: OPENMED_JOURNEY_SCHEMA
+        why: negative_control
+      - workload: Job/journey-migration
+        check: deploy.inheritance
+        reason: security_profile_mismatch
+        why: negative_control
+      - workload: Job/journey-migration
+        check: deploy.inheritance
+        reason: inherited_setting_mismatch
+        setting: OPENMED_JOURNEY_SCHEMA
+        why: negative_control
+
+  # --- Compose bundle --------------------------------------------------------
+  - id: compose-bundle
+    platform: compose
+    purpose: shipped
+    file: ../openmed-compose.yaml
+    require_offline: true
+    environment: {}
+    expect:
+      - &compose-auth
+        workload: openmed
+        check: auth.enabled
+        reason: auth_disabled
+        why: fail_closed
+      - &compose-binding
+        workload: openmed
+        check: journey.principal_binding
+        reason: control_not_implemented
+        why: known
+        owner_pr: 4437
+        issue: 3549
+      - &compose-encryption
+        workload: openmed
+        check: journey.encryption_at_rest
+        reason: control_not_implemented
+        why: known
+        owner_pr: 4441
+        issue: 3550
+      - &compose-store-tls
+        workload: openmed
+        check: journey.store_tls
+        reason: postgres_tls_not_configured
+        why: known
+        owner_pr: 4146
+        issue: 3915
+
+  - id: compose-invalid-dev-profile
+    platform: compose
+    purpose: negative_control
+    file: ../openmed-compose.yaml
+    require_offline: true
+    environment:
+      OPENMED_PROFILE: dev
+    expect:
+      - *compose-auth
+      - *compose-binding
+      - *compose-encryption
+      - *compose-store-tls
+      - workload: openmed
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: journey-worker
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: journey-migrate
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: journey-golden
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+      - workload: mcp
+        check: deploy.profile
+        reason: development_profile_selected
+        why: negative_control
+
+  - id: compose-invalid-trusted-hosts
+    platform: compose
+    purpose: negative_control
+    file: ../openmed-compose.yaml
+    require_offline: true
+    environment:
+      OPENMED_SERVICE_TRUSTED_HOSTS: "*"
+    expect:
+      - workload: openmed
+        check: deploy.service_config
+        reason: service_config_invalid
+        why: negative_control
