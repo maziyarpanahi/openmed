@@ -7,8 +7,10 @@ on:
       - '.swift-format'
       - 'Package.swift'
       - 'Package.resolved'
+      - 'scripts/check_swift_root_consumer.sh'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/release/check_swift_manifest_drift.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -21,8 +23,10 @@ on:
       - '.swift-format'
       - 'Package.swift'
       - 'Package.resolved'
+      - 'scripts/check_swift_root_consumer.sh'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
+      - 'scripts/release/check_swift_manifest_drift.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -48,6 +52,9 @@ jobs:
     - name: Lint Swift formatting
       run: scripts/lint_swift.sh
 
+    - name: Check root and nested manifest drift
+      run: python3 scripts/release/check_swift_manifest_drift.py
+
     - name: Resolve documented root package dependencies
       run: swift package resolve
 
@@ -59,6 +66,9 @@ jobs:
 
     - name: Test Unicode scalar offset parity fixture
       run: swift test --filter OffsetContractParityTests
+
+    - name: Build versioned root-package consumer for macOS
+      run: scripts/check_swift_root_consumer.sh macos
 
   build-ios:
     name: Build for iOS
@@ -77,6 +87,9 @@ jobs:
           -scheme OpenMedKit-Package \
           -destination 'generic/platform=iOS Simulator' \
           -skipPackagePluginValidation
+
+    - name: Build versioned root-package consumer for iOS
+      run: scripts/check_swift_root_consumer.sh ios
 
   build-watchos:
     name: Build & Test watchOS Simulator

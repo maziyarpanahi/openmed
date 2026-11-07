@@ -748,7 +748,7 @@
                 temperature: 0,
                 topP: 1,
                 topK: 0,
-                prefillStepSize: 256,
+                prefill: PrefillParameters(stepSize: 256, chunking: .remainder),
                 seed: 0
             )
             let stream = try await container.generate(
