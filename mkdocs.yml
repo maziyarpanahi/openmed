@@ -713,6 +713,7 @@ nav:
       - Android QNN and NNAPI: runtimes/android-accelerators.md
       - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
+      - Android Keystore Secrets: android-keystore-secrets.md
       - On-device Segmenters: on-device-segmenters.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md

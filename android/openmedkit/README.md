@@ -43,6 +43,11 @@ Unicode offsets, and SHA-256 span hashes—not arbitrary messages or detected
 surface text. De-identification action records likewise retain provenance and
 replacement metadata without retaining the original identifier.
 
+Hash keys and portable policy or bundle-trust secrets live in the Android
+Keystore through `AndroidKeystoreSecretProvider`, never in preferences, caches,
+or the AAR. See [Android Keystore Secrets](../../docs/android-keystore-secrets.md)
+for references, required protection, failure codes, and backup exclusion.
+
 This module is on-device only by design. It is not a medical device and does not
 provide diagnosis, treatment decisions, or emergency clinical guidance. Any
 future clinical workflow integration must keep human review and appropriate
