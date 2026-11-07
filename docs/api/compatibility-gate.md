@@ -23,7 +23,8 @@ field values, credentials, or model payloads.
 
 The service error envelope currently exposes these stable categories:
 
-`auth_rate_limited`, `authentication_required`, `backpressure`, `bad_request`,
+`admission_limited`, `admission_saturated`, `auth_rate_limited`,
+`authentication_required`, `backpressure`, `bad_request`,
 `budget_exceeded`, `capability_error`, `circuit_breaker_open`,
 `configuration_error`, `forbidden`, `grounding_invalid_request`,
 `inference_error`, `input_error`, `internal_error`, `invalid_credentials`,

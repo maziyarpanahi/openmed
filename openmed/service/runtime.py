@@ -13,6 +13,21 @@ from openmed.core.models import ModelLoader
 from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
+from .admission import (
+    ADMISSION_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_MAX_QUEUE_ENV_VAR,
+    ADMISSION_NAMESPACE_CLAIM_ENV_VAR,
+    ADMISSION_NAMESPACE_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_NAMESPACE_MAX_QUEUE_ENV_VAR,
+    ADMISSION_PRINCIPAL_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_PRINCIPAL_MAX_QUEUE_ENV_VAR,
+    ADMISSION_QUEUE_TIMEOUT_ENV_VAR,
+    ADMISSION_RETRY_AFTER_ENV_VAR,
+    DEFAULT_ADMISSION_QUEUE_TIMEOUT_SECONDS,
+    DEFAULT_ADMISSION_RETRY_AFTER_SECONDS,
+    AdmissionConfig,
+    AdmissionController,
+)
 from .keep_alive import parse_keep_alive
 from .resilience import ResilienceManager, ServiceResilienceConfig
 from .warm_pool import (
@@ -119,6 +134,7 @@ _MEMORY_MULTIPLIERS = {
     "gi": 1024**3,
     "gib": 1024**3,
 }
+_ADMISSION_CLAIM_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 _THROTTLE_KEY_ALIASES = {
     "global": "global",
     "process": "global",
@@ -612,6 +628,51 @@ def parse_service_coalescing_config() -> ServiceCoalescingConfig:
     )
 
 
+def parse_service_admission_config() -> AdmissionConfig:
+    """Read fair request-admission ceilings from the current environment."""
+    ceilings = {
+        name: _parse_non_negative_int(
+            os.getenv(env_var),
+            env_var=env_var,
+            default=0,
+        )
+        for name, env_var in (
+            ("max_concurrency", ADMISSION_MAX_CONCURRENCY_ENV_VAR),
+            ("max_queue", ADMISSION_MAX_QUEUE_ENV_VAR),
+            ("principal_max_concurrency", ADMISSION_PRINCIPAL_MAX_CONCURRENCY_ENV_VAR),
+            ("principal_max_queue", ADMISSION_PRINCIPAL_MAX_QUEUE_ENV_VAR),
+            ("namespace_max_concurrency", ADMISSION_NAMESPACE_MAX_CONCURRENCY_ENV_VAR),
+            ("namespace_max_queue", ADMISSION_NAMESPACE_MAX_QUEUE_ENV_VAR),
+        )
+    }
+    waits = {}
+    for name, env_var, default in (
+        (
+            "queue_timeout_seconds",
+            ADMISSION_QUEUE_TIMEOUT_ENV_VAR,
+            DEFAULT_ADMISSION_QUEUE_TIMEOUT_SECONDS,
+        ),
+        (
+            "retry_after_seconds",
+            ADMISSION_RETRY_AFTER_ENV_VAR,
+            DEFAULT_ADMISSION_RETRY_AFTER_SECONDS,
+        ),
+    ):
+        value = _parse_non_negative_float(
+            os.getenv(env_var), env_var=env_var, default=default
+        )
+        if not 0 < value < float("inf"):
+            raise ValueError(f"{env_var} must be a positive finite number")
+        waits[name] = value
+    claim = (os.getenv(ADMISSION_NAMESPACE_CLAIM_ENV_VAR) or "").strip() or None
+    if claim is not None and _ADMISSION_CLAIM_PATTERN.fullmatch(claim) is None:
+        raise ValueError(
+            f"{ADMISSION_NAMESPACE_CLAIM_ENV_VAR} must be a claim name of at most "
+            "64 letters, digits, '_', '-', '.' or ':'"
+        )
+    return AdmissionConfig(**ceilings, namespace_claim=claim, **waits)
+
+
 def parse_service_mlx_paged_kv_cache_config() -> PagedKVCacheConfig | None:
     """Read optional MLX-LM paged KV-cache settings from the environment."""
     budget_bytes = parse_memory_budget_bytes(
@@ -746,6 +807,7 @@ class ServiceRuntime:
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
+    admission: AdmissionConfig = field(default_factory=AdmissionConfig, kw_only=True)
     paged_kv_cache: PagedKVCacheConfig | None = None
     resilience_config: ServiceResilienceConfig = field(
         default_factory=ServiceResilienceConfig
@@ -758,6 +820,11 @@ class ServiceRuntime:
     _workflow_store: Optional[Any] = field(default=None, init=False, repr=False)
     _workflow_store_lock: threading.RLock = field(
         default_factory=threading.RLock,
+        init=False,
+        repr=False,
+    )
+    _admission_controller: Optional[AdmissionController] = field(
+        default=None,
         init=False,
         repr=False,
     )
@@ -794,6 +861,7 @@ class ServiceRuntime:
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
         throttle = parse_service_throttle_config()
+        admission = parse_service_admission_config()
         paged_kv_cache = parse_service_mlx_paged_kv_cache_config()
         resilience_config = parse_service_resilience_config()
         return cls(
@@ -820,6 +888,7 @@ class ServiceRuntime:
             batching=batching,
             coalescing=coalescing,
             throttle=throttle,
+            admission=admission,
             paged_kv_cache=paged_kv_cache,
             resilience_config=resilience_config,
             _loader_factory=ModelLoader,
@@ -855,6 +924,22 @@ class ServiceRuntime:
                         metrics=self.metrics,
                     )
         return self._warm_pool
+
+    @property
+    def admission_controller(self) -> AdmissionController:
+        """Return the fair-admission controller shared by every transport.
+
+        REST, GraphQL and any other transport given this runtime draw on one
+        principal, namespace and global budget.
+        """
+        if self._admission_controller is None:
+            with self._loader_lock:
+                if self._admission_controller is None:
+                    self._admission_controller = AdmissionController(
+                        self.admission,
+                        metrics=self.metrics,
+                    )
+        return self._admission_controller
 
     def get_resilience(self) -> ResilienceManager:
         """Return the shared retry and circuit-breaker manager."""

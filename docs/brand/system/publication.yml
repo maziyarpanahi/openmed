@@ -209,6 +209,7 @@ classification:
     - guides/session-end-hook.md
     - serving/resilience.md
     - serving/backpressure.md
+    - serving/fair-admission.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md

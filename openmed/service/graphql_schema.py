@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import inspect
+from collections.abc import Callable, Mapping, Sequence
 from enum import Enum
 from typing import Any, Optional, cast
 
@@ -17,6 +18,14 @@ from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
+from .admission import (
+    AUTH_SCOPE_KEY,
+    TRANSPORT_GRAPHQL,
+    AdmissionController,
+    AdmissionRejected,
+    AdmissionSaturated,
+    release_when_settled,
+)
 from .auth import AuthPrincipal, scopes_satisfy
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -38,6 +47,11 @@ GRAPHQL_FIELD_SCOPES = {
     "journeyResources": ("journey:read",),
     "entityTypes": (),
 }
+# Root fields that start model or heavy work, mirroring the REST route
+# policies of ``/analyze``, ``/pii/deidentify`` and ``/v1/journey/resources``.
+GRAPHQL_ADMITTED_FIELDS = frozenset({"analyze", "deidentify", "journeyResources"})
+ADMISSION_REJECTED_CODE = "OPENMED_ADMISSION_REJECTED"
+ADMISSION_REJECTED_MESSAGE = "Request admission limit reached; retry later."
 
 
 class FieldScopeExtension(SchemaExtension):
@@ -70,6 +84,86 @@ class FieldScopeExtension(SchemaExtension):
 
             self.execution_context.validation_rules += (FieldScopeRule,)
         yield
+
+
+class RequestAdmissionExtension(SchemaExtension):
+    """Admit each model-backed root field through the shared controller.
+
+    Every selected ``analyze``, ``deidentify`` or ``journeyResources`` field,
+    aliases included, takes one permit from the same principal budget that
+    REST requests use, so batching fields into one document cannot exceed a
+    principal's share. A rejected field fails with a value-free
+    ``OPENMED_ADMISSION_REJECTED`` error, and the HTTP response carries the
+    matching 429 or 503 status and ``Retry-After`` header.
+    """
+
+    def resolve(
+        self,
+        _next: Callable[..., Any],
+        root: Any,
+        info: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Wrap admitted root fields; pass every other field through."""
+        if (
+            info.field_name not in GRAPHQL_ADMITTED_FIELDS
+            or info.parent_type.name != "Query"
+        ):
+            return _next(root, info, *args, **kwargs)
+        controller = getattr(
+            getattr(info.context, "runtime", None), "admission_controller", None
+        )
+        if not isinstance(controller, AdmissionController) or not controller.enabled:
+            return _next(root, info, *args, **kwargs)
+        return self._admitted(controller, _next, root, info, args, kwargs)
+
+    async def _admitted(
+        self,
+        controller: AdmissionController,
+        _next: Callable[..., Any],
+        root: Any,
+        info: Any,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        request = getattr(info.context, "request", None)
+        scope = getattr(request, "scope", None)
+        principal = scope.get(AUTH_SCOPE_KEY) if isinstance(scope, Mapping) else None
+        try:
+            permit = await controller.acquire(
+                controller.ticket(principal, transport=TRANSPORT_GRAPHQL)
+            )
+        except AdmissionRejected as exc:
+            _mark_admission_rejection(info.context, exc)
+            raise GraphQLError(
+                ADMISSION_REJECTED_MESSAGE,
+                extensions={"code": ADMISSION_REJECTED_CODE, "reason": exc.reason},
+            ) from None
+        settled = False
+        try:
+            result = _next(root, info, *args, **kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+            settled = True
+            return result
+        finally:
+            if settled:
+                permit.release()
+            else:
+                # A failed or timed-out resolver may leave model work running;
+                # keep the unit until the request's tracked work settles.
+                release_when_settled(permit)
+
+
+def _mark_admission_rejection(context: Any, exc: AdmissionRejected) -> None:
+    response = getattr(context, "response", None)
+    if response is None:
+        return
+    # A saturated service (503) outranks a principal over its share (429).
+    if response.status_code != AdmissionSaturated.status_code:
+        response.status_code = exc.status_code
+    response.headers["Retry-After"] = exc.retry_after_header
 
 
 class OpenMedGraphQLContext(BaseContext):
@@ -633,7 +727,10 @@ class PrivacySafeSchema(strawberry.Schema):
         """Suppress Strawberry's default exception logger to protect PHI."""
 
 
-schema = PrivacySafeSchema(query=Query, extensions=[FieldScopeExtension])
+schema = PrivacySafeSchema(
+    query=Query,
+    extensions=[FieldScopeExtension, RequestAdmissionExtension],
+)
 
 
 async def _run_analyze(
