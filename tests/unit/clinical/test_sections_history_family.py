@@ -190,25 +190,20 @@ def test_history_family_fixture_quality_exceeds_acceptance_thresholds() -> None:
     assert mean_boundary_character_iou >= 0.85
 
 
-@pytest.mark.parametrize(
-    ("header", "canonical"),
-    (
+def test_history_aliases_use_context_canonical_labels(subtests) -> None:
+    for header, canonical in (
         ("HPI", "history_of_present_illness"),
         ("PMH", "past_medical_history"),
         ("FH", "family_history"),
         ("SH", "social_history"),
-    ),
-)
-def test_history_aliases_use_context_canonical_labels(
-    header: str,
-    canonical: str,
-) -> None:
-    text = f"{header}: Synthetic content."
+    ):
+        with subtests.test(header=header, canonical=canonical):
+            text = f"{header}: Synthetic content."
 
-    assert SECTION_LABEL_ALIASES[normalize_section_header(header)] == canonical
-    assert segment_history_family(text) == (
-        SectionSpan(label=canonical, start=0, end=len(text)),
-    )
+            assert SECTION_LABEL_ALIASES[normalize_section_header(header)] == canonical
+            assert segment_history_family(text) == (
+                SectionSpan(label=canonical, start=0, end=len(text)),
+            )
 
 
 def test_leading_prose_is_one_unsectioned_span() -> None:

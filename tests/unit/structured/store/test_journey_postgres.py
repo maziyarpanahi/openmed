@@ -71,19 +71,17 @@ def test_qmark_translation_preserves_parameterized_values() -> None:
     assert sql.endswith("WHERE fact_id = %s AND created_revision <= %s")
 
 
-@pytest.mark.parametrize(
-    "schema",
-    (
+def test_schema_identifiers_are_strictly_bounded(subtests) -> None:
+    for schema in (
         "OpenMed",
         "journey-store",
         "journey.store",
         "journey schema",
         "a" * 64,
-    ),
-)
-def test_schema_identifiers_are_strictly_bounded(schema: str) -> None:
-    with pytest.raises(ValueError, match="controlled identifier"):
-        PostgresJourneyStore(object(), schema=schema)  # type: ignore[arg-type]
+    ):
+        with subtests.test(schema=schema):
+            with pytest.raises(ValueError, match="controlled identifier"):
+                PostgresJourneyStore(object(), schema=schema)  # type: ignore[arg-type]
 
 
 def test_invalid_connection_and_dsn_return_typed_failure() -> None:
@@ -148,24 +146,20 @@ def test_postgres_connect_uses_reviewed_driver_without_exposing_dsn(
     assert "synthetic-secret" not in repr(result)
 
 
-@pytest.mark.parametrize(
-    "dsn",
-    (
+def test_pg8000_connection_url_rejects_unsupported_or_unsafe_options(subtests) -> None:
+    for dsn in (
         "https://openmed:secret@postgres/openmed",
         "postgresql://openmed:secret@postgres:0/openmed",
         "postgresql://openmed:secret@postgres/openmed?sslmode=disable",
         "postgresql://openmed:secret@postgres/openmed?sslmode=require",
         "postgresql://openmed:secret@postgres/openmed?sslmode=verify-full&x=y",
-    ),
-)
-def test_pg8000_connection_url_rejects_unsupported_or_unsafe_options(
-    dsn: str,
-) -> None:
-    result = PostgresJourneyStore.connect(dsn)
+    ):
+        with subtests.test(dsn=dsn):
+            result = PostgresJourneyStore.connect(dsn)
 
-    assert result.state is StoreState.FAILURE
-    assert result.code == "invalid_dsn"
-    assert "secret" not in repr(result)
+            assert result.state is StoreState.FAILURE
+            assert result.code == "invalid_dsn"
+            assert "secret" not in repr(result)
 
 
 def test_pg8000_connection_url_requires_tls_verification_when_requested() -> None:

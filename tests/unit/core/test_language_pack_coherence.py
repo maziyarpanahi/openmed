@@ -302,6 +302,7 @@ def test_empty_registry_reports_no_rows_and_is_coherent():
     assert check_language_pack_coherence(registry=registry) == 0
 
 
+@pytest.mark.slow
 def test_builtin_language_pack_catalog_is_coherent():
     rows = pack_coherence_report()
 

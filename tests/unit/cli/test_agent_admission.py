@@ -80,16 +80,18 @@ def test_missing_state_requires_explicit_provisioning(tmp_path: Path) -> None:
         assert str(tmp_path) not in result.output
 
 
-@pytest.mark.parametrize("option", ["--scope", "--role"])
-def test_invalid_metadata_never_echoes_rejected_content(
-    tmp_path: Path, option: str
-) -> None:
-    sentinel = "Synthetic Patient; bearer secret; /private/source"
-    result = invoke("resume", tmp_path, "--initialize", option, sentinel)
-    assert result.exit_code == 1
-    assert sentinel not in result.output
-    assert "invalid_control_metadata" in result.output
-    assert not (tmp_path / "ledger.db").exists()
+def test_invalid_metadata_never_echoes_rejected_content(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for option in ["--scope", "--role"]:
+        with subtests.test(option=option):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            sentinel = "Synthetic Patient; bearer secret; /private/source"
+            result = invoke("resume", tmp_path, "--initialize", option, sentinel)
+            assert result.exit_code == 1
+            assert sentinel not in result.output
+            assert "invalid_control_metadata" in result.output
+            assert not (tmp_path / "ledger.db").exists()
 
 
 def test_reinitialize_cannot_bypass_stop(tmp_path: Path) -> None:
@@ -164,11 +166,11 @@ def test_production_entry_point_stop_resume_and_invalid_metadata(
     assert json.loads(capsys.readouterr().out)["generation"] == 4
 
 
-def test_actual_console_script_supports_agents_status() -> None:
+@pytest.mark.slow
+def test_actual_console_script_supports_agents_status(openmed_console_script) -> None:
     import subprocess
-    import sys
 
-    console = Path(sys.executable).parent / "openmed"
+    console = openmed_console_script
     result = subprocess.run(
         [str(console), "agents", "status"], capture_output=True, text=True, check=False
     )

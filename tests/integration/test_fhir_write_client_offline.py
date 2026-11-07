@@ -189,32 +189,36 @@ def _signed_authorization(prepared):
     )
 
 
-@pytest.mark.parametrize("kind", ["create", "update", "transaction"])
 def test_fake_server_exact_approved_wire_with_real_consumed_authorization(
-    tmp_path, kind
+    subtests, tmp_path
 ):
-    env = _setup(ledger=_DurableLedger(tmp_path / "attempts.db"))
-    if kind == "transaction":
-        proposed = env.client.prepare_transaction(
-            _transaction(),
-            idempotency_key=KEY,
-            credential_handle=HANDLE,
-            lineage=env.manifest,
-        )
-        env.broker.dispatch = lambda h, *, audience, required_scopes: env.broker.sender(
-            audience, "Bearer SyntheticPrivateToken"
-        )
-    else:
-        proposed = _prepared(env, kind)
-    receipt = _signed_authorization(proposed)
-    env.client._authorize = lambda p, r: r == receipt.receipt
-    server = _FakeFHIR(proposed, kind)
-    env.client._transport = server
-    outcome = env.client.submit(proposed, receipt)
-    assert outcome.status is FHIRWriteStatus.COMMITTED
-    assert env.client.submit(proposed, receipt) == outcome
-    assert env.client.reconcile(proposed) == outcome
-    assert server.calls == server.applied == 1
+    case_root = tmp_path
+    for kind in ["create", "update", "transaction"]:
+        with subtests.test(kind=kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            env = _setup(ledger=_DurableLedger(tmp_path / "attempts.db"))
+            if kind == "transaction":
+                proposed = env.client.prepare_transaction(
+                    _transaction(),
+                    idempotency_key=KEY,
+                    credential_handle=HANDLE,
+                    lineage=env.manifest,
+                )
+                env.broker.dispatch = lambda h, *, audience, required_scopes: (
+                    env.broker.sender(audience, "Bearer SyntheticPrivateToken")
+                )
+            else:
+                proposed = _prepared(env, kind)
+            receipt = _signed_authorization(proposed)
+            env.client._authorize = lambda p, r: r == receipt.receipt
+            server = _FakeFHIR(proposed, kind)
+            env.client._transport = server
+            outcome = env.client.submit(proposed, receipt)
+            assert outcome.status is FHIRWriteStatus.COMMITTED
+            assert env.client.submit(proposed, receipt) == outcome
+            assert env.client.reconcile(proposed) == outcome
+            assert server.calls == server.applied == 1
 
 
 def test_commit_then_timeout_stays_unknown_across_reopened_ledger(tmp_path):
