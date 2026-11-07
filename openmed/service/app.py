@@ -868,11 +868,16 @@ def create_app(
                 await mediator.stop()
                 raise
 
+        mtls = getattr(fastapi_app.state, "mtls", None)
+        if mtls is not None:
+            mtls.start_reload_watcher()
         fastapi_app.state.ready = True
 
         try:
             yield
         finally:
+            if mtls is not None:
+                mtls.stop_reload_watcher()
             fastapi_app.state.ready = False
             fastapi_app.state.shutting_down = True
             mediator = getattr(fastapi_app.state, "openhim_mediator", None)

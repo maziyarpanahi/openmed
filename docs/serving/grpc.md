@@ -153,10 +153,81 @@ CA fingerprints, and certificate expiry) for deployment self-checks.
 
 ### Certificate rotation
 
-Certificates and keys are read once at startup. To rotate, write the new
-chain and key, then restart the process; the restart re-runs every validation
-above and a bad replacement fails startup instead of serving. In-place reload
-without a restart is not supported yet.
+A `GrpcTLSConfig` passed straight to `serve()` is read once at startup. To
+rotate without a restart, wrap it in a `GrpcCredentialReloader`. grpcio then
+asks the reloader for credentials on every new TLS handshake, so new
+connections use the newest validated generation while established connections
+and their in-flight unary and streaming RPCs keep the generation they were
+accepted under.
+
+```python
+from openmed.service.grpc_security import GrpcCredentialReloader, GrpcTLSConfig
+from openmed.service.grpc_server import serve
+from openmed.service.tls_reload import install_reload_signal_handler
+
+reloader = GrpcCredentialReloader(
+    GrpcTLSConfig(
+        certificate_chain_file="/etc/openmed/grpc/server-chain.pem",
+        private_key_file="/etc/openmed/grpc/server-key.pem",
+        client_ca_file="/etc/openmed/grpc/client-ca.pem",
+    ),
+    trust_overlap_seconds=300,       # old client CA accepted for 5 minutes
+    max_connection_age_seconds=3600,  # old connections retire within an hour
+    connection_grace_seconds=300,     # plus up to 5 minutes for running RPCs
+)
+server = serve("0.0.0.0:50051", tls=reloader)
+install_reload_signal_handler(reloader)  # `kill -HUP <pid>` reloads
+server.wait_for_termination()
+```
+
+Reloads are local only. Call `reloader.reload()`, send `SIGHUP` after
+`install_reload_signal_handler()` (POSIX), or run a
+`TLSCredentialWatcher(reloader, interval_seconds=...)` that polls file
+metadata and reloads when it changes. `reload()` may also be given a new
+`GrpcTLSConfig` when each generation is staged in its own directory.
+
+Every reload validates a complete candidate before anything changes: the same
+checks as startup, plus that the chain links from leaf to intermediates, that
+the leaf stays valid for at least `min_remaining_validity_seconds` (5 minutes
+by default), that every client CA is a currently valid CA certificate, and
+that the files did not change while they were read. A candidate that would
+change whether client certificates are required is refused, because grpcio
+fixes that when the listener is created. Any refusal keeps the previous
+generation serving; there is never a plaintext or unauthenticated interval.
+Write new material atomically (write a temporary file, then rename it, or use
+a secret volume) so a reload never sees half a generation. A restart loads
+the configured files again and fails closed if they are incomplete.
+
+When the client CA bundle changes, clients issued by the outgoing CA can keep
+opening connections until the trust overlap ends. After that only the new CA
+is accepted for new connections. Connections opened under the old generation
+are closed once they reach `max_connection_age_seconds`; RPCs still running
+after `connection_grace_seconds` end with `UNAVAILABLE`, which clients can
+retry on a fresh connection. Pass `max_connection_age_seconds=None` to leave
+connection age unbounded.
+
+`reload()` returns a `TLSReloadResult` with the new and previous generation
+IDs, `validation_state`, `activation_state`, the overlap deadline and a typed
+`outcome` (`activated`, `unchanged` or `rejected`) plus a reason code.
+`reloader.readiness()` reports whether the active certificate and client trust
+are inside their validity windows, and `reloader.report()` returns generation
+IDs, fingerprints, counters and states. None of these include file paths, PEM
+text, subjects or SANs.
+
+| Reload reason | Meaning |
+| --- | --- |
+| `tls_activated` / `tls_unchanged` | The candidate was activated, or matched the active generation |
+| `tls_incomplete` | A required file is not configured |
+| `tls_unreadable` / `tls_malformed` | A file could not be read, or is empty, oversized or not valid PEM |
+| `tls_key_mismatch` | The key does not match the leaf, for example after a partial write |
+| `tls_certificate_expired` / `tls_certificate_not_yet_valid` | A certificate is outside its validity window |
+| `tls_certificate_expiring` | The leaf, or the latest client CA, expires within the minimum remaining validity |
+| `tls_chain_untrusted` | The chain does not link leaf to intermediates, or does not lead to the optional `TLSCredentialSource.server_ca_file` |
+| `tls_client_ca_invalid` | The client CA bundle contains a certificate that is not a CA |
+| `tls_policy_incompatible` | The candidate would change the client-certificate requirement |
+| `tls_candidate_changed` | A file changed while the candidate was being read |
+| `tls_reload_in_progress` | Another reload was running; concurrent reloads are rejected, not queued |
+| `tls_activation_failed` | grpcio refused the validated material |
 
 ## Client Example
 
