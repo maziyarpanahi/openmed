@@ -20,6 +20,17 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from .egress import (
+    EgressAdapter,
+    EgressDataClass,
+    EgressDenied,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+    egress_http_client,
+    egress_scope,
+)
+
 SERVICE_PRIVACY_GATEWAY_ENDPOINT_ENV_VAR = "OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT"
 DEFAULT_PRIVACY_GATEWAY_POLICY = "strict"
 DEFAULT_PRIVACY_GATEWAY_MIN_CONFIDENCE = 0.85
@@ -310,10 +321,20 @@ class PrivacyGatewayAuditTrail:
 
 @dataclass(frozen=True)
 class HttpExternalLLMTransport:
-    """HTTP transport for the operator-configured external LLM endpoint."""
+    """HTTP transport for the operator-configured external LLM endpoint.
+
+    Each call is authorized by the egress policy for the ``privacy_gateway``
+    purpose before the redacted prompt is serialized, the serialized body is
+    checked against the decision's byte budget, and the connection is pinned
+    to addresses that passed the policy. A refusal raises
+    :class:`PrivacyTransportError` with reason ``egress_denied``.
+    """
 
     endpoint: str
     timeout: float = 30.0
+    egress_policy: Optional[EgressPolicy] = field(
+        default=None, repr=False, compare=False
+    )
 
     @classmethod
     def from_env(cls) -> "HttpExternalLLMTransport":
@@ -333,19 +354,49 @@ class HttpExternalLLMTransport:
         metadata: Mapping[str, Any],
     ) -> str:
         """POST a redacted prompt and return the model text."""
-        import httpx
-
+        operation = EgressOperation(
+            EgressAdapter.PRIVACY_GATEWAY,
+            policy=self.egress_policy,
+            bound_destinations=(self.endpoint,),
+        )
         try:
-            response = httpx.post(
+            decision = operation.authorize(
                 self.endpoint,
-                json={
+                purpose=EgressPurpose.PRIVACY_GATEWAY,
+                data_class=EgressDataClass.DEIDENTIFIED_TEXT,
+                timeout_seconds=self.timeout,
+            )
+            body = json.dumps(
+                {
                     "prompt": redacted_text,
                     "request_id": request_id,
                     "metadata": dict(metadata),
                 },
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            decision = decision.require_body(len(body))
+        except EgressDenied:
+            raise PrivacyTransportError(
+                "External LLM egress was denied by policy",
+                reason_code="egress_denied",
+            ) from None
+
+        try:
+            with egress_http_client(timeout=self.timeout) as client:
+                with egress_scope(decision):
+                    response = client.post(
+                        self.endpoint,
+                        content=body,
+                        headers={"Content-Type": "application/json"},
+                    )
+                response.raise_for_status()
+        except EgressDenied:
+            raise PrivacyTransportError(
+                "External LLM egress was denied by policy",
+                reason_code="egress_denied",
+            ) from None
         except Exception as exc:
             raise PrivacyTransportError("External LLM transport failed") from exc
 

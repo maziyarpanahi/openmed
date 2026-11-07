@@ -9,6 +9,18 @@ from typing import Any, Callable, Optional
 
 import httpx
 
+from .egress import (
+    EgressAdapter,
+    EgressCredential,
+    EgressDataClass,
+    EgressDecision,
+    EgressDenied,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+    egress_http_client,
+    egress_scope,
+)
 from .signing import (
     NONCE_HEADER,
     SIGNATURE_HEADER,
@@ -19,6 +31,7 @@ from .signing import (
 
 EVENT_HEADER = "X-OpenMed-Event"
 DEFAULT_WEBHOOK_TIMEOUT_SECONDS = 10.0
+WEBHOOK_ERROR_EGRESS_DENIED = "egress_denied"
 
 
 @dataclass(frozen=True)
@@ -77,6 +90,56 @@ def sign_webhook_payload(
     )
 
 
+def _webhook_operation(
+    url: str, egress_policy: Optional[EgressPolicy]
+) -> EgressOperation:
+    return EgressOperation(
+        EgressAdapter.WEBHOOKS,
+        policy=egress_policy,
+        bound_destinations=(url,),
+    )
+
+
+def _authorize_webhook(
+    operation: EgressOperation,
+    url: str,
+    timeout_seconds: float,
+) -> EgressDecision:
+    return operation.authorize(
+        url,
+        purpose=EgressPurpose.WEBHOOK,
+        data_class=EgressDataClass.METADATA,
+        credential=EgressCredential.SIGNATURE,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def authorize_webhook_destination(
+    url: str,
+    *,
+    timeout_seconds: float = DEFAULT_WEBHOOK_TIMEOUT_SECONDS,
+    egress_policy: Optional[EgressPolicy] = None,
+) -> EgressDecision:
+    """Check a callback URL against the egress policy at job submission.
+
+    Args:
+        url: Callback URL supplied with the job.
+        timeout_seconds: Per-attempt timeout the delivery will use.
+        egress_policy: Policy to apply; defaults to the environment policy.
+
+    Returns:
+        The allowed decision. Literal-IP callbacks are classified here;
+        hostnames are resolved and checked again before each connection.
+
+    Raises:
+        EgressDenied: When the policy refuses the callback destination.
+    """
+
+    return _authorize_webhook(
+        _webhook_operation(url, egress_policy), url, timeout_seconds
+    )
+
+
 def deliver_webhook(
     url: str,
     payload: dict[str, Any],
@@ -87,6 +150,7 @@ def deliver_webhook(
     timeout_seconds: float = DEFAULT_WEBHOOK_TIMEOUT_SECONDS,
     client: Optional[httpx.Client] = None,
     sleeper: Callable[[float], None] = time.sleep,
+    egress_policy: Optional[EgressPolicy] = None,
 ) -> WebhookDeliveryResult:
     """POST a signed webhook payload, retrying non-2xx responses and I/O errors.
 
@@ -95,11 +159,28 @@ def deliver_webhook(
     ``timeout_seconds`` bounds each attempt's connect/read/write/pool I/O and is
     applied to every request, including when the caller supplies ``client``; a
     supplied client's own configuration and ownership are left unchanged.
+
+    Every attempt is authorized by the egress policy (``egress_policy`` or the
+    environment policy) under one logical operation bound to ``url``: the first
+    check runs before the payload is serialized, and a denied attempt stops
+    delivery with error ``egress_denied`` instead of retrying. A client created
+    here connects only to addresses that passed the policy.
     """
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
     if backoff_seconds < 0:
         raise ValueError("backoff_seconds must be greater than or equal to 0")
+
+    operation = _webhook_operation(url, egress_policy)
+    try:
+        decision = _authorize_webhook(operation, url, timeout_seconds)
+    except EgressDenied:
+        return WebhookDeliveryResult(
+            success=False,
+            attempts=0,
+            status_code=None,
+            error=WEBHOOK_ERROR_EGRESS_DENIED,
+        )
 
     request_path = httpx.URL(url).raw_path.decode("ascii")
     body = canonical_json_bytes(payload)
@@ -109,12 +190,20 @@ def deliver_webhook(
     }
 
     owns_client = client is None
-    active_client = client or httpx.Client(timeout=timeout_seconds)
+    active_client = client or egress_http_client(timeout=timeout_seconds)
     attempts = 0
     last_status_code: Optional[int] = None
     last_error: Optional[str] = None
     try:
         for attempt in range(1, max_attempts + 1):
+            try:
+                if attempt > 1:
+                    decision = _authorize_webhook(operation, url, timeout_seconds)
+                checked = decision.require_body(len(body))
+            except EgressDenied:
+                last_status_code = None
+                last_error = WEBHOOK_ERROR_EGRESS_DENIED
+                break
             attempts = attempt
             signed_headers = sign_request(
                 "POST",
@@ -124,12 +213,13 @@ def deliver_webhook(
             )
             headers = {**base_headers, **signed_headers}
             try:
-                response = active_client.post(
-                    url,
-                    content=body,
-                    headers=headers,
-                    timeout=timeout_seconds,
-                )
+                with egress_scope(checked):
+                    response = active_client.post(
+                        url,
+                        content=body,
+                        headers=headers,
+                        timeout=timeout_seconds,
+                    )
                 last_status_code = response.status_code
                 if 200 <= response.status_code < 300:
                     return WebhookDeliveryResult(
@@ -139,6 +229,10 @@ def deliver_webhook(
                         error=None,
                     )
                 last_error = f"HTTP {response.status_code}"
+            except EgressDenied:
+                last_status_code = None
+                last_error = WEBHOOK_ERROR_EGRESS_DENIED
+                break
             except httpx.HTTPError as exc:
                 last_error = str(exc)
 

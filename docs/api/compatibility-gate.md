@@ -25,7 +25,7 @@ The service error envelope currently exposes these stable categories:
 
 `auth_rate_limited`, `authentication_required`, `backpressure`, `bad_request`,
 `budget_exceeded`, `capability_error`, `circuit_breaker_open`,
-`configuration_error`, `forbidden`, `grounding_invalid_request`,
+`configuration_error`, `egress_denied`, `forbidden`, `grounding_invalid_request`,
 `inference_error`, `input_error`, `internal_error`, `invalid_credentials`,
 `missing_extra`, `model_load_error`, `not_ready`,
 `offline_snapshot_unavailable`, `openmed_error`, `policy_error`,

@@ -23,6 +23,19 @@ import httpx
 
 from openmed.__about__ import __version__
 
+from .egress import (
+    EgressAdapter,
+    EgressCredential,
+    EgressDataClass,
+    EgressDecision,
+    EgressDenied,
+    EgressOperation,
+    EgressPolicy,
+    EgressPurpose,
+    egress_async_http_client,
+    egress_scope,
+)
+
 OPENHIM_MEDIA_TYPE = "application/json+openhim"
 OPENHIM_MEDIATOR_PATH = "/openhim/deidentify"
 OPENHIM_HEARTBEAT_PATH = "/openhim/heartbeat"
@@ -307,7 +320,12 @@ class OpenHIMMediatorSettings:
 
 
 class OpenHIMMediatorClient:
-    """Register the mediator and maintain its OpenHIM heartbeat."""
+    """Register the mediator and maintain its OpenHIM heartbeat.
+
+    Every authentication, registration, and heartbeat request is authorized by
+    the egress policy for the ``openhim`` purpose under one logical operation
+    bound to ``api_url``; an owned client connects only to checked addresses.
+    """
 
     def __init__(
         self,
@@ -315,6 +333,7 @@ class OpenHIMMediatorClient:
         *,
         client: Optional[httpx.AsyncClient] = None,
         monotonic: Callable[[], float] = time.monotonic,
+        egress_policy: Optional[EgressPolicy] = None,
     ) -> None:
         if not settings.enabled:
             raise OpenHIMMediatorConfigurationError(
@@ -323,7 +342,12 @@ class OpenHIMMediatorClient:
         self.settings = settings
         self._monotonic = monotonic
         self._started_at = monotonic()
-        self._client = client or httpx.AsyncClient(
+        self._egress = EgressOperation(
+            EgressAdapter.OPENHIM,
+            policy=egress_policy,
+            bound_destinations=(settings.api_url,),
+        )
+        self._client = client or egress_async_http_client(
             timeout=settings.request_timeout_seconds,
             verify=settings.verify_tls,
         )
@@ -341,6 +365,26 @@ class OpenHIMMediatorClient:
 
         return str(self.settings.registration["urn"])
 
+    def _authorize(
+        self,
+        url: str,
+        *,
+        data_class: EgressDataClass,
+        credential: EgressCredential,
+    ) -> EgressDecision:
+        return self._egress.authorize(
+            url,
+            purpose=EgressPurpose.OPENHIM,
+            data_class=data_class,
+            credential=credential,
+            timeout_seconds=self.settings.request_timeout_seconds,
+        )
+
+    def _request_credential(self) -> EgressCredential:
+        if self.settings.auth_mode == "basic":
+            return EgressCredential.BASIC
+        return EgressCredential.HEADER
+
     async def _authentication_kwargs(self) -> dict[str, Any]:
         if self.settings.auth_mode == "basic":
             return {
@@ -351,9 +395,14 @@ class OpenHIMMediatorClient:
             }
 
         username = quote(self.settings.username, safe="")
-        response = await self._client.get(
-            f"{self.settings.api_url}/authenticate/{username}"
+        preflight_url = f"{self.settings.api_url}/authenticate/{username}"
+        decision = self._authorize(
+            preflight_url,
+            data_class=EgressDataClass.NONE,
+            credential=EgressCredential.NONE,
         )
+        with egress_scope(decision):
+            response = await self._client.get(preflight_url)
         if response.status_code != 200:
             raise OpenHIMMediatorProtocolError(
                 f"OpenHIM authentication preflight returned {response.status_code}"
@@ -403,12 +452,19 @@ class OpenHIMMediatorClient:
         async with self._register_lock:
             if self._registered:
                 return
-            authentication = await self._authentication_kwargs()
-            response = await self._client.post(
-                f"{self.settings.api_url}/mediators",
-                json=dict(self.settings.registration),
-                **authentication,
+            registration_url = f"{self.settings.api_url}/mediators"
+            decision = self._authorize(
+                registration_url,
+                data_class=EgressDataClass.METADATA,
+                credential=self._request_credential(),
             )
+            authentication = await self._authentication_kwargs()
+            with egress_scope(decision):
+                response = await self._client.post(
+                    registration_url,
+                    json=dict(self.settings.registration),
+                    **authentication,
+                )
             if response.status_code != 201:
                 raise OpenHIMMediatorProtocolError(
                     f"OpenHIM mediator registration returned {response.status_code}"
@@ -426,12 +482,19 @@ class OpenHIMMediatorClient:
         if force_config:
             payload["config"] = True
         encoded_urn = quote(self.urn, safe="")
-        authentication = await self._authentication_kwargs()
-        response = await self._client.post(
-            f"{self.settings.api_url}/mediators/{encoded_urn}/heartbeat",
-            json=payload,
-            **authentication,
+        heartbeat_url = f"{self.settings.api_url}/mediators/{encoded_urn}/heartbeat"
+        decision = self._authorize(
+            heartbeat_url,
+            data_class=EgressDataClass.METADATA,
+            credential=self._request_credential(),
         )
+        authentication = await self._authentication_kwargs()
+        with egress_scope(decision):
+            response = await self._client.post(
+                heartbeat_url,
+                json=payload,
+                **authentication,
+            )
         if response.status_code != 200:
             raise OpenHIMMediatorProtocolError(
                 f"OpenHIM mediator heartbeat returned {response.status_code}"
@@ -464,7 +527,11 @@ class OpenHIMMediatorClient:
                 await self.heartbeat()
             except asyncio.CancelledError:
                 raise
-            except (httpx.HTTPError, OpenHIMMediatorProtocolError) as exc:
+            except (
+                httpx.HTTPError,
+                OpenHIMMediatorProtocolError,
+                EgressDenied,
+            ) as exc:
                 self._last_error = type(exc).__name__
 
     async def stop(self) -> None:

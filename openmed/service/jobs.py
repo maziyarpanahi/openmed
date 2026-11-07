@@ -19,7 +19,11 @@ from openmed.core.audit import hash_text
 
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
-from .webhooks import WebhookDeliveryResult, deliver_webhook
+from .webhooks import (
+    WebhookDeliveryResult,
+    authorize_webhook_destination,
+    deliver_webhook,
+)
 
 SERVICE_JOBS_STORE_ENV_VAR = "OPENMED_SERVICE_JOBS_STORE_PATH"
 SERVICE_JOBS_TTL_ENV_VAR = "OPENMED_SERVICE_JOBS_TTL_SECONDS"
@@ -260,8 +264,17 @@ class DeidentifyJobQueue:
         )
 
     def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        """Submit one de-identification job and return its initial metadata."""
+        """Submit one de-identification job and return its initial metadata.
+
+        A webhook URL is checked against the egress policy before the job is
+        accepted, so a refused callback is rejected at submission.
+
+        Raises:
+            EgressDenied: When the egress policy refuses the webhook URL.
+        """
         self.runtime.validate_served_model(payload.model_name)
+        if payload.webhook is not None:
+            authorize_webhook_destination(payload.webhook.url)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
