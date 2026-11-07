@@ -274,6 +274,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
   token IDs. Callers must supply a local guard and asset provenance to release text.
 
+- Local barcode, QR and DataMatrix region detection across image, DICOM pixel
+  and PDF raster redaction, with a caller-installed optional ZXing backend,
+  deterministic fake, payload-free coverage reports, explicit unavailable
+  coverage policy and residual-code verification.
+
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
 
 - Fail closed before publishing redacted DOCX, XLSX and PPTX packages with

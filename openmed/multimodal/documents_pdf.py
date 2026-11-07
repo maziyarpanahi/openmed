@@ -24,6 +24,14 @@ from typing import Any, BinaryIO
 
 from .asset_limits import LimitProfile
 from .base import ExtractedDocument, SourceSpan, register_handler
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+    merge_code_coverage,
+)
 from .documents_pdf_layout import (
     PdfPageLayout,
     PdfReadingOrder,
@@ -873,12 +881,19 @@ def _pdf_handler(
     )
     if output_path is not None or bool(_policy_value(policy, "return_bytes")):
         annotation_report: list[Mapping[str, Any]] = []
+        code_report: dict[str, Any] = {}
+        code_policy = _policy_value(policy, "code_detection_policy")
         redacted_pdf = _render_redacted_pdf(
             BytesIO(content),
             rectangles,
             include_annotations=bool(include_annotations),
             annotation_report=annotation_report,
             policy=policy,
+            code_detector=_policy_value(policy, "code_detector"),
+            code_detection_policy=(
+                "coverage_incomplete" if code_policy is None else code_policy
+            ),
+            code_report=code_report,
         )
         if output_path is not None:
             _write_pdf_output(output_path, redacted_pdf)
@@ -889,6 +904,7 @@ def _pdf_handler(
                 "redacted_pdf_sha256": hashlib.sha256(redacted_pdf).hexdigest(),
                 "redacted_pdf_bytes": redacted_pdf,
                 "annotations": annotation_report,
+                **code_report,
             }
         )
     if policy is not None:
@@ -910,6 +926,9 @@ def _render_redacted_pdf(
     include_annotations: bool = False,
     annotation_report: list[Mapping[str, Any]] | None = None,
     policy: Any = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
+    code_report: dict[str, Any] | None = None,
 ) -> bytes:
     """Rasterize a PDF and burn opaque boxes into a fresh image-only PDF."""
     limit_profile = redaction_limit_profile(policy)
@@ -934,6 +953,8 @@ def _render_redacted_pdf(
     )
     if annotation_report is not None:
         annotation_report.extend(prepared.report)
+    code_coverage: list[CodeCoverageReport] = []
+    residual_coverage: list[CodeCoverageReport] = []
     try:
         with pdfplumber.open(BytesIO(prepared.content)) as pdf:
             total_pixels = 0
@@ -953,6 +974,13 @@ def _render_redacted_pdf(
                     antialias=True,
                 ).original.convert("RGB")
                 images.append(rendered)
+                source_codes = detect_code_regions(
+                    rendered,
+                    detector=code_detector,
+                    policy=code_detection_policy,
+                    page=page_index,
+                )
+                code_coverage.append(source_codes)
                 width = max(float(getattr(page, "width", rendered.width)), 1.0)
                 height = max(float(getattr(page, "height", rendered.height)), 1.0)
                 x_scale = rendered.width / width
@@ -969,9 +997,25 @@ def _render_redacted_pdf(
                         ),
                         fill="black",
                     )
+                for region in source_codes.regions:
+                    x0, y0, x1, y1 = region.bbox
+                    drawer.rectangle((x0, y0, x1 - 1, y1 - 1), fill="black")
+                residual = detect_code_regions(
+                    rendered,
+                    detector=code_detector,
+                    policy=code_detection_policy,
+                    page=page_index,
+                )
+                assert_no_residual_codes(residual)
+                residual_coverage.append(residual)
 
         if not images:
             raise UnsupportedDocumentError("Cannot emit a clean PDF with no pages.")
+        if code_report is not None:
+            code_report["code_coverage"] = merge_code_coverage(code_coverage).to_dict()
+            code_report["residual_code_coverage"] = merge_code_coverage(
+                residual_coverage
+            ).to_dict()
         output = BytesIO()
         first, *remaining = images
         first.save(
