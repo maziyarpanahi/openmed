@@ -464,6 +464,7 @@ nav:
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
       - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - OpenMedKit Evidence Contracts: multimodal/openmedkit-contracts.md
+      - Local Multimodal Review: multimodal/local-review.md
       - Cross-modal Clock Alignment: multimodal/cross-modal-clock-alignment.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
