@@ -12,11 +12,18 @@ from google.protobuf import struct_pb2
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
+from .grpc_security import (
+    GrpcServerCredentials,
+    GrpcStartupError,
+    GrpcTLSConfig,
+    bind_grpc_listener,
+    resolve_grpc_listener,
+)
 from .proto.generated import openmed_pb2, openmed_pb2_grpc
 from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
 
-DEFAULT_GRPC_ADDRESS = "[::]:50051"
+DEFAULT_GRPC_ADDRESS = "127.0.0.1:50051"
 DEFAULT_GRPC_MAX_WORKERS = 10
 
 
@@ -131,9 +138,23 @@ def create_grpc_server(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
+    interceptors: Sequence[grpc.ServerInterceptor] = (),
 ) -> grpc.Server:
-    """Create a grpcio server with the OpenMed service registered."""
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
+    """Create an unbound grpcio server with the OpenMed service registered.
+
+    Args:
+        runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
+        max_workers: Worker threads for the synchronous server.
+        interceptors: Server interceptors applied to every RPC, in order.
+
+    Returns:
+        A server with no listener. Bind it with
+        :func:`openmed.service.grpc_security.bind_grpc_listener`.
+    """
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=max_workers),
+        interceptors=tuple(interceptors),
+    )
     openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(
         OpenMedGrpcServicer(runtime),
         server,
@@ -146,10 +167,47 @@ def serve(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
+    tls: GrpcTLSConfig | GrpcServerCredentials | None = None,
+    allow_insecure_remote_dev: bool = False,
+    interceptors: Sequence[grpc.ServerInterceptor] = (),
 ) -> grpc.Server:
-    """Start an insecure local gRPC server and return the running server."""
-    server = create_grpc_server(runtime=runtime, max_workers=max_workers)
-    server.add_insecure_port(address)
+    """Validate the listener, bind it, start the server and return it.
+
+    The default address is loopback-only plaintext. Any non-loopback address
+    requires ``tls`` unless ``allow_insecure_remote_dev`` is set under the
+    ``dev`` or ``test`` profile.
+
+    Args:
+        address: The gRPC bind address. Defaults to ``127.0.0.1:50051``.
+        runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
+        max_workers: Worker threads for the synchronous server.
+        tls: Server TLS files (or pre-validated credentials). Supplying a
+            client CA enables mutual TLS.
+        allow_insecure_remote_dev: Development-only override for plaintext on
+            a non-loopback address; refused outside ``dev``/``test``.
+        interceptors: Server interceptors applied to every RPC, in order.
+
+    Returns:
+        A started server that is listening on the requested address.
+
+    Raises:
+        GrpcStartupError: Before serving, when the listener policy refuses the
+            configuration, credentials are invalid, or binding fails.
+    """
+    listener = resolve_grpc_listener(
+        address,
+        tls=tls,
+        allow_insecure_remote_dev=allow_insecure_remote_dev,
+        profile=runtime.profile if runtime is not None else None,
+    )
+    server = create_grpc_server(
+        runtime=runtime, max_workers=max_workers, interceptors=interceptors
+    )
+    try:
+        bind_grpc_listener(server, listener)
+    except GrpcStartupError:
+        server.stop(None)
+        raise
     server.start()
     return server
 

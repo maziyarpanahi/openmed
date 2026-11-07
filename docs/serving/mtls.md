@@ -114,6 +114,13 @@ route scopes and configure JWT keys and route scopes as described in
 [REST Service Authentication](authentication.md). The TLS certificate is still
 required before the JWT is evaluated.
 
+## gRPC transport
+
+The gRPC service terminates TLS and mutual TLS itself through grpcio rather
+than through these REST settings. See
+[gRPC Service: Transport Security](grpc.md#transport-security) for its
+loopback default, `GrpcTLSConfig`, and startup reason codes.
+
 ## Logging and PHI safety
 
 Client certificate PEM, subject, SANs, and fingerprint are never written to
