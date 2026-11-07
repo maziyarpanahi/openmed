@@ -747,6 +747,7 @@ classification:
     - interop/fhir-profiles.md
     - icd11-grounding.md
     - export-matrix.md
+    - openmedkit-support-matrix.md
     - maple-on-device.md
     - mlx-backend.md
     - performance-mps.md
