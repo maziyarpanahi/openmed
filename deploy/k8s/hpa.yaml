@@ -1,3 +1,6 @@
+# Reference autoscaler for the openmed-service Deployment. When the Deployment
+# comes from the Helm chart, set autoscaling.enabled=true so the release
+# renders OPENMED_SERVICE_REPLICA_MODE=multi. See docs/deploy/autoscaling.md.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

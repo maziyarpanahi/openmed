@@ -164,3 +164,11 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> Non
         "secret rotation",
     ):
         assert required_text in docs
+
+
+def test_bundle_declares_single_replica_mode_for_its_one_api_container() -> None:
+    service = _service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service
+    assert len(service["ports"]) == 1

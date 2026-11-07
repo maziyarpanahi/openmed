@@ -77,7 +77,14 @@ helm upgrade openmed-service deploy/helm/openmed-service \
 
 The chart does not create an Ingress or autoscaling object. Add those in
 environment-specific overlays so cluster ingress classes, certificates, and HPA
-policy stay outside the reusable chart.
+policy stay outside the reusable chart. When an HPA such as
+`deploy/k8s/hpa.yaml` scales the release, set `autoscaling.enabled=true`.
+
+The chart renders `OPENMED_SERVICE_REPLICA_MODE=multi` when `replicaCount` is
+greater than 1 or `autoscaling.enabled` is true. In multi-replica mode the API
+stays not ready until each replica-local component is disabled or accepted
+through `replicaState`; see
+[Replica-local state](autoscaling.md#replica-local-state-and-safe-topologies).
 
 For Journey releases, take a paired PostgreSQL and artifact-volume recovery
 point before `helm upgrade`. Wait for the migration hook, both Deployments,
@@ -96,7 +103,9 @@ orchestrated deployments:
 
 `/livez` reports that the process is running. `/readyz` returns success only
 after configured model preload completes and flips back to not ready during
-graceful shutdown. Probe requests set `Host: localhost` so the service trusted
+graceful shutdown. In multi-replica mode it also returns
+`replica_unsafe_state` while replica-local state is neither disabled nor
+accepted. Probe requests set `Host: localhost` so the service trusted
 host middleware accepts kubelet checks without weakening the application host
 allowlist.
 
@@ -123,7 +132,10 @@ objects are not backups; use the cluster's encrypted secret manager.
 
 | Value | Default | Description |
 | --- | --- | --- |
-| `replicaCount` | `1` | Number of service pods. |
+| `replicaCount` | `1` | Number of service pods. More than 1 renders `OPENMED_SERVICE_REPLICA_MODE=multi`. |
+| `autoscaling.enabled` | `false` | Marks the release as scaled by an external HPA and renders multi-replica mode. The chart does not create the HPA. |
+| `replicaState.accept` | `[]` | Categories joined into `OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE`. |
+| `replicaState.disable` | `[]` | Job categories joined into `OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE`. |
 | `image.repository` | `openmed` | Container image repository. |
 | `image.tag` | `3.2.0` | Container image tag. Empty uses `Chart.appVersion`. |
 | `image.pullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |

@@ -14,6 +14,7 @@ from openmed.__about__ import __version__
 ROOT = Path(__file__).resolve().parents[3]
 CHART_DIR = ROOT / "deploy" / "helm" / "openmed-service"
 CI_VALUES = CHART_DIR / "ci-values.yaml"
+REFERENCE_HPA = ROOT / "deploy" / "k8s" / "hpa.yaml"
 HELM = shutil.which("helm")
 
 pytestmark = pytest.mark.skipif(HELM is None, reason="helm is not installed")
@@ -180,3 +181,80 @@ def test_journey_profile_renders_migration_worker_storage_and_default_deny():
     ]
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
     assert all(set(rule) <= {"to", "ports"} for rule in policy["spec"]["egress"])
+
+
+def _configmap_data(*args: str) -> dict[str, str]:
+    return _by_kind(_render_chart(*args), "ConfigMap")["data"]
+
+
+def _replica_report(monkeypatch: pytest.MonkeyPatch, data: dict[str, str]):
+    from openmed.service.app import create_app, replica_state_report
+
+    for name, value in data.items():
+        monkeypatch.setenv(name, value)
+    return replica_state_report(create_app())
+
+
+def test_default_render_declares_single_replica_mode():
+    data = _configmap_data()
+
+    assert data["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert data["OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE"] == ""
+    assert data["OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE"] == ""
+
+
+def test_ci_values_render_multi_replica_mode_with_explicit_choices():
+    data = _configmap_data("--values", str(CI_VALUES))
+
+    assert data["OPENMED_SERVICE_REPLICA_MODE"] == "multi"
+    assert data["OPENMED_SERVICE_REPLICA_ACCEPT_LOCAL_STATE"] == (
+        "rate_limiter,concurrency_limiter"
+    )
+    assert data["OPENMED_SERVICE_REPLICA_DISABLE_LOCAL_STATE"] == (
+        "async_jobs,fhir_bulk_jobs,smart_backend_jobs"
+    )
+
+
+@pytest.mark.parametrize(
+    ("args", "mode"),
+    [
+        (("--set", "replicaCount=1"), "single"),
+        (("--set", "replicaCount=3"), "multi"),
+        (("--set", "autoscaling.enabled=true"), "multi"),
+        (("--set", "replicaCount=0", "--set", "autoscaling.enabled=true"), "multi"),
+    ],
+)
+def test_replica_count_and_autoscaling_derive_the_replica_mode(args, mode):
+    assert _configmap_data(*args)["OPENMED_SERVICE_REPLICA_MODE"] == mode
+
+
+def test_reference_autoscaling_example_renders_multi_replica_mode():
+    hpa = yaml.safe_load(REFERENCE_HPA.read_text(encoding="utf-8"))
+    min_replicas = hpa["spec"]["minReplicas"]
+
+    assert min_replicas > 1
+    for args in (
+        ("--set", "autoscaling.enabled=true"),
+        ("--set", f"replicaCount={min_replicas}"),
+    ):
+        assert _configmap_data(*args)["OPENMED_SERVICE_REPLICA_MODE"] == "multi"
+
+
+def test_rendered_replica_policy_drives_service_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    ci_report = _replica_report(
+        monkeypatch, _configmap_data("--values", str(CI_VALUES))
+    )
+    autoscaled_report = _replica_report(
+        monkeypatch, _configmap_data("--set", "autoscaling.enabled=true")
+    )
+
+    assert ci_report.ready
+    assert not autoscaled_report.ready
+    assert autoscaled_report.reason_code == "replica_unsafe_state"
+    assert autoscaled_report.unsafe_categories == (
+        "async_jobs",
+        "fhir_bulk_jobs",
+        "smart_backend_jobs",
+    )
