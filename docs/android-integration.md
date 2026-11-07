@@ -224,7 +224,16 @@ suspend fun redactSyntheticDocument(
 ```
 
 Keep `DocumentIntakeResult.offsetMap`, `pages`, and `tokens` if the UI needs to
-map de-identification spans back to source pages. Test the full flow with
+map de-identification spans back to source pages. `DocumentIntakeResult.evidence`
+also maps each recognized region back to a box on the original page, with the
+page rotation and crop, in the coordinates Swift OpenMedKit uses; see
+[Native Document Intake Coordinates](multimodal/native-document-intake.md).
+
+`extract` returns only complete intakes and throws `DocumentIntakeException`,
+whose message is value-free reason codes, when a page is missing, access is
+lost, or coordinates cannot be mapped unambiguously. Call `intake(uri)` to get a
+`DocumentIntakeReport` with an explicit `complete`, `partial` or `refused`
+outcome instead. OCR adapters report token boxes in the upright image's pixels. Test the full flow with
 synthetic fixtures before introducing real clinical documents, and keep human
 review in the downstream workflow. In unit tests, pass `FakeOcrAdapter` (in the
 core artifact) instead of an engine.
