@@ -49,6 +49,10 @@ SPECULATIVE_ACCEPTANCE_RATE_NAME = "openmed_mlx_speculative_acceptance_rate"
 SPECULATIVE_AVERAGE_DEPTH_NAME = "openmed_mlx_speculative_average_depth"
 OPERATIONAL_TOTAL_NAME = "openmed_service_operational_total"
 OPERATIONAL_DURATION_NAME = "openmed_service_operational_duration_seconds"
+REQUEST_BODY_TIMEOUT_NAME = "openmed_service_request_body_timeout_total"
+REQUEST_BODY_TIMEOUT_REASONS = frozenset({"deadline", "min_rate"})
+UNKNOWN_REQUEST_BODY_TIMEOUT_REASON = "other"
+CONNECTION_REJECTED_NAME = "openmed_service_connection_rejected_total"
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -147,6 +151,10 @@ class PrometheusMetricsRegistry:
         self._operational_total: dict[tuple[str, str, str], int] = {}
         self._operational_duration_count: dict[tuple[str, str, str], int] = {}
         self._operational_duration_sum: dict[tuple[str, str, str], float] = {}
+        self._request_body_timeout_total = dict.fromkeys(
+            sorted(REQUEST_BODY_TIMEOUT_REASONS), 0
+        )
+        self._connection_rejected_total = 0
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
@@ -393,6 +401,26 @@ class PrometheusMetricsRegistry:
                 self._operational_duration_sum.get(key, 0.0) + event.duration_seconds
             )
 
+    def record_request_body_timeout(self, *, reason: str) -> None:
+        """Count one request body rejected for a receive-time bound.
+
+        Args:
+            reason: ``"deadline"`` or ``"min_rate"``; any other value is
+                counted as ``"other"`` so labels stay bounded.
+        """
+        label = str(reason)
+        if label not in REQUEST_BODY_TIMEOUT_REASONS:
+            label = UNKNOWN_REQUEST_BODY_TIMEOUT_REASON
+        with self._lock:
+            self._request_body_timeout_total[label] = (
+                self._request_body_timeout_total.get(label, 0) + 1
+            )
+
+    def set_connection_rejected_total(self, count: int) -> None:
+        """Set the process-wide count of connection-limit rejections."""
+        with self._lock:
+            self._connection_rejected_total = _non_negative_int(count)
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -439,6 +467,8 @@ class PrometheusMetricsRegistry:
             operational_total = dict(self._operational_total)
             operational_duration_count = dict(self._operational_duration_count)
             operational_duration_sum = dict(self._operational_duration_sum)
+            request_body_timeout_total = dict(self._request_body_timeout_total)
+            connection_rejected_total = self._connection_rejected_total
 
         lines: list[str] = []
         _append_family_header(
@@ -830,6 +860,24 @@ class PrometheusMetricsRegistry:
                 f"{OPERATIONAL_DURATION_NAME}_sum{labels} "
                 f"{_format_sample_value(operational_duration_sum[key])}"
             )
+
+        _append_family_header(
+            lines,
+            REQUEST_BODY_TIMEOUT_NAME,
+            "Request bodies rejected for missing a receive deadline, by reason.",
+            "counter",
+        )
+        for reason, value in sorted(request_body_timeout_total.items()):
+            labels = _label_suffix({"reason": reason})
+            lines.append(f"{REQUEST_BODY_TIMEOUT_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            CONNECTION_REJECTED_NAME,
+            "Requests the server rejected at its connection concurrency limit.",
+            "counter",
+        )
+        lines.append(f"{CONNECTION_REJECTED_NAME} {connection_rejected_total}")
 
         return "\n".join(lines) + "\n"
 

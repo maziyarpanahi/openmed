@@ -67,6 +67,24 @@ config:
     enabled: false
   # Graceful shutdown drain timeout in seconds.
   shutdownDrainSeconds: 30
+  # Connection and request-body time bounds. The launcher passes the first
+  # three to Uvicorn; the body bounds reject stalled or trickling uploads with
+  # 408 request_body_timeout before route parsing.
+  transport:
+    # Connections or tasks per worker before Uvicorn answers 503.
+    limitConcurrency: 128
+    # Seconds an idle HTTP keep-alive connection stays open. This is not the
+    # model keep-alive above.
+    timeoutKeepAliveSeconds: 5
+    # Seconds shutdown waits for open connections before cancelling them.
+    # Keep it below terminationGracePeriodSeconds.
+    timeoutGracefulShutdownSeconds: 30
+    # Total seconds allowed to receive one request body.
+    requestBodyTimeoutSeconds: 60
+    # Seconds before the minimum body transfer rate applies.
+    requestBodyGraceSeconds: 10
+    # Minimum average body transfer rate in bytes per second; 0 disables it.
+    requestBodyMinBytesPerSecond: 1024
   # Optional pull-only Prometheus metrics endpoint.
   metrics:
     enabled: false
