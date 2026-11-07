@@ -459,6 +459,7 @@ nav:
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
       - EDF and EDF+ Reader: multimodal/edf-reader.md
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - Critical Transcript Token Holds: multimodal/transcript-holds.md
       - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
       - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
