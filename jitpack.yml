@@ -6,4 +6,4 @@ before_install:
   - $HOME/.local/bin/uv python install 3.12
 
 install:
-  - PYTHON_BIN="$($HOME/.local/bin/uv python find 3.12)" && cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" -PopenmedPython="$PYTHON_BIN" --stacktrace
+  - PYTHON_BIN="$($HOME/.local/bin/uv python find 3.12)" && cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal :openmedkit-mlkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" -PopenmedPython="$PYTHON_BIN" --stacktrace

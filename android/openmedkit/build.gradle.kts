@@ -131,6 +131,11 @@ kotlin {
     jvmToolchain(11)
 }
 
+// The core AAR must stay free of vendor OCR, Play services, and telemetry
+// artifacts; ML Kit OCR lives in the optional :openmedkit-mlkit module.
+extra["openmedkitDependencyBoundary"] = "core"
+apply(from = rootProject.file("gradle/dependency-boundary.gradle.kts"))
+
 tasks.matching { it.name.endsWith("Assets") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
 }
@@ -173,6 +178,7 @@ val verifyReleaseConsumerRules by tasks.registering {
 tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
     dependsOn(verifyReleaseConsumerRules)
+    dependsOn("verifyDependencyBoundary")
 }
 
 tasks.withType<Test>().configureEach {
@@ -353,7 +359,6 @@ afterEvaluate {
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.mlkit.text.recognition)
     implementation(libs.onnxruntime.android)
     implementation(libs.djl.tokenizers)
     implementation(libs.djl.tokenizer.native.android)
