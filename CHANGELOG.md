@@ -76,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
 
+- Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
+  16, 212 and 80 with windowed integer outputs, streamed checksum verification,
+  value-safe metadata
+  and MIT annotation summaries, synthetic privacy fixtures and explicit human
+  review boundaries.
+
 - Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
 
 - Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
