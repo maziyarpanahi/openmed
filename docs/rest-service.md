@@ -388,8 +388,24 @@ OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 python -m openmed.service.logging --ho
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
 During shutdown, readiness is flipped off, new model-backed work is rejected,
 and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
-`/privacy-gateway/complete` requests to finish. The default is `30`.
+`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
+`/pii/deidentify/stream`, and `/privacy-gateway/complete` requests to finish.
+The default is `30`.
+
+Optional NDJSON stream bounds:
+
+```bash
+OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS=30 \
+OPENMED_SERVICE_STREAM_MAX_EVENTS=100000 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+`OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS` is how long one write to a
+streaming client may stay blocked before the stream is stopped (default `30`).
+`OPENMED_SERVICE_STREAM_MAX_EVENTS` is the most NDJSON lines one stream may
+emit (default `100000`, maximum `10000000`). Both apply to
+`/pii/extract/stream` and `/pii/deidentify/stream`, must be positive, and
+cannot be disabled. See [NDJSON stream bounds](#ndjson-stream-bounds).
 
 Optional pull-only Prometheus metrics endpoint:
 
@@ -466,6 +482,9 @@ names, counts, labels, lengths, and durations. See
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
 - Streaming de-identification advances the blocking core iterator in the
   threadpool and applies the same active-profile timeout to the complete stream.
+- Streaming PII extraction applies one active-profile deadline across every
+  extraction window, and both NDJSON streams bound slow consumers and event
+  counts; see [NDJSON stream bounds](#ndjson-stream-bounds).
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
 - `/privacy-gateway/complete` redacts PHI before the configured external LLM
@@ -844,6 +863,31 @@ Request body:
 
 Returns the same shape as `extract_pii(...).to_dict()`.
 
+### `POST /pii/extract/stream`
+
+Streams incremental span events for long inputs. It accepts every
+`/pii/extract` field plus `chunk_size` (`1` to `32768`, default `1024`),
+`window_chars` (default `4096`), `tokenizer_context_chars` (default `128`),
+`max_entity_chars` (default `512`), and `include_text` (default `true`; set it
+to `false` to omit span surfaces from events). The response media type is
+`application/x-ndjson`; each line is one event with `type` `emit`, `retract`,
+or `final`, plus a PHI-free `audit` object.
+
+One deadline, the active-profile `timeout`, spans every extraction window. It
+is checked before each window starts and bounds each window's wait, so the
+stream ends on time even if a model window is slow; the last line is then the
+standard `timeout` error:
+
+```json
+{"type":"error","error":{"code":"timeout","message":"Request exceeded configured timeout of 60 seconds","details":{"timeout_seconds":60.0}}}
+```
+
+Model failures end the stream with a value-free `bad_request` or
+`internal_error` line instead. A worker thread cannot be interrupted, so when
+the stream stops while a window is still running, the model reference and the
+admission slot stay held (and are counted as orphaned work) until that window
+returns; they are never reused while the model is busy.
+
 ### `POST /pii/deidentify`
 
 Request body:
@@ -936,6 +980,30 @@ If the configured service timeout is reached after the response has started,
 the last line has `type: "error"` and the standard `timeout` error fields. A
 client disconnect stops iteration and releases the model request. Streamed
 source text is never written to service logs.
+
+### NDJSON stream bounds
+
+`/pii/extract/stream` and `/pii/deidentify/stream` share these bounds. Each
+one ends the stream with at most one `type: "error"` line carrying a
+controlled code and no request content; no event follows it, and the stream
+has no `final` line.
+
+| Bound | Setting | Terminal `error.code` | `error.details` |
+| --- | --- | --- | --- |
+| Request deadline | active-profile `timeout` | `timeout` | `timeout_seconds` |
+| Event cap | `OPENMED_SERVICE_STREAM_MAX_EVENTS` | `stream_event_limit` | `max_events` |
+| Write idle | `OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS` | `stream_write_idle` | `write_idle_seconds` |
+
+The write-idle bound applies when one write to the client stays blocked, for
+example because the client stopped reading. The blocked write is abandoned,
+the `stream_write_idle` line is offered to the client for up to one second,
+and the stream stops producing events. If the client still is not reading,
+the response is left incomplete (no chunked terminator) and the server closes
+the connection. The service logs only the code.
+
+A stream holds its model reference, its concurrency permit
+(`OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`), and its graceful-shutdown
+drain slot until its body ends, not only until response headers are sent.
 
 ### `POST /privacy-gateway/complete`
 

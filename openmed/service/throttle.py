@@ -179,6 +179,9 @@ class RequestWork:
     parallel workers acquire their own. Each releases its permit on completion,
     allowing waiting fields to progress even before the response finishes.
     Batch submissions retain admission until removal or dispatch completion.
+    Streamed response bodies outlive the HTTP wait, so they take a ``hold``
+    that keeps admission until the body ends; work a stream abandons while it
+    still runs is tracked as orphaned until it settles.
     """
 
     def __init__(
@@ -197,6 +200,7 @@ class RequestWork:
         self._tasks: set[asyncio.Future[Any]] = set()
         self._callbacks: list[Callable[[], None]] = []
         self._primary_claimed = False
+        self._holds = 0
         self._closed = False
         self._finished = False
         self._orphaned = False
@@ -216,12 +220,42 @@ class RequestWork:
     def track(self, task: asyncio.Future[Any]) -> None:
         """Retain ownership of one asynchronous operation through completion."""
         self._tasks.add(task)
+        if self._closed and not task.done():
+            # Work handed over after the HTTP wait detached has no waiter left.
+            self._mark_orphaned()
 
         def completed(future: asyncio.Future[Any]) -> None:
             self._tasks.discard(future)
             self._finish_if_idle()
 
         task.add_done_callback(completed)
+
+    def hold(self) -> Callable[[], None]:
+        """Keep admission for a response body that outlives the HTTP handler.
+
+        A streaming route returns its response before the body runs, so the
+        HTTP wait detaches as soon as headers are sent. A hold keeps the
+        request's permit and lifecycle callbacks (such as the drain token)
+        until the body calls the returned release function. A hold is not
+        orphaned work.
+
+        Returns:
+            An idempotent function that releases this hold.
+        """
+        if self._finished:
+            return _noop
+        self._holds += 1
+        released = False
+
+        def release() -> None:
+            nonlocal released
+            if released:
+                return
+            released = True
+            self._holds -= 1
+            self._finish_if_idle()
+
+        return release
 
     def on_finished(self, callback: Callable[[], None]) -> None:
         """Release a lifecycle token only after the response and work finish."""
@@ -234,13 +268,18 @@ class RequestWork:
         """Detach the HTTP wait while retaining any outstanding work."""
         self._closed = True
         if any(not task.done() for task in self._tasks):
-            self._orphaned = True
-            if self._metrics is not None:
-                self._metrics.orphaned_work_started()
+            self._mark_orphaned()
         self._finish_if_idle()
 
+    def _mark_orphaned(self) -> None:
+        if self._orphaned or self._finished:
+            return
+        self._orphaned = True
+        if self._metrics is not None:
+            self._metrics.orphaned_work_started()
+
     def _finish_if_idle(self) -> None:
-        if not self._closed or self._tasks or self._finished:
+        if not self._closed or self._tasks or self._holds or self._finished:
             return
         self._finished = True
         if self._permit is not None:
@@ -251,6 +290,10 @@ class RequestWork:
         callbacks, self._callbacks = self._callbacks, []
         for callback in callbacks:
             callback()
+
+
+def _noop() -> None:
+    return None
 
 
 _REQUEST_WORK: ContextVar[Optional[RequestWork]] = ContextVar(

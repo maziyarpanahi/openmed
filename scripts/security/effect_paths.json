@@ -522,6 +522,16 @@
     },
     {
       "classification": "operational",
+      "function": "StreamWriteGuard._expire",
+      "module": "openmed.service.streaming"
+    },
+    {
+      "classification": "operational",
+      "function": "StreamWriteGuard.wrap.bounded_send",
+      "module": "openmed.service.streaming"
+    },
+    {
+      "classification": "operational",
       "function": "OpenTelemetryMiddleware.__call__.send_with_status",
       "module": "openmed.service.tracing"
     },
