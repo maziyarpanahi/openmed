@@ -1,7 +1,10 @@
 """Convert token-classification checkpoints to ONNX runtime artifacts.
 
 Use the default profile for a standard fp32 ONNX export plus the WebGPU fp16
-variant. Use ``--profile android`` for Android ONNX Runtime Mobile artifacts:
+variant. The fp16 variant is emitted only after it passes the fp16-vs-fp32
+parity gate in :mod:`openmed.onnx.webgpu_gate`, whose evidence is recorded under
+``webgpu_fp16_gate`` in ``openmed-onnx.json``. Use ``--profile android`` for
+Android ONNX Runtime Mobile artifacts:
 ``model.onnx`` and ``model_fp16.onnx`` are exported at the fixed Android opset
 with `input_ids` and `attention_mask` inputs, optional `token_type_ids`, a
 `logits` output, and named dynamic `batch` and `sequence` axes. The fixed opset
@@ -19,6 +22,7 @@ import shutil
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -58,6 +62,18 @@ from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
+)
+from openmed.onnx.webgpu_gate import (
+    DEFAULT_FP32_KEEP_OPS,
+    WEBGPU_FP16_GATE_KEY,
+    WEBGPU_GATE_POLICIES,
+    WEBGPU_GATE_POLICY_FAIL,
+    WEBGPU_GATE_POLICY_OMIT,
+    WebGpuFp16GateConfig,
+    WebGpuFp16GateError,
+    finalize_fp16_webgpu_graph,
+    validate_webgpu_fp16_export,
+    verify_webgpu_fp16_gate_evidence,
 )
 from openmed.processing.tokenization import (
     SEGMENTER_IDS,
@@ -311,23 +327,60 @@ def export_webgpu(
     output_path: str | Path,
     *,
     keep_io_types: bool = True,
+    keep_fp32_ops: Sequence[str] | None = None,
+    keep_fp32_nodes: Sequence[str] = (),
 ) -> Path:
-    """Create a WebGPU-targeted fp16 ONNX artifact from a fp32 ONNX model."""
+    """Create a WebGPU-targeted fp16 ONNX artifact from a fp32 ONNX model.
+
+    Operators in ``keep_fp32_ops`` (plus ONNX Runtime's default fp16 block
+    list) and nodes in ``keep_fp32_nodes`` stay in fp32, and chains of such
+    nodes stay in fp32 end to end. The keep-list is stamped into the artifact's
+    metadata so the parity gate can record it. This function does not gate the
+    artifact; :func:`convert` runs :func:`validate_webgpu_fp16_export` before
+    the artifact is listed in a manifest.
+
+    Args:
+        onnx_path: fp32 source graph.
+        output_path: Destination for the fp16 graph.
+        keep_io_types: Keep float graph inputs and outputs in fp32.
+        keep_fp32_ops: Operator types kept in fp32. ``None`` uses
+            ``DEFAULT_FP32_KEEP_OPS``; an empty sequence keeps only the
+            converter defaults.
+        keep_fp32_nodes: Node names kept in fp32.
+
+    Returns:
+        The written fp16 artifact path.
+    """
 
     try:
         import onnx
-        from onnxruntime.transformers.float16 import convert_float_to_float16
+        from onnxruntime.transformers import float16 as ort_float16
     except ImportError as exc:
         raise_missing_backend("onnx", feature="WebGPU export", cause=exc)
 
     onnx_path = Path(onnx_path)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    fp32_ops = tuple(DEFAULT_FP32_KEEP_OPS if keep_fp32_ops is None else keep_fp32_ops)
+    fp32_nodes = tuple(keep_fp32_nodes)
+    op_block_list = _dedupe_keep_order(
+        [*getattr(ort_float16, "DEFAULT_OP_BLOCK_LIST", ()), *fp32_ops]
+    )
 
     model = onnx.load(str(onnx_path), load_external_data=False)
-    fp16_model = convert_float_to_float16(
+    fp16_model = ort_float16.convert_float_to_float16(
         str(onnx_path),
         keep_io_types=keep_io_types,
+        op_block_list=op_block_list,
+        node_block_list=list(fp32_nodes),
+    )
+    finalize_fp16_webgpu_graph(
+        fp16_model,
+        source_node_names=[
+            node.name for node in getattr(getattr(model, "graph", None), "node", ())
+        ],
+        keep_fp32_ops=fp32_ops,
+        keep_fp32_nodes=fp32_nodes,
     )
     _copy_missing_model_metadata(fp16_model, model)
     onnx.save(fp16_model, str(output_path))
@@ -363,8 +416,19 @@ def convert(
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
     segmenter_id: str | None = None,
+    webgpu_gate_config: WebGpuFp16GateConfig | None = None,
 ) -> OnnxConversionResult:
-    """Export ONNX artifacts and optionally publish the resulting directory."""
+    """Export ONNX artifacts and optionally publish the resulting directory.
+
+    The fp16 WebGPU artifact is listed only after
+    :func:`validate_webgpu_fp16_export` passes on the same lengths and corpus as
+    optimized-graph validation, whether or not graph optimization is enabled.
+    ``webgpu_gate_config`` sets the gate tolerances, fp32 keep-list and failure
+    policy: ``"fail"`` (default) raises :class:`WebGpuFp16GateError`, while
+    ``"omit"`` drops ``model.webgpu.onnx`` and records the value-free reason
+    under ``webgpu_fp16_gate`` in ``openmed-onnx.json``. Either way a failed
+    fp16 artifact is deleted before anything is published.
+    """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -536,14 +600,43 @@ def convert(
             ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
         ]
 
+    webgpu_gate: dict[str, Any] | None = None
     if profile not in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME} and include_webgpu:
+        gate_config = webgpu_gate_config or WebGpuFp16GateConfig()
         webgpu_path = export_webgpu(
             onnx_path,
             output_dir / DEFAULT_WEBGPU_FILENAME,
+            keep_fp32_ops=gate_config.keep_fp32_ops,
+            keep_fp32_nodes=gate_config.keep_fp32_nodes,
         )
-        artifacts.append(
-            ExportArtifact(format="webgpu", path=webgpu_path, precision="float16")
+        webgpu_gate = validate_webgpu_fp16_export(
+            onnx_path,
+            webgpu_path,
+            lengths=tuple(validation_lengths or DEFAULT_DYNAMIC_VALIDATION_LENGTHS),
+            config=config,
+            validation_texts=validation_texts,
+            sample_texts=(sample_text,) if sample_text else (),
+            tokenizer_loader=partial(
+                _webgpu_gate_tokenizer,
+                model_id,
+                cache_dir=cache_dir,
+            ),
+            gate_config=gate_config,
         )
+        if webgpu_gate.get("passed") is True:
+            artifacts.append(
+                ExportArtifact(format="webgpu", path=webgpu_path, precision="float16")
+            )
+        else:
+            Path(webgpu_path).unlink(missing_ok=True)
+            reasons = ", ".join(str(item) for item in webgpu_gate.get("reasons") or [])
+            if gate_config.on_failure != WEBGPU_GATE_POLICY_OMIT:
+                raise WebGpuFp16GateError(webgpu_gate)
+            logger.warning(
+                "Omitted %s: fp16 WebGPU parity gate failed (%s)",
+                DEFAULT_WEBGPU_FILENAME,
+                reasons,
+            )
 
     if include_transformersjs:
         transformersjs_result = export_transformersjs_bundle(
@@ -604,6 +697,7 @@ def convert(
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
         segmenter=segmenter,
+        webgpu_fp16_gate=webgpu_gate,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
@@ -713,8 +807,15 @@ def write_export_manifest(
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
     segmenter: Mapping[str, Any] | None = None,
+    webgpu_fp16_gate: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
+    """Write an ONNX/WebGPU artifact manifest into *output_dir*.
+
+    A ``webgpu`` artifact requires ``webgpu_fp16_gate``: a passing gate record
+    whose ``artifact_sha256`` matches the artifact bytes. The record is stored
+    under the top-level ``webgpu_fp16_gate`` key, also when the gate omitted
+    the artifact.
+    """
 
     output_dir = Path(output_dir)
     formats = _dedupe_keep_order([artifact.format for artifact in artifacts])
@@ -756,6 +857,8 @@ def write_export_manifest(
     }
     if segmenter is not None:
         manifest["segmenter"] = dict(segmenter)
+    if webgpu_fp16_gate is not None:
+        manifest[WEBGPU_FP16_GATE_KEY] = dict(webgpu_fp16_gate)
 
     manifest_path = output_dir / MANIFEST_FILENAME
     with manifest_path.open("w", encoding="utf-8") as handle:
@@ -765,7 +868,11 @@ def write_export_manifest(
 
 
 def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
-    """Validate optional manifest-declared resources in an ONNX bundle."""
+    """Validate optional manifest-declared resources in an ONNX bundle.
+
+    Declared segmenter resources must exist, and a declared ``webgpu`` artifact
+    must carry a passing, digest-bound fp16 parity gate record.
+    """
 
     root = Path(output_dir)
     manifest_path = root / MANIFEST_FILENAME
@@ -780,6 +887,7 @@ def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
         if not isinstance(segmenter, Mapping):
             raise ValueError("ONNX segmenter descriptor must be an object")
         validate_segmenter_resources(root, segmenter)
+    verify_webgpu_fp16_gate_evidence(root, manifest)
     return manifest
 
 
@@ -1466,6 +1574,28 @@ def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
     return load_tokenizer
 
 
+def _webgpu_gate_tokenizer(model_id: str, *, cache_dir: str | None) -> Any:
+    """Load the tokenizer for the gate corpus, or ``None`` when unavailable.
+
+    The gate fails closed with ``validation_corpus_unavailable`` when
+    validation texts were requested but no tokenizer could be loaded.
+    """
+
+    try:
+        from transformers import AutoTokenizer
+    except ImportError:
+        return None
+    try:
+        return get_tokenizer_with_loader(
+            model_id,
+            AutoTokenizer.from_pretrained,
+            cache_dir=cache_dir,
+        )
+    except Exception:  # noqa: BLE001 - the gate records a value-free reason.
+        logger.warning("Could not load the tokenizer for the fp16 WebGPU gate corpus")
+        return None
+
+
 def _ensure_id2label(config: Mapping[str, Any]) -> dict[str, str]:
     id2label = config.get("id2label")
     if isinstance(id2label, Mapping) and id2label:
@@ -1567,6 +1697,27 @@ def main() -> None:
         help="Only emit the fp32 ONNX artifact",
     )
     parser.add_argument(
+        "--webgpu-gate-policy",
+        choices=list(WEBGPU_GATE_POLICIES),
+        default=WEBGPU_GATE_POLICY_FAIL,
+        help=(
+            "Action when the fp16 WebGPU parity gate fails: fail the conversion "
+            "(default) or omit model.webgpu.onnx and record the reason"
+        ),
+    )
+    parser.add_argument(
+        "--webgpu-keep-fp32-op",
+        action="append",
+        default=None,
+        help="Extra operator type kept in fp32 in model.webgpu.onnx, repeatable",
+    )
+    parser.add_argument(
+        "--webgpu-keep-fp32-node",
+        action="append",
+        default=None,
+        help="Node name kept in fp32 in model.webgpu.onnx, repeatable",
+    )
+    parser.add_argument(
         "--include-transformersjs",
         action="store_true",
         help="Also emit a Transformers.js bundle with model_quantized.onnx",
@@ -1600,7 +1751,10 @@ def main() -> None:
     parser.add_argument(
         "--no-onnx-optimization",
         action="store_true",
-        help="Skip post-export ONNX graph optimization and validation",
+        help=(
+            "Skip post-export ONNX graph optimization and its validation; the "
+            "fp16 WebGPU parity gate still runs"
+        ),
     )
     parser.add_argument(
         "--disable-constant-folding",
@@ -1751,6 +1905,11 @@ def main() -> None:
         publish_token_env=args.publish_token_env,
         publish_private=args.publish_private,
         publish_overwrite_existing=args.publish_overwrite_existing,
+        webgpu_gate_config=WebGpuFp16GateConfig(
+            on_failure=args.webgpu_gate_policy,
+            keep_fp32_ops=(*DEFAULT_FP32_KEEP_OPS, *(args.webgpu_keep_fp32_op or ())),
+            keep_fp32_nodes=tuple(args.webgpu_keep_fp32_node or ()),
+        ),
     )
 
 

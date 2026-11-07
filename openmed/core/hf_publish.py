@@ -268,6 +268,11 @@ def publish_artifact(
     artifact_dir = Path(artifact_dir)
     if not artifact_dir.exists():
         raise HfPublishError(f"artifact directory does not exist: {artifact_dir}")
+    _require_gated_webgpu_artifact(
+        artifact_dir,
+        format_name=format_name,
+        formats=formats,
+    )
 
     verified_gate_report: GateReport | None = None
     if gate_report_path is not None:
@@ -392,6 +397,38 @@ def publish_artifact(
         manifest_row=row,
         skipped=skipped,
     )
+
+
+def _require_gated_webgpu_artifact(
+    artifact_dir: Path,
+    *,
+    format_name: str,
+    formats: list[str] | tuple[str, ...] | None,
+) -> None:
+    """Refuse to publish a WebGPU artifact without passing fp16 gate evidence.
+
+    Applies when the requested formats or the bundle's ``openmed-onnx.json``
+    declare ``webgpu``. The gate record must pass and match the artifact bytes.
+    """
+
+    requested = [format_name, *(formats or [])]
+    wants_webgpu = any(
+        _manifest_format_name(str(item)) == "webgpu" for item in requested
+    )
+    manifest = _read_optional_json(artifact_dir / "openmed-onnx.json")
+    if not wants_webgpu and not manifest:
+        return
+
+    from openmed.onnx.webgpu_gate import verify_webgpu_fp16_gate_evidence
+
+    try:
+        verify_webgpu_fp16_gate_evidence(
+            artifact_dir,
+            manifest,
+            require=wants_webgpu,
+        )
+    except ValueError as exc:
+        raise HfPublishError(str(exc)) from None
 
 
 def _write_verified_model_card(

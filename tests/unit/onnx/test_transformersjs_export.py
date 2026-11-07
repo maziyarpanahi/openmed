@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import shutil
@@ -22,6 +23,25 @@ def _module():
 
 def _convert_module():
     return importlib.import_module("openmed.onnx.convert")
+
+
+def _passing_webgpu_gate(webgpu_path: Path) -> dict:
+    from openmed.onnx.webgpu_gate import (
+        Fp16ParityObservation,
+        evaluate_webgpu_fp16_gate,
+    )
+
+    rows = [[[2.0, 0.0], [0.0, 2.0]]]
+    return evaluate_webgpu_fp16_gate(
+        [Fp16ParityObservation("synthetic", rows, rows, requested_length=2)],
+        activation_probe={"status": "computed", "overflow_tensor_count": 0},
+        evidence={
+            "artifact_sha256": hashlib.sha256(
+                Path(webgpu_path).read_bytes()
+            ).hexdigest(),
+            "evaluated_lengths": [2],
+        },
+    )
 
 
 def test_export_transformersjs_bundle_writes_layout_and_manifest(
@@ -175,6 +195,11 @@ def test_convert_can_include_transformersjs_bundle(
 
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
+    monkeypatch.setattr(
+        module,
+        "validate_webgpu_fp16_export",
+        lambda onnx_path, webgpu_path, **kwargs: _passing_webgpu_gate(webgpu_path),
+    )
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(
         module,

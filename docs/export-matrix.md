@@ -71,6 +71,13 @@ truth is the backend code, but the essentials are:
   marked `certified: false` in `recall_delta.json` when the measured per-label
   recall delta exceeds the INT4 limit. Release gates block over-budget INT4
   formats. See [MLX Quantized Export Certification](export-mlx-quant.md).
+- **WebGPU fp16 is gated on parity.** The ONNX (default) column includes
+  `model.webgpu.onnx` only when the fp16 graph passes the export-time gate
+  against its fp32 parent on ONNX Runtime CPU: logit deltas, token and span
+  agreement, per-label recall loss on G1/G2 labels and an fp16 activation-range
+  probe. A failed gate fails the conversion, or omits the artifact with a
+  recorded reason under `--webgpu-gate-policy omit`. See
+  [fp16 WebGPU Parity Gate](export-onnx-webgpu.md#fp16-webgpu-parity-gate).
 
 ## See also
 
