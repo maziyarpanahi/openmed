@@ -155,10 +155,67 @@ after suspected exposure, operator departure, backup compromise, or accidental
 secret disclosure. Emergency rotation should use the same verification steps;
 urgency is not a reason to skip consistency checks.
 
+## Service credentials from mounted secret files
+
+Every service credential setting also accepts a `_FILE` companion that names a
+mounted secret file, such as a Compose secret under `/run/secrets` or a
+Kubernetes Secret volume. Environment values are visible through container
+inspection and process environments; secret files are not.
+
+| Inline setting | File setting | Used by |
+| --- | --- | --- |
+| `OPENMED_SERVICE_AUTH_API_KEYS` | `OPENMED_SERVICE_AUTH_API_KEYS_FILE` | REST API-key hashes |
+| `OPENMED_SERVICE_AUTH_JWKS` | `OPENMED_SERVICE_AUTH_JWKS_FILE` | REST JWT verification keys |
+| `OPENMED_SERVICE_OTLP_HEADERS` | `OPENMED_SERVICE_OTLP_HEADERS_FILE` | OTLP exporter headers |
+| `OPENMED_OPENHIM_PASSWORD` | `OPENMED_OPENHIM_PASSWORD_FILE` | OpenHIM management API |
+| `OPENMED_SIDECAR_HASH_SECRET` | `OPENMED_SIDECAR_HASH_SECRET_FILE` | Desktop sidecar request-ID HMAC |
+| `OPENMED_JOURNEY_POSTGRES_DSN` | `OPENMED_JOURNEY_POSTGRES_DSN_FILE` | `openmed-journey` migrate, worker, probe, golden |
+
+The file rules are the same for every setting:
+
+- Set either the inline variable or its `_FILE` companion. Setting both fails
+  startup; an empty value counts as unset.
+- The file must be a regular UTF-8 text file (symbolic links are followed, as
+  Kubernetes Secret volumes require). Exactly one trailing line ending (`\n` or
+  `\r\n`) is removed, so `echo` and editor newlines are harmless; an empty file
+  is refused.
+- Files are bounded: 1 MiB for API keys and JWKS, 64 KiB for the others.
+- Under the production profile (`OPENMED_PROFILE` unset or `prod`) on POSIX
+  hosts, a file that other users can access, or that its group can write, is
+  refused. Group read is accepted only for root-owned files, which is how
+  Kubernetes presents a Secret volume to a pod with an `fsGroup` (`0440`). Use
+  mode `0400` or `0600` owned by the service user everywhere else. Other
+  profiles skip the permission check.
+
+Failures are reported with fixed codes and the setting name only, never the
+path, the contents, or the operating-system error:
+
+| Code | Meaning |
+| --- | --- |
+| `secret_source_conflict` | Both the inline variable and `_FILE` are set. |
+| `secret_file_unreadable` | The file is missing or cannot be opened or read. |
+| `secret_file_not_regular` | The path is a directory, FIFO, device, or socket. |
+| `secret_file_too_large` | The file exceeds the size bound. |
+| `secret_file_permissions_too_open` | Production profile and the mode is too permissive. |
+| `secret_file_invalid_encoding` | The file is not UTF-8 text. |
+| `secret_file_empty` | The file is empty after removing one line ending. |
+
+The REST service fails startup with the setting and code in the error message.
+`openmed-journey` prints `{"state": "not_ready", "code": "<code>"}` and exits
+with status 2. The desktop sidecar reports `SIDECAR_SECRET_INVALID`. Programs
+can reuse the same rules through `openmed.service.secret_files.read_secret_setting`.
+
+`deploy/openmed-compose.yaml` and `examples/openhim-mediator/docker-compose.yml`
+deliver credentials as Compose secrets, and the Helm chart mounts the Journey
+database Secret and any `secretFiles` entries as read-only volumes. See
+[Self-hosted Journey deployment](../deploy/self-hosted-compose.md) and
+[Helm Deployment](../deploy/helm.md).
+
 ## Environment and file-permission checklist
 
 - Prefer an OS keychain, mounted secret file, or local secret manager over
-  command-line arguments or shell history.
+  command-line arguments or shell history. OpenMed service credentials accept
+  `<NAME>_FILE` as described above.
 - If environment variables are required, scope them to the service process,
   prevent debug dumps, and remember that child processes inherit them.
 - Create secret and vault files under `umask 077`; require mode `0600` for files

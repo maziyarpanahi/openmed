@@ -23,6 +23,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        # Makes the mounted database Secret readable by the container group.
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -31,11 +33,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/bin/python3", "-m", "openmed.deploy.journey", "migrate"]
           env:
-            - name: OPENMED_JOURNEY_POSTGRES_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.journey.database.secretName | quote }}
-                  key: {{ .Values.journey.database.secretKey | quote }}
+            {{- include "openmed-service.journeyDatabaseEnv" . | nindent 12 }}
             - name: OPENMED_JOURNEY_SCHEMA
               value: {{ .Values.journey.schema | quote }}
           resources:
@@ -46,4 +44,12 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
+          {{- with (include "openmed-service.journeyDatabaseVolumeMount" .) }}
+          volumeMounts:
+            {{- . | nindent 12 }}
+          {{- end }}
+      {{- with (include "openmed-service.journeyDatabaseVolume" .) }}
+      volumes:
+        {{- . | nindent 8 }}
+      {{- end }}
 {{- end }}

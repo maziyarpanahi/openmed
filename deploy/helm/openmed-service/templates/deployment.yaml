@@ -67,14 +67,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "openmed-service.configMapName" . }}
-          {{- if or .Values.journey.enabled .Values.extraEnv }}
+          {{- if or .Values.journey.enabled .Values.secretFiles .Values.extraEnv }}
           env:
             {{- if .Values.journey.enabled }}
-            - name: OPENMED_JOURNEY_POSTGRES_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.journey.database.secretName | quote }}
-                  key: {{ .Values.journey.database.secretKey | quote }}
+            {{- include "openmed-service.journeyDatabaseEnv" . | nindent 12 }}
+            {{- end }}
+            {{- if .Values.secretFiles }}
+            {{- include "openmed-service.secretFileEnv" . | trim | nindent 12 }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
@@ -119,7 +118,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.extraVolumeMounts }}
+          {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.secretFiles .Values.extraVolumeMounts }}
           volumeMounts:
             {{- if .Values.persistence.enabled }}
             - name: model-cache
@@ -133,12 +132,18 @@ spec:
               mountPath: {{ .Values.journey.artifacts.mountPath | quote }}
             - name: tmp
               mountPath: /tmp
+            {{- with (include "openmed-service.journeyDatabaseVolumeMount" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.secretFiles }}
+            {{- include "openmed-service.secretFileVolumeMounts" . | trim | nindent 12 }}
             {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-      {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.extraVolumes }}
+      {{- if or .Values.persistence.enabled .Values.journey.enabled .Values.secretFiles .Values.extraVolumes }}
       volumes:
         {{- if .Values.persistence.enabled }}
         - name: model-cache
@@ -152,6 +157,12 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        {{- with (include "openmed-service.journeyDatabaseVolume" .) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secretFiles }}
+        {{- include "openmed-service.secretFileVolumes" . | trim | nindent 8 }}
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

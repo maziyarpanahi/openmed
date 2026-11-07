@@ -22,17 +22,34 @@ docker pull postgres:17-alpine
 ```
 
 Create a strong database password in the deployment secret manager and expose
-it only to the Compose invocation as `OPENMED_POSTGRES_PASSWORD`. Do not write
-it into this YAML, an image, a support bundle, or shell output. A clean
-development machine can generate an ephemeral value for its current shell:
+it, together with the matching Journey DSN, only to the Compose invocation as
+`OPENMED_POSTGRES_PASSWORD` and `OPENMED_JOURNEY_POSTGRES_DSN`. Do not write
+them into this YAML, an image, a support bundle, or shell output. A clean
+development machine can generate ephemeral values for its current shell:
 
 ```bash
 export OPENMED_POSTGRES_PASSWORD="$(openssl rand -hex 32)"
+export OPENMED_JOURNEY_POSTGRES_DSN="postgresql://openmed:${OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed"
 ```
 
-The value is required; Compose fails before startup when it is absent. For a
-long-lived deployment, inject it from the host's secret service rather than a
-checked-in `.env` file. `HF_TOKEN` is not configured by this profile.
+Both values are required; Compose fails before startup when either is absent.
+They are delivered as Compose `secrets:`, not container environment variables:
+Compose writes them to `/run/secrets/openmed_postgres_password` for
+PostgreSQL (`POSTGRES_PASSWORD_FILE`) and to
+`/run/secrets/openmed_journey_postgres_dsn` for the migration, worker, API
+health, and golden containers (`OPENMED_JOURNEY_POSTGRES_DSN_FILE`), owned by
+`65532:65532` with mode `0400`. `docker inspect` and `/proc/<pid>/environ` of
+the OpenMed containers therefore show only the file paths. Some Compose
+releases print a warning that secret `uid`, `gid`, and `mode` only apply to
+Swarm; current releases apply them to environment-sourced secrets, and the
+`prod` profile refuses a world-readable secret file with
+`secret_file_permissions_too_open` if one does not. See
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the file rules and error codes.
+
+For a long-lived deployment, inject the values from the host's secret service
+rather than a checked-in `.env` file. `HF_TOKEN` is not configured by this
+profile.
 
 ## Start and run the golden journey
 
@@ -171,8 +188,9 @@ Use overlapping credentials so a secret rotation does not strand old
 containers:
 
 1. create a second least-privilege PostgreSQL role with the same schema grants;
-2. update the host secret source and recreate migration, worker, and API
-   containers in that order;
+2. update the host secret source for `OPENMED_POSTGRES_PASSWORD` and
+   `OPENMED_JOURNEY_POSTGRES_DSN` and recreate migration, worker, and API
+   containers in that order so Compose rewrites the secret files;
 3. verify the component health report and golden journey;
 4. revoke the old role, then remove it after the rollback window.
 

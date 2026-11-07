@@ -1,5 +1,7 @@
-# Local-first Journey deployment profile. Set OPENMED_POSTGRES_PASSWORD before
-# startup; the value is never persisted in this file or emitted by health tools.
+# Local-first Journey deployment profile. Set OPENMED_POSTGRES_PASSWORD and
+# OPENMED_JOURNEY_POSTGRES_DSN in the shell that runs Compose. Compose copies
+# them into owner-only secret files under /run/secrets; the containers never
+# receive them as environment variables, and health tools never emit them.
 
 x-openmed-image: &openmed-image
   image: "${OPENMED_IMAGE:-openmed:distroless}"
@@ -33,9 +35,21 @@ x-openmed-environment: &openmed-environment
   TRANSFORMERS_CACHE: /cache/huggingface/transformers
   OPENMED_CACHE_DIR: /cache/openmed
   OPENMED_JOURNEY_ARTIFACT_ROOT: /cache/artifacts
-  OPENMED_JOURNEY_POSTGRES_DSN: >-
-    postgresql://openmed:${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed
   OPENMED_JOURNEY_SCHEMA: "${OPENMED_JOURNEY_SCHEMA:-openmed_journey}"
+
+x-openmed-journey-environment: &openmed-journey-environment
+  <<: *openmed-environment
+  OPENMED_JOURNEY_POSTGRES_DSN_FILE: /run/secrets/openmed_journey_postgres_dsn
+
+# Compose writes environment-sourced secrets inside the container with this
+# owner and mode. Some Compose releases warn that uid/gid/mode only apply to
+# Swarm; the prod profile refuses a world-readable secret file either way.
+x-openmed-journey-secrets: &openmed-journey-secrets
+  secrets:
+    - source: openmed_journey_postgres_dsn
+      uid: "65532"
+      gid: "65532"
+      mode: 0400
 
 services:
   postgres:
@@ -44,7 +58,11 @@ services:
     environment:
       POSTGRES_DB: openmed
       POSTGRES_USER: openmed
-      POSTGRES_PASSWORD: "${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}"
+      POSTGRES_PASSWORD_FILE: /run/secrets/openmed_postgres_password
+    # The image entrypoint reads the file as root before dropping privileges.
+    secrets:
+      - source: openmed_postgres_password
+        mode: 0400
     volumes:
       - openmed-postgres:/var/lib/postgresql/data
     networks:
@@ -74,11 +92,11 @@ services:
         max-file: "3"
 
   journey-migrate:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["migrate"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,11 +105,11 @@ services:
     restart: "no"
 
   journey-worker:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["worker", "--host", "0.0.0.0", "--port", "8091"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
     volumes:
       - openmed-cache:/cache
     depends_on:
@@ -120,11 +138,11 @@ services:
         max-file: "3"
 
   openmed:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
     ports:
       - "${OPENMED_BIND_ADDRESS:-127.0.0.1}:${OPENMED_PORT:-8080}:8080"
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
       OPENMED_SERVICE_PRELOAD_MODELS: "${OPENMED_SERVICE_PRELOAD_MODELS:-}"
       OPENMED_SERVICE_KEEP_ALIVE: "${OPENMED_SERVICE_KEEP_ALIVE:-10m}"
       OPENMED_SERVICE_MAX_RESIDENT_MODELS: "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
@@ -168,12 +186,12 @@ services:
         max-file: "3"
 
   journey-golden:
-    <<: [*openmed-image, *openmed-security]
+    <<: [*openmed-image, *openmed-security, *openmed-journey-secrets]
     profiles: ["smoke"]
     entrypoint: ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.deploy.journey"]
     command: ["golden"]
     environment:
-      <<: *openmed-environment
+      <<: *openmed-journey-environment
     volumes:
       - openmed-cache:/cache
     depends_on:
@@ -225,3 +243,9 @@ volumes:
 networks:
   openmed-internal:
     internal: true
+
+secrets:
+  openmed_postgres_password:
+    environment: OPENMED_POSTGRES_PASSWORD
+  openmed_journey_postgres_dsn:
+    environment: OPENMED_JOURNEY_POSTGRES_DSN

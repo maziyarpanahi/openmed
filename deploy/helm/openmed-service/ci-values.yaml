@@ -32,6 +32,14 @@ config:
     concurrencyWaitSeconds: 0.1
     keyBy: x-forwarded-for
 
+secretFiles:
+  - env: OPENMED_SERVICE_AUTH_API_KEYS
+    secretName: openmed-service-auth
+    secretKey: api-keys.json
+  - env: OPENMED_SERVICE_OTLP_HEADERS
+    secretName: openmed-otlp
+    secretKey: headers
+
 extraEnv:
   - name: HF_TOKEN
     valueFrom:
