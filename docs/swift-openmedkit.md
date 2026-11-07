@@ -454,6 +454,116 @@ let openmed = try OpenMed(
 )
 ```
 
+## Lifecycle-managed runtime
+
+`OpenMedRuntime` is an actor that owns one on-device text model session and
+makes inference cancellable, background-aware and memory-pressure-safe. It
+loads the session lazily from local assets, leases it to in-flight requests,
+and releases it when idle, under memory pressure, on background expiration or
+at shutdown.
+
+```swift
+let runtime = OpenMedRuntime(
+    backend: .mlx(modelDirectoryURL: modelDirectory),
+    // iOS apps opt in to background time; the default never requests it.
+    backgroundExecution: OpenMedUIApplicationBackgroundExecution(application: .shared)
+)
+
+let task = Task { try await runtime.deidentify(note, policy: Policy.defaultName) }
+task.cancel()  // throws OpenMedRuntimeError.cancelled; no partial output
+
+do {
+    let entities = try await runtime.extractPII(note)
+} catch let error as OpenMedRuntimeError {
+    // error.reasonCode, error.retryGuidance — never text, spans or paths
+}
+await runtime.shutdown()
+```
+
+The runtime follows an explicit state machine:
+
+| State | Meaning | Leaves to |
+| --- | --- | --- |
+| `idle` | No session resident; admission loads one | `loading`, `released` |
+| `loading` | The loader is building a session from local assets | `ready`, `idle` (failure, pressure, expiration), `released` |
+| `ready` | Session resident, no lease held | `busy(1)`, `idle` (idle release, pressure, expiration), `released` |
+| `busy(n)` | `n` inferences hold leases | `busy(n±1)`, `ready`, `draining` |
+| `draining` | Admission closed while leases finish or cancel | `idle` (pressure, expiration), `released` (`drain()`, `shutdown()`) |
+| `released` | Terminal; no session, no signal observations | — |
+
+**Cancellation.** `analyzeText`, `extractPII` and the three `deidentify`
+overloads run tokenization, windowing, model prediction, merging and
+serialization behind cooperative checkpoints (`OpenMedInferenceStage`).
+Cancelling the calling task, a memory-pressure cancellation, background
+expiration or shutdown is observed at the next checkpoint, so the latency to a
+terminal state is bounded by one step between checkpoints: one tokenizer pass,
+one model window, or one merge or serialization pass. Model work that can
+suspend (for example async Core ML prediction) is also interrupted directly.
+The runtime always waits for the model call to return before ending its lease,
+so a session is never released while in use, and it drops any result produced
+after cancellation. `snapshot()` records the stage at which each cancellation
+was observed and its monotonic latency.
+
+**Memory pressure.** `OpenMedDispatchMemoryPressureSource` (the default,
+backed by `DispatchSource.makeMemoryPressureSource`) feeds warning, critical
+and normal levels. Warning and critical refuse new admissions immediately.
+By default a warning lets in-flight requests finish (cancelling stragglers
+after 2 s) and critical cancels them; both release the session once the last
+lease ends, and a session with no lease is released at once. A later request
+after `normal` reacquires a session through the loader. Configure this with
+`OpenMedRuntimeConfiguration.memoryWarningResponse` and
+`memoryCriticalResponse`, or call `handleMemoryPressure(_:)` from your own
+signal.
+
+**Background expiration.** `OpenMedUIApplicationBackgroundExecution` begins one
+`UIApplication` background task while the runtime is busy and ends it when the
+runtime is ready. When the system expires it, in-flight requests stop with
+`backgroundExpired`, their output is suppressed, the session is released, and
+admission stays closed until `UIApplication.willEnterForegroundNotification`
+(or `resumeAfterForeground()`); the next request loads a fresh session rather
+than reusing abandoned state. Pass the application explicitly so the library
+never touches `UIApplication.shared` from an app extension. macOS, watchOS and
+extensions use the default `OpenMedNoBackgroundExecution`, which never expires.
+Nothing is persisted to resume work in the background.
+
+**Idle release.** A resident session with no lease is released after
+`idleReleaseMilliseconds` (60 s by default; `nil` disables it) or on
+`releaseIdleResources()`. All timers use the injectable `OpenMedRuntimeClock`.
+
+**Errors.** Every lifecycle outcome is a value-free `OpenMedRuntimeError`:
+
+| Error | Reason code | Retry guidance |
+| --- | --- | --- |
+| `cancelled` | `cancelled` | `do_not_retry` |
+| `memoryPressure` | `memory_pressure` | `retry_after_memory_pressure_clears` |
+| `backgroundExpired` | `background_expired` | `retry_after_foreground` |
+| `draining` | `draining` | `retry_with_new_runtime` |
+| `released` | `released` | `retry_with_new_runtime` |
+| `capacityExceeded` | `capacity_exceeded` | `retry_later` |
+| `modelUnavailable` | `model_unavailable` | `check_model_artifact` |
+| `inferenceFailed` | `inference_failed` | `do_not_retry` |
+
+Loader and model errors are withheld; `snapshot()` keeps only their Swift type
+name. Errors, snapshots and descriptions never contain input text, spans,
+labels, model paths or underlying messages.
+
+**Local-only recovery.** `OpenMedRuntime(backend:)` loads with network access
+disabled on first use and on every reacquisition, so MLX artifacts must carry
+their tokenizer and Core ML bundles need `tokenizerFolderURL`. The runtime never
+selects a remote backend. Custom sessions conform to `OpenMedRuntimeModel` and
+are supplied through `OpenMedRuntime(loader:)`; the loader must verify its
+artifact and build fresh state on every call.
+
+**Synchronous calls.** The existing synchronous `OpenMed` methods keep their
+signatures and run the same staged pipeline and checkpoints, so they produce the
+same offsets, labels, actions and bytes. They observe only the calling task's
+cancellation (and throw `OpenMedRuntimeError.cancelled` when it is cancelled);
+they are not admitted, drained, or stopped by memory pressure or background
+expiration. Use `OpenMedRuntime` when you need those guarantees.
+
+Device and simulator memory evidence for these paths is not part of the package
+test suite; the unit tests drive every signal through deterministic fakes.
+
 ## Public API
 
 ### `OpenMedBackend`
@@ -501,6 +611,36 @@ public final class OpenMed {
 ```
 
 `extractPII(...)` now follows the Python PII path more closely by applying span repair plus semantic-unit merging for fragmented dates, SSNs, phone numbers, emails, and similar PII spans.
+
+### `OpenMedRuntime`
+
+```swift
+public actor OpenMedRuntime {
+    public init(
+        configuration: OpenMedRuntimeConfiguration = OpenMedRuntimeConfiguration(),
+        memoryPressure: any OpenMedMemoryPressureSource = OpenMedDispatchMemoryPressureSource(),
+        backgroundExecution: any OpenMedBackgroundExecutionProvider = OpenMedNoBackgroundExecution(),
+        clock: any OpenMedRuntimeClock = OpenMedSystemClock(),
+        loader: @escaping @Sendable () async throws -> any OpenMedRuntimeModel
+    )
+    public init(backend: OpenMedBackend, maxSeqLength: Int = 512, ...)  // iOS and macOS
+
+    public var state: OpenMedRuntimeState { get }
+    public func load() async throws
+    public func analyzeText(_ text: String, confidenceThreshold: Float = 0.5) async throws -> [EntityPrediction]
+    public func extractPII(_ text: String, confidenceThreshold: Float = 0.5, useSmartMerging: Bool = true) async throws -> [EntityPrediction]
+    public func deidentify(_ text: String, policy: String, ...) async throws -> PolicyDeidentificationResult
+    public func deidentify(_ text: String, policy: Policy, ...) async throws -> PolicyDeidentificationResult
+    public func deidentify(_ text: String, method: DeidentificationMethod = .mask, ...) async throws -> DeidentificationResult
+    public func releaseIdleResources() -> Bool
+    public func handleMemoryPressure(_ level: OpenMedMemoryPressureLevel)
+    public func handleBackgroundExpiration()
+    public func resumeAfterForeground()
+    public func drain() async
+    public func shutdown() async
+    public func snapshot() -> OpenMedRuntimeSnapshot
+}
+```
 
 ### `OpenMedModelStore`
 
