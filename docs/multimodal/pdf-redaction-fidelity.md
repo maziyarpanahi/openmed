@@ -45,7 +45,7 @@ selected pixels and encoding, not OCR completeness, detection accuracy or every
 PDF viewer's rendering. Compare output with the source in the intended workflow.
 
 The path-based API below has a separate selectable-text and layout-fidelity
-contract and remains unchanged.
+contract.
 
 `render_redacted_pdf` accepts the top-origin, 0-based page rectangles returned
 by `project_text_spans`:
@@ -75,6 +75,77 @@ print(result.to_dict())
 
 The destination is written atomically only after all verification gates pass.
 Existing destinations are protected unless `overwrite=True` is explicit.
+
+## Annotation Safety
+
+Both PDF rasterizing redaction paths omit all annotation appearances by default.
+This includes FreeText, Stamp, Text and widget appearances: their pixels must
+not enter the output merely because ordinary page-text detection cannot see
+them. Annotation removal happens in memory without modifying the source or
+writing an intermediate source PDF. Default layout verification compares with
+that annotation-free source, so omitted appearances are not fidelity failures.
+
+Owned multi-phase operations capture one immutable in-memory source before
+extraction, detection, mapping and rendering. Updating the input path or stream
+during a detector callback cannot switch the document that is rendered. A
+seekable caller-owned binary stream stays open, and its name is never opened as
+a replacement path. Caller-supplied `document=` values or regions calculated in
+a separate call must still be matched to the source by the caller.
+
+`result.to_dict()["annotations"]` contains one entry per page with `page`,
+`annotation_count`, `omitted_annotation_count`, and a `subtypes` count mapping.
+Subtype names come from a closed vocabulary; other values become `Other`.
+Annotation contents, field names, appearance text and source paths never enter
+these annotation reports.
+
+To explicitly inspect and keep supported text appearances, supply a local
+detector that returns character offsets into its input:
+
+```python
+def annotation_detector(text):
+    # Replace this synthetic example with your local PHI detector.
+    marker = "SYNTHETIC_PATIENT"
+    start = text.find(marker)
+    return [] if start < 0 else [(start, start + len(marker))]
+
+result = render_redacted_pdf(
+    source,
+    output,
+    rectangles,
+    annotation_detector=annotation_detector,
+)
+```
+
+The detector sees both annotation `Contents` and the selected normal appearance
+text, which can disagree. Mapped visual words and PDF text-operation order are
+both provided when they differ, including rotated or mirrored text. Any detected
+span masks the entire annotation rectangle. Inspected appearances with no
+detected spans may remain as flattened page content; interactive annotation
+objects never survive. Internal fidelity checks use this inspected, flattened
+source in opt-in mode. The standalone `measure_pdf_layout_fidelity` helper uses
+an annotation-free source and should not be used to independently accept retained
+annotation appearances.
+
+`extract_pdf(source, include_annotations=True)` exposes the same additional
+text and full-extent source spans without rendering. The document-ingestion
+path accepts `policy={"include_annotations": True, "return_bytes": True}`
+only with an injected detector. It preserves full annotation masks even when a
+table or caption also covers a detected span.
+
+Opt-in processing fails closed with `annotation_appearance_unmappable` before
+writing output when an appearance has no reliable text/coordinate map. Unsupported
+cases include image or nested-form appearances, vector painting, Type 3 fonts,
+missing appearance states, invalid transforms, text outside its rectangle,
+clipped rectangles, shifted media origins and distinct crop boxes. These cases
+need a separately verified OCR/geometry workflow; they do not silently fall back
+to retaining unchecked pixels. Detector failures use `annotation_detection_failed`.
+Coordinate verification does not establish detector recall or clinical correctness.
+Each detector is invoked once after its call signature is checked. Results must
+be explicit span sequences (or supported `entities`/`pii_entities`/`spans` wrappers)
+with non-boolean integral offsets in range and a coordinate map for every span.
+Malformed results, callback failures and excessive result iteration fail closed.
+The verified renderer bounds detector results with `max_regions`; document
+ingestion accepts at most 10,000 detections in annotation opt-in mode.
 
 ## What The Renderer Preserves
 
@@ -162,3 +233,6 @@ Scanned or image-only source PDFs are outside this API's text-removal proof:
 their redaction rectangles must come from the OCR pipeline, and residual text
 must be verified by re-OCR. PDF redaction is an assistive privacy control, not a
 diagnostic or clinical decision system.
+
+Annotation source and detector refusals use fixed diagnostics and discard underlying
+exception context, including document and provider error details.

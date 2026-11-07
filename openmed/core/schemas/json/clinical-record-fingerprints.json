@@ -1,0 +1,138 @@
+{
+  "brief_audit": {
+    "fingerprint": "sha256:285cb71e5f8d76be2149247267704b67452308098c942c6b361f453edb1d59ea",
+    "properties": [
+      "backend_id",
+      "citations",
+      "claim_bindings",
+      "digest",
+      "envelope",
+      "generation_contract",
+      "metrics",
+      "profile_digest",
+      "provenance",
+      "refusal_reason",
+      "review_packet",
+      "schema_version",
+      "stages",
+      "status",
+      "summary_characters",
+      "summary_digest",
+      "verdicts"
+    ],
+    "required": [
+      "backend_id",
+      "citations",
+      "digest",
+      "envelope",
+      "metrics",
+      "profile_digest",
+      "provenance",
+      "refusal_reason",
+      "review_packet",
+      "schema_version",
+      "stages",
+      "status",
+      "summary_characters",
+      "summary_digest",
+      "verdicts"
+    ],
+    "schema_version": 1
+  },
+  "brief_response": {
+    "fingerprint": "sha256:1d617eb86aa529c4e283c8188b09bb3f8ddde85c72be44ce9d21760cc11135d6",
+    "properties": [
+      "backend_id",
+      "citations",
+      "claim_bindings",
+      "digest",
+      "envelope",
+      "generation_contract",
+      "metrics",
+      "profile_digest",
+      "provenance",
+      "refusal_reason",
+      "review_packet",
+      "schema_version",
+      "stages",
+      "status",
+      "summary",
+      "summary_characters",
+      "summary_digest",
+      "verdicts"
+    ],
+    "required": [
+      "backend_id",
+      "citations",
+      "digest",
+      "envelope",
+      "metrics",
+      "profile_digest",
+      "provenance",
+      "refusal_reason",
+      "review_packet",
+      "schema_version",
+      "stages",
+      "status",
+      "summary",
+      "summary_characters",
+      "summary_digest",
+      "verdicts"
+    ],
+    "schema_version": 1
+  },
+  "evidence_packet": {
+    "fingerprint": "sha256:839cef553d2ff870d3da2f9ea0f486aff2827619fa65f12535da4b0c836295c1",
+    "properties": [
+      "kind",
+      "packet_id",
+      "policy_fingerprint",
+      "references",
+      "rejection_report",
+      "schema_version"
+    ],
+    "required": [
+      "kind",
+      "packet_id",
+      "policy_fingerprint",
+      "references",
+      "rejection_report",
+      "schema_version"
+    ],
+    "schema_version": 2
+  },
+  "nli_verification": {
+    "fingerprint": "sha256:1bbe32fd097449deeb714a76cea04736e0ab13d22edd95e2963c1fa7e22698d7",
+    "properties": [
+      "backend_id",
+      "claim_index",
+      "contradicted",
+      "label",
+      "review_required",
+      "score"
+    ],
+    "required": [
+      "backend_id",
+      "claim_index",
+      "contradicted",
+      "label",
+      "review_required",
+      "score"
+    ],
+    "schema_version": 1
+  },
+  "sdoh_evidence_report": {
+    "fingerprint": "sha256:7bce4d3d9b28c8909a02940081e703ae675c208d979be93af21bd1a9a4a73384",
+    "properties": [
+      "disclaimer",
+      "findings",
+      "schema_version"
+    ],
+    "required": [
+      "disclaimer",
+      "findings",
+      "schema_version"
+    ],
+    "schema_version": 1
+  }
+}

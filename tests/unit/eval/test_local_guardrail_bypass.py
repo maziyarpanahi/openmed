@@ -257,18 +257,19 @@ def test_non_evidence_runner_result_fails_closed_without_echoing_it() -> None:
     assert sentinel not in repr(report)
 
 
-@pytest.mark.parametrize("source", ["", None, 123])
-def test_invalid_source_fails_without_echoing_values(source: object) -> None:
-    with pytest.raises(
-        LocalGuardrailBypassError,
-        match="invalid pre-de-identification source",
-    ) as error:
-        evaluate_local_guardrail_bypass(
-            _safe_runner,
-            pre_deidentified_text=source,  # type: ignore[arg-type]
-        )
-    if source != "":
-        assert str(source) not in str(error.value)
+def test_invalid_source_fails_without_echoing_values(subtests) -> None:
+    for source in ["", None, 123]:
+        with subtests.test(source=source):
+            with pytest.raises(
+                LocalGuardrailBypassError,
+                match="invalid pre-de-identification source",
+            ) as error:
+                evaluate_local_guardrail_bypass(
+                    _safe_runner,
+                    pre_deidentified_text=source,  # type: ignore[arg-type]
+                )
+            if source != "":
+                assert str(source) not in str(error.value)
 
 
 def test_sensitive_evidence_fields_are_hidden_from_repr() -> None:

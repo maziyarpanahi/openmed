@@ -8,9 +8,9 @@
     "clinical_validation": false,
     "fixture_digest": "sha256:bf9bd5efbd645e3b977e5b358b362f3b0b7e809b6ca8282fcef75666c933f786",
     "model_revision": null,
-    "output_digest": "sha256:79c018cd08babb008c8bcefd2c67db578fd75665b5da9f3a25c1d77fb5780988",
+    "output_digest": "sha256:ecf233df703f377c63e0b60c5f8d598deb67391ca25c371d71aae5826d6b9bc3",
     "protocol": "gold-masked-literal-assertion-sentence-v1",
-    "report_digest": "sha256:cf432b2329896f2d8b60ece9214baca821fc4b8abd37540a5efd15aea5f9e17d",
+    "report_digest": "sha256:b43db3193fc8800d9afd0965e2009d5227d4b097e804480d8becb1618cf82f6c",
     "synthetic_only": true,
     "threshold_digest": "sha256:c64fd184ac79fe335674ef1f28b03e7ff2bed3d02431f9187aec410c7deebf6f"
   },
@@ -20,19 +20,19 @@
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_clinical_fact_recall",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_fact_coverage",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {
@@ -69,19 +69,19 @@
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_clinical_fact_recall",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_fact_coverage",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {
@@ -118,19 +118,19 @@
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_clinical_fact_recall",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {
           "details": {
             "threshold": 0.95,
-            "value": 0.75
+            "value": 1.0
           },
           "gate": "summary_fact_coverage",
-          "passed": false,
+          "passed": true,
           "reason": "measured"
         },
         {

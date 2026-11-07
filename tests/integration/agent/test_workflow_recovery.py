@@ -95,60 +95,75 @@ def _initial_checkpoint() -> RecoveryCheckpoint:
     )
 
 
-@pytest.mark.parametrize("commits_before_interruption", [0, 1, 2, 3])
 def test_interruption_reconciles_or_retries_every_effect_exactly_once(
-    tmp_path: Path, commits_before_interruption: int
+    subtests, tmp_path
 ) -> None:
-    journal = CheckpointJournal(tmp_path / "journal")
-    initial = _initial_checkpoint()
-    journal.append(initial)
-    sink = SyntheticSink()
+    case_root = tmp_path
+    for commits_before_interruption in [0, 1, 2, 3]:
+        with subtests.test(commits_before_interruption=commits_before_interruption):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            journal = CheckpointJournal(tmp_path / "journal")
+            initial = _initial_checkpoint()
+            journal.append(initial)
+            sink = SyntheticSink()
 
-    first = recover_workflow(journal.load(), sink.observe(initial.effects), now=10)
-    assert first.disposition is RecoveryDisposition.RESUME
-    dispatching = advance_checkpoint(initial, first)
-    journal.append(dispatching)
+            first = recover_workflow(
+                journal.load(), sink.observe(initial.effects), now=10
+            )
+            assert first.disposition is RecoveryDisposition.RESUME
+            dispatching = advance_checkpoint(initial, first)
+            journal.append(dispatching)
 
-    for index, effect in enumerate(dispatching.effects[:commits_before_interruption]):
-        sink.apply(effect.idempotency_key, f"sha256:{index + 7:064x}")
-
-    # A new journal instance models process/device restart after the interruption.
-    restarted = CheckpointJournal(tmp_path / "journal")
-    lineage = restarted.load()
-    recovered = recover_workflow(lineage, sink.observe(lineage[-1].effects), now=10)
-    reconciled = advance_checkpoint(lineage[-1], recovered)
-    restarted.append(reconciled)
-
-    if recovered.disposition is RecoveryDisposition.RESUME:
-        retry_keys = set(recovered.retry_idempotency_keys)
-        for index, effect in enumerate(reconciled.effects):
-            if effect.idempotency_key in retry_keys:
+            for index, effect in enumerate(
+                dispatching.effects[:commits_before_interruption]
+            ):
                 sink.apply(effect.idempotency_key, f"sha256:{index + 7:064x}")
-        final_decision = recover_workflow(
-            restarted.load(), sink.observe(reconciled.effects), now=10
-        )
-        final_checkpoint = advance_checkpoint(restarted.load()[-1], final_decision)
-        restarted.append(final_checkpoint)
-    else:
-        assert recovered.disposition is RecoveryDisposition.COMPLETE
 
-    final_lineage = restarted.load()
-    if final_lineage[-1].phase is not RecoveryPhase.COMPLETED:
-        final_decision = recover_workflow(
-            final_lineage, sink.observe(final_lineage[-1].effects), now=10
-        )
-        final_checkpoint = advance_checkpoint(final_lineage[-1], final_decision)
-        restarted.append(final_checkpoint)
-        final_lineage = restarted.load()
+            # A new journal instance models process/device restart after the interruption.
+            restarted = CheckpointJournal(tmp_path / "journal")
+            lineage = restarted.load()
+            recovered = recover_workflow(
+                lineage, sink.observe(lineage[-1].effects), now=10
+            )
+            reconciled = advance_checkpoint(lineage[-1], recovered)
+            restarted.append(reconciled)
 
-    assert final_lineage[-1].phase is RecoveryPhase.COMPLETED
-    assert set(sink.commit_counts.values()) == {1}
-    assert set(sink.commits) == {effect.idempotency_key for effect in initial.effects}
+            if recovered.disposition is RecoveryDisposition.RESUME:
+                retry_keys = set(recovered.retry_idempotency_keys)
+                for index, effect in enumerate(reconciled.effects):
+                    if effect.idempotency_key in retry_keys:
+                        sink.apply(effect.idempotency_key, f"sha256:{index + 7:064x}")
+                final_decision = recover_workflow(
+                    restarted.load(), sink.observe(reconciled.effects), now=10
+                )
+                final_checkpoint = advance_checkpoint(
+                    restarted.load()[-1], final_decision
+                )
+                restarted.append(final_checkpoint)
+            else:
+                assert recovered.disposition is RecoveryDisposition.COMPLETE
+
+            final_lineage = restarted.load()
+            if final_lineage[-1].phase is not RecoveryPhase.COMPLETED:
+                final_decision = recover_workflow(
+                    final_lineage, sink.observe(final_lineage[-1].effects), now=10
+                )
+                final_checkpoint = advance_checkpoint(final_lineage[-1], final_decision)
+                restarted.append(final_checkpoint)
+                final_lineage = restarted.load()
+
+            assert final_lineage[-1].phase is RecoveryPhase.COMPLETED
+            assert set(sink.commit_counts.values()) == {1}
+            assert set(sink.commits) == {
+                effect.idempotency_key for effect in initial.effects
+            }
 
 
-@pytest.mark.parametrize(
-    ("phase", "expected_disposition", "expected_reason"),
-    [
+def test_interruption_at_each_nonterminal_checkpoint_resumes_or_fails_closed(
+    subtests,
+) -> None:
+    for phase, expected_disposition, expected_reason in [
         (
             RecoveryPhase.PLANNED,
             RecoveryDisposition.REVIEW_REQUIRED,
@@ -174,28 +189,29 @@ def test_interruption_reconciles_or_retries_every_effect_exactly_once(
             RecoveryDisposition.REVIEW_REQUIRED,
             RecoveryReason.WORKFLOW_ABORTED,
         ),
-    ],
-)
-def test_interruption_at_each_nonterminal_checkpoint_resumes_or_fails_closed(
-    phase: RecoveryPhase,
-    expected_disposition: RecoveryDisposition,
-    expected_reason: RecoveryReason,
-) -> None:
-    approval = phase is not RecoveryPhase.PLANNED
-    checkpoint = RecoveryCheckpoint.create(
-        workflow_id=WORKFLOW_ID,
-        run_id=RUN_ID,
-        sequence=0,
-        phase=phase,
-        plan_digest=PLAN_DIGEST,
-        effects=_effects(),
-        approval_action_digest=PLAN_DIGEST if approval else None,
-        approval_receipt_digest=RECEIPT_DIGEST if approval else None,
-        approval_expires_at=1_000 if approval else None,
-    )
-    sink = SyntheticSink()
+    ]:
+        with subtests.test(
+            phase=phase,
+            expected_disposition=expected_disposition,
+            expected_reason=expected_reason,
+        ):
+            approval = phase is not RecoveryPhase.PLANNED
+            checkpoint = RecoveryCheckpoint.create(
+                workflow_id=WORKFLOW_ID,
+                run_id=RUN_ID,
+                sequence=0,
+                phase=phase,
+                plan_digest=PLAN_DIGEST,
+                effects=_effects(),
+                approval_action_digest=PLAN_DIGEST if approval else None,
+                approval_receipt_digest=RECEIPT_DIGEST if approval else None,
+                approval_expires_at=1_000 if approval else None,
+            )
+            sink = SyntheticSink()
 
-    decision = recover_workflow((checkpoint,), sink.observe(checkpoint.effects), now=10)
+            decision = recover_workflow(
+                (checkpoint,), sink.observe(checkpoint.effects), now=10
+            )
 
-    assert decision.disposition is expected_disposition
-    assert decision.reason is expected_reason
+            assert decision.disposition is expected_disposition
+            assert decision.reason is expected_reason

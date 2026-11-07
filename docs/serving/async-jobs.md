@@ -105,7 +105,7 @@ The default metadata store is
 OPENMED_SERVICE_JOBS_STORE_PATH=/var/lib/openmed/jobs.json \
 OPENMED_SERVICE_JOBS_TTL_SECONDS=86400 \
 OPENMED_SERVICE_JOBS_WORKERS=2 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `OPENMED_SERVICE_JOBS_TTL_SECONDS` controls terminal metadata cleanup.
