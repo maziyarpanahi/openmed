@@ -1,0 +1,114 @@
+{
+  "schema": "openmed.tokenizer-conformance.runtime-support",
+  "version": 1,
+  "contract_version": "openmed.tokenizer-conformance.v1",
+  "runtimes": {
+    "python-tokenizers": {
+      "library": "tokenizers (Rust crate via Python binding, hf extra)",
+      "adapter": "openmed.onnx.inference._TokenizersTokenizerAdapter",
+      "fields": {
+        "normalized": {"status": "supported"},
+        "tokens": {"status": "supported"},
+        "input_ids": {"status": "supported"},
+        "attention_mask": {"status": "supported"},
+        "token_type_ids": {"status": "supported"},
+        "special_tokens_mask": {"status": "supported"},
+        "offsets": {"status": "supported"},
+        "truncated_input_ids": {"status": "supported"},
+        "window_ranges": {"status": "supported"},
+        "window_input_ids": {"status": "supported"}
+      },
+      "divergences": []
+    },
+    "swift-transformers": {
+      "library": "swift-transformers 1.0.0",
+      "adapter": "OpenMed.encodeForModel, OpenMed.buildOffsets, OpenMed.makeTokenChunks",
+      "fields": {
+        "normalized": {"status": "unsupported", "reason": "normalizer_not_public"},
+        "tokens": {"status": "supported"},
+        "input_ids": {"status": "supported"},
+        "attention_mask": {"status": "supported"},
+        "token_type_ids": {"status": "supported"},
+        "special_tokens_mask": {"status": "unsupported", "reason": "special_tokens_mask_not_exposed"},
+        "offsets": {"status": "supported"},
+        "truncated_input_ids": {"status": "supported"},
+        "window_ranges": {"status": "supported"},
+        "window_input_ids": {"status": "supported"}
+      },
+      "divergences": [
+        {
+          "feature": "clean_text.control",
+          "fields": ["tokens", "input_ids", "attention_mask", "token_type_ids", "offsets"],
+          "reason": "clean_text_keeps_control_characters"
+        },
+        {
+          "feature": "clean_text.format",
+          "fields": ["tokens", "input_ids", "attention_mask", "token_type_ids", "offsets"],
+          "reason": "clean_text_keeps_format_characters"
+        },
+        {
+          "feature": "strip_accents.non_latin",
+          "fields": ["tokens", "input_ids", "offsets"],
+          "reason": "strip_accents_latin_combining_block_only"
+        },
+        {
+          "feature": "wordpiece.grapheme_cluster_split",
+          "fields": ["tokens", "input_ids", "attention_mask", "token_type_ids", "offsets"],
+          "reason": "wordpiece_matches_grapheme_clusters_only"
+        },
+        {"feature": "unknown.word", "fields": ["offsets"], "reason": "kit_offsets_unknown_token_heuristic"},
+        {"feature": "unknown.long_word", "fields": ["offsets"], "reason": "kit_offsets_unknown_token_heuristic"},
+        {"feature": "offsets.trailing_removed_mark", "fields": ["offsets"], "reason": "kit_offsets_extend_over_marks"},
+        {"feature": "special_tokens.in_text", "fields": ["offsets"], "reason": "kit_maps_special_token_text_to_empty_offsets"},
+        {"feature": "truncation.overflow", "fields": ["truncated_input_ids"], "reason": "kit_truncation_drops_trailing_special_token"},
+        {"feature": "window.subword_boundary", "fields": ["window_input_ids"], "reason": "kit_retokenizes_chunk_text"}
+      ]
+    },
+    "djl-tokenizers": {
+      "library": "ai.djl.huggingface:tokenizers 0.33.0",
+      "adapter": "BackendOnnxTokenClassifier tokenizer encoding and toTokenOffsets",
+      "fields": {
+        "normalized": {"status": "unsupported", "reason": "normalizer_not_exposed"},
+        "tokens": {"status": "supported"},
+        "input_ids": {"status": "supported"},
+        "attention_mask": {"status": "supported"},
+        "token_type_ids": {"status": "supported"},
+        "special_tokens_mask": {"status": "supported"},
+        "offsets": {"status": "supported"},
+        "truncated_input_ids": {"status": "supported"},
+        "window_ranges": {"status": "unsupported", "reason": "overflow_encodings_without_sequence_indices"},
+        "window_input_ids": {"status": "supported"}
+      },
+      "divergences": []
+    },
+    "tokenizers-js": {
+      "library": "@huggingface/tokenizers 0.2.0 (Transformers.js tokenizers module)",
+      "adapter": "alignTokenOffsets",
+      "fields": {
+        "normalized": {"status": "supported"},
+        "tokens": {"status": "supported"},
+        "input_ids": {"status": "supported"},
+        "attention_mask": {"status": "supported"},
+        "token_type_ids": {"status": "supported"},
+        "special_tokens_mask": {"status": "unsupported", "reason": "special_tokens_mask_not_exposed"},
+        "offsets": {"status": "supported"},
+        "truncated_input_ids": {"status": "unsupported", "reason": "no_truncation"},
+        "window_ranges": {"status": "unsupported", "reason": "no_truncation_windows"},
+        "window_input_ids": {"status": "unsupported", "reason": "no_truncation_windows"}
+      },
+      "divergences": [
+        {
+          "feature": "cjk.supplementary",
+          "fields": ["normalized", "tokens", "input_ids", "attention_mask", "token_type_ids", "offsets"],
+          "reason": "cjk_padding_iterates_utf16_code_units"
+        },
+        {"feature": "unknown.word", "fields": ["offsets"], "reason": "kit_alignment_refuses_unknown_token"},
+        {"feature": "unknown.long_word", "fields": ["offsets"], "reason": "kit_alignment_refuses_unknown_token"},
+        {"feature": "offsets.trailing_removed_mark", "fields": ["offsets"], "reason": "kit_offsets_extend_over_marks"},
+        {"feature": "clean_text.format_inside_word", "fields": ["offsets"], "reason": "kit_alignment_refuses_removed_format_char"},
+        {"feature": "wordpiece.mark_only_piece", "fields": ["offsets"], "reason": "kit_alignment_refuses_mark_only_piece"},
+        {"feature": "special_tokens.in_text", "fields": ["offsets"], "reason": "kit_skips_special_token_words"}
+      ]
+    }
+  }
+}

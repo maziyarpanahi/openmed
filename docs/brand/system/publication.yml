@@ -768,6 +768,7 @@ classification:
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
+    - tokenizer-conformance.md
     - faq.md
     - troubleshooting.md
     - onboarding.md
