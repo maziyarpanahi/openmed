@@ -4,9 +4,11 @@ The shipped ConText negation layer (:mod:`openmed.clinical.context`) decides
 *whether* a negation cue is present, scoping it to the sentence. That is too
 coarse: in ``"no chest pain but has fever"`` a sentence-level scope wrongly
 negates ``fever``. This module computes the exact token region each negation
-cue governs, terminating the scope at conjunctions, clause breaks, and
-scope-terminating cue words, so an entity is negated only when it falls inside a
-cue's computed influence span.
+cue governs, terminating the scope at contrastive conjunctions, clause breaks,
+and scope-terminating cue words, so an entity is negated only when it falls
+inside a cue's computed influence span. Coordinated list members stay in scope
+(``"denies fever and cough"``) until a conjunct opens a new clause
+(``"and reports cough"``) or carries its own cue.
 
 Forward cues (``no``, ``denies``, ``no evidence of`` ...) govern the text to
 their right; backward cues (``ruled out``, ``absent`` ...) govern the text to
@@ -22,7 +24,15 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from .context import NEGATION_CUES, PSEUDO_NEGATION_CUES
+from .context import (
+    NEGATION_CUES,
+    PSEUDO_NEGATION_CUES,
+    _compiled_context_lexicon,
+    _contains_clause_opener,
+    _has_directional_cue,
+    _has_scope_cue,
+    _opens_clause,
+)
 
 NEGATION_SCOPE_ADVISORY = (
     "Negation scopes are computed deterministically from surface cues and "
@@ -46,19 +56,21 @@ _BACKWARD_CUES: frozenset[str] = frozenset(
     }
 )
 
-# A negation scope terminates at sentence punctuation, coordinating
-# conjunctions, and classic NegEx clause-break terminators. The punctuation and
-# ``and``/``or``/``but``/``however`` set mirror the shipped ConText
-# ``_SCOPE_TERMINATOR_RE``; the remaining NegEx terminators sharpen the boundary
-# beyond sentence-level scoping. Comma is intentionally not a terminator so
-# coordinated negation lists ("no fever, chills, or cough") stay in scope.
+# A negation scope always terminates at sentence punctuation, contrastive
+# conjunctions, and classic NegEx clause-break terminators. Commas and the
+# coordinators ``and`` / ``or`` are list separators instead: the scope continues
+# across them ("no fever, chills, or cough") and ends only where the next
+# conjunct opens a new clause or carries its own cue. The separator and clause
+# rules come from the English ConText lexicon so both layers agree.
 _TERMINATOR_RE = re.compile(
     r"(?:[.!?;]|(?<!\w)(?:"
-    r"and|but|however|or|although|though|nevertheless|yet|still|"
+    r"but|however|although|though|nevertheless|yet|still|"
     r"except|aside from|apart from|secondary to|which|who|because"
     r")(?!\w))",
     re.IGNORECASE,
 )
+_ENGLISH_RULES = _compiled_context_lexicon("en")
+_SEPARATOR_RE = _ENGLISH_RULES.separator_re
 
 
 def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
@@ -102,20 +114,129 @@ def _normalize_cue(surface: str) -> str:
     return " ".join(surface.casefold().split())
 
 
-def _forward_bound(text: str, start: int) -> int:
-    """First terminator at or after ``start``; end of text if none."""
+def _blank_spans(text: str, spans: Sequence[tuple[int, int]]) -> str:
+    """Blank entity spans so their words never read as cues or clause openers."""
+
+    chars = list(text)
+    for start, end in spans:
+        end = min(end, len(chars))
+        start = min(max(start, 0), end)
+        chars[start:end] = " " * (end - start)
+    return "".join(chars)
+
+
+def _separators(check_text: str, start: int, end: int) -> list[tuple[int, int]]:
+    if _SEPARATOR_RE is None or start >= end:
+        return []
+    return [match.span() for match in _SEPARATOR_RE.finditer(check_text, start, end)]
+
+
+def _first_entity_start(
+    entities: Sequence[tuple[int, int]],
+    start: int,
+    end: int,
+) -> int | None:
+    return min((left for left, _ in entities if start <= left < end), default=None)
+
+
+def _last_entity_end(
+    entities: Sequence[tuple[int, int]],
+    start: int,
+    end: int,
+) -> int | None:
+    return max((right for left, right in entities if start <= left < end), default=None)
+
+
+def _conjunct_starts_new_clause(
+    check_text: str,
+    start: int,
+    end: int,
+    entities: Sequence[tuple[int, int]],
+    *,
+    check_trail: bool,
+) -> bool:
+    """Whether a conjunct is a clause of its own rather than a list member."""
+
+    if _has_scope_cue(check_text[start:end], _ENGLISH_RULES):
+        return True
+    entity_start = _first_entity_start(entities, start, end)
+    if entity_start is None:
+        return _opens_clause(check_text[start:end], _ENGLISH_RULES)
+    if _contains_clause_opener(check_text[start:entity_start], _ENGLISH_RULES):
+        return True
+    if not check_trail:
+        return False
+    entity_end = _last_entity_end(entities, start, end) or end
+    return _opens_clause(check_text[entity_end:end], _ENGLISH_RULES)
+
+
+def _forward_bound(
+    text: str,
+    check_text: str,
+    start: int,
+    entities: Sequence[tuple[int, int]],
+) -> int:
+    """End of a forward scope: a hard terminator or a new-clause conjunct."""
 
     match = _TERMINATOR_RE.search(text, start)
-    return match.start() if match else len(text)
+    clause_end = match.start() if match else len(text)
+    separators = _separators(check_text, start, clause_end)
+    for index, (separator_start, separator_end) in enumerate(separators):
+        conjunct_end = (
+            separators[index + 1][0] if index + 1 < len(separators) else clause_end
+        )
+        if _conjunct_starts_new_clause(
+            check_text,
+            separator_end,
+            conjunct_end,
+            entities,
+            check_trail=False,
+        ):
+            return separator_start
+    return clause_end
 
 
-def _backward_bound(text: str, end: int) -> int:
-    """Offset just after the last terminator before ``end``; 0 if none."""
+def _backward_bound(
+    text: str,
+    check_text: str,
+    end: int,
+    entities: Sequence[tuple[int, int]],
+) -> int:
+    """Start of a backward scope, walking left across coordinated members."""
 
     last = 0
     for match in _TERMINATOR_RE.finditer(text, 0, end):
         last = match.end()
-    return last
+    separators = _separators(check_text, last, end)
+    if not separators:
+        return last
+
+    scope_start = separators[-1][1]
+    # The cue's own conjunct may carry a predicate ("cough are absent"); only a
+    # subject or verb ahead of its first finding, or a forward cue, splits it.
+    entity_start = _first_entity_start(entities, scope_start, end)
+    if entity_start is None:
+        cue_conjunct_opens = _opens_clause(check_text[scope_start:end], _ENGLISH_RULES)
+    else:
+        cue_conjunct_opens = _contains_clause_opener(
+            check_text[scope_start:entity_start], _ENGLISH_RULES
+        )
+    if cue_conjunct_opens or _has_directional_cue(
+        check_text[scope_start:end], _ENGLISH_RULES, backward=False
+    ):
+        return scope_start
+    for index in range(len(separators) - 1, -1, -1):
+        previous_start = separators[index - 1][1] if index else last
+        if _conjunct_starts_new_clause(
+            check_text,
+            previous_start,
+            separators[index][0],
+            entities,
+            check_trail=True,
+        ):
+            break
+        scope_start = previous_start
+    return scope_start
 
 
 def _coerce_span(span: Mapping[str, object]) -> tuple[int, int]:
@@ -143,6 +264,7 @@ def detect_negation_scopes(
 
     entities = [_coerce_span(span) for span in spans]
     masked = _mask_pseudo_negation(text)
+    check_text = _blank_spans(masked, entities)
 
     scopes: list[NegationScope] = []
     for match in _NEGATION_RE.finditer(masked):
@@ -150,9 +272,11 @@ def detect_negation_scopes(
         surface = text[cue_start:cue_end]
         direction = BACKWARD if _normalize_cue(surface) in _BACKWARD_CUES else FORWARD
         if direction == FORWARD:
-            scope_start, scope_end = cue_end, _forward_bound(text, cue_end)
+            scope_start = cue_end
+            scope_end = _forward_bound(text, check_text, cue_end, entities)
         else:
-            scope_start, scope_end = _backward_bound(text, cue_start), cue_start
+            scope_start = _backward_bound(text, check_text, cue_start, entities)
+            scope_end = cue_start
 
         governed = tuple(
             (start, end)

@@ -147,6 +147,8 @@ regression table and the synthetic fixture, not a native-speaker review.
 | `scope_terminators` | Language-specific boundaries used to trim the direct resolver's context window and validate explicit modifier hits. Sentence punctuation is also a boundary. |
 | `conjunction_terminators` | Same-sentence blockers used by `scan_context_cues()` between a cue and target, such as the local equivalents of “but” or “however.” |
 | `token_boundaries` | When `true`, cue matching requires Unicode word boundaries. Set to `false` only when the script or orthography needs substring matching, then add negative tests for accidental matches inside longer text. |
+| `coordinators` | Optional list joiners such as “and” or “or.” Declaring them opts the pack into coordinated scope: these words and commas no longer end a scope by themselves, so “denies fever and cough” negates both findings. Leave empty to keep every `scope_terminators` entry as a hard boundary. Add a minimal pair for each entry. |
+| `clause_openers` | Optional subjects, auxiliaries, and reporting verbs that mark a new clause when they open a conjunct after a comma or coordinator, as in “no fever and reports cough.” Only used when `coordinators` is set. Missing openers let a scope run on into a new clause, so test each one with a negative control. |
 
 ### Scope Direction
 
@@ -158,7 +160,17 @@ the left. Cue and target must remain in the same sentence, and a localized
 
 The resolver path also accepts a span carrying full context and offsets. It
 trims that context at punctuation and `scope_terminators`, then evaluates each
-axis. Pseudo-negation is masked before true negation cues are counted; an even
+axis. For a pack that declares `coordinators` (English today), the hard
+boundaries are punctuation plus the `scope_terminators` and
+`conjunction_terminators` that are not coordinators, such as “but,”
+“however,” and “although.” Inside that clause, a cue keeps governing
+coordinated list members in both directions: “no fever, chills, or cough” and
+“pneumonia or effusion ruled out” assert every member. The scope stops at a
+conjunct that opens a new clause (“no fever and reports cough”) or carries its
+own cue (“no fever and possible pneumonia”), so each finding is counted
+against the one cue that governs it. Recent-temporality cues such as “new”
+split only the temporality axis, so “no pneumothorax or new consolidation”
+stays one negated list. Pseudo-negation is masked before true negation cues are counted; an even
 number of true negation cues is treated as affirmed so double negation is
 deterministic. These mechanical rules need language-specific minimal pairs and
 must remain advisory annotations rather than clinical decisions.

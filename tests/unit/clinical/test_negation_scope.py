@@ -116,8 +116,46 @@ def test_entity_after_scope_terminator_is_not_negated():
 
     result = negated_spans(text, [fever, cough, chest_pain])
 
-    # "and" terminates the scope, so only fever is negated.
-    assert result == ((fever["start"], fever["end"]),)
+    # "and" continues the list; the semicolon terminates the scope.
+    assert result == ((fever["start"], fever["end"]), (cough["start"], cough["end"]))
+
+
+def test_coordinated_new_clause_ends_the_scope():
+    text = "no fever and reports cough"
+    fever = _span(text, "fever")
+    cough = _span(text, "cough")
+
+    scope = detect_negation_scopes(text, [fever, cough])[0]
+
+    assert scope.scope_end == text.index("and")
+    assert scope.governed == ((fever["start"], fever["end"]),)
+
+
+def test_backward_cue_covers_a_coordinated_list():
+    text = "fever and cough are absent"
+    fever = _span(text, "fever")
+    cough = _span(text, "cough")
+
+    scope = detect_negation_scopes(text, [fever, cough])[0]
+
+    assert scope.direction == "backward"
+    assert scope.scope_start == 0
+    assert scope.governed == (
+        (fever["start"], fever["end"]),
+        (cough["start"], cough["end"]),
+    )
+
+
+def test_repeated_cue_closes_the_previous_scope():
+    text = "no fever, no chills"
+    fever = _span(text, "fever")
+    chills = _span(text, "chills")
+
+    first, second = detect_negation_scopes(text, [fever, chills])
+
+    assert first.scope_end == text.index(",")
+    assert first.governed == ((fever["start"], fever["end"]),)
+    assert second.governed == ((chills["start"], chills["end"]),)
 
 
 # --------------------------------------------------------------------------
@@ -133,10 +171,10 @@ def test_comma_separated_list_stays_in_scope():
 
     result = negated_spans(text, [fever, chills, cough])
 
-    # Commas do not terminate: fever and chills are negated; "or" ends the run.
+    # Commas and the serial "or" both continue the list, so all three are negated.
     assert (fever["start"], fever["end"]) in result
     assert (chills["start"], chills["end"]) in result
-    assert (cough["start"], cough["end"]) not in result
+    assert (cough["start"], cough["end"]) in result
 
 
 def test_cue_offsets_index_back_to_the_cue_text():

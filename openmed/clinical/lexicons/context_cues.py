@@ -14,7 +14,16 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ClinicalCueLexicon:
-    """Language-specific cue pack for deterministic clinical ConText axes."""
+    """Language-specific cue pack for deterministic clinical ConText axes.
+
+    ``coordinators`` and ``clause_openers`` opt a pack into coordinated scope
+    handling. Coordinators (such as ``and`` / ``or``) and commas then act as
+    list separators: a cue keeps governing later list members and ends only
+    where the next conjunct opens a new clause (a ``clause_openers`` match) or
+    carries its own ConText cue. A pack that leaves ``coordinators`` empty
+    keeps the original behavior, where every ``scope_terminators`` entry ends
+    the scope.
+    """
 
     language: str
     negation: tuple[str, ...]
@@ -27,6 +36,8 @@ class ClinicalCueLexicon:
     scope_terminators: tuple[str, ...]
     conjunction_terminators: tuple[str, ...]
     token_boundaries: bool = True
+    coordinators: tuple[str, ...] = ()
+    clause_openers: tuple[str, ...] = ()
 
 
 ENGLISH_CONTEXT_LEXICON = ClinicalCueLexicon(
@@ -147,6 +158,70 @@ ENGLISH_CONTEXT_LEXICON = ClinicalCueLexicon(
     ),
     scope_terminators=("and", "but", "however", "or"),
     conjunction_terminators=("but", "however", "although"),
+    # "and" / "or" join list members ("denies fever and cough"), so a cue keeps
+    # its scope across them until a conjunct opens a new clause. "nor" is left
+    # out on purpose: it never ends a negation scope.
+    coordinators=("and", "or"),
+    # Words that start a new clause when they open a conjunct after a comma or
+    # coordinator ("no fever and reports cough"): subjects, auxiliaries, and
+    # common clinical reporting predicates.
+    clause_openers=(
+        "he",
+        "she",
+        "they",
+        "we",
+        "patient",
+        "the patient",
+        "is",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "had",
+        "does",
+        "did",
+        "will",
+        "would",
+        "can",
+        "cannot",
+        "can't",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "reports",
+        "reported",
+        "endorses",
+        "endorsed",
+        "complains",
+        "complained",
+        "states",
+        "stated",
+        "notes",
+        "noted",
+        "describes",
+        "described",
+        "admits",
+        "admitted",
+        "presents",
+        "presented",
+        "develops",
+        "developed",
+        "shows",
+        "showed",
+        "demonstrates",
+        "demonstrated",
+        "reveals",
+        "revealed",
+        "remains",
+        "continues",
+        "appears",
+        "positive",
+        "present",
+        "with",
+    ),
 )
 
 SPANISH_CONTEXT_LEXICON = ClinicalCueLexicon(
@@ -598,6 +673,8 @@ def register_clinical_cue_lexicon(
         scope_terminators=tuple(lexicon.scope_terminators),
         conjunction_terminators=tuple(lexicon.conjunction_terminators),
         token_boundaries=bool(lexicon.token_boundaries),
+        coordinators=tuple(lexicon.coordinators),
+        clause_openers=tuple(lexicon.clause_openers),
     )
     _LEXICONS[code] = normalized
     return normalized
