@@ -605,3 +605,7 @@ variables are explicitly supplied.
 ## Local speech recognition
 
 The optional `OpenMedSpeech` product provides a pinned Core ML English speech adapter with bounded PCM ownership, partial/final events and cooperative cancellation. See [local Core ML speech](multimodal/apple-speech.md) for model pins, lifecycle rules and offline validation.
+
+## Thermal admission for multimodal work
+
+`MultimodalThermalSession` can gate a local operation against current Apple thermal state, queue age and measured latency. See [Apple session admission](multimodal/thermal-latency-gates.md#apple-session-admission) for the policy table, recovery behavior and value-free evidence.

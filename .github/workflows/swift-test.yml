@@ -13,6 +13,7 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
+      - 'tests/fixtures/multimodal/ambient_session_transitions.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -25,6 +26,7 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/parity/speech_contract_v1.json'
+      - 'tests/fixtures/multimodal/ambient_session_transitions.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
