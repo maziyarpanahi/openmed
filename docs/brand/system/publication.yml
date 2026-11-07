@@ -476,6 +476,7 @@ classification:
     - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
     - multimodal/batch-preflight.md
+    - multimodal/preflight-fixtures.md
     - multimodal/preflight-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md

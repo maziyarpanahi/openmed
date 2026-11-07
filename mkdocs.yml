@@ -416,6 +416,7 @@ nav:
       - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
       - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
+      - Synthetic Preflight Fixtures: multimodal/preflight-fixtures.md
       - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
