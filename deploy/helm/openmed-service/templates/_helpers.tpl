@@ -58,6 +58,18 @@ Name of the model-cache PVC.
 {{- end -}}
 {{- end -}}
 
+{{- define "openmed-service.journeyArtifactClaimName" -}}
+{{- if .Values.journey.artifacts.existingClaim -}}
+{{- .Values.journey.artifacts.existingClaim -}}
+{{- else -}}
+{{- printf "%s-journey-artifacts" (include "openmed-service.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "openmed-service.journeyWorkerName" -}}
+{{- printf "%s-journey-worker" (include "openmed-service.fullname" .) -}}
+{{- end -}}
+
 {{/*
 Trusted hosts needed for loopback probes and in-cluster Service DNS.
 */}}

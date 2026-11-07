@@ -17,8 +17,11 @@ from openmed.core.anonymizer.locales import (
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
+    NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     validate_aadhaar,
+    validate_bangladesh_nid,
     validate_chinese_resident_id,
     validate_czech_rodne_cislo,
     validate_danish_cpr,
@@ -27,24 +30,40 @@ from openmed.core.pii_i18n import (
     validate_french_nir,
     validate_german_steuer_id,
     validate_greek_amka,
+    validate_gujarati_aadhaar,
     validate_indonesian_nik,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_japanese_my_number,
+    validate_kannada_aadhaar,
     validate_kenya_maisha_namba,
     validate_korean_rrn,
+    validate_malayalam_aadhaar,
     validate_marathi_aadhaar,
+    validate_nigeria_nin,
     validate_norwegian_fodselsnummer,
+    validate_philsys_psn,
+    validate_polish_pesel,
     validate_portuguese_cpf,
     validate_romanian_cnp,
     validate_russian_snils,
+    validate_rwanda_id,
     validate_spanish_nie,
     validate_swedish_personnummer,
     validate_tamil_aadhaar,
     validate_thai_national_id,
     validate_turkish_tckn,
     validate_ukrainian_rnokpp,
+    validate_vietnamese_cccd,
     validate_za_id_number,
 )
+from openmed.training.synthetic.native_dates import (
+    NativeDateProfile,
+    generate_native_date,
+    resolve_native_date_profiles,
+)
+from openmed.training.synthetic.provider_versions import surrogate_provider_stamp
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "as",
@@ -61,12 +80,15 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "ml",
     "mr",
     "or",
+    "pl",
     "pa",
     "ta",
     "te",
     "am",
     "pt",
     "ar",
+    "fa",
+    "ur",
     "he",
     "ja",
     "tr",
@@ -85,7 +107,32 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "uk",
     "cs",
     "el",
+    "vi",
 )
+
+NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    "ha",
+    "ig",
+    "yo",
+    "rw",
+    "tl",
+)
+"""National-ID-only routes with repository-authored locale PHI templates."""
+
+USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = ("ne",)
+"""User-supplied-model routes with repository-authored locale PHI templates."""
+
+AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    *NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES,
+    *USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES,
+)
+"""Languages without a bundled model whose examples are augmentation-only.
+
+These codes are accepted explicitly rather than through a catch-all over
+``NATIONAL_ID_ONLY_LANGUAGES`` or ``USER_SUPPLIED_MODEL_LANGUAGES``, so a newly
+wired route stays unsupported until it gains a reviewed template. They are
+excluded from :meth:`LocalePhiGenerator.generate_all` unless requested.
+"""
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
     L.PERSON,
@@ -111,6 +158,20 @@ _FIELD_LABELS: Final[Mapping[str, str]] = {
     "phone": L.PHONE,
     "street_address": L.STREET_ADDRESS,
     "date": L.DATE,
+}
+
+# Arabic and Amharic name and place surrogates follow the source script. Their
+# placeholder sources are synthetic native-script values from the curated
+# language-pack data, so generated examples stay in the template's script.
+_NATIVE_SCRIPT_SOURCES: Final[Mapping[str, Mapping[str, str]]] = {
+    "am": {
+        L.PERSON: "ሰላም ተስፋዬ",
+        L.STREET_ADDRESS: "አዲስ አበባ ቦሌ 12",
+    },
+    "ar": {
+        L.PERSON: "\u0644\u064a\u0644\u0649 \u062d\u0633\u0646",
+        L.STREET_ADDRESS: "\u0634\u0627\u0631\u0639 \u0627\u0644\u0646\u064a\u0644 12",
+    },
 }
 
 _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
@@ -241,6 +302,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". ପରବର୍ତ୍ତୀ ତାରିଖ ",
         ".",
     ),
+    "pl": (
+        "Notatka kliniczna: pacjent ",
+        " urodzony ",
+        ". PESEL ",
+        ". Telefon ",
+        ". Adres ",
+        ". Wizyta kontrolna ",
+        ".",
+    ),
     "pa": (
         "ਕਲੀਨਿਕਲ ਨੋਟ: ਮਰੀਜ਼ ",
         " ਜਨਮ ",
@@ -297,6 +367,24 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0639\u0646\u0648\u0627\u0646 ",
         ". \u0645\u0648\u0639\u062f \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629 ",
         ".",
+    ),
+    "fa": (
+        "یادداشت بالینی: بیمار ",
+        " متولد ",
+        ". کد ملی بیمار ",
+        ". تلفن ",
+        ". نشانی ",
+        ". تاریخ پیگیری ",
+        ".",
+    ),
+    "ur": (
+        "طبی نوٹ: مریض ",
+        " کی تاریخ پیدائش ",
+        "۔ مریض کا آدھار ",
+        "۔ فون ",
+        "۔ پتہ ",
+        "۔ اگلی تاریخ ",
+        "۔",
     ),
     "he": (
         "\u05d4\u05e2\u05e8\u05d4 \u05e7\u05dc\u05d9\u05e0\u05d9\u05ea: \u05de\u05d8\u05d5\u05e4\u05dc ",
@@ -460,6 +548,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Ημερομηνία επανελέγχου ",
         ".",
     ),
+    "vi": (
+        "Ghi chú lâm sàng: bệnh nhân ",
+        " sinh ngày ",
+        ". CCCD ",
+        ". Điện thoại ",
+        ". Địa chỉ ",
+        ". Ngày tái khám ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -471,15 +568,24 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "es": validate_spanish_nie,
     "nl": validate_dutch_bsn,
     "as": validate_aadhaar,
+    "bn": validate_bangladesh_nid,
+    "gu": validate_gujarati_aadhaar,
     "hi": validate_aadhaar,
+    "ml": validate_malayalam_aadhaar,
+    "pa": validate_aadhaar,
+    "kn": validate_kannada_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
+    "pl": validate_polish_pesel,
     "ta": validate_tamil_aadhaar,
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
+    "fa": validate_iran_national_id,
+    "ur": validate_aadhaar,
     "he": validate_israeli_teudat_zehut,
     "id": validate_indonesian_nik,
+    "ja": validate_japanese_my_number,
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
     "ro": validate_romanian_cnp,
@@ -494,6 +600,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "uk": validate_ukrainian_rnokpp,
     "cs": validate_czech_rodne_cislo,
     "el": validate_greek_amka,
+    "vi": validate_vietnamese_cccd,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -505,15 +612,24 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "es": "pii_i18n.validate_spanish_nie",
     "nl": "pii_i18n.validate_dutch_bsn",
     "as": "pii_i18n.validate_aadhaar",
+    "bn": "pii_i18n.validate_bangladesh_nid",
+    "gu": "pii_i18n.validate_gujarati_aadhaar",
     "hi": "pii_i18n.validate_aadhaar",
+    "ml": "pii_i18n.validate_malayalam_aadhaar",
+    "pa": "pii_i18n.validate_aadhaar",
+    "kn": "pii_i18n.validate_kannada_aadhaar",
     "mr": "pii_i18n.validate_marathi_aadhaar",
     "or": "pii_i18n.validate_aadhaar",
+    "pl": "pii_i18n.validate_polish_pesel",
     "ta": "pii_i18n.validate_tamil_aadhaar",
     "te": "pii_i18n.validate_aadhaar",
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
+    "fa": "pii_i18n.validate_iran_national_id",
+    "ur": "pii_i18n.validate_aadhaar",
     "he": "pii_i18n.validate_israeli_teudat_zehut",
     "id": "pii_i18n.validate_indonesian_nik",
+    "ja": "pii_i18n.validate_japanese_my_number",
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
     "ro": "pii_i18n.validate_romanian_cnp",
@@ -528,7 +644,110 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "uk": "pii_i18n.validate_ukrainian_rnokpp",
     "cs": "pii_i18n.validate_czech_rodne_cislo",
     "el": "pii_i18n.validate_greek_amka",
+    "vi": "pii_i18n.validate_vietnamese_cccd",
 }
+
+_NATIONAL_ID_ONLY_ROUTE: Final = "national_id_only"
+_USER_SUPPLIED_MODEL_ROUTE: Final = "user_supplied_model"
+
+_AUGMENTATION_ONLY_ROUTES: Final[Mapping[str, str]] = {
+    **{code: _NATIONAL_ID_ONLY_ROUTE for code in NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES},
+    **{
+        code: _USER_SUPPLIED_MODEL_ROUTE
+        for code in USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES
+    },
+}
+
+# Repository-authored note skeletons for routes without a bundled model. Each
+# tuple holds the literal text around the ``_FIELD_ORDER`` slots. The literals
+# carry clinical vocabulary and the context cues the deterministic pattern
+# packs recognize, but never a name, address, or digit: every PHI value is
+# drawn from a surrogate or identifier provider at render time.
+_AUGMENTATION_ONLY_TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
+    "ha": (
+        "Bayanin asibiti: majiyyaci ",
+        ", ranar haihuwa ",
+        ". Lambar NIN ",
+        ". Lambar waya ",
+        ". Adireshi ",
+        ". Ranar ziyara ta gaba ",
+        ".",
+    ),
+    "ig": (
+        "Ndetu ụlọ ọgwụ: onye ọrịa bụ ",
+        ". Ụbọchị ọmụmụ: ",
+        ". Nọmba NIN: ",
+        ". Nọmba ekwentị: ",
+        ". Adreesị: ",
+        ". Ụbọchị nleta ọzọ: ",
+        ".",
+    ),
+    "yo": (
+        "Àkọsílẹ̀ aláìsàn: orúkọ ",
+        "; ọjọ́ ìbí ",
+        "; nọ́mbà ìdánimọ̀ NIN ",
+        "; nọ́ńbà tẹlifóònù ",
+        "; àdírẹ́sì ",
+        "; ọjọ́ ìpàdé tó ń bọ̀ ",
+        ".",
+    ),
+    "rw": (
+        "Inyandiko y'ubuvuzi: umurwayi ",
+        ". Itariki y'amavuko ",
+        ". Nimero y'indangamuntu ",
+        ". Telefoni ",
+        ". Aderesi ",
+        ". Itariki yo kugaruka ",
+        ".",
+    ),
+    "tl": (
+        "Klinikal na tala: pasyente ",
+        ", petsa ng kapanganakan ",
+        ". PhilSys PSN ",
+        ". Telepono ",
+        ". Tirahan ",
+        ". Susunod na konsulta ",
+        ".",
+    ),
+    "ne": (
+        "क्लिनिकल टिप्पणी: बिरामी ",
+        " को जन्म मिति ",
+        "। बिरामी परिचय नम्बर ",
+        "। फोन ",
+        "। ठेगाना ",
+        "। अर्को भेट मिति ",
+        "।",
+    ),
+}
+
+# Validator-backed national-ID providers for the national-ID-only routes. The
+# user-supplied-model route ``ne`` has no OpenMed national-ID provider, so it
+# takes the Luhn fallback in ``LocalePhiGenerator._identifier``.
+_AUGMENTATION_ONLY_ID_VALIDATORS: Final[
+    Mapping[str, tuple[Callable[[str], bool], str]]
+] = {
+    "ha": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "ig": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "yo": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "rw": (validate_rwanda_id, "pii_i18n.validate_rwanda_id"),
+    "tl": (validate_philsys_psn, "pii_i18n.validate_philsys_psn"),
+}
+
+
+def _template_literals(language: str) -> tuple[str, ...]:
+    """Return the note skeleton for a model-backed or augmentation-only code."""
+
+    if language in _AUGMENTATION_ONLY_TEMPLATES:
+        return _AUGMENTATION_ONLY_TEMPLATES[language]
+    return _TEMPLATES[language]
+
+
+def _national_id_validator(language: str) -> tuple[Callable[[str], bool], str]:
+    """Return the validator and its stable name for ``language``'s national ID."""
+
+    if language in _AUGMENTATION_ONLY_ID_VALIDATORS:
+        return _AUGMENTATION_ONLY_ID_VALIDATORS[language]
+    return _NATIONAL_ID_VALIDATORS[language], _NATIONAL_ID_VALIDATOR_NAMES[language]
 
 
 @dataclass(frozen=True)
@@ -574,19 +793,57 @@ class LocalePhiExample:
 
 
 class LocalePhiGenerator:
-    """Generate deterministic locale PHI augmentation examples."""
+    """Generate deterministic locale PHI augmentation examples.
 
-    def __init__(self, *, seed: int | None = None) -> None:
+    Args:
+        seed: Seed for deterministic output. ``None`` draws fresh randomness.
+        date_profiles: Optional ``{language: profile}`` mapping that opts a
+            language in to native-digit or native-calendar dates. Values are
+            names from
+            :data:`~openmed.training.synthetic.native_dates.NATIVE_DATE_PROFILES`
+            or :class:`~openmed.training.synthetic.native_dates.NativeDateProfile`
+            instances. Languages left out keep ISO Gregorian ASCII dates, and
+            ``None`` leaves every example byte-identical to the default.
+    """
+
+    def __init__(
+        self,
+        *,
+        seed: int | None = None,
+        date_profiles: Mapping[str, str | NativeDateProfile] | None = None,
+    ) -> None:
         self.seed = seed
         self._rng = random.Random(seed)
+        self._date_profiles = resolve_native_date_profiles(date_profiles)
 
     def generate(self, language: str) -> LocalePhiExample:
-        """Generate one synthetic PHI example for ``language``."""
+        """Generate one synthetic PHI example for ``language``.
 
+        Codes in :data:`SUPPORTED_LOCALE_PHI_LANGUAGES` render their existing
+        templates. Codes in :data:`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`
+        render repository-authored templates for routes without a bundled
+        model and record ``bundled_model=False`` plus their ``language_route``.
+
+        Args:
+            language: OpenMed ISO 639-1 language code.
+
+        Returns:
+            One synthetic example whose gold spans match their text slices.
+
+        Raises:
+            ValueError: If ``language`` has no locale PHI template, or its
+                route is no longer wired in OpenMed.
+            RuntimeError: If a provider returns an identifier that fails its
+                validator, or an augmentation-only field gets a placeholder.
+        """
+
+        if language in AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES:
+            return self._generate_augmentation_only(language)
         if language not in SUPPORTED_LOCALE_PHI_LANGUAGES:
             raise ValueError(
                 f"unsupported locale PHI language {language!r}; "
-                f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}"
+                f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}; "
+                f"augmentation_only={list(AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)!r}"
             )
         if language not in SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES:
             raise ValueError(f"language {language!r} is not wired in OpenMed")
@@ -602,6 +859,8 @@ class LocalePhiGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "locale_phi",
+            "surrogate_providers": surrogate_provider_stamp(locale),
+            **self._date_profile_metadata(language, spans),
         }
         return LocalePhiExample(
             text=text,
@@ -611,25 +870,85 @@ class LocalePhiGenerator:
             metadata=metadata,
         )
 
-    def generate_all(self) -> tuple[LocalePhiExample, ...]:
-        """Generate one example for every wired locale PHI language."""
+    def generate_all(
+        self, *, include_augmentation_only: bool = False
+    ) -> tuple[LocalePhiExample, ...]:
+        """Generate one example for every wired locale PHI language.
 
-        return tuple(
-            self.generate(language) for language in SUPPORTED_LOCALE_PHI_LANGUAGES
+        Args:
+            include_augmentation_only: Also append one example for each code in
+                :data:`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`. The default keeps
+                the model-backed output unchanged.
+
+        Returns:
+            Examples in :data:`SUPPORTED_LOCALE_PHI_LANGUAGES` order, followed by
+            the augmentation-only languages when requested.
+        """
+
+        languages = SUPPORTED_LOCALE_PHI_LANGUAGES
+        if include_augmentation_only:
+            languages = (*languages, *AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)
+        return tuple(self.generate(language) for language in languages)
+
+    def _generate_augmentation_only(self, language: str) -> LocalePhiExample:
+        route = _AUGMENTATION_ONLY_ROUTES[language]
+        wired = (
+            NATIONAL_ID_ONLY_LANGUAGES
+            if route == _NATIONAL_ID_ONLY_ROUTE
+            else USER_SUPPLIED_MODEL_LANGUAGES
+        )
+        if language not in wired:
+            raise ValueError(f"language {language!r} is not wired in OpenMed")
+
+        locale = resolve_locale(language)
+        values = self._values_for(language, locale)
+        for field_name, (value, _) in values.items():
+            # The anonymizer degrades to ``[LABEL]`` when a provider fails; a
+            # placeholder must never become a gold PHI span.
+            if not value or value == f"[{_FIELD_LABELS[field_name]}]":
+                raise RuntimeError(
+                    f"surrogate provider returned a placeholder for "
+                    f"{language!r} field {field_name!r}"
+                )
+        text, spans = self._render(language, values)
+        metadata = {
+            "augmentation_only": True,
+            "bundled_model": False,
+            "contains_real_phi": False,
+            "language": language,
+            "language_route": route,
+            "locale": locale,
+            "seed": self.seed,
+            "synthetic": True,
+            "synthetic_source": "locale_phi",
+            "surrogate_providers": surrogate_provider_stamp(locale),
+            **self._date_profile_metadata(language, spans),
+        }
+        return LocalePhiExample(
+            text=text,
+            gold_spans=spans,
+            language=language,
+            locale=locale,
+            metadata=metadata,
         )
 
     def _values_for(
         self, language: str, locale: str
     ) -> Mapping[str, tuple[str, Mapping[str, Any]]]:
         identifier, identifier_metadata = self._identifier(language)
+        sources = _NATIVE_SCRIPT_SOURCES.get(language, {})
         return {
             "person": (
-                self._surrogate(language, L.PERSON, "Example Patient", locale),
+                self._surrogate(
+                    language,
+                    L.PERSON,
+                    sources.get(L.PERSON, "Example Patient"),
+                    locale,
+                ),
                 {"field": "person"},
             ),
-            "date_of_birth": (
-                self._surrogate(language, L.DATE_OF_BIRTH, "1970-01-15", locale),
-                {"field": "date_of_birth"},
+            "date_of_birth": self._date_value(
+                language, locale, "date_of_birth", L.DATE_OF_BIRTH, "1970-01-15"
             ),
             "identifier": (identifier, identifier_metadata),
             "phone": (
@@ -637,13 +956,15 @@ class LocalePhiGenerator:
                 {"field": "phone"},
             ),
             "street_address": (
-                self._surrogate(language, L.STREET_ADDRESS, "", locale),
+                self._surrogate(
+                    language,
+                    L.STREET_ADDRESS,
+                    sources.get(L.STREET_ADDRESS, ""),
+                    locale,
+                ),
                 {"field": "street_address"},
             ),
-            "date": (
-                self._surrogate(language, L.DATE, "2024-04-18", locale),
-                {"field": "date"},
-            ),
+            "date": self._date_value(language, locale, "date", L.DATE, "2024-04-18"),
         }
 
     def _identifier(self, language: str) -> tuple[str, Mapping[str, Any]]:
@@ -657,23 +978,21 @@ class LocalePhiGenerator:
                 id_locale,
                 seed=seed,
             )
-            validator = _NATIONAL_ID_VALIDATORS[language]
+            validator, validator_name = _national_id_validator(language)
             if not validator(value):
-                raise RuntimeError(
-                    f"generated invalid national ID for {language!r}: {value!r}"
-                )
+                raise RuntimeError(f"generated invalid national ID for {language!r}")
             return value, {
                 "field": "identifier",
                 "id_locale": id_locale,
                 "id_method": method,
                 "id_subtype": "national_id",
-                "validator": _NATIONAL_ID_VALIDATOR_NAMES[language],
+                "validator": validator_name,
             }
 
         rng = random.Random(seed)
         value = clinical_ids.generate_luhn_identifier(rng=rng)
         if not clinical_ids.validate_luhn(value):
-            raise RuntimeError(f"generated invalid Luhn identifier: {value!r}")
+            raise RuntimeError("generated invalid Luhn identifier")
         return value, {
             "field": "identifier",
             "id_locale": LANG_TO_LOCALE[language],
@@ -702,7 +1021,7 @@ class LocalePhiGenerator:
     def _render(
         self, language: str, values: Mapping[str, tuple[str, Mapping[str, Any]]]
     ) -> tuple[str, tuple[SyntheticPhiSpan, ...]]:
-        literals = _TEMPLATES[language]
+        literals = _template_literals(language)
         chunks: list[str] = []
         spans: list[SyntheticPhiSpan] = []
         cursor = 0
@@ -736,21 +1055,75 @@ class LocalePhiGenerator:
         digest = hashlib.blake2b(material, digest_size=8).digest()
         return int.from_bytes(digest, "big", signed=False)
 
+    def _date_value(
+        self,
+        language: str,
+        locale: str,
+        field_name: str,
+        label: str,
+        original: str,
+    ) -> tuple[str, Mapping[str, Any]]:
+        """Render one date field with the language's opt-in date profile.
+
+        Without a profile this is the original ISO Gregorian surrogate call, so
+        default output and random-state consumption stay unchanged.
+        """
+
+        profile = self._date_profiles.get(language)
+        if profile is None:
+            return (
+                self._surrogate(language, label, original, locale),
+                {"field": field_name},
+            )
+        rng = random.Random(self._field_seed(language, label))
+        value, metadata = generate_native_date(profile, rng, field=field_name)
+        return value, {"field": field_name, **metadata}
+
+    def _date_profile_metadata(
+        self, language: str, spans: Sequence[SyntheticPhiSpan]
+    ) -> dict[str, Any]:
+        """Return value-free example metadata for a profiled language."""
+
+        profile = self._date_profiles.get(language)
+        if profile is None:
+            return {}
+        gaps = {
+            span.metadata["field"]: span.metadata["detection_gap"]
+            for span in spans
+            if span.metadata.get("date_profile") == profile.name
+            and span.metadata.get("detection_gap") is not None
+        }
+        return {"date_detection_gaps": gaps, "date_profile": profile.name}
+
 
 def generate_locale_phi_examples(
     *,
     languages: Sequence[str] = SUPPORTED_LOCALE_PHI_LANGUAGES,
     seed: int | None = None,
+    date_profiles: Mapping[str, str | NativeDateProfile] | None = None,
 ) -> tuple[LocalePhiExample, ...]:
-    """Generate synthetic PHI examples for ``languages``."""
+    """Generate synthetic PHI examples for ``languages``.
 
-    generator = LocalePhiGenerator(seed=seed)
+    Args:
+        languages: Language codes to render, one example each.
+        seed: Seed for deterministic output.
+        date_profiles: Optional ``{language: profile}`` native date selection;
+            see :class:`LocalePhiGenerator`.
+
+    Returns:
+        One example per requested language, in order.
+    """
+
+    generator = LocalePhiGenerator(seed=seed, date_profiles=date_profiles)
     return tuple(generator.generate(language) for language in languages)
 
 
 __all__ = [
+    "AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES",
     "LOCALE_PHI_LABELS",
+    "NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES",
     "SUPPORTED_LOCALE_PHI_LANGUAGES",
+    "USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES",
     "LocalePhiExample",
     "LocalePhiGenerator",
     "SyntheticPhiSpan",

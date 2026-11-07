@@ -268,6 +268,45 @@ def _static_all(tree: ast.Module) -> tuple[str, ...] | None:
     return exports
 
 
+def _string_mapping(expression: ast.expr) -> dict[str, str] | None:
+    """Return a literal string-to-string mapping when one is statically known."""
+
+    if not isinstance(expression, ast.Dict):
+        return None
+    result: dict[str, str] = {}
+    for key, value in zip(expression.keys, expression.values):
+        if not (
+            isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+        ):
+            return None
+        result[key.value] = value.value
+    return result
+
+
+def _static_string_mappings(tree: ast.Module) -> dict[str, dict[str, str]]:
+    """Collect top-level literal string mappings used by lazy export tables."""
+
+    mappings: dict[str, dict[str, str]] = {}
+    for statement in tree.body:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            target = statement.targets[0]
+            value = statement.value
+        elif isinstance(statement, ast.AnnAssign):
+            target = statement.target
+            value = statement.value
+        if not isinstance(target, ast.Name) or value is None:
+            continue
+        mapping = _string_mapping(value)
+        if mapping is not None:
+            mappings[target.id] = mapping
+    return mappings
+
+
 def _render_expression(expression: ast.AST | None) -> str | None:
     if expression is None:
         return None
@@ -540,16 +579,34 @@ def _class_symbols(node: ast.ClassDef, module: str) -> dict[str, Symbol]:
     return symbols
 
 
-def _absolute_import(module: str, is_package: bool, node: ast.ImportFrom) -> str:
-    if node.level == 0:
-        return node.module or ""
+def _absolute_module(
+    module: str,
+    is_package: bool,
+    imported_module: str,
+    level: int,
+) -> str:
+    """Resolve an absolute module name without importing it."""
+
+    if level == 0:
+        return imported_module
     base = module.split(".") if is_package else module.split(".")[:-1]
-    remove = max(0, node.level - 1)
+    remove = max(0, level - 1)
     if remove:
         base = base[:-remove]
-    if node.module:
-        base.extend(node.module.split("."))
+    if imported_module:
+        base.extend(imported_module.split("."))
     return ".".join(base)
+
+
+def _absolute_import(module: str, is_package: bool, node: ast.ImportFrom) -> str:
+    return _absolute_module(module, is_package, node.module or "", node.level)
+
+
+def _absolute_lazy_module(module: str, is_package: bool, target: str) -> str:
+    """Resolve a lazy-import mapping value such as ``.core.results``."""
+
+    level = len(target) - len(target.lstrip("."))
+    return _absolute_module(module, is_package, target[level:], level)
 
 
 def _module_symbols(
@@ -563,11 +620,27 @@ def _module_symbols(
     except SyntaxError as exc:
         raise ApiSurfaceError(f"could not parse {path}: {exc}") from exc
     exports = _static_all(tree)
+    string_mappings = _static_string_mappings(tree)
+    exported_roots = (
+        None if exports is None else {name.partition(".")[0] for name in exports}
+    )
+
+    def selected_root(name: str) -> bool:
+        # Keep dotted member exports and __version__ semantics. Hidden local
+        # definitions cannot be resolved through the public surface anyway.
+        return (not name.startswith("_") or name == "__version__") and (
+            exported_roots is None or name in exported_roots
+        )
+
     local: dict[str, Symbol] = {}
     for statement in tree.body:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not selected_root(statement.name):
+                continue
             local[statement.name] = _function_symbol(statement, module, statement.name)
         elif isinstance(statement, ast.ClassDef):
+            if not selected_root(statement.name):
+                continue
             class_symbols = _class_symbols(statement, module)
             local[statement.name] = class_symbols[f"{module}.{statement.name}"]
             for full_name, symbol in class_symbols.items():
@@ -604,6 +677,7 @@ def _module_symbols(
                     source_target=alias.name,
                 )
         elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            fingerprint: str | None = None
             targets = (
                 statement.targets
                 if isinstance(statement, ast.Assign)
@@ -611,15 +685,35 @@ def _module_symbols(
             )
             for target in targets:
                 for name in _assigned_names(target):
-                    if name == "__all__":
+                    if name == "__all__" or not selected_root(name):
                         continue
+                    if fingerprint is None:
+                        fingerprint = _fingerprint(statement, "data")
                     local[name] = Symbol(
                         name=f"{module}.{name}",
                         module=module,
                         qualname=name,
                         kind="data",
-                        fingerprint=_fingerprint(statement, "data"),
+                        fingerprint=fingerprint,
                     )
+
+    lazy_attribute_names = string_mappings.get("_LAZY_ATTRIBUTE_NAMES", {})
+    for name, target_module in string_mappings.get("_LAZY_IMPORTS", {}).items():
+        attribute_name = lazy_attribute_names.get(name, name)
+        absolute_module = _absolute_lazy_module(
+            module,
+            path.name == "__init__.py",
+            target_module,
+        )
+        target = ".".join(part for part in (absolute_module, attribute_name) if part)
+        local[name] = Symbol(
+            name=f"{module}.{name}",
+            module=module,
+            qualname=name,
+            kind="import",
+            fingerprint=hashlib.sha256(f"import:{target}".encode()).hexdigest(),
+            source_target=target,
+        )
 
     selected: dict[str, Symbol] = {}
     names = (
@@ -682,6 +776,14 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
 
     resolved = dict(surface)
     for _ in range(8):
+        class_members: dict[str, list[Symbol]] = {
+            symbol.name: [] for symbol in resolved.values() if symbol.kind == "class"
+        }
+        for member in resolved.values():
+            parent_name, separator, _ = member.name.rpartition(".")
+            if separator and parent_name in class_members:
+                class_members[parent_name].append(member)
+
         updates: dict[str, Symbol] = {}
         for symbol in tuple(resolved.values()):
             if symbol.kind != "import" or symbol.source_target is None:
@@ -706,9 +808,7 @@ def _resolve_imported_symbols(surface: Mapping[str, Symbol]) -> dict[str, Symbol
                 continue
             target_prefix = f"{target.name}."
             alias_prefix = f"{symbol.name}."
-            for member in tuple(resolved.values()):
-                if not member.name.startswith(target_prefix):
-                    continue
+            for member in class_members.get(target.name, ()):
                 suffix = member.name[len(target_prefix) :]
                 alias_name = alias_prefix + suffix
                 updates.setdefault(
@@ -762,6 +862,12 @@ def extract_surface(
 
 def _narrowing_reasons(before: Symbol, after: Symbol) -> tuple[str, ...]:
     if before.kind != after.kind:
+        if (
+            before.kind == "import"
+            and before.source_target is not None
+            and before.source_target == after.source_target
+        ):
+            return ()
         return (f"kind changed from {before.kind} to {after.kind}",)
     if before.parameters is None or after.parameters is None:
         return ()

@@ -6,6 +6,12 @@ import math
 import re
 from typing import Literal, TypedDict
 
+from .lexicons.clinical_norm import (
+    abbreviation_surfaces,
+    canonical_unit_alias,
+    get_clinical_norm_lexicon,
+    parse_locale_number,
+)
 from .units import MeasurementNormalization, normalize_to
 
 VitalKind = Literal[
@@ -44,8 +50,18 @@ VITAL_SIGNS_ADVISORY = (
 )
 
 _NUMERIC = r"(?:\d+(?:\.\d*)?|\.\d+)"
+_LOCALIZED_NUMERIC = (
+    r"(?:"
+    r"(?:\d{1,3}(?:[ \u00a0\u202f'’.,]\d{3})+|\d+)(?:[.,\u066b]\d+)?"
+    r"|[.,\u066b]\d+)"
+)
+# Any Unicode whitespace character: str patterns make ``\s`` Unicode-aware, so
+# this covers non-breaking (U+00A0), narrow no-break (U+202F), thin (U+2009)
+# and the other spaces copied clinical text carries.
+_UNICODE_WHITESPACE_RE = re.compile(r"\s")
 _SEPARATOR = r"\s*(?:(?:is|was|=|:)\s*)?"
 _TRAILING_BOUNDARY = r"(?=$|\s|[.,;)])"
+_LOCALIZED_SEPARATOR = r"\s*(?:(?:is|was|=|:|：)\s*)?"
 
 _BLOOD_PRESSURE_RE = re.compile(
     rf"(?:\b(?:bp|b/p|blood pressure)\b{_SEPARATOR})?"
@@ -80,6 +96,15 @@ _HEART_RATE_RE = re.compile(
 )
 _BPM_ONLY_RE = re.compile(
     rf"(?<!\w)(?P<value>{_NUMERIC})\s*(?P<unit>bpm){_TRAILING_BOUNDARY}",
+    re.IGNORECASE,
+)
+_LOCALIZED_BLOOD_PRESSURE_VALUE_RE = re.compile(
+    rf"^(?P<systolic>{_LOCALIZED_NUMERIC})\s*/\s*"
+    rf"(?P<diastolic>{_LOCALIZED_NUMERIC})(?:\s*(?P<unit>\S.*?))?\s*$",
+    re.IGNORECASE,
+)
+_LOCALIZED_SINGLE_VALUE_RE = re.compile(
+    rf"^(?P<value>{_LOCALIZED_NUMERIC})(?:\s*(?P<unit>\S.*?))?\s*$",
     re.IGNORECASE,
 )
 
@@ -141,7 +166,11 @@ def _blood_pressure_result(match: re.Match[str]) -> VitalSignResult:
     }
 
 
-def structure_vital_sign(text: object) -> VitalSignResult:
+def structure_vital_sign(
+    text: object,
+    *,
+    language: object | None = None,
+) -> VitalSignResult:
     """Structure a short narrative vital-sign phrase.
 
     The parser recognizes blood pressure, heart rate, body temperature,
@@ -149,8 +178,17 @@ def structure_vital_sign(text: object) -> VitalSignResult:
     written and are never converted or normalized. Unknown or unparseable input
     returns an explicit ``"unknown"`` result instead of raising.
 
+    Each Unicode whitespace character is read as one ASCII space before the
+    English patterns run, so ``mm Hg`` written with U+00A0 or ``oxygen saturation``
+    written with U+202F parse exactly like their ASCII spellings. The replacement is one character
+    for one, so string length and positions are unchanged. Localized parsing
+    (``language``) sees the phrase unchanged, because it reads non-breaking and
+    narrow spaces as digit-group separators.
+
     Args:
         text: Short vital-sign phrase or already-located narrative span.
+        language: Optional source-language code for localized vital
+            abbreviations, decimal punctuation, and unit aliases.
 
     Returns:
         A structured vital-sign mapping with a kind, value, captured unit, and
@@ -163,6 +201,18 @@ def structure_vital_sign(text: object) -> VitalSignResult:
     phrase = text.strip()
     if not phrase:
         return empty_vital_sign_result()
+
+    if language is not None:
+        localized = _localized_vital_sign(phrase, language=language)
+        if localized["kind"] != "unknown":
+            return localized
+        if _starts_with_localized_abbreviation(phrase, language=language):
+            return localized
+
+    # Several patterns spell multi-word labels and units with a literal ASCII
+    # space ("oxygen saturation", "breaths per min"), so a copied non-breaking
+    # space used to turn a readable vital sign into "unknown".
+    phrase = _UNICODE_WHITESPACE_RE.sub(" ", phrase)
 
     if match := _BLOOD_PRESSURE_RE.search(phrase):
         return _blood_pressure_result(match)
@@ -184,10 +234,149 @@ def normalize_vital_measurement(
     value: object,
     unit: object,
     target_unit: object,
+    *,
+    language: object | None = None,
+    target_language: object | None = None,
 ) -> MeasurementNormalization:
     """Normalize a captured vital-sign value with explicit unit provenance."""
 
-    return normalize_to(value, unit, target_unit)
+    return normalize_to(
+        value,
+        unit,
+        target_unit,
+        from_language=language,
+        to_language=target_language,
+    )
+
+
+def _localized_vital_sign(
+    phrase: str,
+    *,
+    language: object,
+) -> VitalSignResult:
+    for kind in (
+        "blood_pressure",
+        "oxygen_saturation",
+        "body_temperature",
+        "respiratory_rate",
+        "heart_rate",
+    ):
+        if (tail := _strip_localized_prefix(phrase, kind, language=language)) is None:
+            continue
+        if kind == "blood_pressure":
+            return _localized_blood_pressure_result(tail, language=language)
+        return _localized_single_value_result(kind, tail, language=language)
+    return empty_vital_sign_result()
+
+
+def _strip_localized_prefix(
+    phrase: str,
+    kind: str,
+    *,
+    language: object,
+) -> str | None:
+    lexicon = get_clinical_norm_lexicon(language)
+    for surface in sorted(
+        abbreviation_surfaces(kind, language=language),
+        key=len,
+        reverse=True,
+    ):
+        boundary = "" if not lexicon.token_boundaries else r"(?!\w)"
+        pattern = re.compile(
+            rf"^\s*{re.escape(surface)}\.?{boundary}{_LOCALIZED_SEPARATOR}",
+            re.IGNORECASE,
+        )
+        if match := pattern.match(phrase):
+            return phrase[match.end() :].strip()
+    return None
+
+
+def _starts_with_localized_abbreviation(
+    phrase: str,
+    *,
+    language: object,
+) -> bool:
+    for kind in (
+        "blood_pressure",
+        "oxygen_saturation",
+        "body_temperature",
+        "respiratory_rate",
+        "heart_rate",
+    ):
+        if _strip_localized_prefix(phrase, kind, language=language) is not None:
+            return True
+    return False
+
+
+def _localized_blood_pressure_result(
+    tail: str,
+    *,
+    language: object,
+) -> VitalSignResult:
+    match = _LOCALIZED_BLOOD_PRESSURE_VALUE_RE.fullmatch(tail)
+    if match is None:
+        return empty_vital_sign_result()
+    systolic = _parse_localized_number(match.group("systolic"), language=language)
+    diastolic = _parse_localized_number(match.group("diastolic"), language=language)
+    if systolic is None or diastolic is None:
+        return empty_vital_sign_result()
+
+    unit = _localized_unit(match.groupdict().get("unit"), language=language)
+    return {
+        "kind": "blood_pressure",
+        "value": None,
+        "unit": unit,
+        "components": [
+            {"kind": "systolic", "value": systolic, "unit": unit},
+            {"kind": "diastolic", "value": diastolic, "unit": unit},
+        ],
+    }
+
+
+def _localized_single_value_result(
+    kind: str,
+    tail: str,
+    *,
+    language: object,
+) -> VitalSignResult:
+    match = _LOCALIZED_SINGLE_VALUE_RE.fullmatch(tail)
+    if match is None:
+        return empty_vital_sign_result()
+    value = _parse_localized_number(match.group("value"), language=language)
+    if value is None:
+        return empty_vital_sign_result()
+    return {
+        "kind": kind,  # type: ignore[typeddict-item]
+        "value": value,
+        "unit": _localized_unit(match.groupdict().get("unit"), language=language),
+        "components": [],
+    }
+
+
+def _parse_localized_number(
+    text: str,
+    *,
+    language: object,
+) -> VitalSignNumber | None:
+    value = parse_locale_number(text, language=language)
+    if value is None:
+        return None
+    if value.is_integer():
+        return int(value)
+    return value
+
+
+def _localized_unit(
+    unit: object,
+    *,
+    language: object,
+) -> str:
+    if not isinstance(unit, str):
+        return ""
+    cleaned = unit.strip()
+    if not cleaned:
+        return ""
+    return canonical_unit_alias(cleaned, language=language) or cleaned
 
 
 __all__ = [

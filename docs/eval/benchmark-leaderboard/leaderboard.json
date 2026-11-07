@@ -1,5 +1,5 @@
 {
-  "row_count": 1,
+  "row_count": 2,
   "rows": [
     {
       "device": "mlx-fp",
@@ -14,6 +14,20 @@
       "reproducibility_hash": "sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34",
       "run_date": "2026-06-14",
       "suite": "golden"
+    },
+    {
+      "device": "cpu",
+      "f1": 0.7142857142857143,
+      "leakage": 0.5990566037735849,
+      "model_family": "Synthetic rules control",
+      "model_name": "openmed-synthetic-regex-phi-baseline-v1",
+      "recall": 0.5555555555555556,
+      "release_tag": "not-released",
+      "report_path": "shield-synthetic.report.json",
+      "report_url": "reports/shield-synthetic.report.json",
+      "reproducibility_hash": "sha256:2cc88b7070ede609b18fe206a6f3fae95a0fbb0013f84c51962aaa3f06afeae9",
+      "run_date": "2026-09-28",
+      "suite": "shield-synthetic"
     }
   ],
   "schema_version": 1,
@@ -45,6 +59,30 @@
         }
       ],
       "name": "golden"
+    },
+    {
+      "families": [
+        {
+          "name": "Synthetic rules control",
+          "rows": [
+            {
+              "device": "cpu",
+              "f1": 0.7142857142857143,
+              "leakage": 0.5990566037735849,
+              "model_family": "Synthetic rules control",
+              "model_name": "openmed-synthetic-regex-phi-baseline-v1",
+              "recall": 0.5555555555555556,
+              "release_tag": "not-released",
+              "report_path": "shield-synthetic.report.json",
+              "report_url": "reports/shield-synthetic.report.json",
+              "reproducibility_hash": "sha256:2cc88b7070ede609b18fe206a6f3fae95a0fbb0013f84c51962aaa3f06afeae9",
+              "run_date": "2026-09-28",
+              "suite": "shield-synthetic"
+            }
+          ]
+        }
+      ],
+      "name": "shield-synthetic"
     }
   ]
 }

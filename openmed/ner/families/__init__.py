@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from .base import EncoderOutput, ModelFamily, SupportsEncoding
-from .gliner import ensure_gliner_available, is_gliner_available
+from .gliner import (
+    clear_gliformer_cache,
+    ensure_gliformer_available,
+    ensure_gliner_available,
+    is_gliformer_available,
+    is_gliner_available,
+    load_gliformer_handle,
+)
 from .gliner2 import (
     clear_gliner2_cache,
     ensure_gliner2_available,
@@ -16,6 +23,8 @@ from .indic import (
     IndicEncoderLoadResult,
     IndicEncoderSpec,
     IndicNerAdapter,
+    IndicNerCheckpointUnavailable,
+    IndicNerCompatibilityError,
     IndicNerPrediction,
     IndicNerWeightsUnavailable,
     configured_indic_ner_model,
@@ -36,11 +45,17 @@ __all__ = [
     "is_gliner2_available",
     "load_gliner2_handle",
     "clear_gliner2_cache",
+    "clear_gliformer_cache",
+    "ensure_gliformer_available",
+    "is_gliformer_available",
+    "load_gliformer_handle",
     "INDIC_ENCODER_SPECS",
     "IndicEncoderHandle",
     "IndicEncoderLoadResult",
     "IndicEncoderSpec",
     "IndicNerAdapter",
+    "IndicNerCheckpointUnavailable",
+    "IndicNerCompatibilityError",
     "IndicNerPrediction",
     "IndicNerWeightsUnavailable",
     "configured_indic_ner_model",

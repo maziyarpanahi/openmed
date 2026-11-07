@@ -98,8 +98,9 @@ def _install_dependencies(monkeypatch, snapshot_download):
     monkeypatch.setattr(
         inference,
         "_load_runtime_dependencies",
-        lambda: (np, FakeOrt, FakeTokenizer, snapshot_download),
+        lambda: (np, FakeOrt, FakeTokenizer),
     )
+    monkeypatch.setattr(inference, "_load_snapshot_download", lambda: snapshot_download)
 
 
 def test_from_pretrained_loads_cpu_int8_and_predicts_entities(
@@ -170,18 +171,40 @@ def test_direct_onnx_path_uses_sibling_metadata(tmp_path: Path, monkeypatch) -> 
     assert model.artifact_dir == artifact_dir
 
 
-@pytest.mark.parametrize("threshold", [-0.01, 1.01])
-def test_predict_rejects_invalid_threshold(
+def test_local_artifact_does_not_load_hub_downloader(
     tmp_path: Path,
     monkeypatch,
-    threshold: float,
 ) -> None:
     artifact_dir = _write_artifact(tmp_path)
-    _install_dependencies(monkeypatch, lambda **kwargs: str(artifact_dir))
+    monkeypatch.setattr(
+        inference,
+        "_load_runtime_dependencies",
+        lambda: (np, FakeOrt, FakeTokenizer),
+    )
+
+    def reject_hub_download():
+        raise AssertionError("local edge inference attempted to load Hub tooling")
+
+    monkeypatch.setattr(inference, "_load_snapshot_download", reject_hub_download)
+
     model = inference.OnnxModel.from_pretrained(artifact_dir)
 
-    with pytest.raises(ValueError, match="threshold"):
-        model.predict("Alice Nguyen", threshold=threshold)
+    assert model.variant == "int8"
+
+
+def test_predict_rejects_invalid_threshold(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for threshold in [-0.01, 1.01]:
+        with subtests.test(threshold=threshold):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                artifact_dir = _write_artifact(tmp_path)
+                _install_dependencies(monkeypatch, lambda **kwargs: str(artifact_dir))
+                model = inference.OnnxModel.from_pretrained(artifact_dir)
+
+                with pytest.raises(ValueError, match="threshold"):
+                    model.predict("Alice Nguyen", threshold=threshold)
 
 
 def test_explicit_missing_variant_is_actionable(tmp_path: Path, monkeypatch) -> None:

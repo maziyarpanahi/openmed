@@ -12,8 +12,12 @@ Notes:
   ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
   surrogates bypass that approximate path and therefore do not warn.
 - Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
-  ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
-  available through the language pack.
+  ``en_KE`` as its runtime backend only for script-free fields. Ethiopic name,
+  city, and street surrogates recombine the synthetic curated values in the
+  language pack (see :data:`SCRIPT_SURROGATE_APPROXIMATIONS`).
+- Punjabi (``pa``) has no Faker locale in Faker 40.x; the conceptual ``pa_IN``
+  locale uses ``en_IN`` for generic fields while the language pack supplies
+  gender-aware Gurmukhi name surrogates.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
 - African French and Portuguese conceptual locales (``fr_SN``, ``fr_CI``,
@@ -21,15 +25,40 @@ Notes:
   while delegating unsupported Faker methods to ``fr_FR`` or ``pt_PT``.
 - Arabic defaults to ``ar_EG``. Region tags ``ar-DZ`` and ``ar-MA`` select an
   installed regional Faker backend, or fall back to ``ar_EG`` with a one-time
-  warning when that backend is unavailable.
+  warning when that backend is unavailable. ``ar_EG`` ships no Arabic-script
+  person or address data, so Arabic-script name surrogates use Faker's generic
+  ``ar_AA`` inventory and place surrogates use curated Egyptian templates,
+  unless the selected regional locale ships its own Arabic-script data (see
+  :data:`SCRIPT_SURROGATE_APPROXIMATIONS`).
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
 - Assamese resolves conceptually to ``as_IN`` with Faker's ``bn_BD`` backend;
   curated Assamese names prevent Bengali name data from crossing that boundary.
+- Kannada resolves conceptually to ``kn_IN`` with Faker's ``en_IN`` backend;
+  the bundled Kannada provider preserves one- or two-initial name shapes.
 - Odia resolves to Faker's native ``or_IN`` locale without an approximation
   warning, so name surrogates remain in Odia script.
 - Tamil resolves to the native ``ta_IN`` Faker locale; patronymic-initial
   PERSON surrogates preserve the source's initial-plus-given-name shape.
+- Nepali (``ne``) resolves to Faker's native ``ne_NP`` locale, so it is neither
+  a documented approximation nor a conceptual locale needing a backend, and it
+  emits no warning. OpenMed ships no Nepali national-ID provider.
+- Vietnamese resolves to Faker's native ``vi_VN`` locale without an
+  approximation warning, so name and address surrogates keep their diacritics;
+  national-ID dispatch routes to the CCCD provider on the same locale.
+- Urdu uses a conceptual ``ur_IN`` locale backed by ``en_IN`` for non-name
+  values; bundled name surrogates remain in Urdu script.
+- Swahili (``sw``/``sw_TZ``), Hausa, Igbo, Yoruba, and Kinyarwanda address and
+  town surrogates use curated synthetic local conventions from
+  ``providers.african_places`` because their Faker locales ship no address
+  data. isiXhosa addresses use the ``zu_ZA`` backend. The
+  ``address_approximation`` column of :func:`locale_coherence_report` records
+  each source.
+- Sinhala (``si``, an experimental user-supplied-model route) has no Faker
+  locale. The conceptual ``si_LK`` locale is a documented approximation: names,
+  cities and street addresses come from a small repository-authored synthetic
+  Sinhala inventory, script-free fields use the ``en_IN`` backend, and NIC
+  surrogates come from the structural ``sri_lanka_nic`` provider.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -76,12 +105,31 @@ _APPROXIMATE_LOCALES: Final = frozenset(
         "ms",
         "pa",
         "rw",
+        "si",
         "sr",
         "te",
         "ur",
         "xh",
     }
 )
+
+
+# Languages whose source-script name and place surrogates bypass the default
+# Faker locale. Bare ``ar`` keeps its native ``ar_EG`` locale and never warns;
+# ``am`` keeps its existing ``am_ET`` approximation warning for script-free
+# fields only. Each value is recorded verbatim in ``locale_coherence_report``.
+SCRIPT_SURROGATE_APPROXIMATIONS: Final[Mapping[str, str]] = {
+    "am": (
+        "Ethiopic names, cities, and streets recombine synthetic curated values; "
+        "en_KE backs only script-free fields"
+    ),
+    "ar": (
+        "Arabic-script names use Faker's ar_AA inventory and places use synthetic "
+        "curated Egyptian templates, unless a regional override ships "
+        "Arabic-script Faker data"
+    ),
+}
+"""Documented script-surrogate approximations, keyed by language code."""
 
 
 # Conceptual locale -> OpenMed model language. These locales deliberately do
@@ -104,6 +152,8 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "am_ET": "en_KE",
     "ar_MA": "ar_EG",
     "as_IN": "bn_BD",
+    "de_BE": "de_DE",
+    "en_IE": "en_IE",
     "en_ET": "en_US",
     "en_TZ": "en_US",
     "en_UG": "en_US",
@@ -121,11 +171,58 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "pt_MZ": "pt_PT",
     "pt_AO": "pt_PT",
     "rw_RW": "en_US",
+    "si_LK": "en_IN",
     "sr_RS": "hr_HR",
     "sw_TZ": "sw",
+    "ur_IN": "en_IN",
     "ur_PK": "en_PK",
     "xh_ZA": "zu_ZA",
 }
+
+URDU_GIVEN_NAMES: Final = (
+    "آمنہ",
+    "عارف",
+    "زہرہ",
+    "فاطمہ",
+    "حسن",
+    "مریم",
+    "سلمان",
+    "نادیہ",
+)
+"""Small synthetic-safe inventory for Urdu-script name surrogates."""
+
+URDU_FAMILY_NAMES: Final = (
+    "خان",
+    "سید",
+    "بیگم",
+    "قریشی",
+    "میرزا",
+    "رضوی",
+)
+"""Small synthetic-safe inventory for Urdu-script family-name surrogates."""
+
+
+def generate_urdu_name(faker, original: str, *, locale: str) -> str:
+    """Return a bundled Urdu-script name distinct from ``original``."""
+
+    del locale
+    normalized_original = " ".join(original.split())
+    candidates = tuple(
+        f"{given} {family}"
+        for given in URDU_GIVEN_NAMES
+        for family in URDU_FAMILY_NAMES
+        if f"{given} {family}" != normalized_original
+        and given not in normalized_original
+        and family not in normalized_original
+    )
+    if not candidates:
+        candidates = tuple(
+            f"{given} {family}"
+            for given in URDU_GIVEN_NAMES
+            for family in URDU_FAMILY_NAMES
+            if f"{given} {family}" != normalized_original
+        )
+    return faker.random.choice(candidates)
 
 
 # Region-qualified Arabic codes -> Faker locale. Bare ``ar`` stays ``ar_EG``
@@ -269,6 +366,10 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``locale``: the default or conceptual locale.
       - ``approximate``: ``True`` when that default locale is a documented
         approximation rather than a native match.
+      - ``address_approximation``: the documented source of address and town
+        surrogates for African language packs whose Faker locale ships no
+        in-country address data, otherwise ``None``. See
+        ``openmed.core.anonymizer.providers.african_places``.
       - ``id_providers``: national-ID Faker method names whose surrogates
         round-trip the language's registered checksum validator (empty when the
         language has no checksummed national-ID surrogate provider).
@@ -276,16 +377,24 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``id_locale``: the Faker locale those providers are drawn from, or
         ``None``. Usually equals ``locale``; differs when the registered
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
+      - ``surrogate_approximation``: the documented source of source-script
+        name and place surrogates when they bypass the default Faker locale
+        (see :data:`SCRIPT_SURROGATE_APPROXIMATIONS`), otherwise ``None``.
     """
     from ..pii_i18n import (  # lazy: avoid import cycle
         INDIC_NER_LANGUAGES,
         NATIONAL_ID_ONLY_LANGUAGES,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
     )
+    from .providers.african_places import AFRICAN_ADDRESS_APPROXIMATIONS
 
     rows: list[dict[str, object]] = []
     reported_languages = (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
     for lang in sorted(reported_languages):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
@@ -300,9 +409,11 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
                 "approximate": lang in _APPROXIMATE_LOCALES,
+                "address_approximation": AFRICAN_ADDRESS_APPROXIMATIONS.get(lang),
                 "id_providers": id_methods,
                 "id_types": id_types,
                 "id_locale": id_locale,
+                "surrogate_approximation": SCRIPT_SURROGATE_APPROXIMATIONS.get(lang),
             }
         )
 
@@ -312,11 +423,13 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": locale,
                 "approximate": False,
+                "address_approximation": None,
                 # Senegal CNI and Angola BI coverage is contextual rather than
                 # checksum-backed, so no provider or validator is claimed.
                 "id_providers": [],
                 "id_types": [],
                 "id_locale": None,
+                "surrogate_approximation": None,
             }
         )
     return rows
@@ -328,8 +441,12 @@ __all__ = [
     "LANG_TO_LOCALE",
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
+    "SCRIPT_SURROGATE_APPROXIMATIONS",
+    "URDU_FAMILY_NAMES",
+    "URDU_GIVEN_NAMES",
     "ZH_CN_ADDRESS_LOCALE",
     "ZH_NAME_LOCALES",
+    "generate_urdu_name",
     "is_chinese_name_locale",
     "list_regional_locales",
     "locale_coherence_report",

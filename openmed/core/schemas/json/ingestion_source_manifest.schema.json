@@ -1,0 +1,18 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/source-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_digests": {"items": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "created_at": {"format": "date-time", "type": "string"},
+    "manifest_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "pipeline_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "policy_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+  },
+  "required": ["artifact_digests", "created_at", "manifest_id", "pipeline_digest", "policy_digest", "schema_version", "source_id"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionSourceManifest",
+  "type": "object"
+}

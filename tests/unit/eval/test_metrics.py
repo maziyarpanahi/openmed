@@ -44,6 +44,7 @@ def test_eval_modules_import_cleanly():
     assert openmed.eval.report.BenchmarkReport
     assert openmed.eval.suites.DEFAULT_SUITES == (
         "golden",
+        "openmed-synth",
         "i2b2",
         "n2c2",
         "shield",
@@ -55,11 +56,15 @@ def test_eval_modules_import_cleanly():
         "cmeee",
         "naamapadam",
         "chinese-clinical-ner",
+        "cblue-task-coverage",
         "multimodal_dicom",
         "code_mixed_routing",
         "india_health_id_leakage",
         "indian_multi_id",
         "indic-name-consistency",
+        "india_clinical_phi_leakage",
+        "india_surrogate_consistency",
+        "temporal_consistency",
     )
 
 

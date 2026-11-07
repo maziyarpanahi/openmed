@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/interop/fhir-journey-roundtrip.schema.json",
+  "title": "OpenMed FHIR R4 Journey round-trip export",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle",
+    "compatibility_policy",
+    "evidence_mappings",
+    "fhir_release",
+    "losses",
+    "lossless",
+    "schema_version",
+    "source_snapshot"
+  ],
+  "properties": {
+    "bundle": {
+      "type": "object",
+      "required": ["resourceType", "type", "entry", "extension"],
+      "properties": {
+        "resourceType": {"const": "Bundle"},
+        "type": {"const": "collection"},
+        "entry": {"type": "array", "items": {"type": "object"}},
+        "extension": {"type": "array", "minItems": 1}
+      }
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "evidence_mappings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidence_mapping"}
+    },
+    "fhir_release": {"const": "4.0.1"},
+    "losses": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/loss"}
+    },
+    "lossless": {"type": "boolean"},
+    "schema_version": {"const": "1.0.0"},
+    "source_snapshot": {"type": "object"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "evidence_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_hash",
+        "evidence_ids",
+        "record_id",
+        "target_reference"
+      ],
+      "properties": {
+        "canonical_hash": {"$ref": "#/$defs/digest"},
+        "evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "record_id": {"$ref": "#/$defs/opaque_id"},
+        "target_reference": {"type": "string", "minLength": 3, "maxLength": 160}
+      }
+    },
+    "loss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason_code", "record_id"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 256},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "record_id": {
+          "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+        }
+      }
+    }
+  }
+}

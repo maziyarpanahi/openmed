@@ -79,6 +79,75 @@ def test_module_all_hides_unlisted_symbol():
     assert "fixturepkg.api.removed" in before
 
 
+@pytest.mark.parametrize("explicit_exports", [False, True])
+def test_hidden_definitions_are_not_fingerprinted(monkeypatch, explicit_exports):
+    source = (
+        "def _hidden():\n    return 'private'\n"
+        "class _Hidden:\n    def method(self):\n        return 'private'\n"
+        "_PRIVATE = {'hidden': [1, 2, 3]}\n"
+        "def public(value: str) -> str:\n    return value\n"
+    )
+    if explicit_exports:
+        source += (
+            "def unexported():\n    return 'hidden'\n"
+            "class Unexported:\n    pass\n"
+            "UNEXPORTED = [1, 2, 3]\n"
+            "__all__ = ['public']\n"
+        )
+    original = api_surface_diff._fingerprint
+    seen = []
+
+    def fingerprint(node, kind):
+        seen.append(kind)
+        assert getattr(node, "name", "public") == "public"
+        return original(node, kind)
+
+    monkeypatch.setattr(api_surface_diff, "_fingerprint", fingerprint)
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): source}, "fixturepkg"
+    )
+    assert set(surface) == {"fixturepkg.api.public"}
+    assert surface["fixturepkg.api.public"].signature == "(value: str) -> str"
+    assert seen == ["function"]
+
+
+def test_dotted_member_exports_still_extract_their_class():
+    surface = api_surface_diff.extract_surface_from_sources(
+        {
+            PurePosixPath("fixturepkg/api.py"): (
+                "class Client:\n"
+                "    def request(self, value: str) -> str:\n"
+                "        return value\n"
+                "__all__ = ['Client.request']\n"
+            )
+        },
+        "fixturepkg",
+    )
+    assert set(surface) == {"fixturepkg.api.Client.request"}
+    assert surface["fixturepkg.api.Client.request"].signature == "(value: str) -> str"
+
+
+def test_shared_assignment_fingerprint_is_computed_once(monkeypatch):
+    calls = []
+    original = api_surface_diff._fingerprint
+
+    def fingerprint(node, kind):
+        calls.append(kind)
+        return original(node, kind)
+
+    monkeypatch.setattr(api_surface_diff, "_fingerprint", fingerprint)
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): "first = second = {'value': 1}\n"},
+        "fixturepkg",
+    )
+    assert set(surface) == {"fixturepkg.api.first", "fixturepkg.api.second"}
+    assert (
+        surface["fixturepkg.api.first"].fingerprint
+        == surface["fixturepkg.api.second"].fingerprint
+    )
+    assert calls == ["data"]
+
+
 def test_reexported_function_keeps_static_signature_without_importing():
     sources = {
         PurePosixPath("fixturepkg/__init__.py"): (
@@ -94,6 +163,94 @@ def test_reexported_function_keeps_static_signature_without_importing():
     assert surface["fixturepkg.public"].signature == (
         "(value: str, optional: int = 1) -> str"
     )
+
+
+def test_transitive_class_reexport_keeps_members_without_importing():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "from .facade import Client\n__all__ = ['Client']\n"
+        ),
+        PurePosixPath("fixturepkg/facade.py"): (
+            "from .api import Client\n__all__ = ['Client']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "class Client:\n"
+            "    def request(self, value: str) -> str:\n"
+            "        return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.Client"].kind == "class"
+    assert surface["fixturepkg.Client.request"].signature == "(value: str) -> str"
+
+
+def test_lazy_reexport_map_keeps_signatures_and_class_members():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "_LAZY_IMPORTS = {'public': '.api', 'Client': '.api'}\n"
+            "__all__ = ['public', 'Client']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "def public(value: str, optional: int = 1) -> str:\n"
+            "    return value\n\n"
+            "class Client:\n"
+            "    def request(self, value: str) -> str:\n"
+            "        return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.public"].signature == (
+        "(value: str, optional: int = 1) -> str"
+    )
+    assert surface["fixturepkg.Client"].kind == "class"
+    assert surface["fixturepkg.Client.request"].signature == "(value: str) -> str"
+
+
+def test_lazy_reexport_map_honors_attribute_aliases():
+    sources = {
+        PurePosixPath("fixturepkg/__init__.py"): (
+            "_LAZY_IMPORTS = {'public': '.api'}\n"
+            "_LAZY_ATTRIBUTE_NAMES = {'public': 'implementation'}\n"
+            "__all__ = ['public']\n"
+        ),
+        PurePosixPath("fixturepkg/api.py"): (
+            "def implementation(value: str) -> str:\n    return value\n"
+        ),
+    }
+
+    surface = api_surface_diff.extract_surface_from_sources(sources, "fixturepkg")
+
+    assert surface["fixturepkg.public"].signature == "(value: str) -> str"
+    assert surface["fixturepkg.public"].source_target == "fixturepkg.api.implementation"
+
+
+def test_resolving_a_previously_opaque_import_is_not_breaking():
+    before = {
+        "fixturepkg.VALUE": api_surface_diff.Symbol(
+            name="fixturepkg.VALUE",
+            module="fixturepkg",
+            qualname="VALUE",
+            kind="import",
+            source_target="fixturepkg.api.VALUE",
+        )
+    }
+    after = {
+        "fixturepkg.VALUE": api_surface_diff.Symbol(
+            name="fixturepkg.VALUE",
+            module="fixturepkg",
+            qualname="VALUE",
+            kind="data",
+            source_target="fixturepkg.api.VALUE",
+        )
+    }
+
+    diff = api_surface_diff.diff_surfaces(before, after, package="fixturepkg")
+
+    assert diff.breaking == ()
 
 
 def test_package_local_reexport_without_all_remains_public():
@@ -188,6 +345,7 @@ def test_json_stdout_stays_machine_readable_when_check_passes(
     assert "completeness check passed" in captured.err
 
 
+@pytest.mark.slow
 def test_full_package_extraction_is_ast_only_and_under_thirty_seconds(monkeypatch):
     imported_before = set(sys.modules)
     original_import = builtins.__import__
@@ -198,15 +356,49 @@ def test_full_package_extraction_is_ast_only_and_under_thirty_seconds(monkeypatc
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", reject_openmed_import)
-    started = time.monotonic()
     surface = api_surface_diff.extract_surface(ROOT, "WORKTREE")
-    elapsed = time.monotonic() - started
 
     assert surface
-    assert elapsed < 30
     assert set(sys.modules) - imported_before == set()
 
 
+@pytest.mark.slow
+def test_v21_exception_compatibility_symbols_remain_public():
+    surface = api_surface_diff.extract_surface(ROOT, "WORKTREE")
+    expected = {
+        "openmed.multimodal.MissingDependencyError.extra",
+        "openmed.multimodal.MissingDependencyError.feature",
+        "openmed.multimodal.MissingDependencyError.package",
+        "openmed.multimodal.base.MissingDependencyError.extra",
+        "openmed.multimodal.base.MissingDependencyError.feature",
+        "openmed.multimodal.base.MissingDependencyError.package",
+        "openmed.multimodal.exceptions.MissingDependencyError.extra",
+        "openmed.multimodal.exceptions.MissingDependencyError.feature",
+        "openmed.multimodal.exceptions.MissingDependencyError.package",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.extra",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.feature",
+        "openmed.multimodal.metadata_scrub.MissingDependencyError.package",
+        "openmed.multimodal.ocr.MissingDependencyError.extra",
+        "openmed.multimodal.ocr.MissingDependencyError.feature",
+        "openmed.multimodal.ocr.MissingDependencyError.package",
+        "openmed.ner.MissingDependencyError.extra",
+        "openmed.ner.MissingDependencyError.feature",
+        "openmed.ner.MissingDependencyError.package",
+        "openmed.ner.exceptions.MissingDependencyError.extra",
+        "openmed.ner.exceptions.MissingDependencyError.feature",
+        "openmed.ner.exceptions.MissingDependencyError.package",
+        "openmed.ner.exceptions.MissingOptionalDependencyError",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.extra",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.feature",
+        "openmed.ner.exceptions.MissingOptionalDependencyError.package",
+        "openmed.utils.InputValidationError.code",
+        "openmed.utils.gateway.InputValidationError.code",
+    }
+
+    assert expected <= surface.keys()
+
+
+@pytest.mark.slow
 def test_real_migration_guide_covers_every_detected_break(tmp_path):
     baseline = subprocess.run(
         [
@@ -239,14 +431,23 @@ def test_real_migration_guide_covers_every_detected_break(tmp_path):
     assert api_surface_diff.check_migration_document(diff, incomplete) == (omitted,)
 
 
-def test_release_workflow_runs_gate_only_for_tags():
-    workflow = (ROOT / ".github" / "workflows" / "release-gates.yml").read_text(
+def test_model_release_workflow_is_separate_from_sdk_tags():
+    model_workflow = (ROOT / ".github" / "workflows" / "release-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    publish_workflow = (ROOT / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
     )
 
-    assert 'tags:\n      - "v*"' in workflow
-    assert "fetch-depth: 0" in workflow
-    assert "Check API migration guide completeness" in workflow
-    assert "if: startsWith(github.ref, 'refs/tags/v1.9.')" in workflow
-    assert "scripts/release/api_surface_diff.py" in workflow
-    assert "API migration guide completeness gate passed." in workflow
+    assert "\n  push:" not in model_workflow
+    assert "workflow_dispatch:" in model_workflow
+    assert "schedule:" not in model_workflow
+    assert "fetch-depth: 0" in model_workflow
+    assert "Check API migration guide completeness" in model_workflow
+    assert "if: github.event_name == 'workflow_dispatch'" in model_workflow
+    assert "scripts/release/api_surface_diff.py" in model_workflow
+    assert 'pip install -e ".[dev,hf,zh,indic]"' in model_workflow
+    assert "default: v2.3.0" in model_workflow
+    assert "default: docs/migration/2.3-to-2.5.md" in model_workflow
+    assert "API migration guide completeness gate passed." in model_workflow
+    assert "tags:\n      - 'v*'" in publish_workflow

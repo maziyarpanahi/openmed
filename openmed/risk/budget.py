@@ -1053,6 +1053,11 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
         max_residual_qi_weight=10.0,
         max_surviving_direct_ids=0,
     ),
+    "clinical_preserve": RiskBudget(
+        name="clinical_preserve",
+        max_residual_qi_weight=10.0,
+        max_surviving_direct_ids=0,
+    ),
     "canada_pipeda": RiskBudget(
         name="canada_pipeda",
         max_residual_qi_weight=3.0,

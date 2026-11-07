@@ -14,17 +14,31 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from .calendars import (
+    ETHIOPIAN,
+    GREGORIAN,
+    LUNAR_HIJRI,
+    SOLAR_HIJRI,
+    THAI_BUDDHIST,
+)
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackRegistry
+from .language_packs import (
+    CHINESE_LANGUAGE_PACK,
+    HINDI_LANGUAGE_PACK,
+    TELUGU_LANGUAGE_PACK,
+)
 
 UNKNOWN_SCRIPT = "Unknown"
 UNROUTED_SCRIPT = "Unrouted"
 
 REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 
-# These built-in routes intentionally use a named fallback until a dedicated
-# PII model is published. They must not be represented as trained/model-backed
-# languages in release manifests.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"ru"})
+# These built-in routes intentionally use a named fallback until dedicated
+# public PII weights are available. They must not be represented as
+# trained/model-backed languages in release claims.
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset(
+    {"fa", "ml", "pa", "pl", "ru", "ta", "ur"}
+)
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -42,6 +56,7 @@ def _pack(
     national_id_provider: tuple[str, str] | None = None,
     context_scripts: Sequence[str] = (),
     routing_markers: Sequence[str] = (),
+    default_calendar: str = GREGORIAN,
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -57,6 +72,7 @@ def _pack(
         national_id_providers=providers,
         context_scripts=tuple(context_scripts),
         routing_markers=tuple(routing_markers),
+        default_calendar=default_calendar,
     )
 
 
@@ -65,7 +81,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "en",
         "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
         "en_US",
-        ("Latin", "Cyrillic", "Greek", "Hebrew", "Thai", UNKNOWN_SCRIPT),
+        ("Latin", "Cyrillic", "Greek"),
         national_id_provider=("en_US", "ssn"),
     ),
     _pack(
@@ -104,12 +120,14 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("nl_NL", "ssn"),
     ),
     _pack(
-        "hi",
-        "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
-        "hi_IN",
-        ("Devanagari",),
-        national_id_provider=("hi_IN", "aadhaar"),
+        "pl",
+        "OpenMed/privacy-filter-multilingual",
+        "pl_PL",
+        ("Latin",),
+        national_id_provider=("pl_PL", "pesel"),
+        routing_markers=("pacjent", "pacjentka", "pesel", "kod pocztowy"),
     ),
+    HINDI_LANGUAGE_PACK,
     _pack(
         "mr",
         "OpenMed/privacy-filter-multilingual",
@@ -141,21 +159,60 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         national_id_provider=("as_IN", "aadhaar"),
     ),
     _pack(
+        "gu",
+        "OpenMed/privacy-filter-multilingual",
+        "gu_IN",
+        ("Gujarati",),
+        national_id_provider=("gu_IN", "aadhaar"),
+        routing_markers=(
+            "દર્દી",
+            "નામ",
+            "આધાર",
+            "પિન",
+            "જાન્યુઆરી",
+            "ફેબ્રુઆરી",
+        ),
+    ),
+    _pack(
+        "kn",
+        "OpenMed/privacy-filter-multilingual",
+        "kn_IN",
+        ("Kannada",),
+        national_id_provider=("kn_IN", "aadhaar"),
+        routing_markers=(
+            "ರೋಗಿ",
+            "ಹೆಸರು",
+            "ಆಧಾರ್",
+            "ಪಿನ್",
+            "ಜನವರಿ",
+            "ಫೆಬ್ರವರಿ",
+        ),
+    ),
+    _pack(
         "bn",
         "OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1",
         "bn_BD",
         ("Bengali",),
+        national_id_provider=("bn_BD", "bangladesh_nid"),
     ),
     _pack(
-        "te",
-        "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
-        "en_IN",
-        ("Telugu",),
-        national_id_provider=("en_IN", "aadhaar"),
+        "ml",
+        "OpenMed/privacy-filter-multilingual",
+        "ml_IN",
+        ("Malayalam",),
+        national_id_provider=("ml_IN", "aadhaar"),
     ),
+    _pack(
+        "pa",
+        "OpenMed/privacy-filter-multilingual",
+        "pa_IN",
+        ("Gurmukhi",),
+        national_id_provider=("pa_IN", "aadhaar"),
+    ),
+    TELUGU_LANGUAGE_PACK,
     _pack(
         "ta",
-        "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1",
+        "OpenMed/privacy-filter-multilingual",
         "ta_IN",
         ("Tamil",),
         national_id_provider=("ta_IN", "aadhaar"),
@@ -166,6 +223,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "am_ET",
         ("Ethiopic",),
         national_id_provider=("am_ET", "ethiopia_fayda"),
+        default_calendar=ETHIOPIAN,
     ),
     _pack(
         "pt",
@@ -174,17 +232,48 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("pt_BR", "cpf"),
     ),
+    # Lunar Hijri years (1356-1450 in the bundled table) never overlap the
+    # Gregorian years 1800-2299, so unmarked Arabic and Urdu dates in the
+    # table's years are read as Umm al-Qura Hijri dates and others stay
+    # Gregorian.
     _pack(
         "ar",
         "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
         "ar_EG",
         ("Arabic",),
+        default_calendar=LUNAR_HIJRI,
+    ),
+    _pack(
+        "fa",
+        "OpenMed/privacy-filter-multilingual",
+        "fa_IR",
+        ("Arabic",),
+        national_id_provider=("fa_IR", "iran_national_id"),
+        routing_markers=(
+            "بیمار",
+            "کد ملی",
+            "خیابان",
+            "کوچه",
+            "پلاک",
+            "فروردین",
+            "اسفند",
+        ),
+        default_calendar=SOLAR_HIJRI,
+    ),
+    _pack(
+        "ur",
+        "OpenMed/privacy-filter-multilingual",
+        "ur_IN",
+        ("Arabic",),
+        national_id_provider=("ur_IN", "aadhaar"),
+        routing_markers=("مریض", "آدھار", "پتہ", "جناب", "محترمہ"),
+        default_calendar=LUNAR_HIJRI,
     ),
     _pack(
         "he",
         "OpenMed/privacy-filter-multilingual",
         "he_IL",
-        (UNROUTED_SCRIPT,),
+        ("Hebrew",),
         national_id_provider=("he_IL", "teudat_zehut"),
     ),
     _pack(
@@ -193,16 +282,9 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "ja_JP",
         ("Han", "Hiragana/Katakana"),
         context_scripts=("Hiragana/Katakana",),
+        national_id_provider=("ja_JP", "my_number"),
     ),
-    LanguagePack(
-        code="zh",
-        scripts=("Han",),
-        default_model="OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1",
-        segmenter_id="jieba",
-        recognizers=("builtin-patterns", "model"),
-        surrogate_locale="zh_CN",
-        national_id_providers={"chinese_resident_id": "zh_CN"},
-    ),
+    CHINESE_LANGUAGE_PACK,
     _pack(
         "tr",
         "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
@@ -221,8 +303,9 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "th",
         "OpenMed/privacy-filter-multilingual",
         "th_TH",
-        (UNROUTED_SCRIPT,),
+        ("Thai",),
         national_id_provider=("th_TH", "thai_national_id"),
+        default_calendar=THAI_BUDDHIST,
     ),
     _pack(
         "ko",
@@ -308,6 +391,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("no_NO", "ssn"),
     ),
+    _pack(
+        "vi",
+        "OpenMed/OpenMed-PII-Vietnamese-SuperClinical-Small-44M-v1",
+        "vi_VN",
+        ("Latin",),
+        national_id_provider=("vi_VN", "vietnamese_cccd"),
+    ),
 )
 
 
@@ -324,7 +414,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
     "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
     "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
-    "pl": NationalIdOnlyCapability("pl_PL", ("pl_PL", "pesel")),
     "lv": NationalIdOnlyCapability("lv_LV", ("lv_LV", "personas_kods")),
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
     "ms": NationalIdOnlyCapability("ms_MY", ("ms_MY", "mykad")),
@@ -335,17 +424,15 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "hr": NationalIdOnlyCapability("hr_HR", ("hr_HR", "ssn")),
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
-    "vi": NationalIdOnlyCapability("vi_VN", ("vi_VN", "vietnamese_cccd")),
-    "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
 
 SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     "bn": "bn_BD",
-    "gu": "gu_IN",
-    "kn": "kn_IN",
     "ml": "ml_IN",
-    "pa": "pa_IN",
+    # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
+    # approximation entry and no conceptual backend mapping.
+    "ne": "ne_NP",
 }
 
 # Languages surfaced by script routing before a bundled default PII model or
@@ -353,13 +440,39 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # these codes; keeping them separate from ``SUPPORTED_LANGUAGES`` avoids
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
-    "gu",
-    "kn",
-    "ml",
     "ne",
-    "pa",
-    "ur",
+    "si",
 }
+
+# Registry placeholder carried by user-supplied-model route packs. It equals
+# ``openmed.core.pii_i18n.USER_SUPPLIED_PII_MODEL``, which model resolution maps
+# back to ``None``, so it is never treated as a downloadable repository.
+_USER_SUPPLIED_MODEL_PLACEHOLDER = "user-supplied"
+
+# User-supplied-model routes that own a script no registered pack serves. The
+# router can only select a ``LanguagePack``, so each route is declared as one,
+# but these packs are deliberately not registered: registration would add the
+# code to ``SUPPORTED_LANGUAGES`` and ``DEFAULT_PII_MODELS`` and advertise a
+# bundled model that OpenMed does not ship. Their locale and national-ID
+# provider still reach ``LANG_TO_LOCALE`` and ``NATIONAL_ID_PROVIDERS``.
+USER_SUPPLIED_MODEL_ROUTE_PACKS: tuple[LanguagePack, ...] = (
+    # Sinhala (experimental). Faker ships no Sinhala locale, so the conceptual
+    # ``si_LK`` locale draws names and places from a small synthetic Sinhala
+    # inventory and leaves script-free fields to the ``en_IN`` backend.
+    LanguagePack(
+        code="si",
+        scripts=("Sinhala",),
+        default_model=_USER_SUPPLIED_MODEL_PLACEHOLDER,
+        segmenter_id="unicode-sentence",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="si_LK",
+        surrogate_locale_approximation=(
+            "No Faker Sinhala locale: synthetic curated Sinhala names and "
+            "places, en_IN backend for script-free fields"
+        ),
+        national_id_providers={"sri_lanka_nic": "si_LK"},
+    ),
+)
 
 _SCRIPT_ORDER = (
     "Latin",
@@ -381,6 +494,7 @@ _SCRIPT_ORDER = (
     "Greek",
     "Hebrew",
     "Thai",
+    "Sinhala",
     UNKNOWN_SCRIPT,
 )
 
@@ -398,13 +512,14 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "pt",
         "tr",
         "cs",
+        "pl",
         "sw",
         "ig",
         "yo",
         "zu",
         "xh",
     ),
-    "Arabic": ("ar", "ha", "ur"),
+    "Arabic": ("ar", "fa", "ha", "ur"),
     "Cyrillic": ("ru", "uk"),
     "Han": ("zh", "ja"),
     "Devanagari": ("hi", "mr", "ne"),
@@ -417,6 +532,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
     "Kannada": ("kn",),
     "Malayalam": ("ml",),
     "Greek": ("el",),
+    "Sinhala": ("si",),
 }
 
 _LOCALE_ORDER = (
@@ -428,14 +544,19 @@ _LOCALE_ORDER = (
     "nl",
     "hi",
     "mr",
+    "ne",
     "or",
     "as",
+    "kn",
     "bn",
     "te",
     "ta",
+    "si",
     "am",
     "pt",
     "ar",
+    "fa",
+    "ur",
     "he",
     "ja",
     "zh",
@@ -467,7 +588,6 @@ _LOCALE_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 _NATIONAL_ID_PROVIDER_ORDER = (
@@ -481,11 +601,15 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "mr",
     "or",
     "as",
+    "kn",
     "te",
     "ta",
+    "si",
     "am",
     "pt",
+    "fa",
     "tr",
+    "ur",
     "he",
     "id",
     "th",
@@ -514,7 +638,6 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 
@@ -540,14 +663,29 @@ class LanguagePackAdapters:
         supplemental_locales: Mapping[str, str] | None = None,
         user_supplied_model_languages: Sequence[str] = (),
         script_language_candidates: Mapping[str, Sequence[str]] | None = None,
+        user_supplied_route_packs: Sequence[LanguagePack] = (),
     ) -> None:
-        """Create and subscribe a live adapter bundle."""
+        """Create and subscribe a live adapter bundle.
+
+        Args:
+            registry: Registry whose packs back every projection.
+            builtin_order: Preferred projection order for built-in codes.
+            national_id_only: Pattern-only national-ID capabilities.
+            supplemental_locales: Extra ``LANG_TO_LOCALE`` entries.
+            user_supplied_model_languages: Routable codes without bundled models.
+            script_language_candidates: Explicit script routing hint order.
+            user_supplied_route_packs: Unregistered packs for user-supplied-model
+                routes. They feed the locale, national-ID provider and script
+                hint projections, and :meth:`routing_packs`, but never
+                ``supported_languages`` or ``default_pii_models``.
+        """
 
         self.registry = registry
         self._builtin_order = tuple(builtin_order)
         self._national_id_only = dict(national_id_only or {})
         self._supplemental_locales = dict(supplemental_locales or {})
         self._user_supplied_model_languages = set(user_supplied_model_languages)
+        self._user_supplied_route_packs = tuple(user_supplied_route_packs)
         self._script_language_candidates = {
             script: tuple(codes)
             for script, codes in (script_language_candidates or {}).items()
@@ -559,18 +697,43 @@ class LanguagePackAdapters:
         self.script_language_hints: dict[str, tuple[str, ...]] = {}
         registry._add_listener(self.refresh)
 
-    def _ordered_codes(self) -> tuple[str, ...]:
-        codes = tuple(self.registry.iter_codes())
+    def _ordered_codes(self, codes: Sequence[str]) -> tuple[str, ...]:
         known = set(codes)
         ordered = [code for code in self._builtin_order if code in known]
         ordered.extend(code for code in codes if code not in self._builtin_order)
         return tuple(ordered)
 
+    def _unregistered_route_packs(
+        self, registered: set[str]
+    ) -> tuple[LanguagePack, ...]:
+        # A registered pack always wins over a user-supplied route of the same
+        # code, so a later bundled model replaces the route without an edit here.
+        return tuple(
+            pack
+            for pack in self._user_supplied_route_packs
+            if pack.code not in registered
+        )
+
+    def routing_packs(self) -> tuple[LanguagePack, ...]:
+        """Return registered packs plus unregistered user-supplied route packs.
+
+        The language router selects from this tuple by default. Route packs
+        carry a ``user-supplied`` placeholder model, so routing a script to one
+        never implies that OpenMed ships weights for that language.
+        """
+
+        packs = tuple(self.registry.iter_packs())
+        return (*packs, *self._unregistered_route_packs({p.code for p in packs}))
+
     def refresh(self) -> None:
         """Refresh every public projection from one registry snapshot."""
 
-        codes = self._ordered_codes()
-        packs = tuple(self.registry.get(code) for code in codes)
+        # Read packs once: an atomic generation may remove codes, so separate
+        # code and pack lookups could otherwise observe two generations.
+        snapshot = {pack.code: pack for pack in self.registry.iter_packs()}
+        codes = self._ordered_codes(tuple(snapshot))
+        packs = tuple(snapshot[code] for code in codes)
+        route_packs = self._unregistered_route_packs(set(codes))
 
         self.supported_languages.clear()
         self.supported_languages.update(codes)
@@ -581,6 +744,7 @@ class LanguagePackAdapters:
         )
 
         locale_values = dict((pack.code, pack.surrogate_locale) for pack in packs)
+        locale_values.update((pack.code, pack.surrogate_locale) for pack in route_packs)
         locale_values.update(self._supplemental_locales)
         locale_values.update(
             (code, capability.locale)
@@ -590,7 +754,7 @@ class LanguagePackAdapters:
         self.lang_to_locale.update(_ordered_items(locale_values, _LOCALE_ORDER))
 
         provider_values: dict[str, tuple[str, str]] = {}
-        for pack in packs:
+        for pack in (*packs, *route_packs):
             if pack.national_id_providers:
                 method, locale = next(iter(pack.national_id_providers.items()))
                 provider_values[pack.code] = (locale, method)
@@ -608,7 +772,7 @@ class LanguagePackAdapters:
             sorted(
                 {
                     script
-                    for pack in packs
+                    for pack in (*packs, *route_packs)
                     for script in pack.scripts
                     if script not in _SCRIPT_ORDER and script != UNROUTED_SCRIPT
                 }
@@ -619,11 +783,16 @@ class LanguagePackAdapters:
             self.supported_languages
             | set(self._national_id_only)
             | self._user_supplied_model_languages
+            | {pack.code for pack in route_packs}
         )
         for script in script_names:
             configured_hints = self._script_language_candidates.get(script)
             if configured_hints is None:
-                hints = tuple(pack.code for pack in packs if script in pack.scripts)
+                hints = tuple(
+                    pack.code
+                    for pack in (*packs, *route_packs)
+                    if script in pack.scripts
+                )
             else:
                 hints = tuple(
                     code for code in configured_hints if code in routable_languages
@@ -651,6 +820,7 @@ LANGUAGE_PACK_ADAPTERS = LanguagePackAdapters(
     supplemental_locales=SUPPLEMENTAL_LOCALES,
     user_supplied_model_languages=USER_SUPPLIED_MODEL_LANGUAGES,
     script_language_candidates=_SCRIPT_LANGUAGE_CANDIDATES,
+    user_supplied_route_packs=USER_SUPPLIED_MODEL_ROUTE_PACKS,
 )
 
 SUPPORTED_LANGUAGES = LANGUAGE_PACK_ADAPTERS.supported_languages
@@ -675,5 +845,6 @@ __all__ = [
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_LANGUAGES",
     "USER_SUPPLIED_MODEL_LANGUAGES",
+    "USER_SUPPLIED_MODEL_ROUTE_PACKS",
     "is_registered_segmenter",
 ]

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/structured/governed-dataset.schema.json",
+  "title": "OpenMed governed dataset manifest",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy",
+    "export_profile",
+    "formats",
+    "license_constraints",
+    "manifest_digest",
+    "model_versions",
+    "policy_digest",
+    "record_digests",
+    "schema_version",
+    "selection",
+    "snapshot",
+    "split_records",
+    "vocabulary_digest"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "export_profile": {"enum": ["metadata_only", "deidentified_values"]},
+    "formats": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["annotation_jsonl", "jsonl", "parquet"]}
+    },
+    "license_constraints": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/license_constraint"}
+    },
+    "manifest_digest": {"$ref": "#/$defs/digest"},
+    "model_versions": {"$ref": "#/$defs/version_mapping"},
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "record_digests": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/opaque_id"},
+      "additionalProperties": {"$ref": "#/$defs/digest"}
+    },
+    "schema_version": {"const": "1.0.0"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "snapshot": {"$ref": "#/$defs/snapshot"},
+    "split_records": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/controlled"},
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "vocabulary_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "digest_mapping": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/digest"}
+    },
+    "version_mapping": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/controlled"},
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible_patient_keys",
+        "review_excluded_count",
+        "source_digest",
+        "source_id",
+        "source_kind",
+        "source_snapshot_digest",
+        "source_snapshot_id"
+      ],
+      "properties": {
+        "eligible_patient_keys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "review_excluded_count": {"type": "integer", "minimum": 0},
+        "source_digest": {"$ref": "#/$defs/digest"},
+        "source_id": {"$ref": "#/$defs/opaque_id"},
+        "source_kind": {"enum": ["cohort", "ingestion_job"]},
+        "source_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "source_snapshot_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "license_constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["license_id", "redistribution", "source_id", "terms_digest"],
+      "properties": {
+        "license_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "redistribution": {
+          "enum": ["permitted", "prohibited", "restricted", "unknown"]
+        },
+        "source_id": {"$ref": "#/$defs/controlled"},
+        "terms_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "attributes",
+        "component_versions",
+        "created_at",
+        "dataset_id",
+        "file_hashes",
+        "license_tags",
+        "manifest_hash",
+        "parent_snapshot_ids",
+        "query_hash",
+        "record_count",
+        "schema_hash",
+        "schema_version",
+        "snapshot_id",
+        "source_artifact_ids",
+        "source_fact_ids",
+        "split_hashes"
+      ],
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "compatibility_policy",
+            "export_profile",
+            "license_constraints",
+            "model_versions",
+            "policy_digest",
+            "source_digest",
+            "source_id",
+            "source_kind",
+            "source_snapshot_digest",
+            "vocabulary_digest"
+          ]
+        },
+        "component_versions": {"$ref": "#/$defs/version_mapping"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "dataset_id": {"$ref": "#/$defs/opaque_id"},
+        "file_hashes": {"$ref": "#/$defs/digest_mapping"},
+        "license_tags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "manifest_hash": {"$ref": "#/$defs/digest"},
+        "parent_snapshot_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "query_hash": {"$ref": "#/$defs/digest"},
+        "record_count": {"type": "integer", "minimum": 0},
+        "schema_hash": {"$ref": "#/$defs/digest"},
+        "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+        "snapshot_id": {"$ref": "#/$defs/opaque_id"},
+        "source_artifact_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "source_fact_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "split_hashes": {"$ref": "#/$defs/digest_mapping"}
+      }
+    }
+  }
+}

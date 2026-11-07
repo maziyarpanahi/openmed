@@ -13,7 +13,14 @@ Browse the [issues page](https://github.com/maziyarpanahi/openmed/issues) and fi
 
 ### Claiming an issue
 
-Comment on the issue to let the maintainers know you're working on it. A short "I'd like to take this" is enough — no formal assignment is required.
+Trusted contributors can self-assign an open issue by posting a comment whose
+entire content is `/assign`. You are eligible as soon as you have at least one
+pull request merged into this repository. The command works only on open issue
+conversations; it ignores pull request conversations, bots, and comments that
+contain any other text.
+
+If you do not have a merged pull request yet, comment on the issue to ask a
+maintainer before starting work. A short "I'd like to take this" is enough.
 
 If the issue does not match the available templates, open a new item from the
 [issue forms](https://github.com/maziyarpanahi/openmed/issues/new/choose) and

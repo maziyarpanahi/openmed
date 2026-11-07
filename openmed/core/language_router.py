@@ -18,11 +18,25 @@ from typing import Protocol, runtime_checkable
 from .language_pack import LanguagePack
 from .language_pack_catalog import LANGUAGE_PACK_ADAPTERS
 from .script_detect import (
+    ASCII_NUMERAL_SET,
+    DEFAULT_NORMALIZER,
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
     candidate_languages_for_text,
+    fold_perso_arabic_letters,
+    normalizer_for_script,
+    numeral_set_for_script,
     segment_by_script,
 )
+
+# Per-script routing sources for runs whose lexical evidence reorders the
+# script's candidate list: the first entry names the evidence that fired, the
+# second the deterministic fallback used when that language has no pack.
+_SCRIPT_EVIDENCE_SOURCES = {
+    "Bengali": ("stdlib:assamese-cues", "stdlib:bengali-fallback"),
+    "Arabic": ("stdlib:urdu-cues", "stdlib:arabic-fallback"),
+}
+_DEFAULT_EVIDENCE_SOURCES = ("stdlib:text-cues", "stdlib:text-cue-fallback")
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +127,21 @@ class PyCLD2LanguageIdentifier:
 
 @dataclass(frozen=True, slots=True)
 class LanguageRun:
-    """Exact-offset routing decision for one contiguous script run."""
+    """Exact-offset routing decision for one contiguous script run.
+
+    ``start`` and ``end`` are half-open code-point offsets that always fall on
+    extended grapheme-cluster boundaries.
+
+    ``candidates`` is the ordered routing hint list for the run's script. It is
+    advisory, not a closed set: ``language`` may fall outside it when a
+    neighbouring script, a routing marker, or the optional language-ID backend
+    selects a pack that the script hints did not rank. ``source`` records which
+    of those paths decided the run.
+
+    ``normalizer`` and ``tokenizer`` name the components the run must be
+    processed with. ``numeral_set`` names the native decimal digits the script
+    writes numbers with, which is ``"ascii"`` for scripts that use ASCII digits.
+    """
 
     start: int
     end: int
@@ -121,6 +149,11 @@ class LanguageRun:
     language: str
     confidence: float
     source: str
+    candidates: tuple[str, ...] = ()
+    normalizer: str = DEFAULT_NORMALIZER
+    tokenizer: str = ""
+    numeral_set: str = ASCII_NUMERAL_SET
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,19 +183,24 @@ class LanguageRouter:
         packs: Sequence[LanguagePack] | None = None,
         language_identifier: LanguageIdentifier | None = None,
         use_optional_lid: bool = True,
+        fallback_pack: str | None = None,
     ) -> None:
         """Create a router.
 
         Args:
-            packs: Candidate packs. Built-in packs are used when omitted.
+            packs: Candidate packs. When omitted, the registered built-in packs
+                are used together with the unregistered user-supplied-model
+                route packs, such as Sinhala, which carry no bundled model.
             language_identifier: Injected local LID backend. When omitted and
                 ``use_optional_lid`` is true, the lazy CLD2 adapter is used.
             use_optional_lid: Try the optional CLD2 adapter when no backend was
                 injected. Set false to force the stdlib-only path.
+            fallback_pack: Explicit pack code to permit unsupported scripts.
+                Without it, auto pipelines reject letter-bearing unsupported runs.
         """
 
         self.packs = tuple(
-            LANGUAGE_PACK_ADAPTERS.registry.iter_packs() if packs is None else packs
+            LANGUAGE_PACK_ADAPTERS.routing_packs() if packs is None else packs
         )
         if not self.packs:
             raise ValueError("packs must contain at least one LanguagePack")
@@ -178,6 +216,9 @@ class LanguageRouter:
         if language_identifier is None and use_optional_lid:
             self.language_identifier = PyCLD2LanguageIdentifier()
         self._packs_by_code = {pack.code: pack for pack in self.packs}
+        if fallback_pack is not None and fallback_pack not in self._packs_by_code:
+            raise ValueError("fallback_pack must name a registered candidate pack")
+        self.fallback_pack = fallback_pack
         self._packs_by_script = {
             script: tuple(
                 sorted(
@@ -209,10 +250,13 @@ class LanguageRouter:
                 for neighbor in (index - 1, index + 1)
                 if 0 <= neighbor < len(script_runs)
             }
+            run_text = text[start:end]
+            candidates = candidate_languages_for_text(run_text, script)
             pack, confidence, source = self._select_pack(
-                text[start:end],
+                run_text,
                 script,
                 neighboring_scripts,
+                candidates,
             )
             routed.append(
                 LanguageRun(
@@ -222,6 +266,15 @@ class LanguageRouter:
                     language=pack.code,
                     confidence=confidence,
                     source=source,
+                    candidates=candidates,
+                    normalizer=normalizer_for_script(script),
+                    tokenizer=pack.segmenter_id,
+                    numeral_set=numeral_set_for_script(script),
+                    reason=(
+                        "unsupported_script"
+                        if source == "stdlib:unknown-script"
+                        else None
+                    ),
                 )
             )
 
@@ -282,10 +335,13 @@ class LanguageRouter:
         text: str,
         script: str,
         neighboring_scripts: set[str],
+        text_hints: tuple[str, ...] | None = None,
     ) -> tuple[LanguagePack, float, str]:
         candidates = self._packs_by_script.get(script, ())
         if not candidates:
-            fallback = self._packs_by_code.get("en", self.packs[0])
+            fallback = self._packs_by_code.get(
+                self.fallback_pack or "en", self.packs[0]
+            )
             return fallback, 0.5, "stdlib:unknown-script"
 
         context_matches = tuple(
@@ -296,13 +352,25 @@ class LanguageRouter:
         if context_matches:
             return context_matches[0], 0.99, "stdlib:context-script"
 
-        text_hints = candidate_languages_for_text(text, script)
+        if text_hints is None:
+            text_hints = candidate_languages_for_text(text, script)
         if text_hints != candidate_languages_for_script(script):
+            cue_source, fallback_source = _SCRIPT_EVIDENCE_SOURCES.get(
+                script,
+                _DEFAULT_EVIDENCE_SOURCES,
+            )
             candidates_by_code = {pack.code: pack for pack in candidates}
-            for code in text_hints:
+            for rank, code in enumerate(text_hints):
                 selected = candidates_by_code.get(code)
-                if selected is not None:
-                    return selected, 0.99, "stdlib:assamese-cues"
+                if selected is None:
+                    continue
+                if rank == 0:
+                    return selected, 0.99, cue_source
+                # The evidence-preferred language has no registered pack, so
+                # the run falls back to the next candidate that does. The
+                # lower confidence keeps that fallback visible in the routing
+                # metadata instead of reading as a confident match.
+                return selected, 0.8, fallback_source
 
         if len(candidates) == 1:
             return candidates[0], 0.99, "stdlib:script"
@@ -310,7 +378,10 @@ class LanguageRouter:
         marker_matches = [
             (
                 sum(
-                    self._routing_marker_count(text, marker)
+                    self._routing_marker_count(
+                        fold_perso_arabic_letters(text, pack.code),
+                        fold_perso_arabic_letters(marker, pack.code),
+                    )
                     for marker in pack.routing_markers
                 ),
                 pack,

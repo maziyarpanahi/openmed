@@ -34,6 +34,32 @@ def test_current_non_dev_dependencies_are_permissive():
     } == set()
 
 
+def test_current_dependencies_pass_without_installed_metadata(monkeypatch):
+    # CI runs the policy before installing the package, so every audited
+    # dependency needs a reviewed entry rather than installed metadata.
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    results = policy.audit_pyproject(ROOT / "pyproject.toml")
+
+    assert results
+    assert [
+        f"{result.entry.group}:{result.entry.name}"
+        for result in results
+        if not result.allowed
+    ] == []
+
+
+def test_jsonschema_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("jsonschema")
+    allowed, reason = policy.is_allowed_license("jsonschema", license_text)
+
+    assert license_text == "MIT"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_zh_and_indic_dependencies_have_reviewed_permissive_licenses():
     results = policy.audit_pyproject(ROOT / "pyproject.toml")
     language_results = {
@@ -65,6 +91,55 @@ def test_cryptography_license_is_reviewed_without_installed_metadata(monkeypatch
     allowed, reason = policy.is_allowed_license("cryptography", license_text)
 
     assert license_text == "Apache-2.0 OR BSD-3-Clause"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_apache_airflow_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("apache-airflow")
+    allowed, reason = policy.is_allowed_license("apache-airflow", license_text)
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_snowpark_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("snowflake-snowpark-python")
+    allowed, reason = policy.is_allowed_license(
+        "snowflake-snowpark-python",
+        license_text,
+    )
+
+    assert license_text == "Apache-2.0"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_gitpython_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("gitpython")
+    allowed, reason = policy.is_allowed_license("gitpython", license_text)
+
+    assert license_text == "BSD-3-Clause"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
+def test_strawberry_graphql_license_is_reviewed_without_installed_metadata(
+    monkeypatch,
+):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("strawberry-graphql")
+    allowed, reason = policy.is_allowed_license("strawberry-graphql", license_text)
+
+    assert license_text == "MIT"
     assert allowed is True
     assert reason == "permissive license"
 
@@ -107,6 +182,13 @@ dependencies = ["example-gpl>=1"]
     assert len(results) == 1
     assert results[0].allowed is False
     assert "not allowed" in results[0].reason
+
+
+def test_extract_msg_is_an_explicit_subprocess_bridge_exception():
+    allowed, reason = policy.is_allowed_license("extract-msg", "GPL-3.0-only")
+
+    assert allowed is True
+    assert "out-of-process Outlook MSG bridge" in reason
 
 
 def test_elastic_dependency_fails_policy(tmp_path):

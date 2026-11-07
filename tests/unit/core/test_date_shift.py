@@ -3,11 +3,138 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from openmed.core.date_shift import stable_offset_for
+from openmed.core.date_shift import stable_offset_for, stable_offset_from_seed
+from openmed.core.locale_formats import LOCALE_DATE_ORDER, parse_date
 from openmed.core.pipeline import Pipeline
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 HMAC_TEST_MATERIAL = bytes(range(1, 33))
+
+
+@pytest.mark.parametrize(("lang", "order"), sorted(LOCALE_DATE_ORDER.items()))
+@pytest.mark.parametrize("separator", [".", "/", "-"])
+def test_every_locale_numeric_shift_preserves_order_separator_and_interval(
+    lang, order, separator
+):
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    values = {
+        "dmy": ("11{0}10{0}2026", "13{0}10{0}2026"),
+        "mdy": ("10{0}11{0}2026", "10{0}13{0}2026"),
+        "ymd": ("2026{0}10{0}11", "2026{0}10{0}13"),
+    }[order]
+    first, second = (value.format(separator) for value in values)
+    for shifter in (_shift_date, _shift_date_basic):
+        shifted = [shifter(value, 1, lang=lang) for value in (first, second)]
+        parsed = [parse_date(value, lang) for value in shifted]
+        assert [value.normalized for value in parsed] == [
+            (2026, 10, 12),
+            (2026, 10, 14),
+        ]
+        assert all(value.order == order for value in parsed)
+        assert all(value.count(separator) == 2 for value in shifted)
+
+
+def test_unknown_locale_ambiguous_dates_are_not_guessed():
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    for shifter in (_shift_date, _shift_date_basic):
+        assert shifter("11/10/2026", 1, lang=None) == "[DATE_SHIFTED]"
+
+
+def test_cjk_date_shifts_preserve_source_format_and_digit_system(subtests):
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    cases = [
+        ("zh", "2024年3月15日", 10, False, "2024年3月25日"),
+        ("ja", "24年3月15日", 10, False, "24年3月25日"),
+        ("ko", "2024년 3월 15일", 10, False, "2024년 3월 25일"),
+        ("zh", "2024年03月05日", -10, False, "2024年02月24日"),
+        ("zh", "２０２４年０３月１５日", 10, False, "２０２４年０３月２５日"),
+        ("ja", "２４年３月１５日", 10, False, "２４年３月２５日"),
+        ("ko", "2024 년 03 월 05 일", 10, False, "2024 년 03 월 15 일"),
+        ("zh", "2024年12月31日", 1, False, "2025年01月01日"),
+        ("ja", "99年12月31日", 1, False, "00年01月01日"),
+        ("ko", "2024년 12월 31일", 1, True, "2024년 01월 01일"),
+        ("zh", " 2024年03月15日 ", 0, False, " 2024年03月15日 "),
+    ]
+    for shifter in (_shift_date, _shift_date_basic):
+        for lang, source, offset, keep_year, expected in cases:
+            with subtests.test(shifter=shifter.__name__, lang=lang, source=source):
+                assert shifter(source, offset, keep_year, lang=lang) == expected
+
+
+def test_cjk_date_shifts_do_not_require_dateutil_and_fail_closed(monkeypatch, subtests):
+    import sys
+
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    monkeypatch.setitem(sys.modules, "dateutil", None)
+    monkeypatch.setitem(sys.modules, "dateutil.parser", None)
+    for shifter in (_shift_date, _shift_date_basic):
+        for source, expected in [
+            ("2024年3月15日", "2024年3月25日"),
+            ("2024년 3월 15일", "2024년 3월 25일"),
+            ("2024年2月30日", "[DATE_SHIFTED]"),
+            ("2024年13月15日", "[DATE_SHIFTED]"),
+            ("9999年12月31日", "[DATE_SHIFTED]"),
+            ("49年12月31日", "[DATE_SHIFTED]"),
+            ("2024年3月15日 trailing", "[DATE_SHIFTED]"),
+        ]:
+            with subtests.test(shifter=shifter.__name__, source=source):
+                assert shifter(source, 10, lang="zh") == expected
+
+
+def test_cjk_date_shifts_work_through_the_public_pipeline(subtests):
+    for lang, source, expected in [
+        ("zh", "2024年3月15日", "2024年3月25日"),
+        ("ja", "24年3月15日", "24年3月25日"),
+        ("ko", "2024년 3월 15일", "2024년 3월 25일"),
+        ("zh", "２０２４年０３月１５日", "２０２４年０３月２５日"),
+    ]:
+        with subtests.test(lang=lang, source=source):
+            text = f"Synthetic date: {source}"
+            result = _deidentify_with_entities(
+                text, _date_entity(text, source), lang=lang, date_shift_days=10
+            )
+            assert result.deidentified_text == f"Synthetic date: {expected}"
+
+
+def test_registered_and_national_id_languages_have_date_orders():
+    from openmed.core.language_pack_catalog import (
+        BUILTIN_LANGUAGE_PACKS,
+        NATIONAL_ID_ONLY_LANGUAGES,
+    )
+
+    languages = {
+        pack.code for pack in BUILTIN_LANGUAGE_PACKS
+    } | NATIONAL_ID_ONLY_LANGUAGES
+    assert languages <= LOCALE_DATE_ORDER.keys()
+
+
+@pytest.mark.parametrize(("lang", "order"), sorted(LOCALE_DATE_ORDER.items()))
+def test_surrogate_date_generators_share_locale_order(lang, order):
+    import random
+    from types import SimpleNamespace
+
+    from openmed.core.anonymizer.format_preserve import preserve_date_format
+    from openmed.core.anonymizer.registry import _gen_date, _gen_date_of_birth
+    from openmed.core.locale_formats import date_order_for_locale
+
+    original = "2026.10.11" if order == "ymd" else "11.10.2026"
+    locale = lang if "-" in lang else lang + "_XX"
+    expected = preserve_date_format(
+        original,
+        date_order=order,
+        rng=random.Random(4),
+        locale=locale,
+    )
+    assert date_order_for_locale(locale) == order
+    for generator in (_gen_date, _gen_date_of_birth):
+        actual = generator(
+            SimpleNamespace(random=random.Random(4)), original, locale=locale
+        )
+        assert actual == expected
 
 
 def _prediction(text: str, *entities: EntityPrediction) -> PredictionResult:
@@ -38,6 +165,7 @@ def _date_entity(
 def _deidentify_with_entities(
     text: str,
     *entities: EntityPrediction,
+    lang: str = "en",
     **run_kwargs,
 ):
     def model_detector(model_text: str, **kwargs):
@@ -45,7 +173,7 @@ def _deidentify_with_entities(
         return _prediction(model_text, *entities)
 
     return (
-        Pipeline(model_detector=model_detector, use_safety_sweep=False)
+        Pipeline(model_detector=model_detector, use_safety_sweep=False, lang=lang)
         .run(
             text,
             method="shift_dates",
@@ -67,6 +195,21 @@ def test_stable_offset_for_is_repeatable_bounded_and_nonzero():
     assert first == second
     assert -30 <= first <= 30
     assert first != 0
+
+
+def test_stable_offset_from_seed_is_repeatable_bounded_and_nonzero():
+    first = stable_offset_from_seed(822, max_days=30)
+    second = stable_offset_from_seed(822, max_days=30)
+
+    assert first == second
+    assert -30 <= first <= 30
+    assert first != 0
+
+
+@pytest.mark.parametrize("seed", [True, 8.22, "822"])
+def test_stable_offset_from_seed_requires_an_integer(seed):
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        stable_offset_from_seed(seed, max_days=30)
 
 
 def test_stable_offset_for_rejects_empty_patient_key_without_echoing_value():
@@ -117,6 +260,33 @@ def test_patient_keyed_shift_dates_are_stable_across_documents():
     shifted_start = datetime.strptime(first_start, "%m/%d/%Y")
     shifted_end = datetime.strptime(first_end, "%m/%d/%Y")
     assert shifted_end - shifted_start == timedelta(days=10)
+
+
+def test_request_seed_controls_automatic_date_shift():
+    text = "Admit 01/10/2020 discharge 01/20/2020"
+    seed = 822
+    offset = stable_offset_from_seed(seed, max_days=30)
+
+    first = _deidentify_with_entities(
+        text,
+        _date_entity(text, "01/10/2020"),
+        _date_entity(text, "01/20/2020"),
+        seed=seed,
+        date_shift_max_days=30,
+    )
+    second = _deidentify_with_entities(
+        text,
+        _date_entity(text, "01/10/2020"),
+        _date_entity(text, "01/20/2020"),
+        seed=seed,
+        date_shift_max_days=30,
+    )
+
+    assert first.deidentified_text == second.deidentified_text
+    assert first.deidentified_text == (
+        f"Admit {_shift_mmddyyyy('01/10/2020', offset)} "
+        f"discharge {_shift_mmddyyyy('01/20/2020', offset)}"
+    )
 
 
 def test_different_patient_keys_can_produce_different_offsets():

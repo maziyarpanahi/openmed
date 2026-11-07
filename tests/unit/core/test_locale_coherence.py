@@ -25,6 +25,7 @@ from faker.config import AVAILABLE_LOCALES
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer import locales as L
+from openmed.core.anonymizer.digit_systems import detect_digit_system, fold_digits
 from openmed.core.anonymizer.locales import (
     CONCEPTUAL_LOCALE_LANGUAGES,
     FAKER_BACKEND_LOCALE,
@@ -34,6 +35,8 @@ from openmed.core.anonymizer.locales import (
     resolve_faker_backend_locale,
     resolve_locale,
 )
+from openmed.core.anonymizer.person_surrogates import URDU_MASCULINE_GIVEN_NAMES
+from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.language_pack import get_language_pack
@@ -48,7 +51,9 @@ from openmed.core.pii_i18n import (
     LOCALE_FAKE_DATA,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     validate_aadhaar,
+    validate_malayalam_aadhaar,
     validate_marathi_aadhaar,
 )
 
@@ -66,11 +71,17 @@ DOCUMENTED_APPROXIMATE = {
     "ms",
     "pa",
     "rw",
+    "si",
     "sr",
     "te",
     "ur",
     "xh",
 }
+
+# Languages whose name and place surrogates bypass the default Faker locale and
+# come from script-correct providers instead. Kept independent of the code under
+# test so a silent change to the documented approximation fails loudly.
+DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS = {"am", "ar"}
 
 # Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
@@ -80,7 +91,10 @@ KNOWN_PROVIDERLESS_VALIDATORS = set()
 SAMPLE_SIZE = 40
 
 REPORT_LANGUAGES = (
-    SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+    SUPPORTED_LANGUAGES
+    | NATIONAL_ID_ONLY_LANGUAGES
+    | INDIC_NER_LANGUAGES
+    | USER_SUPPLIED_MODEL_LANGUAGES
 )
 
 CONCEPTUAL_BACKENDS = {
@@ -125,9 +139,10 @@ def _national_id_validators(lang):
 
 
 class TestLocaleResolution:
-    @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
-    def test_every_supported_language_has_locale_entry(self, lang):
-        assert lang in LANG_TO_LOCALE, f"{lang!r} missing LANG_TO_LOCALE entry"
+    def test_every_supported_language_has_locale_entry(self, subtests):
+        for lang in sorted(REPORT_LANGUAGES):
+            with subtests.test(lang=lang):
+                assert lang in LANG_TO_LOCALE, f"{lang!r} missing LANG_TO_LOCALE entry"
 
     @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
     def test_resolved_locale_exists_in_faker(self, lang):
@@ -139,6 +154,45 @@ class TestLocaleResolution:
             f"{lang!r} -> {locale!r} is not a real Faker locale and is not a "
             "documented approximation"
         )
+
+    def test_malayalam_pack_warns_once_and_preserves_house_name_shape(self):
+        assert "ml" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["ml"] == "OpenMed/privacy-filter-multilingual"
+        assert LANG_TO_LOCALE["ml"] == "ml_IN"
+        assert NATIONAL_ID_PROVIDERS["ml"] == ("ml_IN", "aadhaar")
+        assert FAKER_BACKEND_LOCALE["ml_IN"] == "en_IN"
+        assert "ml" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("ml") == "ml_IN"
+            assert resolve_locale("ml") == "ml_IN"
+            anonymizer = Anonymizer(lang="ml", consistent=True, seed=690)
+            house_given = anonymizer.surrogate(
+                "പുതുശ്ശേരി രാമൻ",
+                "PERSON",
+            )
+            initial_given = anonymizer.surrogate("കെ. രാമൻ", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "൨൪൬൭ ൭൮൩൨ ൫൪൮൪",
+                "national_id",
+            )
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert len(house_given.split()) == 2
+        assert all(
+            any("\u0d00" <= character <= "\u0d7f" for character in token)
+            for token in house_given.split()
+        )
+        assert len(initial_given.split()) == 2
+        assert initial_given.split()[0].endswith(".")
+        assert house_given != "പുതുശ്ശേരി രാമൻ"
+        assert initial_given != "കെ. രാമൻ"
+        assert validate_malayalam_aadhaar(aadhaar)
 
     def test_swahili_uses_native_faker_locale_without_warning(self):
         L._warned.clear()
@@ -205,7 +259,9 @@ class TestLocaleResolution:
         assert any(
             surname in person for surname in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
         )
-        assert validate_aadhaar(aadhaar)
+        # Native-digit sources keep their digit system (#3871).
+        assert detect_digit_system(aadhaar).name == "bengali"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
         pack = get_language_pack("or")
@@ -251,6 +307,56 @@ class TestLocaleResolution:
         ]
         assert re.fullmatch(r"[\u0B00-\u0B7F ]+", person)
         assert person != "ଅରୁଣ ଦାସ"
+        assert detect_digit_system(aadhaar).name == "oriya"
+        assert validate_aadhaar(fold_digits(aadhaar))
+
+    def test_gujarati_pack_uses_native_locale_and_gender_suffixes(self):
+        pack = get_language_pack("gu")
+
+        assert pack is not None
+        assert pack.scripts == ("Gujarati",)
+        assert "gu" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["gu"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["gu"] == "Gujarati"
+        assert LANGUAGE_MODEL_PREFIX["gu"] == "Gujarati-"
+        assert LANGUAGE_MONTH_NAMES["gu"] == [
+            "જાન્યુઆરી",
+            "ફેબ્રુઆરી",
+            "માર્ચ",
+            "એપ્રિલ",
+            "મે",
+            "જૂન",
+            "જુલાઈ",
+            "ઑગસ્ટ",
+            "સપ્ટેમ્બર",
+            "ઑક્ટોબર",
+            "નવેમ્બર",
+            "ડિસેમ્બર",
+        ]
+        assert LANG_TO_LOCALE["gu"] == "gu_IN"
+        assert NATIONAL_ID_PROVIDERS["gu"] == ("gu_IN", "aadhaar")
+        assert "gu_IN" in AVAILABLE_LOCALES
+        assert "gu" not in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("gu") == "gu_IN"
+            anonymizer = Anonymizer(lang="gu", consistent=True, seed=691)
+            male = anonymizer.surrogate("નરેશભાઈ", "PERSON")
+            female = anonymizer.surrogate("રમીલાબેન", "PERSON")
+            aadhaar = anonymizer.surrogate(
+                "2467 7832 5484",
+                "national_id",
+            )
+
+        assert not [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+ભાઈ", male)
+        assert re.fullmatch(r"[\u0A80-\u0AFF]+બેન", female)
+        assert male != "નરેશભાઈ"
+        assert female != "રમીલાબેન"
         assert validate_aadhaar(aadhaar)
 
     def test_marathi_pack_uses_approximate_locale_and_three_part_names(self):
@@ -303,12 +409,9 @@ class TestLocaleResolution:
         assert female_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
         assert male_match.group(3) in LOCALE_FAKE_DATA["mr_IN"]["LAST_NAME"]
 
-    def test_tamil_pack_uses_native_locale_model_and_aadhaar_provider(self):
+    def test_tamil_pack_uses_public_placeholder_locale_and_aadhaar_provider(self):
         assert "ta" in SUPPORTED_LANGUAGES
-        assert (
-            DEFAULT_PII_MODELS["ta"]
-            == "OpenMed/OpenMed-PII-Tamil-mSuperClinical-Large-279M-v1"
-        )
+        assert DEFAULT_PII_MODELS["ta"] == "OpenMed/privacy-filter-multilingual"
         assert LANG_TO_LOCALE["ta"] == "ta_IN"
         assert NATIONAL_ID_PROVIDERS["ta"] == ("ta_IN", "aadhaar")
         assert "ta_IN" in AVAILABLE_LOCALES
@@ -337,13 +440,72 @@ class TestLocaleResolution:
             for surrogate in surrogates
         )
 
-    @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
-    def test_conceptual_locale_resolves_to_installed_backend(self, locale):
-        language = CONCEPTUAL_LOCALE_LANGUAGES[locale]
+    def test_kannada_pack_uses_documented_approximate_locale_and_initial_shape(self):
+        pack = get_language_pack("kn")
 
-        assert resolve_locale(language, locale) == locale
-        assert resolve_faker_backend_locale(locale) == CONCEPTUAL_BACKENDS[locale]
-        assert CONCEPTUAL_BACKENDS[locale] in AVAILABLE_LOCALES
+        assert pack is not None
+        assert pack.scripts == ("Kannada",)
+        assert "kn" in SUPPORTED_LANGUAGES
+        assert DEFAULT_PII_MODELS["kn"] == "OpenMed/privacy-filter-multilingual"
+        assert LANGUAGE_NAMES["kn"] == "Kannada"
+        assert LANGUAGE_MODEL_PREFIX["kn"] == "Kannada-"
+        assert LANGUAGE_MONTH_NAMES["kn"] == [
+            "ಜನವರಿ",
+            "ಫೆಬ್ರವರಿ",
+            "ಮಾರ್ಚ್",
+            "ಏಪ್ರಿಲ್",
+            "ಮೇ",
+            "ಜೂನ್",
+            "ಜುಲೈ",
+            "ಆಗಸ್ಟ್",
+            "ಸೆಪ್ಟೆಂಬರ್",
+            "ಅಕ್ಟೋಬರ್",
+            "ನವೆಂಬರ್",
+            "ಡಿಸೆಂಬರ್",
+        ]
+        assert LANG_TO_LOCALE["kn"] == "kn_IN"
+        assert FAKER_BACKEND_LOCALE["kn_IN"] == "en_IN"
+        assert "kn_IN" not in AVAILABLE_LOCALES
+        assert NATIONAL_ID_PROVIDERS["kn"] == ("kn_IN", "aadhaar")
+        assert get_national_id("kn_IN", "aadhaar") is not None
+        assert "kn" in L._APPROXIMATE_LOCALES
+
+        L._warned.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert resolve_locale("kn") == "kn_IN"
+            anonymizer = Anonymizer(lang="kn", consistent=True, seed=695)
+            native = anonymizer.surrogate("ಕೆ. ಎಸ್. ರವಿ", "PERSON")
+            code_mixed = anonymizer.surrogate("K. S. Ravi", "PERSON")
+            aadhaar = anonymizer.surrogate("೨೪೬೭ ೭೮೩೨ ೫೪೮೪", "national_id")
+            assert resolve_locale("kn") == "kn_IN"
+
+        user_warnings = [
+            warning for warning in caught if issubclass(warning.category, UserWarning)
+        ]
+        assert len(user_warnings) == 1
+        assert "kn_IN" in str(user_warnings[0].message)
+        assert "en_IN" in str(user_warnings[0].message)
+        assert re.fullmatch(
+            r"[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+\.[ \t]*[\u0C80-\u0CFF]+",
+            native,
+        )
+        assert re.fullmatch(r"[A-Za-z]+\.[ \t]*[A-Za-z]+\.[ \t]*[A-Za-z]+", code_mixed)
+        assert native != "ಕೆ. ಎಸ್. ರವಿ"
+        assert code_mixed != "K. S. Ravi"
+        assert detect_digit_system(aadhaar).name == "kannada"
+        assert validate_aadhaar(fold_digits(aadhaar))
+
+    def test_conceptual_locale_resolves_to_installed_backend(self, subtests):
+        for locale in sorted(CONCEPTUAL_BACKENDS):
+            with subtests.test(locale=locale):
+                language = CONCEPTUAL_LOCALE_LANGUAGES[locale]
+
+                assert resolve_locale(language, locale) == locale
+                assert (
+                    resolve_faker_backend_locale(locale) == CONCEPTUAL_BACKENDS[locale]
+                )
+                assert CONCEPTUAL_BACKENDS[locale] in AVAILABLE_LOCALES
 
 
 class TestNationalIdRoundTrip:
@@ -386,6 +548,24 @@ class TestNationalIdRoundTrip:
                 f"failed every registered validator "
                 f"{[v.__name__ for v in validators]}"
             )
+
+    def test_regional_national_id_surrogates_round_trip(self, subtests):
+        for lang, locale, id_type, method in [
+            ("nl", "nl_BE", "rrn", "belgian_rrn"),
+            ("de", "de_CH", "ahv", "swiss_ahv"),
+        ]:
+            with subtests.test(
+                lang=lang, locale=locale, id_type=id_type, method=method
+            ):
+                spec = get_national_id(locale, id_type)
+                assert spec is not None
+                assert spec.faker_method == method
+                assert _LOCALE_ID_METHODS[locale] == method
+
+                anon = Anonymizer(lang=lang, consistent=True, seed=42)
+                surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+
+                assert spec.validate(surrogate)
 
 
 class TestApproximateLocaleWarnings:
@@ -472,9 +652,11 @@ class TestLocaleCoherenceReport:
                 "language",
                 "locale",
                 "approximate",
+                "address_approximation",
                 "id_providers",
                 "id_types",
                 "id_locale",
+                "surrogate_approximation",
             }
             assert row["locale"] == LANG_TO_LOCALE[lang]
             assert isinstance(row["approximate"], bool)
@@ -491,6 +673,30 @@ class TestLocaleCoherenceReport:
                 assert row["id_providers"] == []
                 assert row["id_types"] == []
                 assert row["id_locale"] is None
+            if lang in DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS:
+                assert isinstance(row["surrogate_approximation"], str)
+            else:
+                assert row["surrogate_approximation"] is None
+
+    def test_arabic_and_amharic_script_surrogates_are_documented_approximations(
+        self,
+    ):
+        rows = {
+            r["language"]: r
+            for r in locale_coherence_report()
+            if r["locale"] not in CONCEPTUAL_BACKENDS
+        }
+
+        assert {
+            lang for lang, row in rows.items() if row["surrogate_approximation"]
+        } == DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS
+        arabic = rows["ar"]["surrogate_approximation"]
+        amharic = rows["am"]["surrogate_approximation"]
+        assert "ar_AA" in arabic and "synthetic" in arabic
+        assert "synthetic" in amharic and "en_KE" in amharic
+        # The Arabic default stays a native Faker locale with no warning.
+        assert rows["ar"]["approximate"] is False
+        assert rows["am"]["approximate"] is True
 
     def test_conceptual_rows_include_all_backends(self):
         rows = {
@@ -506,9 +712,11 @@ class TestLocaleCoherenceReport:
                 "language",
                 "locale",
                 "approximate",
+                "address_approximation",
                 "id_providers",
                 "id_types",
                 "id_locale",
+                "surrogate_approximation",
             }
             assert row["language"] == CONCEPTUAL_LOCALE_LANGUAGES[locale]
             assert FAKER_BACKEND_LOCALE[locale] == backend
@@ -516,6 +724,7 @@ class TestLocaleCoherenceReport:
             assert row["id_providers"] == []
             assert row["id_types"] == []
             assert row["id_locale"] is None
+            assert row["surrogate_approximation"] is None
 
     def test_report_is_json_serializable(self):
         # The status/leaderboard work serializes this; keep it JSON-friendly.
@@ -523,19 +732,22 @@ class TestLocaleCoherenceReport:
 
 
 class TestAfricanFrenchPortugueseSurrogates:
-    @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
-    def test_curated_name_location_address_and_phone_surrogates(self, locale):
-        lang = CONCEPTUAL_LOCALE_LANGUAGES[locale]
-        anonymizer = Anonymizer(lang=lang, locale=locale, consistent=True, seed=866)
+    def test_curated_name_location_address_and_phone_surrogates(self, subtests):
+        for locale in sorted(CONCEPTUAL_BACKENDS):
+            with subtests.test(locale=locale):
+                lang = CONCEPTUAL_LOCALE_LANGUAGES[locale]
+                anonymizer = Anonymizer(
+                    lang=lang, locale=locale, consistent=True, seed=866
+                )
 
-        for label, key in (
-            ("NAME", "NAME"),
-            ("LOCATION", "LOCATION"),
-            ("STREET_ADDRESS", "STREET_ADDRESS"),
-            ("PHONE", "PHONE"),
-        ):
-            surrogate = anonymizer.surrogate(f"source-{key}", label)
-            assert surrogate in LOCALE_FAKE_DATA[locale][key]
+                for label, key in (
+                    ("NAME", "NAME"),
+                    ("LOCATION", "LOCATION"),
+                    ("STREET_ADDRESS", "STREET_ADDRESS"),
+                    ("PHONE", "PHONE"),
+                ):
+                    surrogate = anonymizer.surrogate(f"source-{key}", label)
+                    assert surrogate in LOCALE_FAKE_DATA[locale][key]
 
     def test_default_french_and_portuguese_outputs_are_unchanged(self):
         expected = {
@@ -565,9 +777,8 @@ class TestAfricanFrenchPortugueseSurrogates:
                 label: anonymizer.surrogate(originals[label], label) for label in values
             } == values
 
-    @pytest.mark.parametrize(
-        ("lang", "locale", "text", "model_entities", "sweep_values"),
-        [
+    def test_synthetic_clinical_fixtures_have_zero_leakage(self, subtests):
+        for lang, locale, text, model_entities, sweep_values in [
             (
                 "fr",
                 "fr_SN",
@@ -590,63 +801,147 @@ class TestAfricanFrenchPortugueseSurrogates:
                 ),
                 ("+258 84 123 4567",),
             ),
-        ],
-    )
-    def test_synthetic_clinical_fixtures_have_zero_leakage(
-        self,
-        lang,
-        locale,
-        text,
-        model_entities,
-        sweep_values,
-    ):
-        from openmed.core.pii import (
-            _apply_safety_sweep_to_result,
-            _build_deidentification_result,
-        )
-        from openmed.processing.outputs import EntityPrediction, PredictionResult
-
-        entities = []
-        for surface, label in model_entities:
-            start = text.index(surface)
-            entities.append(
-                EntityPrediction(
-                    text=surface,
-                    label=label,
-                    start=start,
-                    end=start + len(surface),
-                    confidence=0.99,
+        ]:
+            with subtests.test(
+                lang=lang,
+                locale=locale,
+                text=text,
+                model_entities=model_entities,
+                sweep_values=sweep_values,
+            ):
+                from openmed.core.pii import (
+                    _apply_safety_sweep_to_result,
+                    _build_deidentification_result,
                 )
+                from openmed.processing.outputs import (
+                    EntityPrediction,
+                    PredictionResult,
+                )
+
+                entities = []
+                for surface, label in model_entities:
+                    start = text.index(surface)
+                    entities.append(
+                        EntityPrediction(
+                            text=surface,
+                            label=label,
+                            start=start,
+                            end=start + len(surface),
+                            confidence=0.99,
+                        )
+                    )
+                prediction = PredictionResult(
+                    text=text,
+                    entities=entities,
+                    model_name="synthetic-fixture",
+                    timestamp="2026-07-18T00:00:00Z",
+                    metadata={"synthetic": True},
+                )
+
+                swept, added_count = _apply_safety_sweep_to_result(
+                    text,
+                    prediction,
+                    lang=lang,
+                    locale=locale,
+                )
+                result = _build_deidentification_result(
+                    text,
+                    swept,
+                    effective_method="replace",
+                    keep_year=False,
+                    date_shift_days=None,
+                    keep_mapping=False,
+                    lang=lang,
+                    consistent=True,
+                    seed=866,
+                    locale=locale,
+                    use_safety_sweep=True,
+                )
+
+                protected_values = [surface for surface, _label in model_entities]
+                protected_values.extend(sweep_values)
+                assert added_count == len(sweep_values)
+                assert all(
+                    value not in result.deidentified_text for value in protected_values
+                )
+
+
+def test_gujarati_surrogates_choose_gender_aligned_native_names(subtests):
+    for source, method, stem, expected in [
+        ("નરેશભાઈ", "first_name_male", "વિજય", "વિજયભાઈ"),
+        ("રમીલાબેન", "first_name_female", "કવિતા", "કવિતાબેન"),
+        ("નરેશ પટેલભાઈ", "name_male", "વિજય શાહ", "વિજય શાહભાઈ"),
+        ("રમીલા પટેલબેન", "name_female", "કવિતા શાહ", "કવિતા શાહબેન"),
+    ]:
+        with subtests.test(source=source, method=method, stem=stem, expected=expected):
+            from unittest.mock import Mock
+
+            from openmed.core.anonymizer.providers.script_names import (
+                generate_gujarati_name,
             )
-        prediction = PredictionResult(
-            text=text,
-            entities=entities,
-            model_name="synthetic-fixture",
-            timestamp="2026-07-18T00:00:00Z",
-            metadata={"synthetic": True},
+
+            faker = Mock()
+            getattr(faker, method).return_value = stem
+            assert generate_gujarati_name(faker, source, locale="gu_IN") == expected
+            getattr(faker, method).assert_called_once_with()
+            faker.name.assert_not_called()
+            faker.first_name.assert_not_called()
+
+
+def test_urdu_pack_warns_once_and_uses_bundled_names():
+    pack = get_language_pack("ur")
+
+    assert pack is not None
+    assert pack.scripts == ("Arabic",)
+    assert "ur" in SUPPORTED_LANGUAGES
+    assert DEFAULT_PII_MODELS["ur"] == "OpenMed/privacy-filter-multilingual"
+    assert LANGUAGE_NAMES["ur"] == "Urdu"
+    assert LANGUAGE_MODEL_PREFIX["ur"] == "Urdu-"
+    assert LANGUAGE_MONTH_NAMES["ur"] == [
+        "جنوری",
+        "فروری",
+        "مارچ",
+        "اپریل",
+        "مئی",
+        "جون",
+        "جولائی",
+        "اگست",
+        "ستمبر",
+        "اکتوبر",
+        "نومبر",
+        "دسمبر",
+    ]
+    assert LANG_TO_LOCALE["ur"] == "ur_IN"
+    assert NATIONAL_ID_PROVIDERS["ur"] == ("ur_IN", "aadhaar")
+    assert FAKER_BACKEND_LOCALE["ur_IN"] == "en_IN"
+    assert "ur" in L._APPROXIMATE_LOCALES
+
+    L._warned.clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert resolve_locale("ur") == "ur_IN"
+        assert resolve_locale("ur") == "ur_IN"
+        anonymizer = Anonymizer(lang="ur", consistent=True, seed=694)
+        name = anonymizer.surrogate("جناب سیّد علی خان صاحب", "PERSON")
+        aadhaar = anonymizer.surrogate(
+            "۲۴۶۷ ۷۸۳۲ ۵۴۸۴",
+            "national_id",
         )
 
-        swept, added_count = _apply_safety_sweep_to_result(
-            text,
-            prediction,
-            lang=lang,
-            locale=locale,
-        )
-        result = _build_deidentification_result(
-            text,
-            swept,
-            effective_method="replace",
-            keep_year=False,
-            date_shift_days=None,
-            keep_mapping=False,
-            lang=lang,
-            consistent=True,
-            seed=866,
-            locale=locale,
-            use_safety_sweep=True,
-        )
-
-        protected_values = [surface for surface, _label in model_entities]
-        protected_values.extend(sweep_values)
-        assert added_count == len(sweep_values)
-        assert all(value not in result.deidentified_text for value in protected_values)
+    user_warnings = [
+        warning for warning in caught if issubclass(warning.category, UserWarning)
+    ]
+    assert len(user_warnings) == 1
+    # The honorifics ``جناب`` and ``صاحب`` are kept verbatim around a bundled
+    # Urdu name whose given name matches their masculine gender (#3887).
+    assert name.startswith("جناب ")
+    assert name.endswith(" صاحب")
+    core = name.removeprefix("جناب ").removesuffix(" صاحب")
+    assert core in {
+        f"{given} {family}"
+        for given in L.URDU_GIVEN_NAMES
+        for family in L.URDU_FAMILY_NAMES
+    }
+    assert core.split()[0] in URDU_MASCULINE_GIVEN_NAMES
+    assert name != "جناب سیّد علی خان صاحب"
+    assert validate_aadhaar(aadhaar)

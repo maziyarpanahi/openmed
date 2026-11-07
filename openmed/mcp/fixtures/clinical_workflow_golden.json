@@ -333,10 +333,68 @@
                     "system": "http://hl7.org/fhir/sid/icd-10-cm",
                     "version": "synthetic-v1",
                     "code": "SYN-ASTER-1303",
-                    "display": "Aster syndrome"
+                    "display": "Aster syndrome",
+                    "extension": [
+                      {
+                        "url": "https://openmed.ai/fhir/StructureDefinition/grounded-code-provenance",
+                        "extension": [
+                          {
+                            "url": "linker",
+                            "valueString": "mcp"
+                          },
+                          {
+                            "url": "score",
+                            "valueDecimal": 0.99
+                          },
+                          {
+                            "url": "matched_alias",
+                            "valueString": "unavailable"
+                          },
+                          {
+                            "url": "vocab_version",
+                            "valueString": "synthetic-v1"
+                          },
+                          {
+                            "url": "evidence_start",
+                            "valueUnsignedInt": 54
+                          },
+                          {
+                            "url": "evidence_end",
+                            "valueUnsignedInt": 68
+                          }
+                        ]
+                      }
+                    ]
                   }
                 ],
-                "text": "Aster syndrome"
+                "text": "Aster syndrome",
+                "extension": [
+                  {
+                    "url": "https://openmed.ai/fhir/StructureDefinition/medical-device-assist",
+                    "extension": [
+                      {
+                        "url": "assist_only",
+                        "valueBoolean": true
+                      },
+                      {
+                        "url": "autonomous_decision",
+                        "valueBoolean": false
+                      },
+                      {
+                        "url": "evidence_start",
+                        "valueUnsignedInt": 54
+                      },
+                      {
+                        "url": "evidence_end",
+                        "valueUnsignedInt": 68
+                      },
+                      {
+                        "url": "disclaimer",
+                        "valueString": "Assist-only terminology grounding for human review; not an autonomous clinical coding, diagnosis, treatment, or billing decision."
+                      }
+                    ]
+                  }
+                ]
               },
               "subject": {
                 "reference": "Patient/openmed-subject"

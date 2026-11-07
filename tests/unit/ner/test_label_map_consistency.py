@@ -13,8 +13,10 @@ from pathlib import Path
 import pytest
 
 from openmed.core.labels import (
+    BIOMEDICAL_LABEL_KIND,
     CANONICAL_LABELS,
     hipaa_class_for,
+    label_kind_for,
     policy_label_for,
     risk_level_for,
     system_hints_for,
@@ -90,26 +92,11 @@ class TestDefaultsJsonInvariants:
 
 
 class TestNerFamilyDomains:
-    DISPLAY_LABEL_OVERRIDES = {
-        "CHEM": "Chemical",
-        "CL": "CellLine",
-        "DNA": "DNA",
-        "PROTEIN_ENUM": "ProteinEnumeration",
-        "PROTEIN_FAMILIY_OR_GROUP": "ProteinFamilyOrGroup",
-        "RNA": "RNA",
-    }
     SHIPPED_CATEGORIES = {
         info.category
         for info in OPENMED_MODELS.values()
         if info.model_id.startswith("OpenMed/OpenMed-NER-")
     }
-
-    @classmethod
-    def _display_label(cls, entity_type):
-        return cls.DISPLAY_LABEL_OVERRIDES.get(
-            entity_type,
-            "".join(part.title() for part in entity_type.split("_")),
-        )
 
     def test_every_shipped_ner_family_has_a_domain(self):
         assert self.SHIPPED_CATEGORIES
@@ -121,11 +108,11 @@ class TestNerFamilyDomains:
 
     @pytest.mark.parametrize("category", sorted(SHIPPED_CATEGORIES))
     def test_family_labels_match_registry_metadata(self, category):
-        expected = [
-            self._display_label(entity_type)
-            for entity_type in _CATEGORY_ENTITY_TYPES[category]
-        ]
-        assert get_default_labels(category.lower()) == expected
+        source_labels = get_default_labels(category.lower())
+        normalized = list(
+            dict.fromkeys(normalize_canonical_label(label) for label in source_labels)
+        )
+        assert set(normalized) == set(_CATEGORY_ENTITY_TYPES[category])
 
 
 def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> None:
@@ -136,6 +123,74 @@ def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> No
         load_default_label_map(path)
 
     assert str(path) in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Lab-value domain (issue #2353)
+# ---------------------------------------------------------------------------
+
+
+class TestLabDomain:
+    EXPECTED_LABELS = [
+        "LabTest",
+        "LabValue",
+        "Unit",
+        "ReferenceRange",
+        "AbnormalFlag",
+        "Specimen",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "LabTest": "LAB_TEST",
+        "LabValue": "LAB_VALUE",
+        "Unit": "UNIT",
+        "ReferenceRange": "REFERENCE_RANGE",
+        "AbnormalFlag": "ABNORMAL_FLAG",
+        "Specimen": "SPECIMEN",
+    }
+
+    def test_lab_domain_is_available_and_non_empty(self):
+        assert "lab" in available_domains()
+        assert get_default_labels("lab") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_lab_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_lab_category_metadata_matches_domain_labels(self):
+        normalized = [
+            normalize_canonical_label(label) for label in self.EXPECTED_LABELS
+        ]
+        assert normalized == _CATEGORY_ENTITY_TYPES["Lab"]
+
+
+# ---------------------------------------------------------------------------
+# Lab-value routing in model_registry (issue #2353)
+# ---------------------------------------------------------------------------
+
+
+class TestLabRouting:
+    LAB_TEXT = "Hemoglobin 8.1 g/dL, below reference range"
+
+    def test_match_categories_routes_lab(self):
+        categories = [c for c, _ in _match_categories(self.LAB_TEXT)]
+        assert categories[0] == "Lab"
+
+    def test_lab_is_registry_metadata_not_a_live_category(self):
+        assert "Lab" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Lab" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.LAB_TEXT)
+        assert suggestions
+        assert all(info.category != "Lab" for _key, info, _reason in suggestions)
 
 
 # ---------------------------------------------------------------------------
@@ -219,17 +274,15 @@ class TestMicrobiologyDomain:
         labels = get_default_labels("microbiology")
         assert labels == self.EXPECTED_LABELS
 
-    @pytest.mark.parametrize(
-        ("label", "expected"),
-        [
+    def test_microbiology_labels_normalize(self, subtests):
+        for label, expected in [
             ("susceptibility", "SUSCEPTIBILITY"),
             ("antibiotic", "ANTIBIOTIC"),
             ("microorganism", "MICROORGANISM"),
-            ("organism", "MICROORGANISM"),
-        ],
-    )
-    def test_microbiology_labels_normalize(self, label, expected):
-        assert normalize_canonical_label(label) == expected
+            ("organism", "ORGANISM"),
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_canonical_label(label) == expected
 
     def test_match_categories_routes_microbiology(self):
         categories = [
@@ -326,6 +379,96 @@ class TestSpecialtyRouting:
                 info.category not in {"Dermatology", "Ophthalmology"}
                 for _key, info, _reason in suggestions
             )
+
+
+# ---------------------------------------------------------------------------
+# Radiology domain and routing (issue #1971)
+# ---------------------------------------------------------------------------
+
+
+class TestRadiologyDomain:
+    EXPECTED_LABELS = [
+        "Finding",
+        "ImagingModality",
+        "Anatomy",
+        "Laterality",
+        "Measurement",
+        "Impression",
+    ]
+    EXPECTED_CANONICAL_LABELS = [
+        "FINDING",
+        "IMAGING_MODALITY",
+        "ANATOMY",
+        "LATERALITY",
+        "MEASUREMENT",
+    ]
+
+    def test_radiology_in_available_domains(self):
+        assert "radiology" in available_domains()
+
+    def test_get_default_labels_returns_radiology_set(self):
+        assert get_default_labels("radiology") == self.EXPECTED_LABELS
+
+    def test_radiology_labels_match_registry_metadata(self):
+        normalized = list(
+            dict.fromkeys(
+                normalize_canonical_label(label) for label in self.EXPECTED_LABELS
+            )
+        )
+        assert normalized == self.EXPECTED_CANONICAL_LABELS
+        assert normalized == _CATEGORY_ENTITY_TYPES["Radiology"]
+
+    def test_radiology_labels_are_non_identifier_biomedical_concepts(self, subtests):
+        for label, expected in [
+            ("finding", "FINDING"),
+            ("imaging modality", "IMAGING_MODALITY"),
+            ("laterality", "LATERALITY"),
+            ("measurement", "MEASUREMENT"),
+            ("impression", "FINDING"),
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_canonical_label(label) == expected
+                assert expected in CANONICAL_LABELS
+                assert label_kind_for(expected) == BIOMEDICAL_LABEL_KIND
+                assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+                assert hipaa_class_for(expected) is None
+
+
+class TestRadiologyRouting:
+    RADIOLOGY_TEXT = "CT of the chest shows a 4 mm nodule"
+
+    def test_match_categories_routes_radiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.RADIOLOGY_TEXT)
+        ]
+        assert categories == ["Radiology"]
+
+    def test_each_radiology_keyword_routes(self, subtests):
+        for text in [
+            "CT chest",
+            "MRI brain",
+            "chest x-ray",
+            "renal ultrasound",
+            "portable radiograph",
+            "with contrast",
+            "impression is unchanged",
+            "pulmonary nodule",
+            "left lower lobe opacity",
+        ]:
+            with subtests.test(text=text):
+                categories = [category for category, _reason in _match_categories(text)]
+                assert "Radiology" in categories
+
+    def test_radiology_is_registry_metadata_not_a_live_category(self):
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Radiology" in _CATEGORY_ENTITY_TYPES
+        assert "Radiology" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.RADIOLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Radiology" for _key, info, _reason in suggestions)
 
 
 # ---------------------------------------------------------------------------
@@ -960,6 +1103,100 @@ class TestProceduresRouting:
         suggestions = get_model_suggestions(self.PROCEDURES_TEXT)
         assert suggestions
         assert all(info.category != "Procedures" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Immunology, mental-health, and dentistry domains (issue #2358)
+# ---------------------------------------------------------------------------
+
+
+class TestImmunologyMentalHealthDentistryDomains:
+    EXPECTED_LABELS = {
+        "immunology": ["Allergen", "AllergicReaction", "Immunization", "Antibody"],
+        "mental_health": [
+            "PsychiatricSymptom",
+            "Diagnosis",
+            "Medication",
+            "Therapy",
+        ],
+        "dentistry": ["Tooth", "DentalCondition", "DentalProcedure", "Restoration"],
+    }
+    EXPECTED_CANONICAL_LABELS = {
+        "Allergen": "ALLERGEN",
+        "AllergicReaction": "FINDING",
+        "Immunization": "IMMUNIZATION",
+        "Antibody": "PROTEIN",
+        "PsychiatricSymptom": "PSYCH_SYMPTOM",
+        "Diagnosis": "PROBLEM",
+        "Medication": "MEDICATION",
+        "Therapy": "PROCEDURE",
+        "Tooth": "TOOTH",
+        "DentalCondition": "CONDITION",
+        "DentalProcedure": "PROCEDURE",
+        "Restoration": "PROCEDURE",
+    }
+
+    def test_domains_are_available_with_non_empty_label_sets(self):
+        domains = available_domains()
+        for domain, expected in self.EXPECTED_LABELS.items():
+            assert domain in domains
+            assert get_default_labels(domain) == expected
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(EXPECTED_CANONICAL_LABELS.items()),
+    )
+    def test_domain_labels_normalize_to_known_canonical_labels(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+
+    def test_mental_health_domain_has_no_sdoh_labels(self):
+        labels = {
+            normalize_canonical_label(label)
+            for label in self.EXPECTED_LABELS["mental_health"]
+        }
+        assert labels.isdisjoint({"SDOH", "SUBSTANCE_USE", "SOCIAL_DETERMINANT"})
+        assert "PSYCH_SYMPTOM" in labels
+        assert risk_level_for("PSYCH_SYMPTOM") == "high"
+
+    def test_specialty_categories_are_forward_registry_metadata(self):
+        from openmed.core.model_registry import CATEGORIES
+
+        expected_categories = {
+            "Immunology": {"ALLERGEN", "FINDING", "IMMUNIZATION", "PROTEIN"},
+            "MentalHealth": {
+                "PSYCH_SYMPTOM",
+                "PROBLEM",
+                "MEDICATION",
+                "PROCEDURE",
+            },
+            "Dentistry": {"TOOTH", "CONDITION", "PROCEDURE"},
+        }
+        for category, expected in expected_categories.items():
+            assert set(_CATEGORY_ENTITY_TYPES[category]) == expected
+            assert category not in CATEGORIES
+
+
+class TestImmunologyMentalHealthDentistryRouting:
+    REPRESENTATIVE_TEXTS = {
+        "Immunology": "Synthetic allergy workup notes anaphylaxis and elevated IgG",
+        "MentalHealth": "Synthetic note describes depression treated with an antidepressant",
+        "Dentistry": "Synthetic dental visit documents caries and a crown",
+    }
+
+    @pytest.mark.parametrize("category", REPRESENTATIVE_TEXTS)
+    def test_match_categories_routes_specialty(self, category):
+        categories = [
+            matched
+            for matched, _reason in _match_categories(
+                self.REPRESENTATIVE_TEXTS[category]
+            )
+        ]
+        assert category in categories
+
+    def test_get_model_suggestions_remains_live_model_fallback(self):
+        for text in self.REPRESENTATIVE_TEXTS.values():
+            assert get_model_suggestions(text)
 
 
 class TestNormalizeLabelIdempotency:

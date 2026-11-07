@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/ingestion_pipeline_stage.schema.json",
+  "schema_version": 1,
+  "title": "OpenMed ingestion pipeline stage manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy",
+    "component",
+    "component_version",
+    "input_digests",
+    "input_record_ids",
+    "job_id",
+    "output_digests",
+    "output_record_ids",
+    "parent_stage_manifest_ids",
+    "policy_digest",
+    "reason_code",
+    "recorded_at",
+    "schema_version",
+    "sequence",
+    "stage",
+    "stage_manifest_id",
+    "state"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "component": {"$ref": "#/$defs/controlled"},
+    "component_version": {"$ref": "#/$defs/version"},
+    "input_digests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "input_record_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/opaque_id"}
+    },
+    "job_id": {"$ref": "#/$defs/opaque_id"},
+    "output_digests": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "output_record_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/opaque_id"}
+    },
+    "parent_stage_manifest_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/opaque_id"}
+    },
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "reason_code": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/controlled"}]
+    },
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "schema_version": {"const": "1.0.0"},
+    "sequence": {"type": "integer", "minimum": 1, "maximum": 11},
+    "stage": {
+      "enum": [
+        "source_adaptation",
+        "privacy_policy",
+        "document_routing",
+        "extraction",
+        "assertion",
+        "temporality",
+        "relation_extraction",
+        "grounding",
+        "fact_normalization",
+        "validation",
+        "durable_writes"
+      ]
+    },
+    "stage_manifest_id": {"$ref": "#/$defs/opaque_id"},
+    "state": {
+      "enum": [
+        "success",
+        "partial",
+        "unknown",
+        "conflict",
+        "unsupported",
+        "denied",
+        "failure"
+      ]
+    }
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+    }
+  }
+}

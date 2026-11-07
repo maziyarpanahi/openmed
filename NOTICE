@@ -22,6 +22,13 @@ License: Apache-2.0
 Usage: Planned structured-data profiling and quasi-identifier discovery for
 tabular anonymization workflows.
 
+Name: KServe V2 inference protocol
+Source: https://github.com/kserve/open-inference-protocol
+License: Apache-2.0
+Usage: OpenMed ships a minimal, locally namespaced protobuf subset for the
+standard ModelInfer request and response wire fields. It provides a client-only
+Triton/KServe integration and does not bundle an inference server.
+
 Name: medspaCy ConText
 Source: https://github.com/medspacy/medspacy
 License: Apache-2.0
@@ -45,6 +52,29 @@ The complete ICU copyright and permission notice is retained in
 openmed/processing/resources/segmenter/ICU.txt and is copied into every
 standalone Indic or combined segmenter bundle as a declared, digest-bound
 license resource.
+
+Name: hijridate Umm al-Qura month starts
+Source: https://github.com/dralshehri/hijridate (version 2.6.0,
+src/hijridate/ummalqura.py)
+License: MIT
+Copyright: Copyright (c) Mohammed Alshehri
+Usage: The 1356-1450 AH Umm al-Qura month starts are stored as month lengths
+in openmed/core/data/calendars/hijri_umm_al_qura.json for lunar Hijri date
+shifting. The table records its source, retrieval date, local modifications,
+verification references, the MIT permission notice and a SHA-256 digest that
+the loader verifies.
+
+Name: py-nepali Bikram Sambat month lengths
+Source: https://github.com/opensource-nepal/py-nepali (version 1.2.0,
+nepali/date_converter.py)
+License: MIT
+Copyright: Copyright (c) 2018 The Python Packaging Authority (as stated in the
+upstream LICENSE file)
+Usage: The 2000-2083 BS month lengths are stored in
+openmed/core/data/calendars/bikram_sambat.json for Bikram Sambat date
+shifting. The table records its source, retrieval date, local modifications,
+verification references, the MIT permission notice and a SHA-256 digest that
+the loader verifies.
 
 Name: SHIELD clinical PHI corpus
 Source: https://github.com/susom/shield_dataset

@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
+from openmed.core.errors import InputError
+
 from . import gateway
 
 
@@ -39,6 +41,25 @@ def validate_input(
         max_chars=(default_limits.max_chars if max_length is None else max_length),
         max_bytes=default_limits.max_bytes,
     )
+    # Preserve the original generic validator contract: unlike the strict PII
+    # and service gateways, this compatibility helper accepts string-convertible
+    # values. Public PII entry points validate their input before reaching it.
+    if text is not None and not isinstance(
+        text,
+        (str, bytes, bytearray, memoryview),
+    ):
+        try:
+            text = str(text)
+        except Exception as exc:
+            raise gateway.InputValidationError(
+                "Input text cannot be converted to a string. Pass text or a "
+                "strict UTF-8 bytes-like value.",
+                code="text_type",
+                metadata={
+                    "type": type(text).__name__,
+                    "error_type": type(exc).__name__,
+                },
+            ) from exc
     text = gateway.normalize_text(
         text,
         limits=limits,
@@ -69,12 +90,18 @@ def validate_model_name(model_name: str) -> str:
         ValueError: If model name is invalid.
     """
     if not isinstance(model_name, str):
-        raise ValueError("Model name must be a string")
+        raise InputError(
+            "Model name must be a string. Pass a registry key, model ID, or "
+            "local model path."
+        )
 
     model_name = model_name.strip()
 
     if not model_name:
-        raise ValueError("Model name cannot be empty")
+        raise InputError(
+            "Model name cannot be empty. Pass a registry key, model ID, or "
+            "local model path."
+        )
 
     # Allow existing local model directories/files in addition to Hub-style ids.
     expanded_path = Path(model_name).expanduser()
@@ -85,21 +112,36 @@ def validate_model_name(model_name: str) -> str:
     if "/" in model_name:
         parts = model_name.split("/")
         if len(parts) != 2:
-            raise ValueError("Invalid model name format. Use 'org/model' or 'model'")
+            raise InputError(
+                "Invalid model name format. Use 'org/model', 'model', or an "
+                "existing local path."
+            )
 
         org, model = parts
         if not org or not model:
-            raise ValueError("Organization and model name cannot be empty")
+            raise InputError(
+                "Organization and model name cannot be empty. Use 'org/model' "
+                "with both components populated."
+            )
 
         # Validate characters
         if not re.match(r"^[a-zA-Z0-9\-_.]+$", org):
-            raise ValueError("Invalid characters in organization name")
+            raise InputError(
+                "Invalid characters in organization name. Use letters, numbers, "
+                "hyphens, underscores, or periods."
+            )
         if not re.match(r"^[a-zA-Z0-9\-_.]+$", model):
-            raise ValueError("Invalid characters in model name")
+            raise InputError(
+                "Invalid characters in model name. Use letters, numbers, "
+                "hyphens, underscores, or periods."
+            )
     else:
         # Just model name
         if not re.match(r"^[a-zA-Z0-9\-_.]+$", model_name):
-            raise ValueError("Invalid characters in model name")
+            raise InputError(
+                "Invalid characters in model name. Use letters, numbers, "
+                "hyphens, underscores, or periods."
+            )
 
     return model_name
 
@@ -117,10 +159,15 @@ def validate_confidence_threshold(threshold: float) -> float:
         ValueError: If threshold is invalid.
     """
     if not isinstance(threshold, (int, float)):
-        raise ValueError("Confidence threshold must be a number")
+        raise InputError(
+            "Confidence threshold must be a number. Pass a value from 0.0 to 1.0."
+        )
 
     if threshold < 0.0 or threshold > 1.0:
-        raise ValueError("Confidence threshold must be between 0.0 and 1.0")
+        raise InputError(
+            "Confidence threshold must be between 0.0 and 1.0. Pass a value in "
+            "that inclusive range."
+        )
 
     return float(threshold)
 
@@ -140,12 +187,17 @@ def validate_output_format(format_name: str) -> str:
     valid_formats = ["dict", "json", "html", "csv"]
 
     if not isinstance(format_name, str):
-        raise ValueError("Output format must be a string")
+        raise InputError(
+            "Output format must be a string. Pass one of: dict, json, html, csv."
+        )
 
     format_name = format_name.lower().strip()
 
     if format_name not in valid_formats:
-        raise ValueError(f"Unsupported output format. Valid formats: {valid_formats}")
+        raise InputError(
+            f"Unsupported output format. Pass one of: {valid_formats}.",
+            details={"supported": valid_formats},
+        )
 
     return format_name
 
@@ -164,13 +216,18 @@ def validate_batch_size(batch_size: int, max_batch_size: int = 100) -> int:
         ValueError: If batch size is invalid.
     """
     if not isinstance(batch_size, int):
-        raise ValueError("Batch size must be an integer")
+        raise InputError("Batch size must be an integer. Pass a positive whole number.")
 
     if batch_size <= 0:
-        raise ValueError("Batch size must be positive")
+        raise InputError(
+            "Batch size must be positive. Pass an integer greater than zero."
+        )
 
     if batch_size > max_batch_size:
-        raise ValueError(f"Batch size too large. Maximum: {max_batch_size}")
+        raise InputError(
+            f"Batch size too large. The maximum is {max_batch_size}; reduce the "
+            "batch size before retrying."
+        )
 
     return batch_size
 

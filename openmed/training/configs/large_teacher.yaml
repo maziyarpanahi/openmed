@@ -1,6 +1,7 @@
 schema_version: openmed.training.recipe.v1
 preset_name: large_teacher
 mode: C
+clinical_family_targets: [relex_med, relex_ade, link]
 backbone:
   model_ref: openmed/backbones/large-clinical-teacher
   revision: policy-spine-v1

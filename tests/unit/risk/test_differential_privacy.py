@@ -1,0 +1,271 @@
+"""Offline synthetic tests for aggregate differential privacy mechanisms."""
+
+from __future__ import annotations
+
+import math
+import random
+
+import pytest
+
+from openmed.risk import release_dp_aggregate
+from openmed.risk.differential_privacy import (
+    DifferentialPrivacy,
+    PrivacyBudget,
+    PrivacyBudgetExceeded,
+    gaussian_noise,
+    gaussian_privacy_delta,
+    gaussian_scale,
+    laplace_noise,
+    laplace_scale,
+    release_count,
+    release_histogram,
+    release_mean,
+    release_sum,
+    utility_report,
+)
+
+
+def test_package_alias_keeps_dispatch_release_available() -> None:
+    released = release_dp_aggregate(
+        4,
+        kind="count",
+        epsilon=1.0,
+        rng=_FixedRandom(0.5),
+    )
+
+    assert released == pytest.approx(4.0)
+
+
+def test_laplace_scale_and_seeded_noise_follow_sensitivity_formula() -> None:
+    sensitivity = 3.0
+    epsilon = 0.6
+    expected_scale = sensitivity / epsilon
+
+    assert laplace_scale(sensitivity, epsilon) == pytest.approx(expected_scale)
+    unit = 0.75
+    expected_noise = -expected_scale * math.log(1.0 - 2.0 * (unit - 0.5))
+    assert laplace_noise(sensitivity, epsilon, rng=_FixedRandom(unit)) == pytest.approx(
+        expected_noise
+    )
+
+
+def test_gaussian_scale_and_seeded_noise_follow_sensitivity_formula() -> None:
+    sensitivity = 2.0
+    epsilon = 0.8
+    delta = 1e-5
+    expected_scale = gaussian_scale(sensitivity, epsilon, delta)
+
+    assert gaussian_privacy_delta(expected_scale, sensitivity, epsilon) <= delta
+    assert gaussian_noise(
+        sensitivity,
+        epsilon,
+        delta,
+        rng=_FixedGaussian(1.5),
+    ) == pytest.approx(1.5 * expected_scale)
+
+
+def test_gaussian_count_release_charges_delta_and_scale() -> None:
+    delta = 1e-4
+    budget = PrivacyBudget(epsilon=1.0, delta=0.01)
+
+    released = release_count(
+        9,
+        epsilon=0.5,
+        delta=delta,
+        mechanism="gaussian",
+        budget=budget,
+        rng=_FixedGaussian(0.0),
+    )
+
+    expected_scale = gaussian_scale(1.0, 0.5, delta)
+    assert released == pytest.approx(9.0)
+    assert budget.spent_delta == pytest.approx(delta)
+    assert budget.spends[0].mechanism == "gaussian"
+    assert budget.spends[0].noise_scale == pytest.approx(expected_scale)
+    assert budget.spends[0].to_dict()["calibration_method"] == "analytic_gaussian"
+
+
+def test_analytic_gaussian_meets_independently_evaluated_profile(subtests):
+    for epsilon in [0.05, 0.1, 0.5, 0.99, 1, 2, 10, 20, 50]:
+        for delta in [1e-10, 1e-8, 1e-5, 1e-3]:
+            with subtests.test(epsilon=epsilon, delta=delta):
+                sigma = gaussian_scale(1.0, epsilon, delta)
+                # Independent direct equation from Balle/Wang Theorem 8. The production
+                # implementation uses scaled erfc; this ordinary range needs no scaling.
+                first = math.erfc((epsilon * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
+                second = (
+                    math.exp(epsilon)
+                    * math.erfc((epsilon * sigma + 0.5 / sigma) / math.sqrt(2))
+                    / 2
+                )
+                assert first - second <= delta
+                assert gaussian_privacy_delta(sigma, 1.0, epsilon) == pytest.approx(
+                    first - second, rel=1e-9, abs=1e-16
+                )
+                assert gaussian_scale(7.0, epsilon, delta) == pytest.approx(7 * sigma)
+
+
+def test_gaussian_old_high_epsilon_reproduction_and_utility():
+    old_sigma = math.sqrt(2 * math.log(1.25 / 1e-5)) / 20
+    assert gaussian_privacy_delta(old_sigma, 1.0, 20) > 1e-3
+    report = utility_report([0.5, 10, 20, 50], mechanism="gaussian", delta=1e-5)
+    for point in report.points:
+        assert gaussian_privacy_delta(point.noise_scale, 1, point.epsilon) <= 1e-5
+
+
+def test_gaussian_invalid_parameters_fail_closed(subtests):
+    for epsilon, delta in [
+        (0, 1e-5),
+        (float("inf"), 1e-5),
+        (float("nan"), 1e-5),
+        (1, 0),
+        (1, -1),
+        (1, 1),
+        (1, float("nan")),
+    ]:
+        with subtests.test(epsilon=epsilon, delta=delta):
+            with pytest.raises(ValueError):
+                gaussian_scale(1.0, epsilon, delta)
+
+
+def test_gaussian_extreme_scales_and_zero_sensitivity():
+    assert gaussian_scale(0, 20, 1e-5) == 0
+    assert gaussian_privacy_delta(0, 0, 20) == 0
+    assert gaussian_privacy_delta(0, 1, 20) == 1
+    assert gaussian_privacy_delta(gaussian_scale(1, 1000, 1e-10), 1, 1000) <= 1e-10
+    with pytest.raises(ValueError, match="not representable"):
+        gaussian_scale(1e308, 0.05, 1e-10)
+
+
+def test_gaussian_cancellation_uses_conservative_tail_not_false_zero():
+    sigma = gaussian_scale(1, 1e-20, 1e-20)
+    # The privacy-loss tail is an independent sufficient DP bound. In this
+    # extreme regime subtracting two almost equal CDFs would round to zero.
+    tail = math.erfc((1e-20 * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
+    assert tail <= 1e-20
+
+
+def test_budget_composes_queries_and_rejects_without_mutating() -> None:
+    budget = PrivacyBudget(epsilon=1.0, delta=0.1)
+
+    release_count(4, epsilon=0.4, budget=budget, rng=random.Random(3))
+    release_sum(
+        12,
+        epsilon=0.3,
+        sensitivity=2,
+        delta=0.02,
+        budget=budget,
+        rng=random.Random(4),
+    )
+
+    assert budget.spent_epsilon == pytest.approx(0.7)
+    assert budget.spent_delta == pytest.approx(0.02)
+    assert budget.query_count == 2
+    assert budget.remaining_epsilon == pytest.approx(0.3)
+
+    with pytest.raises(PrivacyBudgetExceeded) as caught:
+        release_count(8, epsilon=0.31, budget=budget, rng=random.Random(5))
+
+    assert caught.value.decision.reason == "epsilon exceeds budget"
+    assert budget.query_count == 2
+    assert budget.spent_epsilon == pytest.approx(0.7)
+
+
+def test_budget_rejects_delta_overrun_without_mutating() -> None:
+    budget = PrivacyBudget(epsilon=1.0, delta=0.01)
+
+    with pytest.raises(PrivacyBudgetExceeded) as caught:
+        release_count(
+            8,
+            epsilon=0.2,
+            delta=0.02,
+            mechanism="gaussian",
+            budget=budget,
+            rng=_FixedGaussian(0.0),
+        )
+
+    assert caught.value.decision.reason == "delta exceeds budget"
+    assert budget.query_count == 0
+
+
+def test_histogram_is_one_budget_query_and_keeps_only_aggregate_keys() -> None:
+    budget = PrivacyBudget(epsilon=1.0)
+    released = release_histogram(
+        {"low": 3, "high": 7},
+        epsilon=0.5,
+        budget=budget,
+        rng=random.Random(8),
+    )
+
+    assert set(released) == {"low", "high"}
+    assert len(released) == 2
+    assert budget.query_count == 1
+    assert budget.spends[0].aggregate == "histogram"
+    assert "3" not in repr(budget.to_dict())
+    assert "7" not in repr(budget.to_dict())
+
+
+def test_mean_can_derive_bounded_sensitivity() -> None:
+    budget = PrivacyBudget(epsilon=1.0)
+    released = release_mean(
+        50,
+        epsilon=0.5,
+        lower=0,
+        upper=100,
+        count=10,
+        budget=budget,
+        rng=_FixedRandom(0.5),
+    )
+
+    assert released == pytest.approx(50.0)
+    assert budget.spends[0].sensitivity == pytest.approx(10.0)
+
+
+def test_utility_report_exposes_error_tradeoff_without_source_values() -> None:
+    report = utility_report([0.5, 1.0, 2.0], sensitivity=2.0)
+
+    assert [point.noise_scale for point in report.points] == pytest.approx(
+        [4.0, 2.0, 1.0]
+    )
+    assert report.points[0].root_mean_square_error == pytest.approx(4.0 * math.sqrt(2))
+    assert "patient" not in repr(report.to_dict()).lower()
+
+
+def test_gaussian_requires_positive_delta_and_facade_shares_budget() -> None:
+    with pytest.raises(ValueError, match="delta greater than zero"):
+        release_count(2, epsilon=0.5, mechanism="gaussian", delta=0.0)
+
+    layer = DifferentialPrivacy(
+        epsilon=1.0,
+        rng=_FixedRandom(0.5),
+    )
+    assert layer.count(5, epsilon=0.4) == pytest.approx(5.0)
+    assert layer.budget.spent_epsilon == pytest.approx(0.4)
+
+
+class _FixedRandom:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def random(self) -> float:
+        return self.value
+
+
+class _FixedGaussian:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def gauss(self, mu: float, sigma: float) -> float:
+        return mu + self.value * sigma
+
+
+def test_small_epsilon_calibration_accounts_for_cdf_rounding(subtests):
+    for sensitivity in [0.1, 1.0, 7.0]:
+        with subtests.test(sensitivity=sensitivity):
+            epsilon, delta = 1e-20, 1e-5
+            sigma = gaussian_scale(sensitivity, epsilon, delta)
+            # Independently, delta(epsilon) >= delta(0) - (exp(epsilon) - 1).
+            # The zero-epsilon Gaussian profile uses erf directly, avoiding CDF
+            # subtraction; a violating lower bound proves under-calibration.
+            zero_profile = math.erf(sensitivity / (2.0 * sigma * math.sqrt(2.0)))
+            assert zero_profile - math.expm1(epsilon) <= delta

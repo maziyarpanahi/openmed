@@ -42,7 +42,7 @@ from typing import Sequence
 from unittest.mock import patch
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import assume, example, given, settings
 from hypothesis import strategies as st
 
 from openmed.core.pii import _shift_date, deidentify, extract_pii, reidentify
@@ -383,6 +383,44 @@ def test_every_sentinel_is_deterministically_covered_and_removed(label, value):
     )
 
 
+def test_malformed_iscii_preserves_clinical_text_and_identifier_spans(subtests):
+    for prefix in ["", "ïB"]:
+        for use_safety_sweep in [False, True]:
+            with subtests.test(prefix=prefix, use_safety_sweep=use_safety_sweep):
+                label, value = _PLANTED_IDENTIFIERS[0]
+                planted = ((label, value),)
+                # Enough high bytes to exercise the heuristic even with an ASCII suffix.
+                text = prefix + "³" * 80 + "ï Patient " + value + " BP 120/80"
+                with patch("openmed.analyze_text", _make_analyze_stub(planted)):
+                    extracted = extract_pii(text, model_name=_MODEL)
+                    result = deidentify(
+                        text,
+                        method="mask",
+                        model_name=_MODEL,
+                        use_safety_sweep=use_safety_sweep,
+                    )
+
+                _assert_text_equal(
+                    extracted.text, text, context="extraction source mismatch"
+                )
+                _assert_span_invariants(extracted.entities, extracted.text)
+                _assert_planted_spans_covered(
+                    extracted.entities, extracted.text, planted
+                )
+                _assert_text_equal(
+                    result.original_text, text, context="canonical source mismatch"
+                )
+                _assert_span_invariants(result.pii_entities, result.original_text)
+                _assert_planted_spans_covered(
+                    result.pii_entities, result.original_text, planted
+                )
+                _assert_text_equal(
+                    result.deidentified_text,
+                    text.replace(value, "[NAME]"),
+                    context="masked clinical text mismatch",
+                )
+
+
 def test_replace_heterogeneous_semantic_union_never_reuses_raw_components():
     """A greedy typed surrogate cannot preserve another label's raw value."""
     planted = (_PLANTED_IDENTIFIERS[1], _PLANTED_IDENTIFIERS[0])
@@ -510,6 +548,7 @@ def test_deidentify_mask_idempotent(doc):
         )
 
 
+@pytest.mark.slow
 @given(doc=planted_documents())
 def test_deidentify_deterministic_fixed_seed(doc):
     """A fixed seed yields byte-identical redacted output across runs."""
@@ -702,6 +741,7 @@ def test_repeated_dates_share_one_pipeline_shift(shift, keep_year):
     )
 
 
+@pytest.mark.slow
 @settings(deadline=None)
 @given(doc=long_planted_documents())
 def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
@@ -733,6 +773,7 @@ def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
         )
 
 
+@pytest.mark.slow
 @settings(deadline=None)
 @given(case=chunk_boundary_documents())
 def test_streaming_chunk_boundary_matches_single_pass(case):
@@ -777,6 +818,9 @@ def test_streaming_chunk_boundary_matches_single_pass(case):
 
 
 @settings(deadline=None)
+@example(text="³³³³ï")
+@example(text="ïB³³³³ï")
+@example(text="³³³³ð")
 @given(text=st.text(min_size=0, max_size=400))
 def test_deidentify_never_crashes_on_arbitrary_text(text):
     """The de-identification path never raises on any valid ``str``.

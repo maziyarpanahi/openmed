@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover - optional surface
     rprint = print
 
 from openmed import analyze_text, get_model_max_length, list_models
+from openmed.cli.agent_tools import add_agent_tools_command
 from openmed.cli.main import _format_models_size_table, build_models_size_report
 from openmed.core.config import (
     OpenMedConfig,
@@ -86,7 +87,7 @@ def _render_table(title: str, headers: List[str], rows: List[List[str]]) -> None
     Console().print(table)
 
 
-def build_app():
+def build_app(*, governance_service=None):
     """Build and return the Typer application."""
     _ensure_typer()
 
@@ -94,6 +95,11 @@ def build_app():
     models_app = typer.Typer(help="Model discovery commands.")
     cli_app = typer.Typer(help="Config utilities.")
     zero_app = typer.Typer(help="Zero-shot (GLiNER/GLiNER2) utilities.")
+
+    add_agent_tools_command(app, typer, governance_service=governance_service)
+    from openmed.cli.multimodal_preflight import add_multimodal_preflight_typer_command
+
+    add_multimodal_preflight_typer_command(app, typer)
 
     # ------------------------------------------------------------------
     # analyze

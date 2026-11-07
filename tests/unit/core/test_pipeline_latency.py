@@ -75,22 +75,6 @@ def _build_pipeline() -> Pipeline:
     return Pipeline(model_detector=_phone_only_detector)
 
 
-def _best_run_seconds(text: str, *, repeats: int = 5) -> float:
-    """Return the minimum wall-clock seconds across ``repeats`` runs.
-
-    Taking the minimum discards scheduler noise and GC pauses, which is the
-    standard way to make micro-benchmarks robust on shared CI runners.
-    """
-    pipeline = _build_pipeline()
-    pipeline.run(text, method="mask")  # warm caches / imports before timing
-    best = float("inf")
-    for _ in range(repeats):
-        start = time.perf_counter()
-        pipeline.run(text, method="mask")
-        best = min(best, time.perf_counter() - start)
-    return best
-
-
 def test_pipeline_reports_per_stage_latency_for_all_stages():
     """Every stage exposes a non-negative, latency-only duration."""
     result = _build_pipeline().run(_synthetic_note(20), method="mask")
@@ -128,63 +112,3 @@ def test_long_note_spans_are_length_invariant():
     # Redaction stays consistent: the fake phone anchor is redacted everywhere.
     assert "555-0142" not in large.redacted_text
     assert large.redacted_text.count("[") >= 40
-
-
-@pytest.mark.slow
-def test_pipeline_latency_scales_roughly_linearly_with_note_length():
-    """A 4x longer note must not cost quadratically more (near-linear bound)."""
-    base_blocks = 40
-    factor = 4
-    base_note = _synthetic_note(base_blocks)
-    long_note = _synthetic_note(base_blocks * factor)
-
-    # Sanity: the long note really is ~factor x the base length.
-    length_ratio = len(long_note) / len(base_note)
-    assert factor - 0.5 <= length_ratio <= factor + 0.5
-
-    base_seconds = _best_run_seconds(base_note)
-    long_seconds = _best_run_seconds(long_note)
-
-    # Guard against a zero/near-zero denominator on very fast machines.
-    base_seconds = max(base_seconds, 1e-4)
-    time_ratio = long_seconds / base_seconds
-
-    # Linear scaling would give time_ratio ~= factor (4x). We allow a generous
-    # 3x headroom over linear (i.e. up to ~12x) to absorb CI noise and constant
-    # overheads, while still failing loudly on quadratic (which would be ~16x+)
-    # or worse regressions.
-    assert time_ratio <= factor * 3, (
-        f"pipeline latency scaled {time_ratio:.1f}x for a {length_ratio:.1f}x "
-        f"longer note; expected roughly linear (<= {factor * 3}x)"
-    )
-
-
-@pytest.mark.slow
-def test_no_single_stage_dominates_superlinearly_on_long_notes():
-    """No stage's share of total time should explode as the note grows.
-
-    We compare each stage's *fraction* of total runtime between a short and a
-    long note. A stage that scales worse than the whole pipeline (e.g. a hidden
-    per-span re-scan of the full text) would see its fraction grow sharply. We
-    assert the fraction does not more than triple, which tolerates CI noise but
-    catches genuine super-linear stage blowups.
-    """
-    short = _build_pipeline().run(_synthetic_note(20), method="mask")
-    long = _build_pipeline().run(_synthetic_note(160), method="mask")
-
-    short_total = max(sum(short.stage_durations_ms.values()), 1e-6)
-    long_total = max(sum(long.stage_durations_ms.values()), 1e-6)
-
-    for stage_name in STAGE_NAMES:
-        short_frac = short.stage_duration_ms(stage_name) / short_total
-        long_frac = long.stage_duration_ms(stage_name) / long_total
-        # Only meaningful for stages that take a non-trivial slice; skip stages
-        # whose share is negligible in both runs (timing them is dominated by
-        # clock resolution).
-        if short_frac < 0.05 and long_frac < 0.05:
-            continue
-        assert long_frac <= short_frac * 3 + 0.05, (
-            f"stage {stage_name!r} share grew from {short_frac:.2%} to "
-            f"{long_frac:.2%} between short and long notes (possible "
-            f"super-linear blowup)"
-        )

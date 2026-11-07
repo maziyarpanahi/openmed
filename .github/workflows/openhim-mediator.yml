@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -25,7 +29,7 @@ jobs:
       run:
         working-directory: examples/openhim-mediator
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Start recorded core fixture
         run: docker compose --profile fixture up -d openhim-fixture

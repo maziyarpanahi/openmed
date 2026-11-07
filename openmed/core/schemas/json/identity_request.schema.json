@@ -1,0 +1,34 @@
+{
+  "$defs": {
+    "sourceKey": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_type": {"enum": ["patient", "encounter"]},
+        "local_key": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+        "schema_version": {"const": "1.0.0"},
+        "source_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+      },
+      "required": ["entity_type", "local_key", "schema_version", "source_id"],
+      "type": "object"
+    }
+  },
+  "$id": "https://openmed.dev/schemas/v3/identity/request.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attributes": {"items": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "entity_type": {"enum": ["patient", "encounter"]},
+    "policy_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "policy_version": {"pattern": "^[1-9][0-9]*(\\.[0-9]+){0,2}$", "type": "string"},
+    "purpose": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "request_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "requested_at": {"format": "date-time", "type": "string"},
+    "role": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_keys": {"items": {"$ref": "#/$defs/sourceKey"}, "minItems": 1, "type": "array", "uniqueItems": true}
+  },
+  "required": ["attributes", "entity_type", "policy_id", "policy_version", "purpose", "request_id", "requested_at", "role", "schema_version", "source_keys"],
+  "schema_version": 1,
+  "title": "OpenMedIdentityResolutionRequest",
+  "type": "object"
+}

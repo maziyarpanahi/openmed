@@ -7,7 +7,7 @@ preference for billable leaf codes over their 3-character category.
 
 from __future__ import annotations
 
-from openmed.core.labels import CONDITION
+from openmed.core.labels import CANCER, CONDITION, DISEASE, PATHOLOGY
 
 from ..registry import register_linker
 from ..types import Candidate
@@ -20,6 +20,7 @@ class Icd10cmLinker(VocabLinker):
     system = "ICD10CM"
     key = "icd10cm"
     required_label = CONDITION
+    compatible_labels = frozenset({CANCER, DISEASE, PATHOLOGY})
 
     def _format_code(self, code: str) -> str:
         code = str(code).strip().upper()

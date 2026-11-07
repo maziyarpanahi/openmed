@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "forbidden_raw_text": "SYNTHETIC_RAW_PHI_SENTINEL_1354",
+  "cases": [
+    {
+      "class": "OpenMedError",
+      "code": "openmed_error",
+      "message": "OpenMed could not complete the request. Retry once and report the error code if it recurs.",
+      "details": {"label": "SYNTHETIC_OPERATION"}
+    },
+    {
+      "class": "InputError",
+      "code": "input_error",
+      "message": "The request input is malformed. Pass text in the documented format and retry.",
+      "details": {"offset": 12}
+    },
+    {
+      "class": "ConfigurationError",
+      "code": "configuration_error",
+      "message": "The OpenMed configuration is incomplete. Configure the required option and retry.",
+      "details": {"label": "SYNTHETIC_OPTION"}
+    },
+    {
+      "class": "CapabilityError",
+      "code": "capability_error",
+      "message": "The requested capability is unavailable. Select an installed backend or install the required extra.",
+      "details": {"label": "SYNTHETIC_BACKEND"}
+    },
+    {
+      "class": "MissingExtraError",
+      "code": "missing_extra",
+      "message": "The optional runtime is unavailable. Install it with `pip install openmed[mcp]` and retry.",
+      "details": {"label": "SYNTHETIC_EXTRA"}
+    },
+    {
+      "class": "ModelLoadError",
+      "code": "model_load_error",
+      "message": "The model could not be loaded. Verify the model identifier and local files, then retry.",
+      "details": {"label": "SYNTHETIC_MODEL"}
+    },
+    {
+      "class": "PolicyError",
+      "code": "policy_error",
+      "message": "The request violates the selected privacy policy. Choose a permitted action or update the policy configuration.",
+      "details": {"label": "SYNTHETIC_POLICY"}
+    },
+    {
+      "class": "BudgetExceededError",
+      "code": "budget_exceeded",
+      "message": "The request exceeded its configured budget. Reduce the input or increase the request budget, then retry.",
+      "details": {"count": 42}
+    },
+    {
+      "class": "InternalError",
+      "code": "internal_error",
+      "message": "OpenMed encountered an internal invariant failure. Stop processing and report the error code.",
+      "details": {"hash": "sha256:synthetic"}
+    },
+    {
+      "class": "InferenceError",
+      "code": "inference_error",
+      "message": "The inference backend returned an invalid result. Retry with a compatible model and report the error code if it recurs.",
+      "details": {"count": 3}
+    }
+  ]
+}

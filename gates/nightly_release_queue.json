@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "weekly_themes": {
+    "monday": "language-packs",
+    "tuesday": "clinical-privacy",
+    "wednesday": "quantized-edge",
+    "thursday": "tier-coverage",
+    "friday": "indic-privacy"
+  },
+  "candidates": [
+    {
+      "id": "pii-french-small-onnx",
+      "weekday": "monday",
+      "theme": "language-packs",
+      "source_model_id": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-german-small-onnx",
+      "weekday": "monday",
+      "theme": "language-packs",
+      "source_model_id": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-clinicale5-small-onnx",
+      "weekday": "tuesday",
+      "theme": "clinical-privacy",
+      "source_model_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 33000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-fastclinical-small-onnx",
+      "weekday": "tuesday",
+      "theme": "clinical-privacy",
+      "source_model_id": "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 82000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-french-small-int8",
+      "weekday": "wednesday",
+      "theme": "quantized-edge",
+      "source_model_id": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1-onnx-int8",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "int8",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-german-small-int8",
+      "weekday": "wednesday",
+      "theme": "quantized-edge",
+      "source_model_id": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1-onnx-int8",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "int8",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-bioclinicalbert-base-onnx",
+      "weekday": "thursday",
+      "theme": "tier-coverage",
+      "source_model_id": "OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1-onnx",
+      "family": "PII",
+      "tier": "Base",
+      "param_count": 110000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-portuguese-small-onnx",
+      "weekday": "thursday",
+      "theme": "tier-coverage",
+      "source_model_id": "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-hindi-small-onnx",
+      "weekday": "friday",
+      "theme": "indic-privacy",
+      "source_model_id": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Small-44M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    },
+    {
+      "id": "pii-telugu-small-onnx",
+      "weekday": "friday",
+      "theme": "indic-privacy",
+      "source_model_id": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Small-44M-v1",
+      "repo_id": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Small-44M-v1-onnx",
+      "family": "PII",
+      "tier": "Small",
+      "param_count": 44000000,
+      "format": "onnx",
+      "fixture_path": "openmed/eval/golden/fixtures/multilingual.json",
+      "suite": "golden-pii-multilingual"
+    }
+  ]
+}

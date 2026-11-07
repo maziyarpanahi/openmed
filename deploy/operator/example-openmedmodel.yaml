@@ -1,0 +1,19 @@
+apiVersion: openmed.ai/v1alpha1
+kind: OpenMedModel
+metadata:
+  name: openmed-service
+  namespace: openmed
+spec:
+  family: PII
+  version: OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1
+  tier: Small
+  replicas: 2
+  targetRef:
+    name: openmed-service
+    containerName: openmed-service
+  rolloutStrategy:
+    type: RollingUpdate
+    maxUnavailable: 0
+    maxSurge: 1
+    rollbackOnFailure: true
+    progressDeadlineSeconds: 600

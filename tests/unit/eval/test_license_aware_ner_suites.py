@@ -125,38 +125,37 @@ def test_naamapadam_official_token_tags_load_hi_and_te() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("source_label", "expected"),
-    [("PER", PERSON), ("B-LOC", LOCATION), ("I-ORG", ORGANIZATION)],
-)
-def test_naamapadam_per_loc_org_mapping(source_label: str, expected: str) -> None:
-    mapping = map_naamapadam_label(source_label, language="hi")
+def test_naamapadam_per_loc_org_mapping(subtests) -> None:
+    for source_label, expected in [
+        ("PER", PERSON),
+        ("B-LOC", LOCATION),
+        ("I-ORG", ORGANIZATION),
+    ]:
+        with subtests.test(source_label=source_label, expected=expected):
+            mapping = map_naamapadam_label(source_label, language="hi")
 
-    assert mapping.canonical_label == expected
-    assert mapping.mapped is True
+            assert mapping.canonical_label == expected
+            assert mapping.mapped is True
 
 
-@pytest.mark.parametrize(
-    ("suite", "path_env"),
-    [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)],
-)
-def test_unconfigured_suites_auto_skip_with_clear_message(
-    suite: str,
-    path_env: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(path_env, raising=False)
+def test_unconfigured_suites_auto_skip_with_clear_message(subtests) -> None:
+    for suite, path_env in [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)]:
+        with subtests.test(suite=suite, path_env=path_env):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(path_env, raising=False)
 
-    with pytest.warns(UserWarning, match=rf"Skipping {suite}: {path_env} is not set"):
-        assert load_suite_fixtures(suite) == []
+                with pytest.warns(
+                    UserWarning, match=rf"Skipping {suite}: {path_env} is not set"
+                ):
+                    assert load_suite_fixtures(suite) == []
 
-    metadata = suite_metadata(suite)
-    assert metadata["availability"] == {
-        "configured": False,
-        "path_env": path_env,
-        "reason": f"{path_env} is not set",
-        "status": "skipped",
-    }
+                metadata = suite_metadata(suite)
+                assert metadata["availability"] == {
+                    "configured": False,
+                    "path_env": path_env,
+                    "reason": f"{path_env} is not set",
+                    "status": "skipped",
+                }
 
 
 def test_suites_run_from_environment_paths(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,20 +175,21 @@ def test_suites_run_from_environment_paths(monkeypatch: pytest.MonkeyPatch) -> N
     assert naamapadam[0].language == "hi"
 
 
-@pytest.mark.parametrize(
-    ("suite", "path_env"),
-    [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)],
-)
 def test_configured_empty_suites_fail_instead_of_silently_passing(
-    suite: str,
-    path_env: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    subtests, tmp_path
 ) -> None:
-    monkeypatch.setenv(path_env, str(tmp_path))
+    case_root = tmp_path
+    for suite, path_env in [(CMEEE, CMEEE_PATH_ENV), (NAAMAPADAM, NAAMAPADAM_PATH_ENV)]:
+        with subtests.test(suite=suite, path_env=path_env):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv(path_env, str(tmp_path))
 
-    with pytest.raises(ValueError, match="configured.*contains no benchmark records"):
-        load_suite_fixtures(suite)
+                with pytest.raises(
+                    ValueError, match="configured.*contains no benchmark records"
+                ):
+                    load_suite_fixtures(suite)
 
 
 def test_cross_script_harness_reports_per_suite_micro_f1() -> None:
@@ -237,10 +237,24 @@ def test_default_registry_contains_both_license_aware_suites() -> None:
 
 
 def test_no_real_benchmark_payload_filenames_are_committed() -> None:
+    """Fail if a benchmark-named payload is committed without self-attestation.
+
+    Scope, stated plainly: this checks the ``metadata.synthetic`` attestation,
+    not the content. A file carrying real rows with ``synthetic: true`` would
+    pass here. The CBLUE fixtures are additionally content-locked by
+    ``test_committed_fixtures_are_reproducible_from_the_generator``, which
+    compares them byte for byte against a generator that reads no external
+    state; that test, not this one, is what makes their content provable.
+    """
+
     repo_root = Path(__file__).resolve().parents[3]
-    benchmark_name = re.compile(r"cblue|cmeee|naamapadam|indicglue", re.IGNORECASE)
+    benchmark_name = re.compile(
+        r"cblue|cmeee|cmeie|chip[-_]?cdn|chip[-_]?ctc|imcs|kuake|naamapadam|indicglue",
+        re.IGNORECASE,
+    )
     payload_suffixes = {".bio", ".conll", ".csv", ".iob", ".json", ".jsonl", ".tsv"}
     offenders: list[str] = []
+    scanned: list[str] = []
 
     for scan_root in (repo_root / "openmed", repo_root / "tests"):
         for path in scan_root.rglob("*"):
@@ -250,11 +264,42 @@ def test_no_real_benchmark_payload_filenames_are_committed() -> None:
                 or benchmark_name.search(path.name) is None
             ):
                 continue
+            # as_posix() so the comparison below holds on Windows, where
+            # str(Path) is backslash-separated. Without it this guard fails on
+            # that platform whether or not the invariant holds, which would
+            # make it report a state it never actually checked.
+            relative = path.relative_to(repo_root).as_posix()
+            scanned.append(relative)
             if _is_synthetic_payload(path):
                 continue
-            offenders.append(str(path.relative_to(repo_root)))
+            offenders.append(relative)
 
     assert offenders == []
+    # A no-vendor guard that matches nothing proves nothing. Every committed
+    # benchmark-named payload, including each CBLUE task fixture, must be in
+    # scope and must have been vetted as synthetic above.
+    assert set(scanned) >= {
+        "openmed/eval/fixtures/cblue_chip_cdn_synthetic.jsonl",
+        "openmed/eval/fixtures/cblue_imcs_v2_ner_synthetic.jsonl",
+        "openmed/eval/fixtures/cmeee_zh_synthetic.jsonl",
+        "tests/unit/eval/fixtures/multilingual_ner/cmeee.jsonl",
+    }
+
+
+def test_no_vendor_guard_rejects_a_non_synthetic_payload(tmp_path: Path) -> None:
+    synthetic = tmp_path / "cblue_chip_cdn_synthetic.jsonl"
+    synthetic.write_text(
+        json.dumps({"text": "甲区甲型热症", "metadata": {"synthetic": True}}) + "\n",
+        encoding="utf-8",
+    )
+    vendored = tmp_path / "cblue_chip_cdn_test.jsonl"
+    vendored.write_text(
+        json.dumps({"text": "甲区甲型热症", "metadata": {"synthetic": False}}) + "\n",
+        encoding="utf-8",
+    )
+
+    assert _is_synthetic_payload(synthetic) is True
+    assert _is_synthetic_payload(vendored) is False
 
 
 def _identity_runner(

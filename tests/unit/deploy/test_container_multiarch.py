@@ -13,11 +13,25 @@ ARM_LATENCY_DOCS = ROOT / "docs" / "benchmarks" / "arm-latency.md"
 DOCS = ROOT / "docs" / "deploy" / "multi-arch.md"
 MKDOCS = ROOT / "mkdocs.yml"
 
+LOWERCASE_IMAGE_NAME_STEP = (
+    """owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" """
+    """| tr '[:upper:]' '[:lower:]')\n"""
+    """          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV\""""
+)
+LOWERCASE_IMAGE_NAME_OUTPUT = (
+    'echo "image_name=ghcr.io/${owner_repo}" >> "$GITHUB_OUTPUT"'
+)
+
 PINNED_PYTHON_BASE_RE = re.compile(
     r"^FROM(?: --platform=\$TARGETPLATFORM)? "
-    r"python:3\.11-slim@sha256:[0-9a-f]{64}$",
+    r"python:3\.11-slim@sha256:[0-9a-f]{64}(?: AS [A-Za-z0-9._-]+)?$",
     re.MULTILINE,
 )
+FROM_IMAGE_RE = re.compile(
+    r"^FROM(?: --platform=\S+)? (?P<image>\S+)(?: AS \S+)?$",
+    re.IGNORECASE | re.MULTILINE,
+)
+PINNED_IMAGE_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
 
 
 def test_deployment_dockerfile_uses_digest_pinned_python_base():
@@ -28,14 +42,51 @@ def test_deployment_dockerfile_uses_digest_pinned_python_base():
 
 def test_root_dockerfile_keeps_compose_base_digest_pinned():
     content = ROOT_DOCKERFILE.read_text(encoding="utf-8")
+    stage_images = [match.group("image") for match in FROM_IMAGE_RE.finditer(content)]
 
     assert PINNED_PYTHON_BASE_RE.search(content)
+    assert stage_images
+    assert all(PINNED_IMAGE_RE.fullmatch(image) for image in stage_images)
+
+
+def test_published_and_scanned_container_runtime_recipes_match() -> None:
+    root = ROOT_DOCKERFILE.read_text(encoding="utf-8")
+    deploy = DEPLOY_DOCKERFILE.read_text(encoding="utf-8")
+    assert [match.group("image") for match in FROM_IMAGE_RE.finditer(root)] == [
+        match.group("image") for match in FROM_IMAGE_RE.finditer(deploy)
+    ]
+    # Platform headers may differ; all runtime instructions must stay aligned.
+    assert root[root.index("ENV ") :] == deploy[deploy.index("ENV ") :]
+
+
+def test_runtime_images_omit_unrelated_sources_and_remove_installer() -> None:
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        assert "COPY . /app" not in source
+        assert "COPY openmed /app/openmed" in source
+        assert (
+            "COPY gates/baseline.json gates/registry_state.json /app/gates/" in source
+        )
+        assert "COPY eval/redteam/corpus/adversarial_phi.jsonl" in source
+        assert '"pip==26.2.0"' in source
+        assert "python -m pip check" in source
+        assert "python -m pip uninstall --yes pip" in source
+        assert source.index("python -m pip check") < source.index(
+            "python -m pip uninstall --yes pip"
+        )
+
+
+def test_runtime_uuid_pin_uses_available_repository_revision() -> None:
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        assert '"libuuid1=2.42.4-1"' in source
+        assert "libuuid1=2.42.3-1" not in source
 
 
 def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():
     content = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "docker/build-push-action@v6" in content
+    assert "docker/build-push-action@" in content
     assert "platforms: linux/amd64,linux/arm64" in content
     assert "docker buildx imagetools inspect" in content
     assert "grep -Eq 'Platform:[[:space:]]+linux/amd64'" in content
@@ -88,3 +139,25 @@ def test_multiarch_docs_are_in_mkdocs_nav():
     content = MKDOCS.read_text(encoding="utf-8")
 
     assert "deploy/multi-arch.md" in content
+
+
+def test_multiarch_workflow_lowercases_the_ghcr_image_reference():
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    # GHCR rejects uppercase repository names, so the workflow folds
+    # ``GITHUB_REPOSITORY`` before it builds any image reference. Without this
+    # every fork of a capitalised owner fails with "repository name must be
+    # lowercase".
+    assert LOWERCASE_IMAGE_NAME_STEP in content
+    assert content.index(LOWERCASE_IMAGE_NAME_STEP) < content.index(
+        "${IMAGE_NAME}:sha-"
+    )
+    assert LOWERCASE_IMAGE_NAME_OUTPUT in content
+
+
+def test_multiarch_attestation_uses_the_lowercase_step_output() -> None:
+    content = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "id: image-name" in content
+    assert "subject-name: ${{ steps.image-name.outputs.image_name }}" in content
+    assert "subject-name: ${{ env.IMAGE_NAME }}" not in content

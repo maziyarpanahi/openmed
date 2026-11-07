@@ -20,7 +20,7 @@ public struct DeIDScreen: View {
             ScanStageHeader(
                 eyebrow: ScanStage.deidentify.eyebrow,
                 spans: [.plain("Redact, then "), .accent("compare"), .plain(".")],
-                subhead: "Three local PII engines mask the same note. Yellow = detected PHI.",
+                subhead: "Four local PII engines can mask the same note. Yellow = detected PHI.",
                 scale: .lg
             )
 
@@ -52,7 +52,10 @@ public struct DeIDScreen: View {
                             OMChip(
                                 engine.toggleTitle,
                                 tone: flow.piiEngine == engine ? .ink : .neutral,
-                                action: { flow.piiEngine = engine; HapticsCenter.selection() }
+                                action: {
+                                    flow.piiEngine = engine
+                                    HapticsCenter.selection()
+                                }
                             )
                         }
                     }

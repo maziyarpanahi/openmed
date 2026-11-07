@@ -9,7 +9,7 @@ Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada 
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@ Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada 
 </p>
 
 <p>
-  <b>Uendeshaji unaotanguliza matumizi ya ndani</b> &nbsp;·&nbsp; <b>Lugha 33 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Maingizo 2,266 ya manifesti</b> &nbsp;·&nbsp; <b>Lugha 35 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -89,6 +89,26 @@ Modeli ya NER ya kliniki hutumia runtime ya ndani baada ya vipengee vinavyohitaj
 
 ---
 
+## Mfano wa muhtasari wa kliniki kwa sekunde 30
+
+Kutoka kwenye nakala ya msimbo, endesha onyesho la mikataba ya kiolesura kwa data
+sintetiki kwa kutumia CPU pekee:
+
+```bash
+python examples/v30_clinical_brief.py
+# Hiari: --model mlx; modeli ya toleo lililowekwa ihifadhiwe mapema kwenye Apple silicon.
+```
+
+Mfano huondoa utambulisho kwenye dokezo lililojumuishwa, hutoa na kuoanisha dhana,
+kisha huonyesha muhtasari wenye marejeo, matokeo ya ukaguzi na pakiti ya mapitio
+isiyo na thamani ghafi. **Watoa huduma wa NER/NLI ni vibadala vya majaribio ya
+data sintetiki, si modeli zilizofunzwa wala uthibitisho wa kliniki.** Haukubali
+madokezo ya nje. MLX inaweza kukataa matokeo yasiyoungwa mkono; haipiti ukaguzi
+wa usalama. Angalia [mwongozo](docs/clinical/clinical-brief.md) na
+[hati ya onyesho](docs/demo/clinical-brief.md) kwa mipaka na usanidi wa ndani.
+
+---
+
 ## Unajenga kwa wakala?
 
 Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia
@@ -125,7 +145,7 @@ Kwenye maunzi ya Apple yanayoungwa mkono, OpenMed inaweza kutumia **MLX** na **[
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -173,11 +193,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Kisha tumia toleo lisilobadilika la OpenMed `v2.0.0`:
+Kisha tumia toleo lisilobadilika la OpenMed `v3.2.0`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.2.0")
 }
 ```
 
@@ -304,7 +324,7 @@ Mfano wa matokeo:
 **Huduma ya REST**
 
 ```bash
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `GET /health` · `POST /analyze` · `POST /pii/extract` ·
@@ -432,17 +452,18 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 34 zinazotumika; 33 zikitumia modeli)
+## PII ya lugha nyingi (njia 42 zinazotumika; 35 zikitumia modeli)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 34 ya lugha za PII**:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
-`th`, `tr`, `uk`, `xh`, `zh` na `zu`, pamoja na checkpoint
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 40 ya lugha za PII**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`,
+`ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+`th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
 katalogi iliyosajiliwa ya modeli za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
 chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
 na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia nne za ziada (`gu`, `kn`, `ml`
-na `pa`) na inaweza pia kuhudumia Kiassam, Kibengali, Kihindi, Kimarathi, Kiodia, Kitamil na Kitelugu.
+iliyosanidiwa na mtumiaji inaweza kuhudumia Kiassam, Kibengali, Kigujarati,
+Kihindi, Kikannada, Kimalayalam, Kimarathi, Kiodia, Kipunjabi, Kitamil na
+Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
@@ -470,7 +491,7 @@ pamoja wa pipeline na majibu ya hitilafu yaliyounganishwa.
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # au kwa Docker
 docker build -t openmed:local .
@@ -507,9 +528,9 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Maelezo ya Toleo la OpenMed 2.0.0](docs/release/v2.0.0.md) | [Maelezo ya Toleo la OpenMed 1.9.1](docs/release/v1.9.1.md) | [Mifano](docs/examples.md) |
+| [Mwongozo wa Uhamiaji wa OpenMed 3.2.0](docs/migration/3.1-to-3.2.md) | [Maelezo ya Toleo la OpenMed 2.2.0](docs/release/v2.2.0.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
-| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Detector](docs/plugin-sdk.md) |
+| [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Upanuzi](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |
 
 ---
@@ -537,6 +558,7 @@ Michango inakaribishwa: ripoti za hitilafu, maombi ya vipengele na PR. Soma
 - [Fungua issue](https://github.com/maziyarpanahi/openmed/issues)
 - [Mwongozo wa kuchangia](CONTRIBUTING.md) ·
   [Kanuni za Maadili](CODE_OF_CONDUCT.md) ·
+  [Wadumishaji](MAINTAINERS.md) ·
   [Sera ya usalama](SECURITY.md)
 - **Tafsiri zinakaribishwa**: saidia kukamilisha README za lugha nyingine.
 
@@ -588,7 +610,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

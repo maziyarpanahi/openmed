@@ -1,0 +1,49 @@
+{{- if .Values.journey.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openmed-service.fullname" . }}-journey-migrate-{{ .Release.Revision }}
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: journey-migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.journey.migration.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.journey.migration.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "openmed-service.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: journey-migration
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/python3", "-m", "openmed.deploy.journey", "migrate"]
+          env:
+            - name: OPENMED_JOURNEY_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.journey.database.secretName | quote }}
+                  key: {{ .Values.journey.database.secretKey | quote }}
+            - name: OPENMED_JOURNEY_SCHEMA
+              value: {{ .Values.journey.schema | quote }}
+          resources:
+            {{- toYaml .Values.journey.migration.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

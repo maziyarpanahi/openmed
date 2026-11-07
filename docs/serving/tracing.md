@@ -5,6 +5,11 @@ request text, model output text, or PHI-bearing bodies into spans. Tracing is
 off by default. If no tracing environment variable is set, the service does not
 create an OTLP exporter and does not push telemetry to a collector.
 
+This service flag is independent from the core privacy-pipeline instrumentation.
+To trace the ten `Pipeline` stages or collect their aggregate histograms, see
+[Core Pipeline Observability](../core-observability.md). Enabling either surface
+does not implicitly enable the other.
+
 ## Enable Tracing
 
 Install the service extra:
@@ -17,14 +22,14 @@ Enable in-process spans without exporting them:
 
 ```bash
 OPENMED_SERVICE_TRACING_ENABLED=true \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Enable OTLP export over HTTP:
 
 ```bash
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Setting `OPENMED_SERVICE_OTLP_ENDPOINT` is treated as an explicit tracing
@@ -36,7 +41,7 @@ Optional exporter settings:
 OPENMED_SERVICE_OTLP_HEADERS=Authorization=Bearer-token,X-Scope=clinic-a \
 OPENMED_SERVICE_OTLP_TIMEOUT_SECONDS=5 \
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 ## Span Shape

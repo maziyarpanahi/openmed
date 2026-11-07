@@ -5,59 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; connect-src 'self' blob:; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:"
+    />
+    <meta
       name="description"
-      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+      content="Explore PII redaction, clinical entities, relations, and evidence-grounded chat with Maple running locally through WebGPU."
     />
-    <link
-      rel="canonical"
-      href="https://openmed.life/docs/demo/web/"
-    />
+    <link rel="canonical" href="https://openmed.life/docs/demo/web/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="OpenMed" />
-    <meta
-      property="og:title"
-      content="OpenMed browser PII benchmark"
-    />
+    <meta property="og:title" content="Maple clinical studio for WebGPU" />
     <meta
       property="og:description"
-      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+      content="Explore PII redaction, clinical entities, relations, and evidence-grounded chat with Maple running locally through WebGPU."
     />
     <meta property="og:url" content="https://openmed.life/docs/demo/web/" />
     <meta property="og:image" content="https://openmed.life/og.png" />
     <meta property="og:image:alt" content="OpenMed local-first healthcare NLP" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="OpenMed browser PII benchmark"
-    />
+    <meta name="twitter:title" content="Maple clinical studio for WebGPU" />
     <meta
       name="twitter:description"
-      content="Configure same-origin runtime and model assets, then run a synthetic OpenMed PII benchmark locally in the browser."
+      content="Explore PII redaction, clinical entities, relations, and evidence-grounded chat with Maple running locally through WebGPU."
     />
     <meta name="twitter:image" content="https://openmed.life/og.png" />
     <meta name="twitter:image:alt" content="OpenMed local-first healthcare NLP" />
     <link rel="icon" href="../../assets/openmed-favicon.svg" />
     <link rel="stylesheet" href="../../stylesheets/openmed-system.css" />
     <link rel="stylesheet" href="../../stylesheets/openmed-standalone.css" />
-    <title>OpenMed browser PII benchmark</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Maple clinical studio for WebGPU</title>
   </head>
   <body>
-    <a class="om-skip-link" href="#main">Skip to content</a>
+    <a class="om-skip-link" href="#main">Skip to studio</a>
     <header class="om-site-header">
       <div class="om-site-header__inner">
         <a class="om-brand" href="/docs/" aria-label="OpenMed documentation">
-          <img
-            src="../../assets/openmed-mark.svg"
-            alt=""
-            width="28"
-            height="28"
-          />
+          <img src="../../assets/openmed-mark.svg" alt="" width="28" height="28" />
           <span>openmed</span>
-          <span class="om-brand__product">browser benchmark</span>
+          <span class="om-brand__product">maple studio</span>
         </a>
         <nav class="om-site-nav" aria-label="Page links">
           <a href="/docs/">Documentation</a>
-          <a href="/docs/export-onnx-webgpu/">ONNX and WebGPU</a>
+          <a
+            href="https://github.com/maziyarpanahi/openmed/blob/master/docs/demo/web/README.md"
+          >Setup guide</a>
           <a
             href="https://github.com/maziyarpanahi/openmed/tree/master/docs/demo/web"
           >Source</a>
@@ -68,126 +61,426 @@
       </div>
     </header>
 
-    <main id="main" class="om-page">
-      <section class="om-hero" aria-labelledby="page-title">
-        <p class="eyebrow">Local browser inference</p>
-        <h1 id="page-title">WASM vs WebGPU PII detection</h1>
-        <p class="lede">
-          Load a Transformers.js token-classification bundle, detect sensitive
-          spans in synthetic text, and compare cold model load with first
-          inference latency. Inference runs in this browser. Runtime and model
-          assets must be supplied from the same origin as this page.
-        </p>
+    <main id="main" class="studio-page">
+      <section class="studio-hero" aria-labelledby="page-title">
+        <div class="studio-hero__copy">
+          <div class="hero-kicker">
+            <span class="live-dot" aria-hidden="true"></span>
+            Private WebGPU workspace
+          </div>
+          <h1 id="page-title">Clinical text,<br /><em>kept close.</em></h1>
+          <p class="lede">
+            Use Maple-Preview for privacy review, entity and relation extraction,
+            or evidence-grounded questions. Model execution happens on this device;
+            note text is never sent to an inference service.
+          </p>
+          <div class="hero-facts" aria-label="Maple model facts">
+            <div><strong>20B</strong><span>parameters</span></div>
+            <div><strong>1B</strong><span>active</span></div>
+            <div><strong>2-bit</strong><span>ternary QMoE</span></div>
+            <div><strong>WebGPU</strong><span>local compute</span></div>
+          </div>
+        </div>
+        <div class="maple-portrait" aria-hidden="true">
+          <div class="maple-portrait__halo"></div>
+          <div class="maple-glyph">M</div>
+          <div class="maple-portrait__label">
+            <span>MAPLE</span>
+            <small>PREVIEW · LOCAL</small>
+          </div>
+        </div>
       </section>
 
-      <div class="grid">
-        <section class="card" aria-labelledby="settings-heading">
-          <h2 id="settings-heading">Model and backend</h2>
-          <div class="field">
-            <label for="runtime-module">Local runtime adapter module</label>
-            <input
-              id="runtime-module"
-              name="runtime-module"
-              value=""
-              placeholder="./vendor/openmed-transformers-runtime.js"
-              autocomplete="off"
-              spellcheck="false"
-              aria-describedby="runtime-note"
-            />
-            <p id="runtime-note" class="note">
-              The same-origin module must export
-              <code>createOpenMedPipeline(options)</code>.
-            </p>
-          </div>
-          <div class="field">
-            <label for="repo-id">Local model bundle URL</label>
-            <input
-              id="repo-id"
-              name="repo-id"
-              value=""
-              placeholder="./models/openmed-pii/"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </div>
-          <div class="field">
-            <label for="backend">Execution backend</label>
-            <select id="backend" name="backend">
-              <option value="wasm">WASM (CPU)</option>
-              <option value="webgpu">WebGPU</option>
-            </select>
-          </div>
-          <p id="webgpu-support" class="note"></p>
-        </section>
-
-        <section class="card" aria-labelledby="timing-heading">
-          <h2 id="timing-heading">Timing panel</h2>
-          <div class="table-wrap">
-            <table>
-              <caption class="om-sr-only">
-                Model load and first inference timing by execution backend
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Backend</th>
-                  <th scope="col">Model load</th>
-                  <th scope="col">First inference</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">WASM</th>
-                  <td id="wasm-load">—</td>
-                  <td id="wasm-first">—</td>
-                </tr>
-                <tr>
-                  <th scope="row">WebGPU</th>
-                  <td id="webgpu-load">—</td>
-                  <td id="webgpu-first">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="note">
-            Reset before a new cold-load comparison. Browser disk caches may
-            make later downloads faster.
+      <aside class="privacy-banner" aria-label="Privacy and safety notice">
+        <div class="privacy-banner__icon" aria-hidden="true">⌾</div>
+        <div>
+          <strong>Your text stays in this tab</strong>
+          <p>
+            The page only accepts same-origin runtime and model assets. It has no
+            cloud inference fallback, telemetry, or prompt storage.
           </p>
-        </section>
+        </div>
+        <span class="privacy-banner__tag">Synthetic data recommended</span>
+      </aside>
 
-        <section class="card full" aria-labelledby="input-heading">
-          <h2 id="input-heading">Synthetic input</h2>
-          <label for="input-text">Text to inspect</label>
-          <textarea id="input-text" name="input-text">John Doe was born on 12/12/1990 and lives in Berlin.</textarea>
-          <div class="actions">
-            <button id="run-selected" type="button">Run selected backend</button>
-            <button id="benchmark-both" type="button">Benchmark both</button>
-            <button id="reset" class="secondary" type="button">
-              Reset benchmarks
+      <div class="studio-layout">
+        <aside class="model-panel" aria-labelledby="model-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Runtime</p>
+              <h2 id="model-heading">Maple on this device</h2>
+            </div>
+            <span id="model-state" class="state-chip" data-state="idle">Not loaded</span>
+          </div>
+
+          <div class="device-card">
+            <span class="device-card__mark" aria-hidden="true">GPU</span>
+            <div>
+              <strong id="device-name">Checking this browser…</strong>
+              <p id="webgpu-support">Inspecting WebGPU support.</p>
+            </div>
+          </div>
+
+          <details class="runtime-settings" open>
+            <summary>Local asset settings</summary>
+            <div class="field">
+              <label for="runtime-module">Runtime adapter module</label>
+              <input
+                id="runtime-module"
+                name="runtime-module"
+                value=""
+                placeholder="./maple-ort-web-adapter.mjs"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="runtime-note"
+              />
+              <p id="runtime-note" class="field-note">
+                Must export <code>createOpenMedMapleRuntime(options)</code>.
+              </p>
+            </div>
+            <div class="field">
+              <label for="repo-id">Local Maple weight pack</label>
+              <input
+                id="repo-id"
+                name="repo-id"
+                value=""
+                placeholder="./models/maple-preview-2bit-webgpu/"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                aria-describedby="model-note"
+              />
+              <p id="model-note" class="field-note">
+                Serve the exported pack from this page's origin. No weights are bundled.
+              </p>
+            </div>
+            <div class="settings-row">
+              <div class="field">
+                <label for="context-tokens">Context</label>
+                <select id="context-tokens" name="context-tokens">
+                  <option value="1024">1,024 tokens</option>
+                  <option value="2048">2,048 tokens</option>
+                  <option value="4096" selected>4,096 tokens</option>
+                  <option value="8192">8,192 tokens</option>
+                  <option value="16384">16,384 tokens</option>
+                  <option value="32768">32,768 tokens · high memory</option>
+                  <option value="65536">65,536 tokens · high memory</option>
+                  <option value="131072">131,072 tokens · maximum</option>
+                </select>
+              </div>
+              <label class="cache-toggle" for="cache-model">
+                <input id="cache-model" type="checkbox" checked />
+                <span>Keep model cached on device</span>
+              </label>
+            </div>
+          </details>
+
+          <div id="load-progress" class="load-progress" hidden>
+            <div class="load-progress__row">
+              <strong id="progress-label">Preparing model</strong>
+              <span id="progress-percent">0%</span>
+            </div>
+            <progress id="model-progress" max="1" value="0">0%</progress>
+            <p id="progress-detail">Waiting for the local model pack.</p>
+          </div>
+
+          <div class="model-actions">
+            <button id="load-model" class="primary-action" type="button">
+              Load Maple locally
+            </button>
+            <button id="cancel-load" class="quiet-action" type="button" hidden>
+              Cancel
+            </button>
+            <button id="try-preview" class="quiet-action" type="button">
+              Preview the interface
+            </button>
+            <button id="clear-model-cache" class="text-action" type="button">
+              Clear model cache
             </button>
           </div>
-          <p id="status" class="status" role="status" aria-live="polite">
-            Ready. Supply same-origin runtime and model assets; use synthetic
-            data only.
-          </p>
-        </section>
 
-        <section class="card full" aria-labelledby="results-heading">
-          <h2 id="results-heading">Detected spans</h2>
-          <div id="results" class="results">No inference run yet.</div>
-          <ul id="entities" class="entities" aria-label="Detected entities"></ul>
+          <dl class="runtime-facts" id="runtime-details">
+            <div><dt>Download</dt><dd>Declared by local bundle</dd></div>
+            <div><dt>GPU memory</dt><dd>Measure export + context</dd></div>
+            <div><dt>Storage</dt><dd id="storage-detail">Checking…</dd></div>
+          </dl>
+          <p class="model-caveat">
+            Maple-Preview is a research model. This exact 2-bit ternary QMoE path
+            requires the pinned OpenMed WebGPU runtime and target-device validation.
+          </p>
+        </aside>
+
+        <section class="workbench" aria-labelledby="workbench-heading">
+          <div class="workbench-heading">
+            <div>
+              <p class="eyebrow">Workspace</p>
+              <h2 id="workbench-heading">Choose a clinical workflow</h2>
+            </div>
+            <span class="local-badge"><span aria-hidden="true">●</span> Local only</span>
+          </div>
+
+          <div class="task-tabs" role="tablist" aria-label="Clinical workflow">
+            <button
+              id="task-pii"
+              class="task-tab"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="task-workspace"
+              tabindex="0"
+              data-task="pii"
+            >
+              <span class="task-tab__icon" aria-hidden="true">⌁</span>
+              <span><strong>PII removal</strong><small>Find &amp; redact</small></span>
+            </button>
+            <button
+              id="task-entities"
+              class="task-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="task-workspace"
+              tabindex="-1"
+              data-task="entities"
+            >
+              <span class="task-tab__icon" aria-hidden="true">◇</span>
+              <span><strong>Entities</strong><small>Structure the note</small></span>
+            </button>
+            <button
+              id="task-relations"
+              class="task-tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="task-workspace"
+              tabindex="-1"
+              data-task="relations"
+            >
+              <span class="task-tab__icon" aria-hidden="true">↗</span>
+              <span><strong>Relations</strong><small>Connect evidence</small></span>
+            </button>
+          </div>
+
+          <div
+            id="task-workspace"
+            class="task-workspace"
+            role="tabpanel"
+            tabindex="0"
+            aria-labelledby="task-pii"
+          >
+            <div class="input-heading">
+              <div>
+                <h3 id="task-title">PII removal</h3>
+                <p id="task-description">
+                  Identify direct identifiers and return a reviewable redacted note.
+                </p>
+              </div>
+              <label class="preset-picker" for="preset">
+                <span>Example</span>
+                <select id="preset" name="preset">
+                  <option value="medication-event">Medication event</option>
+                  <option value="referral">Specialist referral</option>
+                  <option value="discharge">Discharge follow-up</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="note-label" for="input-text">Synthetic clinical note</label>
+            <textarea
+              id="input-text"
+              name="input-text"
+              autocomplete="off"
+              autocapitalize="sentences"
+              spellcheck="true"
+              aria-describedby="input-help"
+            ></textarea>
+            <div class="input-meta">
+              <span id="input-help">Not saved to browser storage or logs.</span>
+              <span id="character-count">0 characters</span>
+            </div>
+
+            <div class="run-row">
+              <button id="run-task" class="run-button" type="button" disabled>
+                <span id="run-label">Run PII removal</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <button id="stop-generation" class="stop-button" type="button" hidden>
+                Stop generation
+              </button>
+              <button id="clear-session" class="clear-button" type="button">
+                Clear text &amp; results
+              </button>
+            </div>
+            <p id="status" class="status-line" role="status" aria-live="polite">
+              Load a local Maple runtime, or preview the interface with synthetic output.
+            </p>
+          </div>
+
+          <section class="output-panel" aria-labelledby="result-heading">
+            <div class="output-heading">
+              <div>
+                <p class="eyebrow">Maple output</p>
+                <h3 id="result-heading">Ready for a local run</h3>
+                <p id="result-subtitle">
+                  Structured results will appear here without leaving this page.
+                </p>
+              </div>
+              <div class="metrics" aria-label="Generation metrics">
+                <span><strong id="metric-latency">—</strong> elapsed</span>
+                <span><strong id="metric-tokens">—</strong> tokens</span>
+                <span><strong id="metric-speed">—</strong> tok/s</span>
+              </div>
+            </div>
+            <div id="results" class="results-canvas" aria-live="polite">
+              <div class="empty-output">
+                <span aria-hidden="true">✦</span>
+                <strong>One model, three structured workflows</strong>
+                <p>Select a task above and run it against the synthetic note.</p>
+              </div>
+            </div>
+            <ul id="entities" class="result-chips" aria-label="Structured result items"></ul>
+            <details id="raw-output-panel" class="raw-output" hidden>
+              <summary>Model response used for this view</summary>
+              <pre><code id="raw-output"></code></pre>
+            </details>
+          </section>
+
+          <section class="chat-panel" aria-labelledby="chat-heading">
+            <div class="chat-heading">
+              <div>
+                <p class="eyebrow">Grounded conversation</p>
+                <h3 id="chat-heading">Ask about this note</h3>
+                <p>
+                  Keep the extraction above, choose a local conversation model, then
+                  ask a follow-up with exact evidence from the note.
+                </p>
+              </div>
+              <span class="stream-badge"><span aria-hidden="true">●</span> Streams locally</span>
+            </div>
+
+            <div class="chat-model-picker" aria-labelledby="chat-model-heading">
+              <div class="chat-model-picker__copy">
+                <span class="model-orb" aria-hidden="true">AI</span>
+                <div>
+                  <strong id="chat-model-heading">Conversation model</strong>
+                  <p id="chat-model-description">
+                    Maple Preview · uses the extraction runtime already loaded above.
+                  </p>
+                </div>
+              </div>
+              <div class="chat-model-picker__controls">
+                <label for="chat-model">Local model</label>
+                <select id="chat-model" name="chat-model">
+                  <option value="maple" selected>Maple Preview · 2-bit</option>
+                  <option value="lfm25">LFM2.5 · 2.6B Q4F16</option>
+                </select>
+                <span id="chat-model-state" class="state-chip" data-state="idle">
+                  Uses Maple
+                </span>
+              </div>
+            </div>
+
+            <div id="chat-model-loader" class="chat-model-loader" hidden>
+              <div class="field">
+                <label for="chat-model-path">Local LFM2.5 Q4F16 pack</label>
+                <input
+                  id="chat-model-path"
+                  name="chat-model-path"
+                  value="./models/lfm2.5-2.6b-onnx-q4f16/"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  aria-describedby="chat-model-note"
+                />
+                <p id="chat-model-note" class="field-note">
+                  Pinned 1.53 GB WebGPU model · same-origin files only. Loading it
+                  releases Maple GPU memory but preserves the extraction above. The
+                  custom LFM Open License 1.0 applies.
+                </p>
+              </div>
+              <div class="chat-model-loader__actions">
+                <button id="load-chat-model" class="quiet-action" type="button">
+                  Load LFM2.5 locally
+                </button>
+                <button id="cancel-chat-model-load" class="text-action" type="button" hidden>
+                  Cancel
+                </button>
+                <button id="release-chat-model" class="text-action" type="button" hidden>
+                  Release LFM2.5
+                </button>
+              </div>
+              <div id="chat-model-progress" class="load-progress" hidden>
+                <div class="load-progress__row">
+                  <strong id="chat-model-progress-label">Preparing LFM2.5</strong>
+                  <span id="chat-model-progress-percent">0%</span>
+                </div>
+                <progress id="chat-model-progress-bar" max="1" value="0">0%</progress>
+                <p id="chat-model-progress-detail">Waiting for the local Q4F16 pack.</p>
+              </div>
+            </div>
+
+            <div id="chat-messages" class="chat-thread" aria-live="polite">
+              <div class="chat-empty">
+                <span class="maple-avatar" aria-hidden="true">M</span>
+                <div>
+                  <strong>Grounded answers, not hidden reasoning</strong>
+                  <p>Ask about the note’s medications, events, entities, or uncertainty.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-composer">
+              <label for="question-text">Question about the current note</label>
+              <textarea
+                id="question-text"
+                name="question-text"
+                rows="2"
+                autocomplete="off"
+                spellcheck="true"
+              >What medication-event relationship is supported by this note, and what remains uncertain?</textarea>
+              <div class="chat-composer__footer">
+                <p>⌘/Ctrl + Enter to send · No chain-of-thought is displayed or stored.</p>
+                <div class="chat-actions">
+                  <button id="stop-chat" class="stop-button" type="button" hidden>
+                    Stop
+                  </button>
+                  <button id="ask-maple" class="chat-send" type="button" disabled>
+                    <span id="chat-send-label">Ask Maple</span><span aria-hidden="true">↗</span>
+                  </button>
+                </div>
+              </div>
+              <div class="chat-status-row">
+                <p id="chat-status" class="status-line" role="status" aria-live="polite">
+                  Load Maple or use the interface preview to start a local conversation.
+                </p>
+                <div class="chat-metrics" aria-label="Chat generation metrics">
+                  <span><strong id="chat-metric-first-token">—</strong> first token</span>
+                  <span><strong id="chat-metric-tokens">—</strong> tokens</span>
+                  <span><strong id="chat-metric-speed">—</strong> tok/s</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
       </div>
 
-      <p class="note">
-        Demonstration only. Results can be incomplete and must not be used to
-        make clinical decisions or certify that text is de-identified.
-      </p>
+      <section class="safety-note" aria-labelledby="safety-heading">
+        <p class="eyebrow">Human review required</p>
+        <h2 id="safety-heading">A studio, not a clinical decision system.</h2>
+        <p>
+          Model output may be incomplete, incorrect, or overconfident. Do not use
+          this demo to diagnose, treat, make autonomous clinical decisions, or
+          certify that real text is de-identified. Validate critical identifiers,
+          spans, relations, and evidence with an appropriate reviewer.
+        </p>
+      </section>
     </main>
 
     <footer class="om-site-footer">
       <div class="om-site-footer__inner">
-        <span>OpenMed documentation</span>
-        <span>Local-first healthcare NLP · synthetic data only</span>
+        <span>OpenMed · local-first healthcare AI</span>
+        <span>Maple-Preview · research use · synthetic examples</span>
       </div>
     </footer>
 

@@ -9,7 +9,7 @@ Le moteur local principal d’OpenMed effectue l’extraction et la dé-identifi
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@ Le moteur local principal d’OpenMed effectue l’extraction et la dé-identifi
 </p>
 
 <p>
-  <b>Exécution locale en priorité</b> &nbsp;·&nbsp; <b>33 langues PII prises en charge par modèle</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 entrées de manifeste</b> &nbsp;·&nbsp; <b>35 langues PII prises en charge par modèle</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -102,7 +102,7 @@ Sur le matériel Apple pris en charge, OpenMed peut utiliser **MLX** et **[OpenM
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -166,7 +166,7 @@ analyze_text(
 **Service REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -275,7 +275,7 @@ Sur les hôtes non-Apple-Silicon, les noms de modèles MLX sont automatiquement 
 
 ---
 
-## PII multilingue (34 routes prises en charge ; 33 prises en charge par modèle)
+## PII multilingue (42 routes prises en charge ; 35 prises en charge par modèle)
 
 Extraction et dé-identification en `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` et `tr`, soit **le catalogue enregistré de modèles PII** au total.
 
@@ -312,7 +312,7 @@ Un service FastAPI compatible Docker, avec validation des requêtes, préchargem
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -393,7 +393,7 @@ Si OpenMed vous est utile dans vos recherches, merci de le citer :
 
 Si OpenMed vous est utile, une étoile aide les autres à le découvrir.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

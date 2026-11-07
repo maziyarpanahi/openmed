@@ -94,7 +94,7 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     cached_dir = tmp_path / "cache" / "rxnorm"
     cached_dir.mkdir(parents=True)
-    _write_fixture(cached_dir, "concepts")
+    cached_fixture = _write_fixture(cached_dir, "concepts")
 
     def fail_download(url: str, target: Path, timeout: float) -> None:
         raise AssertionError("download should not be attempted")
@@ -105,7 +105,7 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
             "rxnorm": VocabSource(
                 system="rxnorm",
                 url="https://example.invalid/rxnorm.tsv",
-                sha256="0" * 64,
+                sha256=_sha256(cached_fixture),
             )
         },
         downloader=fail_download,
@@ -114,12 +114,13 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
     assert loader.get_index("rxnorm").get("ASA") == "CONCEPTS-001"
 
 
-@pytest.mark.parametrize("system", ["umls", "snomed", "snomed-ct"])
-def test_restricted_vocabularies_point_to_user_key_path(system):
-    loader = VocabLoader()
+def test_restricted_vocabularies_point_to_user_key_path(subtests):
+    for system in ["umls", "snomed", "snomed-ct"]:
+        with subtests.test(system=system):
+            loader = VocabLoader()
 
-    with pytest.raises(RestrictedVocabularyError, match="user-key-gated"):
-        loader.get_index(system)
+            with pytest.raises(RestrictedVocabularyError, match="user-key-gated"):
+                loader.get_index(system)
 
 
 def test_checksum_mismatch_rejects_local_source(tmp_path):

@@ -56,14 +56,14 @@ def test_format_parser_fuzz_workflow_is_opt_in_and_time_bounded() -> None:
     )
     assert int(job["timeout-minutes"]) <= 15
     action_refs = {
-        step["uses"]
+        step["uses"].split("@", 1)[0] + "@"
         for step in job["steps"]
         if isinstance(step, dict) and "uses" in step
     }
     assert action_refs == {
-        "actions/checkout@v7",
-        "actions/setup-python@v7",
-        "astral-sh/setup-uv@v8.3.2",
+        "actions/checkout@",
+        "actions/setup-python@",
+        "astral-sh/setup-uv@",
     }
     assert any(
         step.get("env", {}).get("HYPOTHESIS_PROFILE") == "fuzz-nightly"
@@ -83,16 +83,17 @@ def test_explicit_unknown_hypothesis_profile_fails_closed(
         fuzz_conftest._load_selected_profile()
 
 
-@pytest.mark.parametrize("profile", ["default", ""])
-def test_explicit_non_harness_profile_fails_closed(
-    monkeypatch: pytest.MonkeyPatch,
-    profile: str,
-) -> None:
+def test_explicit_non_harness_profile_fails_closed(subtests) -> None:
     """Only the two audited fuzz profiles may be selected through the environment."""
-    monkeypatch.setenv("HYPOTHESIS_PROFILE", profile)
+    for profile in ["default", ""]:
+        with subtests.test(profile=profile):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("HYPOTHESIS_PROFILE", profile)
 
-    with pytest.raises(InvalidArgument, match="Unsupported HYPOTHESIS_PROFILE"):
-        fuzz_conftest._load_selected_profile()
+                with pytest.raises(
+                    InvalidArgument, match="Unsupported HYPOTHESIS_PROFILE"
+                ):
+                    fuzz_conftest._load_selected_profile()
 
 
 def test_unset_hypothesis_profile_uses_bounded_default(

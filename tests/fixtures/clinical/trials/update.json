@@ -1,0 +1,34 @@
+{
+  "studies": [
+    {
+      "protocolSection": {
+        "identificationModule": {
+          "nctId": "NCT00000001",
+          "briefTitle": "Synthetic blood pressure study",
+          "officialTitle": "A Synthetic Study of a Blood Pressure Intervention"
+        },
+        "statusModule": {
+          "overallStatus": "WITHDRAWN",
+          "lastUpdatePostDateStruct": {"date": "2026-09-20"}
+        },
+        "conditionsModule": {"conditions": ["Hypertension"]},
+        "armsInterventionsModule": {
+          "interventions": [{"type": "OTHER", "name": "Synthetic coaching"}]
+        },
+        "contactsLocationsModule": {
+          "locations": [
+            {
+              "facility": "Synthetic Research Center",
+              "city": "Paris",
+              "country": "France"
+            }
+          ]
+        },
+        "eligibilityModule": {
+          "eligibilityCriteria": "Inclusion: synthetic adult participants. Exclusion: none."
+        }
+      }
+    }
+  ],
+  "totalCount": 1
+}

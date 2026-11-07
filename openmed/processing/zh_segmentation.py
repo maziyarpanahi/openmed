@@ -8,8 +8,11 @@ model files on OpenMed's behalf.
 from __future__ import annotations
 
 import importlib
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
 
 from .tokenization import (
@@ -26,6 +29,32 @@ DEFAULT_MEDICAL_USER_DICTIONARY = (
     Path(__file__).with_name("data") / "zh_medical_terms.txt"
 )
 SUPPORTED_CHINESE_SEGMENTATION_BACKENDS = frozenset({"jieba", "pkuseg", "hanlp"})
+
+#: Boundary-F1 floor the shipped conformance suite applies to a backend.
+#: Mirrors the default-backend gate already enforced for jieba.
+SEGMENTATION_BOUNDARY_F1_FLOOR = 0.90
+
+#: Independent defects the shared conformance suite reports for a backend.
+SEGMENTATION_CONFORMANCE_CHECKS = frozenset(
+    {
+        "protocol",
+        "alignment",
+        "offsets",
+        "overlap",
+        "ordering",
+        "coverage",
+        "dictionary",
+    }
+)
+
+
+class SegmentationAlignmentError(ValueError):
+    """Raised when a backend word cannot be located in the source text.
+
+    Subclasses :class:`ValueError` so existing callers keep working while the
+    conformance suite can attribute the failure to alignment specifically
+    instead of to a generic protocol violation.
+    """
 
 
 @runtime_checkable
@@ -341,6 +370,291 @@ def segmentation_boundary_f1(
     return 2.0 * true_positives / (len(gold) + len(predicted))
 
 
+@dataclass(frozen=True)
+class SegmentationConformanceCase:
+    """One synthetic probe for the shared backend conformance suite.
+
+    Args:
+        text: Source string handed to the backend unchanged.
+        gold_words: Reference cut of ``text``; concatenating them must
+            reproduce ``text`` exactly.
+        required_terms: Dictionary terms the backend must emit as single
+            tokens, exercising user-dictionary overrides.
+    """
+
+    text: str
+    gold_words: tuple[str, ...]
+    required_terms: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SegmentationConformanceIssue:
+    """A single conformance defect attributed to one named check."""
+
+    case_index: int
+    check: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class SegmentationConformanceReport:
+    """Conformance outcome plus recorded quality and throughput evidence.
+
+    Only ``chars_per_second`` is hardware-dependent. ``boundary_f1`` over a
+    checksum-pinned corpus is deterministic for a given backend build, so
+    callers may gate on it; :data:`SEGMENTATION_BOUNDARY_F1_FLOOR` is the
+    floor the shipped suite applies. The harness itself never gates, so the
+    policy lives with the caller rather than in the measurement.
+
+    Scope: the checks verify the span protocol and that user-dictionary terms
+    survive as single tokens. They do not verify segmentation quality on the
+    remaining text, and the floor only rejects gross degradation such as
+    character-level output; a backend that merges non-dictionary runs still
+    conforms.
+
+    The report holds a read-only mapping and is therefore not hashable.
+    """
+
+    backend: str
+    case_count: int
+    issues: tuple[SegmentationConformanceIssue, ...] = ()
+    boundary_f1: float = 0.0
+    dictionary_hit_rate: float = 0.0
+    chars_per_second: float = 0.0
+    token_count: int = 0
+    metadata: Mapping[str, Any] = field(
+        default_factory=lambda: MappingProxyType({}),
+    )
+
+    @property
+    def ok(self) -> bool:
+        """Whether the backend produced no conformance defect."""
+
+        return not self.issues
+
+    @property
+    def checks_triggered(self) -> frozenset[str]:
+        """Distinct check names that reported at least one defect."""
+
+        return frozenset(issue.check for issue in self.issues)
+
+    def to_evidence(self) -> dict[str, Any]:
+        """Return a JSON-serializable evidence record for release logs."""
+
+        return {
+            "backend": self.backend,
+            "case_count": self.case_count,
+            "token_count": self.token_count,
+            "boundary_f1": self.boundary_f1,
+            "dictionary_hit_rate": self.dictionary_hit_rate,
+            "chars_per_second": self.chars_per_second,
+            "issue_count": len(self.issues),
+            "checks_triggered": sorted(self.checks_triggered),
+            "metadata": dict(self.metadata),
+        }
+
+
+def run_segmenter_conformance(
+    segmenter: ChineseSegmenter,
+    cases: Sequence[SegmentationConformanceCase],
+    *,
+    backend: str = "unknown",
+    metadata: Mapping[str, Any] | None = None,
+) -> SegmentationConformanceReport:
+    """Run the shared exact-offset conformance suite against one backend.
+
+    Every case is checked independently so a report attributes each defect to
+    the specific invariant it broke rather than stopping at the first failure.
+
+    Args:
+        segmenter: Any object implementing :class:`ChineseSegmenter`.
+        cases: Synthetic probes with reference cuts and required terms.
+        backend: Name recorded on the report.
+        metadata: Extra provenance recorded verbatim on the report.
+
+    Returns:
+        A :class:`SegmentationConformanceReport`. Conformance is decided by
+        :attr:`SegmentationConformanceReport.ok`; the quality and throughput
+        numbers are recorded evidence and are never gated here.
+
+    Raises:
+        ValueError: If ``cases`` is empty, which would otherwise report a
+            vacuous pass, or if a case's ``gold_words`` do not reconstruct
+            its text.
+    """
+
+    if not cases:
+        raise ValueError("Conformance requires at least one case")
+
+    issues: list[SegmentationConformanceIssue] = []
+    scores: list[float] = []
+    required_total = 0
+    required_hit = 0
+    token_count = 0
+    char_count = 0
+    elapsed = 0.0
+
+    for index, case in enumerate(cases):
+        gold = _gold_tokens(case)
+        started = time.perf_counter()
+        try:
+            # list() accepts a lazy tokenizer's generator and turns a backend
+            # that returns None into a reportable TypeError instead of a crash.
+            tokens = list(segmenter.segment(case.text))
+        except SegmentationAlignmentError as exc:
+            elapsed += time.perf_counter() - started
+            issues.append(SegmentationConformanceIssue(index, "alignment", str(exc)))
+            scores.append(0.0)
+            required_total += len(case.required_terms)
+            char_count += len(case.text)
+            continue
+        except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+            elapsed += time.perf_counter() - started
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "protocol",
+                    f"{type(exc).__name__}: {exc}",
+                )
+            )
+            scores.append(0.0)
+            required_total += len(case.required_terms)
+            char_count += len(case.text)
+            continue
+        elapsed += time.perf_counter() - started
+        char_count += len(case.text)
+
+        try:
+            valid = _check_case(case, tokens, index, issues)
+        except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "protocol",
+                    f"{type(exc).__name__}: {exc}",
+                )
+            )
+            scores.append(0.0)
+            required_total += len(case.required_terms)
+            continue
+        token_count += len(tokens)
+        scores.append(segmentation_boundary_f1(gold, valid))
+
+        emitted = {token.text for token in valid}
+        for term in case.required_terms:
+            required_total += 1
+            if term in emitted:
+                required_hit += 1
+            else:
+                issues.append(
+                    SegmentationConformanceIssue(
+                        index,
+                        "dictionary",
+                        f"required term {term!r} was not emitted as a single token",
+                    )
+                )
+
+    return SegmentationConformanceReport(
+        backend=backend,
+        case_count=len(cases),
+        issues=tuple(issues),
+        boundary_f1=(sum(scores) / len(scores)) if scores else 0.0,
+        dictionary_hit_rate=(required_hit / required_total) if required_total else 1.0,
+        chars_per_second=(char_count / elapsed) if elapsed > 0 else 0.0,
+        token_count=token_count,
+        metadata=MappingProxyType(dict(metadata or {})),
+    )
+
+
+def _gold_tokens(case: SegmentationConformanceCase) -> list[SpanToken]:
+    if "".join(case.gold_words) != case.text:
+        raise ValueError("Conformance gold_words must reconstruct the case text")
+    tokens: list[SpanToken] = []
+    cursor = 0
+    for word in case.gold_words:
+        end = cursor + len(word)
+        tokens.append(SpanToken(word, cursor, end))
+        cursor = end
+    return tokens
+
+
+def _check_case(
+    case: SegmentationConformanceCase,
+    tokens: Sequence[SpanToken],
+    index: int,
+    issues: list[SegmentationConformanceIssue],
+) -> list[SpanToken]:
+    text = case.text
+    cursor = 0
+    highest_start = -1
+    valid: list[SpanToken] = []
+
+    for position, token in enumerate(tokens):
+        if not isinstance(token, SpanToken):
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "protocol",
+                    f"token {position} is {type(token).__name__}, not SpanToken",
+                )
+            )
+            continue
+        in_range = 0 <= token.start < token.end <= len(text)
+        exact = in_range and text[token.start : token.end] == token.text
+        if not exact:
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "offsets",
+                    f"token {position} {token.text!r} does not match "
+                    f"source span [{token.start}, {token.end})",
+                )
+            )
+        if not in_range:
+            # An out-of-range span cannot take part in coverage bookkeeping.
+            continue
+        if token.start < highest_start:
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "ordering",
+                    f"token {position} starts at {token.start} after a token "
+                    f"starting at {highest_start}",
+                )
+            )
+        elif token.start < cursor:
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "overlap",
+                    f"token {position} starts at {token.start} inside the span "
+                    f"ending at {cursor}",
+                )
+            )
+        elif any(not char.isspace() for char in text[cursor : token.start]):
+            issues.append(
+                SegmentationConformanceIssue(
+                    index,
+                    "coverage",
+                    f"non-whitespace text [{cursor}, {token.start}) is uncovered",
+                )
+            )
+        if exact:
+            valid.append(token)
+        highest_start = max(highest_start, token.start)
+        cursor = max(cursor, token.end)
+
+    if any(not char.isspace() for char in text[cursor:]):
+        issues.append(
+            SegmentationConformanceIssue(
+                index,
+                "coverage",
+                f"trailing non-whitespace text [{cursor}, {len(text)}) is uncovered",
+            )
+        )
+    return valid
+
+
 def _import_optional_dependency(
     module_name: str,
     *,
@@ -371,7 +685,7 @@ def _align_words_to_text(text: str, words: Iterable[Any]) -> list[SpanToken]:
             continue
         start = text.find(word, cursor)
         if start < 0:
-            raise ValueError(
+            raise SegmentationAlignmentError(
                 f"Backend token {word!r} could not be aligned after offset {cursor}"
             )
         tokens.extend(_tokens_for_uncovered_text(text, cursor, start))
@@ -492,11 +806,18 @@ __all__ = [
     "HanLPSegmenter",
     "JiebaSegmenter",
     "PkusegSegmenter",
+    "SEGMENTATION_BOUNDARY_F1_FLOOR",
+    "SEGMENTATION_CONFORMANCE_CHECKS",
     "SUPPORTED_CHINESE_SEGMENTATION_BACKENDS",
+    "SegmentationAlignmentError",
+    "SegmentationConformanceCase",
+    "SegmentationConformanceIssue",
+    "SegmentationConformanceReport",
     "UserDictionaryEntry",
     "create_chinese_segmenter",
     "create_chinese_segmenter_from_config",
     "load_user_dictionary",
+    "run_segmenter_conformance",
     "segmentation_boundary_f1",
     "validate_segmentation",
 ]

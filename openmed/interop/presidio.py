@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from importlib import import_module as _import_module
 from typing import Any, Iterable, Mapping, Sequence
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.labels import normalize_label
 from openmed.core.pii import PIIEntity
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
@@ -134,10 +135,7 @@ def _load_presidio_result_cls() -> type[Any]:
     try:
         module = _import_module("presidio_analyzer")
     except ImportError as exc:
-        raise ImportError(
-            "Presidio support requires the 'presidio' extra. "
-            "Install with `pip install openmed[presidio]`."
-        ) from exc
+        raise_missing_backend("presidio", feature="Presidio support", cause=exc)
     return module.RecognizerResult
 
 

@@ -9,7 +9,6 @@ import logging
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from time import perf_counter
 from typing import (
     Any,
     Callable,
@@ -22,6 +21,7 @@ from typing import (
 )
 
 from openmed.compliance.data_use import DataUseAction, DataUsePolicy, DataUseTag
+from openmed.utils.profiling import Timer
 
 from .budget import RequestBudget, coerce_budget
 from .custom_recognizer import (
@@ -29,10 +29,12 @@ from .custom_recognizer import (
     build_transliterated_name_recognizer,
     coerce_custom_recognizer,
 )
+from .errors import ConfigurationError, InputError, InternalError
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .language_router import DocumentLanguageDecision, LanguageRouter
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
-from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+from .schemas.span import ACTION_KEEP, OpenMedSpan, _resolve_hmac_secret, hmac_text_hash
+from .telemetry import PIPELINE_STAGE_NAMES, PipelineTelemetry, StageTelemetry
 
 # Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
 # ``pii`` here would eagerly load the heavier public de-identification module,
@@ -47,20 +49,10 @@ DeidentificationMethod = Literal[
     "format_preserve",
 ]
 
-STAGE_NAMES: tuple[str, ...] = (
-    "normalize",
-    "language_script",
-    "doc_type_section",
-    "deterministic_detectors",
-    "fast_pii_model",
-    "clinical_phi_model",
-    "span_arbitration",
-    "policy_actions",
-    "safety_sweep",
-    "emit",
-)
+STAGE_NAMES: tuple[str, ...] = PIPELINE_STAGE_NAMES
 
-DEFAULT_HASH_SECRET = b"openmed-pipeline-v1"
+# None requests a private key per pipeline instance; never use a public key.
+DEFAULT_HASH_SECRET = None
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +183,11 @@ class PipelineResult:
         for result in self.stage_results:
             if result.name == name:
                 return result
-        raise KeyError(name)
+        raise ConfigurationError(
+            "The requested pipeline stage is unavailable. Pass a name from "
+            "Pipeline.stage_names.",
+            details={"supported_stages": list(STAGE_NAMES)},
+        )
 
     def stage_duration_ms(self, name: str) -> float:
         """Return the measured wall-clock duration of ``name`` in milliseconds.
@@ -207,7 +203,11 @@ class PipelineResult:
         it is not charged to any one stage.
         """
         if name not in self.stage_durations_ms:
-            raise KeyError(name)
+            raise ConfigurationError(
+                "No duration was recorded for the requested pipeline stage. "
+                "Pass a completed stage name from stage_durations_ms.",
+                details={"recorded_stages": sorted(self.stage_durations_ms)},
+            )
         return self.stage_durations_ms[name]
 
     def explain(self) -> Any:
@@ -265,6 +265,7 @@ class Pipeline:
         normalize_accents: Optional[bool] = None,
         use_safety_sweep: bool = True,
         preserve_whitespace: bool = False,
+        convert_zawgyi: bool = True,
         loader: Any = None,
         privacy_filter_pipeline: Any = None,
         model_detector: ModelDetector | None = None,
@@ -291,7 +292,9 @@ class Pipeline:
         token_language_tags: Sequence[Any] | None = None,
         lid_model: Any = None,
         transliterated_name_config: Any = None,
-        hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
+        hmac_secret: str | bytes | None = DEFAULT_HASH_SECRET,
+        telemetry: PipelineTelemetry | None = None,
+        telemetry_enabled: bool | None = None,
     ) -> None:
         from . import pii
         from .policy import load_policy
@@ -322,6 +325,7 @@ class Pipeline:
         self.normalize_accents = normalize_accents
         self.use_safety_sweep = use_safety_sweep
         self.preserve_whitespace = bool(preserve_whitespace)
+        self.convert_zawgyi = bool(convert_zawgyi)
         self.loader = loader
         self.privacy_filter_pipeline = privacy_filter_pipeline
         self.model_detector = model_detector
@@ -348,9 +352,17 @@ class Pipeline:
         self.indian_multi_id = indian_multi_id
         self.code_mixed = bool(code_mixed)
         if not self.code_mixed and token_language_tags is not None:
-            raise ValueError("token_language_tags requires code_mixed=True")
+            raise ConfigurationError(
+                "token_language_tags requires code_mixed=True. Enable code-mixed "
+                "processing or omit token_language_tags.",
+                details={"argument": "token_language_tags"},
+            )
         if not self.code_mixed and lid_model is not None:
-            raise ValueError("lid_model requires code_mixed=True")
+            raise ConfigurationError(
+                "lid_model requires code_mixed=True. Enable code-mixed processing "
+                "or omit lid_model.",
+                details={"argument": "lid_model"},
+            )
         self.token_language_tags = (
             tuple(token_language_tags) if token_language_tags is not None else None
         )
@@ -360,7 +372,18 @@ class Pipeline:
             if self.code_mixed
             else None
         )
-        self.hmac_secret = hmac_secret
+        self.hmac_secret = _resolve_hmac_secret(hmac_secret)
+        if telemetry is not None and telemetry_enabled is not None:
+            raise ValueError("Pass either telemetry or telemetry_enabled, not both")
+        if telemetry is not None and not isinstance(telemetry, PipelineTelemetry):
+            raise TypeError("telemetry must be a PipelineTelemetry instance")
+        if telemetry is None:
+            telemetry = (
+                PipelineTelemetry.from_env()
+                if telemetry_enabled is None
+                else PipelineTelemetry(enabled=telemetry_enabled)
+            )
+        self.telemetry = telemetry
         from .clinical_protect import protection_options_from_config
 
         self.clinical_protect_options = protection_options_from_config(config)
@@ -405,7 +428,11 @@ class Pipeline:
 
         resolved_data_use_policy = self.data_use_policy or DEFAULT_DATA_USE_POLICY
         if not isinstance(resolved_data_use_policy, DataUsePolicy):
-            raise TypeError("data_use_policy must be a DataUsePolicy")
+            raise ConfigurationError(
+                "data_use_policy must be a DataUsePolicy. Pass a configured "
+                "DataUsePolicy instance or omit the option.",
+                details={"argument": "data_use_policy"},
+            )
         attempted_data_use_actions: list[DataUseAction | str] = [data_use_action]
         if surrogate_vault is not None:
             attempted_data_use_actions.append(DataUseAction.SURROGATE_VAULT)
@@ -431,11 +458,24 @@ class Pipeline:
         }
         cascade_duration_ms: float | None = None
         original_text = text if self.preserve_whitespace else text.strip()
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[0],
+            telemetry=self.telemetry,
+            stage_index=1,
+        ) as stage_telemetry:
             normalized = self.stage1_normalize(original_text)
+            if stage_telemetry.active:
+                stage_telemetry.set_input_length(len(original_text))
         if budget_clock is not None:
             budget_clock.check("pipeline.stage1_normalize")
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
+        _reject_unconverted_legacy_text(normalized)
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[1],
+            telemetry=self.telemetry,
+            stage_index=2,
+        ):
             route = self.stage2_language_script(normalized.normalized_text)
         token_language_tags = self._normalize_code_mixed_tags(normalized)
         if budget_clock is not None:
@@ -444,7 +484,12 @@ class Pipeline:
             normalized.normalized_text,
             self.hmac_secret,
         )
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[2],
+            telemetry=self.telemetry,
+            stage_index=3,
+        ):
             section_metadata = _remap_section_metadata_to_normalized(
                 self.stage3_doc_type_section(
                     normalized.original_text,
@@ -509,7 +554,7 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
-            cascade_started = perf_counter()
+            cascade_timer = Timer().start()
             cascade_result = self.cascade_router.run(
                 normalized.normalized_text,
                 context=context,
@@ -517,11 +562,16 @@ class Pipeline:
                 language=route.lang,
                 policy_profile=self.policy_profile,
             )
-            cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+            cascade_duration_ms = cascade_timer.stop()
             if budget_clock is not None:
                 budget_clock.check("pipeline.cascade_router")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[3],
+                telemetry=self.telemetry,
+                stage_index=4,
+            ) as stage_telemetry:
                 deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
                 deterministic_spans = (
                     *deterministic_spans,
@@ -559,10 +609,16 @@ class Pipeline:
                         metadata=cascade_metadata,
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, deterministic_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage4_deterministic_detectors")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[4],
+                telemetry=self.telemetry,
+                stage_index=5,
+            ) as stage_telemetry:
                 model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
                 model_spans = (
                     *model_spans,
@@ -589,10 +645,16 @@ class Pipeline:
                         },
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, model_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage5_fast_pii_model")
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[5],
+                telemetry=self.telemetry,
+                stage_index=6,
+            ) as stage_telemetry:
                 clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
                 clinical_spans = (
                     *clinical_spans,
@@ -619,6 +681,7 @@ class Pipeline:
                         },
                     )
                 )
+                _record_telemetry_spans(stage_telemetry, clinical_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage6_clinical_phi_model")
 
@@ -628,11 +691,17 @@ class Pipeline:
                 model_name="cascade",
             )
         else:
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[3],
+                telemetry=self.telemetry,
+                stage_index=4,
+            ) as stage_telemetry:
                 deterministic_spans = self.stage4_deterministic_detectors(
                     normalized.normalized_text,
                     context,
                 )
+                _record_telemetry_spans(stage_telemetry, deterministic_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage4_deterministic_detectors")
             deterministic_spans = _stamp_span_sections(
@@ -643,7 +712,12 @@ class Pipeline:
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[4],
+                telemetry=self.telemetry,
+                stage_index=5,
+            ) as stage_telemetry:
                 pii_result = self.stage5_fast_pii_model(
                     normalized.normalized_text,
                     route,
@@ -668,6 +742,7 @@ class Pipeline:
                         pipeline_stage=STAGE_NAMES[4],
                     ),
                 )
+                _record_telemetry_spans(stage_telemetry, model_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage5_fast_pii_model")
             model_spans = _stamp_span_sections(model_spans, context.section_metadata)
@@ -675,11 +750,17 @@ class Pipeline:
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+            with _stage_timer(
+                stage_durations_ms,
+                STAGE_NAMES[5],
+                telemetry=self.telemetry,
+                stage_index=6,
+            ) as stage_telemetry:
                 clinical_spans = self.stage6_clinical_phi_model(
                     normalized.normalized_text,
                     context,
                 )
+                _record_telemetry_spans(stage_telemetry, clinical_spans)
             if budget_clock is not None:
                 budget_clock.check("pipeline.stage6_clinical_phi_model")
             clinical_spans = _stamp_span_sections(
@@ -691,11 +772,17 @@ class Pipeline:
             )
 
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[6]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[6],
+            telemetry=self.telemetry,
+            stage_index=7,
+        ) as stage_telemetry:
             merged_spans = self.stage7_arbitration(
                 arbitration_candidates,
                 context,
             )
+            _record_telemetry_spans(stage_telemetry, merged_spans)
         arbitration_trace_metadata = (
             _arbitration_trace_metadata(
                 arbitration_candidates,
@@ -751,12 +838,18 @@ class Pipeline:
             )
         )
 
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[7]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[7],
+            telemetry=self.telemetry,
+            stage_index=8,
+        ) as stage_telemetry:
             policy_spans = self.stage8_policy_actions(
                 merged_spans,
                 context,
                 explain=explain,
             )
+            _record_telemetry_spans(stage_telemetry, policy_spans)
         policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
@@ -800,12 +893,18 @@ class Pipeline:
         if budget_clock is not None:
             budget_clock.check("pipeline.stage8_policy_actions")
 
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[8],
+            telemetry=self.telemetry,
+            stage_index=9,
+        ) as stage_telemetry:
             sweep_spans, sweep_metadata = self.stage9_safety_sweep(
                 normalized.normalized_text,
                 pii_result,
                 context,
             )
+            _record_telemetry_spans(stage_telemetry, sweep_spans)
         if budget_clock is not None:
             budget_clock.check("pipeline.stage9_safety_sweep")
         stage_results.append(
@@ -846,7 +945,16 @@ class Pipeline:
             )
         if budget_clock is not None:
             budget_clock.check("pipeline.stage10_emit")
-        with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
+        final_spans = (
+            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
+        )
+        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
+        with _stage_timer(
+            stage_durations_ms,
+            STAGE_NAMES[9],
+            telemetry=self.telemetry,
+            stage_index=10,
+        ) as stage_telemetry:
             deidentified = self.stage10_emit(
                 normalized.original_text,
                 emission_pii_result,
@@ -877,12 +985,11 @@ class Pipeline:
                 audit=audit,
                 config=self.config,
             )
+            _record_telemetry_spans(stage_telemetry, final_spans)
+            if stage_telemetry.active:
+                stage_telemetry.set_redacted_length(len(deidentified.deidentified_text))
         if budget_clock is not None:
             budget_clock.check("pipeline.stage10_emit_complete")
-        final_spans = (
-            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
-        )
-        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
         emission_spans = _remap_spans_to_original(
             final_spans,
             normalized,
@@ -963,20 +1070,31 @@ class Pipeline:
                 tag.end,
             )
             if start >= end:
-                raise ValueError("token language tag normalized to an empty span")
+                raise InputError(
+                    "A token language tag normalized to an empty span. Check the "
+                    "tag offsets against the original text before retrying.",
+                    details={"start": tag.start, "end": tag.end},
+                )
             normalized_tags.append(CodeMixedTokenTag(start, end, tag.label))
         return tuple(normalized_tags)
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
-        from ..processing.legacy_encoding import convert_legacy_encoding
+        from ..processing.legacy_encoding import (
+            _changed_source_units,
+            convert_legacy_encoding,
+        )
 
-        legacy_conversion = convert_legacy_encoding(text)
+        legacy_conversion = convert_legacy_encoding(
+            text,
+            convert_zawgyi=self.convert_zawgyi,
+        )
         legacy_text = legacy_conversion.text
         if legacy_conversion.encoding == "unicode":
             legacy_origins = tuple((index, index + 1) for index in range(len(text)))
         else:
             # Auto-detected ISCII reaches this API as a Latin-1 surrogate
             # string, so original byte and source-character offsets coincide.
+            # Zawgyi converted from a ``str`` is indexed by code point.
             legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
 
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
@@ -1028,6 +1146,21 @@ class Pipeline:
             normalized_to_original=tuple(normalized_to_original),
             normalized_to_original_span=tuple(normalized_to_original_span),
         )
+        if legacy_conversion.encoding == "iscii":
+            converted_bytes = sum(ord(char) >= 0x80 for char in text)
+        elif legacy_conversion.encoding == "zawgyi":
+            converted_bytes = _changed_source_units(text, legacy_conversion)
+        else:
+            converted_bytes = 0
+        legacy_metadata: dict[str, Any] = {
+            "encoding": legacy_conversion.encoding,
+            "changed": legacy_conversion.changed,
+            "converted_bytes": converted_bytes,
+        }
+        if legacy_conversion.zawgyi is not None:
+            # Decision codes and counts only; never source text.
+            legacy_metadata["reason"] = legacy_conversion.reason
+            legacy_metadata["zawgyi"] = legacy_conversion.zawgyi.to_metadata()
         document = NormalizedDocument(
             original_text=text,
             normalized_text=normalized_text,
@@ -1038,15 +1171,7 @@ class Pipeline:
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
                 "encoding_repair": encoding_repair_metadata,
-                "legacy_encoding": {
-                    "encoding": legacy_conversion.encoding,
-                    "changed": legacy_conversion.changed,
-                    "converted_bytes": (
-                        sum(ord(char) >= 0x80 for char in text)
-                        if legacy_conversion.encoding == "iscii"
-                        else 0
-                    ),
-                },
+                "legacy_encoding": legacy_metadata,
             },
         )
         target_script = getattr(self.config, "chinese_target_script", None)
@@ -1056,26 +1181,49 @@ class Pipeline:
 
     def stage2_language_script(self, text: str) -> LanguageRoute:
         from . import pii
+        from .model_registry import get_default_pii_model
         from .pii_i18n import (
-            DEFAULT_PII_MODELS,
             INDIC_NER_LANGUAGES,
+            NATIONAL_ID_ONLY_LANGUAGES,
             SUPPORTED_LANGUAGES,
+            USER_SUPPLIED_MODEL_LANGUAGES,
+            USER_SUPPLIED_PII_MODEL,
         )
         from .script_detect import detect_script
 
         if self.lang == "auto":
             router = self.language_router or LanguageRouter()
             decision = router.route(text)
+            unsupported = [
+                run.script
+                for run in decision.runs
+                if run.reason == "unsupported_script"
+                and any(char.isalpha() for char in text[run.start : run.end])
+            ]
+            if unsupported and router.fallback_pack is None:
+                raise InputError(
+                    "Automatic routing encountered an unsupported script. "
+                    "Configure an explicit LanguageRouter fallback_pack to proceed.",
+                    details={
+                        "reason": "unsupported_script",
+                        "scripts": sorted(set(unsupported)),
+                    },
+                )
             lang = decision.language
             script = decision.dominant_script
             model_name = pii._resolve_effective_pii_model(self.model_name, lang)
+            available_default_model: str | None = decision.dominant_pack.default_model
+            if available_default_model == USER_SUPPLIED_PII_MODEL:
+                # User-supplied-model route packs ship no weights; report no
+                # default model, as the explicit-language path below does.
+                available_default_model = None
             return LanguageRoute(
                 lang=lang,
                 script=script,
                 model_name=model_name,
                 decision=decision,
                 metadata={
-                    "available_default_model": decision.dominant_pack.default_model,
+                    "available_default_model": available_default_model,
                     "dominant_pack": decision.dominant_pack.code,
                     "routing_confidence": decision.confidence,
                     "lid_backend": decision.lid_backend,
@@ -1088,18 +1236,29 @@ class Pipeline:
 
         script = detect_script(text)
         lang = self.lang
-        accepted_languages = SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
+        # Mirror ``pii._resolve_effective_pii_model`` so an explicit language the
+        # core accepts is never rejected one stage earlier.
+        accepted_languages = (
+            SUPPORTED_LANGUAGES
+            | INDIC_NER_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
+        )
         if lang not in accepted_languages:
-            raise ValueError(
-                f"Unsupported language '{lang}'. "
-                f"Supported: {sorted(accepted_languages)}"
+            raise InputError(
+                "The requested language is unsupported. Pass a registered "
+                "language code or register a user-supplied model.",
+                details={"supported_languages": sorted(accepted_languages)},
             )
         model_name = pii._resolve_effective_pii_model(self.model_name, lang)
         return LanguageRoute(
             lang=lang,
             script=script,
             model_name=model_name,
-            metadata={"available_default_model": DEFAULT_PII_MODELS.get(lang)},
+            # ``get_default_pii_model`` resolves registry placeholders to
+            # ``None``, so a language with no bundled weights never reports a
+            # sentinel string as an available model.
+            metadata={"available_default_model": get_default_pii_model(lang)},
         )
 
     def stage3_doc_type_section(
@@ -1432,7 +1591,11 @@ class Pipeline:
             )
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
-            raise RuntimeError("safety sweep must not reduce redacted character count")
+            raise InternalError(
+                "The safety sweep reduced the redacted character count. Stop "
+                "processing and report this invariant failure.",
+                details={"before": before, "after": after},
+            )
         if self.custom_recognizer is not None:
             from . import pii
 
@@ -1575,6 +1738,7 @@ class Pipeline:
             detector = _detector_for_entity(entity, default_detector)
             metadata = dict(getattr(entity, "metadata", None) or {})
             metadata.setdefault("pipeline_stage", stage)
+            hipaa_class = hipaa_class_for(canonical, lang=context.route.lang)
             spans.append(
                 OpenMedSpan(
                     doc_id=context.doc_id,
@@ -1584,9 +1748,7 @@ class Pipeline:
                     entity_type=label or canonical,
                     canonical_label=canonical,
                     policy_label=policy_label_for(canonical, lang=context.route.lang),
-                    regulatory_tags=(
-                        hipaa_class_for(canonical, lang=context.route.lang),
-                    ),
+                    regulatory_tags=(hipaa_class,) if hipaa_class is not None else (),
                     score=float(getattr(entity, "confidence", 0.0) or 0.0),
                     detector=detector,
                     evidence=_evidence_for_entity(entity),
@@ -1648,6 +1810,7 @@ class Pipeline:
                 metadata.setdefault("pipeline_stage", pipeline_stage)
                 metadata.setdefault("plugin_detector", spec.name)
                 evidence = _sanitize_plugin_mapping(span.evidence, surface)
+                hipaa_class = hipaa_class_for(canonical, lang=context.route.lang)
                 spans.append(
                     replace(
                         span,
@@ -1659,9 +1822,9 @@ class Pipeline:
                             canonical,
                             lang=context.route.lang,
                         ),
-                        regulatory_tags=(
-                            hipaa_class_for(canonical, lang=context.route.lang),
-                        ),
+                        regulatory_tags=(hipaa_class,)
+                        if hipaa_class is not None
+                        else (),
                         detector=detector_provenance(spec),
                         evidence=evidence,
                         section=span.section
@@ -1840,19 +2003,43 @@ class Pipeline:
 def _stage_timer(
     durations_ms: dict[str, float],
     stage_name: str,
-) -> Iterator[None]:
+    *,
+    telemetry: PipelineTelemetry,
+    stage_index: int,
+) -> Iterator[StageTelemetry]:
     """Record the wall-clock duration of a pipeline stage in milliseconds.
 
     The recorded value is a latency measurement only; it carries no document
     text and may be used for transient metrics or logs. It is deliberately not
-    persisted in the reproducible pipeline audit record.
+    persisted in the reproducible pipeline audit record. The shared
+    :class:`~openmed.utils.profiling.Timer` measurement also finishes the
+    optional telemetry span and histogram, avoiding a duplicate timing clock.
     """
-    start = perf_counter()
-    try:
-        yield
-    finally:
-        elapsed_ms = (perf_counter() - start) * 1000.0
-        durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
+    timer = Timer().start()
+    with telemetry.stage_span(stage_index, stage_name) as recorder:
+        try:
+            yield recorder
+        finally:
+            elapsed_ms = timer.stop()
+            durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
+            recorder.finish(elapsed_ms)
+
+
+def _record_telemetry_spans(
+    recorder: StageTelemetry,
+    spans: Sequence[OpenMedSpan],
+) -> None:
+    """Attach aggregate, canonical output signals to one stage recorder."""
+    if not recorder.active:
+        return
+    recorder.set_span_count(len(spans))
+    recorder.set_entity_count(len(spans))
+    recorder.set_labels(tuple(span.canonical_label for span in spans))
+    if spans:
+        recorder.set_offset_range(
+            min(span.start for span in spans),
+            max(span.end for span in spans),
+        )
 
 
 def _iter_normalization_segments(text: str):
@@ -1876,6 +2063,27 @@ def _iter_normalization_segments(text: str):
 
 def _identity_text(text: str) -> str:
     return text
+
+
+def _reject_unconverted_legacy_text(document: NormalizedDocument) -> None:
+    """Refuse to route text whose suspected legacy encoding was left as-is."""
+
+    from ..processing.legacy_encoding import LEGACY_ENCODING_UNCONVERTED
+
+    legacy = document.metadata.get("legacy_encoding") or {}
+    if legacy.get("reason") != LEGACY_ENCODING_UNCONVERTED:
+        return
+    zawgyi = legacy.get("zawgyi") or {}
+    raise InputError(
+        "Zawgyi-encoded Burmese was detected but Zawgyi conversion is disabled. "
+        "Enable convert_zawgyi or convert the text to Unicode before routing.",
+        details={
+            "reason": LEGACY_ENCODING_UNCONVERTED,
+            "suspected_encoding": "zawgyi",
+            "confidence": zawgyi.get("confidence"),
+            "myanmar_chars": zawgyi.get("myanmar_chars"),
+        },
+    )
 
 
 def _normalize_chinese_document(
@@ -2063,6 +2271,7 @@ def _language_run_metadata(run: Any) -> dict[str, object]:
         "language": run.language,
         "confidence": run.confidence,
         "source": run.source,
+        "reason": run.reason,
     }
 
 
@@ -2084,8 +2293,10 @@ def _deterministic_patterns(
         validator=clinical_ids.validate_luhn,
     )
     if lang == "en":
+        from .pii_i18n import _numeric_date_pattern
+
         if locale is None:
-            return [luhn_mrn, *PII_PATTERNS]
+            return [luhn_mrn, *PII_PATTERNS, _numeric_date_pattern(lang)]
 
         from .pii_i18n import LOCALE_PII_PATTERNS
 
@@ -2106,6 +2317,7 @@ def _deterministic_patterns(
             luhn_mrn,
             *PII_PATTERNS,
             *locale_patterns,
+            _numeric_date_pattern(locale or lang),
         ]
 
     from .pii_i18n import get_patterns_for_language

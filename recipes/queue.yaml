@@ -1,0 +1,53 @@
+version: 1
+weekly_themes:
+  monday: language-pack
+  tuesday: clinical-ner
+  wednesday: quantized-edge
+  thursday: benchmark-refresh
+  friday: sdk-release
+items:
+  - id: pii-french-small-v1-mlx
+    weekday: monday
+    theme: language-pack
+    model_id: OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1
+    formats:
+      - mlx-fp
+    publish: true
+
+  - id: pii-german-small-v1-mlx
+    weekday: monday
+    theme: language-pack
+    model_id: OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1
+    formats:
+      - mlx-fp
+    publish: true
+
+  - id: clinical-ner-small-v1-mlx
+    weekday: tuesday
+    theme: clinical-ner
+    model_id: OpenMed/OpenMed-ClinicalNER-SuperClinical-Small-44M-v1
+    formats:
+      - mlx-fp
+    publish: true
+
+  - id: pii-french-small-v1-edge
+    weekday: wednesday
+    theme: quantized-edge
+    model_id: OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1
+    formats:
+      - mlx-8bit
+      - coreml
+    publish: true
+    depends_on_green_parent:
+      - pii-french-small-v1-mlx
+
+  - id: pii-german-small-v1-edge
+    weekday: wednesday
+    theme: quantized-edge
+    model_id: OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1
+    formats:
+      - mlx-8bit
+      - coreml
+    publish: true
+    depends_on_green_parent:
+      - pii-german-small-v1-mlx

@@ -13,12 +13,15 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -28,8 +31,23 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from openmed.interop.fhir_bulk import NDJSONFileSummary, deidentify_ndjson_async
+from openmed.interop.fhir.bulk import (
+    BULK_DATA_VERSION,
+    DEFAULT_MAX_BUFFERED_RESOURCES,
+    BulkRejection,
+    NDJSONFileSummary,
+    _safe_metadata,
+    _safe_resource_type,
+    deidentify_ndjson_async,
+)
+from openmed.interop.fhir.smart_refresh import (
+    SMARTTokenResponse,
+    SMARTTokenValidationError,
+    _clock_now,
+    validate_smart_token_response,
+)
 from openmed.interop.fhir_operations import Deidentifier
+from openmed.interop.smart_scope_audit import _granted_scope_tokens
 
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 DEFAULT_BACKEND_SERVICES_SCOPE = "system/*.read"
@@ -43,12 +61,44 @@ DEFAULT_METHOD = "replace"
 ClientAssertionBuilder = Callable[["SMARTBackendConfig"], str]
 SleepCallable = Callable[[float], Awaitable[None]]
 
+_TOKEN_HTTP_ACTIVE: ContextVar[bool] = ContextVar(
+    "openmed_token_http_active", default=False
+)
+
+
+class _TokenHTTPLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not _TOKEN_HTTP_ACTIVE.get()
+
+
+@contextmanager
+def _token_http_log_guard():
+    # HTTPX INFO and HTTPcore DEBUG include endpoint/connection values. Suppress
+    # only this task's token exchange; concurrent unrelated requests still log.
+    for name in (
+        "httpx",
+        "httpcore",
+        "httpcore.connection",
+        "httpcore.http11",
+        "httpcore.http2",
+        "httpcore.proxy",
+        "httpcore.socks",
+    ):
+        logger = logging.getLogger(name)
+        if not any(isinstance(item, _TokenHTTPLogFilter) for item in logger.filters):
+            logger.addFilter(_TokenHTTPLogFilter())
+    marker = _TOKEN_HTTP_ACTIVE.set(True)
+    try:
+        yield
+    finally:
+        _TOKEN_HTTP_ACTIVE.reset(marker)
+
 
 class SMARTBackendError(RuntimeError):
     """Raised when backend-services ingestion cannot proceed safely."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class SMARTBackendConfig:
     """Configuration for one SMART backend-services bulk ingestion run."""
 
@@ -66,6 +116,7 @@ class SMARTBackendConfig:
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
     policy: str = DEFAULT_POLICY
     method: str = DEFAULT_METHOD
+    max_buffered_resources: int = DEFAULT_MAX_BUFFERED_RESOURCES
 
     def __post_init__(self) -> None:
         _require_nonblank("fhir_base_url", self.fhir_base_url)
@@ -80,6 +131,8 @@ class SMARTBackendConfig:
             raise ValueError("poll_interval_seconds must be non-negative")
         if self.request_timeout_seconds <= 0:
             raise ValueError("request_timeout_seconds must be positive")
+        if self.max_buffered_resources < 1:
+            raise ValueError("max_buffered_resources must be at least 1")
         _validate_http_url("fhir_base_url", self.fhir_base_url)
         _validate_http_url("token_url", self.token_url)
 
@@ -118,7 +171,7 @@ class BulkDataFileDescriptor:
     def source_label(self) -> str:
         """Return a PHI-safe source label for error summaries."""
 
-        return f"{self.index:05d}-{_safe_filename_piece(self.resource_type)}"
+        return f"{self.index:05d}-{_safe_filename_piece(_safe_resource_type(self.resource_type))}"
 
     @property
     def output_filename(self) -> str:
@@ -135,6 +188,7 @@ class BulkExportManifest:
     request_url: str
     output: tuple[BulkDataFileDescriptor, ...]
     error_count: int = 0
+    request_url_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -151,6 +205,9 @@ class SMARTBackendFileResult:
     error_count: int
     output_sha256: str
     resumed: bool = False
+    rejection_count: int = 0
+    rejections: tuple[BulkRejection, ...] = ()
+    peak_buffered_resources: int = 0
 
     @classmethod
     def from_summary(
@@ -173,6 +230,9 @@ class SMARTBackendFileResult:
             error_count=summary.error_count,
             output_sha256=summary.output_sha256,
             resumed=resumed,
+            rejection_count=summary.rejection_count,
+            rejections=summary.rejections,
+            peak_buffered_resources=summary.peak_buffered_resources,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -180,7 +240,7 @@ class SMARTBackendFileResult:
 
         return {
             "index": self.index,
-            "resource_type": self.resource_type,
+            "resource_type": _safe_resource_type(self.resource_type),
             "output_file": self.output_file,
             "expected_count": self.expected_count,
             "lines_processed": self.lines_processed,
@@ -189,6 +249,9 @@ class SMARTBackendFileResult:
             "error_count": self.error_count,
             "output_sha256": self.output_sha256,
             "resumed": self.resumed,
+            "rejection_count": self.rejection_count,
+            "rejections": [rejection.to_dict() for rejection in self.rejections],
+            "peak_buffered_resources": self.peak_buffered_resources,
         }
 
     def to_checkpoint_record(self) -> dict[str, Any]:
@@ -206,7 +269,7 @@ class SMARTBackendFileResult:
 
         return cls(
             index=int(record["index"]),
-            resource_type=str(record["resource_type"]),
+            resource_type=_safe_resource_type(str(record["resource_type"])),
             output_file=str(record["output_file"]),
             expected_count=record.get("expected_count"),
             lines_processed=int(record.get("lines_processed", 0)),
@@ -215,6 +278,19 @@ class SMARTBackendFileResult:
             error_count=int(record.get("error_count", 0)),
             output_sha256=str(record.get("output_sha256", "")),
             resumed=resumed,
+            rejection_count=int(record.get("rejection_count", 0)),
+            rejections=tuple(
+                BulkRejection(
+                    line_number=int(item.get("line_number", 0)),
+                    reason=str(item.get("reason", "rejected")),
+                    resource_sha256=str(item.get("resource_sha256", "")),
+                    resource_type=item.get("resource_type"),
+                    path=item.get("path"),
+                )
+                for item in record.get("rejections", [])
+                if isinstance(item, dict)
+            ),
+            peak_buffered_resources=int(record.get("peak_buffered_resources", 0)),
         )
 
 
@@ -234,23 +310,54 @@ class SMARTBackendIngestionSummary:
     files: tuple[SMARTBackendFileResult, ...] = ()
     started_at: float = 0.0
     finished_at: float = 0.0
+    policy: str = DEFAULT_POLICY
+    policy_version: str = "v1"
+    bulk_data_version: str = BULK_DATA_VERSION
+    rejection_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable PHI-free job summary."""
 
+        resource_types: dict[str, int] = {}
+        for file in self.files:
+            resource_type = _safe_resource_type(file.resource_type)
+            resource_types[resource_type] = (
+                resource_types.get(resource_type, 0) + file.resources_deidentified
+            )
         return {
             "job_id": self.job_id,
             "status": self.status,
             "files_total": self.files_total,
             "files_completed": self.files_completed,
             "resources_deidentified": self.resources_deidentified,
+            "resource_types": resource_types,
             "lines_processed": self.lines_processed,
             "error_count": self.error_count,
+            "rejection_count": self.rejection_count,
             "output_sha256": self.output_sha256,
             "max_inflight_downloads_observed": self.max_inflight_downloads_observed,
+            "max_buffered_resources": max(
+                (file.peak_buffered_resources for file in self.files),
+                default=0,
+            ),
+            "bulk_data_version": self.bulk_data_version,
+            "policy": _safe_metadata(self.policy),
+            "policy_version": _safe_metadata(self.policy_version),
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "duration_seconds": max(0.0, self.finished_at - self.started_at),
+            "provenance": {
+                "gateway": "openmed.service.smart_backend",
+                "bulk_data_version": self.bulk_data_version,
+                "policy": _safe_metadata(self.policy),
+                "policy_version": _safe_metadata(self.policy_version),
+            },
             "files": [file.to_dict() for file in self.files],
+            "rejections": [
+                rejection.to_dict()
+                for file in self.files
+                for rejection in file.rejections
+            ],
         }
 
 
@@ -265,11 +372,15 @@ class SMARTBackendBulkIngestor:
         client_assertion_builder: ClientAssertionBuilder | None = None,
         sleep: SleepCallable = asyncio.sleep,
         deidentifier: Deidentifier | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.config = config
         self._transport = transport
-        self._client_assertion_builder = (
-            client_assertion_builder or build_client_assertion
+        self._clock = clock
+        self._token_expires_at = 0
+        self._token_issued_at = 0
+        self._client_assertion_builder = client_assertion_builder or (
+            lambda config: build_client_assertion(config, clock=clock)
         )
         self._sleep = sleep
         self._deidentifier = deidentifier
@@ -283,7 +394,10 @@ class SMARTBackendBulkIngestor:
         run_id = job_id or uuid.uuid4().hex
         started_at = time.time()
         self.config.output_path.mkdir(parents=True, exist_ok=True)
-        checkpoint = _Checkpoint.load(self.config.checkpoint_file)
+        checkpoint = _Checkpoint.load(
+            self.config.checkpoint_file,
+            configuration=_smart_checkpoint_configuration(self.config),
+        )
 
         async with httpx.AsyncClient(
             transport=self._transport,
@@ -315,30 +429,81 @@ class SMARTBackendBulkIngestor:
             files=ordered,
             started_at=started_at,
             finished_at=finished_at,
+            policy=self.config.policy,
+            rejection_count=sum(file.rejection_count for file in ordered),
         )
 
     async def _fetch_access_token(self, client: httpx.AsyncClient) -> str:
+        self._token_expires_at = 0
         self._assert_allowed_url(self.config.token_url)
-        assertion = self._client_assertion_builder(self.config)
-        response = await client.post(
-            self.config.token_url,
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "client_credentials",
-                "scope": self.config.scope,
-                "client_assertion_type": CLIENT_ASSERTION_TYPE,
-                "client_assertion": assertion,
-            },
-        )
-        _raise_for_status(response, "token endpoint")
-        payload = _json_response(response, "token endpoint")
-        token = payload.get("access_token")
-        if not isinstance(token, str) or not token:
-            raise SMARTBackendError("token endpoint did not return an access token")
-        return token
+        failure = None
+        token_response = None
+        try:
+            issued_at = _clock_now(self._clock)
+            requested = _granted_scope_tokens(self.config.scope.split(" "))
+            assertion = self._client_assertion_builder(self.config)
+            with _token_http_log_guard():
+                async with client.stream(
+                    "POST",
+                    self.config.token_url,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    data={
+                        "grant_type": "client_credentials",
+                        "scope": self.config.scope,
+                        "client_assertion_type": CLIENT_ASSERTION_TYPE,
+                        "client_assertion": assertion,
+                    },
+                ) as response:
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        if len(body) + len(chunk) > 65536:
+                            raise SMARTTokenValidationError()
+                        body.extend(chunk)
+                    token_response = SMARTTokenResponse(
+                        response.status_code, bytes(body)
+                    )
+        except asyncio.CancelledError:
+            raise
+        except SMARTTokenValidationError:
+            failure = "token response invalid"
+        except Exception:
+            failure = "token endpoint unavailable"
+        if failure is not None:
+            raise SMARTBackendError(failure)
+        if token_response is None:
+            raise SMARTBackendError("token endpoint unavailable")
+        try:
+            credential, audit = validate_smart_token_response(
+                token_response,
+                requested_scopes=requested,
+                issued_at=issued_at,
+            )
+            if audit.narrowed:
+                failure = "token scope narrowed and insufficient"
+        except SMARTTokenValidationError:
+            failure = "token response invalid"
+        if failure is not None:
+            raise SMARTBackendError(failure)
+        self._token_expires_at = credential.expires_at
+        self._token_issued_at = issued_at
+        self._assert_token_current()
+        return credential.access_token
+
+    def _assert_token_current(self) -> None:
+        invalid_clock = False
+        try:
+            now = _clock_now(self._clock)
+        except ValueError:
+            invalid_clock = True
+        if invalid_clock:
+            self._token_expires_at = 0
+            raise SMARTBackendError("token clock invalid")
+        if now < self._token_issued_at or now >= self._token_expires_at:
+            self._token_expires_at = 0
+            raise SMARTBackendError("token expired")
 
     async def _kickoff_export(
         self,
@@ -347,15 +512,23 @@ class SMARTBackendBulkIngestor:
     ) -> str:
         export_url = self._export_url()
         self._assert_allowed_url(export_url)
-        response = await client.get(
-            export_url,
-            headers={
-                "Accept": "application/fhir+json, application/json",
-                "Authorization": f"Bearer {token}",
-                "Prefer": "respond-async",
-            },
-            params={"_outputFormat": "application/fhir+ndjson"},
-        )
+        self._assert_token_current()
+        try:
+            response = await client.get(
+                export_url,
+                headers={
+                    "Accept": "application/fhir+json, application/json",
+                    "Authorization": f"Bearer {token}",
+                    "Prefer": "respond-async",
+                },
+                params={"_outputFormat": "application/fhir+ndjson"},
+            )
+        except asyncio.CancelledError:
+            raise
+        except SMARTBackendError:
+            raise
+        except Exception:
+            raise SMARTBackendError("bulk export kickoff unavailable") from None
         if response.status_code != 202:
             _raise_for_status(response, "bulk export kickoff")
             raise SMARTBackendError(
@@ -378,13 +551,21 @@ class SMARTBackendBulkIngestor:
     ) -> BulkExportManifest:
         while True:
             self._assert_allowed_url(status_url)
-            response = await client.get(
-                status_url,
-                headers={
-                    "Accept": "application/fhir+json, application/json",
-                    "Authorization": f"Bearer {token}",
-                },
-            )
+            self._assert_token_current()
+            try:
+                response = await client.get(
+                    status_url,
+                    headers={
+                        "Accept": "application/fhir+json, application/json",
+                        "Authorization": f"Bearer {token}",
+                    },
+                )
+            except asyncio.CancelledError:
+                raise
+            except SMARTBackendError:
+                raise
+            except Exception:
+                raise SMARTBackendError("bulk export status unavailable") from None
             if response.status_code == 202:
                 await self._sleep(_retry_after_seconds(response, self.config))
                 continue
@@ -453,6 +634,7 @@ class SMARTBackendBulkIngestor:
 
         await self._enter_download()
         try:
+            self._assert_token_current()
             async with client.stream(
                 "GET",
                 descriptor.url,
@@ -473,9 +655,10 @@ class SMARTBackendBulkIngestor:
                     policy=self.config.policy,
                     method=self.config.method,
                     deidentifier=self._deidentifier,
+                    max_buffered_resources=self.config.max_buffered_resources,
                 )
             os.replace(partial, destination)
-        except Exception:
+        except BaseException:
             partial.unlink(missing_ok=True)
             raise
         finally:
@@ -510,6 +693,7 @@ class SMARTBackendBulkIngestor:
             url = raw_descriptor.get("url")
             if not isinstance(resource_type, str) or not resource_type:
                 raise SMARTBackendError("bulk export output descriptor is missing type")
+            resource_type = _safe_resource_type(resource_type)
             if not isinstance(url, str) or not url:
                 raise SMARTBackendError("bulk export output descriptor is missing url")
             absolute_url = urljoin(self.config.fhir_base_url, url)
@@ -528,9 +712,10 @@ class SMARTBackendBulkIngestor:
         error_count = len(errors) if isinstance(errors, list) else 0
         return BulkExportManifest(
             transaction_time=str(payload.get("transactionTime", "")),
-            request_url=str(payload.get("request", "")),
+            request_url="<redacted>",
             output=tuple(descriptors),
             error_count=error_count,
+            request_url_sha256=_hash_text(payload.get("request")),
         )
 
     def _destination_for(self, descriptor: BulkDataFileDescriptor) -> Path:
@@ -637,6 +822,19 @@ class SMARTBackendJobManager:
             raise ValueError("ingestion job has not completed")
         return status.summary
 
+    async def cancel(self, job_id: str) -> SMARTBackendJobStatus:
+        """Cancel one running ingestion job without exposing its credentials."""
+
+        record = self._jobs.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        if not record.task.done() and record.status.status == "running":
+            record.status.status = "cancelled"
+            record.status.updated_at = time.time()
+            record.task.cancel()
+            await asyncio.gather(record.task, return_exceptions=True)
+        return record.status
+
     async def cancel_all(self) -> None:
         """Cancel any still-running background jobs during service shutdown."""
 
@@ -663,6 +861,11 @@ class SMARTBackendJobManager:
                 deidentifier=deidentifier,
             )
             summary = await ingestor.run(job_id=job_id)
+        except asyncio.CancelledError:
+            record.status.status = "cancelled"
+            record.status.error = None
+            record.status.updated_at = time.time()
+            return
         except Exception as exc:
             record.status.status = "failed"
             record.status.error = _sanitize_exception(exc)
@@ -673,10 +876,20 @@ class SMARTBackendJobManager:
             record.status.updated_at = time.time()
 
 
-def build_client_assertion(config: SMARTBackendConfig) -> str:
+def build_client_assertion(
+    config: SMARTBackendConfig,
+    *,
+    clock: Callable[[], float] = time.time,
+) -> str:
     """Build a signed SMART Backend Services JWT client assertion."""
 
-    now = int(time.time())
+    invalid_clock = False
+    try:
+        now = _clock_now(clock)
+    except ValueError:
+        invalid_clock = True
+    if invalid_clock:
+        raise SMARTBackendError("client assertion clock invalid")
     header: dict[str, Any] = {"alg": "RS384", "typ": "JWT"}
     if config.key_id:
         header["kid"] = config.key_id
@@ -785,11 +998,12 @@ class _DERReader:
 class _Checkpoint:
     path: Path
     completed: dict[str, dict[str, Any]]
+    configuration: str = ""
 
     @classmethod
-    def load(cls, path: Path) -> "_Checkpoint":
+    def load(cls, path: Path, *, configuration: str = "") -> "_Checkpoint":
         if not path.exists():
-            return cls(path=path, completed={})
+            return cls(path=path, completed={}, configuration=configuration)
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
@@ -797,7 +1011,14 @@ class _Checkpoint:
         completed = payload.get("completed", {})
         if not isinstance(completed, dict):
             raise SMARTBackendError("checkpoint file has invalid completed state")
-        return cls(path=path, completed=dict(completed))
+        stored_configuration = payload.get("configuration", "")
+        if stored_configuration != configuration:
+            completed = {}
+        return cls(
+            path=path,
+            completed=dict(completed),
+            configuration=configuration,
+        )
 
     def is_completed(
         self, descriptor: BulkDataFileDescriptor, destination: Path
@@ -828,6 +1049,7 @@ class _Checkpoint:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": 1,
+            "configuration": self.configuration,
             "completed": self.completed,
         }
         temporary = self.path.with_name(f"{self.path.name}.tmp")
@@ -883,6 +1105,16 @@ def _aggregate_output_digest(files: tuple[SMARTBackendFileResult, ...]) -> str:
     return digest.hexdigest()
 
 
+def _smart_checkpoint_configuration(config: SMARTBackendConfig) -> str:
+    payload = {
+        "gateway": "openmed.service.smart_backend/1",
+        "policy": config.policy,
+        "method": config.method,
+        "max_buffered_resources": config.max_buffered_resources,
+    }
+    return _hash_text(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+
+
 def _b64json(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return _b64url(raw)
@@ -930,5 +1162,14 @@ def _require_nonblank(name: str, value: Any) -> None:
 
 
 def _sanitize_exception(exc: BaseException) -> str:
-    message = str(exc).strip()
-    return message or exc.__class__.__name__
+    if isinstance(exc, SMARTBackendError):
+        return str(exc)
+    if isinstance(exc, (httpx.HTTPError, OSError)):
+        return "remote SMART endpoint unavailable"
+    return f"{exc.__class__.__name__} during SMART backend ingestion"
+
+
+def _hash_text(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        return ""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()

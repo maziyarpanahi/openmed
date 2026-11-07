@@ -1,8 +1,9 @@
 """FHIR R4 ``CodeableConcept`` assembly and structural consistency checks.
 
-This module checks local shape and text/display consistency only. It does not
-validate codes, displays, systems, or bindings against a terminology service,
-code system, or value set.
+This module checks local shape and text/display consistency. Callers may also
+provide an expected vocabulary URI set for deterministic source-system checks;
+it does not validate codes, displays, or bindings against a terminology
+service, code system, or value set.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Any, Literal, TypedDict
 
 from openmed.clinical.normalization import RankedConcept
 
-from .codeable_concept_simple import codeable_concept, coding
+from .codeable_concept_simple import codeable_concept, coding, system_uri
 
 __all__ = [
     "CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL",
@@ -26,6 +27,7 @@ CodeableConceptFindingCode = Literal[
     "missing-text-when-codeless",
     "empty-coding-array",
     "text-display-mismatch",
+    "system-uri-mismatch",
 ]
 
 
@@ -42,11 +44,13 @@ class CodeableConceptFinding(TypedDict):
 _MISSING_TEXT_WHEN_CODELESS = "missing-text-when-codeless"
 _EMPTY_CODING_ARRAY = "empty-coding-array"
 _TEXT_DISPLAY_MISMATCH = "text-display-mismatch"
+_SYSTEM_URI_MISMATCH = "system-uri-mismatch"
 
 _FINDING_ORDER: dict[str, int] = {
     _MISSING_TEXT_WHEN_CODELESS: 0,
     _EMPTY_CODING_ARRAY: 1,
     _TEXT_DISPLAY_MISMATCH: 2,
+    _SYSTEM_URI_MISMATCH: 3,
 }
 
 _MISSING_TEXT_DIAGNOSTICS = "CodeableConcept without usable coding must include text."
@@ -57,6 +61,9 @@ _TEXT_DISPLAY_DIAGNOSTICS = (
     "CodeableConcept.text must match at least one coding.display when both are "
     "available, or a coding display must provide the fallback label."
 )
+_SYSTEM_URI_DIAGNOSTICS = (
+    "Coding.system must match one of the expected canonical terminology URIs."
+)
 CONCEPT_NORMALIZATION_PROVENANCE_EXTENSION_URL = (
     "https://openmed.ai/fhir/StructureDefinition/concept-normalization-provenance"
 )
@@ -66,6 +73,8 @@ def check_codeable_concept(
     concept: Any,
     *,
     expression: str = "CodeableConcept",
+    expected_system: str | None = None,
+    expected_systems: Sequence[str] | None = None,
 ) -> list[CodeableConceptFinding]:
     """Return deterministic structural findings for a ``CodeableConcept``.
 
@@ -78,6 +87,12 @@ def check_codeable_concept(
     Args:
         concept: Candidate FHIR R4 ``CodeableConcept`` mapping.
         expression: FHIRPath-style base expression for the checked element.
+        expected_system: Optional short vocabulary id or canonical URI expected
+            on every Coding. This is a convenience form for one vocabulary.
+        expected_systems: Optional short vocabulary ids or canonical URIs that
+            are allowed on the Codings. Supplying this opt-in set lets a caller
+            catch a URI copied from the wrong source vocabulary without making
+            custom FHIR CodeSystems invalid by default.
 
     Returns:
         A deterministic list of JSON-serializable finding dictionaries.
@@ -121,6 +136,22 @@ def check_codeable_concept(
                 expression=_field_expression(expression, "text"),
             )
         )
+
+    expected_uris = _expected_system_uris(expected_system, expected_systems)
+    if expected_uris:
+        for index, item in enumerate(codings):
+            if item.get("system") not in expected_uris:
+                findings.append(
+                    _finding(
+                        finding_code=_SYSTEM_URI_MISMATCH,
+                        severity="error",
+                        code="value",
+                        diagnostics=_SYSTEM_URI_DIAGNOSTICS,
+                        expression=_indexed_field_expression(
+                            expression, index, "system"
+                        ),
+                    )
+                )
 
     return sorted(
         findings,
@@ -265,3 +296,38 @@ def _field_expression(base: Any, field: str) -> str:
     if not base_expression:
         return field
     return f"{base_expression}.{field}"
+
+
+def _expected_system_uris(
+    expected_system: str | None,
+    expected_systems: Sequence[str] | None,
+) -> set[str]:
+    """Resolve optional expected vocabulary names into canonical URI strings."""
+
+    values: list[str] = []
+    if expected_system is not None:
+        values.append(expected_system)
+    if expected_systems is not None:
+        if isinstance(expected_systems, str):
+            values.append(expected_systems)
+        else:
+            values.extend(value for value in expected_systems if isinstance(value, str))
+
+    resolved: set[str] = set()
+    for value in values:
+        try:
+            resolved.add(system_uri(value))
+        except ValueError:
+            # An invalid expectation cannot accidentally validate a Coding, but
+            # the tolerant checker still returns findings rather than raising.
+            continue
+    return resolved
+
+
+def _indexed_field_expression(base: Any, index: int, field: str) -> str:
+    """Return a FHIRPath expression for an indexed CodeableConcept coding."""
+
+    base_expression = base.strip() if isinstance(base, str) else "CodeableConcept"
+    if not base_expression:
+        base_expression = "CodeableConcept"
+    return f"{base_expression}.coding[{index}].{field}"

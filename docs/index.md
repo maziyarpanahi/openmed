@@ -7,26 +7,36 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `2.0.0` establishes a stable major-version contract across Python,
-Swift, Kotlin/Android, JavaScript, REST, and local deployment surfaces. It
-combines policy-aware de-identification, expanded clinical and structured-data
+The OpenMed `3.2.0` candidate adds multilingual privacy patterns, native
+calendars and surrogates, synthetic clinical dataset tooling, and optional
+local GLiFormer, GLiNER2.5, GLiClass and decision-server backends. These new
+runtime and data-generation capabilities are primarily Python APIs; existing
+Swift, Kotlin/Android, JavaScript and service contracts retain their documented
+platform coverage. Review the [3.1-to-3.2 migration guide](migration/3.1-to-3.2.md)
+for the Python 3.11 minimum, rendering requirements and decision schema
+compatibility. Low-resource cohort languages remain experimental until their
+independent review and graduation gates pass.
+New-model training and checkpoint publication are optional research, not feature
+or SDK-release prerequisites. The candidate combines policy-aware de-identification,
+expanded clinical and structured-data
 workflows, broad multilingual PII coverage, and fail-closed release evidence:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
   hashes, review bundles, redaction previews, and release gates.
-- **Multimodal and structured inputs** across OCR, images, PDFs, DOCX, EPUB,
+- **Multimodal and structured inputs** across OCR, images, PDFs, DOCX,
+  email, EPUB,
   vCard/iCalendar, DICOM, CSV/TSV, JSONL chat logs, HL7 v2, CDA/C-CDA, FHIR
   operations, and FHIR Bulk NDJSON.
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **34 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr,
-  he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr,
-  uk, xh, zh, and zu**, with Russian using a documented multilingual default-model
-  placeholder and Bengali, Chinese, and Tamil using dedicated registry entries,
-  plus locale-aware validation and surrogate generation. A user-configured
-  Indic NER adapter adds four optional routes and can also serve Assamese,
-  Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Additional validator-backed national-ID
+- **42 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu,
+  he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr,
+  uk, ur, vi, xh, zh, and zu**, with Russian using a documented multilingual default-model
+  placeholder and Bengali, Chinese, and Tamil using dedicated registry
+  entries, plus locale-aware validation and surrogate generation. A user-configured
+  Indic NER adapter can also serve Assamese, Bengali, Gujarati, Hindi, Kannada,
+  Malayalam, Marathi, Odia, Punjabi, Tamil, and Telugu. Additional validator-backed national-ID
   coverage remains available for ID-only locales.
 - **Release evidence** for leakage heatmaps, model scorecards, threshold
   sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, signed
@@ -85,21 +95,24 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – major-version installation coordinates, compatibility guidance, platform coverage, and qualification requirements.
+- [OpenMed 3.2.0 Release Notes](./release/v3.2.0.md) – candidate scope, intended post-publication coordinates and validation requirements. See the [feature map](./feature-map.md) for capability and platform coverage.
+- [OpenMed 3.2.0 Migration Guide](./migration/3.1-to-3.2.md) – interpreter requirements, rendering changes and retained decision contracts.
+- [OpenMed 2.5.0 Release Notes](./release/v2.5.0.md) – historical coverage and installation coordinates for the previous stable release.
+- [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – historical major-version contract and v2 baseline.
 - [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – historical Swift packaging, Android release hardening, and dependency-security fixes for the final 1.9 patch.
 - [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – historical cross-platform runtime and service release inventory.
 - [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – historical coverage checklist across examples, docs, website, and source modules.
 - [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
 - [ONNX and WebGPU Export](./export-onnx-webgpu.md) – export, manifest, runtime-loading, and publication guidance for ONNX browser artifacts.
 - [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
-- [FHIR Interop Helpers](./fhir-interop.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
+- [FHIR Interop Helpers](./fhir-interop.md), [FHIR-to-OMOP round-trip conformance](./interop/fhir-omop-matrix.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
 - [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), [Android Span Parity](./android-parity.md), and [CoreML Packaging](./coreml-export.md) – local mobile/runtime paths.
 
 ## How these docs are structured
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – review the current installation coordinates, compatibility contract, and validation requirements.
+3. [OpenMed 3.2.0 Migration Guide](./migration/3.1-to-3.2.md) – review contract changes and validation requirements before upgrading.
 4. Core guides:
     - [Analyze Text Helper](./analyze-text.md) for single-call inference.
     - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

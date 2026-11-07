@@ -364,12 +364,38 @@ def test_anonymize_table_accepts_dataframe_like_object():
 # --------------------------------------------------------------------------- #
 def test_unknown_model_is_rejected():
     with pytest.raises(AnonymizationError):
-        anonymize_table(_mixed_table(), {"age": "age"}, model="l-diversity")
+        anonymize_table(_mixed_table(), {"age": "age"}, model="unsupported")
 
 
 def test_unknown_column_type_is_rejected():
     with pytest.raises(AnonymizationError):
         anonymize_table(_mixed_table(), {"age": "salary"})
+
+
+def test_invalid_qi_errors_do_not_echo_source_values(subtests):
+    for rows, quasi_identifiers, canary in [
+        (
+            [{"age": "synthetic-age-canary"}],
+            {"age": "age"},
+            "synthetic-age-canary",
+        ),
+        (
+            [{"zip": "synthetic-zip-canary!"}],
+            {"zip": "zip"},
+            "synthetic-zip-canary!",
+        ),
+    ]:
+        with subtests.test(
+            rows=rows, quasi_identifiers=quasi_identifiers, canary=canary
+        ):
+            with pytest.raises(AnonymizationError) as raised:
+                anonymize_table(rows, quasi_identifiers, k=1)
+            assert canary not in str(raised.value)
+
+
+def test_non_string_column_type_is_rejected_as_anonymization_error():
+    with pytest.raises(AnonymizationError, match="unknown column type"):
+        anonymize_table(_mixed_table(), {"age": ["age"]})
 
 
 def test_clinical_code_qi_requires_caller_supplied_parent_data():
@@ -398,10 +424,11 @@ def test_empty_quasi_identifiers_is_rejected():
         anonymize_table(_mixed_table(), {})
 
 
-@pytest.mark.parametrize("bad_k", [0, -1])
-def test_invalid_target_k_is_rejected(bad_k):
-    with pytest.raises(AnonymizationError):
-        anonymize_table(_mixed_table(), {"age": "age"}, target_k=bad_k)
+def test_invalid_target_k_is_rejected(subtests):
+    for bad_k in [0, -1]:
+        with subtests.test(bad_k=bad_k):
+            with pytest.raises(AnonymizationError):
+                anonymize_table(_mixed_table(), {"age": "age"}, target_k=bad_k)
 
 
 def test_invalid_suppression_rate_is_rejected():
@@ -409,5 +436,7 @@ def test_invalid_suppression_rate_is_rejected():
         anonymize_table(_mixed_table(), {"age": "age"}, suppression_rate=1.5)
 
 
-def test_supported_models_contains_only_k_anon():
-    assert SUPPORTED_MODELS == frozenset({MODEL_K_ANON})
+def test_supported_models_cover_the_public_table_orchestrator():
+    assert SUPPORTED_MODELS == frozenset(
+        {MODEL_K_ANON, "dp", "l-diversity", "t-closeness"}
+    )

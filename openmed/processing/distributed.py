@@ -128,10 +128,16 @@ def plan_document_shards(
     ``worker_count`` is accepted for executor-facing call sites but does not
     affect membership, which lets operators change workers without reshuffling
     an already planned corpus.
+
+    Both counts must be positive Python integers, excluding booleans; invalid
+    values are rejected before documents are read.
     """
     _validate_shard_count(shard_count)
-    if worker_count is not None and worker_count < 1:
-        raise ValueError("worker_count must be greater than zero")
+    if worker_count is not None:
+        if isinstance(worker_count, bool) or not isinstance(worker_count, int):
+            raise ValueError("worker_count must be a positive integer")
+        if worker_count < 1:
+            raise ValueError("worker_count must be greater than zero")
 
     normalized_id_fields = _normalize_id_fields(id_fields)
     assignments: dict[int, list[tuple[str, str]]] = defaultdict(list)
@@ -167,6 +173,8 @@ def plan_document_shards(
 
 
 def _validate_shard_count(shard_count: int) -> None:
+    if isinstance(shard_count, bool) or not isinstance(shard_count, int):
+        raise ValueError("shard_count must be a positive integer")
     if shard_count < 1:
         raise ValueError("shard_count must be greater than zero")
 

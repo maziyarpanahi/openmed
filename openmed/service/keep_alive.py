@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Optional
 
@@ -20,16 +21,19 @@ def parse_keep_alive(value: Any) -> Optional[float]:
 
     Accepted values are numbers in seconds, strings like ``"30s"``, ``"5m"``,
     ``"1h30m"``, and opt-out strings such as ``"off"`` or ``"forever"``.
+    Numeric durations must be finite and non-negative; use an opt-out string
+    rather than a non-finite numeric value to disable expiry.
     """
     if value is None:
         return None
     if isinstance(value, bool):
         raise ValueError("keep_alive must be a duration, not a boolean")
     if isinstance(value, (int, float)):
-        seconds = float(value)
-        if seconds < 0:
-            raise ValueError("keep_alive must be greater than or equal to 0")
-        return seconds
+        try:
+            seconds = float(value)
+        except OverflowError:
+            raise ValueError("keep_alive must be finite") from None
+        return _validate_seconds(seconds)
     if not isinstance(value, str):
         raise ValueError("keep_alive must be a duration string or number of seconds")
 
@@ -45,9 +49,7 @@ def parse_keep_alive(value: Any) -> Optional[float]:
         seconds = None
 
     if seconds is not None:
-        if seconds < 0:
-            raise ValueError("keep_alive must be greater than or equal to 0")
-        return seconds
+        return _validate_seconds(seconds)
 
     total = 0.0
     position = 0
@@ -63,4 +65,13 @@ def parse_keep_alive(value: Any) -> Optional[float]:
         raise ValueError(
             "keep_alive must use duration units like '30s', '5m', or '1h30m'"
         )
-    return total
+    return _validate_seconds(total)
+
+
+def _validate_seconds(seconds: float) -> float:
+    """Reject durations that cannot represent a finite, non-negative timeout."""
+    if not math.isfinite(seconds):
+        raise ValueError("keep_alive must be finite")
+    if seconds < 0:
+        raise ValueError("keep_alive must be greater than or equal to 0")
+    return seconds

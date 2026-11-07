@@ -1,0 +1,25 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingest/evidence-adapter-quarantine.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_count": {"minimum": 0, "type": "integer"},
+    "classification": {"enum": ["ambiguous", "malformed", "partial", "unsafe", "unsupported"]},
+    "compatibility_policy": {"const": "same_major"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "failure_count": {"minimum": 1, "type": "integer"},
+    "parser_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "parser_version": {"pattern": "^[1-9][0-9]*(\\.[0-9]+){0,2}$", "type": "string"},
+    "quarantine_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "reason_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_byte_size": {"minimum": 0, "type": "integer"},
+    "source_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "source_format": {"enum": ["text", "document", "fhir_r4", "hl7v2", "cda", "csv", "xlsx", "pdf", "ocr", "image", "dicom_sr"]},
+    "source_version": {"pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$", "type": "string"}
+  },
+  "required": ["candidate_count", "classification", "compatibility_policy", "created_at", "failure_count", "parser_id", "parser_version", "quarantine_id", "reason_code", "schema_version", "source_byte_size", "source_digest", "source_format", "source_version"],
+  "schema_version": 1,
+  "title": "OpenMedStructuredEvidenceQuarantine",
+  "type": "object"
+}

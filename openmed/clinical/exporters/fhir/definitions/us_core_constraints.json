@@ -1,0 +1,399 @@
+{
+  "schemaVersion": 1,
+  "fhirVersion": "4.0.1",
+  "usCoreVersion": "9.0.0",
+  "license": "CC0-1.0",
+  "source": "https://hl7.org/fhir/us/core/STU9/",
+  "description": "OpenMed-authored compact constraints for selected US Core STU9 profiles; no clinical terminology expansions or implementation-guide content.",
+  "defaults": {
+    "AllergyIntolerance": "us-core-allergyintolerance",
+    "Condition": "us-core-condition-problems-health-concerns",
+    "MedicationRequest": "us-core-medicationrequest",
+    "Observation": "us-core-observation-lab"
+  },
+  "bindings": {
+    "allergy-code": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.43"
+    },
+    "allergy-manifestation": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://hl7.org/fhir/ValueSet/clinical-findings"
+    },
+    "condition-code": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://hl7.org/fhir/us/core/ValueSet/us-core-condition-code"
+    },
+    "condition-encounter-category": {
+      "systems": {
+        "http://terminology.hl7.org/CodeSystem/condition-category": [
+          "encounter-diagnosis"
+        ]
+      }
+    },
+    "condition-problem-category": {
+      "systems": {
+        "http://hl7.org/fhir/us/core/CodeSystem/condition-category": [
+          "health-concern"
+        ],
+        "http://terminology.hl7.org/CodeSystem/condition-category": [
+          "problem-list-item"
+        ]
+      }
+    },
+    "medication-request-category": {
+      "systems": {
+        "http://terminology.hl7.org/CodeSystem/medicationrequest-category": [
+          "community",
+          "discharge",
+          "inpatient",
+          "outpatient"
+        ]
+      }
+    },
+    "medication-request-medication": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4"
+    },
+    "medication-request-route": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.22"
+    },
+    "observation-interpretation": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://hl7.org/fhir/ValueSet/observation-interpretation"
+    },
+    "observation-laboratory-code": {
+      "external": true,
+      "strength": "extensible",
+      "url": "http://hl7.org/fhir/us/core/ValueSet/us-core-laboratory-test-codes"
+    },
+    "observation-laboratory-category": {
+      "systems": {
+        "http://terminology.hl7.org/CodeSystem/observation-category": [
+          "laboratory"
+        ]
+      }
+    },
+    "reaction-severity": {
+      "systems": {
+        "http://hl7.org/fhir/reaction-event-severity": [
+          "mild",
+          "moderate",
+          "severe"
+        ]
+      }
+    }
+  },
+  "profiles": [
+    {
+      "id": "us-core-condition-problems-health-concerns",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+      "resourceType": "Condition",
+      "elements": [
+        {
+          "path": "meta",
+          "mustSupport": true
+        },
+        {
+          "path": "meta.lastUpdated",
+          "mustSupport": true
+        },
+        {
+          "path": "extension",
+          "location": "extension[assertedDate]",
+          "mustSupport": true,
+          "selector": {
+            "url": "http://hl7.org/fhir/StructureDefinition/condition-assertedDate"
+          }
+        },
+        {
+          "path": "clinicalStatus",
+          "mustSupport": true
+        },
+        {
+          "path": "verificationStatus",
+          "mustSupport": true
+        },
+        {
+          "path": "category",
+          "location": "category[us-core]",
+          "min": 1,
+          "mustSupport": true,
+          "selector": {
+            "binding": "condition-problem-category"
+          }
+        },
+        {
+          "path": "code",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "condition-code"
+        },
+        {
+          "path": "subject",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "onset[x]",
+          "mustSupport": true
+        },
+        {
+          "path": "abatement[x]",
+          "mustSupport": true
+        },
+        {
+          "path": "recordedDate",
+          "mustSupport": true
+        }
+      ]
+    },
+    {
+      "id": "us-core-condition-encounter-diagnosis",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis",
+      "resourceType": "Condition",
+      "elements": [
+        {
+          "path": "category",
+          "location": "category[us-core]",
+          "min": 1,
+          "max": 1,
+          "mustSupport": true,
+          "selector": {
+            "binding": "condition-encounter-category"
+          }
+        },
+        {
+          "path": "code",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "condition-code"
+        },
+        {
+          "path": "subject",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "encounter",
+          "mustSupport": true
+        },
+        {
+          "path": "recordedDate",
+          "mustSupport": true
+        }
+      ]
+    },
+    {
+      "id": "us-core-observation-lab",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "resourceType": "Observation",
+      "elements": [
+        {
+          "path": "meta",
+          "mustSupport": true
+        },
+        {
+          "path": "meta.lastUpdated",
+          "mustSupport": true
+        },
+        {
+          "path": "status",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "category",
+          "location": "category[us-core]",
+          "min": 1,
+          "max": 1,
+          "mustSupport": true,
+          "selector": {
+            "binding": "observation-laboratory-category"
+          }
+        },
+        {
+          "path": "code",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "observation-laboratory-code"
+        },
+        {
+          "path": "subject",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "encounter",
+          "mustSupport": true
+        },
+        {
+          "path": "effective[x]",
+          "mustSupport": true
+        },
+        {
+          "path": "performer",
+          "mustSupport": true
+        },
+        {
+          "path": "interpretation",
+          "mustSupport": true,
+          "externalBinding": "observation-interpretation"
+        },
+        {
+          "path": "specimen",
+          "mustSupport": true
+        },
+        {
+          "path": "referenceRange",
+          "mustSupport": true
+        }
+      ],
+      "mustSupportAnyOf": [
+        {
+          "paths": [
+            "value[x]",
+            "dataAbsentReason"
+          ],
+          "location": "value[x]|dataAbsentReason"
+        }
+      ]
+    },
+    {
+      "id": "us-core-medicationrequest",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "resourceType": "MedicationRequest",
+      "elements": [
+        {
+          "path": "status",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "intent",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "category",
+          "location": "category[us-core]",
+          "mustSupport": true,
+          "selector": {
+            "binding": "medication-request-category"
+          }
+        },
+        {
+          "path": "reported[x]",
+          "mustSupport": true
+        },
+        {
+          "path": "medication[x]",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "medication-request-medication"
+        },
+        {
+          "path": "subject",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "encounter",
+          "mustSupport": true
+        },
+        {
+          "path": "authoredOn",
+          "mustSupport": true
+        },
+        {
+          "path": "requester",
+          "mustSupport": true
+        },
+        {
+          "path": "dosageInstruction",
+          "mustSupport": true
+        },
+        {
+          "path": "dosageInstruction.text",
+          "mustSupport": true
+        },
+        {
+          "path": "dosageInstruction.timing",
+          "mustSupport": true
+        },
+        {
+          "path": "dosageInstruction.route",
+          "mustSupport": true,
+          "externalBinding": "medication-request-route"
+        },
+        {
+          "path": "dosageInstruction.doseAndRate",
+          "mustSupport": true
+        },
+        {
+          "path": "dosageInstruction.doseAndRate.dose[x]",
+          "mustSupport": true
+        },
+        {
+          "path": "dispenseRequest",
+          "mustSupport": true
+        },
+        {
+          "path": "dispenseRequest.numberOfRepeatsAllowed",
+          "mustSupport": true
+        },
+        {
+          "path": "dispenseRequest.quantity",
+          "mustSupport": true
+        }
+      ]
+    },
+    {
+      "id": "us-core-allergyintolerance",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance",
+      "resourceType": "AllergyIntolerance",
+      "elements": [
+        {
+          "path": "clinicalStatus",
+          "mustSupport": true
+        },
+        {
+          "path": "verificationStatus",
+          "mustSupport": true
+        },
+        {
+          "path": "code",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "allergy-code"
+        },
+        {
+          "path": "patient",
+          "min": 1,
+          "mustSupport": true
+        },
+        {
+          "path": "reaction",
+          "mustSupport": true
+        },
+        {
+          "path": "reaction.manifestation",
+          "min": 1,
+          "mustSupport": true,
+          "externalBinding": "allergy-manifestation"
+        },
+        {
+          "path": "reaction.severity",
+          "binding": "reaction-severity"
+        }
+      ]
+    }
+  ]
+}

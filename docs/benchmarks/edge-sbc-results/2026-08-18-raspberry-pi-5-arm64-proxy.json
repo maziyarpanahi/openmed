@@ -1,0 +1,43 @@
+{
+  "benchmark": "edge_sbc",
+  "cold_start_ms": 52.375125,
+  "generated_at": "2026-08-18T00:00:00Z",
+  "install_size_bytes": 239168720,
+  "install_size_mib": 228.089066,
+  "machine": {
+    "architecture": "arm64",
+    "cpu_count": 32,
+    "operating_system": "Darwin",
+    "python": "3.11.10"
+  },
+  "network_guard": "socket-blocked",
+  "offline": true,
+  "peak_rss_bytes": 150044672,
+  "peak_rss_mib": 143.09375,
+  "profile": "raspberry-pi-5",
+  "repeat": 20,
+  "runtime": {
+    "artifact_sha256": "cc64e8a7cac168b9a648ff0477b5de51d0c23a27e15ad4331c52981c8fee4369",
+    "backend": "onnxruntime",
+    "backend_version": "1.23.2",
+    "execution_provider": "CPUExecutionProvider",
+    "name": "synthetic-onnx-identity"
+  },
+  "sample_count": 40,
+  "schema_version": 1,
+  "steady_state_latency_ms": {
+    "p50": 0.004708,
+    "p95": 0.008417,
+    "p99": 0.012
+  },
+  "token_count": 1100,
+  "tokens_per_second": 3870404.980896,
+  "total_seconds": 0.000284,
+  "workload": {
+    "document_count": 2,
+    "name": "mobile_one_page_notes.jsonl",
+    "sha256": "d64608c179fed88fd2f4d49e7152e10375d6397d33226eba93e3d387529aa587",
+    "synthetic": true,
+    "token_definition": "unicode-whitespace-fields"
+  }
+}

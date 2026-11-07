@@ -299,7 +299,7 @@ def load_sense_inventory(
     if path is not None:
         custom_path = Path(path)
         with custom_path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
+            payload = json.load(handle, object_pairs_hook=_reject_repeated_keys)
         custom = _inventory_from_payload(payload, require_permissive=False)
         _merge_inventory(merged, custom)
     elif not include_starter:
@@ -431,7 +431,7 @@ def _starter_inventory() -> SenseInventory:
         DEFAULT_SENSE_INVENTORY_RESOURCE
     )
     with resource.open("r", encoding="utf-8") as handle:
-        payload = json.load(handle)
+        payload = json.load(handle, object_pairs_hook=_reject_repeated_keys)
     return _inventory_from_payload(payload, require_permissive=True)
 
 
@@ -463,16 +463,71 @@ def _inventory_from_payload(
         raise ValueError("sense inventory requires a non-empty senses mapping")
 
     senses: dict[str, tuple[SenseDefinition, ...]] = {}
+    raw_keys: dict[str, str] = {}
     for raw_short_form, raw_definitions in raw_senses.items():
         short_form = _normalize_short_form(raw_short_form)
         if not short_form:
             raise ValueError("sense inventory short forms must be non-empty")
+        if short_form in raw_keys:
+            # Without this the later key silently replaced the earlier one's senses.
+            raise ValueError("sense inventory short forms collide after normalization")
+        raw_keys[short_form] = str(raw_short_form)
         if not _is_nonstring_sequence(raw_definitions) or not raw_definitions:
             raise ValueError(f"sense inventory entry {short_form!r} needs candidates")
-        senses[short_form] = tuple(
+        definitions = tuple(
             _definition_from_payload(short_form, item) for item in raw_definitions
         )
+        _reject_duplicate_senses(short_form, definitions)
+        senses[short_form] = definitions
     return SenseInventory(senses)
+
+
+def _reject_duplicate_senses(
+    short_form: str,
+    definitions: Sequence[SenseDefinition],
+) -> None:
+    """Reject candidates that repeat or contradict each other for one short form.
+
+    Candidates are identified by normalized long form and semantic type, so the
+    same long form under distinct semantic types stays a valid alternative. Two
+    candidates with the same identity are an exact duplicate when their source
+    also matches, and a conflicting definition when it does not. Positions are
+    1-based, in file order.
+    """
+
+    seen: dict[tuple[str, str], tuple[int, str]] = {}
+    for position, definition in enumerate(definitions, start=1):
+        identity = (
+            _normalize_text(definition.long_form),
+            definition.semantic_type,
+        )
+        source = _normalize_text(definition.source)
+        first = seen.get(identity)
+        if first is None:
+            seen[identity] = (position, source)
+            continue
+        first_position, first_source = first
+        if source == first_source:
+            raise ValueError(
+                "sense inventory entry repeats candidate "
+                f"{first_position} as candidate {position}"
+            )
+        raise ValueError(
+            "sense inventory entry has conflicting candidates "
+            f"{first_position} and {position}: same long form and semantic type, "
+            "different source"
+        )
+
+
+def _reject_repeated_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """``object_pairs_hook`` that fails on a key repeated within one JSON object."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("sense inventory JSON repeats a key")
+        result[key] = value
+    return result
 
 
 def _definition_from_payload(short_form: str, payload: object) -> SenseDefinition:
@@ -510,17 +565,20 @@ def _merge_inventory(
 ) -> None:
     for short_form, custom_candidates in custom.items():
         current = merged.setdefault(short_form, [])
-        positions = {
+        # Only definitions that were there before this file can be replaced. A
+        # file listing one long form under two semantic types keeps both: the
+        # first replaces the existing definition and the second is appended,
+        # instead of the second overwriting the first.
+        replaceable = {
             candidate.long_form.casefold(): index
             for index, candidate in enumerate(current)
         }
         for candidate in custom_candidates:
-            key = candidate.long_form.casefold()
-            if key in positions:
-                current[positions[key]] = candidate
-            else:
-                positions[key] = len(current)
+            index = replaceable.pop(candidate.long_form.casefold(), None)
+            if index is None:
                 current.append(candidate)
+            else:
+                current[index] = candidate
 
 
 def _score_candidate(

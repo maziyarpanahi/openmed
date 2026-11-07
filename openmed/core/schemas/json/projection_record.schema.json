@@ -1,0 +1,20 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/projections/record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "byte_size": {"minimum": 0, "type": "integer"},
+    "consent_revision_fingerprint": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "consent_scope_fingerprint": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "content_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "namespace": {"enum": ["identified", "deidentified"]},
+    "projection_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "version": {"minimum": 1, "type": "integer"}
+  },
+  "required": ["byte_size", "consent_revision_fingerprint", "consent_scope_fingerprint", "content_digest", "created_at", "namespace", "projection_id", "schema_version", "version"],
+  "schema_version": 1,
+  "title": "OpenMedProjectionRecord",
+  "type": "object"
+}

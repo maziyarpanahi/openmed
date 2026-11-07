@@ -69,6 +69,20 @@ from openmed.interop.cda import redact_cda
 redacted_xml = redact_cda("synthetic_ccda.xml", date_shift_days=30)
 ```
 
+C-CDA default header rules cover patient, guardian, next-of-kin and informant
+names/addresses/telecom values, plus birthplace addresses. Those known values
+also seed the narrative surface sweep. Pass `coverage_report={}` to
+`redact_cda` to collect `unmapped_elements` (controlled element paths and
+counts) and `unmapped_counts` for person names, addresses and telecoms. Reports
+never include values, attributes or custom element names. Unmapped structures
+still require local profile review; these defaults are not a guarantee of
+complete de-identification or a conformance validation.
+The optional inventory refuses documents deeper than 64 levels or containing
+more than 10,000 elements with `CDA coverage limit exceeded`, before updating
+the output mapping. This bounds controlled paths and avoids partial reports.
+To measure residual PHI against seeded C-CDA documents with element-level
+truth, see [Synthetic C-CDA documents](training/synthetic/cda-documents.md).
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash
@@ -140,6 +154,33 @@ openmed models pull disease_detection_superclinical \
 Progress contains only repository filenames and byte/file totals. After the
 pull completes, set `OPENMED_OFFLINE=1`; the same command then performs a
 cache-only lookup and never attempts a network connection.
+
+### Scriptable CLI output and shell completion
+
+Add `--json` to a leaf command when a pipeline needs one stable JSON document
+on stdout instead of human-readable formatting:
+
+```bash
+openmed analyze --text "synthetic clinical note" --json
+```
+
+The result uses the command's typed `to_dict()` payload inside a stable
+`ok`/`command`/`data` envelope. Errors use the matching `ok`/`command`/`error`
+envelope and a non-zero exit code; diagnostics and progress stay off the JSON
+stdout stream.
+
+Generate completion definitions for the shell in use:
+
+```bash
+# Bash
+eval "$(openmed completion bash)"
+
+# Zsh
+source <(openmed completion zsh)
+
+# Fish
+openmed completion fish | source
+```
 
 ## 5. Copy code snippets from the docs
 

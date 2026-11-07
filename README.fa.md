@@ -9,7 +9,7 @@
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>اجرای محلی‌محور</b> &nbsp;·&nbsp; <b>33 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 ورودی مانیفست</b> &nbsp;·&nbsp; <b>35 زبان PII با پشتیبانی مدل</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -120,7 +120,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -196,7 +196,7 @@ analyze_text(
 **سرویس REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -331,7 +331,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII چندزبانه (34 مسیر پشتیبانی‌شده؛ 33 مسیر با مدل)
+## PII چندزبانه (42 مسیر پشتیبانی‌شده؛ 35 مسیر با مدل)
 
 استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **فهرست ثبت‌شدهٔ مدل‌های PII**.
 
@@ -374,7 +374,7 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -472,7 +472,7 @@ OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شد�
 
 </div>
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

@@ -37,7 +37,11 @@ def run_load_test(
     payload: dict[str, Any] = DEFAULT_PAYLOAD,
     path: str = DEFAULT_PATH,
 ) -> LoadReport:
-    """Run the requests and return their speed, latency, and error rate."""
+    """Run requests through complete response bodies and summarize performance.
+
+    A response that starts but never sends its final body event is a failed
+    request, not a successful latency sample.
+    """
     if concurrency < 1 or total_requests < 1:
         raise ValueError("concurrency and total_requests must be at least 1")
 
@@ -93,10 +97,14 @@ async def _post(app: Any, path: str, payload: dict[str, Any]) -> int:
     body = json.dumps(payload).encode()
     status = None
     body_sent = False
+    response_complete = asyncio.Event()
 
     async def receive():
         nonlocal body_sent
         if body_sent:
+            # Finishing the request body is not a client disconnect. Streaming
+            # responses may listen for this event while sending their body.
+            await response_complete.wait()
             return {"type": "http.disconnect"}
         body_sent = True
         return {"type": "http.request", "body": body, "more_body": False}
@@ -105,6 +113,10 @@ async def _post(app: Any, path: str, payload: dict[str, Any]) -> int:
         nonlocal status
         if message["type"] == "http.response.start":
             status = message["status"]
+        elif message["type"] == "http.response.body" and not message.get(
+            "more_body", False
+        ):
+            response_complete.set()
 
     scope = {
         "type": "http",
@@ -126,6 +138,8 @@ async def _post(app: Any, path: str, payload: dict[str, Any]) -> int:
 
     if status is None:
         raise RuntimeError("The app did not return an HTTP status")
+    if not response_complete.is_set():
+        raise RuntimeError("The app did not complete the HTTP response body")
     return status
 
 

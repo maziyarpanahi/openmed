@@ -9,7 +9,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@ OpenMed 的核心本地运行时会在所需模型制品就绪后执行抽取和
 </p>
 
 <p>
-  <b>本地优先运行</b> &nbsp;·&nbsp; <b>33 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 条清单记录</b> &nbsp;·&nbsp; <b>35 种模型支持的 PII 语言</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -89,6 +89,23 @@ for entity in result.entities:
 
 ---
 
+## 30 秒运行临床摘要示例
+
+在源码检出目录中运行仅使用 CPU 的合成数据接口演示：
+
+```bash
+python examples/v30_clinical_brief.py
+# 可选：--model mlx，需要在 Apple 芯片设备上预先缓存固定版本的模型。
+```
+
+该示例对内置记录进行去标识化、实体抽取和概念匹配，然后输出带来源引用的摘要、
+核验结果和不含原始值的审核包。**NER/NLI 提供程序是明确标注的合成测试替身，
+不是经过训练的模型，也不代表临床验证。** 不接受外部记录输入。
+MLX 输出若缺乏证据支持会被拒绝，不会绕过保护检查。
+详见[摘要指南](docs/clinical/clinical-brief.md)和[演示脚本](docs/demo/clinical-brief.md)。
+
+---
+
 ## 使用智能体构建？
 
 请从[面向使用者的智能体指南](docs/agent-usage.md)开始，或加载精选的
@@ -124,7 +141,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -166,11 +183,11 @@ dependencyResolutionManagement {
 }
 ```
 
-然后使用不可变的 OpenMed `v2.0.0` 版本：
+然后使用不可变的 OpenMed `v3.2.0` 版本：
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.2.0")
 }
 ```
 
@@ -303,7 +320,7 @@ print([(e.label, e.text) for e in result.entities])
 **REST 服务**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -509,17 +526,15 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## 多语言 PII（34 条支持的路由；33 条由模型支持）
+## 多语言 PII（42 条支持的路由；35 条由模型支持）
 
-实体抽取和去标识化支持 **34 个 PII 语言代码**：
-`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fr`、`he`、`hi`、`id`、`it`、`ja`、`ko`、`mr`、`nl`、`no`、`or`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
+实体抽取和去标识化支持 **40 个 PII 语言代码**：
+`am`、`ar`、`as`、`bn`、`cs`、`da`、`de`、`el`、`en`、`es`、`fa`、`fr`、`gu`、`he`、`hi`、`id`、`it`、`ja`、`kn`、`ko`、`ml`、`mr`、`nl`、`no`、`or`、`pa`、`pt`、`ro`、`ru`、`sv`、`sw`、`ta`、`te`、`th`、`tr`、`uk`、`vi`、`xh`、`zh` 和 `zu`，共计 **已登记的 PII 模型目录**。
 俄语路由目前使用文档中说明的多语言默认模型占位符。孟加拉语、中文和泰米尔语拥有专用注册表条目。
-一个由用户选择并配置的印度语言 NER 系列还支持四条额外路由
-（`gu`、`kn`、`ml` 和 `pa`），
-并且也可服务于阿萨姆语、孟加拉语、印地语、马拉地语、奥里亚语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
+一个由用户选择并配置的印度语言 NER 系列可服务于阿萨姆语、孟加拉语、古吉拉特语、印地语、卡纳达语、马拉雅拉姆语、马拉地语、奥里亚语、旁遮普语、泰米尔语和泰卢固语。请设置 `OPENMED_INDIC_NER_MODEL`；
 OpenMed 不会捆绑或自动选择这些权重。
 OpenMed 还为其他仅含证件号的语言区域提供基于 validator 的国家证件号覆盖，
-例如波兰、拉脱维亚、斯洛伐克、马来西亚、菲律宾和芬兰。
+例如拉脱维亚、斯洛伐克、马来西亚、菲律宾和芬兰。
 
 各语言代码的默认 PII 模型、Faker locale 和去标识化前后示例，参见[分语言指南](docs/languages.md)。
 
@@ -573,7 +588,7 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -611,7 +626,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 请求合并、速率与并发限制、`/livez`、`/readyz` 和可选 metrics：
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -643,9 +658,9 @@ AI 智能体可以加载精选的 [llms.txt](https://openmed.life/docs/llms.txt)
 | [常见问题](docs/faq.md) | [匿名化](docs/anonymization.md) | [批处理](https://openmed.life/docs/batch-processing) |
 | [配置档案](https://openmed.life/docs/profiles) | [REST 服务](docs/rest-service.md) | [MLX 后端](docs/mlx-backend.md) |
 | [Transformers.js 导出](docs/export-transformersjs.md) | [FHIR 互操作](docs/fhir-interop.md) | [HL7 v2 去标识化](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.0.0 发行说明](docs/release/v2.0.0.md) | [OpenMed 1.9.1 发行说明](docs/release/v1.9.1.md) | [示例](docs/examples.md) |
+| [OpenMed 3.2.0 迁移指南](docs/migration/3.1-to-3.2.md) | [OpenMed 2.2.0 发行说明](docs/release/v2.2.0.md) | [示例](docs/examples.md) |
 | [发布通道](docs/release/semver-and-channels.md) | [生成式模型策略](docs/generative-model-policy.md) | [贡献指南](docs/contributing.md) |
-| [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [检测器插件 SDK](docs/plugin-sdk.md) |
+| [安全策略](SECURITY.md) | [合规状态](docs/compliance.md) | [扩展插件 SDK](docs/plugin-sdk.md) |
 | [v1 到 v2 迁移](docs/migration.md) | [MCP 客户端连接](docs/mcp-clients.md) | [非洲开发者入门](docs/africa-onboarding.md) |
 
 ---
@@ -667,7 +682,7 @@ OpenMed 的守护者是一只蓬松的波斯猫，化身为小小的**阿维森�
 欢迎贡献：bug 报告、功能请求和 PR 都欢迎。请先阅读[贡献指南](CONTRIBUTING.md)和[行为准则](CODE_OF_CONDUCT.md)。
 
 - [提交 issue](https://github.com/maziyarpanahi/openmed/issues)
-- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [安全策略](SECURITY.md)
+- [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md) · [维护者](MAINTAINERS.md) · [安全策略](SECURITY.md)
 - **欢迎翻译**：帮助完善顶部语言切换栏中链接的其他语言 README。
 
 ---
@@ -711,7 +726,7 @@ OpenMed SDK 源代码基于 [Apache-2.0 License](LICENSE) 发布。第三方资�
 
 如果 OpenMed 对你有帮助，点个 star 能帮助更多人发现它。
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

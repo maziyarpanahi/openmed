@@ -1031,6 +1031,15 @@ def _validate_fonts_and_consumers(errors: list[str]) -> None:
 
 
 def _validate_claims(errors: list[str]) -> None:
+    sys.path.insert(0, str(REPO_ROOT))
+    from openmed.__about__ import __version__  # noqa: PLC0415
+    from openmed.core.language_pack_catalog import (  # noqa: PLC0415
+        DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+        DEFAULT_PII_MODELS,
+        NATIONAL_ID_ONLY_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
+
     registry = _load_json("docs/brand/system/claims.yml")
     if registry["schema_version"] != 2:
         errors.append("claims registry must use schema version 2")
@@ -1039,6 +1048,9 @@ def _validate_claims(errors: list[str]) -> None:
         "network": "forbidden",
         "network_refresh_command": (
             "python scripts/brand/update_claims.py --refresh-github-stars"
+        ),
+        "community_refresh_command": (
+            "python scripts/brand/update_claims.py --refresh-community-metrics"
         ),
         "network_refresh_ci_policy": "never invoke from CI",
         "rounding": "none unless a claim definition explicitly says otherwise",
@@ -1058,20 +1070,23 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.0.0",
-        "repository_model_snapshot": 1520,
-        "hugging_face_openmed_owned_snapshot": 1520,
-        "supported_pii_languages": 34,
-        "model_backed_pii_languages": 33,
-        "placeholder_pii_languages": ["ru"],
-        "user_supplied_model_languages": ["gu", "kn", "ml", "ne", "pa", "ur"],
-        "pii_family_manifest_entries": 655,
-        "mlx_manifest_entries": 662,
+        "package_version": __version__,
+        "repository_model_snapshot": 2266,
+        "hugging_face_openmed_owned_snapshot": 2266,
+        "supported_pii_languages": len(DEFAULT_PII_MODELS),
+        "model_backed_pii_languages": len(
+            set(DEFAULT_PII_MODELS) - DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+        ),
+        "placeholder_pii_languages": sorted(DEFAULT_MODEL_PLACEHOLDER_LANGUAGES),
+        "user_supplied_model_languages": sorted(USER_SUPPLIED_MODEL_LANGUAGES),
+        "pii_family_manifest_entries": 1018,
+        "mlx_manifest_entries": 661,
         "pii_entity_types": 50,
         "model_license_population": {
-            "apache-2.0": 1511,
-            "other": 5,
-            "unknown": 4,
+            "apache-2.0": 2255,
+            "mit": 4,
+            "other": 4,
+            "unknown": 3,
         },
         "sdk_license": "Apache-2.0",
         "runtime_locality": "local-first",
@@ -1108,8 +1123,12 @@ def _validate_claims(errors: list[str]) -> None:
                 f"claim {claim_name} is {claims[claim_name]['value']!r}, "
                 f"expected {value!r}"
             )
-    if len(claims["national_id_only_languages"]["value"]) != 18:
-        errors.append("national-ID-only language claim must contain 18 codes")
+    if claims["national_id_only_languages"]["value"] != sorted(
+        NATIONAL_ID_ONLY_LANGUAGES
+    ):
+        errors.append(
+            "national-ID-only language claim must match the registered catalog"
+        )
 
     try:
         generated_at = dt.date.fromisoformat(registry["generated_at"])
@@ -1218,6 +1237,54 @@ def _validate_claims(errors: list[str]) -> None:
     )
     if "--refresh-github-stars" in workflow_text:
         errors.append("CI must never invoke the networked GitHub stars refresh")
+    if "--refresh-community-metrics" in workflow_text:
+        errors.append("CI must never invoke the networked community metrics refresh")
+
+    community = _load_json("docs/brand/system/evidence/community-metrics.json")
+    community_claims = {
+        "hugging_face_public_models": community["hugging_face"]["public_models"],
+        "cumulative_model_downloads": community["hugging_face"]["downloads_all_time"],
+        "monthly_model_downloads": community["hugging_face"]["downloads_30d"],
+        "cumulative_package_installs": community["pypi"]["installs_total"],
+    }
+    for claim_name, raw in community_claims.items():
+        claim = claims.get(claim_name, {})
+        if (
+            claim.get("status") != "verified"
+            or claim.get("value") != raw
+            or claim.get("as_of") != community["captured_at"][:10]
+            or claim.get("review_by") != community["review_by"]
+        ):
+            errors.append(
+                f"claim {claim_name} differs from committed community evidence"
+            )
+    website_text = (REPO_ROOT / "docs/website/index.html").read_text(encoding="utf-8")
+    for repo_id, millions in community["display"]["featured_models_millions"].items():
+        card = (
+            f"<strong>{millions}M</strong> all-time downloads</span>"
+            f'<a href="https://huggingface.co/{repo_id}">'
+        )
+        if card not in website_text:
+            errors.append(f"website model card for {repo_id} differs from evidence")
+    entity_tile = (
+        f"<strong>{claims['pii_entity_types']['value']}</strong><b>PII entity types</b>"
+    )
+    if entity_tile not in website_text:
+        errors.append("website PII entity-type tile differs from the governed claim")
+    model_backed = claims["model_backed_pii_languages"]["value"]
+    supported = claims["supported_pii_languages"]["value"]
+    for count in re.findall(r"(\d+) model-backed", website_text):
+        if int(count) != model_backed:
+            errors.append(
+                f"website says {count} model-backed languages; the claim is {model_backed}"
+            )
+    for count in re.findall(
+        r"(\d+) supported (?:codes|PII language codes)", website_text
+    ):
+        if int(count) != supported:
+            errors.append(
+                f"website says {count} supported codes; the claim is {supported}"
+            )
 
     package = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     expected_description = (
@@ -1268,7 +1335,7 @@ def _validate_claims(errors: list[str]) -> None:
     if (
         organization.get("url") != "https://openmed.life/"
         or organization.get("sameAs") != expected_identity_links
-        or organization.get("founder") != {"@type": "Person", "name": "Maziyar Panahi"}
+        or "founder" in organization
     ):
         errors.append("website Organization JSON-LD identity graph is not canonical")
     software = by_type.get("SoftwareSourceCode", {})
@@ -1276,6 +1343,7 @@ def _validate_claims(errors: list[str]) -> None:
         software.get("softwareVersion") != claims["package_version"]["value"]
         or software.get("license") != "https://www.apache.org/licenses/LICENSE-2.0"
         or software.get("codeRepository") != "https://github.com/maziyarpanahi/openmed"
+        or software.get("creator", {}).get("name") != "Maziyar Panahi"
     ):
         errors.append("website software JSON-LD disagrees with governed claims")
     _validate_faq_parity(website, by_type.get("FAQPage", {}), errors)
@@ -1849,6 +1917,22 @@ def _validate_accessibility_evidence(errors: list[str]) -> None:
         errors.append("manual accessibility evidence lacks its qualification")
 
 
+def _without_marketing_beacon(source: str, *, marketing_page: bool) -> str:
+    """Exclude only the approved homepage analytics tag from the remote scan."""
+
+    if not marketing_page:
+        return source
+    approved_beacon = (
+        r'<script\s+type="module"\s+'
+        r'src="https://static\.cloudflareinsights\.com/beacon\.min\.js"\s+'
+        r"data-cf-beacon='\{\"token\":\s*"
+        r'"86108e13d57f44f69a4c67a445df1f17"'
+        r"\}'\s*>\s*</script>"
+    )
+    # A second beacon or any different remote script still fails the scan.
+    return re.sub(approved_beacon, "", source, count=1)
+
+
 def _validate_governance(errors: list[str]) -> None:
     register = (REPO_ROOT / "docs/brand/system/asset-register.md").read_text(
         encoding="utf-8"
@@ -2092,7 +2176,10 @@ def _validate_governance(errors: list[str]) -> None:
         REPO_ROOT / "docs/javascripts/openmed.js",
     ]
     browser_text = "\n".join(
-        path.read_text(encoding="utf-8")
+        _without_marketing_beacon(
+            path.read_text(encoding="utf-8"),
+            marketing_page=path == REPO_ROOT / "docs/website/index.html",
+        )
         for path in owned_browser_sources
         if path.is_file()
     )

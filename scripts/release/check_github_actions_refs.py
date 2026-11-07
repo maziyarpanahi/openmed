@@ -11,10 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+import yaml
+from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
+
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 
-USES_RE = re.compile(r"^\s*-?\s*uses:\s*[\"']?([^\"'\s#]+)")
 FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
@@ -47,7 +49,7 @@ def workflow_files(workflows_dir: Path = DEFAULT_WORKFLOWS_DIR) -> list[Path]:
     return sorted(
         path
         for pattern in ("*.yml", "*.yaml")
-        for path in workflows_dir.glob(pattern)
+        for path in workflows_dir.rglob(pattern)
         if path.is_file()
     )
 
@@ -77,14 +79,35 @@ def iter_action_refs(
     """Yield remote action references from workflow files."""
 
     for path in workflow_files(workflows_dir):
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for line_number, line in enumerate(lines, 1):
-            match = USES_RE.match(line)
-            if not match:
-                continue
-            action_ref = parse_action_spec(path, line_number, match.group(1))
-            if action_ref is not None:
-                yield action_ref
+        root = yaml.compose(path.read_text(encoding="utf-8"), Loader=yaml.SafeLoader)
+        visited: set[int] = set()
+
+        def walk(node: Node | None) -> Iterable[ActionRef]:
+            if node is None or id(node) in visited:
+                return
+            visited.add(id(node))
+            if isinstance(node, MappingNode):
+                for key, value in node.value:
+                    if isinstance(key, ScalarNode) and key.value == "uses":
+                        line_number = key.start_mark.line + 1
+                        if (
+                            not isinstance(value, ScalarNode)
+                            or value.tag != "tag:yaml.org,2002:str"
+                        ):
+                            raise ValueError(
+                                f"{path}:{line_number}: uses must be a string"
+                            )
+                        action_ref = parse_action_spec(
+                            path, line_number, value.value.strip()
+                        )
+                        if action_ref is not None:
+                            yield action_ref
+                    yield from walk(value)
+            elif isinstance(node, SequenceNode):
+                for child in node.value:
+                    yield from walk(child)
+
+        yield from walk(root)
 
 
 def resolve_ref(repository: str, ref: str) -> tuple[bool, str]:
@@ -119,6 +142,8 @@ def resolve_ref(repository: str, ref: str) -> tuple[bool, str]:
 def audit_action_refs(
     action_refs: Iterable[ActionRef],
     resolver: Resolver = resolve_ref,
+    *,
+    require_sha: bool = False,
 ) -> list[RefAuditResult]:
     """Validate action refs with de-duplicated remote lookups."""
 
@@ -137,6 +162,13 @@ def audit_action_refs(
             continue
         if FULL_SHA_RE.fullmatch(action_ref.ref):
             results.append(RefAuditResult(action_ref, True, "pinned commit SHA"))
+            continue
+        if require_sha:
+            results.append(
+                RefAuditResult(
+                    action_ref, False, "remote actions must use a full commit SHA"
+                )
+            )
             continue
 
         key = (action_ref.repository, action_ref.ref)
@@ -173,9 +205,20 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_WORKFLOWS_DIR,
         help="Directory containing GitHub Actions workflow YAML files.",
     )
+    parser.add_argument(
+        "--require-sha",
+        action="store_true",
+        help="Reject mutable tags and branches without performing network lookups.",
+    )
     args = parser.parse_args(argv)
 
-    results = audit_action_refs(iter_action_refs(args.workflows_dir))
+    try:
+        results = audit_action_refs(
+            iter_action_refs(args.workflows_dir), require_sha=args.require_sha
+        )
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"GitHub Actions reference policy failed: {exc}", file=sys.stderr)
+        return 1
     failures = [result for result in results if not result.ok]
 
     if failures:

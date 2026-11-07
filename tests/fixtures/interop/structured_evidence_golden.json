@@ -1,0 +1,50 @@
+{
+  "cases": [
+    {
+      "expected_location_type": "text_span",
+      "format": "text",
+      "required_values": [
+        "café\r\nline"
+      ],
+      "source": "café\r\nline"
+    },
+    {
+      "expected_location_type": "json_pointer",
+      "format": "fhir_r4",
+      "required_values": [
+        "Observation",
+        "final",
+        "synthetic"
+      ],
+      "source": "{\"resourceType\":\"Observation\",\"status\":\"final\",\"code\":{\"text\":\"synthetic\"}}"
+    },
+    {
+      "expected_location_type": "message_field",
+      "format": "hl7v2",
+      "required_values": [
+        "2.5",
+        "synthetic",
+        "value"
+      ],
+      "source": "MSH|^~\\&|SYNTHETIC|LAB|OPENMED|LOCAL|20260102030405||ORU^R01|MSG0001|P|2.5\rOBX|1|TX|code||synthetic^value\r"
+    },
+    {
+      "expected_location_type": "document_path",
+      "format": "cda",
+      "required_values": [
+        "synthetic"
+      ],
+      "source": "<ClinicalDocument xmlns=\"urn:hl7-org:v3\"><component><section><text>synthetic</text></section></component></ClinicalDocument>"
+    },
+    {
+      "expected_location_type": "table_cell",
+      "format": "csv",
+      "required_values": [
+        "header",
+        "synthetic"
+      ],
+      "source": "header\r\nsynthetic\r\n"
+    }
+  ],
+  "schema_version": 1
+}

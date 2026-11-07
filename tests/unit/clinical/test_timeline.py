@@ -10,10 +10,15 @@ from openmed.clinical import (
     HISTORICAL,
     RECENT,
     TIMELINE_ASSISTIVE_DISCLAIMER,
+    ClinicalAssertion,
+    TimeExpr,
     anchor_events,
+    assemble_timeline,
     detect_timexes,
     evaluate_timeline_gold,
+    extract_timex,
     normalize_temporal,
+    order_events,
     resolve_temporality,
     resolve_timeline,
 )
@@ -38,6 +43,80 @@ def test_timex_detection_types_and_provenance_offsets() -> None:
     assert by_text["daily"].timex_type == "SET"
     for timex in timexes:
         assert text[timex.start : timex.end] == timex.text
+
+
+def test_extract_timex_exposes_kinds_and_optional_document_anchoring() -> None:
+    text = (
+        "On 2026-06-01 she had surgery. Symptoms began 3 days ago and lasted "
+        "for 2 weeks."
+    )
+
+    unanchored = extract_timex(text)
+    assert all(isinstance(expression, TimeExpr) for expression in unanchored)
+    by_text = {expression.text: expression for expression in unanchored}
+    assert by_text["2026-06-01"].kind == "DATE"
+    assert by_text["for 2 weeks"].kind == "DURATION"
+    assert by_text["3 days ago"].value is None
+    assert by_text["3 days ago"].relative_value == "P3D"
+    assert by_text["3 days ago"].offset_days == -3
+
+    anchored = extract_timex(text, document_time="2026-06-15")
+    anchored_by_text = {expression.text: expression for expression in anchored}
+    assert anchored_by_text["3 days ago"].value == "2026-06-12"
+    assert anchored_by_text["3 days ago"].reference_time == "2026-06-15"
+
+
+def test_compact_order_events_assigns_doc_time_rel_and_stable_partial_order() -> None:
+    text = "History of MI 3 days ago. Chest pain then surgery in 2 days."
+    timexes = extract_timex(text, document_time="2026-06-15")
+    spans = [
+        {
+            "id": "history-mi",
+            "label": "EVENT",
+            "text": "MI",
+            "start": text.index("MI"),
+            "end": text.index("MI") + len("MI"),
+            "context": text,
+        },
+        {
+            "id": "surgery",
+            "label": "EVENT",
+            "text": "surgery",
+            "start": text.index("surgery"),
+            "end": text.index("surgery") + len("surgery"),
+            "context": text,
+        },
+    ]
+
+    timeline = order_events(reversed(spans), timexes)
+
+    assert [event.event_id for event in timeline] == ["history-mi", "surgery"]
+    assert [event.doc_time_rel for event in timeline] == ["before", "after"]
+    assert timeline[0].normalized_value == "2026-06-12"
+    assert timeline[1].normalized_value == "2026-06-17"
+    assert timeline.is_cycle_free
+    assert len(timeline.reduced_graph) == 1
+    assert "History of" not in json.dumps(timeline.to_dict())
+
+
+def test_order_events_orders_then_cue_deterministically() -> None:
+    text = "Pain improved then surgery followed."
+    spans = [
+        {
+            "label": "EVENT",
+            "text": value,
+            "start": text.index(value),
+            "end": text.index(value) + len(value),
+        }
+        for value in ("Pain", "surgery")
+    ]
+
+    baseline = order_events(text, spans)
+    reordered = order_events(text, reversed(spans))
+
+    assert [event.text for event in baseline] == ["Pain", "surgery"]
+    assert baseline.to_dict() == reordered.to_dict()
+    assert len(baseline.reduced_graph) == 1
 
 
 def test_resolve_timeline_chained_anchors_and_reference_provenance() -> None:
@@ -178,6 +257,120 @@ def test_synthetic_gold_corpus_meets_timeline_ci_gates() -> None:
     assert result.value_accuracy >= 0.85, result.to_dict()
     assert result.ordering_consistency >= 0.90, result.to_dict()
     assert result.failures == ()
+
+
+def test_event_timeline_assembler_matches_synthetic_golden_fixture() -> None:
+    fixture = json.loads(
+        (
+            ROOT / "tests" / "fixtures" / "clinical" / "event_timeline_gold.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert fixture["synthetic"] is True
+    timeline = assemble_timeline(
+        fixture["entities"],
+        fixture["normalized_times"],
+        fixture["assertions"],
+        fixture["chains"],
+    )
+
+    expected = fixture["expected"]
+    assert [event.entity for event in timeline.events] == expected["entity_order"]
+    assert [event.normalized_time for event in timeline.events] == expected[
+        "normalized_times"
+    ]
+    assert timeline.events[0].provenance["mention_count"] == 2
+    assert timeline.events[1].assertion.negation == "negated"
+    assert timeline.events[2].assertion.experiencer == "family"
+    assert len(timeline.unanchored_events) == expected["unanchored_count"]
+    assert len(timeline.events) == len(fixture["entities"]) - expected["merged_count"]
+
+    payload = timeline.to_dict()
+    encoded = json.dumps(payload, sort_keys=True)
+    assert "text" not in payload["events"][0]
+    assert "Fever" not in encoded
+    assert "Pain" not in encoded
+    assert timeline.provenance_offsets == tuple(
+        (event.start, event.end) for event in timeline.events
+    )
+
+
+def test_event_timeline_assembler_keeps_unanchored_and_assertion_axes() -> None:
+    timeline = assemble_timeline(
+        [
+            {
+                "id": "negated",
+                "entity": "condition-negated",
+                "label": "CONDITION",
+                "start": 20,
+                "end": 28,
+            },
+            {
+                "id": "family",
+                "entity": "condition-family",
+                "label": "CONDITION",
+                "start": 0,
+                "end": 6,
+            },
+        ],
+        {"negated": {"value": None, "granularity_flags": ["unanchored"]}},
+        {
+            "negated": {"negation": "negated"},
+            "family": {"experiencer": "family"},
+        },
+    )
+
+    assert [event.entity for event in timeline.unanchored_events] == [
+        "condition-family",
+        "condition-negated",
+    ]
+    assert timeline.events[0].assertion.experiencer == "family"
+    assert timeline.events[1].assertion.negation == "negated"
+
+
+def test_event_timeline_assembler_joins_offsets_without_persisting_surface_text() -> (
+    None
+):
+    timeline = assemble_timeline(
+        [
+            {
+                "id": "mention-1",
+                "text": "synthetic condition",
+                "label": "CONDITION",
+                "start": 0,
+                "end": 19,
+            }
+        ],
+        [{"start": 0, "end": 19, "value": "2026-02-01"}],
+        [{"start": 0, "end": 19, "negation": "negated"}],
+    )
+
+    event = timeline.events[0]
+    encoded = json.dumps(event.to_dict(), sort_keys=True)
+    assert event.entity == "mention-1"
+    assert event.label == "CONDITION"
+    assert event.source_span == (0, 19)
+    assert event.assertion.negation == "negated"
+    assert "synthetic condition" not in encoded
+
+
+def test_event_timeline_assembler_accepts_normalized_records_and_assertion_objects() -> (
+    None
+):
+    assertion = ClinicalAssertion(
+        temporality=HISTORICAL,
+        certainty="certain",
+        negation="affirmed",
+        experiencer="patient",
+    )
+    timeline = assemble_timeline(
+        [{"id": "mention-1", "label": "CONDITION", "start": 4, "end": 12}],
+        [{"id": "mention-1", "value": "2026-03-01"}],
+        [{"entity_id": "mention-1", "assertion": assertion}],
+    )
+
+    assert timeline.events[0].normalized_time == "2026-03-01"
+    assert timeline.events[0].assertion == assertion
 
 
 def _events_by_timex_text(timeline) -> dict[str, object]:

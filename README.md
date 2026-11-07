@@ -9,7 +9,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 </p>
 
 <p>
-  <b>Local-first runtime</b> &nbsp;·&nbsp; <b>33 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>35 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -89,6 +89,24 @@ A clinical NER model using the local runtime after its required artifacts are av
 
 ---
 
+## Clinical brief in 30 seconds
+
+From a source checkout, run the CPU-only synthetic contract demonstration:
+
+```bash
+python examples/v30_clinical_brief.py
+# Optional: --model mlx, with the pinned model already cached on Apple silicon.
+```
+
+It de-identifies an embedded note, extracts and grounds a finding, then prints
+a cited brief, verdicts and a value-free review packet. **NER/NLI providers are
+explicit synthetic test doubles, not trained-model or clinical validation.**
+No external note input is accepted. The MLX option may refuse unsupported output;
+it never bypasses the guards. See the [brief guide](docs/clinical/clinical-brief.md)
+and [demo script](docs/demo/clinical-brief.md) for the boundaries and local setup.
+
+---
+
 ## Building with an agent?
 
 Start with the [consumer agent-usage guide](docs/agent-usage.md), or load the
@@ -124,7 +142,7 @@ On supported Apple hardware, OpenMed can use **MLX** and **[OpenMedKit](swift/Op
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -168,11 +186,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the immutable OpenMed `v2.0.0` release:
+Then use the immutable OpenMed `v3.2.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.2.0")
 }
 ```
 
@@ -308,7 +326,7 @@ Example output:
 **REST service**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -516,20 +534,20 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (34 supported routes; 33 model-backed)
+## Multilingual PII (42 supported routes; 35 model-backed)
 
-Extraction and de-identification support **34 supported PII language codes**:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`,
-`it`, `ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
-`te`, `th`, `tr`, `uk`, `xh`, `zh`, and `zu`, with **the registry-backed PII model catalog** in total.
+Extraction and de-identification support **42 supported PII language codes**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
+`it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`te`, `th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh`, and `zu`, with **the registry-backed PII model catalog** in total.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-An optional, user-configured Indic NER family accepts four additional routes
-(`gu`, `kn`, `ml`, and `pa`) and can also serve Assamese, Bengali, Hindi,
-Marathi, Odia, Tamil, and Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
+An optional, user-configured Indic NER family can serve Assamese, Bengali,
+Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and
+Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
 bundles or automatically selects those optional weights.
 OpenMed also includes validator-backed national-ID coverage for additional
-ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
+ID-only locales such as Latvian, Slovak, Malay, Filipino, and Finnish.
 
 See the [per-language guide](docs/languages.md) for each code's default PII
 model, Faker locale, and a before/after de-identification example.
@@ -584,7 +602,7 @@ A Docker-friendly FastAPI service with request validation, shared pipeline prelo
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -623,7 +641,7 @@ async jobs, webhooks, warm pools, dynamic batching, request coalescing, rate
 and concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -656,9 +674,9 @@ MkDocs build.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.0.0 Release Notes](docs/release/v2.0.0.md) | [OpenMed 1.9.1 Release Notes](docs/release/v1.9.1.md) | [Examples](docs/examples.md) |
+| [OpenMed 3.2.0 Migration Guide](docs/migration/3.1-to-3.2.md) | [OpenMed 2.2.0 Release Notes](docs/release/v2.2.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
-| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Detector Plugin SDK](docs/plugin-sdk.md) |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Extension Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |
 
 ---
@@ -681,7 +699,7 @@ a local-first guardian for your most private data.
 Contributions welcome: bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
-- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
+- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Maintainers](MAINTAINERS.md) · [Security policy](SECURITY.md)
 - **Translations welcome**: help complete the other-language READMEs linked in the switcher at the top.
 
 ---
@@ -727,7 +745,7 @@ papers, posters, and derived documentation.
 
 If OpenMed is useful to you, a star helps others discover it.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

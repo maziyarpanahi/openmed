@@ -9,8 +9,11 @@ from typing import Any
 from openmed.eval.error_analysis import (
     MISSED,
     SPURIOUS,
+    LabelingQueueArtifact,
+    LabelingQueueItem,
     error_report,
     mine_gate_failure_labeling_queue,
+    rank_retraining_slices,
 )
 from openmed.eval.harness import BenchmarkFixture
 
@@ -305,6 +308,130 @@ def test_labeling_queue_ranking_is_deterministic_and_impact_weighted() -> None:
     assert [item.label for item in reversed_order.items] == ["LOCATION", "PERSON"]
     assert payload["items"][0]["priority"] == 2.0
     assert payload["items"][1]["priority"] == 0.9
+
+
+def test_retraining_slice_ranking_prioritizes_affected_label_language() -> None:
+    queue = mine_gate_failure_labeling_queue(
+        [
+            {
+                "label": "PERSON",
+                "language": "en",
+                "span_hash": "sha256:person-en",
+                "uncertainty": 0.8,
+                "gate_impact": 4.0,
+                "fixture_id": "synthetic-person-en",
+            },
+            {
+                "label": "PERSON",
+                "language": "fr",
+                "span_hash": "sha256:person-fr",
+                "uncertainty": 0.5,
+                "gate_impact": 2.0,
+                "fixture_id": "synthetic-person-fr",
+            },
+            {
+                "label": "DATE",
+                "language": "en",
+                "span_hash": "sha256:date-en",
+                "uncertainty": 0.4,
+                "gate_impact": 1.0,
+                "fixture_id": "synthetic-date-en",
+            },
+        ],
+        gate_run_hash="sha256:gate-run",
+    )
+
+    artifact = rank_retraining_slices(queue)
+    payload = artifact.to_dict()
+
+    assert [(row["label"], row["language"]) for row in payload["slices"]] == [
+        ("PERSON", "en"),
+        ("PERSON", "fr"),
+        ("DATE", "en"),
+    ]
+    assert payload["slices"][0]["priority_score"] == 3.2
+    assert payload["slices"][0]["rank"] == 1
+    assert payload["slice_count"] == 3
+
+
+def test_retraining_slice_artifact_is_deterministic_and_context_free() -> None:
+    raw_context = "Patient Jordan Smith has SSN 123-45-6789."
+    raw_nominal_hash = "Jordan Smith"
+    item = LabelingQueueItem(
+        span_hash=raw_nominal_hash,
+        surrogate_context=raw_context,
+        label="SSN",
+        language="en",
+        priority=5.0,
+        uncertainty=1.0,
+        gate_impact=5.0,
+        provenance={"fixture_hash": "123-45-6789", "raw_text": raw_context},
+    )
+    queue = LabelingQueueArtifact(
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:report",
+        items=(item,),
+        raw_candidate_count=1,
+        dropped_duplicate_count=0,
+    )
+
+    first = rank_retraining_slices(queue)
+    second = rank_retraining_slices(queue)
+    serialized = first.to_json()
+
+    assert first.to_dict() == second.to_dict()
+    assert serialized == second.to_json()
+    assert raw_context not in serialized
+    assert raw_nominal_hash not in serialized
+    assert "123-45-6789" not in serialized
+    assert "surrogate_context" not in serialized
+    assert "raw_text" not in serialized
+
+
+def test_retraining_slice_ranking_supports_limits_and_empty_queues() -> None:
+    queue = LabelingQueueArtifact(
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:report",
+        items=(),
+        raw_candidate_count=0,
+        dropped_duplicate_count=0,
+    )
+
+    assert rank_retraining_slices(queue, max_slices=0).to_dict()["slices"] == []
+
+    try:
+        rank_retraining_slices(queue, max_slices=-1)
+    except ValueError as exc:
+        assert "non-negative" in str(exc)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("negative max_slices must fail")
+
+
+def test_retraining_slice_ranking_rejects_unsafe_metadata() -> None:
+    item = LabelingQueueItem(
+        span_hash="sha256:person",
+        surrogate_context="<PERSON>",
+        label="PERSON",
+        language="Patient Jordan Smith",
+        priority=1.0,
+        uncertainty=1.0,
+        gate_impact=1.0,
+        provenance={},
+    )
+    queue = LabelingQueueArtifact(
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:report",
+        items=(item,),
+        raw_candidate_count=1,
+        dropped_duplicate_count=0,
+    )
+
+    try:
+        rank_retraining_slices(queue)
+    except ValueError as exc:
+        assert "language" in str(exc)
+    else:  # pragma: no cover - assertion guard
+        raise AssertionError("unsafe language metadata must fail")
 
 
 def _metadata_runner(fixture, model_name, device):

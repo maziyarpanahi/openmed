@@ -65,18 +65,16 @@ def test_nukta_and_virama_sequences_are_logically_ordered_and_lossless():
     assert unicode_to_iscii(converted.text) == source
 
 
-@pytest.mark.parametrize(
-    ("source", "join_control"),
-    [
+def test_contextual_virama_controls_round_trip(subtests):
+    for source, join_control in [
         (bytes.fromhex("b3 e8 e8"), "\u200c"),
         (bytes.fromhex("b3 e8 e9"), "\u200d"),
-    ],
-)
-def test_contextual_virama_controls_round_trip(source, join_control):
-    converted = iscii_to_unicode(source)
+    ]:
+        with subtests.test(source=source, join_control=join_control):
+            converted = iscii_to_unicode(source)
 
-    assert converted.text == f"क्{join_control}"
-    assert unicode_to_iscii(converted.text) == source
+            assert converted.text == f"क्{join_control}"
+            assert unicode_to_iscii(converted.text) == source
 
 
 def test_visual_order_legacy_font_run_becomes_idempotent_unicode():
@@ -158,13 +156,91 @@ def test_c1_control_bytes_prevent_false_iscii_detection():
     assert convert_legacy_encoding(text).text == text
 
 
+def test_latin1_clinical_text_is_not_misdetected_as_iscii(subtests):
+    for text in ["À côté", "ÀÉÎ", "Crème brûlée", "José", "Patient naïB cell"]:
+        with subtests.test(text=text):
+            assert detect_legacy_encoding(text) == "unicode"
+            assert convert_legacy_encoding(text).text == text
+
+
+@pytest.mark.parametrize("prefix", [b"", b"\xef\x42"])
 @pytest.mark.parametrize(
-    "text",
-    ["À côté", "ÀÉÎ", "Crème brûlée", "José", "Patient naïB cell"],
+    "invalid",
+    [b"\xef", b"\xef\x43", b"\xf0", b"\xf0\x41", b"\xff", b"\xef\x43\xb3"],
+    ids=[
+        "truncated-atr",
+        "unsupported-atr",
+        "truncated-ext",
+        "unsupported-ext",
+        "undefined-byte",
+        "internal-atr",
+    ],
 )
-def test_latin1_clinical_text_is_not_misdetected_as_iscii(text):
+def test_malformed_iscii_candidates_preserve_unicode_text_and_offsets(prefix, invalid):
+    source = prefix + b"\xb3" * 4 + invalid
+    text = source.decode("latin-1")
+
+    assert detect_legacy_encoding(source) == "unicode"
     assert detect_legacy_encoding(text) == "unicode"
-    assert convert_legacy_encoding(text).text == text
+    for errors in ("strict", "replace"):
+        converted = convert_legacy_encoding(text, errors=errors)
+        assert converted.text == text
+        assert converted.encoding == "unicode"
+        assert not converted.changed
+        assert converted.offset_map.converted_to_original_spans == tuple(
+            (index, index + 1) for index in range(len(text))
+        )
+        assert converted.offset_map.original_to_converted == tuple(range(len(text)))
+
+    # Explicit decoding must still reject the same malformed source.
+    with pytest.raises(UnicodeDecodeError):
+        convert_legacy_encoding(source, encoding="iscii")
+
+
+def test_explicit_iscii_replacement_remains_opt_in():
+    source = b"\xb3" * 4 + b"\xef"
+
+    converted = convert_legacy_encoding(source, encoding="iscii", errors="replace")
+
+    assert converted.text == "कककक�"
+    assert converted.encoding == "iscii"
+    assert converted.to_original_span(4, 5) == (4, 5)
+
+
+def test_valid_iscii_sequences_remain_auto_detected(subtests):
+    for prefix in [b"", b"\xef\x42"]:
+        for suffix in [b"\xef\x42", b"\xf0\xb8", b"\xe8\xe8", b"\xe8\xe9"]:
+            with subtests.test(prefix=prefix, suffix=suffix):
+                source = prefix + b"\xb3" * 4 + suffix
+
+                assert detect_legacy_encoding(source) == "iscii"
+                assert convert_legacy_encoding(source) == iscii_to_unicode(source)
+
+
+def test_malformed_iscii_uses_existing_pipeline_and_pii_unicode_normalization():
+    text = "³³³³ï"
+
+    document = Pipeline().stage1_normalize(text)
+    assert document.normalized_text == text
+    assert document.metadata["legacy_encoding"]["encoding"] == "unicode"
+    assert document.offset_map.normalized_span_to_original_offsets(0, 5) == (0, 5)
+
+    normalized = normalize_for_pii_detection(text)
+    assert normalized.text == text
+    assert normalized.legacy_encoding == "unicode"
+    assert normalized.converted_legacy_bytes == 0
+    assert normalized.remap_span(0, 5) == (0, 5)
+
+
+def test_malformed_iscii_bytes_keep_utf8_fallback_error_policy():
+    source = b"\xb3" * 4 + b"\xef"
+
+    with pytest.raises(UnicodeDecodeError) as error:
+        convert_legacy_encoding(source)
+    assert error.value.encoding == "utf-8"
+    converted = convert_legacy_encoding(source, errors="replace")
+    assert converted.encoding == "unicode"
+    assert converted.text == source.decode("utf-8", errors="replace")
 
 
 def test_detection_normalizer_routes_iscii_and_maps_span_to_source():

@@ -55,6 +55,20 @@ class EncoderLicense:
 
 
 PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
+    "i2b2": DatasetLicense(
+        dataset="i2b2",
+        license_id="i2b2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="local-dua-required; never redistributed",
+        notes="User-supplied, credentialed de-identification evaluation only.",
+    ),
+    "n2c2": DatasetLicense(
+        dataset="n2c2",
+        license_id="n2c2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="local-dua-required; never redistributed",
+        notes="User-supplied, credentialed de-identification evaluation only.",
+    ),
     "golden": DatasetLicense(
         dataset="golden",
         license_id="Apache-2.0",
@@ -70,6 +84,98 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         notes=(
             "Credentialed local loading only. OpenMed never downloads, caches, "
             "logs, commits, or redistributes RadGraph or source radiology rows."
+        ),
+    ),
+    "biored": DatasetLicense(
+        dataset="biored",
+        license_id="BioRED-data-use-terms",
+        source_url="https://github.com/ncbi/BioRED",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "OpenMed requires a user-supplied authorized local BioC copy. The "
+            "adapter never downloads, caches, logs, commits, or redistributes "
+            "BioRED corpus rows."
+        ),
+    ),
+    "n2c2-2018": DatasetLicense(
+        dataset="n2c2-2018",
+        license_id="i2b2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/projects/n2c2-nlp/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "2018 ADE and medication relation data requires approved n2c2/DBMI "
+            "access. OpenMed reads only a user-supplied local BRAT copy."
+        ),
+    ),
+    "made": DatasetLicense(
+        dataset="made",
+        license_id="MADE-1.0-UMass-DUA",
+        source_url="https://bio-nlp.org/dataset/made1",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MADE 1.0 medication and ADE annotations require approved local "
+            "access. OpenMed reads only a user-supplied BioC or BRAT copy."
+        ),
+    ),
+    "n2c2-2022": DatasetLicense(
+        dataset="n2c2-2022",
+        license_id="n2c2-DBMI-SHAC-DUA",
+        source_url="https://n2c2.dbmi.hms.harvard.edu/2022-track-2",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "2022 SDOH relation data requires approved n2c2/DBMI and SHAC "
+            "access. OpenMed reads only a user-supplied local BRAT copy."
+        ),
+    ),
+    "cegs-ngrid": DatasetLicense(
+        dataset="cegs-ngrid",
+        license_id="CEGS-N-GRID-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "CEGS N-GRID psychiatric intake de-identification data requires "
+            "approved DBMI access. OpenMed reads only a user-supplied local "
+            "annotation export."
+        ),
+    ),
+    "shac": DatasetLicense(
+        dataset="shac",
+        license_id="n2c2-DBMI-SHAC-DUA",
+        source_url="https://n2c2.dbmi.hms.harvard.edu/2022-track-2",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "SHAC social-determinants annotations require approved DBMI/n2c2 "
+            "access. OpenMed reads only a user-supplied local BRAT export."
+        ),
+    ),
+    "thyme": DatasetLicense(
+        dataset="thyme",
+        license_id="Mayo-THYME-data-use-terms",
+        source_url="https://clear.colorado.edu/compbio/thyme/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "THYME temporal annotations require Mayo-THYME access. OpenMed "
+            "reads only a user-supplied local annotation export."
+        ),
+    ),
+    "mednli": DatasetLicense(
+        dataset="mednli",
+        license_id="PhysioNet-Credentialed-Health-Data-License",
+        source_url="https://physionet.org/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MedNLI is derived from credentialed clinical notes. OpenMed never "
+            "downloads, caches, commits, or redistributes its sentence pairs."
+        ),
+    ),
+    "mimic-iv-bhc": DatasetLicense(
+        dataset="mimic-iv-bhc",
+        license_id="UW-PhysioNet-DUA",
+        source_url="https://physionet.org/",
+        redistribution="credentialed eval-only; never redistributed",
+        notes=(
+            "MIMIC-IV-Ext-BHC discharge-summary data requires approved UW and "
+            "PhysioNet access. OpenMed reads only a user-supplied local export."
         ),
     ),
     "naamapadam": DatasetLicense(
@@ -131,6 +237,30 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         notes=(
             "CMeEE is the CBLUE clinical NER task. Supply an authorized local "
             "copy through OPENMED_CMEEE_PATH."
+        ),
+    ),
+    "chip_cdn": DatasetLicense(
+        dataset="chip_cdn",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "CHIP-CDN is the CBLUE clinical diagnosis normalization task and "
+            "its standard-term side derives from a separately licensed "
+            "national clinical ICD-10 edition. Supply an authorized local copy "
+            "through OPENMED_CHIP_CDN_PATH; OpenMed never downloads, caches, "
+            "or redistributes either the mentions or the standard terms."
+        ),
+    ),
+    "imcs_v2_ner": DatasetLicense(
+        dataset="imcs_v2_ner",
+        license_id="CBLUE-access-controlled",
+        source_url="https://tianchi.aliyun.com/dataset/95414",
+        redistribution="user-supplied",
+        notes=(
+            "IMCS-V2-NER is the CBLUE medical-dialogue entity task. Supply an "
+            "authorized local copy through OPENMED_IMCS_V2_NER_PATH; OpenMed "
+            "never downloads, caches, or redistributes dialogue turns."
         ),
     ),
     "medmentions": DatasetLicense(
@@ -220,10 +350,15 @@ PERMISSIVE_ENCODER_LICENSES: Mapping[str, EncoderLicense] = MappingProxyType(
 
 
 def license_for(dataset: str) -> DatasetLicense:
+    requested = str(dataset).strip()
     try:
-        return PUBLIC_DATASET_LICENSES[dataset]
-    except KeyError as exc:
-        raise ValueError(f"unknown dataset license: {dataset}") from exc
+        return PUBLIC_DATASET_LICENSES[requested]
+    except KeyError:
+        normalized = requested.casefold().replace("_", "-")
+        for name, metadata in PUBLIC_DATASET_LICENSES.items():
+            if name.casefold().replace("_", "-") == normalized:
+                return metadata
+        raise ValueError(f"unknown dataset license: {dataset}") from None
 
 
 def encoder_license_for(family: str) -> EncoderLicense:

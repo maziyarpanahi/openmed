@@ -1,8 +1,10 @@
+import { alignTokenOffsets } from "./offsets";
 import type {
   LoadModelOptions,
   LoadOnnxModelOptions,
+  RawTokenClassificationEntity,
+  RawTransformersRuntime,
   TokenClassificationPipeline,
-  TransformersRuntime,
 } from "./types";
 
 const TRANSFORMERS_JS_MODULE = "@huggingface/transformers";
@@ -54,11 +56,29 @@ export async function loadTokenClassificationPipeline(
       local_files_only: localFilesOnly,
       localFilesOnly,
     };
-    return await runtime.pipeline(
+    const pipeline = await runtime.pipeline(
       "token-classification",
       model,
       pipelineOptions,
     );
+    // Preserve runtime properties and resource disposal while normalizing calls.
+    return new Proxy(pipeline, {
+      async apply(target, _receiver, [text, callOptions]) {
+        const output = await target(text, callOptions);
+        if (Array.isArray(output[0])) {
+          return (output as RawTokenClassificationEntity[][]).map(
+            (tokens) => alignTokenOffsets(text, tokens),
+          );
+        }
+        return alignTokenOffsets(text, output as RawTokenClassificationEntity[]);
+      },
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        return property === "dispose" && typeof value === "function"
+          ? value.bind(target)
+          : value;
+      },
+    }) as TokenClassificationPipeline;
   } finally {
     if (runtime.env) {
       if (previousAllowRemote === undefined) {
@@ -92,7 +112,7 @@ export function isLocalModelReference(model: string): boolean {
 
 async function resolveRuntime(
   runtime?: LoadModelOptions["runtime"],
-): Promise<TransformersRuntime> {
+): Promise<RawTransformersRuntime> {
   if (typeof runtime === "function") {
     return runtime();
   }
@@ -101,7 +121,7 @@ async function resolveRuntime(
   }
   const moduleName = TRANSFORMERS_JS_MODULE;
   try {
-    return (await import(moduleName)) as TransformersRuntime;
+    return (await import(moduleName)) as RawTransformersRuntime;
   } catch (error) {
     throw new Error(
       "Install @huggingface/transformers or pass a token-classification pipeline.",

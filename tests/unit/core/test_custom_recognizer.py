@@ -54,6 +54,26 @@ allow:
     assert len(CustomRecognizer.from_config(yaml_path).detect_entities(text)) == 2
 
 
+def test_standalone_recognizer_hashes_are_private_per_call():
+    recognizer = CustomRecognizer.from_config(
+        {"deny_terms": [{"term": "Synthetic", "label": "NAME"}]}
+    )
+
+    def hashes(**kwargs):
+        return [
+            entity.metadata["custom_recognizer"]["text_hash"]
+            for entity in recognizer.detect_entities(
+                "Synthetic met Synthetic", **kwargs
+            )
+        ]
+
+    first = hashes()
+    assert len(first) == 2
+    assert first[0] == first[1]
+    assert first != hashes()
+    assert hashes(hmac_secret="fixture-key") == hashes(hmac_secret=b"fixture-key")
+
+
 def test_deny_term_and_regex_emit_custom_provenance_without_raw_metadata():
     text = "Ward Phoenix enrolled STUDY-123."
     recognizer = CustomRecognizer.from_config(
@@ -75,6 +95,21 @@ def test_deny_term_and_regex_emit_custom_provenance_without_raw_metadata():
         assert metadata["detector"] == CUSTOM_DENY_DETECTOR
         assert custom["text_hash"].startswith("hmac-sha256:")
         assert entity.text not in repr(metadata)
+
+
+def test_biomedical_deny_span_has_no_identifier_regulatory_tag():
+    recognizer = CustomRecognizer.from_config(
+        {"deny_terms": [{"term": "pneumonia", "label": "DISEASE"}]}
+    )
+
+    (span,) = recognizer.detect_spans(
+        "Pneumonia",
+        doc_id="synthetic-doc",
+        hmac_secret="test-secret",
+    )
+
+    assert span.canonical_label == "DISEASE"
+    assert span.regulatory_tags == ()
 
 
 def test_extract_pii_adds_custom_deny_and_allow_suppresses_model(monkeypatch):

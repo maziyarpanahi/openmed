@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/clinical/care-gap.schema.json",
+  "title": "OpenMed evidence-bound care gap",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "advisory",
+    "artifact_type",
+    "compatibility_policy",
+    "evaluated_at",
+    "evidence",
+    "gap_id",
+    "measure_definition_digest",
+    "measure_definition_version_id",
+    "measurement_period",
+    "origin_review_status",
+    "parent_version_id",
+    "policy",
+    "reason_code",
+    "review_events",
+    "review_status",
+    "schema_version",
+    "source_snapshot_digest",
+    "source_snapshot_id",
+    "state",
+    "subject_id",
+    "version_digest",
+    "version_id"
+  ],
+  "properties": {
+    "advisory": {
+      "const": "Care-gap output is evidence-bound decision support for human review only; it does not authorize diagnosis, treatment, outreach, enrollment, or ordering."
+    },
+    "artifact_type": {"const": "care_gap_evaluation"},
+    "compatibility_policy": {"const": "same_major"},
+    "evaluated_at": {"$ref": "#/$defs/timestamp"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "gap_id": {"$ref": "#/$defs/opaque_id"},
+    "measure_definition_digest": {"$ref": "#/$defs/digest"},
+    "measure_definition_version_id": {"$ref": "#/$defs/opaque_id"},
+    "measurement_period": {"$ref": "#/$defs/time_window"},
+    "origin_review_status": {"$ref": "#/$defs/origin_review_status"},
+    "parent_version_id": {
+      "anyOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+    },
+    "policy": {"$ref": "#/$defs/policy"},
+    "reason_code": {"$ref": "#/$defs/controlled"},
+    "review_events": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/review_event"}
+    },
+    "review_status": {"$ref": "#/$defs/review_status"},
+    "schema_version": {"const": "1.0.0"},
+    "source_snapshot_digest": {"$ref": "#/$defs/digest"},
+    "source_snapshot_id": {"$ref": "#/$defs/opaque_id"},
+    "state": {
+      "enum": ["insufficient_data", "met", "not_applicable", "open"]
+    },
+    "subject_id": {"$ref": "#/$defs/opaque_id"},
+    "version_digest": {"$ref": "#/$defs/digest"},
+    "version_id": {"$ref": "#/$defs/opaque_id"}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {"type": "string", "format": "date-time"},
+    "time_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["end", "start"],
+      "properties": {
+        "end": {"$ref": "#/$defs/timestamp"},
+        "start": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "review_status": {
+      "enum": ["approved", "in_review", "not_required", "rejected", "required"]
+    },
+    "origin_review_status": {"enum": ["not_required", "required"]},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "denominator_population_id",
+        "exception_is_not_applicable",
+        "exception_population_id",
+        "exclusion_population_id",
+        "initial_population_id",
+        "numerator_population_id",
+        "policy_id",
+        "version"
+      ],
+      "properties": {
+        "denominator_population_id": {"$ref": "#/$defs/controlled"},
+        "exception_is_not_applicable": {"type": "boolean"},
+        "exception_population_id": {
+          "anyOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]
+        },
+        "exclusion_population_id": {
+          "anyOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]
+        },
+        "initial_population_id": {"$ref": "#/$defs/controlled"},
+        "numerator_population_id": {"$ref": "#/$defs/controlled"},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conflict_ids",
+        "evidence_ids",
+        "fact_ids",
+        "measure_result_digest",
+        "measure_result_id",
+        "population_result_digests"
+      ],
+      "properties": {
+        "conflict_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "evidence_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "fact_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "measure_result_digest": {"$ref": "#/$defs/digest"},
+        "measure_result_id": {"$ref": "#/$defs/opaque_id"},
+        "population_result_digests": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/controlled"},
+          "additionalProperties": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "review_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "authorization_digest",
+        "decision_digest",
+        "event_id",
+        "from_status",
+        "occurred_at",
+        "reason_code",
+        "to_status"
+      ],
+      "properties": {
+        "action": {"enum": ["begin_review", "complete_review"]},
+        "authorization_digest": {"$ref": "#/$defs/digest"},
+        "decision_digest": {
+          "anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "event_id": {"$ref": "#/$defs/opaque_id"},
+        "from_status": {"$ref": "#/$defs/review_status"},
+        "occurred_at": {"$ref": "#/$defs/timestamp"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "to_status": {"$ref": "#/$defs/review_status"}
+      }
+    }
+  }
+}

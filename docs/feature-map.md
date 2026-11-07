@@ -3,14 +3,59 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
-[OpenMed v2.0.0 Release Notes](./release/v2.0.0.md), the
+[OpenMed v3.2.0 release notes](release/v3.2.0.md), the
+[3.1-to-3.2 migration](migration/3.1-to-3.2.md) and the
+[changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md), the historical
+[OpenMed v2.5.0 Release Notes](./release/v2.5.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
 For the model families available by clinical specialty, use the
 [clinical-domain model guide](clinical-domains.md).
 
+## Longitudinal Patient Journey
+
+Journey capabilities are primarily implemented in Python. Shared client and
+OpenMedKit contracts do not imply native execution of every Python feature.
+Optional training is not a feature or SDK-release prerequisite; independently
+qualified local models and explicit caller-supplied providers remain subject
+to runtime calibration, privacy and evidence requirements.
+
+| Area | What it covers | Where to look |
+| --- | --- | --- |
+| Versioned evidence and history | Immutable source artifacts, facts, conflicts, corrections and point-in-time snapshots. | [Journey contracts](clinical/journey-contracts.md), [Longitudinal Journey](clinical/longitudinal-journey.md) |
+| Governed local storage | Content-addressed files, transactional SQLite history, optional PostgreSQL metadata and replay-safe ingestion. | [Local Journey store](structured/local-journey-store.md), [PostgreSQL/object store](structured/postgres-object-journey-store.md) |
+| Common resource surfaces | Governed Python, REST, GraphQL and read-only SQL resources with pagination and typed errors. | [Journey resource API](api/journey-resources.md) |
+| Contract and release evidence | Synthetic end-to-end fixtures, replay, privacy, provenance and platform-sensitive release gates. | [Golden Journey](interop/v3-golden-journey.md), [Journey release gate](release/v3.0-journey-release-gate.md) |
+
+## Guarded Clinical Intelligence
+
+The v3.0 clinical workstreams map to these Python modules, guides and examples.
+Optional runtimes, model artifacts and caller-supplied local providers have
+their own admission requirements. The synthetic brief demonstrates contracts
+and review hand-offs; it does not establish clinical validation or model quality.
+
+| Area | Source modules | Guides | Runnable examples |
+| --- | --- | --- | --- |
+| Guarded clinical brief | `openmed/clinical/brief.py` | [Brief pipeline](clinical/clinical-brief.md), [synthetic walkthrough](demo/clinical-brief.md) | [Fixed synthetic brief](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_clinical_brief.py) |
+| Post-de-identification summarization | `openmed/clinical/summarize.py`, `openmed/clinical/summarize_backends.py` | [Summarization](clinical/summarization.md), [input contract](clinical/summary-input-contract.md), [safety envelope](clinical/summary-safety.md) | Composed in the fixed synthetic brief; no standalone script. |
+| Clinical NLI and claim verification | `openmed/clinical/nli.py`, `openmed/clinical/nli_backends.py`, `openmed/clinical/nli_gate.py` | [Verification](clinical/nli-verification.md), [local checkpoints](models/clinical-nli.md), [abstention](clinical/nli-abstention.md) | Test-only NLI provider in the fixed synthetic brief; no standalone script. |
+| Social determinants of health | `openmed/clinical/sdoh.py`, `openmed/clinical/sdoh_evidence.py`, `openmed/clinical/sdoh_temporal.py` | [Evidence contract](clinical/sdoh-evidence.md), [temporal qualifiers](clinical/sdoh-temporal-qualifiers.md), [counterfactuals](evaluation/sdoh-counterfactuals.md), [false-positive stress](evaluation/sdoh-false-positive-stress.md) | No standalone script. |
+| Guarded clinical relations | `openmed/clinical/relations/` | [Medication changes](clinical/medication-change-relations.md), [review priority](clinical/relation-review-priority.md), [multilingual relations](clinical/multilingual-relations.md) | No standalone script. |
+| Timelines and temporal normalization | `openmed/clinical/timeline/`, `openmed/clinical/temporal_normalizer.py`, `openmed/clinical/timeline_graph.py` | [Timeline assembler](clinical/event-timeline.md), [temporal normalization](clinical/temporal-normalization.md), [timeline evidence](clinical/timeline-evidence.md) | No standalone script. |
+| Note routing and document profiles | `openmed/clinical/note_router.py`, `openmed/clinical/radiology_profile.py`, `openmed/clinical/pathology_profile.py`, `openmed/clinical/discharge_profile.py` | [Routing](clinical/note-routing.md), [radiology](clinical/radiology-profile.md), [pathology](clinical/pathology-profile.md), [discharge](clinical/discharge-profile.md) | No standalone script. |
+| OCR and laboratory measurements | `openmed/multimodal/ocr.py`, `openmed/clinical/lab_measurements.py` | [Memory-only OCR](multimodal/ocr-streaming.md), [lab normalization](clinical/lab-measurements.md), [reference ranges](clinical/lab-reference-ranges.md) | OCR in [multimodal example](https://github.com/maziyarpanahi/openmed/blob/master/examples/v17_multimodal_browser_interop.py); no standalone laboratory script. |
+| Evidence, citations and human review | `openmed/clinical/evidence_packet.py`, `openmed/clinical/review_packet.py`, `openmed/clinical/review_state_machine.py` | [Evidence packets](clinical/evidence-packets.md), [citation boundaries](clinical/citation-boundary-validation.md), [review packets](clinical/human-review-packets.md), [review transitions](clinical/review-transitions.md) | Evidence and synthetic review transitions in the fixed synthetic brief; no standalone review script. |
+| Language packs and Indic/Chinese routing | `openmed/clinical/lexicons/context_cues.py`, `openmed/clinical/relations/multilingual.py`, `openmed/core/script_detect.py` | [Context analysis](clinical/context-analysis.md), [language matrix](clinical/language-matrix.md), [Chinese grounding](clinical/chinese-terminology-grounding.md), [multilingual relations](clinical/multilingual-relations.md) | [Chinese synthetic note](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_chinese_clinical_note.py), [Hindi/Hinglish note](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_hindi_hinglish_note.py) cover de-identification; no standalone clinical language-pack script. |
+| Clinical SLM manifests and probes | `openmed/models/clinical_slm_manifest.py`, `openmed/models/clinical_slm_capabilities.py`, `openmed/models/clinical_slm_memory.py`, `openmed/models/clinical_slm_templates.py` | [Artifact manifest](models/clinical-slm-manifest.md), [capabilities](models/clinical-slm-capabilities.md), [memory preflight](models/clinical-slm-memory-preflight.md), [template digests](models/clinical-slm-template-digests.md) | No standalone script. |
+
 ## Privacy And De-identification
+
+The [guarded clinical brief](clinical/clinical-brief.md) composes local
+de-identification, reviewed evidence, generation, NLI, citations and review
+metadata. `examples/v30_clinical_brief.py` demonstrates the full hand-off on a
+fixed synthetic note with clearly labelled test-only providers; it is not a
+model-quality or clinical readiness claim.
 
 | Area | What it covers | Where to look |
 | --- | --- | --- |
@@ -18,7 +63,7 @@ For the model families available by clinical specialty, use the
 | Canonical span contracts | Versioned `OpenMedSpan`, schema fingerprints, redaction action schemas, provenance, and compatibility gates. | `openmed/core/schemas/`, [De-identification API](./api/deidentification.md), `examples/v16_policy_audit_release_gates.py` |
 | Audit and review evidence | Signed audit reports, reproducibility hashes, review bundles, FHIR `Provenance`/`AuditEvent`, audit diffs, and PHI-safe previews. | `openmed/core/audit.py`, `openmed/core/redaction_preview.py`, `openmed/risk/audit_diff.py`, `openmed/clinical/exporters/fhir/provenance.py`, `examples/v16_policy_audit_release_gates.py` |
 | Runtime de-identification features | `DeidentificationResult.to_dataframe`, surrogate vaults, patient-keyed date shifting, format-preserving redaction, minimum-necessary action selection, streaming redaction, explain traces, section stamping, and risk budgets. | `openmed/core/pii.py`, `openmed/core/surrogate_vault.py`, `openmed/core/date_shift.py`, `openmed/core/anonymizer/format_preserve.py`, `openmed/core/redaction_strength.py`, `openmed/core/streaming.py`, `openmed/core/explain.py`, `openmed/risk/budget.py` |
-| Multilingual PII | 34 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fr, he, hi, id, it, ja, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter adds four optional routes and can also serve Assamese, Bengali, Hindi, Marathi, Odia, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
+| Multilingual PII | 42 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter can serve Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
 
 ## Multimodal And Structured Inputs
 
@@ -26,8 +71,8 @@ For the model families available by clinical specialty, use the
 | --- | --- | --- |
 | Multimodal document contract | `ExtractedDocument`, `SourceSpan`, lazy handler registration, source-offset mapping, and dispatcher-based redaction. | `openmed/multimodal/base.py`, `examples/v17_multimodal_browser_interop.py` |
 | OCR and scanned documents | Shared OCR result contract, fake test engine, Tesseract, PaddleOCR, EasyOCR, docTR, OCR language selection, and available-engine discovery. | `openmed/multimodal/ocr.py`, `tests/unit/multimodal/test_ocr_engines.py`, `examples/v17_multimodal_browser_interop.py` |
-| Markup and metadata | Markdown/AsciiDoc and EPUB extraction, DOCX offset extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_docx.py`, `openmed/multimodal/epub.py`, `openmed/multimodal/metadata_scrub.py`, `examples/v17_multimodal_browser_interop.py` |
-| DICOM, contacts, and PDFs | DICOM header de-identification, burned-in pixel OCR redaction, vCard/iCalendar PHI redaction, and redacted-PDF text-layer leakage/fidelity checks. | `openmed/multimodal/dicom.py`, `openmed/multimodal/contacts_calendar.py`, `openmed/multimodal/verify_pdf.py`, [EPUB Extraction](./multimodal/epub-extraction.md) |
+| Documents and metadata | HTML/HTM source-offset extraction and markup-preserving redaction, EML/optional MSG ingestion with MIME and attachment redaction, Markdown/AsciiDoc, EPUB, and RTF extraction, DOCX offset extraction, PPTX slide/table/speaker-notes redaction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_html.py`, `openmed/multimodal/email.py`, [Email Ingestion](./multimodal/email-ingestion.md), `openmed/multimodal/documents_docx.py`, `openmed/multimodal/pptx.py`, [PPTX Redaction](./multimodal/pptx-redaction.md), `openmed/multimodal/epub.py`, `openmed/multimodal/rtf.py`, [RTF Extraction](./multimodal/rtf-extraction.md), `openmed/multimodal/metadata_scrub.py` |
+| DICOM, contacts, and PDFs | DICOM header de-identification, burned-in pixel OCR redaction, vCard/iCalendar PHI redaction, bbox-preserving multi-column PDF reading-order reconstruction, deterministic redacted-PDF rendering, global text-removal verification, and masked layout-fidelity regression gates. | `openmed/multimodal/dicom.py`, `openmed/multimodal/contacts_calendar.py`, `openmed/multimodal/documents_pdf_layout.py`, `openmed/multimodal/render_pdf.py`, `openmed/multimodal/verify_pdf.py`, [PDF Reading Order](./multimodal/pdf-reading-order.md), [Redacted PDF Rendering And Fidelity](./multimodal/pdf-redaction-fidelity.md) |
 | Chat logs and tabular data | JSONL chat-log redaction with speaker pseudonymization, CSV/TSV PHI column classification, column actions, and PHI-safe manifests. | `openmed/multimodal/chatlog_jsonl.py`, `openmed/multimodal/tabular_csv.py`, `examples/v17_multimodal_browser_interop.py` |
 | Community health worker forms | ODK, CommCare, and KoBoToolbox JSON/CSV export detection, XForm path semantics, repeat preservation, narrative de-identification, metadata hashing, and coordinate generalization. | `openmed/multimodal/chw_forms.py`, [CHW Form Export De-identification](./chw-form-deid.md), `examples/chw_form_deid.py` |
 
@@ -35,11 +80,11 @@ For the model families available by clinical specialty, use the
 
 | Area | What it covers | Where to look |
 | --- | --- | --- |
-| FHIR helpers | Deterministic R4 Bundles, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
-| OMOP and CDM loading | Deterministic note-to-CDM extraction and OMOP CDM loader foundations. | `openmed/interop/cdm_etl.py`, `openmed/interop/omop/cdm_loader.py` |
+| FHIR helpers | Deterministic R4 Bundles, bundled base-R4 structural validation, local IG profile checks, stable `urn:uuid` references, `OperationOutcome`, `Provenance`, `AuditEvent`, CodeableConcept builders/checkers, SMART-on-FHIR bulk ingestion, and coding provenance. | `openmed/clinical/exporters/fhir/`, `openmed/clinical/exporters/codeable_concept.py`, `openmed/clinical/exporters/codeable_concept_check.py`, `openmed/service/smart_backend.py`, [FHIR Interop Helpers](./fhir-interop.md) |
+| OMOP and CDM loading | Deterministic note-to-CDM extraction, versioned clinical-fact projection, digest-bound aggregate quality reports, and synthetic reference reconciliation. | `openmed/interop/cdm_etl.py`, `openmed/interop/omop/`, [OMOP fact projection](./interop/omop-fact-projection.md), [OMOP quality bridge](./interop/omop-quality-bridge.md) |
 | FHIR operations and bulk export | `$de-identify` resource/Bundle wrappers and FHIR Bulk NDJSON de-identification summaries. | `openmed/interop/fhir_operations.py`, `openmed/interop/fhir_bulk.py`, `examples/v17_multimodal_browser_interop.py` |
 | HL7 v2 and CDA/C-CDA | HL7 v2 segment/field redaction, CDA/C-CDA XML de-identification, and multimodal XML dispatch. | `openmed/interop/hl7v2.py`, `openmed/interop/cda.py`, [HL7 v2 De-identification](./hl7v2-deidentification.md) |
-| Optional adapters | Presidio, PHILTER, pyDeid, GLiNER-BioMed, LangChain, and spaCy adapter surfaces. | `openmed/interop/`, [LangChain Redaction Wrapper](./integrations-langchain.md), [spaCy Pipeline Component](./spacy-component.md) |
+| Optional adapters | Presidio, PHILTER, pyDeid, GLiNER-BioMed, LangChain, and spaCy adapter surfaces. | `openmed/interop/`, [Integration Capability Matrix](./integrations/matrix.md), [LangChain Redaction Wrapper](./integrations-langchain.md), [spaCy Pipeline Component](./spacy-component.md) |
 
 ## Clinical Extraction
 
@@ -59,7 +104,7 @@ For the model families available by clinical specialty, use the
 | One-call inference | `analyze_text`, typed `AnalyzeResult`, validation, grouping, and dict/JSON/HTML/CSV formatting. | `openmed/__init__.py`, `openmed/core/results.py`, [Analyze Text Helper](./analyze-text.md) |
 | Loader and batch processing | Model loading, cache reuse, tokenizer caching, batch `analyze_text`, batch PII extraction, and ordered de-identification output. | `openmed/core/models.py`, `openmed/processing/tokenizer_cache.py`, `openmed/processing/batch.py`, [ModelLoader & Pipelines](./model-loader.md), [Batch Processing](./batch-processing.md) |
 | Apple and mobile runtimes | Python MLX, Laneformer MLX-LM, Swift OpenMedKit, Kotlin/Android OpenMedKit, React Native bridge, Core ML export, MLX quantized export, mobile benchmarks, and PyTorch MPS selection/tuning. | `openmed/mlx/`, `openmed/coreml/`, `openmed/torch/`, `swift/OpenMedKit`, `android/openmedkit`, `js/openmedkit-react-native`, [MLX Backend](./mlx-backend.md), [Swift Package](./swift-openmedkit.md), [Android Span Parity](./android-parity.md), [CoreML Packaging](./coreml-export.md) |
-| Quantized and browser formats | AWQ, GPTQ, bitsandbytes loading, ONNX/WebGPU, ONNX Runtime Web, ORT Mobile, OpenVINO, Transformers.js bundle export, and ONNX/quantized manifest metadata. | `openmed/onnx/`, `js/openmedkit-web/`, [Android ONNX Export](./export-onnx-android.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [OpenVINO Runtime](./runtimes/openvino.md), [Transformers.js Export](./export-transformersjs.md) |
+| Quantized and browser formats | AWQ, GPTQ, bitsandbytes loading, ONNX/WebGPU, ONNX Runtime Web, ORT Mobile, OpenVINO, TensorRT, Transformers.js bundle export, and ONNX/quantized manifest metadata. | `openmed/onnx/`, `js/openmedkit-web/`, [Android ONNX Export](./export-onnx-android.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [OpenVINO Runtime](./runtimes/openvino.md), [TensorRT Runtime](./runtimes/tensorrt.md), [Transformers.js Export](./export-transformersjs.md) |
 | Training infrastructure | DAPT corpus assembly, Mode-A distillation, DirectID contracts, hard-negative sampling, active learning, adjudication, and span-relation graph decoding. | `openmed/training/`, `openmed/core/decoding/graph.py` |
 
 ## Service, Clients, And Operations
@@ -67,9 +112,11 @@ For the model families available by clinical specialty, use the
 | Area | What it covers | Where to look |
 | --- | --- | --- |
 | REST and gRPC service | FastAPI endpoints, shared runtime, API-key/JWT auth, no-PHI logging, tracing, gRPC, async jobs, webhooks, model warm pools, dynamic batching, request coalescing, rate/concurrency limits, trusted hosts, CORS, `/livez`, `/readyz`, and metrics. | `openmed/service/`, [REST Service](./rest-service.md), [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [REST Tracing](./serving/tracing.md) |
+| Kubernetes model operations | Declarative `OpenMedModel` resources, manifest-pointer warm-pool rollouts, status conditions, events, rollback, CRD validation, and least-privilege RBAC. | `deploy/operator/`, [Kubernetes Model Operator](./deploy/operator.md) |
+| Core pipeline observability | Optional, no-PHI spans and aggregate histograms for all ten de-identification pipeline stages, with lazy OpenTelemetry loading and no exporter by default. | `openmed/core/telemetry.py`, `openmed/core/pipeline.py`, [Core Pipeline Observability](./core-observability.md) |
 | Typed clients | Python service client and TypeScript REST client parity. | `openmed/service/client.py`, `clients/typescript/`, `clients/typescript/README.md` |
-| Streaming and connectors | Core incremental de-identification, Kafka/Pulsar streaming, Spark structured streaming, object storage, Dask, DuckDB, lakehouse, columnar redaction, and warehouse transformation packages. | `openmed/processing/`, `openmed/integrations/`, `openmed/interop/duckdb_udf.py`, [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md) |
-| CLI | `openmed deid`, FHIR bundle, model recommendation/diff/card, policy diff/lint, doctor, gates preview/bundle, audit/risk, active learning, benchmark, and calibration commands. | `openmed/cli/`, [Contributing & Releases](./contributing.md) |
+| Streaming and connectors | Core incremental de-identification, Kafka/Pulsar streaming, Spark structured streaming, object storage, Dask, DuckDB, lakehouse, columnar redaction, warehouse remote functions, and transformation packages. | `openmed/processing/`, `openmed/integrations/`, `openmed/interop/duckdb_udf.py`, [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Warehouse Remote-Function Handler](./integrations/warehouse-remote-function.md), [Dask DataFrame De-identification](./integrations/dask.md) |
+| CLI | `openmed init`, `openmed deid`, FHIR bundle, model recommendation/diff/card, policy diff/lint, doctor, gates preview/bundle, audit/risk, active learning, benchmark, and calibration commands. | `openmed/cli/`, [Project Scaffold](./cli/openmed-init.md), [Contributing & Releases](./contributing.md) |
 
 ## Evaluation, Risk, And Release Evidence
 
@@ -91,7 +138,7 @@ For the model families available by clinical specialty, use the
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) - review the current major-version contract, release coverage, and migration notes.
+2. [OpenMed 3.2.0 migration](migration/3.1-to-3.2.md) - review intentional API changes and validation requirements.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.

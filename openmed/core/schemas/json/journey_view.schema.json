@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/journey_view.schema.json",
+  "title": "OpenMed Point-in-Time Journey View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compatibility_policy",
+    "snapshot",
+    "events",
+    "graph",
+    "total_count",
+    "next_cursor",
+    "query_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"},
+    "snapshot": {"$ref": "#/$defs/snapshot"},
+    "events": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/event"}
+    },
+    "graph": {"$ref": "#/$defs/graph"},
+    "total_count": {"type": "integer", "minimum": 0},
+    "next_cursor": {
+      "type": ["string", "null"],
+      "pattern": "^journeycursor_[A-Za-z0-9_-]{16,128}$"
+    },
+    "query_fingerprint": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "compatibility_policy",
+        "snapshot_id",
+        "subject_id",
+        "revision"
+      ],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "compatibility_policy": {"const": "same_major"},
+        "snapshot_id": {"$ref": "#/$defs/opaque_id"},
+        "subject_id": {"$ref": "#/$defs/opaque_id"},
+        "revision": {"type": "integer", "minimum": 1}
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "compatibility_policy",
+        "event_id",
+        "position",
+        "event_type",
+        "journey_state",
+        "correction_state",
+        "fact",
+        "evidence_paths",
+        "conflicts",
+        "resolutions",
+        "canonical_records",
+        "review_states",
+        "source_ids"
+      ],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "compatibility_policy": {"const": "same_major"},
+        "event_id": {"$ref": "#/$defs/opaque_id"},
+        "position": {"type": "integer", "minimum": 0},
+        "event_type": {
+          "enum": [
+            "condition",
+            "encounter",
+            "laboratory",
+            "medication",
+            "observation",
+            "procedure",
+            "social_determinant"
+          ]
+        },
+        "journey_state": {"enum": ["current", "historical", "conflicted"]},
+        "correction_state": {
+          "enum": ["none", "amends", "superseded", "amends_and_superseded"]
+        },
+        "fact": {"type": "object"},
+        "evidence_paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact", "locator"],
+            "properties": {
+              "artifact": {"type": "object"},
+              "locator": {"type": "object"}
+            }
+          }
+        },
+        "conflicts": {"type": "array", "items": {"type": "object"}},
+        "resolutions": {"type": "array", "items": {"type": "object"}},
+        "canonical_records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["record", "version", "revision"],
+            "properties": {
+              "record": {"type": "object"},
+              "version": {"type": "integer", "minimum": 1},
+              "revision": {"type": "integer", "minimum": 1}
+            }
+          }
+        },
+        "review_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["queued", "in_review", "approved", "rejected", "expired", "reopened"]
+          }
+        },
+        "source_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "compatibility_policy", "nodes", "edges"],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "compatibility_policy": {"const": "same_major"},
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "event_id",
+              "fact_id",
+              "position",
+              "event_type",
+              "journey_state",
+              "correction_state",
+              "effective_time",
+              "evidence_ids",
+              "derivation_hash"
+            ],
+            "properties": {
+              "event_id": {"$ref": "#/$defs/opaque_id"},
+              "fact_id": {"$ref": "#/$defs/opaque_id"},
+              "position": {"type": "integer", "minimum": 0},
+              "event_type": {"type": "string"},
+              "journey_state": {"enum": ["current", "historical", "conflicted"]},
+              "correction_state": {"type": "string"},
+              "effective_time": {"type": "object"},
+              "evidence_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"$ref": "#/$defs/opaque_id"}
+              },
+              "derivation_hash": {"$ref": "#/$defs/digest"},
+              "assertion_status": {"type": ["string", "null"]},
+              "certainty": {"type": ["string", "null"]},
+              "experiencer": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "edge_id",
+              "source_event_id",
+              "target_event_id",
+              "relation_type",
+              "ordering_basis",
+              "evidence_ids",
+              "derivation_hash"
+            ],
+            "properties": {
+              "edge_id": {"$ref": "#/$defs/opaque_id"},
+              "source_event_id": {"$ref": "#/$defs/opaque_id"},
+              "target_event_id": {"$ref": "#/$defs/opaque_id"},
+              "relation_type": {"type": "string"},
+              "ordering_basis": {"type": "string"},
+              "evidence_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"$ref": "#/$defs/opaque_id"}
+              },
+              "derivation_hash": {"$ref": "#/$defs/digest"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

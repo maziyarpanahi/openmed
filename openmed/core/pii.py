@@ -36,9 +36,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
-from ..processing.text import InputError as InputError
 from ..processing.text import validate_pii_input
 from .budget import BudgetClock, RequestBudget, coerce_budget
+from .capabilities import MissingOptionalDependencyError
+from .capabilities import install_hint as _optional_dependency_install_instruction
 from .config import OpenMedConfig
 from .custom_recognizer import (
     CUSTOM_DENY_DETECTOR,
@@ -49,8 +50,17 @@ from .custom_recognizer import (
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
+    stable_offset_from_seed,
 )
 from .decoding import iter_grapheme_cluster_spans, remap_normalized_span
+from .errors import (
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    redact_detail,
+)
 from .offline import network_blocked_if_offline
 from .script_detect import (
     DetectionNormalization,
@@ -89,37 +99,6 @@ DeidentificationMethod = Literal[
     "shift_dates",
     "format_preserve",
 ]
-
-
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
 
 
 def _optional_dependency_status(
@@ -288,14 +267,17 @@ class DeidentificationResult:
             ``confidence``, ``action``, and ``result_id``.
 
         Raises:
-            ImportError: If pandas is not installed.
+            MissingExtraError: If pandas is not installed. This remains an
+                :class:`ImportError` for compatibility.
         """
         try:
             import pandas as pd
         except ImportError as exc:
-            raise ImportError(
+            raise MissingExtraError(
                 "pandas is required to use DeidentificationResult.to_dataframe(). "
-                "Install it with `pip install pandas`."
+                "Install it with `pip install pandas`.",
+                package="pandas",
+                feature="DeidentificationResult.to_dataframe()",
             ) from exc
 
         columns = [
@@ -346,27 +328,6 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 _OCCURRENCE_MAPPING_PREFIX = "__openmed_occurrence_v1__:"
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset(
-    {
-        "fr",
-        "de",
-        "it",
-        "es",
-        "nl",
-        "hi",
-        "mr",
-        "te",
-        "pt",
-        "ar",
-        "tr",
-        "cs",
-        "zu",
-        "xh",
-        "sv",
-        "da",
-        "no",
-    }
-)
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
 # Repository-prefix allowlist for org/model identifiers that route through the
@@ -527,9 +488,15 @@ def _coerce_batched_raw_outputs(
                 normalized.append(list(item) if item else [])
         return normalized
 
-    raise ValueError(
-        "Privacy-filter batch output length did not match input length "
-        f"({expected_count})"
+    actual_count = len(raw_outputs) if isinstance(raw_outputs, list) else 1
+    raise InferenceError(
+        "Privacy-filter inference returned a batch with an unexpected length. "
+        "Retry with a supported backend; if the mismatch persists, report the "
+        "model and backend identifiers.",
+        details={
+            "expected_count": expected_count,
+            "actual_count": actual_count,
+        },
     )
 
 
@@ -602,26 +569,60 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
         INDIC_NER_LANGUAGES,
         INDIC_NER_MODEL_ENV,
         NATIONAL_ID_ONLY_LANGUAGES,
+        OPTIONAL_PII_MODEL,
         SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+        USER_SUPPLIED_PII_MODEL,
     )
 
     accepted_languages = (
-        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
     lang = validate_language(lang, supported=accepted_languages)
+
+    # Registry placeholders published by discovery surfaces such as
+    # ``openmed_list_pii_languages``. They are not loadable repositories, so
+    # echoing one back must fail with the same actionable guidance as omitting
+    # ``model_name`` rather than with a namespaced download error.
+    placeholder_models = {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}
+
+    def _no_model_error() -> ModelLoadError:
+        # Only ``ne`` and ``ur`` reach the first branch; the optional Indic NER
+        # routes have an env-var path and are named in the third branch instead.
+        no_weights = sorted(USER_SUPPLIED_MODEL_LANGUAGES - INDIC_NER_LANGUAGES)
+        if lang in no_weights:
+            return ModelLoadError(
+                f"Language '{lang}' has no bundled OpenMed PII model; pass an "
+                "explicit model_name (user-supplied-model languages: "
+                f"{', '.join(no_weights)})."
+            )
+        if lang in NATIONAL_ID_ONLY_LANGUAGES:
+            return ModelLoadError(
+                f"Language '{lang}' has deterministic pattern-only support; "
+                "pass an explicit model_name for model-backed inference."
+            )
+        return ModelLoadError(
+            f"Language '{lang}' uses optional Indic NER weights; pass an "
+            f"explicit model_name or set {INDIC_NER_MODEL_ENV}."
+        )
+
+    if model_name in placeholder_models:
+        if get_default_pii_model(lang) is not None:
+            raise InputError(
+                f"'{model_name}' is a registry placeholder, not a loadable "
+                "model; omit model_name to use the default for language "
+                f"'{lang}', or pass an explicit model repository or local path.",
+                details={"argument": "model_name", "language": lang},
+            )
+        raise _no_model_error()
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         resolved = get_default_pii_model(lang)
         if resolved is None:
-            if lang in NATIONAL_ID_ONLY_LANGUAGES:
-                raise ValueError(
-                    f"Language '{lang}' has deterministic pattern-only support; "
-                    "pass an explicit model_name for model-backed inference"
-                )
-            raise ValueError(
-                f"Language '{lang}' uses optional Indic NER weights; pass an "
-                f"explicit model_name or set {INDIC_NER_MODEL_ENV}"
-            )
+            raise _no_model_error()
         return resolved
     return model_name
 
@@ -657,26 +658,8 @@ def _prepare_pii_text(
         chinese_target_script=(
             config.chinese_target_script if config is not None else None
         ),
+        lang=lang,
     )
-    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() == "ar":
-        from .pii_i18n import normalize_arabic_indic_digits
-
-        normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
-        folded_arabic_digits = sum(
-            before != after
-            for before, after in zip(
-                detection_normalization.text,
-                normalized_arabic,
-            )
-        )
-        if folded_arabic_digits:
-            detection_normalization = replace(
-                detection_normalization,
-                text=normalized_arabic,
-                folded_native_digits=(
-                    detection_normalization.folded_native_digits + folded_arabic_digits
-                ),
-            )
     inference_text = detection_normalization.text
     if do_normalize:
         inference_text = _strip_accents(inference_text)
@@ -834,7 +817,10 @@ def _extract_india_clinical_via_script_windows(
 
     windows = india_clinical_script_windows(text, lang)
     if not windows:
-        raise ValueError("India clinical routing requires mixed Latin/Indic text")
+        raise InputError(
+            "India clinical routing requires mixed Latin/Indic text. Pass a "
+            "mixed-script note or disable the India clinical route."
+        )
 
     route = get_india_clinical_model_route(lang)
     # Keep the analyzer injection boundary usable in core-only installs. The
@@ -881,7 +867,11 @@ def _extract_india_clinical_via_script_windows(
             start = base_offset + local_start
             end = base_offset + local_end
             if start < 0 or end < start or end > len(text):
-                raise ValueError("India clinical model returned an invalid span")
+                raise InferenceError(
+                    "India clinical inference returned an invalid span. Retry "
+                    "with a compatible model; if it persists, report the model "
+                    "identifier and span offsets."
+                )
             metadata = dict(entity.metadata or {})
             metadata["india_clinical_route"] = {
                 "core_end": window.core_end,
@@ -913,7 +903,11 @@ def _extract_india_clinical_via_script_windows(
         )
 
     if not routed_results:
-        raise RuntimeError("India clinical routing produced no inference requests")
+        raise InternalError(
+            "India clinical routing produced no inference requests. Retry with a "
+            "supported language route; if it persists, report the language and "
+            "model identifiers."
+        )
 
     base_result = routed_results[0]
     metadata = dict(getattr(base_result, "metadata", None) or {})
@@ -1003,7 +997,10 @@ def _apply_pii_smart_merging(
 
     if code_mixed:
         if token_language_tags is None:
-            raise ValueError("code_mixed=True requires token_language_tags")
+            raise InputError(
+                "code_mixed=True requires token_language_tags or a configured "
+                "token language-ID fallback. Supply tags or configure lid_model."
+            )
         lang_patterns = get_patterns_for_code_mixed_tags(
             result.text,
             token_language_tags,
@@ -1062,6 +1059,8 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return structured metadata retained from semantic/clinical merging."""
 
     metadata: dict[str, Any] = {}
+    if entity.get("detector_sources"):
+        metadata["detector_sources"] = list(entity["detector_sources"])
     if entity.get("source_labels"):
         metadata["semantic_merge"] = {
             "source_labels": list(entity.get("source_labels", ())),
@@ -1076,6 +1075,9 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     if entity.get("india_clinical_merge"):
         metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    if entity.get("calendar"):
+        # Value-free calendar code from a non-Gregorian month-name date rule.
+        metadata["calendar"] = str(entity["calendar"])
     return metadata or None
 
 
@@ -1089,9 +1091,15 @@ def _resolve_code_mixed_token_tags(
     """Return caller-supplied or locally inferred offset-only language tags."""
     if not code_mixed:
         if token_language_tags is not None:
-            raise ValueError("token_language_tags requires code_mixed=True")
+            raise InputError(
+                "token_language_tags requires code_mixed=True. Enable code_mixed "
+                "or remove token_language_tags."
+            )
         if lid_model is not None:
-            raise ValueError("lid_model requires code_mixed=True")
+            raise InputError(
+                "lid_model requires code_mixed=True. Enable code_mixed or remove "
+                "lid_model."
+            )
         return None
     if token_language_tags is not None:
         return tuple(token_language_tags)
@@ -1100,7 +1108,10 @@ def _resolve_code_mixed_token_tags(
 
     inferred = identify_token_languages(text, model=lid_model)
     if not inferred:
-        raise ValueError("code-mixed text must contain at least one token")
+        raise InputError(
+            "Code-mixed text must contain at least one token. Pass non-empty text "
+            "or disable code-mixed routing."
+        )
     return tuple(inferred)
 
 
@@ -1136,7 +1147,10 @@ def _extract_pii_batch(
         budget_clock.check("extract_pii.prepare")
 
     if code_mixed and len(texts) != 1:
-        raise ValueError("code-mixed token tags currently require one input text")
+        raise InputError(
+            "Code-mixed token tags currently support one input text. Submit one "
+            "text per request or omit explicit token tags."
+        )
     effective_model = _resolve_effective_pii_model(model_name, lang)
     prepared = [
         _prepare_pii_text(
@@ -1404,6 +1418,12 @@ def extract_pii(
     Returns:
         PredictionResult with detected PII entities
 
+    Raises:
+        InputError: If text or request options are malformed or unsupported.
+        CapabilityError: If the selected model or optional runtime is unavailable.
+        BudgetExceededError: If the request exceeds its configured budget.
+        InternalError: If inference violates a result or span invariant.
+
     Example:
         >>> from unittest.mock import patch
         >>> from openmed.core.pii import extract_pii
@@ -1495,22 +1515,51 @@ def _resolve_deidentification_method(
     if shift_dates is True and method != "shift_dates":
         effective_method = "shift_dates"
     elif shift_dates is False and method == "shift_dates":
-        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
+        raise InputError(
+            "shift_dates=false conflicts with method='shift_dates'. Remove the "
+            "shift_dates argument or choose a non-date method."
+        )
 
     if date_shift_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_days requires method='shift_dates'. Select shift_dates "
+            "or remove date_shift_days."
+        )
     if patient_key is not None and effective_method != "shift_dates":
-        raise ValueError("patient_key requires method='shift_dates'")
+        raise InputError(
+            "patient_key requires method='shift_dates'. Select shift_dates or "
+            "remove patient_key."
+        )
     if date_shift_max_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_max_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_max_days requires method='shift_dates'. Select "
+            "shift_dates or remove date_shift_max_days."
+        )
     if date_shift_secret is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_secret requires method='shift_dates'")
+        raise InputError(
+            "date_shift_secret requires method='shift_dates'. Select shift_dates "
+            "or remove date_shift_secret."
+        )
     if date_shift_secret is not None and patient_key is None:
-        raise ValueError("date_shift_secret requires patient_key")
+        raise InputError(
+            "date_shift_secret requires patient_key. Supply patient_key for a "
+            "stable offset or remove date_shift_secret."
+        )
     if patient_key is not None and date_shift_secret is None:
-        raise ValueError("patient_key requires date_shift_secret")
+        raise InputError(
+            "patient_key requires date_shift_secret. Supply HMAC key material or "
+            "remove patient_key for a non-keyed offset."
+        )
     if effective_method not in DEIDENTIFICATION_METHODS:
-        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
+        raise InputError(
+            "Unsupported de-identification method. Pass one of the documented "
+            f"methods: {list(DEIDENTIFICATION_METHODS)}.",
+            details={
+                "argument": "method",
+                "method": redact_detail(effective_method),
+                "supported": list(DEIDENTIFICATION_METHODS),
+            },
+        )
 
     return effective_method
 
@@ -1609,6 +1658,12 @@ def _entity_sources(entity: Any) -> list[str]:
         return ["safety_sweep"]
     if source == "locale_rule":
         return ["locale_rule"]
+    detector_sources = metadata.get("detector_sources")
+    if isinstance(detector_sources, (list, tuple)):
+        recorded = {str(item).strip() for item in detector_sources if str(item).strip()}
+        ordered = [item for item in ("ml", "locale_rule") if item in recorded]
+        if ordered:
+            return ordered
     return ["ml"]
 
 
@@ -1647,6 +1702,7 @@ def _detector_infos(
     pii_result: Any,
     *,
     model_name: str,
+    lang: str,
     use_safety_sweep: bool,
 ) -> list[Any]:
     from .audit import DetectorInfo
@@ -1662,6 +1718,19 @@ def _detector_infos(
             commit=metadata.get("model_commit"),
         )
     ]
+    if any(
+        "locale_rule" in _entity_sources(entity)
+        for entity in getattr(pii_result, "entities", ())
+    ):
+        detectors.append(
+            DetectorInfo(
+                source="locale_rule",
+                model_id=f"locale_rules:{lang}",
+                model_format="rules",
+                commit=None,
+                metadata={"language": lang},
+            )
+        )
     if use_safety_sweep:
         detectors.append(
             DetectorInfo(
@@ -1992,6 +2061,7 @@ def _build_audit_report(
         detectors=_detector_infos(
             pii_result,
             model_name=model_name,
+            lang=lang,
             use_safety_sweep=use_safety_sweep,
         ),
         safety_sweep=sweep_metadata,
@@ -2089,6 +2159,7 @@ def _build_deidentification_result(
             patient_key=patient_key,
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
+            seed=seed,
         )
 
     anonymizer = None
@@ -2226,6 +2297,12 @@ def _build_deidentification_result(
 
     if keep_mapping:
         mapping = _build_reidentification_mapping(mapping_occurrences)
+
+    # A redacted identifier can consume one end of a source bidi pair. Remove
+    # only newly orphaned controls; balanced surrounding presentation survives.
+    from .rtl_render import strip_unbalanced_bidi_controls
+
+    deidentified = strip_unbalanced_bidi_controls(deidentified)
 
     audit_report = None
     if audit:
@@ -2374,7 +2451,10 @@ def _deidentify_batch(
     )
     source_texts = [text if preserve_whitespace else text.strip() for text in texts]
     if code_mixed and len(source_texts) != 1:
-        raise ValueError("code-mixed token tags currently require one input text")
+        raise InputError(
+            "Code-mixed token tags currently support one input text. Submit one "
+            "text per request or omit explicit token tags."
+        )
     resolved_token_language_tags = (
         _resolve_code_mixed_token_tags(
             source_texts[0],
@@ -2421,7 +2501,10 @@ def _deidentify_batch(
             sweep_patterns = None
             if code_mixed:
                 if resolved_token_language_tags is None:
-                    raise ValueError("code-mixed routing requires token language tags")
+                    raise InputError(
+                        "Code-mixed routing requires token language tags. Supply "
+                        "token_language_tags or configure lid_model."
+                    )
                 from .pii_i18n import get_patterns_for_code_mixed_tags
 
                 sweep_patterns = get_patterns_for_code_mixed_tags(
@@ -2556,9 +2639,10 @@ def deidentify(
         patient_key: Optional stable patient identifier used only to derive a
             deterministic HMAC date-shift offset. Raw keys are not logged,
             persisted, or returned.
-        date_shift_max_days: Maximum absolute offset for random or
+        date_shift_max_days: Maximum absolute offset for random, seeded, or
             patient-keyed date shifting. Defaults to 365 when ``patient_key``
-            is supplied and neither this nor ``date_shift_days`` is set.
+            or ``seed`` is supplied and neither this nor ``date_shift_days``
+            is set.
         date_shift_secret: Required HMAC key material for patient-keyed
             offsets. Reuse the same value across sessions to keep offsets
             stable.
@@ -2580,8 +2664,11 @@ def deidentify(
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
-        seed: Optional integer seed for cross-run reproducibility of
-            ``consistent=True`` replacements. Implies ``consistent=True``.
+        seed: Optional request-scoped integer seed for cross-run
+            reproducibility of replacements and automatic date shifting.
+            Implies ``consistent=True`` for replacement methods. Explicit
+            ``date_shift_days`` and patient-keyed offsets still take
+            precedence for ``method="shift_dates"``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
@@ -2613,8 +2700,9 @@ def deidentify(
         transliterated_name_config: Optional configuration for the
             Latin-script Indian name allow/deny bridge. The default bridge is
             conservative and can be replaced or extended by configuration.
-        audit: Return a deterministic AuditReport instead of the
-            DeidentificationResult.
+        audit: Return an AuditReport instead of the DeidentificationResult.
+            Fresh calls use separate private HMAC keys. For stable hashes across
+            runs, use a Pipeline with an explicit private hmac_secret.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         budget: Optional per-request wall-time and input-character budget.
@@ -2624,6 +2712,14 @@ def deidentify(
     Returns:
         DeidentificationResult with original and de-identified text, or
         AuditReport when ``audit=True``.
+
+    Raises:
+        InputError: If text or de-identification options are malformed.
+        PolicyError: If the selected privacy policy is invalid or disallows the
+            requested operation.
+        CapabilityError: If the selected model or optional runtime is unavailable.
+        BudgetExceededError: If the request exceeds its configured budget.
+        InternalError: If inference or redaction violates an internal invariant.
 
     Example:
         >>> from datetime import datetime
@@ -2890,18 +2986,36 @@ def _redact_entity(
         if _is_mixed_label_union(entity):
             return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(
+            from .anonymizer.digit_systems import render_in_source_digits
+
+            # Shift the ASCII fold and render the result in the source span's
+            # digit system and date separators.
+            return render_in_source_digits(
                 entity.text,
-                date_shift_days,
-                keep_year,
-                lang=lang,
-                require_dateutil=require_dateutil,
+                lambda source: _shift_date(
+                    source,
+                    date_shift_days,
+                    keep_year,
+                    lang=lang,
+                    require_dateutil=require_dateutil,
+                    calendar=_entity_calendar_hint(entity),
+                ),
             )
         else:
             # Non-date entities get masked
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _entity_calendar_hint(entity: PIIEntity) -> Optional[Any]:
+    """Return the detection-stage calendar code attached to a date span."""
+    from .calendar_dates import CALENDAR_METADATA_KEY
+
+    metadata = getattr(entity, "metadata", None)
+    if isinstance(metadata, Mapping):
+        return metadata.get(CALENDAR_METADATA_KEY)
+    return None
 
 
 def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
@@ -3186,9 +3300,17 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
         A non-zero integer day offset within the range.
     """
     if low > high:
-        raise ValueError("low must be less than or equal to high")
+        raise InputError(
+            "low must be less than or equal to high. Correct the date-shift "
+            "range before retrying.",
+            details={"argument": "date_shift_range"},
+        )
     if low == high == 0:
-        raise ValueError("range must contain at least one non-zero shift")
+        raise InputError(
+            "The range must contain at least one non-zero shift. Expand the "
+            "date-shift range before retrying.",
+            details={"argument": "date_shift_range"},
+        )
 
     while True:
         shift_days = random.randint(low, high)
@@ -3198,9 +3320,14 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
 
 def _validate_date_shift_max_days(max_days: int) -> int:
     if isinstance(max_days, bool) or not isinstance(max_days, int):
-        raise TypeError("date_shift_max_days must be an integer")
+        raise InputError(
+            "date_shift_max_days must be an integer. Pass a positive whole "
+            "number of days."
+        )
     if max_days <= 0:
-        raise ValueError("date_shift_max_days must be positive")
+        raise InputError(
+            "date_shift_max_days must be positive. Pass an integer greater than zero."
+        )
     return max_days
 
 
@@ -3232,6 +3359,7 @@ def _resolve_date_shift_days(
     patient_key: Optional[str | bytes],
     date_shift_max_days: Optional[int],
     date_shift_secret: Optional[str | bytes],
+    seed: Optional[int] = None,
 ) -> int:
     if patient_key is not None:
         return _stable_date_shift_days(
@@ -3243,6 +3371,14 @@ def _resolve_date_shift_days(
 
     if date_shift_days is not None:
         return date_shift_days
+
+    if seed is not None:
+        max_days = (
+            _validate_date_shift_max_days(date_shift_max_days)
+            if date_shift_max_days is not None
+            else DEFAULT_DATE_SHIFT_MAX_DAYS
+        )
+        return stable_offset_from_seed(seed, max_days=max_days)
 
     if date_shift_max_days is not None:
         max_days = _validate_date_shift_max_days(date_shift_max_days)
@@ -3258,6 +3394,7 @@ def _shift_date(
     lang: str = "en",
     *,
     require_dateutil: bool = False,
+    calendar: Optional[Any] = None,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -3267,6 +3404,9 @@ def _shift_date(
     - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
     - Month DD, YYYY / DD Month YYYY (with localized month names)
+    - Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and
+      Bikram Sambat dates, shifted within their own calendar (see
+      :mod:`openmed.core.calendar_dates`)
 
     Args:
         date_str: Date string to shift
@@ -3276,10 +3416,29 @@ def _shift_date(
         require_dateutil: Raise a clear optional-dependency error when
             python-dateutil is unavailable. When false, fall back to the basic
             regex shifter.
+        calendar: Optional detection-stage calendar code for the span, such
+            as ``"solar_hijri"``, ``"hijri"`` or ``"bikram_sambat"``.
 
     Returns:
         Shifted date string in the same format as input
     """
+    from .calendar_dates import shift_calendar_date
+
+    native = shift_calendar_date(
+        date_str,
+        shift_days,
+        lang=lang,
+        calendar=calendar,
+        keep_year=keep_year,
+    )
+    if native.handled:
+        return native.text if native.text is not None else "[DATE_SHIFTED]"
+
+    from .locale_formats import _CJK_DATE_RE
+
+    if _CJK_DATE_RE.fullmatch(date_str):
+        return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
+
     localized = _parse_localized_month_date(date_str, lang)
     if localized is not None:
         try:
@@ -3309,9 +3468,14 @@ def _shift_date(
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
     try:
-        # For European languages, try day-first parsing
-        dayfirst = lang in _DAY_FIRST_LANGS
-        parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
+        from .locale_formats import date_order_for_locale
+
+        if re.fullmatch(r"\d{1,4}([./-])\d{1,2}\1\d{1,4}", date_str.strip()):
+            return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
+        order = date_order_for_locale(lang)
+        parsed_date = date_parser.parse(
+            date_str, fuzzy=False, dayfirst=order == "dmy", yearfirst=order == "ymd"
+        )
         original_year = parsed_date.year
 
         # Shift the date
@@ -3348,87 +3512,53 @@ def _shift_date_basic(
     Returns:
         Shifted date string or placeholder
     """
-    # Order patterns based on language convention
-    if lang in _DAY_FIRST_LANGS - {"de"}:
-        # European: DD/MM/YYYY first
-        patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-        ]
-    elif lang == "de":
-        # German: DD.MM.YYYY
-        patterns = [
-            (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-        ]
-    elif lang == "ja":
-        # Japanese: YYYY/MM/DD (kanji-form 年月日 is handled by the
-        # JAPANESE_PII_PATTERNS regex, not here).
-        patterns = [
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-        ]
-    else:
-        # US/English: MM/DD/YYYY first
-        patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-        ]
+    from .locale_formats import _CJK_DATE_RE, parse_date
 
-    for pattern, order in patterns:
-        match = re.match(pattern, date_str.strip())
-        if match:
-            groups = match.groups()
-            try:
-                if order == "mdy":
-                    month, day, year = int(groups[0]), int(groups[1]), int(groups[2])
-                elif order == "ymd":
-                    year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
-                else:  # dmy
-                    day, month, year = int(groups[0]), int(groups[1]), int(groups[2])
+    parsed = parse_date(date_str, lang=lang)
+    if parsed.normalized is None:
+        return "[DATE_SHIFTED]"
+    try:
+        original = datetime(*parsed.normalized)
+        shifted = original + timedelta(days=shift_days)
+        if keep_year:
+            shifted = _replace_year_safe(shifted, original.year)
+        cjk = _CJK_DATE_RE.fullmatch(date_str)
+        if cjk is not None:
+            from .anonymizer.digit_systems import render_in_source_digits
 
-                # Handle 2-digit years
-                if year < 100:
-                    year += 2000 if year < 50 else 1900
+            def render_components(source: str) -> str:
+                pieces = []
+                cursor = 0
+                for name in ("year", "month", "day"):
+                    start, end = cjk.span(name)
+                    width = end - start
+                    value = getattr(shifted, name)
+                    if name == "year" and width == 2:
+                        value %= 100
+                    pieces.extend((source[cursor:start], f"{value:0{width}d}"))
+                    cursor = end
+                pieces.append(source[cursor:])
+                return "".join(pieces)
 
-                # Validate and create date
-                original_date = datetime(year, month, day)
-                original_year = original_date.year
-
-                # Shift
-                shifted = original_date + timedelta(days=shift_days)
-
-                # Keep year if requested
-                if keep_year:
-                    shifted = _replace_year_safe(shifted, original_year)
-
-                # Format back preserving separator
-                if "." in date_str:
-                    sep = "."
-                elif "/" in date_str:
-                    sep = "/"
-                else:
-                    sep = "-"
-
-                if order == "mdy":
-                    return (
-                        f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
-                    )
-                elif order == "ymd":
-                    return (
-                        f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
-                    )
-                else:
-                    return (
-                        f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
-                    )
-
-            except (ValueError, OverflowError):
-                continue
-
-    return "[DATE_SHIFTED]"
+            rendered = render_in_source_digits(date_str, render_components)
+            # A two-digit year must not silently cross the parser's century
+            # pivot. Preserve the existing fail-closed date behavior instead.
+            if rendered is None or parse_date(rendered, lang=lang).normalized != (
+                shifted.year,
+                shifted.month,
+                shifted.day,
+            ):
+                return "[DATE_SHIFTED]"
+            return rendered
+        separator = next((c for c in date_str if c in ".-/"), "-")
+        parts = {
+            "d": f"{shifted.day:02d}",
+            "m": f"{shifted.month:02d}",
+            "y": f"{shifted.year:04d}",
+        }
+        return separator.join(parts[key] for key in parsed.order or "ymd")
+    except (ValueError, OverflowError):
+        return "[DATE_SHIFTED]"
 
 
 def _format_date_like_original(
@@ -3446,6 +3576,7 @@ def _format_date_like_original(
     Returns:
         Formatted date string
     """
+    from .locale_formats import date_order_for_locale
     from .pii_i18n import LANGUAGE_MONTH_NAMES
 
     original_stripped = original.strip()
@@ -3460,7 +3591,7 @@ def _format_date_like_original(
 
     # Slash-separated dates: interpretation depends on language
     if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
-        if lang in _DAY_FIRST_LANGS:
+        if date_order_for_locale(lang) == "dmy":
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
         else:
@@ -3469,7 +3600,7 @@ def _format_date_like_original(
 
     # Dash-separated dates
     if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
-        if lang in _DAY_FIRST_LANGS:
+        if date_order_for_locale(lang) == "dmy":
             return new_date.strftime("%d-%m-%Y")
         else:
             return new_date.strftime("%m-%d-%Y")
@@ -3518,6 +3649,10 @@ def reidentify(
     Returns:
         Re-identified text with original PII restored
 
+    Raises:
+        InputError: If the text or mapping does not use the documented string
+            types.
+
     Example:
         >>> from openmed.core.pii import reidentify
         >>> reidentify(
@@ -3530,10 +3665,36 @@ def reidentify(
         Only works if keep_mapping=True was used during de-identification.
         Requires proper authorization and audit logging in production.
     """
+    if not isinstance(deidentified_text, str):
+        raise InputError(
+            "deidentified_text must be a string. Pass the text returned by "
+            "deidentify(...).",
+            details={
+                "argument": "deidentified_text",
+                "type": type(deidentified_text).__name__,
+            },
+        )
+    if not isinstance(mapping, Mapping):
+        raise InputError(
+            "mapping must map redacted strings to original strings. Pass the "
+            "mapping returned by deidentify(..., keep_mapping=True).",
+            details={"argument": "mapping", "type": type(mapping).__name__},
+        )
+
+    validated_mapping: list[tuple[str, str]] = []
+    for index, (redacted, original) in enumerate(mapping.items()):
+        if not isinstance(redacted, str) or not isinstance(original, str):
+            raise InputError(
+                "mapping keys and values must be strings. Rebuild the mapping "
+                "from deidentify(..., keep_mapping=True) before retrying.",
+                details={"argument": "mapping", "entry_index": index},
+            )
+        validated_mapping.append((redacted, original))
+
     result = deidentified_text
     regular_mapping: dict[str, str] = {}
     occurrence_mapping: dict[str, list[tuple[int, str]]] = {}
-    for redacted, original in mapping.items():
+    for redacted, original in validated_mapping:
         parsed = _parse_occurrence_mapping_key(redacted)
         if parsed is None:
             regular_mapping[redacted] = original

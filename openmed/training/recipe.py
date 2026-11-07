@@ -12,30 +12,68 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import socket
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from openmed.core.anonymizer import AnonymizerConfig
+from openmed.core.audit import stable_hash
 from openmed.core.decoding import build_label_info
 from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.manifest_schema import validate_manifest_row
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
+from openmed.eval.datasets.public import (
+    CLINICAL_MODEL_FAMILIES,
+    validate_clinical_family_dataset_evidence,
+)
 from openmed.eval.metrics import compute_leakage_rate, compute_recall_slices
+from openmed.eval.tiers import TIERS
+from openmed.training.synthetic.section_labels import (
+    CANONICAL_DOCUMENT_TYPES,
+    CANONICAL_SECTION_LABELS,
+    build_section_dataset,
+)
+
+if TYPE_CHECKING:
+    from openmed.eval.release_gates import GateReport
 
 CONFIG_SCHEMA_VERSION = "openmed.training.recipe.v1"
 QLORA_CONFIG_SCHEMA_VERSION = "openmed.training.qlora_recipe.v1"
 QLORA_SMOKE_RESULT_SCHEMA_VERSION = "openmed.training.qlora_smoke_result.v1"
+CLINICAL_FAMILY_RELEASE_SCHEMA_VERSION = "openmed.training.clinical_family_release.v1"
+DOCTYPE_SECTION_HEAD_SCHEMA_VERSION = "openmed.training.doctype_section_head.v1"
+DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION = "openmed.training.doctype_section_dry_run.v1"
 MAX_LORA_TRAINABLE_RATIO = 0.015
 CONFIG_DIR = Path(__file__).with_name("configs")
 QLORA_SMOKE_PRESET = "qlora_smoke"
+DOCTYPE_SECTION_PRESET = "doctype_section_lora"
+DOCTYPE_SECTION_CONFIG_PATH = CONFIG_DIR / f"{DOCTYPE_SECTION_PRESET}.yaml"
+DOCTYPE_SECTION_LABEL_SET_REF = "openmed.training.recipe:DOCTYPE_SECTION_LABEL_SET@v1"
+DOCTYPE_SECTION_REQUIRED_GATES = ("G5", "G6")
+DOCTYPE_SECTION_LABEL_SET: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        "document_types": tuple(sorted(CANONICAL_DOCUMENT_TYPES)),
+        "section_labels": tuple(sorted(CANONICAL_SECTION_LABELS)),
+    }
+)
 PRESET_BY_MODE = {
     "A": "tiny_distill",
     "B": "laptop_lora",
     "C": "large_teacher",
 }
-MODE_BY_PRESET = {preset: mode for mode, preset in PRESET_BY_MODE.items()}
+MODE_BY_PRESET = {
+    **{preset: mode for mode, preset in PRESET_BY_MODE.items()},
+    DOCTYPE_SECTION_PRESET: "B",
+}
+_CLINICAL_RELEASE_TIERS_BY_MODE = {
+    "A": frozenset({"Tiny"}),
+    "B": frozenset({"Base"}),
+    "C": frozenset({"Large", "XLarge"}),
+}
 
 _REQUIRED_ROOT_FIELDS = frozenset(
     {
@@ -53,7 +91,9 @@ _REQUIRED_ROOT_FIELDS = frozenset(
         "seed",
     }
 )
-_OPTIONAL_ROOT_FIELDS = frozenset({"head_contract"})
+_OPTIONAL_ROOT_FIELDS = frozenset(
+    {"clinical_family_targets", "head_contract", "required_gates"}
+)
 _QLORA_REQUIRED_ROOT_FIELDS = frozenset(
     {
         "schema_version",
@@ -156,6 +196,144 @@ class QuantizationConfig:
 
 
 @dataclass(frozen=True)
+class ClinicalModelFamilySpec:
+    """Stable training and runtime contract for one clinical model family."""
+
+    family: str
+    manifest_family: str
+    repo_prefix: str
+    task: str
+    label_set_ref: str
+    head_contract: str
+    runtime_ref: str
+    allowed_modes: tuple[str, ...]
+    allowed_tiers: tuple[str, ...]
+    required_gates: tuple[str, ...] = ("G5", "G6")
+
+
+CLINICAL_MODEL_FAMILY_SPECS: Mapping[str, ClinicalModelFamilySpec] = MappingProxyType(
+    {
+        "doctype": ClinicalModelFamilySpec(
+            family="doctype",
+            manifest_family="DocType",
+            repo_prefix="OpenMed/OpenMed-DocType-",
+            task="text-classification",
+            label_set_ref=(
+                "openmed.clinical.sections.doctype:"
+                "DEFAULT_DOCUMENT_TYPE_SIGNATURES_RESOURCE@v1"
+            ),
+            head_contract="document-classification:first-window@v1",
+            runtime_ref="openmed.clinical.sections:classify_document",
+            allowed_modes=("A", "B"),
+            allowed_tiers=("Tiny", "Base"),
+        ),
+        "section": ClinicalModelFamilySpec(
+            family="section",
+            manifest_family="Section",
+            repo_prefix="OpenMed/OpenMed-Section-",
+            task="token-classification",
+            label_set_ref="openmed.clinical.context:CANONICAL_SECTION_LABELS@v1",
+            head_contract="token-classification:bio-section-boundary@v1",
+            runtime_ref="openmed.clinical.sections:detect_sections",
+            allowed_modes=("A", "B"),
+            allowed_tiers=("Tiny", "Base"),
+        ),
+        "relex_med": ClinicalModelFamilySpec(
+            family="relex_med",
+            manifest_family="RelEx-Med",
+            repo_prefix="OpenMed/OpenMed-RelEx-Med-",
+            task="relation-extraction",
+            label_set_ref="openmed.clinical.relations:RELATION_ORDER@v2",
+            head_contract="openmed.clinical.relations:JointSpanPairHead@v1",
+            runtime_ref="openmed.clinical.relations:extract_medication_relations",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+        "relex_ade": ClinicalModelFamilySpec(
+            family="relex_ade",
+            manifest_family="RelEx-ADE",
+            repo_prefix="OpenMed/OpenMed-RelEx-ADE-",
+            task="relation-extraction",
+            label_set_ref="openmed.eval.datasets.drugprot:DRUGPROT_RELATION_TYPES@v1",
+            head_contract="openmed.clinical.relations:JointSpanPairHead@v1",
+            runtime_ref="openmed.clinical.relations:extract_relations",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+        "link": ClinicalModelFamilySpec(
+            family="link",
+            manifest_family="Link",
+            repo_prefix="OpenMed/OpenMed-Link-",
+            task="feature-extraction",
+            label_set_ref="openmed.clinical.grounding.vocab:FREE_VOCAB_SYSTEMS@v1",
+            head_contract="span-to-concept:sparse-dense-reranker@v1",
+            runtime_ref="openmed.clinical.grounding:ground",
+            allowed_modes=("B", "C"),
+            allowed_tiers=("Base", "Large", "XLarge"),
+        ),
+    }
+)
+
+
+@dataclass(frozen=True)
+class DoctypeSectionHeadContract:
+    """Validated dual-head contract for section BIO and document-type training."""
+
+    schema_version: str
+    section_task: str
+    section_encoding: str
+    section_labels: str
+    doctype_task: str
+    doctype_pooling: str
+    doctype_labels: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the versioned contract as a JSON-ready mapping."""
+
+        return {
+            "doctype": {
+                "labels": self.doctype_labels,
+                "pooling": self.doctype_pooling,
+                "task": self.doctype_task,
+            },
+            "schema_version": self.schema_version,
+            "section_bio": {
+                "encoding": self.section_encoding,
+                "labels": self.section_labels,
+                "task": self.section_task,
+            },
+        }
+
+
+@dataclass(frozen=True)
+class ResolvedDoctypeSectionHeadContract:
+    """Concrete labels and behavior selected by the dual-head recipe contract."""
+
+    section_task: str
+    section_encoding: str
+    section_labels: tuple[str, ...]
+    doctype_task: str
+    doctype_pooling: str
+    document_types: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the resolved, deterministic head contract."""
+
+        return {
+            "doctype": {
+                "document_types": list(self.document_types),
+                "pooling": self.doctype_pooling,
+                "task": self.doctype_task,
+            },
+            "section_bio": {
+                "encoding": self.section_encoding,
+                "section_labels": list(self.section_labels),
+                "task": self.section_task,
+            },
+        }
+
+
+@dataclass(frozen=True)
 class TrainingRecipeConfig:
     schema_version: str
     preset_name: str
@@ -169,7 +347,9 @@ class TrainingRecipeConfig:
     output_tier: str
     quantization: QuantizationConfig
     seed: int
-    head_contract: str | None = None
+    head_contract: str | DoctypeSectionHeadContract | None = None
+    clinical_family_targets: tuple[str, ...] = ()
+    required_gates: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw_config: Mapping[str, Any]) -> "TrainingRecipeConfig":
@@ -187,10 +367,13 @@ class TrainingRecipeConfig:
             raise RecipeConfigError("mode must be one of A, B, or C")
 
         preset_name = _require_str(data, "preset_name")
-        expected_preset = PRESET_BY_MODE[mode]
-        if preset_name != expected_preset:
+        expected_presets = {PRESET_BY_MODE[mode]}
+        if mode == "B":
+            expected_presets.add(DOCTYPE_SECTION_PRESET)
+        if preset_name not in expected_presets:
             raise RecipeConfigError(
-                f"preset_name {preset_name!r} does not match mode {mode!r}"
+                f"preset_name {preset_name!r} does not match mode {mode!r}; "
+                f"expected one of {', '.join(sorted(expected_presets))}"
             )
 
         hard_negatives_required = data["hard_negatives_required"]
@@ -201,6 +384,16 @@ class TrainingRecipeConfig:
         if seed < 0:
             raise RecipeConfigError("seed must be a non-negative integer")
 
+        label_set_ref = _require_str(data, "label_set_ref")
+        head_contract = _parse_head_contract(
+            data.get("head_contract"), preset_name=preset_name
+        )
+        allowed_loss_labels = (
+            set(CANONICAL_SECTION_LABELS) | set(CANONICAL_DOCUMENT_TYPES)
+            if preset_name == DOCTYPE_SECTION_PRESET
+            else set(CANONICAL_LABELS)
+        )
+
         config = cls(
             schema_version=schema_version,
             preset_name=preset_name,
@@ -208,15 +401,28 @@ class TrainingRecipeConfig:
             backbone=_parse_backbone(_require_mapping(data, "backbone")),
             dapt=_parse_dapt(_require_mapping(data, "dapt")),
             lora=_parse_lora(_require_mapping(data, "lora")),
-            label_set_ref=_require_str(data, "label_set_ref"),
-            loss=_parse_loss(_require_mapping(data, "loss")),
+            label_set_ref=label_set_ref,
+            loss=_parse_loss(
+                _require_mapping(data, "loss"), allowed_labels=allowed_loss_labels
+            ),
             hard_negatives_required=hard_negatives_required,
             output_tier=_require_str(data, "output_tier"),
             quantization=_parse_quantization(_require_mapping(data, "quantization")),
             seed=seed,
-            head_contract=_optional_str(data, "head_contract"),
+            head_contract=head_contract,
+            clinical_family_targets=_parse_clinical_family_targets(
+                data.get("clinical_family_targets", ())
+            ),
+            required_gates=_parse_required_gates(data.get("required_gates", ())),
         )
-        _validate_output_tier(config.output_tier)
+        if preset_name == DOCTYPE_SECTION_PRESET:
+            _validate_doctype_section_recipe(config)
+        else:
+            _validate_output_tier(config.output_tier)
+            if config.required_gates:
+                raise RecipeConfigError(
+                    "required_gates is only supported by doctype_section_lora"
+                )
         return config
 
     def to_dict(self) -> dict[str, Any]:
@@ -234,8 +440,14 @@ class TrainingRecipeConfig:
             "schema_version": self.schema_version,
             "seed": self.seed,
         }
-        if self.head_contract is not None:
+        if isinstance(self.head_contract, DoctypeSectionHeadContract):
+            payload["head_contract"] = self.head_contract.to_dict()
+        elif self.head_contract is not None:
             payload["head_contract"] = self.head_contract
+        if self.clinical_family_targets:
+            payload["clinical_family_targets"] = list(self.clinical_family_targets)
+        if self.required_gates:
+            payload["required_gates"] = list(self.required_gates)
         return payload
 
 
@@ -273,6 +485,91 @@ class DryRunResult:
             "quant_default": self.quant_default,
             "seed": self.seed,
         }
+
+
+@dataclass(frozen=True)
+class DoctypeSectionDryRunResult:
+    """Local artifacts and stable manifest from a DocType/Section dry run."""
+
+    manifest: Mapping[str, Any]
+    manifest_path: Path
+    dataset_path: Path
+    dataset_manifest_path: Path
+
+    @property
+    def reproducibility_hash(self) -> str:
+        """Return the stable hash covering recipe, contract, and synthetic data."""
+
+        return str(self.manifest["reproducibility_hash"])
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the path-independent dry-run manifest."""
+
+        return _plain_mapping(dict(self.manifest), "doctype/section dry-run manifest")
+
+
+@dataclass(frozen=True)
+class ClinicalFamilyRelease:
+    """Validated release artifacts for one externally trained checkpoint."""
+
+    family: str
+    recipe_mode: str
+    recipe_preset: str
+    manifest_row: Mapping[str, Any]
+    dataset_evidence: Mapping[str, Mapping[str, Any]]
+    gate_report: GateReport
+    model_card: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the metadata-only checkpoint release manifest.
+
+        Returns:
+            Canonical release metadata with a deterministic release hash.
+        """
+
+        payload = {
+            "dataset_evidence": _plain(self.dataset_evidence),
+            "family": self.family,
+            "gate_report_hash": self.gate_report.repro_hash,
+            "model_manifest": _plain(self.manifest_row),
+            "recipe_config_hash": clinical_family_recipe_hash(
+                self.family, self.recipe_mode
+            ),
+            "recipe_mode": self.recipe_mode,
+            "recipe_preset": self.recipe_preset,
+            "required_gates": ["G5", "G6"],
+            "schema_version": CLINICAL_FAMILY_RELEASE_SCHEMA_VERSION,
+        }
+        payload["release_hash"] = stable_hash(payload)
+        return payload
+
+    def write(self, output_dir: str | Path) -> dict[str, Path]:
+        """Write the checkpoint manifest, signed gate report, and model card.
+
+        Args:
+            output_dir: Local directory that receives the release metadata.
+
+        Returns:
+            Paths to the three generated release artifacts.
+        """
+
+        destination = Path(output_dir)
+        destination.mkdir(parents=True, exist_ok=True)
+        paths = {
+            "checkpoint_manifest": destination / "checkpoint-manifest.json",
+            "gate_report": destination / "gate-report.json",
+            "model_card": destination / "README.md",
+        }
+        paths["checkpoint_manifest"].write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        paths["gate_report"].write_text(
+            json.dumps(self.gate_report.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        paths["model_card"].write_text(self.model_card, encoding="utf-8")
+        return paths
 
 
 @dataclass(frozen=True)
@@ -524,6 +821,173 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     return _parse_yaml_subset(text)
 
 
+def resolve_doctype_section_head_contract(
+    config: TrainingRecipeConfig,
+) -> ResolvedDoctypeSectionHeadContract:
+    """Resolve a validated dual-head recipe to its concrete canonical labels.
+
+    Args:
+        config: Validated DocType/Section training recipe.
+
+    Returns:
+        Concrete section labels, document types, tasks, and encoding behavior.
+
+    Raises:
+        RecipeConfigError: If the recipe is not the DocType/Section preset or
+            does not carry its validated dual-head contract.
+    """
+
+    if config.preset_name != DOCTYPE_SECTION_PRESET:
+        raise RecipeConfigError(
+            f"head-contract resolution requires preset_name {DOCTYPE_SECTION_PRESET!r}"
+        )
+    if not isinstance(config.head_contract, DoctypeSectionHeadContract):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a validated mapping head_contract"
+        )
+    return ResolvedDoctypeSectionHeadContract(
+        section_task=config.head_contract.section_task,
+        section_encoding=config.head_contract.section_encoding,
+        section_labels=DOCTYPE_SECTION_LABEL_SET[config.head_contract.section_labels],
+        doctype_task=config.head_contract.doctype_task,
+        doctype_pooling=config.head_contract.doctype_pooling,
+        document_types=DOCTYPE_SECTION_LABEL_SET[config.head_contract.doctype_labels],
+    )
+
+
+def clinical_model_family_spec(family: str) -> ClinicalModelFamilySpec:
+    """Return the immutable label, head, runtime, recipe, and tier contract.
+
+    Args:
+        family: Canonical clinical family identifier.
+
+    Returns:
+        The family-specific training and runtime contract.
+
+    Raises:
+        ValueError: If ``family`` is unknown.
+    """
+
+    try:
+        return CLINICAL_MODEL_FAMILY_SPECS[family]
+    except KeyError as exc:
+        raise ValueError(f"unknown clinical model family: {family}") from exc
+
+
+def clinical_family_recipe_hash(family: str, recipe_mode: str) -> str:
+    """Hash the base recipe together with a family's label/head contract.
+
+    Args:
+        family: Canonical clinical family identifier.
+        recipe_mode: Mode or preset accepted by :func:`load_preset`.
+
+    Returns:
+        Stable SHA-256 recipe and family contract hash.
+
+    Raises:
+        RecipeConfigError: If the recipe cannot produce the requested family.
+        ValueError: If ``family`` is unknown.
+    """
+
+    spec = clinical_model_family_spec(family)
+    recipe = load_preset(recipe_mode)
+    if recipe.mode not in spec.allowed_modes:
+        raise RecipeConfigError(
+            f"clinical family {family} does not support recipe mode {recipe.mode}"
+        )
+    if recipe.mode in {"B", "C"} and family not in recipe.clinical_family_targets:
+        raise RecipeConfigError(
+            f"preset {recipe.preset_name} does not declare clinical family {family}"
+        )
+    return stable_hash(
+        {
+            "base_recipe": recipe.to_dict(),
+            "family": spec.family,
+            "head_contract": spec.head_contract,
+            "label_set_ref": spec.label_set_ref,
+            "runtime_ref": spec.runtime_ref,
+        }
+    )
+
+
+def build_clinical_family_release(
+    family: str,
+    *,
+    recipe_mode: str,
+    manifest_row: Mapping[str, Any],
+    gate_report: GateReport | Mapping[str, Any],
+    dataset_evidence: Mapping[str, Mapping[str, Any]],
+    signing_key: bytes | str,
+) -> ClinicalFamilyRelease:
+    """Build release artifacts only from a completed, signed external run.
+
+    This function never trains a model, reads corpus rows, or publishes to a
+    remote service. It validates the checkpoint manifest, the family-specific
+    dataset policy, and signed G5/G6 evidence before rendering metadata-only
+    local release artifacts.
+
+    Args:
+        family: Canonical clinical family identifier.
+        recipe_mode: Mode or preset used by the completed training run.
+        manifest_row: Checkpoint manifest row to certify.
+        gate_report: Signed gate report object or serialized mapping.
+        dataset_evidence: Aggregate-only dataset provenance and metrics.
+        signing_key: Key used to verify the report signature.
+
+    Returns:
+        Validated local release artifacts ready for an external publisher.
+
+    Raises:
+        RecipeConfigError: If manifest, provenance, tier, or gates disagree.
+        TypeError: If supplied evidence has an invalid mapping shape.
+        ValueError: If family or dataset policy validation fails.
+    """
+
+    from openmed.core.model_card import append_model_card_sections, render_model_card
+    from openmed.eval.release_gates import GateReport
+
+    spec = clinical_model_family_spec(family)
+    recipe = load_preset(recipe_mode)
+    if recipe.mode not in spec.allowed_modes:
+        raise RecipeConfigError(
+            f"clinical family {family} does not support recipe mode {recipe.mode}"
+        )
+    if recipe.mode in {"B", "C"} and family not in recipe.clinical_family_targets:
+        raise RecipeConfigError(
+            f"preset {recipe.preset_name} does not declare clinical family {family}"
+        )
+
+    row = _plain_mapping(manifest_row, "manifest_row")
+    violations = validate_manifest_row(row, 1)
+    if violations:
+        raise RecipeConfigError(
+            "clinical checkpoint manifest is invalid: "
+            + "; ".join(violation.message for violation in violations)
+        )
+    evidence = validate_clinical_family_dataset_evidence(family, dataset_evidence)
+    report = (
+        gate_report
+        if isinstance(gate_report, GateReport)
+        else GateReport.from_dict(gate_report)
+    )
+
+    _validate_clinical_manifest_identity(spec, recipe, row, evidence)
+    _validate_clinical_gate_report(spec, row, report, signing_key=signing_key)
+    model_card = append_model_card_sections(
+        render_model_card(row),
+        [_render_clinical_family_evidence(spec, recipe, report, evidence)],
+    )
+    return ClinicalFamilyRelease(
+        family=family,
+        recipe_mode=recipe.mode,
+        recipe_preset=recipe.preset_name,
+        manifest_row=row,
+        dataset_evidence=evidence,
+        gate_report=report,
+        model_card=model_card,
+    )
+
+
 def load_qlora_preset(name: str = QLORA_SMOKE_PRESET) -> QloraRecipeConfig:
     """Load a committed QLoRA smoke preset without importing trainer backends."""
 
@@ -560,6 +1024,100 @@ def run_recipe(mode_or_preset: str, *, dry_run: bool = True) -> DryRunResult:
         return dry_run_recipe(config)
     raise NotImplementedError(
         "Training execution is out of scope for this recipe package"
+    )
+
+
+def run_doctype_section_dry_run(
+    output_dir: str | Path,
+    *,
+    config_path: str | Path = DOCTYPE_SECTION_CONFIG_PATH,
+    dataset_record_count: int | None = None,
+) -> DoctypeSectionDryRunResult:
+    """Validate and wire the seed-pinned DocType/Section recipe without training.
+
+    The harness invokes the existing deterministic synthetic section dataset
+    builder, resolves both model heads, and writes a path-independent manifest.
+    It never loads a model, accelerator runtime, optimizer, or training loop.
+
+    Args:
+        output_dir: Local directory for generated synthetic data and manifests.
+        config_path: Recipe v1 YAML file to validate.
+        dataset_record_count: Synthetic records to wire. The default emits one
+            record for every canonical document type.
+
+    Returns:
+        Paths plus the deterministic dry-run manifest.
+
+    Raises:
+        RecipeConfigError: If the config is not the DocType/Section preset.
+        ValueError: If ``dataset_record_count`` is not a positive integer.
+    """
+
+    config = TrainingRecipeConfig.from_mapping(load_config_file(config_path))
+    if config.preset_name != DOCTYPE_SECTION_PRESET:
+        raise RecipeConfigError(
+            f"doctype/section dry-run requires preset_name {DOCTYPE_SECTION_PRESET!r}"
+        )
+    resolved_contract = resolve_doctype_section_head_contract(config)
+    record_count = (
+        len(CANONICAL_DOCUMENT_TYPES)
+        if dataset_record_count is None
+        else dataset_record_count
+    )
+    if (
+        not isinstance(record_count, int)
+        or isinstance(record_count, bool)
+        or record_count < 1
+    ):
+        raise ValueError("dataset_record_count must be a positive integer")
+
+    destination = Path(output_dir)
+    destination.mkdir(parents=True, exist_ok=True)
+    dataset_result = build_section_dataset(
+        config.seed,
+        record_count,
+        destination / "section-doctype.jsonl",
+    )
+    reproducibility_inputs = {
+        "dataset": {
+            "builder": (
+                "openmed.training.synthetic.section_labels:build_section_dataset"
+            ),
+            "dataset_hash": dataset_result.dataset_hash,
+            "manifest_hash": dataset_result.manifest_hash,
+            "record_count": dataset_result.record_count,
+        },
+        "head_contract": resolved_contract.to_dict(),
+        "label_set_ref": config.label_set_ref,
+        "output_tier": config.output_tier,
+        "quantization": config.quantization.to_dict(),
+        "recipe_config_hash": config_hash(config),
+        "required_gates": list(config.required_gates),
+        "seed": config.seed,
+    }
+    manifest = {
+        **reproducibility_inputs,
+        "artifacts": {
+            "dataset": dataset_result.dataset_path.name,
+            "dataset_manifest": dataset_result.manifest_path.name,
+        },
+        "dry_run": True,
+        "network_required": False,
+        "preset_name": config.preset_name,
+        "reproducibility_hash": stable_hash(reproducibility_inputs),
+        "schema_version": DOCTYPE_SECTION_DRY_RUN_SCHEMA_VERSION,
+        "training_launched": False,
+    }
+    manifest_path = destination / "dry-run-manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return DoctypeSectionDryRunResult(
+        manifest=MappingProxyType(manifest),
+        manifest_path=manifest_path,
+        dataset_path=dataset_result.dataset_path,
+        dataset_manifest_path=dataset_result.manifest_path,
     )
 
 
@@ -664,14 +1222,43 @@ def runtime_dependencies() -> RuntimeDependencies:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Validate an OpenMed training recipe preset."
+        description="Validate an OpenMed training recipe or run a local dry-run."
     )
     parser.add_argument(
-        "mode", choices=tuple(PRESET_BY_MODE) + tuple(PRESET_BY_MODE.values())
+        "mode",
+        choices=(
+            tuple(PRESET_BY_MODE)
+            + tuple(PRESET_BY_MODE.values())
+            + (DOCTYPE_SECTION_PRESET,)
+        ),
     )
     parser.add_argument("--dry-run", action="store_true", default=True)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Required output directory for the DocType/Section dry-run.",
+    )
+    parser.add_argument(
+        "--dataset-record-count",
+        type=int,
+        help="Synthetic record count for the DocType/Section dry-run.",
+    )
     args = parser.parse_args(argv)
 
+    if args.mode == DOCTYPE_SECTION_PRESET:
+        if args.output_dir is None:
+            parser.error(f"{DOCTYPE_SECTION_PRESET} requires --output-dir")
+        result = run_doctype_section_dry_run(
+            args.output_dir,
+            dataset_record_count=args.dataset_record_count,
+        )
+        print(json.dumps(result.to_dict(), sort_keys=True))
+        return 0
+    if args.output_dir is not None or args.dataset_record_count is not None:
+        parser.error(
+            "--output-dir and --dataset-record-count are only valid for "
+            f"{DOCTYPE_SECTION_PRESET}"
+        )
     result = run_recipe(args.mode, dry_run=args.dry_run)
     print(json.dumps(result.to_dict(), sort_keys=True))
     return 0
@@ -679,6 +1266,22 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _copy_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(dict(value))
+
+
+def _plain(value: Any) -> Any:
+    try:
+        return json.loads(json.dumps(value, sort_keys=True))
+    except (TypeError, ValueError) as exc:
+        raise RecipeConfigError("release metadata must be JSON serializable") from exc
+
+
+def _plain_mapping(value: Any, field: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(f"{field} must be a mapping")
+    plain = _plain(value)
+    if not isinstance(plain, dict):
+        raise RecipeConfigError(f"{field} must be a mapping")
+    return plain
 
 
 def _reject_root_shape(data: Mapping[str, Any]) -> None:
@@ -749,7 +1352,7 @@ def _parse_lora(data: Mapping[str, Any]) -> LoraConfig:
     )
 
 
-def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
+def _parse_loss(data: Mapping[str, Any], *, allowed_labels: set[str]) -> LossConfig:
     _require_exact_fields(
         data,
         "loss",
@@ -777,7 +1380,7 @@ def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
     critical_labels = _require_str_tuple(data, "critical_labels")
     if not critical_labels:
         raise RecipeConfigError("loss.critical_labels must not be empty")
-    unknown_labels = sorted(set(critical_labels) - CANONICAL_LABELS)
+    unknown_labels = sorted(set(critical_labels) - allowed_labels)
     if unknown_labels:
         raise RecipeConfigError(
             f"loss.critical_labels contains unknown label(s): {', '.join(unknown_labels)}"
@@ -792,6 +1395,112 @@ def _parse_loss(data: Mapping[str, Any]) -> LossConfig:
     )
 
 
+def _parse_head_contract(
+    value: Any, *, preset_name: str
+) -> str | DoctypeSectionHeadContract | None:
+    if preset_name != DOCTYPE_SECTION_PRESET:
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value:
+            raise RecipeConfigError(
+                "head_contract must be a non-empty string for standard presets"
+            )
+        return value
+
+    if value is None:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a head_contract mapping"
+        )
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} head_contract must be a mapping"
+        )
+    _require_exact_fields(
+        value,
+        "head_contract",
+        {"schema_version", "section_bio", "doctype"},
+    )
+    schema_version = _require_contract_value(
+        value,
+        "schema_version",
+        DOCTYPE_SECTION_HEAD_SCHEMA_VERSION,
+        field="head_contract.schema_version",
+    )
+    section = _require_mapping(value, "section_bio")
+    _require_exact_fields(
+        section,
+        "head_contract.section_bio",
+        {"task", "encoding", "labels"},
+    )
+    doctype = _require_mapping(value, "doctype")
+    _require_exact_fields(
+        doctype,
+        "head_contract.doctype",
+        {"task", "pooling", "labels"},
+    )
+    return DoctypeSectionHeadContract(
+        schema_version=schema_version,
+        section_task=_require_contract_value(
+            section,
+            "task",
+            "token_classification",
+            field="head_contract.section_bio.task",
+        ),
+        section_encoding=_require_contract_value(
+            section,
+            "encoding",
+            "BIO",
+            field="head_contract.section_bio.encoding",
+        ),
+        section_labels=_require_contract_value(
+            section,
+            "labels",
+            "section_labels",
+            field="head_contract.section_bio.labels",
+        ),
+        doctype_task=_require_contract_value(
+            doctype,
+            "task",
+            "sequence_classification",
+            field="head_contract.doctype.task",
+        ),
+        doctype_pooling=_require_contract_value(
+            doctype,
+            "pooling",
+            "first_token_window",
+            field="head_contract.doctype.pooling",
+        ),
+        doctype_labels=_require_contract_value(
+            doctype,
+            "labels",
+            "document_types",
+            field="head_contract.doctype.labels",
+        ),
+    )
+
+
+def _require_contract_value(
+    data: Mapping[str, Any], key: str, expected: str, *, field: str
+) -> str:
+    value = data.get(key)
+    if value != expected:
+        raise RecipeConfigError(f"{field} must be {expected!r}, got {value!r}")
+    return expected
+
+
+def _parse_required_gates(value: Any) -> tuple[str, ...]:
+    if value in (None, ()):
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise RecipeConfigError("required_gates must be a list of strings")
+    gates = tuple(value)
+    if any(not isinstance(gate, str) or not gate for gate in gates):
+        raise RecipeConfigError("required_gates must contain non-empty strings")
+    if len(set(gates)) != len(gates):
+        raise RecipeConfigError("required_gates must not contain duplicates")
+    return gates
+
+
 def _parse_quantization(data: Mapping[str, Any]) -> QuantizationConfig:
     _require_exact_fields(data, "quantization", {"default", "allow_fp32_fallback"})
     allow_fp32_fallback = data["allow_fp32_fallback"]
@@ -801,6 +1510,225 @@ def _parse_quantization(data: Mapping[str, Any]) -> QuantizationConfig:
         default=_require_str(data, "default"),
         allow_fp32_fallback=allow_fp32_fallback,
     )
+
+
+def _parse_clinical_family_targets(value: Any) -> tuple[str, ...]:
+    if value in (None, ()):
+        return ()
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise RecipeConfigError("clinical_family_targets must be a list of strings")
+    targets = tuple(str(item) for item in value if isinstance(item, str) and item)
+    if len(targets) != len(value):
+        raise RecipeConfigError(
+            "clinical_family_targets must contain non-empty strings"
+        )
+    if len(set(targets)) != len(targets):
+        raise RecipeConfigError("clinical_family_targets must not contain duplicates")
+    unknown = sorted(set(targets) - set(CLINICAL_MODEL_FAMILIES))
+    if unknown:
+        raise RecipeConfigError(
+            "clinical_family_targets contains unknown family: " + ", ".join(unknown)
+        )
+    return targets
+
+
+def _validate_clinical_manifest_identity(
+    spec: ClinicalModelFamilySpec,
+    recipe: TrainingRecipeConfig,
+    row: Mapping[str, Any],
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> None:
+    repo_id = str(row.get("repo_id") or "")
+    tier = str(row.get("tier") or "")
+    if row.get("family") != spec.manifest_family:
+        raise RecipeConfigError(
+            f"manifest family must be {spec.manifest_family!r} for {spec.family}"
+        )
+    if row.get("task") != spec.task:
+        raise RecipeConfigError(
+            f"manifest task must be {spec.task!r} for {spec.family}"
+        )
+    if tier not in spec.allowed_tiers:
+        raise RecipeConfigError(
+            f"manifest tier {tier!r} is not supported by {spec.family}"
+        )
+    if tier not in _CLINICAL_RELEASE_TIERS_BY_MODE[recipe.mode]:
+        raise RecipeConfigError(
+            f"manifest tier {tier!r} does not fit recipe mode {recipe.mode}"
+        )
+
+    expected_prefix = spec.repo_prefix
+    if spec.family == "link":
+        vocab = str(evidence["redistributable_vocabulary"].get("vocab") or "")
+        expected_prefix = f"{expected_prefix}{vocab}-"
+    if not repo_id.startswith(expected_prefix):
+        raise RecipeConfigError(f"manifest repo_id must start with {expected_prefix!r}")
+    if not repo_id.endswith(tier) and f"-{tier}-" not in repo_id:
+        raise RecipeConfigError("manifest repo_id must include its declared tier")
+    labels = row.get("canonical_labels")
+    if not isinstance(labels, list) or not labels:
+        raise RecipeConfigError("clinical checkpoint manifest requires label metadata")
+
+    provenance = row.get("training_provenance")
+    if not isinstance(provenance, Mapping):
+        raise RecipeConfigError(
+            "clinical checkpoint manifest requires training_provenance"
+        )
+    if provenance.get("recipe_config_hash") != clinical_family_recipe_hash(
+        spec.family, recipe.mode
+    ):
+        raise RecipeConfigError(
+            "training_provenance recipe_config_hash does not match the recipe"
+        )
+    expected_data_hash = stable_hash(_plain(evidence))
+    if provenance.get("data_manifest_hash") != expected_data_hash:
+        raise RecipeConfigError(
+            "training_provenance data_manifest_hash does not match dataset evidence"
+        )
+
+    benchmark = row.get("benchmark")
+    if not isinstance(benchmark, Mapping) or not benchmark.get("dataset"):
+        raise RecipeConfigError("clinical checkpoint manifest requires a benchmark")
+    dataset_name = str(benchmark["dataset"]).casefold()
+    if spec.family.startswith("relex_") and "drugprot" not in dataset_name:
+        raise RecipeConfigError("RelEx checkpoint benchmark must report DrugProt")
+    if spec.family == "link" and "medmentions" not in dataset_name:
+        raise RecipeConfigError("Link checkpoint benchmark must report MedMentions")
+
+
+def _validate_clinical_gate_report(
+    spec: ClinicalModelFamilySpec,
+    row: Mapping[str, Any],
+    report: GateReport,
+    *,
+    signing_key: bytes | str,
+) -> None:
+    if not report.verify(signing_key):
+        raise RecipeConfigError("clinical checkpoint gate report signature is invalid")
+    if report.decision != "RELEASABLE":
+        raise RecipeConfigError("clinical checkpoint gate decision is not RELEASABLE")
+
+    identity = {
+        "family": (report.family, row.get("family")),
+        "param_count": (report.param_count, row.get("param_count")),
+        "repo_id": (report.repo_id, row.get("repo_id")),
+        "tier": (report.tier, row.get("tier")),
+    }
+    mismatches = [
+        key
+        for key, (reported, manifested) in identity.items()
+        if reported != manifested
+    ]
+    if mismatches:
+        raise RecipeConfigError(
+            "gate report identity diverges from manifest: " + ", ".join(mismatches)
+        )
+    formats = row.get("formats")
+    if not isinstance(formats, list) or report.format not in formats:
+        raise RecipeConfigError("gate report format is absent from manifest formats")
+
+    checks = {check.gate: check for check in report.gate_results}
+    missing = [gate for gate in spec.required_gates if gate not in checks]
+    failed = [
+        gate
+        for gate in spec.required_gates
+        if gate in checks and checks[gate].passed is not True
+    ]
+    if missing or failed:
+        parts = []
+        if missing:
+            parts.append("missing " + ", ".join(missing))
+        if failed:
+            parts.append("failed " + ", ".join(failed))
+        raise RecipeConfigError(
+            "clinical checkpoint requires passing G5/G6: " + "; ".join(parts)
+        )
+    measurements = {
+        "p50": report.p50_ms,
+        "p95": report.p95_ms,
+        "ram": report.ram_mb,
+    }
+    if any(
+        value is None or not math.isfinite(float(value)) or float(value) <= 0
+        for value in measurements.values()
+    ):
+        raise RecipeConfigError("G5/G6 require positive p50, p95, and RAM evidence")
+
+    latency = _measurement_map(row.get("latency_ms"), field="latency_ms")
+    peak_ram = _measurement_map(row.get("peak_ram_mb"), field="peak_ram_mb")
+    expected_measurements = {
+        "latency_ms.p50": (latency.get("p50"), report.p50_ms),
+        "latency_ms.p95": (latency.get("p95"), report.p95_ms),
+        "peak_ram_mb.measured": (peak_ram.get("measured"), report.ram_mb),
+    }
+    divergent = [
+        key
+        for key, (manifest_value, report_value) in expected_measurements.items()
+        if not _same_measurement(manifest_value, report_value)
+    ]
+    if divergent:
+        raise RecipeConfigError(
+            "manifest does not document signed G5/G6 measurements: "
+            + ", ".join(divergent)
+        )
+
+
+def _render_clinical_family_evidence(
+    spec: ClinicalModelFamilySpec,
+    recipe: TrainingRecipeConfig,
+    report: GateReport,
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> str:
+    lines = [
+        "## Clinical Family Release Evidence",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Recipe | Mode {recipe.mode} (`{recipe.preset_name}`) |",
+        f"| Label space | `{spec.label_set_ref}` |",
+        f"| Head contract | `{spec.head_contract}` |",
+        f"| Runtime | `{spec.runtime_ref}` |",
+        f"| G5 tier fit | passed ({report.ram_mb:g} MB peak RAM) |",
+        f"| G6 latency | passed (p50 {report.p50_ms:g} ms / p95 {report.p95_ms:g} ms) |",
+        "",
+        "### Dataset Evidence",
+        "",
+        "| Dataset | Uses | Access | Aggregate metrics |",
+        "|---|---|---|---|",
+    ]
+    for dataset, item in evidence.items():
+        metrics = item.get("metrics")
+        metric_text = (
+            ", ".join(
+                f"{name}={float(value):g}" for name, value in sorted(metrics.items())
+            )
+            if isinstance(metrics, Mapping) and metrics
+            else "manifested; no aggregate metric"
+        )
+        lines.append(
+            f"| {dataset} | {', '.join(item['uses'])} | {item['access']} | "
+            f"{metric_text} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Corpus rows and restricted-vocabulary content are not bundled. "
+            "Optional licensed evaluations remain caller-supplied and local.",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _measurement_map(value: Any, *, field: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise RecipeConfigError(f"clinical checkpoint manifest requires {field}")
+    return value
+
+
+def _same_measurement(left: Any, right: Any) -> bool:
+    if isinstance(left, bool) or not isinstance(left, (int, float)) or right is None:
+        return False
+    return math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=1e-9)
 
 
 def _parse_qlora_base_model(data: Mapping[str, Any]) -> QloraBaseModelConfig:
@@ -928,6 +1856,44 @@ def _parse_qlora_evidence(data: Mapping[str, Any]) -> QloraEvidenceConfig:
 def _validate_output_tier(output_tier: str) -> None:
     if output_tier not in {"tiny", "laptop", "teacher"}:
         raise RecipeConfigError("output_tier must be one of tiny, laptop, or teacher")
+
+
+def _validate_doctype_section_recipe(config: TrainingRecipeConfig) -> None:
+    if config.mode != "B":
+        raise RecipeConfigError(f"{DOCTYPE_SECTION_PRESET} must use mode B")
+    if config.label_set_ref != DOCTYPE_SECTION_LABEL_SET_REF:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} label_set_ref must be "
+            f"{DOCTYPE_SECTION_LABEL_SET_REF!r}"
+        )
+    if not isinstance(config.head_contract, DoctypeSectionHeadContract):
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} requires a valid dual-head head_contract"
+        )
+    if config.required_gates != DOCTYPE_SECTION_REQUIRED_GATES:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} required_gates must be "
+            f"{list(DOCTYPE_SECTION_REQUIRED_GATES)!r}"
+        )
+    if config.output_tier not in TIERS:
+        raise RecipeConfigError(
+            f"{DOCTYPE_SECTION_PRESET} output_tier must name a tier from "
+            "openmed.eval.tiers"
+        )
+    tier_default = str(TIERS[config.output_tier]["default_format"])
+    tier_quantization = tier_default.partition(" ")[0].casefold()
+    quant_default = config.quantization.default
+    if quant_default.casefold() != tier_quantization:
+        raise RecipeConfigError(
+            f"quantization.default {quant_default!r} is incompatible with "
+            f"{config.output_tier} tier default {tier_default!r}"
+        )
+    if "fallback" in tier_default.casefold() and not (
+        config.quantization.allow_fp32_fallback
+    ):
+        raise RecipeConfigError(
+            f"{config.output_tier} tier requires quantization.allow_fp32_fallback=true"
+        )
 
 
 def _validate_qlora_local_only(config: QloraRecipeConfig) -> None:
@@ -1200,17 +2166,6 @@ def _require_str(data: Mapping[str, Any], key: str) -> str:
     value = data[key]
     if not isinstance(value, str) or not value:
         raise RecipeConfigError(f"{key} must be a non-empty string")
-    return value
-
-
-def _optional_str(data: Mapping[str, Any], key: str) -> str | None:
-    if key not in data:
-        return None
-    value = data[key]
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value:
-        raise RecipeConfigError(f"{key} must be a non-empty string when present")
     return value
 
 

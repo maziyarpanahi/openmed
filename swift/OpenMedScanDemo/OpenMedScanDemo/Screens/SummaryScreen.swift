@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 
 public struct SummaryScreen: View {
@@ -26,6 +27,8 @@ public struct SummaryScreen: View {
 
             filterBar
             entitySections
+            relationSection
+            mapleBriefSection
 
             secondaryActions
         }
@@ -127,14 +130,72 @@ public struct SummaryScreen: View {
                     Text("·")
                         .font(.om.mono(10))
                         .foregroundStyle(Color.omFgSubtle)
-                    Text(String(format: "%.0f%%", entity.confidence * 100))
-                        .font(.om.mono(10))
-                        .foregroundStyle(Color.omFgSubtle)
+                    if let confidence = entity.confidence {
+                        Text(String(format: "%.0f%%", confidence * 100))
+                            .font(.om.mono(10))
+                            .foregroundStyle(Color.omFgSubtle)
+                    } else {
+                        Text("GENERATIVE")
+                            .font(.om.mono(10))
+                            .foregroundStyle(Color.omFgSubtle)
+                    }
                 }
             }
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var relationSection: some View {
+        let relations = flow.clinicalOutput?.relations ?? []
+        if !relations.isEmpty {
+            OMCard {
+                VStack(alignment: .leading, spacing: OM.Space.s3) {
+                    HStack {
+                        Text("RELATIONSHIPS").omEyebrow()
+                        Spacer()
+                        OMBadge("\(relations.count)", tone: .accent)
+                    }
+                    ForEach(relations) { relation in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 7) {
+                                Text(relation.head)
+                                    .font(.om.body(14, weight: .semibold))
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(Color.omTealAccent)
+                                Text(relation.tail)
+                                    .font(.om.body(14, weight: .semibold))
+                            }
+                            Text(relation.label.uppercased())
+                                .font(.om.mono(10, weight: .medium))
+                                .foregroundStyle(Color.omFgMuted)
+                        }
+                        if relation != relations.last { OMRule() }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mapleBriefSection: some View {
+        if let brief = flow.mapleBrief {
+            OMCard(elevation: .raised) {
+                VStack(alignment: .leading, spacing: OM.Space.s3) {
+                    HStack {
+                        Text("MAPLE BRIEF").omEyebrow()
+                        Spacer()
+                        OMBadge("On-device", tone: .positive, systemImage: "lock.fill")
+                    }
+                    Text(brief)
+                        .font(.om.body(15))
+                        .foregroundStyle(Color.omInk)
+                        .textSelection(.enabled)
+                }
+            }
+        }
     }
 
     private var secondaryActions: some View {
@@ -182,19 +243,41 @@ public struct SummaryScreen: View {
         let payload: [String: Any] = [
             "stage": "summary",
             "sourceLength": flow.trimmedText.count,
-            "piiEntities": (flow.currentPIIOutput?.entities ?? []).map { [
-                "label": $0.label, "text": $0.text, "start": $0.start, "end": $0.end,
-                "category": $0.category.rawValue, "confidence": $0.confidence,
-            ] },
-            "clinicalEntities": (flow.clinicalOutput?.entities ?? []).map { [
-                "label": $0.label, "text": $0.text, "start": $0.start, "end": $0.end,
-                "category": $0.category.rawValue, "confidence": $0.confidence,
-            ] },
+            "piiEntities": (flow.currentPIIOutput?.entities ?? []).map {
+                [
+                    "label": $0.label, "textSHA256": sha256($0.text), "start": $0.start,
+                    "end": $0.end,
+                    "category": $0.category.rawValue,
+                    "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
+                ]
+            },
+            "clinicalEntities": (flow.clinicalOutput?.entities ?? []).map {
+                [
+                    "label": $0.label, "text": $0.text, "start": $0.start, "end": $0.end,
+                    "category": $0.category.rawValue,
+                    "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
+                ]
+            },
+            "relations": (flow.clinicalOutput?.relations ?? []).map {
+                [
+                    "label": $0.label,
+                    "head": $0.head,
+                    "tail": $0.tail,
+                    "confidence": $0.confidence.map { $0 as Any } ?? NSNull(),
+                ]
+            },
+            "mapleBrief": flow.mapleBrief.map { $0 as Any } ?? NSNull(),
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]) else {
             return "{}"
         }
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    private func sha256(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private var completedPIIOutputs: Int {

@@ -1,0 +1,27 @@
+{
+  "name": "synthetic_clinical_pipeline",
+  "version": "1.0.0",
+  "stages": [
+    {
+      "type": "ingest",
+      "config": {
+        "format": "jsonl",
+        "namespace": "default"
+      }
+    },
+    {
+      "type": "ner",
+      "config": {
+        "model_id": "model_synthetic",
+        "threshold": 0.8
+      }
+    },
+    {
+      "type": "validation",
+      "config": {
+        "profile": "clinical_default",
+        "strict": true
+      }
+    }
+  ]
+}

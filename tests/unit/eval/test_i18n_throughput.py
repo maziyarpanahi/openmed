@@ -45,20 +45,16 @@ def _throughput_report(value: float = 1_000.0) -> dict[str, object]:
     }
 
 
-@pytest.mark.parametrize(
-    "language",
-    i18n_throughput.I18N_THROUGHPUT_LANGUAGES,
-)
-def test_committed_corpora_are_large_deterministic_faker_fixtures(
-    language: str,
-) -> None:
-    fixture = i18n_throughput.load_synthetic_corpus(language)
+def test_committed_corpora_are_large_deterministic_faker_fixtures(subtests) -> None:
+    for language in i18n_throughput.I18N_THROUGHPUT_LANGUAGES:
+        with subtests.test(language=language):
+            fixture = i18n_throughput.load_synthetic_corpus(language)
 
-    assert len(fixture["text"]) >= i18n_throughput.I18N_THROUGHPUT_MIN_CHARS
-    assert fixture["metadata"]["synthetic"] is True
-    assert fixture["metadata"]["generated_only"] is True
-    assert fixture["metadata"]["generator"] == "Faker"
-    assert fixture["metadata"]["sha256"].startswith("sha256:")
+            assert len(fixture["text"]) >= i18n_throughput.I18N_THROUGHPUT_MIN_CHARS
+            assert fixture["metadata"]["synthetic"] is True
+            assert fixture["metadata"]["generated_only"] is True
+            assert fixture["metadata"]["generator"] == "Faker"
+            assert fixture["metadata"]["sha256"].startswith("sha256:")
 
 
 def test_benchmark_emits_cold_start_and_steady_state_metrics() -> None:
@@ -109,6 +105,37 @@ def test_throughput_gate_allows_exactly_twenty_percent_drop() -> None:
     check = evaluate_i18n_throughput_gate(report, _baseline_store())
 
     assert check.passed is True
+
+
+def test_committed_baseline_matches_hosted_runner_calibration() -> None:
+    baseline = json.loads(Path("gates/baseline.json").read_text(encoding="utf-8"))
+    report = _throughput_report()
+    report["languages"] = {
+        "hi": {
+            "segmentation_chars_per_second": 131_006.367,
+            "deidentify_spans_per_second": 37.176,
+        },
+        "ta": {
+            "segmentation_chars_per_second": 137_249.704,
+            "deidentify_spans_per_second": 52.063,
+        },
+        "zh": {
+            "segmentation_chars_per_second": 308_450.324,
+            "deidentify_spans_per_second": 602.039,
+        },
+    }
+
+    check = evaluate_i18n_throughput_gate(report, baseline)
+
+    assert check.passed is True
+    for language in i18n_throughput.I18N_THROUGHPUT_LANGUAGES:
+        entry = baseline["entries"][f"i18n-throughput::{language}::pattern-only"]
+        assert entry["metadata"]["recorded_platform"] == ("GitHub-hosted Ubuntu x86_64")
+        assert entry["metadata"]["calibration_sample_count"] == 6
+        assert (
+            entry["metadata"]["calibration_artifact_set_sha256"]
+            == (entry["reproducibility_hash"])
+        )
 
 
 def test_sleep_injected_segmenter_triggers_language_metric_gate() -> None:

@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from .africa_context import profile_defaults_for
 from .arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION
 from .detector_plugins import DetectorCapability, default_detector_capabilities
+from .errors import PolicyError, redact_detail
 from .labels import CANONICAL_LABELS, POLICY_LABELS, normalize_label, policy_label_for
 from .schemas.span import ACTION_VALUES
 
@@ -30,6 +31,7 @@ class PolicyName(str, Enum):
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
+    CLINICAL_PRESERVE = "clinical_preserve"
     CANADA_PIPEDA = "canada_pipeda"
     UK_ICO_ANONYMISATION = "uk_ico_anonymisation"
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
@@ -445,17 +447,28 @@ def canonical_policy_name(name: str | PolicyName) -> str:
     if isinstance(name, PolicyName):
         return name.value
     if not isinstance(name, str):
-        raise TypeError(
+        raise PolicyError(
             "policy must be a profile name string or a PolicyProfile object, "
-            f"got {type(name).__name__}"
+            f"got {type(name).__name__}. Pass a name from list_policies() or a "
+            "validated PolicyProfile."
         )
     normalized = name.strip().lower().replace("-", "_")
     if not normalized:
-        raise ValueError("policy must not be blank")
+        raise PolicyError(
+            "policy must not be blank. Pass a name from list_policies() or omit "
+            "the policy argument."
+        )
     normalized = POLICY_ALIASES.get(normalized, normalized)
     if normalized not in CANONICAL_POLICY_NAMES:
         allowed = ", ".join((*CANONICAL_POLICY_NAMES, *sorted(POLICY_ALIASES)))
-        raise ValueError(f"unknown policy {name!r}; expected one of: {allowed}")
+        raise PolicyError(
+            f"unknown policy profile; expected one of: {allowed}. Pass a "
+            "documented policy name from list_policies().",
+            details={
+                "argument": "policy",
+                "policy": redact_detail(name),
+            },
+        )
     return normalized
 
 

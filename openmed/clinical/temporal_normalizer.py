@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 TimexType = Literal["DATE", "TIME", "DURATION", "SET"]
 
 _MONTHS = {
@@ -241,6 +243,8 @@ def normalize_temporal(
     text: str,
     spans: Iterable[Mapping[str, object] | Sequence[int]],
     reference_time: str | date | datetime | None,
+    *,
+    language: str = "en",
 ) -> list[NormalizedTimex]:
     """Normalize caller-supplied temporal spans to TIMEX3-style ISO values.
 
@@ -251,6 +255,10 @@ def normalize_temporal(
         reference_time: Document reference time used for relative expressions.
             An ISO string, :class:`date`, :class:`datetime`, or ``None`` is
             accepted. ``None`` never falls back to the current wall clock.
+        language: Explicit normalization rules, ``en`` (default) or ``de``.
+            German supports ISO/D.M.YYYY dates, full German month names and
+            explicit relative day/week/month/year expressions. Unrecognized
+            spans remain unresolved; source text is never translated.
 
     Returns:
         Normalized records in the same order as the supplied spans.
@@ -262,12 +270,22 @@ def normalize_temporal(
 
     if not isinstance(text, str):
         raise TypeError("text must be a string")
+    if language not in ("en", "de"):
+        raise ValueError("temporal normalization supports explicit en or de language")
     reference = _coerce_reference_time(reference_time)
     records: list[NormalizedTimex] = []
     for raw_span in spans:
         start, end = _coerce_span(raw_span, text_length=len(text))
         phrase = text[start:end]
-        normalized = _normalize_phrase(phrase, reference)
+        if language == "de":
+            from openmed.clinical.temporal_german import _german_value
+
+            value, anchor, flags = _german_value(
+                phrase, reference.value.date() if reference else None
+            )
+            normalized = _result(phrase, 0, len(phrase), "DATE", value, anchor, *flags)
+        else:
+            normalized = _normalize_phrase(phrase, reference)
         records.append(
             NormalizedTimex(
                 text=phrase,
@@ -353,7 +371,7 @@ def _normalize_phrase(
     if _ISO_DATETIME_RE.fullmatch(stripped):
         granularity = _iso_datetime_granularity(stripped)
         try:
-            parsed_datetime = datetime.fromisoformat(_replace_z(stripped))
+            parsed_datetime = parse_iso_datetime(_replace_z(stripped))
         except ValueError:
             return _ambiguous_date(stripped, start, end, granularity)
         return _result(
@@ -368,7 +386,7 @@ def _normalize_phrase(
 
     if _ISO_DATE_RE.fullmatch(stripped):
         try:
-            parsed_date = date.fromisoformat(stripped)
+            parsed_date = parse_iso_date(stripped)
         except ValueError:
             return _ambiguous_date(stripped, start, end, "day")
         return _result(
@@ -767,7 +785,7 @@ def _coerce_reference_time(
         raise ValueError("reference_time must not be empty")
     if _ISO_DATE_RE.fullmatch(normalized):
         try:
-            parsed_date = date.fromisoformat(normalized)
+            parsed_date = parse_iso_date(normalized)
         except ValueError as exc:
             raise ValueError(
                 "reference_time must be a valid ISO date or datetime"
@@ -777,10 +795,10 @@ def _coerce_reference_time(
             iso_value=parsed_date.isoformat(),
         )
     try:
-        parsed_datetime = datetime.fromisoformat(_replace_z(normalized))
+        parsed_datetime = parse_iso_datetime(_replace_z(normalized))
     except ValueError:
         try:
-            parsed_date = date.fromisoformat(normalized)
+            parsed_date = parse_iso_date(normalized)
         except ValueError as exc:
             raise ValueError(
                 "reference_time must be a valid ISO date or datetime"

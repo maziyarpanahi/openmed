@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 
 import PackageDescription
 
@@ -11,15 +11,29 @@ let package = Package(
         .visionOS(.v1),
     ],
     products: [
+        .library(name: "OpenMedSpeech", targets: ["OpenMedSpeech"]),
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        )
+        ),
+        .library(
+            name: "OpenMedExtensionSupport",
+            targets: ["OpenMedExtensionSupport"]
+        ),
+        .library(
+            name: "OpenMedShareExtension",
+            targets: ["OpenMedShareExtension"]
+        ),
+        .library(
+            name: "OpenMedActionExtension",
+            targets: ["OpenMedActionExtension"]
+        ),
     ],
     dependencies: [
+        .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            from: "0.1.12"
+            exact: "1.0.0"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
@@ -31,6 +45,16 @@ let package = Package(
         ),
     ],
     targets: [
+        .target(
+            name: "OpenMedSpeech",
+            dependencies: ["OpenMedKit", .product(name: "WhisperKit", package: "argmax-oss-swift")],
+            path: "swift/OpenMedKit/Sources/OpenMedSpeech"
+        ),
+        .testTarget(
+            name: "OpenMedSpeechTests",
+            dependencies: ["OpenMedSpeech", "OpenMedKit"],
+            path: "swift/OpenMedKit/Tests/OpenMedSpeechTests"
+        ),
         .target(
             name: "OpenMedKit",
             dependencies: [
@@ -60,10 +84,35 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .target(
+            name: "OpenMedExtensionSupport",
+            dependencies: ["OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/OpenMedExtensionSupport"
+        ),
+        .target(
+            name: "OpenMedShareExtension",
+            dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
+            path: "swift/OpenMedKit/Sources/ShareExtension"
+        ),
+        .target(
+            name: "OpenMedActionExtension",
+            dependencies: ["OpenMedExtensionSupport"],
+            path: "swift/OpenMedKit/Sources/ActionExtension"
+        ),
         .testTarget(
             name: "OpenMedKitTests",
             dependencies: ["OpenMedKit"],
             path: "swift/OpenMedKit/Tests/OpenMedKitTests"
+        ),
+        .testTarget(
+            name: "ExtensionTests",
+            dependencies: [
+                "OpenMedKit",
+                "OpenMedExtensionSupport",
+                "OpenMedShareExtension",
+                "OpenMedActionExtension",
+            ],
+            path: "swift/OpenMedKit/Tests/ExtensionTests"
         ),
     ]
 )

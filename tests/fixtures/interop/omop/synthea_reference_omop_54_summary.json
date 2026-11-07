@@ -1,0 +1,27 @@
+{
+  "cdm_version": "5.4",
+  "cohort_digest": "sha256:cc5242888af3b98f757cf1eeb64cafd166755feb3c26345bce1c102569fe5aaf",
+  "cohort_split": "holdout",
+  "current_fact_count": 5,
+  "mapping_counts": {
+    "ambiguous": 0,
+    "mapped": 5,
+    "rejected": 0,
+    "unmapped": 0
+  },
+  "reference_etl": "ohdsi.etl_synthea",
+  "reference_license": "apache-2.0",
+  "reference_version": "2.1.1",
+  "row_counts": {
+    "condition_occurrence": 1,
+    "drug_exposure": 1,
+    "measurement": 1,
+    "note": 0,
+    "observation": 1,
+    "person": 1,
+    "procedure_occurrence": 1,
+    "source_to_concept_map": 0,
+    "visit_occurrence": 1
+  },
+  "schema_version": "1.0.0"
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/operational-alert/1.0.0",
+  "title": "OpenMed Operational Alert",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alert_id",
+    "category",
+    "operation",
+    "state",
+    "observed_count",
+    "threshold_count",
+    "window_seconds",
+    "schema_version",
+    "compatibility_policy"
+  ],
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "pattern": "^alert_[0-9a-f]{16,64}$"
+    },
+    "category": {
+      "enum": ["ingestion", "model", "store", "job", "queue", "query", "export"]
+    },
+    "operation": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+    "state": {
+      "enum": [
+        "success",
+        "empty",
+        "partial",
+        "unknown",
+        "conflict",
+        "unsupported",
+        "denied",
+        "failure"
+      ]
+    },
+    "observed_count": {"type": "integer", "minimum": 1, "maximum": 86400000},
+    "threshold_count": {"type": "integer", "minimum": 1, "maximum": 86400000},
+    "window_seconds": {"type": "integer", "minimum": 1, "maximum": 86400000},
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"}
+  }
+}

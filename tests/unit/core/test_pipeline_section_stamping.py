@@ -102,18 +102,30 @@ def test_default_stage_exposes_document_type_classification():
     ).run(text, method="mask")
 
     document_type = result.stage("doc_type_section").metadata["document_type"]
-    assert document_type == {"type": "radiology_report", "confidence": 0.98}
+    assert document_type == {
+        "type": "radiology_report",
+        "loinc_code": "18748-4",
+        "loinc_axes": {
+            "type_of_service": "radiology",
+            "subject_matter_domain": "imaging",
+            "role": "report",
+            "setting": "diagnostic",
+        },
+        "confidence": 0.98,
+    }
 
 
 def test_unavailable_section_hook_leaves_pipeline_output_unchanged():
     text = "Patient John Doe visited."
 
     unavailable_result = Pipeline(
+        hmac_secret="synthetic-section-parity-key",
         model_detector=_model_detector("John Doe"),
         section_detector=lambda text: {"section_hook": "unavailable"},
         use_safety_sweep=False,
     ).run(text, method="mask")
     empty_sections_result = Pipeline(
+        hmac_secret="synthetic-section-parity-key",
         model_detector=_model_detector("John Doe"),
         section_detector=lambda text: {"section_hook": "unavailable", "sections": ()},
         use_safety_sweep=False,

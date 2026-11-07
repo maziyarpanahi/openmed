@@ -1,0 +1,24 @@
+{
+  "resourceType": "ValueSet",
+  "id": "openmed-example-clinical-findings",
+  "url": "https://openmed.example/fhir/ValueSet/clinical-findings",
+  "version": "1.0.0",
+  "status": "active",
+  "compose": {
+    "include": [
+      {
+        "system": "https://openmed.example/fhir/CodeSystem/clinical-findings",
+        "concept": [
+          {
+            "code": "synthetic-finding-a",
+            "display": "Synthetic finding A"
+          },
+          {
+            "code": "synthetic-finding-b",
+            "display": "Synthetic finding B"
+          }
+        ]
+      }
+    ]
+  }
+}

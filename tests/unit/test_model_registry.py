@@ -5,6 +5,47 @@ import pytest
 from openmed.core import model_registry
 
 
+def test_summarizer_package_registration_is_alias_and_revision_bound(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+    assert model_registry.resolve_summarizer_package() is None
+    model_registry.register_summarizer_package(
+        "maple", package_root=tmp_path, manifest_digest="A" * 64
+    )
+    assert model_registry.resolve_summarizer_package("mlx") == (
+        tmp_path,
+        "sha256:" + "a" * 64,
+    )
+    assert model_registry.resolve_summarizer_package(
+        "maple-preview"
+    ) == model_registry.resolve_summarizer_package("mlx")
+    model_registry.clear_summarizer_package("mlx")
+    assert model_registry.resolve_summarizer_package("maple") is None
+
+
+def test_summarizer_registration_failure_drops_values_and_context(subtests):
+    for alias, root, digest in [
+        ("unregistered-private-name", "/opt/openmed/synthetic", "a" * 64),
+        ("mlx", "relative/private/path", "a" * 64),
+        ("mlx", "/opt/openmed/synthetic", "synthetic-private-token"),
+        ([], "/opt/openmed/synthetic", "a" * 64),
+    ]:
+        with subtests.test(alias=alias, root=root, digest=digest):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+                with pytest.raises(ValueError) as caught:
+                    model_registry.register_summarizer_package(
+                        alias, package_root=root, manifest_digest=digest
+                    )
+                assert str(caught.value) == "invalid summarizer package registration"
+                assert caught.value.__context__ is None
+                assert not model_registry._SUMMARIZER_PACKAGES
+
+
+from openmed.core.labels import CANONICAL_LABELS
+
+
 def test_get_model_info_known_key():
     info = model_registry.get_model_info("disease_detection_tiny")
     assert info is not None
@@ -67,29 +108,20 @@ def test_resolve_draft_model_for_laneformer_uses_separate_permissive_artifact():
 def test_biomedical_ner_category_entity_types_are_reconciled():
     expected = {
         "Oncology": {
-            "AMINO_ACID",
-            "ANATOMICAL_SYSTEM",
+            "ANATOMY",
             "CANCER",
             "CELL",
-            "CELLULAR_COMPONENT",
-            "CHEM",
-            "DEVELOPING_ANATOMICAL_STRUCTURE",
+            "CHEMICAL",
             "GENE_OR_GENE_PRODUCT",
-            "IMMATERIAL_ANATOMICAL_ENTITY",
-            "MULTI_TISSUE_STRUCTURE",
             "ORGAN",
             "ORGANISM",
-            "ORGANISM_SUBDIVISION",
-            "ORGANISM_SUBSTANCE",
-            "PATHOLOGICAL_FORMATION",
-            "SIMPLE_CHEMICAL",
+            "PATHOLOGY",
             "SPECIES",
             "TISSUE",
         },
         "Anatomy": {"ANATOMY", "ORGAN", "TISSUE"},
         "Genomics": {
-            "CELL_LINE",
-            "CELL_TYPE",
+            "CELL",
             "DNA",
             "GENE",
             "GENE_OR_GENE_PRODUCT",
@@ -97,16 +129,9 @@ def test_biomedical_ner_category_entity_types_are_reconciled():
             "RNA",
         },
         "Pathology": {"CONDITION", "DISEASE", "PATHOLOGY"},
-        "Hematology": {"CANCER", "CL", "DISEASE"},
-        "Protein": {
-            "GENE_OR_GENE_PRODUCT",
-            "PROTEIN",
-            "PROTEIN_COMPLEX",
-            "PROTEIN_ENUM",
-            "PROTEIN_FAMILIY_OR_GROUP",
-            "PROTEIN_VARIANT",
-        },
-        "Chemical": {"CHEM", "DRUG", "MEDICATION", "SIMPLE_CHEMICAL"},
+        "Hematology": {"CANCER", "CELL", "DISEASE"},
+        "Protein": {"GENE_OR_GENE_PRODUCT", "PROTEIN"},
+        "Chemical": {"CHEMICAL", "DRUG", "MEDICATION"},
     }
 
     for category, entity_types in expected.items():
@@ -114,6 +139,16 @@ def test_biomedical_ner_category_entity_types_are_reconciled():
         registered_set = set(registered)
         assert registered_set == entity_types
         assert len(registered) == len(registered_set)
+
+
+def test_non_privacy_category_entity_types_are_canonical():
+    for category, entity_types in model_registry._CATEGORY_ENTITY_TYPES.items():
+        if category == "Privacy":
+            continue
+        assert set(entity_types) <= CANONICAL_LABELS, (
+            f"{category} has non-canonical entity types: "
+            f"{set(entity_types) - CANONICAL_LABELS}"
+        )
 
 
 def test_get_entity_types_by_category_surfaces_biomedical_family_labels():

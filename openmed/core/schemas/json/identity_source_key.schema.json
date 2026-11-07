@@ -1,0 +1,15 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/identity/source-key.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "entity_type": {"enum": ["patient", "encounter"]},
+    "local_key": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+  },
+  "required": ["entity_type", "local_key", "schema_version", "source_id"],
+  "schema_version": 1,
+  "title": "OpenMedSourceIdentityKey",
+  "type": "object"
+}

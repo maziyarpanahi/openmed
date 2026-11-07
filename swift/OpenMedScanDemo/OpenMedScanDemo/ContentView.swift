@@ -1,7 +1,7 @@
 import SwiftUI
-import OpenMedKit
+
 #if canImport(UIKit)
-import UIKit
+    import UIKit
 #endif
 
 /// Root layout. Hosts the stage screen in the shared chrome and mediates
@@ -34,21 +34,21 @@ struct ContentView: View {
             downloads.refreshAll()
         }
         #if canImport(UIKit) && canImport(VisionKit)
-        .sheet(isPresented: $isShowingScanner) {
-            ScannerSheet(
-                onComplete: { pages in
-                    isShowingScanner = false
-                    flow.usePages(pages)
-                    HapticsCenter.notify(.success)
-                },
-                onCancel: { isShowingScanner = false },
-                onError: { error in
-                    isShowingScanner = false
-                    flow.errorMessage = error.localizedDescription
-                }
-            )
-            .ignoresSafeArea()
-        }
+            .sheet(isPresented: $isShowingScanner) {
+                ScannerSheet(
+                    onComplete: { pages in
+                        isShowingScanner = false
+                        flow.usePages(pages)
+                        HapticsCenter.notify(.success)
+                    },
+                    onCancel: { isShowingScanner = false },
+                    onError: { error in
+                        isShowingScanner = false
+                        flow.errorMessage = error.localizedDescription
+                    }
+                )
+                .ignoresSafeArea()
+            }
         #endif
         .sheet(isPresented: $isShowingModelSheet) {
             ModelDownloadSheet(downloads: downloads)
@@ -110,6 +110,8 @@ struct ContentView: View {
                 presets: presets,
                 onSaveAsNewPreset: { isShowingLabelEditor = true }
             )
+        case .insights:
+            MapleInsightsScreen(flow: flow, downloads: downloads)
         case .summary:
             SummaryScreen(
                 flow: flow,
@@ -149,15 +151,18 @@ struct ContentView: View {
 
     private var primaryTitle: String {
         switch flow.stage {
-        case .input:      return flow.hasText ? "Review document" : "Add document or text"
-        case .review:     return flow.needsOCR ? "Run OCR" : "Continue to de-identification"
+        case .input: return flow.hasText ? "Review document" : "Add document or text"
+        case .review: return flow.needsOCR ? "Run OCR" : "Continue to de-identification"
         case .deidentify:
             if flow.currentPIIOutput == nil { return "Run PII redaction" }
             return "Continue to clinical"
         case .clinical:
             if flow.clinicalOutput == nil { return "Extract clinical signals" }
+            return "Explore with Maple"
+        case .insights:
+            if flow.mapleBrief == nil { return "Generate Maple brief" }
             return "Review summary"
-        case .summary:    return "Start a new scan"
+        case .summary: return "Start a new scan"
         }
     }
 
@@ -176,9 +181,15 @@ struct ContentView: View {
             return true
         case .clinical:
             if flow.clinicalOutput == nil {
-                return downloads.state(for: .glinerRelex) == .ready
+                return downloads.state(for: flow.clinicalModelID) == .ready
                     && flow.currentPIIOutput != nil
                     && !flow.activeLabels.isEmpty
+            }
+            return true
+        case .insights:
+            if flow.mapleBrief == nil {
+                return downloads.state(for: .maplePreview) == .ready
+                    && flow.currentPIIOutput != nil
             }
             return true
         case .summary:
@@ -193,7 +204,7 @@ struct ContentView: View {
         case .review:
             if flow.needsOCR {
                 #if canImport(UIKit)
-                await flow.runOCRIfNeeded()
+                    await flow.runOCRIfNeeded()
                 #endif
             } else {
                 flow.advance()
@@ -207,6 +218,12 @@ struct ContentView: View {
         case .clinical:
             if flow.clinicalOutput == nil {
                 await flow.runClinical()
+            } else {
+                flow.advance()
+            }
+        case .insights:
+            if flow.mapleBrief == nil {
+                await flow.generateMapleBrief()
             } else {
                 flow.advance()
             }

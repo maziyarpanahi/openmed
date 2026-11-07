@@ -1,0 +1,89 @@
+{
+  "resourceType": "Bundle",
+  "id": "bundle-1",
+  "type": "searchset",
+  "total": 2,
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Bundle for John Doe</p></div>"
+  },
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://fhir.example.test/fhir/DocumentReference?_count=2"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://fhir.example.test/fhir/DocumentReference/doc-1",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "id": "doc-1",
+        "status": "current",
+        "docStatus": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34133-9",
+              "display": "Summarization of episode note"
+            }
+          ],
+          "text": "Clinical note"
+        },
+        "subject": {
+          "reference": "Patient/pat-1",
+          "display": "John Doe"
+        },
+        "date": "2024-01-15T09:00:00Z",
+        "description": "Visit note for John Doe at 123 Main Street.",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p title=\"John Doe\">John Doe visited the clinic.</p></div>"
+        },
+        "content": [
+          {
+            "attachment": {
+              "contentType": "text/plain; charset=utf-8",
+              "language": "en",
+              "title": "John Doe visit note",
+              "creation": "2024-01-15T09:00:00Z",
+              "data": "Q2xpbmljYWwgbm90ZSBmb3IgSm9obiBEb2UgYXQgMTIzIE1haW4gU3RyZWV0Lg=="
+            },
+            "format": {
+              "system": "http://ihe.net/fhir/ValueSet/IHE.FormatCode.fhir",
+              "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "https://fhir.example.test/fhir/DiagnosticReport/report-1",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "report-1",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "24331-1",
+              "display": "Lung cancer narrative"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/pat-1",
+          "display": "John Doe"
+        },
+        "effectiveDateTime": "2024-01-15T10:00:00Z",
+        "conclusion": "John Doe's diagnostic report was reviewed at 123 Main Street.",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Report prepared for John Doe.</p></div>"
+        }
+      }
+    }
+  ]
+}

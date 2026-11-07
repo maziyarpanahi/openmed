@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/operational-event/1.0.0",
+  "title": "OpenMed Operational Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "category",
+    "operation",
+    "state",
+    "count",
+    "duration_seconds",
+    "schema_version",
+    "compatibility_policy"
+  ],
+  "properties": {
+    "category": {
+      "enum": ["ingestion", "model", "store", "job", "queue", "query", "export"]
+    },
+    "operation": {
+      "enum": [
+        "aggregate",
+        "authorize",
+        "cancel",
+        "commit",
+        "complete",
+        "correct",
+        "create",
+        "delete",
+        "dispatch",
+        "download",
+        "enqueue",
+        "evaluate",
+        "expire",
+        "infer",
+        "intake",
+        "list",
+        "load",
+        "normalize",
+        "parse",
+        "prepare",
+        "read",
+        "resolve",
+        "run",
+        "search",
+        "shed",
+        "unload",
+        "write"
+      ]
+    },
+    "state": {
+      "enum": [
+        "success",
+        "empty",
+        "partial",
+        "unknown",
+        "conflict",
+        "unsupported",
+        "denied",
+        "failure"
+      ]
+    },
+    "count": {"type": "integer", "minimum": 1, "maximum": 1000000},
+    "duration_seconds": {"type": "number", "minimum": 0, "maximum": 86400},
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"}
+  }
+}

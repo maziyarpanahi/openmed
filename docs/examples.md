@@ -4,10 +4,27 @@ This page curates the most useful samples already in the repository so you can
 jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
 examples use synthetic data and are safe to run during release review.
 
+If you already know the outcome you want, use the
+**[Task-oriented Cookbook](./cookbook.md)** to jump directly from that goal to
+the matching script, notebook, or REST recipe.
+
+## Curated Notebook Gallery
+
+For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
+
+For an install-free demonstration, open the
+**[browser privacy playground](/docs/demo/privacy-playground/)**. Its bundled rules
+redact bounded synthetic text in the current tab and expose aggregate counts
+plus the active browser network boundary.
+
 ## Notebooks (`examples/notebooks/`)
 
 | Notebook | Highlights |
 | --- | --- |
+| [`01_quickstart_redaction.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/01_quickstart_redaction.ipynb) | Quickstart redaction: masking, reversible replacement, and cryptographic hashing. |
+| [`02_batch_dataset.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/02_batch_dataset.ipynb) | Batch dataset de-identification with `BatchProcessor` and directory processing. |
+| [`03_fhir_export.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/03_fhir_export.ipynb) | Redacting clinical text, extracting medical entities, and assembling a deterministic FHIR R4 Bundle. |
+| [`04_eval_walkthrough.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/04_eval_walkthrough.ipynb) | Offline evaluation across bundled synthetic multilingual golden fixtures. |
 | `getting_started.ipynb` | Mirrors the Quick Start guide with step-by-step installation, registry exploration, and a first call to `analyze_text`. |
 | `Sentence_Detection_Batching.ipynb` | Demonstrates pySBD-based segmentation, batching, and how to align predictions back to the original paragraphs. |
 | `ZeroShot_NER_Tour.ipynb` | Walks through GLiNER indexing, domain defaults, inference API usage, and the adapter that converts spans into BIO/BILOU schemes. |
@@ -83,8 +100,13 @@ content-security policy blocks the optional inline styling.
 | `examples/chw_form_deid.py` | De-identifies local ODK, CommCare, or KoBoToolbox JSON/CSV form exports and emits a value-free field-policy manifest. |
 | `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
 | `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
+| `examples/warehouse-remote-function/` | Deploys a BigQuery remote-function batch handler with no-raw-PHI logging, a container entrypoint, and registration DDL. |
 | `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
+| `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
+| `examples/v3_golden_journey.py` | Executes the offline five-source v3 conformance Journey and prints a compact receipt derived from real library contracts. |
+| [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) | Runs section-scoped SDOH extraction, explicitly anchored temporal normalization and a timeline on embedded synthetic data; prints controlled labels, offsets and states only. |
+| [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) | Runs explicit development NLI and a synthetic calibration double, then binds diagnosis/treatment and procedure/indication candidates to evidence and human-review queue bands. |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
@@ -124,6 +146,67 @@ provides a rendered no-download tour of both flows.
 For the full coverage map, see
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
 
+## Synthetic SDOH and timeline contracts
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_sdoh_timeline
+```
+
+The script accepts no external note input or arguments and uses no model,
+download or wall clock. It detects sections, excludes the assessment's SDOH cue,
+normalizes fixed temporal spans against an explicit synthetic reference date,
+and passes `TimeExpr` records with authored synthetic event/assertion tags to
+`build_timeline()`. An ambiguous date remains unanchored and a hypothetical
+event stays in its own lane.
+
+Printed JSONL projects only controlled labels, half-open source offsets and
+states. It omits source surfaces, SDOH values/scores, normalized dates and
+reference dates. General SDOH/temporal serializers can contain protected values;
+this projection is specific to the demonstration. The example requires human
+review and demonstrates contracts, not clinical validation or automatic event
+extraction. See the [SDOH evidence contract](clinical/sdoh-evidence.md),
+[temporal normalization](clinical/temporal-normalization.md) and
+[timeline buckets](clinical/timeline-buckets.md).
+
+All records require closed labels and exact built-in scalar types. The complete
+output is validated and serialized before printing, so malformed metadata causes
+a fixed failure without partial JSONL or provider diagnostic values.
+
+## Synthetic NLI and guarded relations
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_nli_relations
+```
+
+The script accepts no external input or arguments and loads no model. It calls
+`verify()` with the explicit **development-only heuristic** and an injected
+**synthetic calibration double** using authored probabilities and the public
+selective NLI gate. Neither is a qualified clinical model or empirical
+calibration result. The standalone `review_required` flag denotes abstention;
+a false flag or heuristic neutral label does not authorize clinical action.
+The fixed verdict metadata is checked and every record is serialized before
+printing, so malformed scalar values or serialization drift produce one fixed
+error without source values or partial JSONL output.
+
+It generates diagnosis/treatment and procedure/indication candidates from
+explicit local cue language, binds endpoint/linking evidence with an uncertain
+assertion state, and assigns human-review queue bands. Candidate rule scores
+are not calibrated clinical probabilities. Review bands do not infer clinical
+urgency, treatment appropriateness or confirmation.
+
+Printed JSONL contains only controlled labels, scores, flags, offsets, evidence
+digests and priorities. It omits premise, claim, note and raw document identifiers.
+Hashes support correlation, not anonymization or authorization. The fixed
+demonstration requires human review and makes no clinical-validation claim.
+See [NLI verification](clinical/nli-verification.md),
+[relation evidence binding](clinical/relation-evidence-binding.md) and
+[review priority](clinical/relation-review-priority.md).
+
+
 ## v1.7 multimodal, interop, and browser recipes
 
 The v1.7 examples are grouped around the main new public surfaces:
@@ -142,7 +225,7 @@ The v1.8 examples and guides focus on cross-platform runtime and production
 deployment paths:
 
 - Android/Kotlin and Swift-Kotlin parity: [Android Span Parity](./android-parity.md), [Android ONNX Export](./export-onnx-android.md), and [Swift-Kotlin API Parity](./swift-kotlin-parity.md).
-- Browser and mobile JavaScript: [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
+- Browser and mobile JavaScript: [Browser Network-Egress Proof](./demo/browser-egress.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
 - Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
 - Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
 
@@ -154,7 +237,8 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `2.0.0` includes release-critical Apple, Android, browser, and service entry points:
+The OpenMed `3.2.0` candidate retains release-critical Apple, Android, browser,
+and service entry points. Native feature coverage differs by platform:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

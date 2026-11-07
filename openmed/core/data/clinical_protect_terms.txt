@@ -1,4 +1,4 @@
-# OpenMed clinical protection terms v1
+# OpenMed clinical protection terms v2
 #
 # Source/license note:
 # This is a small OpenMed-maintained list of generic clinical vocabulary,
@@ -50,6 +50,8 @@ Tourette
 Down syndrome
 Parkinson disease
 Parkinson's disease
+Morbus Parkinson
+Morbus Crohn
 
 # Ward, service, and department words
 cardiology
@@ -88,3 +90,25 @@ Langerhans
 Meckel
 Purkinje
 Wernicke
+
+# German clinical structure, negation, procedures and findings. This small
+# authored regression vocabulary is not a German clinical qualification set.
+Sozialanamnese
+Eigenanamnese
+Familienanamnese
+Medikamentenanamnese
+Kurznarkose
+Kardioversion
+Sinusrhythmus
+Vorhofflimmern
+Nichtraucherin
+Nichtraucher
+Dyspnoe
+LVEF
+keine
+kein
+keinen
+keiner
+ohne
+verneint
+unauffällig

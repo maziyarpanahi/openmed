@@ -2,7 +2,7 @@ name: Low-resource profile
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
@@ -11,7 +11,7 @@ on:
       - "scripts/benchmarks/low_resource_deid.py"
       - "uv.lock"
   push:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
@@ -22,6 +22,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   benchmark:
@@ -34,10 +38,10 @@ jobs:
       OPENMED_PROFILE: low_resource
       LOW_RESOURCE_PII_REVISION: 82f57fcab68125b05f1aa9fdd41319732358311b
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
           enable-cache: true
           cache-dependency-glob: |
@@ -69,7 +73,7 @@ jobs:
 
       - name: Upload aggregate benchmark metrics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: low-resource-benchmark
           path: low-resource-benchmark.json

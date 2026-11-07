@@ -1,0 +1,34 @@
+{
+  "records": [
+    {
+      "synthetic_record_id": "SYNTH-PRIVATE-ROW-2200",
+      "age": 47,
+      "postal_prefix": "SYN-99",
+      "sensitive_outcome": "synthetic-rare-outcome"
+    }
+  ],
+  "policy": {
+    "quasi_identifiers": [
+      "age",
+      "postal_prefix"
+    ],
+    "sensitive_attributes": [
+      "sensitive_outcome"
+    ],
+    "direct_identifiers": [
+      "synthetic_record_id"
+    ],
+    "target_k": 1,
+    "target_l": 1,
+    "target_t": 1.0,
+    "membership_max_inference_rate": 0.0
+  },
+  "population_assumptions": {
+    "scope": "synthetic-v22-fixture"
+  },
+  "sensitive_values": [
+    "SYNTH-PRIVATE-ROW-2200",
+    "SYN-99",
+    "synthetic-rare-outcome"
+  ]
+}

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Optional, Union
 
+from pydantic import StrictStr
+
+from openmed.clinical.grounding.systems import SYSTEM_URIS, canonical_system
 from openmed.core.policy import canonical_policy_name
 from openmed.interop.tools import (
     AnalyzeTextArgs,
@@ -13,10 +16,38 @@ from openmed.interop.tools import (
     PIILanguage,
     UnloadModelArgs,
 )
+from openmed.structured.decision import (
+    DECISION_COMPATIBILITY_POLICY,
+    DEFAULT_CALIBRATION_ID,
+    decision_request_schema,
+)
+from openmed.structured.decision import (
+    DECISION_SCHEMA_VERSION as DECISION_SCHEMA_VERSION,
+)
+from openmed.structured.decision import (
+    MAX_CONFIGURABLE_INPUT_CHARS as DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+)
+from openmed.structured.decision import (
+    MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
+)
+from openmed.structured.decision import (
+    MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_QUESTIONS as DECISION_MAX_QUESTIONS,
+)
+from openmed.structured.decision import (
+    MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
+)
+from openmed.structured.decision import (
+    MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
-    validate_model_name,
+)
+from openmed.utils.validation import (
+    validate_model_name as validate_model_name,
 )
 
 from .keep_alive import parse_keep_alive
@@ -40,6 +71,7 @@ _DEFAULT_STREAM_CHUNK_SIZE = 1024
 _DEFAULT_STREAM_WINDOW_CHARS = 4096
 _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
+_DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
 
 
@@ -57,7 +89,9 @@ def _normalize_pii_language(value: Any) -> str:
 
 
 def _normalize_model_name(value: str) -> str:
-    return validate_model_name(value)
+    # The service runtime enforces its operator-declared served set. Request
+    # parsing must never expand or probe caller-selected filesystem paths.
+    return value
 
 
 def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
@@ -168,6 +202,75 @@ def _normalize_records_jsonl(value: Any) -> str:
     return value
 
 
+def _normalize_optional_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_text(value)
+
+
+def _normalize_grounding_systems(value: Any) -> list[str]:
+    if value is None:
+        return list(_DEFAULT_GROUNDING_SYSTEMS)
+    if isinstance(value, str):
+        values = value.split(",")
+    elif isinstance(value, Sequence):
+        values = list(value)
+    else:
+        raise ValueError("systems must be a list of vocabulary names")
+    systems = [canonical_system(str(item)) for item in values if str(item).strip()]
+    if not systems:
+        raise ValueError("systems must contain at least one vocabulary")
+    if any(system not in SYSTEM_URIS for system in systems):
+        raise ValueError("systems contains an unsupported grounding vocabulary")
+    return list(dict.fromkeys(systems))
+
+
+def _normalize_grounding_language(value: Any) -> str:
+    if value is None:
+        return "en"
+    normalized = str(value).strip().casefold()
+    if not normalized:
+        raise ValueError("lang must be a non-empty language string")
+    return normalized
+
+
+def _normalize_grounding_language_alias(values: Any) -> Any:
+    if not isinstance(values, Mapping) or "lang" not in values:
+        return values
+    normalized = dict(values)
+    language = normalized.pop("lang")
+    source_language = normalized.get("source_language")
+    if source_language is not None and _normalize_grounding_language(
+        source_language
+    ) != _normalize_grounding_language(language):
+        raise ValueError("lang and source_language must match when both are provided")
+    normalized["source_language"] = language
+    return normalized
+
+
+def _normalize_grounding_entities(value: Any) -> Optional[list[dict[str, Any]]]:
+    if value is None:
+        return None
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError("entities must be a list of objects")
+    entities: list[dict[str, Any]] = []
+    for index, entity in enumerate(value):
+        if not isinstance(entity, dict):
+            raise ValueError(f"entity at index {index} must be an object")
+        entities.append(dict(entity))
+    if not entities:
+        raise ValueError("entities must contain at least one object")
+    return entities
+
+
+def _normalize_phenotype(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("phenotype must be an object")
+    if not value:
+        raise ValueError("phenotype must not be empty")
+    return value
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -194,6 +297,7 @@ class _StrictModel(BaseModel):
 
         class Config:
             extra = "forbid"
+            allow_population_by_field_name = True
 
     if PYDANTIC_V2:
 
@@ -216,6 +320,11 @@ if PYDANTIC_V2:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -225,6 +334,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -255,6 +369,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -315,6 +434,11 @@ if PYDANTIC_V2:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -501,6 +625,8 @@ if PYDANTIC_V2:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @field_validator("records_jsonl", mode="before")
         @classmethod
@@ -512,12 +638,78 @@ if PYDANTIC_V2:
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
 
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @property
+        def lang(self) -> str:
+            """Return the grounding facade language argument."""
+
+            return self.source_language
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @field_validator("entities", mode="before")
+        @classmethod
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @field_validator("systems", mode="before")
+        @classmethod
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @field_validator("source_language", mode="before")
+        @classmethod
+        def _validate_source_language(cls, value: Any) -> str:
+            return _normalize_grounding_language(value)
+
+        @model_validator(mode="before")
+        @classmethod
+        def _validate_language_alias(cls, values: Any) -> Any:
+            return _normalize_grounding_language_alias(values)
+
+        @model_validator(mode="after")
+        def _validate_inputs(self) -> "GroundRequest":
+            if self.text is None and not self.entities:
+                raise ValueError("provide text or at least one entity")
+            return self
+
 else:
 
     class AnalyzeRequest(AnalyzeTextArgs):
         """Request schema for /analyze."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -527,6 +719,10 @@ else:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -555,6 +751,10 @@ else:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -607,6 +807,10 @@ else:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -768,6 +972,8 @@ else:
         records_jsonl: str
         vocabulary_version: Optional[str] = None
         validate_constraints: bool = False
+        completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
 
         @validator("records_jsonl", pre=True)
         def _validate_records_jsonl(cls, value: Any) -> str:
@@ -776,3 +982,645 @@ else:
         @validator("vocabulary_version", pre=True)
         def _validate_vocabulary_version(cls, value: Any) -> Optional[str]:
             return _normalize_optional_nonblank_string(value, "vocabulary_version")
+
+    class ProfileRequest(_StrictModel):
+        """Request schema for the PHI-free quality profile route."""
+
+        records_jsonl: str
+        completeness_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        required_fields: list[str] = Field(default_factory=list)
+        athena_index: Optional[dict[str, Any]] = None
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+    class GroundRequest(_StrictModel):
+        """Request schema for the offline terminology grounding route."""
+
+        text: Optional[str] = None
+        entities: Optional[list[dict[str, Any]]] = None
+        systems: list[str] = Field(
+            default_factory=lambda: list(_DEFAULT_GROUNDING_SYSTEMS)
+        )
+        source_language: str = "en"
+        top_k: int = Field(default=5, ge=1, le=50)
+        offline: bool = True
+
+        @property
+        def lang(self) -> str:
+            """Return the grounding facade language argument."""
+
+            return self.source_language
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> Optional[str]:
+            return _normalize_optional_text(value)
+
+        @validator("entities", pre=True)
+        def _validate_entities(cls, value: Any) -> Optional[list[dict[str, Any]]]:
+            return _normalize_grounding_entities(value)
+
+        @validator("systems", pre=True)
+        def _validate_systems(cls, value: Any) -> list[str]:
+            return _normalize_grounding_systems(value)
+
+        @validator("source_language", pre=True)
+        def _validate_source_language(cls, value: Any) -> str:
+            return _normalize_grounding_language(value)
+
+        @root_validator(pre=True)
+        def _validate_language_alias(cls, values: dict[str, Any]) -> dict[str, Any]:
+            return _normalize_grounding_language_alias(values)
+
+        @root_validator
+        def _validate_inputs(cls, values: dict[str, Any]) -> dict[str, Any]:
+            if values.get("text") is None and not values.get("entities"):
+                raise ValueError("provide text or at least one entity")
+            return values
+
+
+DecisionModeValue = Literal[
+    "fixed_choice",
+    "boolean_choice",
+    "ordered_preference",
+    "scalar_score",
+    "multi_label",
+    "question_set",
+]
+
+
+def _decision_list_field(maximum: int, *, optional: bool = False) -> Any:
+    constraints = {"max_length": maximum} if PYDANTIC_V2 else {"max_items": maximum}
+    if optional:
+        return Field(default=None, **constraints)
+    return Field(default_factory=list, **constraints)
+
+
+def _decision_options_field() -> Any:
+    return _decision_list_field(DECISION_MAX_OPTIONS)
+
+
+def _check_decision_input_bound(input_text: Any, max_input_chars: Any) -> None:
+    """Keep the 1.0.0 input bound unless a request raises it explicitly."""
+
+    if (
+        max_input_chars is None
+        and isinstance(input_text, str)
+        and len(input_text) > DECISION_MAX_INPUT_CHARS
+    ):
+        raise ValueError(
+            f"input_text exceeds {DECISION_MAX_INPUT_CHARS} characters; "
+            "set max_input_chars to raise the bound"
+        )
+
+
+class SystemOneRequest(_StrictModel):
+    """Text or structured state and named questions for protected local decisions."""
+
+    state: str | dict[str, Any] | list[Any] = Field(..., repr=False)
+    questions: dict[str, dict[str, Any]] = Field(..., repr=False)
+
+
+class FixedOptionDecisionRequest(_StrictModel):
+    """Canonical bounded request for ``POST /v1/decisions``.
+
+    The OpenAPI component is the canonical decision request schema; the core
+    contract performs the full validation, including question sets.
+    """
+
+    mode: DecisionModeValue
+    input_text: str = Field(
+        min_length=1,
+        max_length=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
+    options: list[str] = _decision_options_field()
+    namespace: str = "default"
+    purpose: str = "care_review"
+    calibration_id: str = DEFAULT_CALIBRATION_ID
+    timeout_ms: int = Field(
+        default=5000,
+        ge=DECISION_MIN_TIMEOUT_MS,
+        le=DECISION_MAX_TIMEOUT_MS,
+    )
+    schema_version: Optional[Literal["1.0.0", "1.1.0"]] = None
+    compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+    question_id: Optional[str] = None
+    instructions: Optional[str] = None
+    option_descriptions: Optional[list[Optional[str]]] = _decision_list_field(
+        DECISION_MAX_OPTIONS,
+        optional=True,
+    )
+    levels: list[str] = _decision_list_field(DECISION_MAX_OPTIONS)
+    questions: list[dict[str, Any]] = _decision_list_field(DECISION_MAX_QUESTIONS)
+    media: list[dict[str, Any]] = Field(
+        default_factory=list,
+        repr=False,
+        **({"max_length": 4} if PYDANTIC_V2 else {"max_items": 4}),
+    )
+    input_format: Literal["text", "json"] = "text"
+    max_input_chars: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=decision_request_schema(),
+        )
+
+        @model_validator(mode="after")
+        def _validate_input_bound(self) -> "FixedOptionDecisionRequest":
+            _check_decision_input_bound(self.input_text, self.max_input_chars)
+            return self
+
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = decision_request_schema()
+
+        @root_validator
+        def _validate_input_bound(cls, values: dict[str, Any]) -> dict[str, Any]:
+            _check_decision_input_bound(
+                values.get("input_text"),
+                values.get("max_input_chars"),
+            )
+            return values
+
+
+class GroundCandidateResponse(_StrictModel):
+    """One coded terminology candidate in a grounding response."""
+
+    system: str
+    system_uri: Optional[str] = None
+    code: str
+    display: str
+    score: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    source_language: str
+    source: str
+    matched_alias: Optional[str] = None
+    match_kind: Optional[str] = None
+    vocab_version: Optional[str] = None
+
+
+class GroundedSpanResponse(_StrictModel):
+    """One grounded source span with provenance and ranked candidates."""
+
+    text: str
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    system: Optional[str] = None
+    system_uri: Optional[str] = None
+    code: Optional[str] = None
+    display: Optional[str] = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    cui: Optional[str] = None
+    codes: dict[str, str]
+    score: float = Field(ge=0.0, le=1.0)
+    calibrated_score: Optional[float] = None
+    abstained: bool
+    provenance: dict[str, Any]
+    canonical_label: Optional[str] = None
+    assertion: Optional[dict[str, Any]] = None
+    source_language: str
+    candidates: list[GroundCandidateResponse]
+    alternatives: list[GroundCandidateResponse]
+    ranked_alternatives: list[GroundCandidateResponse]
+    section: Optional[str] = None
+    section_context: Optional[str] = None
+    snapshot_provenance: dict[str, dict[str, Any]]
+    metadata: dict[str, Any]
+
+
+class GroundResponse(_StrictModel):
+    """Response schema mirroring the grounding facade's span result shape."""
+
+    schema_version: Literal["openmed.grounding.v1"]
+    offline: bool
+    systems: list[str]
+    snapshots: dict[str, dict[str, Any]]
+    results: list[GroundedSpanResponse]
+
+
+class FHIRBulkExportRequest(_StrictModel):
+    """Request schema for local or SMART-backed Bulk Data jobs.
+
+    ``input_dir``/``source_dir`` select the offline local gateway. When they
+    are omitted, the SMART backend-service fields are required by the service
+    layer. Credential fields are accepted only for the duration of a job and
+    are never returned in status payloads.
+    """
+
+    input_dir: Optional[str] = None
+    source_dir: Optional[str] = None
+    output_dir: str
+    checkpoint_path: Optional[str] = None
+    policy: str = "hipaa_safe_harbor"
+    method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+    max_buffered_resources: int = Field(default=1, ge=1)
+    max_inflight_downloads: int = Field(default=2, ge=1)
+    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    fhir_base_url: Optional[str] = None
+    token_url: Optional[str] = None
+    client_id: Optional[str] = None
+    private_key_pem: Optional[str] = None
+    key_id: Optional[str] = None
+    scope: str = "system/*.read"
+    export_path: str = "$export"
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    use_smart_merging: bool = True
+    use_safety_sweep: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+class FHIRBulkImportRequest(FHIRBulkExportRequest):
+    """Request schema for the local Bulk Data import-compatible route."""
+
+
+class ConceptAncestorRequest(_StrictModel):
+    """One caller-supplied concept hierarchy edge."""
+
+    ancestor_concept_id: int = Field(gt=0)
+    descendant_concept_id: int = Field(gt=0)
+
+
+class CohortResolveRequest(_StrictModel):
+    """Request schema for in-memory ``POST /cohort/resolve``."""
+
+    phenotype: dict[str, Any]
+    records_jsonl: str
+    concept_ancestors: list[ConceptAncestorRequest] = Field(default_factory=list)
+    completeness_floor: float | None = Field(default=None, ge=0.0, le=1.0)
+    required_fields: list[str] = Field(default_factory=list)
+
+    if PYDANTIC_V2:
+
+        @field_validator("phenotype", mode="before")
+        @classmethod
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @field_validator("records_jsonl", mode="before")
+        @classmethod
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+    else:  # pragma: no cover
+
+        @validator("phenotype", pre=True)
+        def _validate_phenotype(cls, value: Any) -> dict[str, Any]:
+            return _normalize_phenotype(value)
+
+        @validator("records_jsonl", pre=True)
+        def _validate_records_jsonl(cls, value: Any) -> str:
+            return _normalize_records_jsonl(value)
+
+
+JourneyResourceStateValue = Literal[
+    "success",
+    "partial",
+    "empty",
+    "unknown",
+    "conflict",
+    "unsupported",
+    "denied",
+    "failure",
+]
+JourneyResourceTypeValue = Literal[
+    "artifact",
+    "job",
+    "fact",
+    "conflict",
+    "journey",
+    "cohort",
+    "dataset",
+    "registry",
+    "measure",
+    "trial_review",
+    "evidence",
+    "current_fact",
+    "journey_event",
+    "mapping",
+    "cohort_run",
+    "dataset_manifest",
+]
+
+
+class JourneyResourceResponse(_StrictModel):
+    """One versioned, field-filtered Journey resource."""
+
+    resource_type: JourneyResourceTypeValue
+    resource_id: str
+    namespace: str
+    data: dict[str, Any]
+    state: JourneyResourceStateValue
+    version: int = Field(ge=1)
+    revision: int = Field(ge=1)
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
+    extensions: dict[str, Any]
+
+
+class JourneyPageInfoResponse(_StrictModel):
+    """Cursor metadata for one bounded Journey resource page."""
+
+    has_next_page: bool
+    end_cursor: Optional[str]
+    page_size: int = Field(ge=0, le=100)
+    snapshot_digest: str
+
+
+class JourneyPolicyResponse(_StrictModel):
+    """Complete access context and response-policy decision."""
+
+    state: Literal["success", "denied"]
+    namespace: str
+    purpose: str
+    role: str
+    attributes: list[str]
+    consent_state: Literal["active", "unknown", "withdrawn"]
+    export_policy: str
+    decision_id: str
+    request_digest: str
+    allowed_fields: list[str]
+    code: Optional[str]
+    policy_version: Literal["1.0.0"]
+
+
+class JourneyResourcePageResponse(_StrictModel):
+    """Typed response shared by versioned Journey list endpoints."""
+
+    state: JourneyResourceStateValue
+    code: Optional[str]
+    resources: list[JourneyResourceResponse]
+    page_info: JourneyPageInfoResponse
+    policy: JourneyPolicyResponse
+    schema_version: Literal["1.0.0"]
+    compatibility_policy: Literal["same_major"]
+
+
+class BriefRequest(_StrictModel):
+    """Bounded local brief request; review configuration stays server-owned."""
+
+    text: StrictStr = Field(min_length=1, max_length=16384, repr=False)
+    model: Literal["mlx", "extractive", "maple", "maple-preview"] = "mlx"
+    profile: Literal[
+        "bhc",
+        "brief_hospital_course",
+        "clinical_handoff",
+        "discharge_summary",
+        "problem_oriented",
+    ] = "bhc"
+    review_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class BriefResponse(_StrictModel):
+    """Protected brief response; never use this model as an access-log payload."""
+
+    schema_version: Literal[1]
+    status: Literal["needs_review", "refused"]
+    summary: str = Field(repr=False)
+    refusal_reason: Optional[str]
+    summary_digest: str
+    summary_characters: int
+    digest: str
+    stages: list[str]
+    citations: list[dict[str, Any]]
+    verdicts: list[dict[str, Any]]
+    metrics: dict[str, Any]
+    envelope: dict[str, Any]
+    review_packet: dict[str, Any]
+    provenance: dict[str, Any]
+    profile_digest: Optional[str]
+    backend_id: Optional[str]
+    generation_contract: Optional[dict[str, Any]] = None
+    claim_bindings: Optional[list[dict[str, Any]]] = None
+
+
+def workflow_http_schemas() -> dict[str, dict[str, Any]]:
+    """Derive bounded HTTP schemas from the existing governance wire types.
+
+    Python parsers remain authoritative for cross-field bindings, digest
+    comparisons, contiguous effect ordinals and durable custody. JSON Schema
+    describes the exact fields and vocabularies; it does not grant permission.
+    """
+    import copy
+    import re
+    from dataclasses import fields
+
+    from openmed.agent import identifiers
+    from openmed.agent.action_phases import ActionPhase
+    from openmed.agent.approvals import tokens
+    from openmed.agent.correlation import (
+        ACTION_ID_PREFIX,
+        CORRELATION_TOKEN_BYTES,
+        RUN_ID_PREFIX,
+    )
+    from openmed.agent.outcomes import (
+        OUTCOME_SCHEMA_VERSION,
+        OutcomeClass,
+        WorkflowOutcome,
+        allowed_reason_codes,
+    )
+    from openmed.agent.workflows.recovery import (
+        CompensationLimit,
+        EffectKind,
+        EffectRecord,
+        EffectState,
+    )
+
+    from .governed_workflows import (
+        MAX_WORKFLOW_EFFECTS,
+        WORKFLOW_ERROR_STATUSES,
+        WORKFLOW_REQUEST_VERSION,
+        WORKFLOW_RESPONSE_VERSION,
+    )
+
+    def fullmatch(pattern):
+        # Python's named capture groups are not ECMA-262 JSON Schema syntax.
+        pattern = re.sub(r"\(\?P<[^>]+>", "(?:", pattern)
+        return {"type": "string", "pattern": "^(?:" + pattern + r")$(?![\s\S])"}
+
+    def identifier(kind):
+        grammar = identifiers._IDENTIFIER_RE.pattern.replace(
+            "(?P<kind>[a-z]+):",
+            kind + rf":(?=[^/]{{1,{identifiers._MAX_NAMESPACE_LENGTH}}}/)",
+        )
+        return {**fullmatch(grammar), "maxLength": identifiers._MAX_IDENTIFIER_LENGTH}
+
+    def closed(properties, contract=None):
+        if contract is not None and set(properties) != {
+            f.name for f in fields(contract)
+        }:
+            raise RuntimeError("Governance wire schema drift.")
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": sorted(properties),
+            "additionalProperties": False,
+        }
+
+    def nullable(schema):
+        return {"anyOf": [schema, {"type": "null"}]}
+
+    digest = fullmatch(tokens._DIGEST_RE.pattern)
+    reference = closed(
+        {
+            "schema_version": {"type": "string", "const": WORKFLOW_REQUEST_VERSION},
+            "run_id": fullmatch(
+                RUN_ID_PREFIX + rf"[0-9a-f]{{{CORRELATION_TOKEN_BYTES * 2}}}"
+            ),
+            "workflow_id": identifier("workflow"),
+            "action_digest": digest,
+            "expected_state_digest": nullable(digest),
+            "request_id": nullable(fullmatch(r"req_[0-9a-f]{32}")),
+        }
+    )
+    mutation = copy.deepcopy(reference)
+    mutation["properties"]["expected_state_digest"] = digest
+    mutation["properties"]["request_id"] = fullmatch(r"req_[0-9a-f]{32}")
+    receipt = closed(
+        {
+            "schema_version": {
+                "type": "string",
+                "const": tokens.APPROVAL_RECEIPT_SCHEMA_VERSION,
+            },
+            "action_digest": digest,
+            "token_digest": digest,
+            "code": {"type": "string", "const": "approved"},
+        },
+        tokens.ApprovalReceipt,
+    )
+    review = closed({**mutation["properties"], "receipt": receipt})
+    effect = closed(
+        {
+            "ordinal": {"type": "integer", "minimum": 0},
+            "action_id": fullmatch(
+                ACTION_ID_PREFIX + rf"[0-9a-f]{{{CORRELATION_TOKEN_BYTES * 2}}}"
+            ),
+            "tool_id": identifier("tool"),
+            "kind": {"type": "string", "enum": [v.value for v in EffectKind]},
+            "operation_digest": digest,
+            "idempotency_key": fullmatch(r"idem_[0-9a-f]{64}"),
+            "approval_required": {"type": "boolean"},
+            "compensation_limit": {
+                "type": "string",
+                "enum": [v.value for v in CompensationLimit],
+            },
+            "state": {"type": "string", "enum": [v.value for v in EffectState]},
+            "commit_evidence_digest": nullable(digest),
+        },
+        EffectRecord,
+    )
+    effect["oneOf"] = [
+        {
+            "properties": {
+                "state": {"const": EffectState.PENDING.value},
+                "commit_evidence_digest": {"type": "null"},
+            }
+        },
+        {
+            "properties": {
+                "state": {"const": EffectState.COMMITTED.value},
+                "commit_evidence_digest": digest,
+            }
+        },
+    ]
+    outcome = {
+        "oneOf": [
+            closed(
+                {
+                    "schema_version": {
+                        "type": "string",
+                        "const": OUTCOME_SCHEMA_VERSION,
+                    },
+                    "outcome_class": {"type": "string", "const": value.value},
+                    "reason_code": {
+                        "type": "string",
+                        "enum": sorted(allowed_reason_codes(value)),
+                    },
+                },
+                WorkflowOutcome,
+            )
+            for value in OutcomeClass
+        ]
+    }
+    view = closed(
+        {
+            "schema_version": {"type": "string", "const": WORKFLOW_RESPONSE_VERSION},
+            "run_id": reference["properties"]["run_id"],
+            "workflow_id": reference["properties"]["workflow_id"],
+            "action_digest": digest,
+            "state_digest": digest,
+            "phase": {"type": "string", "enum": [v.value for v in ActionPhase]},
+            "effects": {
+                "type": "array",
+                "maxItems": MAX_WORKFLOW_EFFECTS,
+                "items": effect,
+            },
+            "preview_digest": digest,
+            "proposed_effect_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": MAX_WORKFLOW_EFFECTS,
+            },
+            "committed_effect_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": MAX_WORKFLOW_EFFECTS,
+            },
+            "outcome": nullable(outcome),
+            "receipt_digest": nullable(digest),
+            "cancellation_requested": {"type": "boolean"},
+        }
+    )
+    view["allOf"] = [
+        {
+            "if": {"properties": {"phase": {"const": ActionPhase.COMPLETED.value}}},
+            "then": {
+                "properties": {
+                    "effects": {
+                        "items": {
+                            "properties": {
+                                "state": {"const": EffectState.COMMITTED.value}
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    ]
+    error = closed(
+        {
+            "error": closed(
+                {
+                    "code": {"type": "string"},
+                    "message": {"type": "string"},
+                    "details": {
+                        "anyOf": [
+                            {"type": "array", "items": {}},
+                            {"type": "object"},
+                            {"type": "null"},
+                        ]
+                    },
+                }
+            )
+        }
+    )
+    error["properties"]["error"]["properties"]["request_id"] = {"type": "string"}
+    error["x-workflow-error-statuses"] = dict(WORKFLOW_ERROR_STATUSES)
+    return {
+        "reference": reference,
+        "mutation": mutation,
+        "review": review,
+        "view": view,
+        "error": error,
+    }

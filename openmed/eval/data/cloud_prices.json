@@ -1,0 +1,105 @@
+{
+  "captured_at": "2026-08-21",
+  "currency": "USD",
+  "notes": [
+    "Prices are dated public retail snapshots, not vendor quotes.",
+    "Free tiers are excluded from paid-tier comparisons.",
+    "AWS requests have a 100-character minimum; Azure bills 1,000-character text records.",
+    "Tier prices are marginal monthly bands; the benchmark does not compute blended progressive invoices.",
+    "Azure directs usage above 10 million monthly records to contact sales; the final row is a retail API snapshot only."
+  ],
+  "prices": [
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": 100000000,
+      "minimum_monthly_characters": 0,
+      "price_per_1000_characters_usd": 0.1,
+      "provider": "AWS",
+      "region": "public list price",
+      "service": "Amazon Comprehend Medical NERe",
+      "source_effective_at": null,
+      "source_url": "https://aws.amazon.com/comprehend/medical/pricing/",
+      "tier": "first 1M 100-character units",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": 200000000,
+      "minimum_monthly_characters": 100000000,
+      "price_per_1000_characters_usd": 0.05,
+      "provider": "AWS",
+      "region": "public list price",
+      "service": "Amazon Comprehend Medical NERe",
+      "source_effective_at": null,
+      "source_url": "https://aws.amazon.com/comprehend/medical/pricing/",
+      "tier": "next 1M 100-character units",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": null,
+      "minimum_monthly_characters": 200000000,
+      "price_per_1000_characters_usd": 0.01,
+      "provider": "AWS",
+      "region": "public list price",
+      "service": "Amazon Comprehend Medical NERe",
+      "source_effective_at": null,
+      "source_url": "https://aws.amazon.com/comprehend/medical/pricing/",
+      "tier": "over 2M 100-character units",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": 500000000,
+      "minimum_monthly_characters": 5000000,
+      "price_per_1000_characters_usd": 0.02,
+      "provider": "Azure",
+      "region": "eastus",
+      "service": "Azure Language Text Analytics for health",
+      "source_effective_at": "2025-06-01",
+      "source_url": "https://prices.azure.com/api/retail/prices?currencyCode=%27USD%27&%24filter=meterId%20eq%20%27379462cb-a6d6-5bda-b9cb-67f00929c795%27%20and%20armRegionName%20eq%20%27eastus%27",
+      "tier": "5K-500K text records",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": 2500000000,
+      "minimum_monthly_characters": 500000000,
+      "price_per_1000_characters_usd": 0.015,
+      "provider": "Azure",
+      "region": "eastus",
+      "service": "Azure Language Text Analytics for health",
+      "source_effective_at": "2025-06-01",
+      "source_url": "https://prices.azure.com/api/retail/prices?currencyCode=%27USD%27&%24filter=meterId%20eq%20%27379462cb-a6d6-5bda-b9cb-67f00929c795%27%20and%20armRegionName%20eq%20%27eastus%27",
+      "tier": "500K-2.5M text records",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": 10000000000,
+      "minimum_monthly_characters": 2500000000,
+      "price_per_1000_characters_usd": 0.006,
+      "provider": "Azure",
+      "region": "eastus",
+      "service": "Azure Language Text Analytics for health",
+      "source_effective_at": "2025-06-01",
+      "source_url": "https://prices.azure.com/api/retail/prices?currencyCode=%27USD%27&%24filter=meterId%20eq%20%27379462cb-a6d6-5bda-b9cb-67f00929c795%27%20and%20armRegionName%20eq%20%27eastus%27",
+      "tier": "2.5M-10M text records",
+      "verify": true
+    },
+    {
+      "captured_at": "2026-08-21",
+      "maximum_monthly_characters": null,
+      "minimum_monthly_characters": 10000000000,
+      "price_per_1000_characters_usd": 0.005,
+      "provider": "Azure",
+      "region": "eastus",
+      "service": "Azure Language Text Analytics for health",
+      "source_effective_at": "2025-06-01",
+      "source_url": "https://prices.azure.com/api/retail/prices?currencyCode=%27USD%27&%24filter=meterId%20eq%20%27379462cb-a6d6-5bda-b9cb-67f00929c795%27%20and%20armRegionName%20eq%20%27eastus%27",
+      "tier": "over 10M text records",
+      "verify": true
+    }
+  ],
+  "schema_version": 1
+}

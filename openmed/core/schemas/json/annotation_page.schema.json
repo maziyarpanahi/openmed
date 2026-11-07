@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/annotation-page/1.0.0",
+  "title": "OpenMed Annotation Page",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "compatibility_policy", "next_cursor", "records", "schema_version", "snapshot_digest", "state"],
+  "properties": {
+    "code": {"type": ["string", "null"]},
+    "compatibility_policy": {"const": "same_major"},
+    "next_cursor": {"type": ["string", "null"]},
+    "records": {"type": "array", "maxItems": 100, "items": {"type": "object"}},
+    "schema_version": {"const": "1.0.0"},
+    "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "state": {"enum": ["success", "partial", "unknown", "conflict", "unsupported", "denied", "failure"]}
+  }
+}

@@ -39,9 +39,9 @@ class _FakeOnnxModel:
     tokenizer = object()
     variant = "int8"
 
-    def predict(self, text, *, threshold=0.0, max_length=None):
-        del text, threshold, max_length
-        return [_FakeEntity()]
+    def predict_batch(self, texts, **kwargs):
+        assert kwargs["batch_size"] == 1
+        return [[_FakeEntity()] for _text in texts]
 
 
 def test_low_resource_profile_has_bounded_runtime_defaults():
@@ -149,6 +149,7 @@ def test_onnx_backend_requests_int8_cpu_session():
     assert kwargs["session_options"].inter_op_num_threads == 1
 
 
+@pytest.mark.slow
 def test_low_resource_backend_selection_never_imports_torch_subprocess():
     script = """
 import importlib.abc

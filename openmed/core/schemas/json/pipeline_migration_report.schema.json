@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/pipeline-migration-report/1.0.0",
+  "title": "OpenMed Pipeline Migration Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["compatibility_policy", "native_config", "report_id", "schema_version", "source_digest", "stages", "state"],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "native_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compatibility_policy", "schema_version", "stages"],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "schema_version": {"const": "1.0.0"},
+        "stages": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["config", "stage"],
+            "properties": {
+              "config": {"type": "object"},
+              "stage": {"enum": ["source_adaptation", "privacy_policy", "document_routing", "extraction", "assertion", "temporality", "relation_extraction", "grounding", "fact_normalization", "validation", "durable_writes"]}
+            }
+          }
+        }
+      }
+    },
+    "report_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+    "schema_version": {"const": "1.0.0"},
+    "source_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "stages": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["disposition", "omitted_fields", "reason_code", "source_index", "source_type", "target_stage"],
+        "properties": {
+          "disposition": {"enum": ["supported", "mapped", "unsupported", "manual_review"]},
+          "omitted_fields": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "reason_code": {"type": "string"},
+          "source_index": {"type": "integer", "minimum": 0},
+          "source_type": {"type": "string"},
+          "target_stage": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "state": {"enum": ["success", "partial", "unknown", "conflict", "unsupported", "denied", "failure"]}
+  }
+}

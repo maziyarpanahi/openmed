@@ -1,0 +1,2 @@
+person_id,gender_concept_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,location_id,provider_id,care_site_id,person_source_value,gender_source_value
+1001,8507,1980,1,15,1980-01-15T08:00:00,3001,4001,5001,Synthetic Avery Example,Unknown

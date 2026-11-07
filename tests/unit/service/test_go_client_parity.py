@@ -22,12 +22,22 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
+    ("post", "/v1/workflows/preflight"): "WorkflowPreflight",
+    ("post", "/v1/workflows/preview"): "WorkflowPreview",
+    ("post", "/v1/workflows/status"): "WorkflowStatus",
+    ("post", "/v1/workflows/review-receipts"): "WorkflowSubmitReceipt",
+    ("post", "/v1/workflows/cancel"): "WorkflowCancel",
+    ("post", "/brief"): "Brief",
     ("post", "/analyze"): "Analyze",
+    ("post", "/cohort/resolve"): "ResolveCohort",
+    ("post", "/v1/decisions"): "Decision",
+    ("post", "/v1/systemone"): "SystemOne",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
         "SMARTBackendIngestionSummary"
     ),
+    ("post", "/ground"): "Ground",
     ("get", "/health"): "Health",
     ("post", "/jobs"): "CreateJob",
     ("get", "/jobs/{job_id}"): "GetJob",
@@ -36,23 +46,37 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/models/unload"): "UnloadModels",
     ("post", "/omop/load"): "LoadOMOP",
     ("post", "/pii/deidentify"): "Deidentify",
+    ("post", "/pii/deidentify/stream"): "DeidentifyStream",
     ("post", "/pii/extract"): "ExtractPII",
     ("post", "/pii/extract/stream"): "ExtractPIIStream",
     ("post", "/privacy-gateway/complete"): "PrivacyGateway",
+    ("post", "/profile"): "Profile",
     ("get", "/readyz"): "Readyz",
+    ("get", "/v1/journey/resources"): "JourneyResources",
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
+    "GovernedWorkflowReference": "GovernedWorkflowReference",
+    "GovernedWorkflowMutation": "GovernedWorkflowMutation",
+    "GovernedWorkflowReview": "GovernedWorkflowReview",
+    "BriefRequest": "BriefRequest",
     "AnalyzeRequest": "AnalyzeRequest",
+    "CohortResolveRequest": "CohortResolveRequest",
+    "ConceptAncestorRequest": "ConceptAncestorRequest",
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "FixedOptionDecisionRequest": "FixedOptionDecisionRequest",
+    "SystemOneRequest": "SystemOneRequest",
+    "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",
     "OmopLoadRequest": "OMOPLoadRequest",
     "PIIDeidentifyRequest": "PIIDeidentifyRequest",
+    "PIIDeidentifyStreamRequest": "PIIDeidentifyStreamRequest",
     "PIIExtractRequest": "PIIExtractRequest",
     "PIIExtractStreamRequest": "PIIExtractStreamRequest",
     "PrivacyGatewayRequest": "PrivacyGatewayRequest",
+    "ProfileRequest": "ProfileRequest",
     "SMARTBackendIngestionRequest": "SMARTBackendIngestionRequest",
 }
 
@@ -60,6 +84,7 @@ GO_NAMED_STRING_TYPE_BY_FIELD = {
     "aggregation_strategy": "AggregationStrategy",
     "lang": "PIILanguage",
     "method": "DeidentificationMethod",
+    "mode": "DecisionMode",
     "policy": "PrivacyPolicy",
 }
 
@@ -181,7 +206,15 @@ def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
 
 
 def test_go_pii_languages_match_core_and_openapi() -> None:
-    from openmed.core.pii_i18n import INDIC_NER_LANGUAGES, SUPPORTED_LANGUAGES
+    from openmed.core.pii_i18n import (
+        INDIC_NER_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
+
+    registered_languages = (
+        SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
+    )
 
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
     go_languages = set(
@@ -201,10 +234,8 @@ def test_go_pii_languages_match_core_and_openapi() -> None:
         if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
     }
 
-    assert go_languages == SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES
-    assert openapi_language_sets == {
-        frozenset(SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES)
-    }
+    assert go_languages == registered_languages
+    assert openapi_language_sets == {frozenset(registered_languages)}
 
 
 def test_go_openapi_enum_constants_match() -> None:
@@ -414,9 +445,11 @@ def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
         "boolean": {"bool"},
         "integer": {"int"},
         "number": {"float64"},
+        "object": {"JSONObject"},
         "string": {
             "string",
             "AggregationStrategy",
+            "DecisionMode",
             "DeidentificationMethod",
             "PIILanguage",
             "PrivacyPolicy",

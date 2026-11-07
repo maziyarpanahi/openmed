@@ -1,3 +1,26 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
+import {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
+export {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
 export type JsonObject = Record<string, unknown>;
 
 export type FetchLike = (
@@ -24,12 +47,17 @@ export type PIILanguage =
   | "kn"
   | "ml"
   | "mr"
+  | "ne"
   | "or"
+  | "pl"
   | "pa"
+  | "si"
   | "ta"
   | "te"
+  | "ur"
   | "pt"
   | "ar"
+  | "fa"
   | "he"
   | "ja"
   | "tr"
@@ -46,8 +74,10 @@ export type PIILanguage =
   | "xh"
   | "zh"
   | "uk"
+  | "ur"
   | "cs"
-  | "el";
+  | "el"
+  | "vi";
 
 export type DeidentificationMethod =
   | "mask"
@@ -72,6 +102,44 @@ export interface AnalyzeRequest {
   sentence_clean?: boolean;
   use_fast_tokenizer?: boolean;
   keep_alive?: KeepAliveValue | null;
+}
+
+export interface GroundRequest {
+  entities?: JsonObject[] | null;
+  offline?: boolean;
+  source_language?: string;
+  systems?: string[];
+  text?: string | null;
+  top_k?: number;
+}
+
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
 }
 
 export interface PIIExtractRequest {
@@ -109,6 +177,10 @@ export interface PIIDeidentifyRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface PIIDeidentifyStreamRequest extends PIIDeidentifyRequest {
+  chunk_size?: number;
+}
+
 export interface PrivacyGatewayRequest {
   text: string;
   model_name?: string;
@@ -120,6 +192,124 @@ export interface PrivacyGatewayRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+}
+
+export type DecisionMode =
+  | "fixed_choice"
+  | "boolean_choice"
+  | "ordered_preference"
+  | "scalar_score"
+  | "multi_label"
+  | "question_set";
+
+export type DecisionState =
+  | "success"
+  | "abstained"
+  | "partial"
+  | "unknown"
+  | "conflict"
+  | "unsupported"
+  | "denied"
+  | "failure";
+
+export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
+
+export interface DecisionQuestion {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  options?: string[];
+  option_descriptions?: (string | null)[];
+  instructions?: string | null;
+  levels?: string[];
+}
+
+/** Protected inline media. Never log the encoded payload. */
+export interface DecisionMedia {
+  media_type: "image/png" | "image/jpeg" | "video/mp4" | "audio/wav";
+  byte_size: number;
+  sha256: string;
+  data: string;
+}
+
+export interface SystemOneRequest {
+  state: string | Record<string, unknown> | unknown[];
+  questions: Record<string, Record<string, unknown>>;
+}
+
+export interface FixedOptionDecisionRequest {
+  mode: DecisionMode;
+  input_text: string;
+  options?: string[];
+  namespace?: string;
+  purpose?: string;
+  calibration_id?: string;
+  timeout_ms?: number;
+  schema_version?: "1.0.0" | "1.1.0";
+  compatibility_policy?: "same_major";
+  question_id?: string;
+  instructions?: string | null;
+  option_descriptions?: (string | null)[];
+  levels?: string[];
+  questions?: DecisionQuestion[];
+  media?: DecisionMedia[];
+  input_format?: "text" | "json";
+  max_input_chars?: number;
+}
+
+export interface DecisionOptionScore {
+  index: number;
+  option: string;
+  score: number;
+}
+
+export interface DecisionLevelScore {
+  index: number;
+  level: string;
+  score: number;
+}
+
+export interface DecisionQuestionResult {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores: DecisionLevelScore[];
+  expected_level: number | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+}
+
+export interface FixedOptionDecisionResult {
+  mode: DecisionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores?: DecisionLevelScore[];
+  expected_level?: number | null;
+  questions?: DecisionQuestionResult[];
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  schema_version: "1.0.0" | "1.1.0";
+  compatibility_policy: "same_major";
+  extensions: JsonObject;
 }
 
 export interface DeidentifyJobDocument {
@@ -185,6 +375,8 @@ export interface OMOPLoadRequest {
   records_jsonl: string;
   vocabulary_version?: string | null;
   validate_constraints?: boolean;
+  completeness_floor?: number | null;
+  required_fields?: string[];
 }
 
 export interface OMOPRejectedSpan {
@@ -206,6 +398,53 @@ export interface OMOPLoadResponse {
   rejected_spans: OMOPRejectedSpan[];
   source_note_hashes: string[];
   constraint_violations?: OMOPConstraintViolations;
+}
+
+export interface ConceptAncestorRequest {
+  ancestor_concept_id: number;
+  descendant_concept_id: number;
+}
+
+export interface CohortResolveRequest {
+  phenotype: JsonObject;
+  records_jsonl: string;
+  concept_ancestors?: ConceptAncestorRequest[];
+  completeness_floor?: number | null;
+  required_fields?: string[];
+}
+
+export interface ProfileRequest {
+  records_jsonl: string;
+  completeness_floor?: number;
+  required_fields?: string[];
+  athena_index?: JsonObject | null;
+}
+
+export type ProfileResponse = JsonObject;
+
+export interface CohortEvidencePointer {
+  criterion_id: string;
+  concept_set_id: string;
+  concept_id: number;
+  vocabulary: string;
+  domain_table: string;
+  event_id: number;
+  note_id: number;
+  note_nlp_id: number;
+  source_note_hash: string;
+  start: number;
+  end: number;
+}
+
+export interface CohortResolveResponse {
+  schema_version: string;
+  advisory: string;
+  patient_ids: number[];
+  evidence: Array<{
+    patient_id: number;
+    matches: CohortEvidencePointer[];
+  }>;
+  provenance: JsonObject;
 }
 
 export interface EntityPrediction {
@@ -265,9 +504,13 @@ export interface PrivacyGatewayResponse {
 
 export type AnalyzeResponse = PredictionResult;
 
+export type GroundResponse = JsonObject;
+
 export type PIIExtractResponse = PredictionResult;
 
 export type PIIExtractStreamResponse = string;
+
+export type PIIDeidentifyStreamResponse = string;
 
 export interface HealthResponse {
   status: string;
@@ -441,6 +684,7 @@ export class OpenMedApiError extends Error {
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
 
   constructor(options: OpenMedClientOptions) {
     const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
@@ -456,10 +700,43 @@ export class OpenMedClient {
     this.baseUrl = baseUrl;
     this.fetchImpl =
       options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     return this.post("/analyze", request);
+  }
+
+  async ground(request: GroundRequest): Promise<GroundResponse> {
+    return this.post("/ground", request);
+  }
+
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
+  }
+
+  async brief(request: BriefRequest): Promise<BriefResponse> {
+    return this.post("/brief", request);
   }
 
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
@@ -469,7 +746,7 @@ export class OpenMedClient {
   async extractPiiStream(
     request: PIIExtractStreamRequest,
   ): Promise<PIIExtractStreamResponse> {
-    return this.post("/pii/extract/stream", request);
+    return this.postNDJSON("/pii/extract/stream", request);
   }
 
   async deidentify(
@@ -478,10 +755,26 @@ export class OpenMedClient {
     return this.post("/pii/deidentify", request);
   }
 
+  async deidentifyStream(
+    request: PIIDeidentifyStreamRequest,
+  ): Promise<PIIDeidentifyStreamResponse> {
+    return this.postNDJSON("/pii/deidentify/stream", request);
+  }
+
   async privacyGateway(
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
+  }
+
+  async systemOne(request: SystemOneRequest): Promise<{decision_id: string; model: string; answers: Record<string, unknown>}> {
+    return this.post("/v1/systemone", request);
+  }
+
+  async decision(
+    request: FixedOptionDecisionRequest,
+  ): Promise<FixedOptionDecisionResult> {
+    return this.post("/v1/decisions", request);
   }
 
   async health(): Promise<HealthResponse> {
@@ -500,6 +793,67 @@ export class OpenMedClient {
     return this.get("/models/loaded");
   }
 
+  async journeyResources(
+    query: JourneyResourceQuery,
+  ): Promise<JourneyResourcePage> {
+    const path = "/v1/journey/resources";
+    const parameters = new URLSearchParams({
+      resource_type: query.resource_type,
+      namespace: query.namespace ?? "default",
+      purpose: query.purpose ?? "care_review",
+      role: query.role ?? "clinician",
+      consent_state: query.consent_state ?? "active",
+      export_policy: query.export_policy ?? "metadata_only",
+      first: String(query.first ?? 20),
+    });
+    if (query.attributes?.length) {
+      parameters.set("attributes", query.attributes.join(","));
+    }
+    if (query.after) {
+      parameters.set("after", query.after);
+    }
+    if (query.fields?.length) {
+      parameters.set("fields", query.fields.join(","));
+    }
+    return this.get(`${path}?${parameters.toString()}`);
+  }
+
+  async journeyWorkflow(
+    workflow: JourneyWorkflowName,
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyResources({
+      ...query,
+      resource_type: JOURNEY_WORKFLOW_RESOURCE_TYPES[workflow],
+    });
+  }
+
+  async journey(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("journey", query);
+  }
+
+  async cohort(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("cohort", query);
+  }
+
+  async dataset(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("dataset", query);
+  }
+
+  async registry(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("registry", query);
+  }
+
+  async measure(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("measure", query);
+  }
+
+  async trialReview(
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("trial_review", query);
+  }
+
   async unloadModels(
     request: ModelUnloadRequest,
   ): Promise<ModelUnloadResponse> {
@@ -508,6 +862,16 @@ export class OpenMedClient {
 
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
+  }
+
+  async profile(request: ProfileRequest): Promise<ProfileResponse> {
+    return this.post("/profile", request);
+  }
+
+  async resolveCohort(
+    request: CohortResolveRequest,
+  ): Promise<CohortResolveResponse> {
+    return this.post("/cohort/resolve", request);
   }
 
   async startSmartBackendIngestion(
@@ -554,6 +918,29 @@ export class OpenMedClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+  }
+
+  private async postNDJSON(path: string, body: unknown): Promise<string> {
+    const response = await this.fetchImpl(this.url(path), {
+      method: "POST",
+      headers: {
+        accept: "application/x-ndjson",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new OpenMedApiError(
+        response.status,
+        toOpenMedErrorEnvelope(parsePayloadText(text), response.status),
+      );
+    }
+    if (!isNDJSONContentType(response.headers.get("content-type"))) {
+      throw new Error(`OpenMed stream ${path} returned a non-NDJSON response.`);
+    }
+    return text;
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
@@ -607,6 +994,10 @@ function smartBackendJobPath(template: string, jobId: string): string {
 
 async function readPayload(response: Response): Promise<unknown> {
   const text = await response.text();
+  return parsePayloadText(text);
+}
+
+function parsePayloadText(text: string): unknown {
   if (!text) {
     return null;
   }
@@ -616,6 +1007,17 @@ async function readPayload(response: Response): Promise<unknown> {
   } catch {
     return text;
   }
+}
+
+function isNDJSONContentType(contentType: string | null): boolean {
+  if (!contentType) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/x-ndjson" ||
+    mediaType === "application/ndjson"
+  );
 }
 
 function toOpenMedErrorEnvelope(
@@ -649,4 +1051,31 @@ function toOpenMedErrorEnvelope(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export interface BriefRequest {
+  text: string;
+  model?: "mlx" | "extractive" | "maple" | "maple-preview";
+  profile?: "bhc" | "brief_hospital_course" | "clinical_handoff" | "discharge_summary" | "problem_oriented";
+  review_id?: string | null;
+}
+
+/** Protected application response; do not log summary text. */
+export interface BriefResponse {
+  schema_version: 1;
+  status: "needs_review" | "refused";
+  summary: string;
+  refusal_reason: string | null;
+  summary_digest: string;
+  summary_characters: number;
+  digest: string;
+  stages: string[];
+  citations: Record<string, unknown>[];
+  verdicts: Record<string, unknown>[];
+  metrics: Record<string, unknown>;
+  envelope: Record<string, unknown>;
+  review_packet: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  profile_digest: string | null;
+  backend_id: string | null;
 }

@@ -1,0 +1,17 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/projections/transform-record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {"format": "date-time", "type": "string"},
+    "output_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "transform_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "transform_type": {"enum": ["pseudonymization", "date_shift"]}
+  },
+  "required": ["created_at", "output_digest", "schema_version", "source_digest", "transform_id", "transform_type"],
+  "schema_version": 1,
+  "title": "OpenMedProjectionTransformRecord",
+  "type": "object"
+}

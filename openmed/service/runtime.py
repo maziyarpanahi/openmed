@@ -26,6 +26,11 @@ from .warm_pool import (
 )
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
+SERVICE_SERVED_MODELS_ENV_VAR = "OPENMED_SERVICE_SERVED_MODELS"
+DEFAULT_SERVED_MODELS = (
+    "disease_detection_superclinical",
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+)
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
@@ -37,6 +42,9 @@ SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
 SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"
+SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_HIGH_WATERMARK"
+SERVICE_BATCH_LOW_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_LOW_WATERMARK"
+SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"
 SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
@@ -72,6 +80,9 @@ SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR = (
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE = 256
+DEFAULT_SERVICE_BATCH_HIGH_WATERMARK = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+DEFAULT_SERVICE_BATCH_LOW_WATERMARK = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK // 2
+DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS = 1000.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
@@ -127,6 +138,9 @@ class ServiceBatchingConfig:
     max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
     max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
     max_queue_size: int = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+    high_watermark: int = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK
+    low_watermark: int = DEFAULT_SERVICE_BATCH_LOW_WATERMARK
+    max_queue_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS
 
 
 @dataclass(frozen=True)
@@ -347,6 +361,73 @@ def parse_service_batch_max_queue_size(raw_value: Optional[str]) -> int:
     return parsed
 
 
+def parse_service_batch_high_watermark(
+    raw_value: Optional[str],
+    *,
+    default: int = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK,
+) -> int:
+    """Parse the aggregate outstanding-request high watermark."""
+    if raw_value is None or not raw_value.strip():
+        return int(default)
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR} must be greater than 0"
+        )
+    return parsed
+
+
+def parse_service_batch_low_watermark(
+    raw_value: Optional[str],
+    *,
+    high_watermark: int,
+) -> int:
+    """Parse the depth below which hysteretic shedding stops."""
+    if raw_value is None or not raw_value.strip():
+        return max(0, int(high_watermark) // 2)
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be a non-negative integer"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be greater than or equal to 0"
+        )
+    if parsed >= high_watermark:
+        raise ValueError(
+            f"{SERVICE_BATCH_LOW_WATERMARK_ENV_VAR} must be less than "
+            f"{SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR}"
+        )
+    return parsed
+
+
+def parse_service_batch_max_queue_wait_ms(raw_value: Optional[str]) -> float:
+    """Parse the maximum time a request may wait before batch dispatch."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR} must be a non-negative number"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR} must be greater than or equal to 0"
+        )
+    return parsed
+
+
 def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     """Parse the configured graceful-shutdown drain window in seconds."""
     if raw_value is None or not raw_value.strip():
@@ -493,6 +574,13 @@ def parse_service_throttle_config() -> ServiceThrottleConfig:
 
 def parse_service_batching_config() -> ServiceBatchingConfig:
     """Read dynamic-batching settings from the current process environment."""
+    max_queue_size = parse_service_batch_max_queue_size(
+        os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
+    )
+    high_watermark = parse_service_batch_high_watermark(
+        os.getenv(SERVICE_BATCH_HIGH_WATERMARK_ENV_VAR),
+        default=max_queue_size,
+    )
     return ServiceBatchingConfig(
         enabled=parse_service_batching_enabled(
             os.getenv(SERVICE_BATCHING_ENABLED_ENV_VAR)
@@ -503,8 +591,14 @@ def parse_service_batching_config() -> ServiceBatchingConfig:
         max_wait_ms=parse_service_batch_max_wait_ms(
             os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
         ),
-        max_queue_size=parse_service_batch_max_queue_size(
-            os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
+        max_queue_size=max_queue_size,
+        high_watermark=high_watermark,
+        low_watermark=parse_service_batch_low_watermark(
+            os.getenv(SERVICE_BATCH_LOW_WATERMARK_ENV_VAR),
+            high_watermark=high_watermark,
+        ),
+        max_queue_wait_ms=parse_service_batch_max_queue_wait_ms(
+            os.getenv(SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR)
         ),
     )
 
@@ -616,6 +710,25 @@ def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
     return tuple(models)
 
 
+class ModelNotServedError(ValueError):
+    """A network request selected a model outside the operator's served set."""
+
+    def __init__(self) -> None:
+        super().__init__("model_not_served")
+
+
+def _is_served_identifier(value: str) -> bool:
+    # Deliberately pure: never expand a home directory or probe the filesystem.
+    return (
+        bool(
+            re.fullmatch(
+                r"[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)?", value
+            )
+        )
+        and ".." not in value
+    )
+
+
 @dataclass
 class ServiceRuntime:
     """Shared runtime state for the REST service."""
@@ -623,6 +736,7 @@ class ServiceRuntime:
     profile: str
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
+    served_models: Optional[Tuple[str, ...]] = field(default=None, kw_only=True)
     max_resident_models: Optional[int] = None
     model_memory_budget_bytes: Optional[int] = None
     default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
@@ -649,6 +763,14 @@ class ServiceRuntime:
     )
 
     metrics: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        if self.served_models is not None and any(
+            not _is_served_identifier(item) for item in self.served_models
+        ):
+            raise ValueError(
+                "Served model configuration must contain public identifiers only"
+            )
 
     @classmethod
     def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
@@ -678,6 +800,15 @@ class ServiceRuntime:
             profile=profile,
             config=config,
             preload_models=preload_models,
+            served_models=(
+                tuple(
+                    item.strip()
+                    for item in os.environ[SERVICE_SERVED_MODELS_ENV_VAR].split(",")
+                    if item.strip()
+                )
+                if SERVICE_SERVED_MODELS_ENV_VAR in os.environ
+                else None
+            ),
             max_resident_models=max_resident_models,
             model_memory_budget_bytes=memory_budget_bytes,
             default_model_footprint_bytes=default_model_footprint_bytes,
@@ -860,6 +991,7 @@ class ServiceRuntime:
 
     def unload_model(self, model_name: str) -> Dict[str, Any]:
         """Unload one inactive model from the shared loader cache."""
+        self.validate_served_model(model_name)
         return self.get_loader().unload_model(model_name)
 
     def unload_all_models(self) -> Dict[str, Any]:
@@ -869,7 +1001,7 @@ class ServiceRuntime:
     def loaded_models(self) -> Dict[str, Any]:
         """Return cache and keep-alive status for the service runtime."""
         if self._warm_pool is None and self._loader is None:
-            return {
+            result: Dict[str, Any] = {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
                 "memory_budget_bytes": self.model_memory_budget_bytes,
@@ -879,7 +1011,40 @@ class ServiceRuntime:
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
-        return self.get_loader().loaded_models()
+        else:
+            result = dict(self.get_loader().loaded_models())
+        result["served_models"] = list(self.served_model_ids())
+        result["model_policy"] = self.model_policy_report()
+        return result
+
+    def served_model_ids(self) -> tuple[str, ...]:
+        """Return the operator-selected public ids without filesystem inspection."""
+        candidates = self.served_models
+        if candidates is None:
+            candidates = (*DEFAULT_SERVED_MODELS, *self.preload_models)
+            if self.config.pii_model:
+                candidates += (self.config.pii_model,)
+        return tuple(
+            sorted({item for item in candidates if _is_served_identifier(item)})
+        )
+
+    def validate_served_model(self, model_name: str) -> str:
+        """Reject undeclared identifiers before logging, loading, or path probing."""
+        if (
+            not _is_served_identifier(model_name)
+            or model_name not in self.served_model_ids()
+        ):
+            raise ModelNotServedError()
+        return model_name
+
+    def model_policy_report(self) -> dict[str, Any]:
+        """Expose value-free production findings for deployment self-checks."""
+        return {
+            "explicit": self.served_models is not None,
+            "findings": ["served_models_not_explicit"]
+            if self.profile == "prod" and self.served_models is None
+            else [],
+        }
 
     def get_workflow_store(self) -> Any:
         """Return the in-process MCP workflow state store."""
@@ -905,7 +1070,7 @@ class ServiceRuntime:
         return parse_keep_alive(keep_alive)
 
     def _resolve_model_name(self, model_name: str) -> str:
-        validated = validate_model_name(model_name)
+        validated = self.validate_served_model(model_name)
         loader = self.get_model_loader()
         resolver = getattr(loader, "resolve_model_name", None)
         if callable(resolver):

@@ -1,0 +1,42 @@
+schema_version: openmed.training.recipe.v1
+preset_name: doctype_section_lora
+mode: B
+clinical_family_targets: [doctype, section]
+backbone:
+  model_ref: openmed/backbones/laptop-clinical-lora-base
+  revision: policy-spine-v1
+  family: encoder-dual-classification
+dapt:
+  corpus_ref: sha256:44603cb4a282d1f308063c1ebfa6651493071bcae2ae28856884533c42aebc25
+  sequence_length: 1024
+lora:
+  target_trainable_ratio: 0.012
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [query, key, value, output]
+label_set_ref: openmed.training.recipe:DOCTYPE_SECTION_LABEL_SET@v1
+head_contract:
+  schema_version: openmed.training.doctype_section_head.v1
+  section_bio:
+    task: token_classification
+    encoding: BIO
+    labels: section_labels
+  doctype:
+    task: sequence_classification
+    pooling: first_token_window
+    labels: document_types
+loss:
+  name: focal_class_weighted
+  focal_gamma: 2.0
+  class_weighted: true
+  class_weighting: inverse_frequency
+  critical_label_weight: 3.5
+  critical_labels: [history_of_present_illness, past_medical_history, medications, allergies, social_history, assessment_and_plan, findings, impression, discharge_summary, progress_note, radiology_report, pathology_report, operative_note, history_and_physical, consult_note]
+hard_negatives_required: true
+output_tier: Base
+required_gates: [G5, G6]
+quantization:
+  default: int8
+  allow_fp32_fallback: true
+seed: 3819

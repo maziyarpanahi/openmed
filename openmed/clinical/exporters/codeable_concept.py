@@ -16,6 +16,9 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping
 
+from openmed.clinical.grounding.postcoordination import (
+    is_postcoordinated_candidate,
+)
 from openmed.clinical.grounding.types import GroundedSpan
 
 from .code_provenance import stamp_coding_provenance
@@ -25,6 +28,7 @@ from .codeable_concept_simple import system_uri as _system_uri
 # Grounding linker system token -> canonical HL7 FHIR R4 system URI. The shared
 # vocabularies derive from the single-source-of-truth map; UMLS is not in it.
 SYSTEM_URI: dict[str, str] = {
+    "CVX": _system_uri("cvx"),
     "RXNORM": _system_uri("rxnorm"),
     "ICD10CM": _system_uri("icd-10-cm"),
     "ICD11": _system_uri("icd-11-mms"),
@@ -69,6 +73,17 @@ def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
                 coding,
                 {coding["system"]: candidate.vocab_version},
                 source_label="grounding candidate",
+            )
+        if is_postcoordinated_candidate(candidate):
+            from .fhir.codeable_concept import stamp_postcoordination_provenance
+
+            if not candidate.vocab_version:
+                raise ValueError(
+                    "post-coordinated SNOMED candidate requires an edition version"
+                )
+            coding = stamp_postcoordination_provenance(
+                coding,
+                edition_uri=candidate.vocab_version,
             )
         codings.append(coding)
     result = _build_codeable_concept(codings, text=grounded_span.text)

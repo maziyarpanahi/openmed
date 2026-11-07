@@ -29,6 +29,12 @@ from openmed.core.pii_i18n import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.core.registry_slots import (
+    REGISTRY_STATE_PATH,
+    RegistryStateError,
+    load_registry_state,
+    registry_state_errors,
+)
 from openmed.core.thresholds import (
     DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
@@ -60,6 +66,7 @@ RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
 SURROGATE_QUALITY_GATE = "surrogate_quality"
+LIVE_SURROGATE_QUALITY_GATE = "surrogate_quality_live"
 GROUNDING_ACCURACY_GATE = "grounding_accuracy"
 CROSS_SCRIPT_GATE = "cross_script"
 CROSS_DOCUMENT_LINKAGE_GATE = "cross_document_linkage"
@@ -84,8 +91,13 @@ G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
 G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
 G11_CRITICAL_RECALL_FLOOR = 0.999
+#: Minimum corpus-level mean Cohen/Fleiss kappa required for eval-set promotion.
+G12_MIN_AGREEMENT_KAPPA = 0.800
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
+G9_DUA_PROMOTION_CADENCE = "human-run"
+G9_DUA_PROMOTION_TIER = "promotion"
+_DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
 RELATION_GOLDEN_REGRESSION_GATE = "relation_golden_regression"
 RELATION_GOLDEN_TRAP_KINDS = ("assertion", "temporal")
 G13_STRICT_ENTITY_F1_FLOOR = 0.900
@@ -105,9 +117,17 @@ G10_UNGROUNDED_FACT_CEILING = 0.0
 DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
+    "bn": 0.0,
+    "gu": 0.0,
+    "kn": 0.0,
+    "ml": 0.0,
     "mr": 0.0,
     "or": 0.0,
+    "pa": 0.0,
+    "pl": 0.0,
     "ta": 0.0,
+    "ur": 0.0,
+    "vi": 0.0,
 }
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
@@ -307,6 +327,13 @@ class GateCheck:
                 else None
             ),
         )
+
+
+def evaluate_summary_gate(**kwargs) -> tuple[GateCheck, ...]:
+    """Evaluate the guarded summary release family with explicit local evidence."""
+    from openmed.eval.summary_gate import evaluate_summary_gate as evaluate
+
+    return evaluate(**kwargs)
 
 
 def evaluate_i18n_throughput_gate(
@@ -770,6 +797,7 @@ class ReleaseGate:
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g11_critical_finding_recall_check(metrics, metadata))
+        checks.append(_g12_gold_corpus_agreement_check(metrics, metadata, payload))
         checks.append(_g14_extraction_fairness_check(metrics, metadata))
         checks.append(_g15_end_to_end_pipeline_check(metrics, metadata, baseline_entry))
         checks.append(_g4_check(quant_delta_result))
@@ -795,6 +823,7 @@ class ReleaseGate:
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
         checks.append(_surrogate_quality_release_check(metrics, metadata))
+        checks.append(_live_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
         relation_baseline = baseline
         if relation_baseline is None and _relation_golden_gate_is_applicable(
@@ -1178,6 +1207,196 @@ def _surrogate_quality_release_check(
     )
 
 
+_LIVE_SURROGATE_EVIDENCE_KEYS = frozenset({"exemptions", "min_pass_rate", "samples"})
+
+
+def evaluate_live_surrogate_quality_gate(
+    report: Any | None = None,
+    *,
+    min_pass_rate: float | None = None,
+    exemptions: Sequence[Any] = (),
+    samples: int | None = None,
+    seed: int | None = None,
+) -> GateCheck:
+    """Return the live per-locale, per-label surrogate-quality gate check.
+
+    The gate fails closed: it passes only when the report covers every
+    registered language pack and national-ID-only language for every live
+    label, and every cell either meets the pass-rate floor or carries an
+    exemption backed by a documented approximation. Cells the live scorer
+    cannot grade are reported as ``unscored`` and block the gate.
+
+    Args:
+        report: A precomputed
+            :class:`~openmed.eval.surrogate_quality_live.LiveSurrogateQualityReport`.
+            When omitted, the live run is executed offline with the other
+            arguments.
+        min_pass_rate: Optional per-cell floor. Re-grades a supplied report.
+        exemptions: Exemptions for a fresh run. Each must name a locale with a
+            documented approximation and a reason.
+        samples: Seeded samples per cell for a fresh run.
+        seed: Seed for a fresh run.
+
+    Returns:
+        The ``surrogate_quality_live`` gate check. Details contain the status
+        matrix, failing and unscored cells, reason counts, rates and digests,
+        never surrogate or original values.
+
+    Raises:
+        TypeError: If ``report`` is not a live surrogate-quality report.
+        ValueError: If a fresh run receives invalid arguments.
+    """
+
+    from openmed.eval.surrogate_quality_live import (
+        DEFAULT_LIVE_SURROGATE_PASS_RATE,
+        DEFAULT_LIVE_SURROGATE_SAMPLES,
+        DEFAULT_LIVE_SURROGATE_SEED,
+        LiveSurrogateQualityReport,
+        evaluate_live_surrogate_quality,
+    )
+
+    if report is None:
+        quality_report = evaluate_live_surrogate_quality(
+            samples=DEFAULT_LIVE_SURROGATE_SAMPLES if samples is None else samples,
+            seed=DEFAULT_LIVE_SURROGATE_SEED if seed is None else seed,
+            min_pass_rate=(
+                DEFAULT_LIVE_SURROGATE_PASS_RATE
+                if min_pass_rate is None
+                else min_pass_rate
+            ),
+            exemptions=exemptions,
+        )
+    elif isinstance(report, LiveSurrogateQualityReport):
+        quality_report = (
+            report
+            if min_pass_rate is None
+            else report.with_min_pass_rate(min_pass_rate)
+        )
+    else:
+        raise TypeError("report must be a LiveSurrogateQualityReport or None")
+
+    details = quality_report.gate_details()
+    if quality_report.passed:
+        reason = "ok"
+    elif quality_report.missing_languages or quality_report.missing_labels:
+        reason = "live surrogate report does not cover every registered language"
+    elif quality_report.failing_cells:
+        reason = "live surrogate quality below per-cell pass-rate floor"
+    else:
+        reason = "live surrogate quality has unscored cells"
+    return GateCheck(
+        LIVE_SURROGATE_QUALITY_GATE,
+        quality_report.passed,
+        reason=reason,
+        details=details,
+    )
+
+
+def _live_surrogate_quality_release_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    """Run the live surrogate gate when a release opts in or requires it.
+
+    Evidence is ``True`` or a mapping with optional ``exemptions``,
+    ``min_pass_rate`` and ``samples``. The floor and sample count can only be
+    raised above the defaults, and the seed is fixed, so release evidence
+    cannot loosen the gate.
+    """
+
+    from openmed.eval.surrogate_quality_live import (
+        DEFAULT_LIVE_SURROGATE_PASS_RATE,
+        DEFAULT_LIVE_SURROGATE_SAMPLES,
+    )
+
+    evidence = _first_value(
+        metrics.get("surrogate_quality_live"),
+        metadata.get("surrogate_quality_live"),
+    )
+    required = bool(
+        metrics.get("surrogate_quality_live_required")
+        or metadata.get("surrogate_quality_live_required")
+    )
+    if evidence is None or evidence is False:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            not required,
+            reason=(
+                "live surrogate-quality evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    if evidence is True:
+        options: dict[str, Any] = {}
+    elif isinstance(evidence, Mapping):
+        options = dict(evidence)
+    else:
+        options = {"<invalid>": None}
+    unknown = sorted(set(options) - _LIVE_SURROGATE_EVIDENCE_KEYS)
+    if unknown:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            False,
+            reason="live surrogate-quality evidence is malformed",
+            details={
+                "error": (
+                    "evidence must be true or a mapping with only "
+                    f"{sorted(_LIVE_SURROGATE_EVIDENCE_KEYS)}"
+                ),
+                "unknown_keys": unknown,
+                "required": required,
+            },
+        )
+
+    requested_rate = options.get("min_pass_rate")
+    requested_samples = options.get("samples")
+    exemptions = options.get("exemptions") or ()
+    try:
+        min_pass_rate = DEFAULT_LIVE_SURROGATE_PASS_RATE
+        if requested_rate is not None:
+            parsed_rate = _strict_probability(requested_rate)
+            if parsed_rate is None:
+                raise ValueError("min_pass_rate must be a number between 0 and 1")
+            min_pass_rate = max(min_pass_rate, parsed_rate)
+        samples = DEFAULT_LIVE_SURROGATE_SAMPLES
+        if requested_samples is not None:
+            if isinstance(requested_samples, bool) or not isinstance(
+                requested_samples, int
+            ):
+                raise ValueError("samples must be an integer")
+            samples = max(samples, requested_samples)
+        if isinstance(exemptions, (str, bytes, Mapping)) or not isinstance(
+            exemptions, Sequence
+        ):
+            raise ValueError("exemptions must be a list of exemption mappings")
+        check = evaluate_live_surrogate_quality_gate(
+            min_pass_rate=min_pass_rate,
+            exemptions=exemptions,
+            samples=samples,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return GateCheck(
+            LIVE_SURROGATE_QUALITY_GATE,
+            False,
+            reason="live surrogate-quality evidence is invalid",
+            details={"error": str(exc), "required": required},
+        )
+
+    details = dict(check.details)
+    details["required"] = required
+    details["requested_min_pass_rate"] = requested_rate
+    details["requested_samples"] = requested_samples
+    return GateCheck(
+        LIVE_SURROGATE_QUALITY_GATE,
+        check.passed,
+        reason=check.reason,
+        details=details,
+    )
+
+
 def _manifest_coherence_check(
     identity: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -1217,6 +1436,7 @@ def _manifest_coherence_check(
     manifest_path = _manifest_path(metadata)
     manifest_rows: list[dict[str, Any]] = []
     manifest_row: Mapping[str, Any] | None = None
+    registry_state_path: Path | None = None
     if manifest_path is not None:
         try:
             manifest_rows = _load_manifest_rows(manifest_path)
@@ -1242,10 +1462,41 @@ def _manifest_coherence_check(
                     "error": "candidate repo_id is absent from manifest",
                 }
 
-    if manifest_rows:
+    if manifest_path is not None and manifest_rows:
+        # Import lazily because data_license_gate returns this module's GateCheck.
+        # The release path must enforce the same read-only license decision as
+        # registry_ctl without creating an import cycle at module load time.
+        from openmed.eval.data_license_gate import evaluate_data_license_gate
+
+        data_license_check = evaluate_data_license_gate(manifest_path)
+        if not data_license_check.passed:
+            mismatches["training_data_licenses"] = {
+                "reason": data_license_check.reason,
+                "details": dict(data_license_check.details),
+            }
         mismatches.update(
             _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
         )
+        registry_state_path = _optional_path(metadata.get("registry_state_path"))
+        if registry_state_path is None and _is_default_path(
+            manifest_path, _DEFAULT_MANIFEST_PATH
+        ):
+            registry_state_path = REGISTRY_STATE_PATH
+        if registry_state_path is not None:
+            try:
+                registry_state = load_registry_state(registry_state_path)
+            except RegistryStateError as exc:
+                mismatches["registry_state"] = {
+                    "path": str(registry_state_path),
+                    "errors": [str(exc)],
+                }
+            else:
+                state_errors = registry_state_errors(manifest_rows, registry_state)
+                if state_errors:
+                    mismatches["registry_state"] = {
+                        "path": str(registry_state_path),
+                        "errors": state_errors,
+                    }
 
     card = _model_card_metadata(metadata)
     if card and manifest_row is not None:
@@ -1268,6 +1519,9 @@ def _manifest_coherence_check(
             "manifest_path": str(manifest_path) if manifest_path is not None else None,
             "manifest_rows": len(manifest_rows),
             "candidate_manifest_row": manifest_row is not None,
+            "registry_state_path": (
+                str(registry_state_path) if registry_state_path is not None else None
+            ),
         },
     )
 
@@ -2290,6 +2544,122 @@ def _critical_finding_misses(metric: Mapping[str, Any]) -> list[dict[str, Any]]:
     return misses
 
 
+def evaluate_gold_corpus_agreement_gate(
+    report: Mapping[str, Any] | Any,
+) -> GateCheck:
+    """Evaluate gold-corpus mean agreement kappa for G12.
+
+    The evaluator accepts a benchmark report, a serialized
+    :class:`~openmed.eval.report.GoldCorpusQualityReport`, or a mapping with a
+    nested ``gold_corpus_quality``/``gold_quality_report`` evidence payload.
+    Reports that do not claim gold-quality evidence are not applicable; once
+    such evidence is supplied, a missing or malformed kappa fails closed.
+    """
+
+    payload = _report_payload(report)
+    return _g12_gold_corpus_agreement_check(
+        _mapping(payload.get("metrics")),
+        _mapping(payload.get("metadata")),
+        payload,
+    )
+
+
+def _g12_gold_corpus_agreement_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    payload: Mapping[str, Any] | None = None,
+) -> GateCheck:
+    raw_kappa, metric_source, evidence_present = _gold_agreement_kappa_evidence(
+        metrics,
+        metadata,
+        payload or {},
+    )
+    details: dict[str, Any] = {
+        "evidence_present": evidence_present,
+        "floor": G12_MIN_AGREEMENT_KAPPA,
+        "metric_source": metric_source,
+        "threshold": G12_MIN_AGREEMENT_KAPPA,
+    }
+    if not evidence_present:
+        return GateCheck("G12", True, reason="not provided", details=details)
+
+    mean_kappa = _agreement_kappa(raw_kappa)
+    if mean_kappa is None:
+        return GateCheck(
+            "G12",
+            False,
+            reason="mean gold-corpus agreement kappa is missing or malformed",
+            details=details,
+        )
+
+    details["mean_agreement_kappa"] = mean_kappa
+    passed = mean_kappa >= G12_MIN_AGREEMENT_KAPPA
+    return GateCheck(
+        "G12",
+        passed,
+        reason=(
+            "ok"
+            if passed
+            else "mean gold-corpus agreement kappa is below the configured floor"
+        ),
+        details=details,
+    )
+
+
+def _gold_agreement_kappa_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    payload: Mapping[str, Any],
+) -> tuple[Any, str | None, bool]:
+    containers = (
+        ("metrics", metrics),
+        ("metadata", metadata),
+        ("candidate", payload),
+    )
+    evidence_keys = (
+        "gold_corpus_quality",
+        "gold_quality_report",
+        "gold_quality",
+    )
+    metric_keys = (
+        "mean_agreement_kappa",
+        "mean_kappa",
+        "overall_agreement",
+    )
+
+    for container_name, container in containers:
+        for evidence_key in evidence_keys:
+            if evidence_key not in container:
+                continue
+            evidence = container.get(evidence_key)
+            if not isinstance(evidence, Mapping):
+                return None, f"{container_name}.{evidence_key}", True
+            for metric_key in metric_keys:
+                if metric_key in evidence:
+                    return (
+                        evidence.get(metric_key),
+                        f"{container_name}.{evidence_key}.{metric_key}",
+                        True,
+                    )
+            return None, f"{container_name}.{evidence_key}", True
+
+    for metric_key in metric_keys:
+        if metric_key in payload:
+            return payload.get(metric_key), f"candidate.{metric_key}", True
+    return None, None, False
+
+
+def _agreement_kappa(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not -1.0 <= value <= 1.0:
+        return None
+    result = float(value)
+    if not math.isfinite(result):
+        return None
+    return result
+
+
 def _g14_extraction_fairness_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -3237,6 +3607,8 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
 def _g9_relation_extraction_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
+    *,
+    require_relaxed: bool = True,
 ) -> GateCheck:
     evidence = _relation_extraction_evidence(metrics, metadata)
     required = bool(
@@ -3271,13 +3643,14 @@ def _g9_relation_extraction_check(
             "lower": strict_lower,
             "floor": G9_STRICT_RE_F1_FLOOR,
         }
-    if relaxed_lower is None:
-        violations["relaxed_confidence_interval"] = "missing lower bound"
-    elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
-        violations["relaxed_relation_f1"] = {
-            "lower": relaxed_lower,
-            "floor": G9_RELAXED_RE_F1_FLOOR,
-        }
+    if require_relaxed:
+        if relaxed_lower is None:
+            violations["relaxed_confidence_interval"] = "missing lower bound"
+        elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
+            violations["relaxed_relation_f1"] = {
+                "lower": relaxed_lower,
+                "floor": G9_RELAXED_RE_F1_FLOOR,
+            }
 
     passed = not violations
     return GateCheck(
@@ -3293,11 +3666,105 @@ def _g9_relation_extraction_check(
             ),
             "relaxed": _relation_metric_summary(relaxed),
             "relaxed_floor": G9_RELAXED_RE_F1_FLOOR,
+            "relaxed_lower_ci_required": require_relaxed,
             "strict": _relation_metric_summary(strict),
             "strict_floor": G9_STRICT_RE_F1_FLOOR,
             "violations": violations,
         },
     )
+
+
+def evaluate_dua_relation_promotion_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate promotion-only G9 evidence for credentialed DUA corpora.
+
+    The strict confidence-bound check is promotion blocking, while the
+    serialized cadence contract explicitly excludes this expensive,
+    human-triggered corpus run from daily blocking evaluation.
+    """
+
+    payload = _report_payload(report)
+    metrics = _mapping(payload.get("metrics"))
+    raw_metadata = _mapping(payload.get("metadata"))
+    contract_violations = _dua_relation_promotion_contract_violations(raw_metadata)
+    metadata = {
+        **raw_metadata,
+        "relation_extraction_required": True,
+        "task": "relation",
+    }
+    base = _g9_relation_extraction_check(
+        metrics,
+        metadata,
+        require_relaxed=False,
+    )
+    violations = dict(_mapping(base.details.get("violations")))
+    if contract_violations:
+        violations["promotion_contract"] = contract_violations
+    details = {
+        **dict(base.details),
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "strict_lower_ci_required": True,
+        "relaxed_lower_ci_required": False,
+        "violations": violations,
+    }
+    passed = base.passed and not contract_violations
+    reason = base.reason
+    if contract_violations:
+        reason = "DUA relation promotion metadata contract is invalid"
+    return GateCheck(
+        gate=base.gate,
+        passed=passed,
+        reason=reason,
+        details=details,
+        blocking_format=base.blocking_format,
+    )
+
+
+def _dua_relation_promotion_contract_violations(
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return violations in the serialized DUA promotion-run contract."""
+
+    violations: dict[str, Any] = {}
+    expected_values = {
+        "cadence": G9_DUA_PROMOTION_CADENCE,
+        "daily_blocking": False,
+        "dua_relation_promotion_required": True,
+        "gate_tier": G9_DUA_PROMOTION_TIER,
+        "promotion_blocking": True,
+        "task": "relation",
+    }
+    for key, expected in expected_values.items():
+        if metadata.get(key) != expected:
+            violations[key] = {
+                "expected": expected,
+                "observed": metadata.get(key),
+            }
+
+    raw_corpora = metadata.get("dua_relation_corpora")
+    if raw_corpora is None:
+        raw_corpora = metadata.get("dataset")
+    if isinstance(raw_corpora, str):
+        values = (raw_corpora,)
+    elif isinstance(raw_corpora, (list, tuple, set, frozenset)):
+        values = tuple(raw_corpora)
+    else:
+        values = ()
+    corpora = {
+        str(value).strip().casefold().replace("_", "-")
+        for value in values
+        if str(value).strip()
+    }
+    if not corpora or not corpora <= _DUA_RELATION_PROMOTION_CORPORA:
+        violations["dua_relation_corpora"] = {
+            "expected": sorted(_DUA_RELATION_PROMOTION_CORPORA),
+            "observed": sorted(corpora),
+        }
+    return violations
 
 
 def _relation_extraction_evidence(
@@ -5837,6 +6304,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Score the shipped grounding-accuracy gold and gate on top-k floors.",
     )
+    candidate_group.add_argument(
+        "--live-surrogate-quality",
+        action="store_true",
+        help=(
+            "Score live surrogates for every registered language pack and "
+            "gate on the per-locale, per-label matrix."
+        ),
+    )
     parser.add_argument(
         "--baseline",
         help="Optional baseline JSON payload. Defaults to the baseline store.",
@@ -5900,6 +6375,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.grounding:
         return _run_grounding_accuracy_gate_cli(args)
+
+    if args.live_surrogate_quality:
+        return _run_live_surrogate_quality_gate_cli(args)
 
     candidate_path = Path(args.candidate)
     if not candidate_path.is_file():
@@ -5979,6 +6457,47 @@ def _run_i18n_throughput_gate_cli(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     print(json.dumps(payload, sort_keys=True))
+    return 0 if check.passed else 1
+
+
+def _run_live_surrogate_quality_gate_cli(args: argparse.Namespace) -> int:
+    from openmed.eval.surrogate_quality_live import evaluate_live_surrogate_quality
+
+    try:
+        quality_report = evaluate_live_surrogate_quality()
+        check = evaluate_live_surrogate_quality_gate(quality_report)
+    except Exception as exc:
+        print(
+            f"live surrogate-quality gate evaluation failed: {exc.__class__.__name__}",
+            file=sys.stderr,
+        )
+        return 2
+
+    decision = RELEASABLE if check.passed else QUARANTINED
+    payload = {
+        "schema_version": 1,
+        "artifact_type": "openmed.eval.live_surrogate_quality_gate",
+        "decision": decision,
+        "gate_result": check.to_dict(),
+        "report": quality_report.to_dict(),
+    }
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "decision": decision,
+                "failing_cells": list(quality_report.failing_cells),
+                "unscored_cells": list(quality_report.unscored_cells),
+                "missing_languages": list(quality_report.missing_languages),
+            },
+            sort_keys=True,
+        )
+    )
     return 0 if check.passed else 1
 
 
@@ -6176,6 +6695,7 @@ __all__ = [
     "G7_RECALL_DROP_LIMIT",
     "G10_UNGROUNDED_FACT_CEILING",
     "G11_CRITICAL_RECALL_FLOOR",
+    "G12_MIN_AGREEMENT_KAPPA",
     "G13_RADIOLOGY_ENTITY_F1_FLOOR",
     "G13_RADIOLOGY_RELATION_F1_FLOOR",
     "G13_RADIOLOGY_UNCERTAINTY_ACCURACY_FLOOR",
@@ -6186,10 +6706,13 @@ __all__ = [
     "G15_E2E_FACT_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
+    "G9_DUA_PROMOTION_CADENCE",
+    "G9_DUA_PROMOTION_TIER",
     "RELATION_GOLDEN_REGRESSION_GATE",
     "RELATION_GOLDEN_TRAP_KINDS",
     "FLAKINESS_GATE",
     "SURROGATE_QUALITY_GATE",
+    "LIVE_SURROGATE_QUALITY_GATE",
     "EXPORT_VARIANT_GATE",
     "GROUNDING_ACCURACY_GATE",
     "GROUNDING_TOP1_FLOOR",
@@ -6214,8 +6737,11 @@ __all__ = [
     "evaluate_reid_risk_gate",
     "evaluate_reidentification_risk_gate",
     "evaluate_relation_golden_regression_gate",
+    "evaluate_dua_relation_promotion_gate",
     "evaluate_grounding_accuracy_gate",
+    "evaluate_gold_corpus_agreement_gate",
     "evaluate_surrogate_quality_gate",
+    "evaluate_live_surrogate_quality_gate",
     "format_preview",
     "main",
     "preview",

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "generator": "openmed.eval.clinical_fixtures.generate_fixture",
+  "profile": "discharge_summary",
+  "synthetic_only": true,
+  "seeds": [17, 29, 41]
+}

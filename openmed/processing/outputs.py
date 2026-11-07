@@ -6,7 +6,10 @@ import logging
 import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from itertools import groupby
 from typing import Any, Dict, List, Optional, Union
+
+from openmed.core.errors import InputError, InternalError
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +185,9 @@ class OutputFormatter:
             entity_text = normalized_text
 
             raw_label = pred.get("entity_group") or pred.get("entity") or ""
-            clean_label = raw_label.replace("B-", "").replace("I-", "")
+            clean_label = (
+                raw_label[2:] if raw_label.startswith(("B-", "I-")) else raw_label
+            )
             label = clean_label or raw_label or "UNKNOWN"
 
             span_metadata = None
@@ -193,7 +198,7 @@ class OutputFormatter:
                 else:
                     try:
                         span_metadata = dict(raw_metadata)
-                    except Exception:
+                    except (TypeError, ValueError):
                         span_metadata = {"value": raw_metadata}
 
             entity = EntityPrediction(
@@ -387,7 +392,11 @@ class OutputFormatter:
             Merged entity.
         """
         if not entities:
-            raise ValueError("Cannot merge empty entity list")
+            raise InternalError(
+                "Cannot merge an empty entity list because the grouping stage "
+                "violated an internal invariant. Retry without grouping; if it "
+                "persists, report the model identifier."
+            )
 
         start = entities[0].start
         end = entities[-1].end
@@ -443,6 +452,9 @@ class OutputFormatter:
     def to_html(self, result: PredictionResult) -> str:
         """Convert result to HTML format with highlighted entities.
 
+        Highlight valid, nonempty source spans without changing their offsets
+        when escaping text and metadata for HTML.
+
         Args:
             result: Prediction result to convert.
 
@@ -459,9 +471,15 @@ class OutputFormatter:
 
         html += '<div class="text-content">\n'
 
-        # Highlight entities in text
+        # Map source boundaries to escaped boundaries before adding markup.
         highlighted_text = html_mod.escape(result.text)
-        offset = 0
+        escaped_offsets = [0]
+        for character in result.text:
+            escaped_offsets.append(
+                escaped_offsets[-1] + len(html_mod.escape(character))
+            )
+        boundaries = []
+        highlight_starts = {}
 
         # Sort entities by start position
         sorted_entities = sorted(
@@ -469,24 +487,46 @@ class OutputFormatter:
             key=lambda x: x.start,
         )
 
-        for entity in sorted_entities:
-            start = entity.start + offset
-            end = entity.end + offset
+        for index, entity in enumerate(sorted_entities):
+            if not 0 <= entity.start < entity.end <= len(result.text):
+                continue
+            start = escaped_offsets[entity.start]
+            end = escaped_offsets[entity.end]
 
             color = self._get_entity_color(entity.label)
 
             highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = "</span>"
+            highlight_starts[index] = highlight_start
+            boundaries.append((start, 1, -end, index))
+            boundaries.append((end, 0, 0, index))
 
-            highlighted_text = (
-                highlighted_text[:start]
-                + highlight_start
-                + highlighted_text[start:end]
-                + highlight_end
-                + highlighted_text[end:]
-            )
-
-            offset += len(highlight_start) + len(highlight_end)
+        chunks = []
+        cursor = 0
+        active = []
+        for position, events in groupby(sorted(boundaries), key=lambda event: event[0]):
+            chunks.append(highlighted_text[cursor:position])
+            closing = set()
+            opening = []
+            for _, kind, _, index in events:
+                if kind:
+                    opening.append(index)
+                else:
+                    closing.add(index)
+            remaining = [index for index in active if index not in closing] + opening
+            shared = 0
+            for previous, current in zip(active, remaining):
+                if previous != current:
+                    break
+                shared += 1
+            # Crossing source spans cannot be represented by nested HTML tags.
+            # Close and reopen only the affected inner highlights so each label
+            # still covers exactly its source range, without duplicating text.
+            chunks.extend("</span>" for _ in active[shared:])
+            chunks.extend(highlight_starts[index] for index in remaining[shared:])
+            active = remaining
+            cursor = position
+        chunks.append(highlighted_text[cursor:])
+        highlighted_text = "".join(chunks)
 
         html += f"<p>{highlighted_text}</p>\n"
         html += "</div>\n"
@@ -611,4 +651,8 @@ def format_predictions(
     elif output_format == "csv":
         return formatter.to_csv_rows(result)
     else:
-        raise ValueError(f"Unsupported output format: {output_format}")
+        supported = ["dict", "json", "html", "csv"]
+        raise InputError(
+            f"Unsupported output format. Pass one of: {supported}.",
+            details={"argument": "output_format", "supported": supported},
+        )

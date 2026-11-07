@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
+from pathlib import Path
+
+from openmed.clinical import CoreferenceChain
 from openmed.clinical.context import (
     CERTAIN,
     FAMILY_EXPERIENCER,
@@ -12,11 +17,25 @@ from openmed.clinical.context import (
 )
 from openmed.clinical.exporters import (
     CORE_OMOP_TABLES,
+    COREFERENCE_EVIDENCE_EXTENSION_URL,
     achilles_smoke_check,
     to_fhir,
     to_omop,
 )
+from openmed.clinical.exporters.fhir import (
+    GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
+    MEDICAL_DEVICE_ASSIST_EXTENSION_URL,
+)
 from openmed.clinical.grounding import Candidate, GroundedSpan
+from openmed.core.schemas import OpenMedSpan, hmac_text_hash
+
+_COREFERENCE_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "clinical"
+    / "medication_coreference_collapse.json"
+)
+_SYNTHETIC_HASH_SECRET = "synthetic-medication-coreference-secret"
 
 
 def _span(
@@ -74,6 +93,47 @@ def _spans() -> tuple[GroundedSpan, ...]:
     )
 
 
+def _coreference_chain(case: dict) -> CoreferenceChain:
+    members = tuple(
+        OpenMedSpan(
+            doc_id=case["document_id"],
+            start=mention["start"],
+            end=mention["end"],
+            text_hash=hmac_text_hash(
+                case["text"][mention["start"] : mention["end"]],
+                _SYNTHETIC_HASH_SECRET,
+            ),
+            entity_type="DRUG",
+            canonical_label="MEDICATION",
+        )
+        for mention in case["mentions"]
+    )
+    return CoreferenceChain(
+        chain_id="coref-synthetic-medication",
+        members=members,
+        representative=members[case["representative_index"]],
+        confidence=0.98,
+    )
+
+
+def _fhir_source_evidence(extension: dict) -> tuple[int, int, str]:
+    values = {
+        item["url"]: item.get("valueUnsignedInt", item.get("valueString"))
+        for item in extension["extension"]
+    }
+    return values["start"], values["end"], values["textHash"]
+
+
+def _string_values(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [item for child in value.values() for item in _string_values(child)]
+    if isinstance(value, list):
+        return [item for child in value for item in _string_values(child)]
+    return []
+
+
 def test_to_fhir_emits_valid_core_r4_resource_shapes() -> None:
     bundle = to_fhir(
         _spans(),
@@ -97,10 +157,72 @@ def test_to_fhir_emits_valid_core_r4_resource_shapes() -> None:
     }
     serialized = str(bundle)
     assert "'_score'" not in serialized
-    assert "openmed.ai/fhir/StructureDefinition" not in serialized
+    assert GROUNDED_CODE_PROVENANCE_EXTENSION_URL in serialized
+    assert MEDICAL_DEVICE_ASSIST_EXTENSION_URL in serialized
     assert resources[0]["code"]["coding"][0]["version"] == "synthetic-v1"
     assert to_fhir(_spans(), document_id="synthetic-doc") == to_fhir(
         _spans(), document_id="synthetic-doc"
+    )
+
+
+def test_to_fhir_collapses_five_coreferent_medication_surfaces() -> None:
+    case = json.loads(_COREFERENCE_FIXTURE.read_text(encoding="utf-8"))
+    chain = _coreference_chain(case)
+    grounding = case["grounding"]
+    candidate = Candidate(
+        system=grounding["system"],
+        code=grounding["code"],
+        display=grounding["display"],
+        score=0.99,
+        source="synthetic",
+        matched_alias=grounding["display"],
+        match_kind="exact",
+        vocab_version="synthetic-v1",
+    )
+    spans = tuple(
+        GroundedSpan(
+            text=mention["surface"],
+            start=mention["start"],
+            end=mention["end"],
+            candidates=(candidate,),
+            canonical_label="MEDICATION",
+        )
+        for mention in case["mentions"]
+    )
+
+    bundle = to_fhir(
+        spans,
+        document_id=case["document_id"],
+        coreference_chains=(chain,),
+    )
+
+    assert bundle is not None
+    assert len(bundle["entry"]) == 1
+    statement = bundle["entry"][0]["resource"]
+    assert statement["resourceType"] == case["expected_resource_type"]
+    evidence = next(
+        extension
+        for extension in statement["extension"]
+        if extension["url"] == COREFERENCE_EVIDENCE_EXTENSION_URL
+    )
+    supporting = [
+        item for item in evidence["extension"] if item["url"] == "supportingMention"
+    ]
+    assert len(supporting) == len(case["mentions"]) == 5
+    assert [_fhir_source_evidence(item) for item in supporting] == [
+        (member.start, member.end, member.text_hash) for member in chain.members
+    ]
+
+    evidence_values = {value.casefold() for value in _string_values(evidence)}
+    for mention in case["mentions"]:
+        assert mention["surface"].casefold() not in evidence_values
+    assert (
+        to_fhir(
+            reversed(spans),
+            document_id=case["document_id"],
+            coreference_chains=(chain,),
+        )
+        == bundle
     )
 
 
@@ -165,6 +287,51 @@ def test_to_omop_emits_four_core_tables_and_passes_smoke() -> None:
     assert tables.table("condition_occurrence")[0]["condition_concept_id"] == 910001
     assert tables.table("drug_exposure")[0]["drug_source_value"] == "Novo tablet"
     assert achilles_smoke_check(tables) == ()
+
+
+def test_achilles_smoke_reports_missing_columns_and_foreign_keys() -> None:
+    spans = _spans()
+    tables = to_omop(
+        spans,
+        document_text=(
+            "Aster syndrome. Novo tablet. Elin panel 7.2 mg/dL. Juno procedure."
+        ),
+        person_id="synthetic-person",
+    )
+    corrupted = {
+        name: tuple(dict(row) for row in rows) for name, rows in tables.tables.items()
+    }
+    corrupted["measurement"][0].pop("measurement_concept_id")
+    corrupted["drug_exposure"][0]["drug_concept_id"] = "not-an-id"
+    corrupted["condition_occurrence"][0]["note_id"] = None
+    corrupted["procedure_occurrence"][0]["person_id"] = 999_999_999
+
+    violations = achilles_smoke_check(replace(tables, tables=corrupted))
+
+    assert any(
+        item.table == "measurement"
+        and item.column == "measurement_concept_id"
+        and item.reason == "missing_column"
+        for item in violations
+    )
+    assert any(
+        item.table == "drug_exposure"
+        and item.column == "drug_concept_id"
+        and item.reason == "invalid_concept_id"
+        for item in violations
+    )
+    assert any(
+        item.table == "procedure_occurrence"
+        and item.column == "person_id"
+        and item.reason == "missing_person"
+        for item in violations
+    )
+    assert any(
+        item.table == "condition_occurrence"
+        and item.column == "note_id"
+        and item.reason == "invalid_foreign_key"
+        for item in violations
+    )
 
 
 def test_to_omop_preserves_unmapped_source_and_excludes_refuted() -> None:

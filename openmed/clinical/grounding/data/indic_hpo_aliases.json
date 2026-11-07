@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "name": "openmed-indic-hpo-starter-aliases",
+  "version": "2026.08.0",
+  "license": "CC0-1.0",
+  "redistributable": true,
+  "entries": [
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-HI-0001",
+      "locale": "hi-IN",
+      "aliases": ["बुखार", "ज्वर"],
+      "target_system": "HPO",
+      "target_code": "HP:0001945",
+      "target_display": "Fever"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-HI-0002",
+      "locale": "hi-IN",
+      "aliases": ["सिरदर्द", "सिर में दर्द"],
+      "target_system": "HPO",
+      "target_code": "HP:0002315",
+      "target_display": "Headache"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-HI-0003",
+      "locale": "hi-IN",
+      "aliases": ["मांसपेशियों में कमजोरी", "मांसपेशियों की कमजोरी"],
+      "target_system": "HPO",
+      "target_code": "HP:0001324",
+      "target_display": "Muscle weakness"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-BN-0001",
+      "locale": "bn-IN",
+      "aliases": ["জ্বর"],
+      "target_system": "HPO",
+      "target_code": "HP:0001945",
+      "target_display": "Fever"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-BN-0002",
+      "locale": "bn-IN",
+      "aliases": ["মাথাব্যথা", "মাথা ব্যথা"],
+      "target_system": "HPO",
+      "target_code": "HP:0002315",
+      "target_display": "Headache"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-BN-0003",
+      "locale": "bn-IN",
+      "aliases": ["পেশী দুর্বলতা"],
+      "target_system": "HPO",
+      "target_code": "HP:0001324",
+      "target_display": "Muscle weakness"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TA-0001",
+      "locale": "ta-IN",
+      "aliases": ["காய்ச்சல்"],
+      "target_system": "HPO",
+      "target_code": "HP:0001945",
+      "target_display": "Fever"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TA-0002",
+      "locale": "ta-IN",
+      "aliases": ["தலைவலி"],
+      "target_system": "HPO",
+      "target_code": "HP:0002315",
+      "target_display": "Headache"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TA-0003",
+      "locale": "ta-IN",
+      "aliases": ["தசை பலவீனம்"],
+      "target_system": "HPO",
+      "target_code": "HP:0001324",
+      "target_display": "Muscle weakness"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TE-0001",
+      "locale": "te-IN",
+      "aliases": ["జ్వరం"],
+      "target_system": "HPO",
+      "target_code": "HP:0001945",
+      "target_display": "Fever"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TE-0002",
+      "locale": "te-IN",
+      "aliases": ["తలనొప్పి"],
+      "target_system": "HPO",
+      "target_code": "HP:0002315",
+      "target_display": "Headache"
+    },
+    {
+      "source_system": "OPENMED-INDIC-ALIAS",
+      "source_code": "OM-TE-0003",
+      "locale": "te-IN",
+      "aliases": ["కండరాల బలహీనత"],
+      "target_system": "HPO",
+      "target_code": "HP:0001324",
+      "target_display": "Muscle weakness"
+    }
+  ]
+}

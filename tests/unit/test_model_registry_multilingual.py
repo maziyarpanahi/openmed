@@ -3,11 +3,14 @@
 import pytest
 
 from openmed.core import model_registry
+from openmed.core.labels import ANATOMY, DISEASE, normalize_label
 from openmed.core.model_registry import (
     CATEGORIES,
     OPENMED_MODELS,
     ModelInfo,
+    build_registry,
     get_default_pii_model,
+    get_ner_models_by_language,
     get_pii_models_by_language,
     load_manifest_rows,
 )
@@ -18,11 +21,28 @@ from openmed.core.pii_i18n import (
     LANGUAGE_NAMES,
     OPTIONAL_PII_MODEL,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_PII_MODEL,
 )
 
-MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "he", "id", "mr", "or", "ro", "th"}
-V2_REGISTRY_LANGUAGES = {"bn", "ta", "zh"}
+MULTILINGUAL_DEFAULT_LANGUAGES = {"as", "gu", "he", "id", "mr", "or", "ro", "th"}
+V2_REGISTRY_LANGUAGES = {"bn", "zh"}
 OPTIONAL_ONLY_LANGUAGES = INDIC_NER_LANGUAGES - SUPPORTED_LANGUAGES
+
+PT_ANATOMY_NER_MANIFEST_ROW = {
+    "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-Portuguese-Base-110M",
+    "family": "NER",
+    "task": "token-classification",
+    "tier": "Base",
+    "param_count": 110_000_000,
+    "canonical_labels": ["ANATOMY"],
+}
+EN_ANATOMY_NER_MANIFEST_ROW = {
+    "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-BioClinical-108M",
+    "family": "NER",
+    "task": "token-classification",
+    "languages": ["en"],
+    "canonical_labels": ["ANATOMY"],
+}
 
 
 class TestRegistryCompleteness:
@@ -57,45 +77,52 @@ class TestRegistryCompleteness:
     def test_default_models_are_registered(self):
         registry_model_ids = {info.model_id for info in OPENMED_MODELS.values()}
         for lang, model_id in DEFAULT_PII_MODELS.items():
-            if model_id == OPTIONAL_PII_MODEL:
+            # Sentinels, not repository identifiers: the optional Indic NER
+            # route resolves from an env var and user-supplied routes require
+            # an explicit model_name.
+            if model_id in {OPTIONAL_PII_MODEL, USER_SUPPLIED_PII_MODEL}:
                 continue
             assert model_id in registry_model_ids, (
                 f"Default model for {lang} ({model_id}) not found in registry"
             )
 
-    @pytest.mark.parametrize("lang", sorted(V2_REGISTRY_LANGUAGES))
-    def test_v2_language_has_manifest_backed_model(self, lang):
-        models = get_pii_models_by_language(lang)
+    def test_v2_language_has_manifest_backed_model(self, subtests):
+        for lang in sorted(V2_REGISTRY_LANGUAGES):
+            with subtests.test(lang=lang):
+                models = get_pii_models_by_language(lang)
 
-        assert models
-        assert all(isinstance(info, ModelInfo) for info in models.values())
-        assert DEFAULT_PII_MODELS[lang] in {info.model_id for info in models.values()}
+                assert models
+                assert all(isinstance(info, ModelInfo) for info in models.values())
+                assert DEFAULT_PII_MODELS[lang] in {
+                    info.model_id for info in models.values()
+                }
 
-    @pytest.mark.parametrize("lang", sorted(V2_REGISTRY_LANGUAGES))
-    def test_v2_manifest_rows_include_release_metadata(self, lang):
-        row = next(
-            row
-            for row in load_manifest_rows()
-            if row["repo_id"] == DEFAULT_PII_MODELS[lang]
-        )
+    def test_v2_manifest_rows_include_release_metadata(self, subtests):
+        for lang in sorted(V2_REGISTRY_LANGUAGES):
+            with subtests.test(lang=lang):
+                row = next(
+                    row
+                    for row in load_manifest_rows()
+                    if row["repo_id"] == DEFAULT_PII_MODELS[lang]
+                )
 
-        assert row["languages"] == [lang]
-        assert row["license"] == "apache-2.0"
-        assert row["param_count"] > 0
-        assert row["script_coverage"]
-        assert set(row["download_sizes"]) == {
-            "safetensors",
-            "mlx",
-            "coreml",
-            "onnx",
-        }
-        if row["released"] is None:
-            assert row.get("download_mb") is None
-            assert row.get("disk_mb") is None
-            assert all(size is None for size in row["download_sizes"].values())
-        else:
-            assert row["download_mb"] > 0
-            assert row["disk_mb"] > 0
+                assert row["languages"] == [lang]
+                assert row["license"] == "apache-2.0"
+                assert row["param_count"] > 0
+                assert row["script_coverage"]
+                assert set(row["download_sizes"]) == {
+                    "safetensors",
+                    "mlx",
+                    "coreml",
+                    "onnx",
+                }
+                if row["released"] is None:
+                    assert row.get("download_mb") is None
+                    assert row.get("disk_mb") is None
+                    assert all(size is None for size in row["download_sizes"].values())
+                else:
+                    assert row["download_mb"] > 0
+                    assert row["disk_mb"] > 0
 
 
 class TestModelNaming:
@@ -135,16 +162,19 @@ class TestModelNaming:
                 f"Model {key} has unexpected model_id prefix: {info.model_id}"
             )
 
-    @pytest.mark.parametrize(
-        ("lang", "expected_key"),
-        (
+    def test_v2_language_compatibility_aliases_are_stable(self, subtests):
+        for lang, expected_key in (
             ("bn", "pii_bn_msuperclinical_large"),
-            ("ta", "pii_ta_msuperclinical_large"),
             ("zh", "pii_zh_bigmed_large"),
-        ),
-    )
-    def test_v2_language_compatibility_aliases_are_stable(self, lang, expected_key):
-        assert expected_key in get_pii_models_by_language(lang)
+        ):
+            with subtests.test(lang=lang, expected_key=expected_key):
+                assert expected_key in get_pii_models_by_language(lang)
+
+    def test_tamil_compatibility_alias_resolves_only_as_a_placeholder(self):
+        alias = OPENMED_MODELS["pii_ta_msuperclinical_large"]
+
+        assert alias.model_id == "OpenMed/privacy-filter-multilingual"
+        assert get_pii_models_by_language("ta") == {}
 
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):
@@ -175,16 +205,22 @@ class TestHelperFunctions:
             return
         assert model_id == DEFAULT_PII_MODELS[lang]
 
-    @pytest.mark.parametrize("lang", sorted(INDIC_NER_LANGUAGES))
-    def test_configured_indic_model_is_registered(self, monkeypatch, lang):
-        monkeypatch.setenv("OPENMED_INDIC_NER_MODEL", "/models/indic-ner")
+    def test_configured_indic_model_is_registered(self, subtests):
+        for lang in sorted(INDIC_NER_LANGUAGES):
+            with subtests.test(lang=lang):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    monkeypatch.setenv("OPENMED_INDIC_NER_MODEL", "/models/indic-ner")
 
-        models = get_pii_models_by_language(lang)
+                    models = get_pii_models_by_language(lang)
 
-        optional = models[f"pii_{lang}_indic_ner"]
-        assert optional.model_id == "/models/indic-ner"
-        assert optional.languages == [lang]
-        assert optional.entity_types == ["PERSON", "LOCATION", "ORGANIZATION"]
+                    optional = models[f"pii_{lang}_indic_ner"]
+                    assert optional.model_id == "/models/indic-ner"
+                    assert optional.languages == [lang]
+                    assert optional.entity_types == [
+                        "PERSON",
+                        "LOCATION",
+                        "ORGANIZATION",
+                    ]
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("xx")
@@ -230,3 +266,55 @@ class TestHelperFunctions:
         assert model_registry.get_pii_models_by_language("hi") == {
             "pii_hi_supported": supported
         }
+
+
+class TestPortugueseNerRegistry:
+    """Verify Portuguese NER rows are classified and language-filterable."""
+
+    def test_portuguese_anatomy_row_gets_category_and_language(self):
+        registry = build_registry([PT_ANATOMY_NER_MANIFEST_ROW])
+        info = next(iter(registry.values()))
+
+        assert info.category == "Anatomy"
+        assert info.languages == ["pt"]
+
+    def test_explicit_manifest_languages_are_preserved(self, subtests):
+        for languages in (["pt", "en"], ["en"]):
+            with subtests.test(languages=languages):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    row = {**PT_ANATOMY_NER_MANIFEST_ROW, "languages": languages}
+                    registry = build_registry([row])
+                    info = next(iter(registry.values()))
+                    monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
+
+                    assert info.category == "Anatomy"
+                    assert info.languages == languages
+                    assert bool(get_ner_models_by_language("pt")) == ("pt" in languages)
+                    assert get_ner_models_by_language("en")
+
+    def test_ner_models_by_language_excludes_english_models(self, monkeypatch):
+        registry = build_registry(
+            [PT_ANATOMY_NER_MANIFEST_ROW, EN_ANATOMY_NER_MANIFEST_ROW]
+        )
+        monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
+
+        portuguese_models = get_ner_models_by_language("pt")
+
+        assert [info.model_id for info in portuguese_models.values()] == [
+            PT_ANATOMY_NER_MANIFEST_ROW["repo_id"]
+        ]
+        assert get_ner_models_by_language("pt")
+        assert not any(
+            info.model_id == EN_ANATOMY_NER_MANIFEST_ROW["repo_id"]
+            for info in portuguese_models.values()
+        )
+
+    def test_ner_language_helper_is_a_top_level_export(self):
+        import openmed
+
+        assert openmed.get_ner_models_by_language is get_ner_models_by_language
+
+    def test_portuguese_family_labels_normalize(self, subtests):
+        for label, expected in (("DOENCA", DISEASE), ("ANATOMIA", ANATOMY)):
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label, lang="pt") == expected

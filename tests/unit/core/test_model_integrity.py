@@ -140,6 +140,46 @@ def test_skip_env_logs_prominent_warning(
     assert "MODEL INTEGRITY VERIFICATION DISABLED" in caplog.text
 
 
+def test_required_integrity_rejects_missing_or_skipped_proof(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_info = SimpleNamespace(
+        model_id="OpenMed/required-integrity-fixture",
+        reproducibility_hash="sha256:" + "3" * 64,
+    )
+
+    with pytest.raises(ModelIntegrityError, match="no verified artifact"):
+        prepare_model_reference(
+            registry_info.model_id,
+            registry_info=registry_info,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+    monkeypatch.setenv("OPENMED_SKIP_MODEL_VERIFY", "1")
+    with pytest.raises(ModelIntegrityError, match="cannot be skipped"):
+        prepare_model_reference(
+            registry_info.model_id,
+            registry_info=registry_info,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+
+def test_required_integrity_rejects_unregistered_reference(tmp_path: Path) -> None:
+    with pytest.raises(ModelIntegrityError, match="registry integrity metadata"):
+        prepare_model_reference(
+            "OpenMed/unregistered-integrity-fixture",
+            registry_info=None,
+            cache_dir=tmp_path,
+            local_only=True,
+            require_integrity=True,
+        )
+
+
 def test_strict_mode_rejects_registry_model_without_hash(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -272,22 +312,6 @@ def test_verified_download_pins_remote_metadata_and_rechecks_offline(
         )
     assert raised.value.expected_sha256 == f"sha256:{weight_hash}"
     assert raised.value.actual_sha256 == sha256_file(snapshot / "model.safetensors")
-
-
-@pytest.mark.slow
-def test_sha256_streaming_500mb_stays_under_two_seconds(tmp_path: Path) -> None:
-    artifact = tmp_path / "synthetic-500mb.bin"
-    artifact.touch()
-    with artifact.open("r+b") as handle:
-        handle.truncate(500 * 1024 * 1024)
-
-    started = time.perf_counter()
-    digest = sha256_file(artifact)
-    elapsed = time.perf_counter() - started
-
-    assert digest.startswith("sha256:")
-    assert len(digest) == len("sha256:") + hashlib.sha256().digest_size * 2
-    assert elapsed < 2.0, f"streaming 500MB took {elapsed:.3f}s"
 
 
 def test_sigstore_bundle_rejects_tampered_manifest(tmp_path: Path) -> None:

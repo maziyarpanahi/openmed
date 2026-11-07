@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/operational-limit-decision/1.0.0",
+  "title": "OpenMed Operational Limit Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "state",
+    "code",
+    "observed_count",
+    "schema_version",
+    "compatibility_policy"
+  ],
+  "properties": {
+    "state": {"enum": ["success", "denied", "unsupported", "failure"]},
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "observed_count": {"type": "integer", "minimum": 0},
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"}
+  }
+}

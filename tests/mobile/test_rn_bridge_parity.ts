@@ -62,6 +62,20 @@ test("public runtime surface is snapshot-tested", async () => {
   assert.deepEqual(packageJson.scripts, snapshot.packageScripts);
 });
 
+test("empty hash keys are rejected before reaching native inference", async () => {
+  const native = createNativeFixture("ios");
+  const fail = async () => { throw new Error("native inference must not run"); };
+  setOpenMedKitNativeModuleForTests({
+    ...native,
+    analyzeText: fail,
+    extractPii: fail,
+    deidentify: fail,
+  });
+  for (const call of [analyzeText, extractPii, deidentify]) {
+    await assert.rejects(call(fixtureText, { hashSecret: "" }), /hashSecret must not be empty/);
+  }
+});
+
 for (const platform of ["ios", "android"] as const) {
   test(`${platform} bridge returns spans matching the shared native fixture`, async () => {
     const native = createNativeFixture(platform);

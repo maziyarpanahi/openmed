@@ -9,7 +9,7 @@ Il runtime locale principale di OpenMed esegue estrazione e de-identificazione d
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -24,7 +24,7 @@ Il runtime locale principale di OpenMed esegue estrazione e de-identificazione d
 </p>
 
 <p>
-  <b>Esecuzione locale prioritaria</b> &nbsp;·&nbsp; <b>33 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 voci del manifesto</b> &nbsp;·&nbsp; <b>35 lingue PII supportate da modelli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -102,7 +102,7 @@ Sull’hardware Apple supportato, OpenMed può usare **MLX** e **[OpenMedKit](sw
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 
@@ -166,7 +166,7 @@ analyze_text(
 **Servizio REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -275,7 +275,7 @@ Sugli host non Apple Silicon, i nomi dei modelli MLX vengono sostituiti automati
 
 ---
 
-## PII multilingue (34 route supportate; 33 supportate da modelli)
+## PII multilingue (42 route supportate; 35 supportate da modelli)
 
 Estrazione e de-identificazione in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` e `tr`: **il catalogo registrato dei modelli PII** in totale.
 
@@ -312,7 +312,7 @@ Un servizio FastAPI compatibile con Docker, con validazione delle richieste, pre
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -393,7 +393,7 @@ Se OpenMed ti è utile nella tua ricerca, ti preghiamo di citarlo:
 
 Se OpenMed ti è utile, una stella aiuta altri a scoprirlo.
 
-[4,700+ GitHub stars · 29 Jul 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

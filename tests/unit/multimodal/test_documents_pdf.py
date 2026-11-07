@@ -170,6 +170,87 @@ def test_synthetic_pdf_fixture_extracts_with_real_pdfplumber(tmp_path):
     assert rectangles[0].bbox[1] < rectangles[0].bbox[3]
 
 
+def test_visual_lines_keep_clinical_headers_and_source_coordinates(monkeypatch):
+    lines = [
+        ("Familienanamnese:", 10, 20),
+        ("Vater mit Diabetes.", 30, 42),
+        ("Befund:", 55, 65),
+        ("Keine Dyspnoe.", 75, 87),
+        ("Medikation:", 100, 110),
+        ("Metoprolol 47,5 mg", 120, 132),
+    ]
+    words = []
+    for text, top, bottom in lines:
+        x = 10
+        for word in text.split():
+            width = len(word) * 6
+            words.append(dict(text=word, x0=x, top=top, x1=x + width, bottom=bottom))
+            x += width + 4
+    module = SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)]))
+    monkeypatch.setitem(sys.modules, "pdfplumber", module)
+    legacy = extract_pdf("synthetic.pdf")
+    clinical = extract_pdf("synthetic.pdf", preserve_lines=True)
+    assert clinical.text == "\n".join(line[0] for line in lines)
+    assert legacy.text == clinical.text.replace("\n", " ")
+    assert clinical.spans == legacy.spans
+    assert clinical.metadata["line_breaks_preserved"] is True
+    assert "line_breaks_preserved" not in legacy.metadata
+    start = clinical.text.index("47,5")
+    assert project_text_spans(clinical, [(start, start + 7)])[0].bbox == (
+        74.0,
+        120.0,
+        114.0,
+        132.0,
+    )
+    from openmed.clinical.analysis import analyze_clinical_context
+
+    result = analyze_clinical_context(
+        clinical.text, [], tasks=["sections"], language="de"
+    )
+    assert [s["label"] for s in result["tasks"]["sections"]["records"]] == [
+        "family_history",
+        "findings",
+        "medications",
+    ]
+
+
+def test_line_preservation_keeps_small_font_tokens_on_same_line(monkeypatch):
+    words = [
+        dict(text="Metoprolol", x0=10, x1=70, top=20, bottom=32),
+        dict(text="47,5", x0=74, x1=98, top=23, bottom=30),
+        dict(text="mg", x0=102, x1=114, top=20, bottom=32),
+    ]
+    monkeypatch.setitem(
+        sys.modules,
+        "pdfplumber",
+        SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
+    )
+    assert (
+        extract_pdf("synthetic.pdf", preserve_lines=True).text == "Metoprolol 47,5 mg"
+    )
+
+
+def test_line_preservation_rejects_untyped_control(subtests):
+    for value in [1, "true", None]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
+                extract_pdf("unopened.pdf", preserve_lines=value)
+
+
+def test_line_preservation_rejects_invalid_word_geometry(subtests):
+    for top, bottom in [(float("nan"), 30), (20, float("inf")), (30, 20), (20, 20)]:
+        with subtests.test(top=top, bottom=bottom):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                words = [dict(text="Patient", x0=10, x1=40, top=top, bottom=bottom)]
+                monkeypatch.setitem(
+                    sys.modules,
+                    "pdfplumber",
+                    SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
+                )
+                with pytest.raises(ValueError, match="valid word geometry"):
+                    extract_pdf("synthetic.pdf", preserve_lines=True)
+
+
 def test_project_text_spans_merges_same_line_words(fake_pdfplumber):
     doc = extract_pdf("synthetic_phi.pdf")
     start = doc.text.index("John")
@@ -188,7 +269,7 @@ def test_project_text_spans_merges_same_line_words(fake_pdfplumber):
 
 
 def test_redact_document_pdf_reports_detected_rectangles(
-    fake_pdfplumber, multimodal_deps_present
+    fake_pdfplumber, multimodal_deps_present, tmp_path
 ):
     def detector(text, *, lang=None):
         return {
@@ -202,7 +283,9 @@ def test_redact_document_pdf_reports_detected_rectangles(
             ]
         }
 
-    doc = redact_document("synthetic_phi.pdf", models={"detector": detector}, lang="en")
+    source = tmp_path / "synthetic_phi.pdf"
+    source.write_bytes(b"synthetic bytes parsed by fake_pdfplumber")
+    doc = redact_document(source, models={"detector": detector}, lang="en")
 
     assert doc.text == "Patient John Doe\nMRN 12345"
     assert doc.metadata["detected_span_count"] == 1
@@ -216,3 +299,45 @@ def test_redact_document_pdf_reports_detected_rectangles(
     assert rectangles[0]["confidence"] == 0.93
     assert rectangles[0]["metadata"]["source_span_count"] == 2
     assert "text_sha256" in rectangles[0]["metadata"]
+
+
+def test_pdf_annotation_refusals_discard_private_exception_context(subtests):
+    for boundary in ["snapshot", "extract", "prepare", "detector"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from io import BytesIO
+
+                import openmed.multimodal.documents_pdf as pdf
+                from openmed.multimodal.base import ExtractedDocument
+
+                class PrivateSource(BytesIO):
+                    def read(self, *args):
+                        raise RuntimeError("synthetic private PDF source detail")
+
+                def fail(*args, **kwargs):
+                    raise RuntimeError("synthetic private annotation detail")
+
+                if boundary == "snapshot":
+                    call = lambda: pdf._snapshot_pdf_source(PrivateSource())
+                    code = "pdf_source_unreadable"
+                elif boundary == "extract":
+                    call = lambda: pdf.extract_pdf(
+                        PrivateSource(), include_annotations=True
+                    )
+                    code = "annotation_appearance_unmappable"
+                elif boundary == "prepare":
+                    monkeypatch.setitem(
+                        sys.modules, "pikepdf", SimpleNamespace(open=fail)
+                    )
+                    call = lambda: pdf._prepare_annotation_source(BytesIO(b"synthetic"))
+                    code = "annotation_appearance_unmappable"
+                else:
+                    call = lambda: pdf._annotation_entities(
+                        ExtractedDocument(text="", spans=()), fail, None
+                    )
+                    code = "annotation_detection_failed"
+                with pytest.raises(ValueError) as caught:
+                    call()
+                assert str(caught.value) == code
+                assert caught.value.__cause__ is None
+                assert caught.value.__context__ is None

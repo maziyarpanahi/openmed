@@ -19,6 +19,13 @@ REQUEST_ID_HEADER = "X-Request-ID"
 SERVICE_LOG_LEVEL_ENV_VAR = "OPENMED_SERVICE_LOG_LEVEL"
 SERVICE_LOG_FORMAT_ENV_VAR = "OPENMED_SERVICE_LOG_FORMAT"
 _MODEL_NAME_SCOPE_KEY = "openmed.access_log_model_name"
+_IDENTITY_SCOPE_KEY = "openmed.access_log_identity"
+_CREDENTIAL_TYPE_SCOPE_KEY = "openmed.access_log_credential_type"
+_GROUNDING_INPUT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_input_count"
+_GROUNDING_RESULT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_result_count"
+_GROUNDING_SYSTEMS_SCOPE_KEY = "openmed.access_log_grounding_systems"
+_GROUNDING_LANG_SCOPE_KEY = "openmed.access_log_grounding_lang"
+_BRIEF_SCOPE_KEY = "openmed.access_log_brief"
 
 _REQUEST_ID: ContextVar[Optional[str]] = ContextVar(
     "openmed_service_request_id",
@@ -70,7 +77,56 @@ def current_request_id() -> Optional[str]:
 def set_access_log_model_name(request: Any, model_name: Optional[str]) -> None:
     """Attach the parsed model name to the current request scope for logging."""
     if model_name:
+        from .app import _get_service_runtime
+
+        _get_service_runtime(request).validate_served_model(model_name)
         request.scope[_MODEL_NAME_SCOPE_KEY] = str(model_name)
+
+
+def set_access_log_identity(
+    request: Any,
+    *,
+    principal: str,
+    credential_type: str,
+) -> None:
+    """Attach a non-PHI caller identity to the current request access log."""
+    request.scope[_IDENTITY_SCOPE_KEY] = str(principal)
+    request.scope[_CREDENTIAL_TYPE_SCOPE_KEY] = str(credential_type)
+
+
+def set_access_log_grounding(
+    request: Any,
+    *,
+    input_count: int,
+    systems: list[str],
+    lang: str,
+    result_count: Optional[int] = None,
+) -> None:
+    """Attach content-free grounding dimensions to the request access log."""
+
+    request.scope[_GROUNDING_INPUT_COUNT_SCOPE_KEY] = max(0, int(input_count))
+    request.scope[_GROUNDING_SYSTEMS_SCOPE_KEY] = tuple(str(item) for item in systems)
+    request.scope[_GROUNDING_LANG_SCOPE_KEY] = str(lang)
+    if result_count is not None:
+        request.scope[_GROUNDING_RESULT_COUNT_SCOPE_KEY] = max(0, int(result_count))
+
+
+def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
+    """Attach only bounded counts and closed-vocabulary brief outcomes."""
+    from openmed.clinical.brief import BriefRefusal
+
+    reason = response.get("refusal_reason")
+    backend = response.get("backend_id")
+    request.scope[_BRIEF_SCOPE_KEY] = {
+        "brief_claim_count": len(response.get("verdicts", [])),
+        "brief_summary_characters": int(response.get("summary_characters", 0)),
+        "brief_refusal_reason": reason
+        if reason in {item.value for item in BriefRefusal}
+        else None,
+        "brief_backend": backend
+        if backend in {"deterministic-extractive", "local-mlx"}
+        else "local",
+    }
 
 
 class CorrelationIdMiddleware:
@@ -109,17 +165,34 @@ class CorrelationIdMiddleware:
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000
             try:
+                payload = {
+                    "method": str(scope.get("method", "")),
+                    "route": _route_template(scope),
+                    "status_code": status_code,
+                    "duration_ms": round(duration_ms, 3),
+                    "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
+                    "identity": scope.get(_IDENTITY_SCOPE_KEY),
+                    "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
+                    "request_id": request_id,
+                }
+                if _GROUNDING_INPUT_COUNT_SCOPE_KEY in scope:
+                    payload.update(
+                        {
+                            "grounding_input_count": scope[
+                                _GROUNDING_INPUT_COUNT_SCOPE_KEY
+                            ],
+                            "grounding_result_count": scope.get(
+                                _GROUNDING_RESULT_COUNT_SCOPE_KEY
+                            ),
+                            "grounding_systems": scope[_GROUNDING_SYSTEMS_SCOPE_KEY],
+                            "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
+                        }
+                    )
+                payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 emit_access_log(
                     self.logger,
                     self.log_config,
-                    {
-                        "method": str(scope.get("method", "")),
-                        "route": _route_template(scope),
-                        "status_code": status_code,
-                        "duration_ms": round(duration_ms, 3),
-                        "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
-                        "request_id": request_id,
-                    },
+                    payload,
                 )
             finally:
                 _REQUEST_ID.reset(request_token)
@@ -155,18 +228,40 @@ def _route_template(scope: Scope) -> str:
     route_path = getattr(route, "path", None)
     if isinstance(route_path, str) and route_path:
         return route_path
+    if scope.get("app") is not None:
+        # Lazy included routers may leave the request's route path empty.
+        # Resolve only a registered effective template; never log raw targets.
+        from starlette.requests import Request
+
+        from .auth import route_key_for_request
+
+        try:
+            _, template = route_key_for_request(Request(scope))
+            return template or "unknown"
+        except Exception:
+            return "unknown"
     return "unknown"
 
 
 def _format_access_log(payload: Mapping[str, Any], config: ServiceLogConfig) -> str:
     if config.fmt == "plain":
-        return (
+        rendered = (
             f"{payload.get('method', '')} {payload.get('route', 'unknown')} "
             f"{payload.get('status_code', 0)} "
             f"{payload.get('duration_ms', 0)}ms "
             f"request_id={payload.get('request_id', '')} "
-            f"model_name={payload.get('model_name') or '-'}"
+            f"model_name={payload.get('model_name') or '-'} "
+            f"identity={payload.get('identity') or '-'} "
+            f"credential_type={payload.get('credential_type') or '-'}"
         )
+        if "grounding_input_count" in payload:
+            rendered += (
+                f" grounding_input_count={payload.get('grounding_input_count')}"
+                f" grounding_result_count={payload.get('grounding_result_count')}"
+                f" grounding_systems={payload.get('grounding_systems') or '-'}"
+                f" grounding_lang={payload.get('grounding_lang') or '-'}"
+            )
+        return rendered
     return _json_dumps(payload)
 
 
@@ -213,5 +308,56 @@ __all__ = [
     "StructuredJsonLogFormatter",
     "current_request_id",
     "service_log_config_from_env",
+    "set_access_log_grounding",
+    "set_access_log_identity",
     "set_access_log_model_name",
 ]
+
+
+def main() -> None:
+    """Launch structured access logging without raw request targets."""
+    import argparse
+
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("app", nargs="?", default="openmed.service.app:app")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--workers", default=1, type=int)
+    parser.add_argument("--ssl-keyfile")
+    parser.add_argument("--ssl-certfile")
+    parser.add_argument("--ssl-ca-certs")
+    parser.add_argument("--ssl-cert-reqs", type=int, default=0)
+    parser.add_argument(
+        "--no-proxy-headers", dest="proxy_headers", action="store_false"
+    )
+    parser.add_argument("--forwarded-allow-ips")
+    options = vars(parser.parse_args())
+    log_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "access": {"()": "openmed.service.logging.StructuredJsonLogFormatter"}
+        },
+        "handlers": {
+            "access": {
+                "class": "logging.StreamHandler",
+                "formatter": "access",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "loggers": {
+            ACCESS_LOGGER_NAME: {
+                "handlers": ["access"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+        },
+    }
+    uvicorn.run(**options, access_log=False, log_config=log_config)
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised by process-level tests
+    main()

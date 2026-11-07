@@ -1,0 +1,26 @@
+{
+  "corpus_signature": "sha256:d4f63acd9499b5a10b52d3318561b4fd7669b056382cd34f1ae0e9bf130a5bed",
+  "items": {
+    "mask_name_email": {
+      "analyze_text": "sha256:4d13d6680834594544499698a6f6b9514ff7812e3e6990a5f1b6a20a4a983d40",
+      "deidentify": "sha256:976ceb9206409792dbaa2f8b0b417cba8b3a6a6f3766428e7f9d1bee4ab71e8c",
+      "extract_pii": "sha256:da702b99c2ddb8bcad66a8db194a73459b432ef8d80b6811f4796e5337c2de34"
+    },
+    "mask_repeated_name": {
+      "analyze_text": "sha256:70eb43c136046b655f7b493a3d21e433dd0bb4eaf8a5842ca27a91ed62278266",
+      "deidentify": "sha256:ced13d9c86b38a3e26b8e780ae704e2bcf7b13840b47676e970d01a881a8d122",
+      "extract_pii": "sha256:edbb40841705cf22b322d28e56c37498427476b902879946719f1b8fdadba4e7"
+    },
+    "replace_seeded_name": {
+      "analyze_text": "sha256:32cd62ce20d2c5bcb0c8c7a766ef710fa0be42069f26f5fcebe2f1de6c347bef",
+      "deidentify": "sha256:87ba6a666c6329cc170f5d07965b6cbe72a6b58a4023b22ff82880109d1942ed",
+      "extract_pii": "sha256:7efc030d0e074c9f3217483d5695acbd9404c28992cb07e51b7fa421b74aaec1"
+    },
+    "shift_dates_seeded": {
+      "analyze_text": "sha256:3092808d3913f2a3518d5a9bc044494c0b9486c746f0c23011f716076476a710",
+      "deidentify": "sha256:831b780ec4cd68ee36421037bbdcf6cd6a590792f204b2ddbf7f638a007c8f36",
+      "extract_pii": "sha256:4f4ae2a6d0262c9790d1d75bf42d07896f13bdfc5efe58d05f815bbbd1ff76ad"
+    }
+  },
+  "schema_version": "openmed.determinism_corpus.v1"
+}

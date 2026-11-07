@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_model_route.schema.json",
+  "title": "OpenMed verified clinical model route",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "alias",
+    "artifact_digest",
+    "artifact_id",
+    "compatibility_policy",
+    "fallback_from",
+    "model_kind",
+    "output_schema",
+    "output_schema_version",
+    "pack_digest",
+    "pack_id",
+    "revision",
+    "runtime",
+    "schema_version",
+    "task"
+  ],
+  "properties": {
+    "alias": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "artifact_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "compatibility_policy": {"const": "same_major"},
+    "fallback_from": {"oneOf": [{"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"}, {"type": "null"}]},
+    "model_kind": {"enum": ["bounded", "deterministic", "generative"]},
+    "output_schema": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "output_schema_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+    "pack_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "pack_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|builtin-v[1-9][0-9]*|local-v[1-9][0-9]*)$"},
+    "runtime": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "schema_version": {"const": "1.0.0"},
+    "task": {"enum": ["assertion", "classification", "pair_scoring", "relation_extraction", "span_extraction", "temporality", "token_classification"]}
+  }
+}

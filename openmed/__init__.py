@@ -11,7 +11,18 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 from .__about__ import __version__
 
 if TYPE_CHECKING:
-    from .core import ModelLoader, OpenMedConfig
+    from .aio import aanalyze_text, abatch, adeidentify, aextract_pii
+    from .core import ModelCachePolicy, ModelLoader, OpenMedConfig
+    from .core.capabilities import (
+        BackendSpec,
+        BackendStatus,
+        MissingOptionalDependencyError,
+    )
+    from .core.document_stream import (
+        DocumentStreamDeidentifier,
+        DocumentStreamResult,
+        deidentify_document_stream,
+    )
     from .core.pii import (
         DeidentificationResult,
         PIIEntity,
@@ -21,16 +32,41 @@ if TYPE_CHECKING:
     )
     from .core.results import AnalyzeResult
     from .processing import BatchProcessor
+    from .processing.advanced_ner import extract_clinical_entities
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
+    "aanalyze_text": ".aio",
+    "abatch": ".aio",
+    "adeidentify": ".aio",
+    "aextract_pii": ".aio",
     "ModelLoader": ".core",
     "OpenMedConfig": ".core",
+    "ModelCachePolicy": ".core",
     "load_model": ".core",
+    "BackendSpec": ".core.capabilities",
+    "BackendStatus": ".core.capabilities",
+    "MissingOptionalDependencyError": ".core.capabilities",
+    "available_backends": ".core.capabilities",
+    "backend_status": ".core.capabilities",
+    "is_backend_available": ".core.capabilities",
+    "require_backend": ".core.capabilities",
+    "ERROR_CODES": ".core.errors",
+    "OpenMedError": ".core.errors",
+    "InputError": ".core.errors",
+    "ConfigurationError": ".core.errors",
+    "CapabilityError": ".core.errors",
+    "MissingExtraError": ".core.errors",
+    "ModelLoadError": ".core.errors",
+    "PolicyError": ".core.errors",
+    "InternalError": ".core.errors",
+    "InferenceError": ".core.errors",
+    "redact_detail": ".core.errors",
     "LANG_TO_LOCALE": ".core.anonymizer",
     "Anonymizer": ".core.anonymizer",
     "AnonymizerConfig": ".core.anonymizer",
     "IndiaSurrogateProvider": ".core.anonymizer",
+    "discover_anonymizer_provider_plugins": ".core.anonymizer",
     "register_clinical_provider": ".core.anonymizer",
     "register_label_generator": ".core.anonymizer",
     "AttestationReport": ".core.attestation",
@@ -46,6 +82,9 @@ _LAZY_IMPORTS = {
     "RequestBudget": ".core.budget",
     "coerce_budget": ".core.budget",
     "CustomRecognizer": ".core.custom_recognizer",
+    "DocumentStreamDeidentifier": ".core.document_stream",
+    "DocumentStreamResult": ".core.document_stream",
+    "deidentify_document_stream": ".core.document_stream",
     "ExplainReport": ".core.explain",
     "explain": ".core.explain",
     "CachedModel": ".core.hf_hub",
@@ -64,7 +103,12 @@ _LAZY_IMPORTS = {
     "get_model_info": ".core.model_registry",
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
+    "get_ner_models_by_language": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
+    "ground": ".clinical.grounding",
+    "GroundedConcept": ".clinical.grounding",
+    "GroundingConfigError": ".clinical.grounding",
+    "GroundingResult": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
     "ModelQuery": ".core.model_search",
     "ModelSearchResult": ".core.model_search",
@@ -122,6 +166,15 @@ _LAZY_IMPORTS = {
     "PagedKVCacheStats": ".mlx.lm",
     "TokenRange": ".mlx.lm",
     "generate_text": ".mlx.lm",
+    "MapleClinicalAssistant": ".mlx.maple",
+    "MapleRelation": ".mlx.maple",
+    "MapleResponseError": ".mlx.maple",
+    "MapleSpan": ".mlx.maple",
+    "MapleTask": ".mlx.maple",
+    "MapleTaskResult": ".mlx.maple",
+    "build_maple_task_messages": ".mlx.maple",
+    "parse_maple_task_response": ".mlx.maple",
+    "redact_maple_spans": ".mlx.maple",
     "OnnxEntity": ".onnx.inference",
     "OnnxModel": ".onnx.inference",
     "load_onnx_model": ".onnx.inference",
@@ -140,10 +193,12 @@ _LAZY_IMPORTS = {
     "format_predictions": ".processing",
     "postprocess_text": ".processing",
     "preprocess_text": ".processing",
+    "resolve_sections": ".processing",
     "process_batch": ".processing",
     "redact_dataset": ".processing",
     "sentence_utils": ".processing",
     "AdvancedNERProcessor": ".processing.advanced_ner",
+    "extract_clinical_entities": ".processing.advanced_ner",
     "StreamingReplayResult": ".processing.advanced_ner",
     "StreamingTokenClassifier": ".processing.advanced_ner",
     "create_advanced_processor": ".processing.advanced_ner",
@@ -352,6 +407,9 @@ def analyze_text(
     model_name: str = "disease_detection_superclinical",
     *,
     model_id: Optional[str] = None,
+    family: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    threshold: Optional[float] = None,
     config: Optional[OpenMedConfig] = None,
     loader: Optional[ModelLoader] = None,
     aggregation_strategy: Optional[str] = "simple",
@@ -367,11 +425,12 @@ def analyze_text(
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
     sentence_backend: Literal["auto", "yasbd"] = "auto",
+    assert_context: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
 ) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
-    """Run a token-classification model on ``text`` and format the predictions.
+    """Run token-classification or native span NER and format the predictions.
 
     Args:
         text: Clinical or biomedical text to analyse.
@@ -379,6 +438,13 @@ def analyze_text(
             local model path.
         model_id: Alias for ``model_name``. Useful for APIs and examples that
             name model identifiers as ``model_id``.
+        family: Explicit ``gliner``, ``gliner2``, or ``gliformer`` family for an
+            ambiguously named checkpoint. Recognized IDs and local configs
+            select their family automatically.
+        labels: Entity types for a native span model; the registered disease
+            checkpoint defaults to ``["disease"]``.
+        threshold: Native extraction threshold, defaulting to 0.5. The final
+            ``confidence_threshold`` filter applies independently afterwards.
         config: Optional :class:`~openmed.core.config.OpenMedConfig` instance.
         loader: Reuse an existing :class:`~openmed.core.models.ModelLoader`.
         aggregation_strategy: Hugging Face aggregation strategy (``"simple"`` by
@@ -401,6 +467,9 @@ def analyze_text(
         sentence_backend: Sentence segmentation engine to use.
             It can be ``"auto"`` (default, unchanged routing) or ``"yasbd"``
             (experimental opt-in; requires ``openmed[yasbd]``).
+        assert_context: Attach deterministic negation, uncertainty,
+            experiencer, and temporality labels to each entity under
+            ``metadata["clinical_context"]``. Disabled by default.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
@@ -468,7 +537,23 @@ def analyze_text(
         if final_result is not None:
             return final_result
 
-    loader = loader or model_loader(config)
+    if loader is None:
+        from .ner.indexing import resolve_model_record
+        from .ner.infer import (
+            ensure_gliformer_available,
+            ensure_gliner2_available,
+            ensure_gliner_available,
+        )
+
+        native_record = resolve_model_record(validated_model, family=family)
+        if native_record is not None:
+            dependency_checks = {
+                "gliformer": ensure_gliformer_available,
+                "gliner2": ensure_gliner2_available,
+                "gliner": ensure_gliner_available,
+            }
+            dependency_checks[native_record.family]()
+        loader = model_loader(config)
     runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
@@ -476,6 +561,12 @@ def analyze_text(
         aggregation_strategy=aggregation_strategy,
         use_fast_tokenizer=use_fast_tokenizer,
     )
+    if family is not None:
+        pipeline_args["family"] = family
+    if labels is not None:
+        pipeline_args["labels"] = labels
+    if threshold is not None:
+        pipeline_args["threshold"] = validate_confidence_threshold(threshold)
 
     provided_max_length = pipeline_kwargs.pop("max_length", None)
     truncate_inputs = pipeline_kwargs.pop("truncation", True)
@@ -493,11 +584,15 @@ def analyze_text(
     if truncate_inputs and provided_max_length is not None:
         effective_max_length = provided_max_length
     elif truncate_inputs:
-        with network_blocked_if_offline(runtime_config):
-            effective_max_length = loader.get_max_sequence_length(
-                validated_model,
-                tokenizer=getattr(ner_pipeline, "tokenizer", None),
-            )
+        native_max_length = getattr(ner_pipeline, "openmed_max_length", None)
+        if type(native_max_length) is int:
+            effective_max_length = native_max_length
+        else:
+            with network_blocked_if_offline(runtime_config):
+                effective_max_length = loader.get_max_sequence_length(
+                    validated_model,
+                    tokenizer=getattr(ner_pipeline, "tokenizer", None),
+                )
 
     desired_max_length = (
         provided_max_length if provided_max_length is not None else effective_max_length
@@ -750,6 +845,16 @@ def analyze_text(
             logger.warning("Failed to remap predictions to medical tokens: %s", exc)
             base_metadata.setdefault("medical_tokenizer", False)
 
+    if assert_context and flattened_predictions:
+        from .clinical.context import assert_context as attach_context
+
+        flattened_predictions = attach_context(
+            validated_text,
+            flattened_predictions,
+            sentences=processed_segments,
+            language=sentence_language,
+        )
+
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,
         "group_entities": group_entities,
@@ -792,14 +897,23 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "ModelCachePolicy",
     "OnnxEntity",
     "OnnxModel",
     "load_onnx_model",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "IndicNormalization",
     "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
+    "resolve_sections",
     "TokenizationHelper",
     "OutputFormatter",
     "format_predictions",
@@ -811,8 +925,10 @@ __all__ = [
     "DatasetRedactionResult",
     "DatasetRedactionSummary",
     "process_batch",
+    "abatch",
     "redact_dataset",
     "AdvancedNERProcessor",
+    "extract_clinical_entities",
     "StreamingReplayResult",
     "StreamingTokenClassifier",
     "create_advanced_processor",
@@ -831,8 +947,13 @@ __all__ = [
     "get_all_models",
     "list_model_categories",
     "get_model_suggestions",
+    "get_ner_models_by_language",
     "get_pii_models_by_language",
     "get_default_pii_model",
+    "ground",
+    "GroundedConcept",
+    "GroundingConfigError",
+    "GroundingResult",
     # Hugging Face Hub model-pull helpers
     "prefetch_model",
     "list_cached_models",
@@ -842,6 +963,7 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "aanalyze_text",
     "explain",
     "ExplainReport",
     "generate_text",
@@ -851,6 +973,15 @@ __all__ = [
     "PagedKVCachePlan",
     "PagedKVCacheStats",
     "TokenRange",
+    "MapleClinicalAssistant",
+    "MapleRelation",
+    "MapleResponseError",
+    "MapleSpan",
+    "MapleTask",
+    "MapleTaskResult",
+    "build_maple_task_messages",
+    "parse_maple_task_response",
+    "redact_maple_spans",
     # Profiling utilities
     "Profiler",
     "ProfileReport",
@@ -865,10 +996,24 @@ __all__ = [
     "timed",
     # PII detection and de-identification
     "extract_pii",
+    "aextract_pii",
     "deidentify",
+    "adeidentify",
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    # Structured public error taxonomy
+    "ERROR_CODES",
+    "OpenMedError",
+    "InputError",
+    "ConfigurationError",
+    "CapabilityError",
+    "MissingExtraError",
+    "ModelLoadError",
+    "PolicyError",
+    "InternalError",
+    "InferenceError",
+    "redact_detail",
     # Per-request resource and timeout budgets
     "RequestBudget",
     "BudgetExceededError",
@@ -883,6 +1028,9 @@ __all__ = [
     "StreamingDeidentificationEvent",
     "StreamingDeidentifier",
     "deidentify_stream",
+    "DocumentStreamDeidentifier",
+    "DocumentStreamResult",
+    "deidentify_document_stream",
     "replay_token_classifier",
     "stream_token_classifier",
     "redaction_preview",
@@ -916,6 +1064,7 @@ __all__ = [
     "AnonymizerConfig",
     "IndiaSurrogateProvider",
     "LANG_TO_LOCALE",
+    "discover_anonymizer_provider_plugins",
     "register_clinical_provider",
     "register_label_generator",
     "SurrogateVault",

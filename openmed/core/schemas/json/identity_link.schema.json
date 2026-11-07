@@ -1,0 +1,33 @@
+{
+  "$defs": {
+    "sourceKey": {
+      "additionalProperties": false,
+      "properties": {
+        "entity_type": {"enum": ["patient", "encounter"]},
+        "local_key": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+        "schema_version": {"const": "1.0.0"},
+        "source_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+      },
+      "required": ["entity_type", "local_key", "schema_version", "source_id"],
+      "type": "object"
+    }
+  },
+  "$id": "https://openmed.dev/schemas/v3/identity/link.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "active": {"type": "boolean"},
+    "canonical_key": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "evidence_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "link_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "policy_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "policy_version": {"pattern": "^[1-9][0-9]*(\\.[0-9]+){0,2}$", "type": "string"},
+    "recorded_at": {"format": "date-time", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "source_key": {"$ref": "#/$defs/sourceKey"}
+  },
+  "required": ["active", "canonical_key", "evidence_digest", "link_id", "policy_id", "policy_version", "recorded_at", "schema_version", "source_key"],
+  "schema_version": 1,
+  "title": "OpenMedIdentityLink",
+  "type": "object"
+}

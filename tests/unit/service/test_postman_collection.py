@@ -407,7 +407,11 @@ def test_accept_headers_match_json_and_ndjson_response_handling() -> None:
         }
         expected = (
             "application/x-ndjson"
-            if _request_operation(request_item) == ("post", "/pii/extract/stream")
+            if _request_operation(request_item)
+            in {
+                ("post", "/pii/extract/stream"),
+                ("post", "/pii/deidentify/stream"),
+            }
             else "application/json"
         )
         assert headers["accept"] == expected
@@ -480,6 +484,7 @@ def test_collection_does_not_persist_credentials() -> None:
     assert smart_body_seen
 
 
-@pytest.mark.parametrize("endpoint", REQUIRED_ENDPOINTS)
-def test_each_required_endpoint_has_a_request(endpoint: str) -> None:
-    assert endpoint in _request_paths()
+def test_each_required_endpoint_has_a_request(subtests) -> None:
+    for endpoint in REQUIRED_ENDPOINTS:
+        with subtests.test(endpoint=endpoint):
+            assert endpoint in _request_paths()

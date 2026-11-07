@@ -1,0 +1,16 @@
+{
+  "resource": {
+    "resourceType": "Observation",
+    "id": "v22-r5-observation",
+    "status": "final",
+    "code": {
+      "text": "Synthetic observation"
+    },
+    "unsupportedCrossVersionField": {
+      "value": "SYNTH-R5-SECRET-2200"
+    }
+  },
+  "sensitive_values": [
+    "SYNTH-R5-SECRET-2200"
+  ]
+}

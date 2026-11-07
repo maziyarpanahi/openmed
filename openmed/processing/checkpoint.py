@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -211,21 +212,24 @@ class LocalFileCheckpointStore:
     def __init__(self, path: str | Path, *, fsync: bool = True) -> None:
         self.path = Path(path)
         self.fsync = fsync
+        self._lock = threading.RLock()
 
     def load(self, topic: str, partition: str | int) -> CheckpointRecord | None:
         """Return the latest checkpoint for a source topic/partition."""
 
-        return self._read_records().get(_checkpoint_key(topic, partition))
+        with self._lock:
+            return self._read_records().get(_checkpoint_key(topic, partition))
 
     def save(self, checkpoint: CheckpointRecord) -> None:
         """Persist ``checkpoint`` with temp-file plus ``os.replace`` semantics."""
 
-        records = self._read_records()
-        current = records.get(checkpoint.source.checkpoint_key)
-        if current is not None and current.source.offset > checkpoint.source.offset:
-            return
-        records[checkpoint.source.checkpoint_key] = checkpoint
-        self._write_records(records)
+        with self._lock:
+            records = self._read_records()
+            current = records.get(checkpoint.source.checkpoint_key)
+            if current is not None and current.source.offset > checkpoint.source.offset:
+                return
+            records[checkpoint.source.checkpoint_key] = checkpoint
+            self._write_records(records)
 
     def _read_records(self) -> dict[str, CheckpointRecord]:
         if not self.path.exists():

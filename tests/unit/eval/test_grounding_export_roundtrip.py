@@ -4,18 +4,130 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
-from openmed.clinical.grounding import Candidate
+import pytest
+
+from openmed.clinical.grounding import Candidate, GroundedSpan
 from openmed.eval.golden.loader import list_fixture_paths
 from openmed.eval.medmentions_linking import (
     MEDMENTIONS_TOP1_FLOOR,
     MEDMENTIONS_TOP1_TARGET,
     evaluate_medmentions_st21pv,
 )
+from openmed.eval.suites import grounding_export as grounding_export_suite
 from openmed.eval.suites.grounding_export import (
+    main,
     run_grounding_export_suite,
     validate_fhir_r4_shape,
 )
+
+
+def _synthetic_linking_projection(tmp_path: Path) -> Path:
+    path = tmp_path / "synthetic-linking.jsonl"
+    path.write_text(
+        json.dumps({"mention": "synthetic mention", "cui": "SYNTHETIC-GOLD"}) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _synthetic_linking_candidate(code: str, system: str = "umls") -> Candidate:
+    return Candidate(
+        system=system,
+        code=code,
+        display="synthetic",
+        score=0.5,
+        source="synthetic-test",
+    )
+
+
+@pytest.mark.parametrize("top_k, expected", [(1, 0.0), (2, 0.0), (3, 1.0), (5, 1.0)])
+def test_medmentions_grounded_span_scores_ranked_alternatives_at_requested_depth(
+    tmp_path: Path, top_k: int, expected: float
+) -> None:
+    selected = _synthetic_linking_candidate("SYNTHETIC-SELECTED")
+    alternatives = (
+        _synthetic_linking_candidate("SYNTHETIC-SECOND"),
+        _synthetic_linking_candidate("SYNTHETIC-GOLD"),
+    )
+    span = GroundedSpan(
+        "synthetic mention", 0, 17, (selected,), alternatives=alternatives
+    )
+    calls: list[tuple[str, int]] = []
+
+    def provider(mention: str, depth: int) -> GroundedSpan:
+        calls.append((mention, depth))
+        return span
+
+    report = evaluate_medmentions_st21pv(
+        _synthetic_linking_projection(tmp_path), provider=provider, top_k=top_k
+    )
+    assert report.metrics["top1_accuracy"] == 0.0
+    assert report.metrics[f"top{top_k}_accuracy"] == expected
+    assert report.metrics["abstention_rate"] == 0.0
+    assert calls == [("synthetic mention", top_k)]
+    assert span.candidates == (selected,)
+    assert span.ranked_alternatives == alternatives
+    assert "synthetic mention" not in report.to_json()
+    assert "SYNTHETIC-GOLD" not in report.to_json()
+
+
+def test_medmentions_never_credits_withheld_or_unselected_alternatives(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for abstained, selected in [(True, False), (True, True), (False, False)]:
+        with subtests.test(abstained=abstained, selected=selected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            gold = _synthetic_linking_candidate("SYNTHETIC-GOLD")
+            span = GroundedSpan(
+                "synthetic mention",
+                0,
+                17,
+                (gold,) if selected else (),
+                alternatives=(gold,),
+                abstained=abstained,
+            )
+            report = evaluate_medmentions_st21pv(
+                _synthetic_linking_projection(tmp_path),
+                provider=lambda *_: span,
+                top_k=2,
+            )
+            assert report.metrics["top1_accuracy"] == 0.0
+            assert report.metrics["top2_accuracy"] == 0.0
+            assert report.metrics["abstention_rate"] == 1.0
+
+
+def test_medmentions_filters_non_umls_before_top_k_for_both_provider_shapes(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for as_span in [True, False]:
+        with subtests.test(as_span=as_span):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            selected = _synthetic_linking_candidate("SYNTHETIC-WRONG", "UMLS")
+            alternatives = (
+                _synthetic_linking_candidate("SYNTHETIC-OTHER", "icd10cm"),
+                _synthetic_linking_candidate("SYNTHETIC-GOLD", "UmLs"),
+            )
+            output = (
+                GroundedSpan(
+                    "synthetic mention", 0, 17, (selected,), alternatives=alternatives
+                )
+                if as_span
+                else (selected, *alternatives)
+            )
+            report = evaluate_medmentions_st21pv(
+                _synthetic_linking_projection(tmp_path),
+                provider=lambda *_: output,
+                top_k=2,
+            )
+            assert report.metrics["top1_accuracy"] == 0.0
+            assert report.metrics["top2_accuracy"] == 1.0
+            assert report.metrics["abstention_rate"] == 0.0
 
 
 def test_grounding_export_fixture_is_not_generic_deidentification_gold() -> None:
@@ -29,7 +141,9 @@ def test_synthetic_grounding_export_roundtrip_passes_offline_smoke() -> None:
     assert report.metrics["passed"] is True
     assert report.metrics["fhir"]["errors"] == 0
     assert report.metrics["fhir"]["official_validator_executed"] is False
+    assert report.metrics["fhir"]["malformed_resource_detected"] is True
     assert report.metrics["omop"]["achilles_smoke_passed"] is True
+    assert report.metrics["omop"]["violations_by_reason"] == {}
     assert report.metadata["synthetic"] is True
 
 
@@ -41,6 +155,192 @@ def test_structural_fhir_check_rejects_deliberately_broken_resource() -> None:
     }
 
     assert validate_fhir_r4_shape(broken) == ("Observation.code is missing",)
+
+
+def test_official_validator_allows_only_openmed_extension_domain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        commands.append(command)
+        output = Path(command[command.index("-output") + 1])
+        output.write_text(
+            json.dumps({"resourceType": "OperationOutcome", "issue": []}),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"temporary validator path {len(commands)}",
+            stderr="",
+        )
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    result = grounding_export_suite.validate_with_hl7_validator(
+        {"resourceType": "Bundle", "type": "collection", "entry": []},
+        validator_jar=validator_jar,
+    )
+    repeated = grounding_export_suite.validate_with_hl7_validator(
+        {"resourceType": "Bundle", "type": "collection", "entry": []},
+        validator_jar=validator_jar,
+    )
+
+    assert result.errors == 0
+    assert repeated.output_hash == result.output_hash
+    assert commands
+    extension_index = commands[0].index("-extension")
+    assert commands[0][extension_index + 1] == (
+        "https://openmed.ai/fhir/StructureDefinition/"
+    )
+
+
+def test_official_validator_negative_control_is_detected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+    validated_resources: list[dict] = []
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        resource = json.loads(Path(command[3]).read_text(encoding="utf-8"))
+        validated_resources.append(resource)
+        observation = next(
+            entry["resource"]
+            for entry in resource["entry"]
+            if entry["resource"]["resourceType"] == "Observation"
+        )
+        issues = []
+        if "code" not in observation:
+            issues.append({"severity": "error", "code": "required"})
+        output = Path(command[command.index("-output") + 1])
+        output.write_text(
+            json.dumps({"resourceType": "OperationOutcome", "issue": issues}),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    report = run_grounding_export_suite(validator_jar=validator_jar)
+
+    assert len(validated_resources) == 2
+    assert report.metrics["passed"] is True
+    assert report.metrics["fhir"] == {
+        "errors": 0,
+        "warnings": 0,
+        "information": 0,
+        "official_validator_executed": True,
+        "validator_failure_reason": None,
+        "malformed_resource_detected": True,
+        "malformed_resource_errors": 1,
+        "malformed_validator_failure_reason": None,
+    }
+
+
+def test_official_validator_fails_closed_without_operation_outcome(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+
+    monkeypatch.setattr(
+        grounding_export_suite.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+
+    result = grounding_export_suite.validate_with_hl7_validator(
+        {"resourceType": "Bundle", "type": "collection", "entry": []},
+        validator_jar=validator_jar,
+    )
+
+    assert result.errors == 1
+    assert result.failure_reason == "validator_output_missing"
+
+
+def test_suite_does_not_count_validator_failure_as_negative_control(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+    calls = 0
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            output = Path(command[command.index("-output") + 1])
+            output.write_text(
+                json.dumps({"resourceType": "OperationOutcome", "issue": []}),
+                encoding="utf-8",
+            )
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    report = run_grounding_export_suite(validator_jar=validator_jar)
+
+    assert report.metrics["passed"] is False
+    assert report.metrics["fhir"]["errors"] == 0
+    assert report.metrics["fhir"]["malformed_resource_detected"] is False
+    assert report.metrics["fhir"]["malformed_validator_failure_reason"] == (
+        "validator_output_missing"
+    )
+
+
+def test_suite_fails_when_official_validator_reports_export_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validator_jar = tmp_path / "validator.jar"
+    validator_jar.write_bytes(b"synthetic-validator")
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        output = Path(command[command.index("-output") + 1])
+        output.write_text(
+            json.dumps(
+                {
+                    "resourceType": "OperationOutcome",
+                    "issue": [{"severity": "error", "code": "required"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+
+    report = run_grounding_export_suite(validator_jar=validator_jar)
+
+    assert report.metrics["passed"] is False
+    assert report.metrics["fhir"]["errors"] == 1
+
+
+def test_cli_writes_json_and_markdown_benchmark_reports(tmp_path: Path) -> None:
+    json_output = tmp_path / "grounding-export.report.json"
+
+    assert main(["--output", str(json_output)]) == 0
+
+    markdown_output = json_output.with_suffix(".md")
+    assert json_output.is_file()
+    assert markdown_output.is_file()
+    assert json.loads(json_output.read_text(encoding="utf-8"))["suite"] == (
+        "grounding_export_roundtrip"
+    )
+    assert markdown_output.read_text(encoding="utf-8").startswith(
+        "# Benchmark Report: grounding_export_roundtrip\n"
+    )
 
 
 def test_medmentions_top1_report_enforces_floor_without_bundling_corpus(
@@ -69,3 +369,22 @@ def test_medmentions_top1_report_enforces_floor_without_bundling_corpus(
     assert report.metrics["passed"] is True
     assert report.metadata["corpus_bundled"] is False
     assert report.metadata["restricted_vocabulary_bundled"] is False
+
+
+@pytest.mark.parametrize(
+    "payload", [b'{"resourceType":"OperationOutcome","issue":1}', b"\xff"]
+)
+def test_malformed_validator_output_fails_closed(
+    tmp_path, monkeypatch, payload
+) -> None:
+    jar = tmp_path / "validator.jar"
+    jar.write_bytes(b"synthetic")
+
+    def fake_run(command, **kwargs):
+        Path(command[command.index("-output") + 1]).write_bytes(payload)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(grounding_export_suite.subprocess, "run", fake_run)
+    result = grounding_export_suite.validate_with_hl7_validator({}, validator_jar=jar)
+    assert result.errors == 1
+    assert result.failure_reason == "validator_output_invalid"

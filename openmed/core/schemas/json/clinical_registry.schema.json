@@ -1,0 +1,411 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/structured/clinical-registry.schema.json",
+  "title": "OpenMed clinical registry artifacts",
+  "schema_version": "1.0.0",
+  "oneOf": [
+    {"$ref": "#/$defs/definition_version"},
+    {"$ref": "#/$defs/registry_case"},
+    {"$ref": "#/$defs/materialization"},
+    {"$ref": "#/$defs/registry_export"}
+  ],
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "opaque_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/opaque_id"}
+    },
+    "digests": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "field_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_statuses",
+        "conflict_statuses",
+        "extraction_rule",
+        "fact_type",
+        "field_id",
+        "max_values",
+        "required",
+        "unknown_statuses",
+        "validation_rule"
+      ],
+      "properties": {
+        "allowed_statuses": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "conflict_statuses": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "extraction_rule": {"$ref": "#/$defs/controlled"},
+        "fact_type": {"$ref": "#/$defs/controlled"},
+        "field_id": {"$ref": "#/$defs/controlled"},
+        "max_values": {"type": "integer", "minimum": 1},
+        "required": {"type": "boolean"},
+        "unknown_statuses": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "validation_rule": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adjudication_field_states",
+        "assignment_required",
+        "correction_allowed",
+        "export_policy_digest",
+        "owner_scope_id",
+        "policy_id",
+        "privacy_policy_digest",
+        "review_field_states",
+        "version"
+      ],
+      "properties": {
+        "adjudication_field_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/field_state"}
+        },
+        "assignment_required": {"type": "boolean"},
+        "correction_allowed": {"type": "boolean"},
+        "export_policy_digest": {"$ref": "#/$defs/digest"},
+        "owner_scope_id": {"$ref": "#/$defs/opaque_id"},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "privacy_policy_digest": {"$ref": "#/$defs/digest"},
+        "review_field_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/field_state"}
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "field_state": {
+      "enum": [
+        "conflict",
+        "corrected",
+        "missing_required",
+        "not_applicable",
+        "present",
+        "unknown",
+        "unsupported"
+      ]
+    },
+    "case_state": {
+      "enum": [
+        "adjudication_rejected",
+        "adjudication_required",
+        "assigned",
+        "export_ready",
+        "exported",
+        "in_review",
+        "review_rejected",
+        "review_required"
+      ]
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohort_definition_digest",
+        "cohort_definition_version_id",
+        "compatibility_policy",
+        "completion_rule",
+        "definition_version",
+        "fields",
+        "registry_id",
+        "schema_version",
+        "workflow"
+      ],
+      "properties": {
+        "cohort_definition_digest": {"$ref": "#/$defs/digest"},
+        "cohort_definition_version_id": {"$ref": "#/$defs/opaque_id"},
+        "compatibility_policy": {"const": "same_major"},
+        "completion_rule": {"$ref": "#/$defs/controlled"},
+        "definition_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/field_rule"}
+        },
+        "registry_id": {"$ref": "#/$defs/opaque_id"},
+        "schema_version": {"const": "1.0.0"},
+        "workflow": {"$ref": "#/$defs/workflow"}
+      }
+    },
+    "definition_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "definition",
+        "definition_digest",
+        "version_id"
+      ],
+      "properties": {
+        "artifact_type": {"const": "registry_definition_version"},
+        "definition": {"$ref": "#/$defs/definition"},
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "version_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "field_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "corrected_from_fact_ids",
+        "derivation_digests",
+        "evidence_ids",
+        "fact_ids",
+        "value_digests"
+      ],
+      "properties": {
+        "corrected_from_fact_ids": {"$ref": "#/$defs/opaque_ids"},
+        "derivation_digests": {"$ref": "#/$defs/digests"},
+        "evidence_ids": {"$ref": "#/$defs/opaque_ids"},
+        "fact_ids": {"$ref": "#/$defs/opaque_ids"},
+        "value_digests": {"$ref": "#/$defs/digests"}
+      }
+    },
+    "field_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence", "field_id", "reason_code", "state"],
+      "properties": {
+        "evidence": {"$ref": "#/$defs/field_evidence"},
+        "field_id": {"$ref": "#/$defs/controlled"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "state": {"$ref": "#/$defs/field_state"}
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assigned_at",
+        "assignment_id",
+        "authorization_digest",
+        "authorization_id",
+        "queue_id"
+      ],
+      "properties": {
+        "assigned_at": {"type": "string", "format": "date-time"},
+        "assignment_id": {"$ref": "#/$defs/opaque_id"},
+        "authorization_digest": {"$ref": "#/$defs/digest"},
+        "authorization_id": {"$ref": "#/$defs/opaque_id"},
+        "queue_id": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "case_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "artifact_digest",
+        "case_id",
+        "event_id",
+        "from_state",
+        "occurred_at",
+        "policy_digest",
+        "reason_code",
+        "to_state"
+      ],
+      "properties": {
+        "action": {"$ref": "#/$defs/controlled"},
+        "artifact_digest": {
+          "anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "case_id": {"$ref": "#/$defs/opaque_id"},
+        "event_id": {"$ref": "#/$defs/opaque_id"},
+        "from_state": {"$ref": "#/$defs/case_state"},
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "policy_digest": {"$ref": "#/$defs/digest"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "to_state": {"$ref": "#/$defs/case_state"}
+      }
+    },
+    "registry_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory",
+        "artifact_type",
+        "assignment",
+        "case_digest",
+        "case_id",
+        "cohort_execution_digest",
+        "cohort_execution_id",
+        "compatibility_policy",
+        "completion_state",
+        "created_at",
+        "definition_digest",
+        "definition_version_id",
+        "events",
+        "fields",
+        "origin_state",
+        "review_packets",
+        "schema_version",
+        "source_snapshot_digest",
+        "source_snapshot_id",
+        "state",
+        "subject_id",
+        "workflow_policy_digest"
+      ],
+      "properties": {
+        "advisory": {"type": "string", "minLength": 1},
+        "artifact_type": {"const": "registry_case"},
+        "assignment": {
+          "anyOf": [{"$ref": "#/$defs/assignment"}, {"type": "null"}]
+        },
+        "case_digest": {"$ref": "#/$defs/digest"},
+        "case_id": {"$ref": "#/$defs/opaque_id"},
+        "cohort_execution_digest": {"$ref": "#/$defs/digest"},
+        "cohort_execution_id": {"$ref": "#/$defs/opaque_id"},
+        "compatibility_policy": {"const": "same_major"},
+        "completion_state": {"enum": ["complete", "incomplete"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "definition_version_id": {"$ref": "#/$defs/opaque_id"},
+        "events": {"type": "array", "items": {"$ref": "#/$defs/case_event"}},
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/field_result"}
+        },
+        "origin_state": {"enum": ["export_ready", "review_required"]},
+        "review_packets": {"type": "array", "items": {"type": "object"}},
+        "schema_version": {"const": "1.0.0"},
+        "source_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "source_snapshot_id": {"$ref": "#/$defs/opaque_id"},
+        "state": {"$ref": "#/$defs/case_state"},
+        "subject_id": {"$ref": "#/$defs/opaque_id"},
+        "workflow_policy_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "required": [
+        "advisory",
+        "artifact_type",
+        "cases",
+        "cohort_execution_digest",
+        "cohort_execution_id",
+        "compatibility_policy",
+        "created_at",
+        "definition_digest",
+        "definition_version_id",
+        "excluded_membership_counts",
+        "materialization_digest",
+        "review_summary",
+        "schema_version",
+        "source_snapshot_digest",
+        "source_snapshot_id"
+      ],
+      "properties": {
+        "advisory": {"type": "string", "minLength": 1},
+        "artifact_type": {"const": "registry_materialization"},
+        "cases": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/opaque_id"},
+          "additionalProperties": {"$ref": "#/$defs/digest"}
+        },
+        "cohort_execution_digest": {"$ref": "#/$defs/digest"},
+        "cohort_execution_id": {"$ref": "#/$defs/opaque_id"},
+        "compatibility_policy": {"const": "same_major"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "definition_version_id": {"$ref": "#/$defs/opaque_id"},
+        "excluded_membership_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "materialization_digest": {"$ref": "#/$defs/digest"},
+        "review_summary": {"type": "object"},
+        "schema_version": {"const": "1.0.0"},
+        "source_snapshot_digest": {"$ref": "#/$defs/digest"},
+        "source_snapshot_id": {"$ref": "#/$defs/opaque_id"}
+      },
+      "additionalProperties": false
+    },
+    "registry_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory",
+        "artifact_type",
+        "authorization_digest",
+        "authorization_id",
+        "case_digests",
+        "compatibility_policy",
+        "created_at",
+        "definition_digest",
+        "definition_version_id",
+        "export_id",
+        "export_policy_digest",
+        "manifest_digest",
+        "privacy_policy_digest",
+        "registry_id",
+        "schema_version",
+        "source_snapshot_ids"
+      ],
+      "properties": {
+        "advisory": {"type": "string", "minLength": 1},
+        "artifact_type": {"const": "registry_export"},
+        "authorization_digest": {"$ref": "#/$defs/digest"},
+        "authorization_id": {"$ref": "#/$defs/opaque_id"},
+        "case_digests": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"$ref": "#/$defs/opaque_id"},
+          "additionalProperties": {"$ref": "#/$defs/digest"}
+        },
+        "compatibility_policy": {"const": "same_major"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "definition_digest": {"$ref": "#/$defs/digest"},
+        "definition_version_id": {"$ref": "#/$defs/opaque_id"},
+        "export_id": {"$ref": "#/$defs/opaque_id"},
+        "export_policy_digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"},
+        "privacy_policy_digest": {"$ref": "#/$defs/digest"},
+        "registry_id": {"$ref": "#/$defs/opaque_id"},
+        "schema_version": {"const": "1.0.0"},
+        "source_snapshot_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        }
+      }
+    }
+  }
+}

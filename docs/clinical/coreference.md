@@ -24,7 +24,8 @@ mentions can use `canonical_label="OTHER"`; informative nouns such as
 "medication" and personal pronouns provide a conservative type hint.
 
 ```python
-from openmed.clinical import resolve_coreference
+from openmed.clinical import link_medication_attributes, resolve_coreference
+from openmed.clinical.exporters import to_fhir
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash
 
 text = "A left lung lesion was found. The lesion is stable. It is unchanged."
@@ -83,7 +84,9 @@ interfaces can recover a chain without storing a raw mention surface.
 
 Use the keyword-only `document_text` form to detect and cluster clinical event
 candidates. This mode is limited to PROBLEM-, TEST-, and TREATMENT-like spans;
-it does not add PII coreference or rewrite downstream event-frame heads.
+it does not add PII coreference. Its sanitized result does not mutate event
+frames; the span-native chains described below opt downstream extraction into
+representative rewriting.
 
 ```python
 from openmed.clinical import resolve_coreference
@@ -106,6 +109,10 @@ result = resolve_coreference(
     document_id="synthetic-note",
     hash_secret="application-owned-secret",
 )
+cluster_ids = result.cluster_ids_by_offset()
+cluster_ids[("synthetic-note", (11, 27))]
+# "synthetic-note:entity:..."
+
 result.to_dict()["clusters"][0]
 # {
 #   "cluster_id": "synthetic-note:entity:...",
@@ -170,6 +177,42 @@ to one representative slot. Attribute roles remain attached once to that
 representative. The added provenance stores only cluster ids, confidence,
 offsets, and HMAC hashes; it does not copy mention surfaces into provenance.
 Frame `value` fields retain their existing caller-visible behavior.
+
+## Collapsing Downstream Relations and Exports
+
+Medication relation linking and grounded FHIR export accept the same
+document-local chains through `coreference_chains=`. Relation candidates still
+use each local mention to score nearby dose, route, frequency, and duration
+attributes. Emitted relation heads are then rewritten to the representative,
+and groups with the same `chain_id` collapse to one medication entity.
+
+```python
+groups = link_medication_attributes(
+    text,
+    medication_and_attribute_spans,
+    coreference_chains=chains,
+)
+
+bundle = to_fhir(
+    grounded_medication_spans,
+    doc_id="example-note",
+    coreference_chains=chains,
+)
+```
+
+Each collapsed relation record retains `cluster_id`, its representative offset
+and HMAC hash, and the offset and HMAC hash of every supporting mention. FHIR
+resources carry the same fields in the
+`clinical-coreference-evidence` extension. Supporting provenance never copies
+mention surfaces; existing relation head values and FHIR CodeableConcept values
+keep their caller-visible behavior.
+
+This collapse is intentionally document-level. A `CoreferenceChain` must cover
+mentions from one source document, and downstream calls apply it only within
+that document's relation or export batch. Cross-document entity linkage is a
+separate, later step: document-linking cluster ids must not be supplied as
+mention chains, and this path neither infers nor collapses entities across
+documents.
 
 ## Resolution Rules
 

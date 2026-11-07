@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+from threading import Event, Thread
 from unittest.mock import Mock, patch
 
 import pytest
@@ -62,7 +63,7 @@ def test_local_only_hf_pipeline_uses_cached_files(mock_pipeline, monkeypatch):
 
     pipeline_kwargs = mock_pipeline.call_args.kwargs
     assert "local_files_only" not in pipeline_kwargs
-    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
     assert pipeline_kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
 
 
@@ -81,7 +82,128 @@ def test_local_only_config_cannot_be_disabled_by_pipeline_kwarg(
 
     pipeline_kwargs = mock_pipeline.call_args.kwargs
     assert "local_files_only" not in pipeline_kwargs
-    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
+@patch("openmed.core.models.pipeline")
+@patch("openmed.core.models.prepare_model_reference")
+@patch("openmed.core.hf_hub._import_snapshot_download")
+def test_prefetched_standard_hub_snapshot_loads_offline_without_duplicate_kwarg(
+    mock_import_snapshot_download,
+    mock_prepare_model_reference,
+    mock_pipeline,
+    tmp_path,
+    monkeypatch,
+):
+    _clear_offline_env(monkeypatch)
+    monkeypatch.setenv(OFFLINE_ENV_VAR, "1")
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+    model_id = "OpenMed/prefetched-pii"
+    snapshot = tmp_path / "standard-hub" / "snapshot"
+    snapshot.mkdir(parents=True)
+    openmed_cache = tmp_path / "openmed-cache"
+    calls = []
+
+    class LocalEntryNotFoundError(Exception):
+        pass
+
+    def fake_snapshot_download(**kwargs):
+        calls.append(kwargs)
+        if "cache_dir" in kwargs:
+            raise LocalEntryNotFoundError
+        return str(snapshot)
+
+    mock_prepare_model_reference.return_value = model_id
+    mock_import_snapshot_download.return_value = (
+        fake_snapshot_download,
+        LocalEntryNotFoundError,
+    )
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(
+        OpenMedConfig(local_only=True, backend="hf", cache_dir=str(openmed_cache))
+    )
+    loader.create_pipeline(model_id, revision="a" * 40)
+
+    pipeline_kwargs = mock_pipeline.call_args.kwargs
+    assert pipeline_kwargs["model"] == str(snapshot)
+    assert "local_files_only" not in pipeline_kwargs
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
+    assert calls == [
+        {
+            "repo_id": model_id,
+            "repo_type": "model",
+            "revision": "a" * 40,
+            "local_files_only": True,
+            "cache_dir": str(openmed_cache),
+        },
+        {
+            "repo_id": model_id,
+            "repo_type": "model",
+            "revision": "a" * 40,
+            "local_files_only": True,
+        },
+    ]
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.backends._module_available", lambda _: True)
+@patch("openmed.core.models.pipeline")
+def test_nested_local_only_pipeline_kwarg_uses_cached_snapshot(
+    mock_pipeline, tmp_path, monkeypatch
+):
+    _clear_offline_env(monkeypatch)
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(backend="hf"))
+    with patch.object(
+        loader, "_prepare_model_reference", return_value=str(snapshot)
+    ) as mock_prepare:
+        loader.create_pipeline(
+            "OpenMed/local-pii",
+            model_kwargs={"local_files_only": True},
+        )
+
+    assert mock_prepare.call_args.kwargs["local_only"] is True
+    pipeline_kwargs = mock_pipeline.call_args.kwargs
+    assert pipeline_kwargs["model"] == str(snapshot)
+    assert "local_files_only" not in pipeline_kwargs["model_kwargs"]
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+def test_integrity_required_load_rejects_unverified_standard_cache(
+    tmp_path, monkeypatch
+):
+    _clear_offline_env(monkeypatch)
+
+    from openmed.core.model_integrity import ModelIntegrityError
+    from openmed.core.models import ModelLoader
+
+    model_id = "OpenMed/OpenMed-PII-SuperClinical-Base-184M-v1"
+    loader = ModelLoader(
+        OpenMedConfig(
+            local_only=True,
+            backend="hf",
+            cache_dir=str(tmp_path / "openmed-cache"),
+        )
+    )
+    with patch.object(loader, "_find_cached_hf_snapshot") as mock_find:
+        with pytest.raises(ModelIntegrityError):
+            loader._prepare_model_reference(
+                model_id,
+                model_id,
+                local_only=True,
+                require_integrity=True,
+            )
+    mock_find.assert_not_called()
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
@@ -172,6 +294,69 @@ def test_explicit_local_only_work_blocks_socket_connection(monkeypatch):
     with network_blocked_if_offline(local_only=True):
         with pytest.raises(OfflineModeError, match="OPENMED_OFFLINE/local_only=True"):
             socket.create_connection(("127.0.0.1", 9), timeout=0.01)
+
+
+def test_overlapping_offline_guards_remain_blocked(monkeypatch):
+    _clear_offline_env(monkeypatch)
+    unguarded_calls = []
+
+    def unguarded_connection(*args, **kwargs):
+        unguarded_calls.append((args, kwargs))
+        return object()
+
+    monkeypatch.setattr(socket, "create_connection", unguarded_connection)
+    first_entered = Event()
+    second_entered = Event()
+    release_first = Event()
+    first_exited = Event()
+    guarded_results = []
+    thread_errors = []
+
+    def first_guard() -> None:
+        try:
+            with network_blocked_if_offline(local_only=True):
+                first_entered.set()
+                if not second_entered.wait(timeout=5):
+                    raise AssertionError("second guard did not enter")
+                if not release_first.wait(timeout=5):
+                    raise AssertionError("first guard was not released")
+        except BaseException as exc:
+            thread_errors.append(exc)
+        finally:
+            first_exited.set()
+
+    def second_guard() -> None:
+        try:
+            if not first_entered.wait(timeout=5):
+                raise AssertionError("first guard did not enter")
+            with network_blocked_if_offline(local_only=True):
+                second_entered.set()
+                if not first_exited.wait(timeout=5):
+                    raise AssertionError("first guard did not exit")
+                try:
+                    socket.create_connection(("synthetic.invalid", 9))
+                except OfflineModeError:
+                    guarded_results.append(True)
+                else:
+                    guarded_results.append(False)
+        except BaseException as exc:
+            thread_errors.append(exc)
+
+    first = Thread(target=first_guard)
+    second = Thread(target=second_guard)
+    first.start()
+    second.start()
+    assert second_entered.wait(timeout=5)
+    release_first.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert thread_errors == []
+    assert guarded_results == [True]
+    assert unguarded_calls == []
+    assert socket.create_connection is unguarded_connection
 
 
 class _FakeLocalPiiPipeline:

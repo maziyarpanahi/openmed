@@ -16,6 +16,10 @@ data:
   OPENMED_SERVICE_BATCHING_ENABLED: {{ .Values.config.batching.enabled | quote }}
   OPENMED_SERVICE_BATCH_MAX_SIZE: {{ .Values.config.batching.maxSize | quote }}
   OPENMED_SERVICE_BATCH_MAX_WAIT_MS: {{ .Values.config.batching.maxWaitMs | quote }}
+  OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE: {{ .Values.config.batching.maxQueueSize | quote }}
+  OPENMED_SERVICE_BATCH_HIGH_WATERMARK: {{ .Values.config.batching.highWatermark | quote }}
+  OPENMED_SERVICE_BATCH_LOW_WATERMARK: {{ .Values.config.batching.lowWatermark | quote }}
+  OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS: {{ .Values.config.batching.maxQueueWaitMs | quote }}
   OPENMED_SERVICE_COALESCING_ENABLED: {{ .Values.config.coalescing.enabled | quote }}
   OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS: {{ .Values.config.shutdownDrainSeconds | quote }}
   OPENMED_SERVICE_METRICS_ENABLED: {{ .Values.config.metrics.enabled | quote }}
@@ -24,3 +28,7 @@ data:
   OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY: {{ .Values.config.throttle.maxConcurrency | quote }}
   OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS: {{ .Values.config.throttle.concurrencyWaitSeconds | quote }}
   OPENMED_SERVICE_THROTTLE_KEY: {{ .Values.config.throttle.keyBy | quote }}
+  {{- if .Values.journey.enabled }}
+  OPENMED_JOURNEY_SCHEMA: {{ .Values.journey.schema | quote }}
+  OPENMED_JOURNEY_ARTIFACT_ROOT: {{ .Values.journey.artifacts.mountPath | quote }}
+  {{- end }}

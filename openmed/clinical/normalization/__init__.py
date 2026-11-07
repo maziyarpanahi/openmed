@@ -40,6 +40,13 @@ from .chinese import (
     load_chinese_terminology_dictionary,
     normalize_chinese_clinical_surface,
 )
+from .composite import (
+    COMPOSITE_SPLIT_STRATEGIES,
+    KNOWN_ATOMIC_COMPOSITES,
+    CompositeMention,
+    CompositeNormalization,
+    normalize_composite,
+)
 from .india import (
     INDIAN_CLINICAL_ABBREVIATIONS,
     INDIAN_CLINICAL_NORMALIZATION_VERSION,
@@ -97,6 +104,9 @@ __all__ = [
     "ChineseTerminologyMatch",
     "ChineseTerminologyPathError",
     "CodeSystemMetadata",
+    "COMPOSITE_SPLIT_STRATEGIES",
+    "CompositeMention",
+    "CompositeNormalization",
     "ConceptNormalizationCache",
     "ConceptNormalizer",
     "EmbeddingBackendStatus",
@@ -119,6 +129,7 @@ __all__ = [
     "IndiaTerminologyKind",
     "IndiaTerminologyLoadResult",
     "IndiaTerminologyLoader",
+    "KNOWN_ATOMIC_COMPOSITES",
     "NormalizationCacheStats",
     "NormalizationEvaluationResult",
     "NormalizationGoldCase",
@@ -141,6 +152,7 @@ __all__ = [
     "make_normalization_cache_key",
     "make_rerank_cache_key",
     "normalize_chinese_clinical_surface",
+    "normalize_composite",
     "rank_candidates",
     "normalize_indian_clinical_abbreviation",
     "normalize_indian_clinical_entities",

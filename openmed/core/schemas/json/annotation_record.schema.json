@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/annotation-record/1.0.0",
+  "title": "OpenMed Annotation Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "annotation_id",
+    "annotation_type",
+    "compatibility_policy",
+    "coordinate_convention",
+    "document_id",
+    "embedding",
+    "end",
+    "metadata",
+    "namespace",
+    "result",
+    "schema_version",
+    "start",
+    "state"
+  ],
+  "properties": {
+    "annotation_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+    "annotation_type": {"enum": ["entity", "relation", "fact_correction", "registry_label"]},
+    "compatibility_policy": {"const": "same_major"},
+    "coordinate_convention": {"enum": ["unicode_codepoint", "utf8_byte", "utf16_code_unit", "token_index", "none"]},
+    "document_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+    "embedding": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "array", "minItems": 1, "maxItems": 4096, "items": {"type": "number"}}
+      ]
+    },
+    "end": {"type": ["integer", "null"], "minimum": 1},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 6,
+      "properties": {
+        "annotator_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "batch_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "model_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "model_version": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"},
+        "review_state": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "source_format": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"}
+      }
+    },
+    "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 2,
+      "maxProperties": 5,
+      "properties": {
+        "evidence_ids": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"}
+        },
+        "fact_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "field": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "label": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "reason_code": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "record_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "registry_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "relation": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "replacement_code": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+        "source_annotation_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+        "surface_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "target_annotation_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"}
+      }
+    },
+    "schema_version": {"const": "1.0.0"},
+    "start": {"type": ["integer", "null"], "minimum": 0},
+    "state": {"enum": ["success", "partial", "unknown", "conflict", "unsupported", "denied", "failure"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"annotation_type": {"const": "entity"}}},
+      "then": {"properties": {"result": {"required": ["label", "surface_hash"], "maxProperties": 2}}}
+    },
+    {
+      "if": {"properties": {"annotation_type": {"const": "relation"}}},
+      "then": {"properties": {"result": {"required": ["relation", "source_annotation_id", "target_annotation_id"], "minProperties": 3, "maxProperties": 3}}}
+    },
+    {
+      "if": {"properties": {"annotation_type": {"const": "fact_correction"}}},
+      "then": {"properties": {"result": {"required": ["fact_id", "field", "reason_code", "replacement_code"], "minProperties": 4, "propertyNames": {"enum": ["evidence_ids", "fact_id", "field", "reason_code", "replacement_code"]}}}}
+    },
+    {
+      "if": {"properties": {"annotation_type": {"const": "registry_label"}}},
+      "then": {"properties": {"result": {"required": ["label", "record_id", "registry_id"], "minProperties": 3, "maxProperties": 4, "propertyNames": {"enum": ["evidence_ids", "label", "record_id", "registry_id"]}}}}
+    }
+  ]
+}

@@ -27,6 +27,7 @@ _REQUIRED_ENGLISH_SECTION_LABELS = frozenset(
         "impression",
         "medications",
         "past_medical_history",
+        "problem_list",
         "social_history",
     }
 )
@@ -192,8 +193,18 @@ GERMAN_SECTION_LEXICON = SectionLexicon(
             "Aktuelle Anamnese",
             "Aktuelle Beschwerden",
         ),
+        "medications": (
+            "Medikation",
+            "Medikamente",
+            "Aktuelle Medikation",
+            "Entlassmedikation",
+        ),
+        "allergies": ("Allergien", "Unverträglichkeiten", "Unvertraeglichkeiten"),
+        "findings": ("Befund", "Befunde", "Untersuchungsbefund"),
         "assessment": ("Beurteilung", "Einschätzung", "Einschaetzung"),
         "plan": ("Plan", "Therapieplan"),
+        "treatment": ("Therapie", "Behandlung"),
+        "clinical_course": ("Verlauf", "Klinischer Verlauf"),
     },
 )
 

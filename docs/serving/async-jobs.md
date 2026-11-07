@@ -86,11 +86,15 @@ Webhook requests include:
 
 - `X-OpenMed-Event`: `job.done` or `job.failed`
 - `X-OpenMed-Timestamp`: Unix timestamp
+- `X-OpenMed-Nonce`: unique opaque request nonce
 - `X-OpenMed-Signature`: `sha256=<hmac>`
 
-The signature is computed over `<timestamp>.<canonical-json-body>` using the
-configured shared secret and HMAC-SHA256. Non-2xx responses and transport
-errors are retried with exponential backoff.
+The signature uses the shared
+[HMAC request-signing scheme](request-signing.md), covering `POST`, the exact
+callback path and query, timestamp, nonce, and SHA-256 digest of the canonical
+JSON body. Each delivery attempt is signed independently with a fresh nonce, so
+retries remain compatible with receiver-side replay protection. Non-2xx
+responses and transport errors are retried with exponential backoff.
 
 ## Local Store Configuration
 
@@ -101,7 +105,7 @@ The default metadata store is
 OPENMED_SERVICE_JOBS_STORE_PATH=/var/lib/openmed/jobs.json \
 OPENMED_SERVICE_JOBS_TTL_SECONDS=86400 \
 OPENMED_SERVICE_JOBS_WORKERS=2 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `OPENMED_SERVICE_JOBS_TTL_SECONDS` controls terminal metadata cleanup.

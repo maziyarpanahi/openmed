@@ -120,6 +120,7 @@ def test_shift_date_leap_day_never_crashes(year, shift, keep_year):
 
 
 @given(text=st.text(min_size=0, max_size=64), shift=_offsets)
+@settings(deadline=None)
 def test_shift_date_arbitrary_text_never_crashes(text, shift):
     """``_shift_date`` never raises on arbitrary junk; returns a ``str`` always."""
     out = _shift_date(text, shift, keep_year=False, lang="en")

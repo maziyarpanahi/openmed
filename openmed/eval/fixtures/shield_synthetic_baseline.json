@@ -1,0 +1,54 @@
+{
+  "schema_version": "openmed.shield_synthetic_baseline.v1",
+  "source_rights": "OpenMed-generated synthetic fixture; Apache-2.0",
+  "cases": [
+    {
+      "id": "synthetic-note-1",
+      "segments": [
+        {"text": "Patient "},
+        {"text": "Sample Person", "shield_label": "patient"},
+        {"text": ", age "},
+        {"text": "42", "shield_label": "age"},
+        {"text": " years old, visited on "},
+        {"text": "2030-04-05", "shield_label": "date"},
+        {"text": " with Dr. "},
+        {"text": "Fiction Clinician", "shield_label": "doctor"},
+        {"text": " at "},
+        {"text": "Example Clinic", "shield_label": "hospital"},
+        {"text": ". Record "},
+        {"text": "SYN-0001", "shield_label": "id"},
+        {"text": "; call "},
+        {"text": "555-0101", "shield_label": "phone"},
+        {"text": " or see "},
+        {"text": "example.invalid", "shield_label": "web"},
+        {"text": ". Address: "},
+        {"text": "10 Fictional Road", "shield_label": "location"},
+        {"text": "."}
+      ]
+    },
+    {
+      "id": "synthetic-note-2",
+      "segments": [
+        {"text": "At "},
+        {"text": "Imaginary Hospital", "shield_label": "hospital"},
+        {"text": ", Dr. "},
+        {"text": "Example Clinician", "shield_label": "doctor"},
+        {"text": " reviewed "},
+        {"text": "Demo Patient", "shield_label": "patient"},
+        {"text": " on "},
+        {"text": "2031-06-07", "shield_label": "date"},
+        {"text": ". Age "},
+        {"text": "61", "shield_label": "age"},
+        {"text": " years old. Identifier "},
+        {"text": "SYN-0002", "shield_label": "id"},
+        {"text": "; phone "},
+        {"text": "555-0102", "shield_label": "phone"},
+        {"text": "; portal "},
+        {"text": "clinic.invalid", "shield_label": "web"},
+        {"text": "; location "},
+        {"text": "20 Imaginary Avenue", "shield_label": "location"},
+        {"text": "."}
+      ]
+    }
+  ]
+}

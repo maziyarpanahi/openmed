@@ -1,0 +1,49 @@
+{
+  "studies": [
+    {
+      "protocolSection": {
+        "identificationModule": {
+          "nctId": "NCT00000001",
+          "briefTitle": "Synthetic blood pressure study",
+          "officialTitle": "A Synthetic Study of a Blood Pressure Intervention"
+        },
+        "statusModule": {
+          "overallStatus": "RECRUITING",
+          "lastUpdatePostDateStruct": {"date": "2026-08-20"}
+        },
+        "conditionsModule": {"conditions": ["Hypertension"]},
+        "armsInterventionsModule": {
+          "interventions": [{"type": "OTHER", "name": "Synthetic coaching"}]
+        },
+        "contactsLocationsModule": {
+          "locations": [
+            {
+              "facility": "Synthetic Research Center",
+              "city": "Paris",
+              "country": "France"
+            }
+          ]
+        },
+        "eligibilityModule": {
+          "eligibilityCriteria": "Inclusion: synthetic adult participants. Exclusion: none."
+        }
+      }
+    },
+    {
+      "protocolSection": {
+        "identificationModule": {
+          "nctId": "NCT00000002",
+          "briefTitle": "Synthetic respiratory study"
+        },
+        "statusModule": {
+          "overallStatus": "ACTIVE_NOT_RECRUITING",
+          "lastUpdatePostDateStruct": {"date": "2026-08"}
+        },
+        "conditionsModule": {"conditions": ["Asthma"]},
+        "eligibilityModule": {"eligibilityCriteria": ""}
+      }
+    }
+  ],
+  "nextPageToken": "synthetic-page-2",
+  "totalCount": 2
+}

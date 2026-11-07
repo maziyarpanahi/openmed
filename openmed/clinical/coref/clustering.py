@@ -104,14 +104,19 @@ class ResolvedCoreferenceResult:
     advisory: str = COREFERENCE_ADVISORY
     scorer_version: str = COMPATIBILITY_SCORER_VERSION
 
-    def entity_ids_by_offset(self) -> dict[tuple[str, SpanOffset], str]:
-        """Return ``(document_id, offset) -> cluster_id`` for every mention."""
+    def cluster_ids_by_offset(self) -> dict[tuple[str, SpanOffset], str]:
+        """Return one canonical cluster id for every event mention offset."""
 
         return {
             (cluster.document_id, offset): cluster.cluster_id
             for cluster in self.clusters
             for offset in cluster.member_offsets
         }
+
+    def entity_ids_by_offset(self) -> dict[tuple[str, SpanOffset], str]:
+        """Return the event cluster index under its compatibility name."""
+
+        return self.cluster_ids_by_offset()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible result without raw mention text."""

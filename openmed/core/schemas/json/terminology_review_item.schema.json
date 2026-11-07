@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/terminology_review_item.schema.json",
+  "title": "OpenMed terminology review item",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_count",
+    "compatibility_policy",
+    "created_at",
+    "mapping_id",
+    "queue_id",
+    "reason_code",
+    "schema_version",
+    "snapshot_digest",
+    "source_digest",
+    "state",
+    "status",
+    "vocabulary",
+    "vocabulary_version"
+  ],
+  "properties": {
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "compatibility_policy": {"const": "same_major"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "mapping_id": {"$ref": "#/$defs/digest"},
+    "queue_id": {"$ref": "#/$defs/digest"},
+    "reason_code": {"$ref": "#/$defs/controlled"},
+    "schema_version": {"const": "1.0.0"},
+    "snapshot_digest": {"$ref": "#/$defs/digest"},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "state": {"enum": ["ambiguous", "unmapped", "rejected"]},
+    "status": {"const": "open"},
+    "vocabulary": {"$ref": "#/$defs/controlled"},
+    "vocabulary_version": {"type": "string", "minLength": 1, "maxLength": 128}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    }
+  }
+}

@@ -74,7 +74,7 @@ def test_clinical_workflow_is_discoverable_without_hardcoded_tool_schemas() -> N
         item for item in registry["workflows"] if item["name"] == CLINICAL_WORKFLOW_NAME
     )
 
-    assert registry["schema_version"] == "1.1.0"
+    assert registry["schema_version"] == "1.2.0"
     assert workflow["prompt_name"] == CLINICAL_WORKFLOW_SPEC.prompt_name
     assert workflow["resource_uri"] == CLINICAL_WORKFLOW_SPEC.resource_uri
     assert workflow["fixture_uri"] == CLINICAL_WORKFLOW_SPEC.fixture_uri
@@ -262,6 +262,8 @@ def test_golden_note_pipeline_matches_chained_handlers_without_egress_or_phi(
         composed = mcp_server.openmed_clinical_pipeline(
             stages=list(CLINICAL_STAGE_ORDER),
             text=deidentified_text,
+            # Reuse one detection's private hashes when comparing downstream stages.
+            spans=early["artifacts"]["detect"]["spans"],
             options={
                 "detect": {"doc_id": "synthetic-agent-run-1251"},
                 "ground": {
@@ -298,20 +300,19 @@ def test_golden_note_pipeline_matches_chained_handlers_without_egress_or_phi(
         assert marker not in logged
 
 
-@pytest.mark.parametrize("artifact_name", CLINICAL_WORKFLOW_SPEC.stage_order)
-def test_golden_agent_run_artifact_schemas_reject_invalid_payloads(
-    artifact_name: str,
-) -> None:
-    fixture = load_golden_agent_run()
-    invalid = deepcopy(fixture["artifacts"][artifact_name])
-    invalid.clear()
+def test_golden_agent_run_artifact_schemas_reject_invalid_payloads(subtests) -> None:
+    for artifact_name in CLINICAL_WORKFLOW_SPEC.stage_order:
+        with subtests.test(artifact_name=artifact_name):
+            fixture = load_golden_agent_run()
+            invalid = deepcopy(fixture["artifacts"][artifact_name])
+            invalid.clear()
 
-    with pytest.raises(ToolSchemaValidationError, match=artifact_name):
-        validate_registered_workflow_artifact(
-            CLINICAL_WORKFLOW_NAME,
-            artifact_name,
-            invalid,
-        )
+            with pytest.raises(ToolSchemaValidationError, match=artifact_name):
+                validate_registered_workflow_artifact(
+                    CLINICAL_WORKFLOW_NAME,
+                    artifact_name,
+                    invalid,
+                )
 
 
 def test_golden_post_deidentification_outputs_and_logs_exclude_source_markers(

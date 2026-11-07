@@ -316,22 +316,25 @@ def test_renderer_rejects_report_without_explicit_synthetic_provenance(
         load_leaderboard_rows(reports)
 
 
-@pytest.mark.parametrize(
-    "run_date",
-    ["2026-07-17 trailing text", "2026-13-01", 20260717],
-)
-def test_renderer_rejects_invalid_run_dates(tmp_path: Path, run_date: object) -> None:
-    reports = tmp_path / "reports"
-    _write_report(reports / "invalid-date.json", model_name="invalid-date")
-    payload = json.loads((reports / "invalid-date.json").read_text(encoding="utf-8"))
-    payload["generated_at"] = run_date
-    (reports / "invalid-date.json").write_text(
-        json.dumps(payload),
-        encoding="utf-8",
-    )
+def test_renderer_rejects_invalid_run_dates(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for run_date in ["2026-07-17 trailing text", "2026-13-01", 20260717]:
+        with subtests.test(run_date=run_date):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            reports = tmp_path / "reports"
+            _write_report(reports / "invalid-date.json", model_name="invalid-date")
+            payload = json.loads(
+                (reports / "invalid-date.json").read_text(encoding="utf-8")
+            )
+            payload["generated_at"] = run_date
+            (reports / "invalid-date.json").write_text(
+                json.dumps(payload),
+                encoding="utf-8",
+            )
 
-    with pytest.raises(LeaderboardError, match="generated_at|run date"):
-        load_leaderboard_rows(reports)
+            with pytest.raises(LeaderboardError, match="generated_at|run date"):
+                load_leaderboard_rows(reports)
 
 
 def test_renderer_escapes_report_metadata_in_html(tmp_path: Path) -> None:
@@ -362,7 +365,7 @@ def test_committed_public_leaderboard_does_not_drift(tmp_path: Path) -> None:
     assert _snapshot(generated) == _snapshot(PUBLIC_LEADERBOARD)
 
 
-def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None:
+def test_pages_workflow_builds_prs_and_deploys_only_master() -> None:
     workflow_text = PAGES_WORKFLOW.read_text(encoding="utf-8")
     workflow = yaml.load(
         workflow_text,
@@ -379,10 +382,10 @@ def test_pages_workflow_builds_prs_and_deploys_master_and_release_tags() -> None
     )
 
     assert push["branches"] == ["master"]
-    assert push["tags"] == ["v*"]
-    assert pull_request["branches"] == ["master"]
+    assert "tags" not in push
+    assert pull_request["branches"] == ["master", "release/v*"]
     assert "docs/**" in pull_request["paths"]
-    assert workflow_text.count('tags: ["v*"]') == 1
+    assert 'tags: ["v*"]' not in workflow_text
     assert (
         "github.event.pull_request.number || 'deploy'"
         in workflow["concurrency"]["group"]

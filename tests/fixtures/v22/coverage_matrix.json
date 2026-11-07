@@ -1,0 +1,172 @@
+{
+  "schema_version": "openmed.v22.coverage-matrix.v1",
+  "matrix_version": 1,
+  "release": "2.2",
+  "synthetic_only": true,
+  "test_command": ".venv/bin/python -m pytest tests/integration/test_v22_exchange_conformance.py tests/unit/release/test_v22_coverage_matrix.py -q",
+  "entries": [
+    {
+      "id": "form-deidentification-grounding",
+      "standard_profile": "OpenMed clinical form review and ICD-10-CM grounding contract",
+      "version": "form review v1; ICD-10-CM synthetic snapshot v22-synthetic-2026-08",
+      "supported_subset": [
+        "Synthetic OCR key/value fields with graph offsets and hash provenance",
+        "Direct-identifier redaction before review serialization",
+        "Exact local grounding of one Condition span to E11.9"
+      ],
+      "known_gaps": [
+        "No OCR engine, remote terminology service, ambiguous coding, or real clinical document is exercised"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/reference_form.json": "sha256:bdb8db8d2d37d02087026469caeaa2f26f4abd8661b8de426cdfb2b619a40bb8",
+        "tests/fixtures/v22/grounding_vocabulary.jsonl": "sha256:9f3d2d3c7c23c9c9879389f43f0b0b45616ad65e51535de1779ba8d841bc5490",
+        "tests/fixtures/v22/expected_reference_hashes.json": "sha256:34de044adc534ade16b725476f4bd8ba501d0c9ad7da56790232f726215681fd"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_reference_exchange_flow_is_deterministic_offline_and_phi_free"
+      ],
+      "source_modules": [
+        "openmed.structured.forms",
+        "openmed.clinical.grounding.api",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "fhir-r4-ips",
+      "standard_profile": "HL7 FHIR R4 core and International Patient Summary",
+      "version": "FHIR 4.0.1; IPS 2.0.1",
+      "supported_subset": [
+        "Document Bundle containing Composition, pseudonymous Patient, and grounded Condition",
+        "Local profile validation and internal reference-integrity checks"
+      ],
+      "known_gaps": [
+        "No external validator, terminology expansion, signature, narrative, or full IPS section set is exercised"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/reference_form.json": "sha256:bdb8db8d2d37d02087026469caeaa2f26f4abd8661b8de426cdfb2b619a40bb8",
+        "tests/fixtures/v22/expected_reference_hashes.json": "sha256:34de044adc534ade16b725476f4bd8ba501d0c9ad7da56790232f726215681fd"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_reference_exchange_flow_is_deterministic_offline_and_phi_free"
+      ],
+      "source_modules": [
+        "openmed.clinical.exporters.fhir.exchange",
+        "openmed.clinical.exporters.fhir.grounded",
+        "openmed.interop.fhir.reference_integrity",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "fhir-r4-to-omop-5-4",
+      "standard_profile": "OpenMed FHIR R4 to OMOP CDM bridge",
+      "version": "FHIR 4.0.1 input; OMOP CDM 5.4 output",
+      "supported_subset": [
+        "Pseudonymous Patient and one ICD-10-CM Condition",
+        "Caller-supplied synthetic vocabulary mapping, constraint validation, counts, hashes, and path-only information loss"
+      ],
+      "known_gaps": [
+        "FHIR Composition is excluded because it is outside the bridge's declared resource set",
+        "No database writer, cohort query, vocabulary service, or reverse round trip is exercised"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/omop_vocabulary.json": "sha256:28911fa9de2f5b58b8d8d87e8548c983d6c795ccad803d2bbfcb4678aa60fc37",
+        "tests/fixtures/v22/expected_reference_hashes.json": "sha256:34de044adc534ade16b725476f4bd8ba501d0c9ad7da56790232f726215681fd"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_reference_exchange_flow_is_deterministic_offline_and_phi_free"
+      ],
+      "source_modules": [
+        "openmed.interop.fhir_omop",
+        "openmed.interop.omop.cdm_loader",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "fhir-r5-adapter-negative",
+      "standard_profile": "OpenMed explicit FHIR cross-release adapter",
+      "version": "FHIR R5 5.0.0 to FHIR R4 4.0.1",
+      "supported_subset": [
+        "Path-specific rejection of a non-representable Observation field"
+      ],
+      "known_gaps": [
+        "This fixture does not claim general R5-to-R4 conversion or validate every supported resource"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/fhir_r5_negative.json": "sha256:b3cde1c0f152788417d2bace6f5e26eb8ea6caaea9722d261c7a58075ffd0613"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_negative_conformance_fixtures_fail_at_safe_boundaries"
+      ],
+      "source_modules": [
+        "openmed.interop.fhir.versions",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "fhir-bulk-resume-negative",
+      "standard_profile": "FHIR Bulk Data local checkpoint compatibility boundary",
+      "version": "OpenMed checkpoint manifest v1",
+      "supported_subset": [
+        "Digest-only page token, policy, endpoint scope, and aggregate progress",
+        "Positive same-context resume and fail-closed endpoint-scope mismatch"
+      ],
+      "known_gaps": [
+        "No Bulk Data server, export kickoff, polling, file download, or complete protocol conformance is exercised"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/bulk_resume_negative.json": "sha256:b88a29f2e574706edbe371b9ae95416e5fb7301d8a3f383cae56e20918d940ca"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_negative_conformance_fixtures_fail_at_safe_boundaries"
+      ],
+      "source_modules": [
+        "openmed.interop.fhir.bulk_checkpoint",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "structured-privacy-negative",
+      "standard_profile": "NIST SP 800-188-oriented OpenMed structured privacy lab",
+      "version": "structured privacy artifact schema v1",
+      "supported_subset": [
+        "One unique synthetic record rejected by a zero-tolerance membership-inference threshold",
+        "Aggregate, value-free privacy evidence serialization"
+      ],
+      "known_gaps": [
+        "The bounded self-test is not a universal re-identification bound, qualified-expert determination, or anonymity certification"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/structured_privacy_negative.json": "sha256:cda409fee76e21e86a4dcadade0170fff112b1b8a705772fd8fb5e800984b048"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_negative_conformance_fixtures_fail_at_safe_boundaries"
+      ],
+      "source_modules": [
+        "openmed.structured.privacy_lab",
+        "openmed.eval.v22_conformance"
+      ]
+    },
+    {
+      "id": "mcp-authorization-negative",
+      "standard_profile": "OpenMed MCP authorization conformance contract",
+      "version": "openmed.mcp.authorization_conformance.v1",
+      "supported_subset": [
+        "Local mocked OAuth-style authorization flow rejects an unapproved state-changing tool call",
+        "Public result contains only case id and failure category"
+      ],
+      "known_gaps": [
+        "No live identity provider, HTTP transport, token endpoint, Dynamic Client Registration, or MCP certification is exercised"
+      ],
+      "fixture_sha256": {
+        "tests/fixtures/v22/mcp_authorization_negative.json": "sha256:19890c8eb2825d3c16e2e9a4eed66674596ec92f6db3406eb2f73b5c218fdefd"
+      },
+      "test_nodes": [
+        "tests/integration/test_v22_exchange_conformance.py::test_negative_conformance_fixtures_fail_at_safe_boundaries"
+      ],
+      "source_modules": [
+        "openmed.mcp.authorization_conformance",
+        "openmed.eval.v22_conformance"
+      ]
+    }
+  ]
+}
