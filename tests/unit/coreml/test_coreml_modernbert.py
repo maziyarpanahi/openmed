@@ -58,12 +58,12 @@ def test_allowlist_accepts_modernbert_spellings_and_architecture_hint() -> None:
 def test_unsupported_family_keeps_message_and_gains_reason_code() -> None:
     from openmed.coreml.convert import resolve_supported_model_type
 
-    config = types.SimpleNamespace(model_type="longformer", architectures=[])
+    config = types.SimpleNamespace(model_type="gpt2", architectures=[])
     with pytest.raises(ExportQualificationError) as error:
         resolve_supported_model_type(config)
     assert error.value.reason is ExportReason.UNSUPPORTED_FAMILY
     assert "Supported families: bert, distilbert" in str(error.value)
-    assert str(error.value).endswith("deberta-v2, modernbert.")
+    assert str(error.value).endswith("deberta-v2, modernbert, longformer.")
 
 
 def _install_stubs(

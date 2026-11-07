@@ -228,6 +228,13 @@ class OnnxModel:
         self._qualified_max_length = (
             int(qualified_max) if isinstance(qualified_max, int) else None
         )
+        # Longformer graphs take a global attention mask filled by the
+        # qualified policy; unqualified graphs fall back to local attention.
+        self._global_attention_policy = str(
+            (self.qualification or {}).get("global_attention") or "none"
+        )
+        windowing = (self.qualification or {}).get("windowing")
+        self._windowing = windowing if isinstance(windowing, Mapping) else None
 
     @classmethod
     def from_pretrained(
@@ -405,7 +412,17 @@ class OnnxModel:
             if isinstance(value, int) and 2 < value < 10**7
         ]
         model_limit = min(limits) if limits else 512
-        window_size = min(model_limit, 512) if max_length is None else max_length
+        windowing = self._windowing
+        declared_window = (
+            int(windowing["window_tokens"]) if windowing is not None else None
+        )
+        if max_length is not None:
+            window_size = max_length
+        elif declared_window is not None:
+            # Qualified long-document exports default to the evidenced window.
+            window_size = min(model_limit, declared_window)
+        else:
+            window_size = min(model_limit, 512)
         _positive_integer("max_length", window_size)
         qualified_limit = self._qualified_max_length
         if qualified_limit is not None and window_size > qualified_limit:
@@ -417,7 +434,12 @@ class OnnxModel:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_SEQUENCE_LENGTH)
         if window_size > model_limit:
             raise ValueError("max_length exceeds the model token limit")
-        overlap = min(96, max(0, (window_size - 2) // 4)) if stride is None else stride
+        if stride is None and windowing is not None and window_size == declared_window:
+            overlap = int(windowing["overlap_tokens"])
+        elif stride is None:
+            overlap = min(96, max(0, (window_size - 2) // 4))
+        else:
+            overlap = stride
         if (
             isinstance(overlap, bool)
             or not isinstance(overlap, int)
@@ -453,6 +475,16 @@ class OnnxModel:
                                 "tokenizer returned invalid source offsets"
                             )
                         token_counts[index] = max(token_counts[index], token_index + 1)
+            if windowing is not None and token_counts[index] > int(
+                windowing["max_document_tokens"]
+            ):
+                # Bounded exports never truncate: refuse the whole request.
+                from openmed.eval.export_qualification import (
+                    ExportQualificationError,
+                    ExportReason,
+                )
+
+                raise ExportQualificationError(ExportReason.SEQUENCE_TOO_LONG)
             windows.extend(encoded_windows)
             counts[index] = len(encoded_windows)
             if len(windows) > max_windows:
@@ -560,6 +592,22 @@ class OnnxModel:
             size = len(window.input_ids)
             for name in encoded:
                 encoded[name][row, :size] = getattr(window, name)
+        if "global_attention_mask" in self.input_names:
+            # Fill the explicit Longformer input from the qualified policy;
+            # padding positions are never global.
+            global_mask = self._np.zeros(shape, dtype=self._np.int64)
+            if self._global_attention_policy == "first_token":
+                global_mask[:, 0] = 1
+            elif self._global_attention_policy != "none":
+                from openmed.eval.export_qualification import (
+                    ExportQualificationError,
+                    ExportReason,
+                )
+
+                raise ExportQualificationError(
+                    ExportReason.UNSUPPORTED_GLOBAL_ATTENTION
+                )
+            encoded["global_attention_mask"] = global_mask
         return self._build_feed(encoded)
 
     def __call__(
@@ -619,12 +667,18 @@ def _check_qualified_artifact(
         providers=list(providers),
     )
     contract = report.get("io_contract") or {}
-    return {
+    qualification = {
         "family": report.get("family"),
         "variant": variant.get("name"),
         "claim": variant.get("claim"),
         "max_sequence_length": contract.get("max_sequence_length"),
     }
+    global_attention = contract.get("global_attention")
+    if isinstance(global_attention, Mapping):
+        qualification["global_attention"] = global_attention.get("policy")
+    if isinstance(contract.get("windowing"), Mapping):
+        qualification["windowing"] = dict(contract["windowing"])
+    return qualification
 
 
 def load_onnx_model(

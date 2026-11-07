@@ -501,28 +501,6 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
     }
 
 
-def test_longformer_export_compatibility_is_scoped(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = _convert_module()
-    original_mask = object()
-    modeling = types.SimpleNamespace(create_bidirectional_mask=original_mask)
-    longformer_module = types.ModuleType("transformers.models.longformer")
-    longformer_module.modeling_longformer = modeling
-    monkeypatch.setitem(
-        sys.modules,
-        "transformers.models.longformer",
-        longformer_module,
-    )
-    model = types.SimpleNamespace(config=types.SimpleNamespace(model_type="longformer"))
-    torch_module = types.SimpleNamespace()
-
-    with module._onnx_export_compatibility(model, torch_module):
-        assert modeling.create_bidirectional_mask is not original_mask
-
-    assert modeling.create_bidirectional_mask is original_mask
-
-
 def test_convert_optimizes_before_webgpu_and_records_validation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

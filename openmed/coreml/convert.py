@@ -31,6 +31,7 @@ from openmed.core.capabilities import raise_missing_backend
 from openmed.core.decoding import build_label_info, labels_to_token_spans
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.export_qualification import (
+    GLOBAL_ATTENTION_INPUT,
     SHAPE_MODE_DYNAMIC,
     SHAPE_MODE_STATIC,
     ExportIOContract,
@@ -38,6 +39,8 @@ from openmed.eval.export_qualification import (
     ExportQualificationReport,
     ExportReason,
     VariantCandidate,
+    WindowingPolicy,
+    global_attention_row,
     qualify_export,
     source_identity,
     summarize_report,
@@ -65,6 +68,7 @@ SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = (
     "xlm-roberta",
     "deberta-v2",
     "modernbert",
+    "longformer",
 )
 
 COMPUTE_UNIT_CHOICES = ("all", "cpuAndNeuralEngine", "cpuOnly")
@@ -76,6 +80,7 @@ COREML_PARITY_REPORT_VERSION = 1
 
 _ARCHITECTURE_TYPE_HINTS = (
     ("ModernBert", "modernbert"),
+    ("Longformer", "longformer"),
     ("DebertaV2", "deberta-v2"),
     ("XLMRoberta", "xlm-roberta"),
     ("Roberta", "roberta"),
@@ -217,15 +222,23 @@ def convert(
     qualification_report_path: str | Path | None = None,
     expected_source_revision: str | None = None,
     direct_identifier_recall_floor: float | None = None,
+    global_attention: str | None = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
 
-    Families with a registered export adapter (ModernBERT) are traced through
-    that adapter, always use a static ``(1, max_seq_length)`` sequence bucket,
-    and are qualified against the PyTorch reference checkpoint on a synthetic
-    PHI suite. Qualification needs Core ML prediction, so it runs on macOS; a
-    failing variant raises :class:`ExportQualificationError` after the
-    evidence is written, and unqualified packages are never published.
+    Families with a registered export adapter (ModernBERT, Longformer) are
+    traced through that adapter, always use a static ``(1, max_seq_length)``
+    sequence bucket, and are qualified against the PyTorch reference
+    checkpoint on a synthetic PHI suite. Qualification needs Core ML
+    prediction, so it runs on macOS; a failing variant raises
+    :class:`ExportQualificationError` after the evidence is written, and
+    unqualified packages are never published.
+
+    Longformer packages take an explicit ``global_attention_mask`` input. The
+    bucket must be a declared multiple of the largest attention window whose
+    estimated attention working set fits the Core ML memory ceiling, and
+    qualification additionally sweeps minimum, typical, attention-window
+    boundary, and maximum lengths and checks windowed long documents.
 
     Args:
         model_id: HuggingFace model identifier.
@@ -264,14 +277,18 @@ def convert(
             resolved revision fails before conversion.
         direct_identifier_recall_floor: Optional absolute direct-identifier
             recall floor for release evidence on real checkpoints.
+        global_attention: Global attention fill policy for families with a
+            ``global_attention_mask`` input (Longformer): ``"none"`` (default)
+            or ``"first_token"``.
 
     Returns:
         Path to the created ``.mlpackage``.
 
     Raises:
         ExportQualificationError: For unsupported family, precision,
-            quantization, compute-unit, sequence, or converter combinations
-            (before weights load) and for failed qualification gates.
+            quantization, compute-unit, sequence, bucket, memory, global
+            attention, or converter combinations (before weights load) and for
+            failed qualification gates.
     """
     output_path = Path(output_path)
     _validate_compute_precision(compute_precision)
@@ -303,9 +320,14 @@ def convert(
     model_type = resolve_supported_model_type(source_config)
     adapter = _resolve_export_adapter(model_type)
     source: Mapping[str, Any] | None = None
+    graph_inputs: tuple[str, ...] = ("input_ids", "attention_mask")
+    global_policy: str | None = None
+    sequence_limits: Any = None
     if adapter is None:
         if qualify:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+        if global_attention is not None:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
     else:
         adapter.validate_request(
             runtime="coreml",
@@ -315,7 +337,13 @@ def convert(
             quantizations=("none", *quantization_variants),
             providers=(compute_units,),
             shape_mode=SHAPE_MODE_STATIC if optimize_for_ane else SHAPE_MODE_DYNAMIC,
+            global_attention=global_attention,
         )
+        graph_inputs = adapter.inputs_for("coreml")
+        global_policy = adapter.resolve_global_attention(
+            global_attention, runtime="coreml"
+        )
+        sequence_limits = adapter.limits_for(source_config, "coreml", compute_precision)
         if qualify is not False:
             source = source_identity(
                 model_id,
@@ -374,10 +402,17 @@ def convert(
         return_tensors="pt",
     )
 
+    if GLOBAL_ATTENTION_INPUT in graph_inputs:
+        # The traced graph has no data-dependent branches, so any binary mask
+        # traces the same ops; one global token keeps the global path live.
+        global_sample = torch.zeros_like(sample["input_ids"])
+        global_sample[:, 0] = 1
+        sample[GLOBAL_ATTENTION_INPUT] = global_sample
+
     with trace_context:
         traced = torch.jit.trace(
             wrapper,
-            (sample["input_ids"], sample["attention_mask"]),
+            tuple(sample[name] for name in graph_inputs),
         )
 
     # 4. Convert to CoreML
@@ -398,12 +433,12 @@ def convert(
             compute_units=compute_units,
         )
     export_metadata = (
-        {
-            "export_family": adapter.family,
-            "export_adapter_version": str(adapter.version),
-            "sequence_shape_mode": SHAPE_MODE_STATIC,
-            "sequence_buckets": json.dumps([max_seq_length]),
-        }
+        _adapter_export_metadata(
+            adapter,
+            max_seq_length=max_seq_length,
+            global_policy=global_policy,
+            sequence_limits=sequence_limits,
+        )
         if adapter is not None
         else {}
     )
@@ -412,15 +447,11 @@ def convert(
         traced,
         inputs=[
             ct.TensorType(
-                name="input_ids",
+                name=name,
                 shape=input_shape,
                 dtype=int,
-            ),
-            ct.TensorType(
-                name="attention_mask",
-                shape=input_shape,
-                dtype=int,
-            ),
+            )
+            for name in graph_inputs
         ],
         outputs=[
             ct.TensorType(name="logits"),
@@ -430,7 +461,7 @@ def convert(
         minimum_deployment_target=ct.target.iOS16,
     )
 
-    sample_inputs = _latency_sample_inputs(sample)
+    sample_inputs = _latency_sample_inputs(sample, names=graph_inputs)
 
     # 5. Add metadata
     _apply_metadata(
@@ -562,6 +593,10 @@ def convert(
                 artifact_root=_common_root([manifest_path, *variant_paths.values()]),
                 fixtures_path=qualification_fixtures_path,
                 direct_identifier_recall_floor=direct_identifier_recall_floor,
+                graph_inputs=graph_inputs,
+                global_policy=global_policy,
+                sequence_limits=sequence_limits,
+                source_config=source_config,
             )
             qualification_block = summarize_report(qualification_report)
         else:
@@ -580,6 +615,13 @@ def convert(
                 "qualified_variants": [],
                 "sequence_buckets": [max_seq_length],
             }
+            if global_policy is not None:
+                qualification_block["global_attention"] = global_policy
+                qualification_block["input_names"] = list(graph_inputs)
+            if sequence_limits is not None:
+                qualification_block["limits"] = sequence_limits.to_dict(
+                    selected=max_seq_length
+                )
 
     _write_coreml_conversion_manifest(
         manifest_path,
@@ -637,6 +679,34 @@ def _resolve_export_adapter(model_type: str):
     return resolve_export_adapter(model_type)
 
 
+def _adapter_export_metadata(
+    adapter,
+    *,
+    max_seq_length: int,
+    global_policy: str | None,
+    sequence_limits: Any,
+) -> dict[str, str]:
+    """Return the string-valued package metadata for an adapter family."""
+    metadata = {
+        "export_family": adapter.family,
+        "export_adapter_version": str(adapter.version),
+        "sequence_shape_mode": SHAPE_MODE_STATIC,
+        "sequence_buckets": json.dumps([max_seq_length]),
+    }
+    if global_policy is not None:
+        metadata["global_attention_policy"] = global_policy
+        metadata["global_attention_input"] = GLOBAL_ATTENTION_INPUT
+    if sequence_limits is not None:
+        metadata["attention_windows"] = json.dumps(
+            list(sequence_limits.attention_windows)
+        )
+        metadata["memory_ceiling_bytes"] = str(sequence_limits.memory_ceiling_bytes)
+        metadata["estimated_attention_bytes"] = str(
+            sequence_limits.bucket_memory_bytes.get(max_seq_length, 0)
+        )
+    return metadata
+
+
 def _coreml_prediction_available(ct) -> bool:
     """Return whether Core ML can execute predictions on this host."""
     models = getattr(ct, "models", None)
@@ -670,6 +740,10 @@ def _qualify_coreml_variants(
     artifact_root: Path,
     fixtures_path: str | Path | None,
     direct_identifier_recall_floor: float | None,
+    graph_inputs: Sequence[str] = ("input_ids", "attention_mask"),
+    global_policy: str | None = None,
+    sequence_limits: Any = None,
+    source_config: Any = None,
 ) -> ExportQualificationReport:
     """Qualify every Core ML package against the stock PyTorch checkpoint."""
 
@@ -708,13 +782,19 @@ def _qualify_coreml_variants(
         runtime="coreml",
         support=adapter.support_for("coreml"),
         io_contract=ExportIOContract(
-            input_names=("input_ids", "attention_mask"),
+            input_names=tuple(graph_inputs),
             output_names=("logits",),
             sequence_buckets=(max_seq_length,),
             max_sequence_length=max_seq_length,
             shape_mode=SHAPE_MODE_STATIC,
             batch_size=1,
             input_dtype="int32",
+            global_attention=global_policy,
+            windowing=(
+                WindowingPolicy.for_window(max_seq_length)
+                if adapter.windowed_documents
+                else None
+            ),
         ),
         tokenizer=tokenizer,
         id2label=id2label,
@@ -725,6 +805,16 @@ def _qualify_coreml_variants(
         fixtures_path=fixtures_path,
         exclude_artifact_names=(COREML_MANIFEST_FILENAME,),
         direct_identifier_recall_floor=direct_identifier_recall_floor,
+        sequence_sweep_boundaries=(
+            adapter.sweep_boundaries(source_config or reference_model.config)
+            if adapter.sweep_boundaries is not None
+            else None
+        ),
+        limits=(
+            sequence_limits.to_dict(selected=max_seq_length)
+            if sequence_limits is not None
+            else None
+        ),
     )
 
 
@@ -1282,14 +1372,18 @@ def _is_ane_compute_unit(value: str) -> bool:
     )
 
 
-def _latency_sample_inputs(sample: Mapping[str, Any]) -> dict[str, Any]:
+def _latency_sample_inputs(
+    sample: Mapping[str, Any],
+    *,
+    names: Sequence[str] = ("input_ids", "attention_mask"),
+) -> dict[str, Any]:
     try:
         import numpy as np
     except ImportError:
         return {}
 
     inputs: dict[str, Any] = {}
-    for name in ("input_ids", "attention_mask"):
+    for name in names:
         value = sample[name]
         if hasattr(value, "detach"):
             value = value.detach().cpu().numpy()
@@ -1521,6 +1615,13 @@ def _coreml_artifact_runner(
             id2label = _load_id2label_for_package(model_path)
             pipeline_state["np"] = np
             pipeline_state["model"] = ct.models.MLModel(str(model_path))
+            # Longformer packages name their global attention fill policy.
+            package_metadata = (
+                getattr(pipeline_state["model"], "user_defined_metadata", None) or {}
+            )
+            pipeline_state["global_attention_policy"] = package_metadata.get(
+                "global_attention_policy"
+            )
             pipeline_state["label_info"] = build_label_info(id2label)
             pipeline_state["tokenizer"] = get_tokenizer_with_loader(
                 source_model_id,
@@ -1539,12 +1640,17 @@ def _coreml_artifact_runner(
         )
         input_ids = np.asarray([encoded["input_ids"]], dtype=np.int32)
         attention_mask = np.asarray([encoded["attention_mask"]], dtype=np.int32)
-        outputs = pipeline_state["model"].predict(
-            {
-                "input_ids": input_ids,
-                "attention_mask": attention_mask,
-            }
-        )
+        feed = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        policy = pipeline_state.get("global_attention_policy")
+        if policy is not None:
+            row = global_attention_row(
+                policy, int(attention_mask.sum()), attention_mask.shape[1]
+            )
+            feed[GLOBAL_ATTENTION_INPUT] = np.asarray([row], dtype=np.int32)
+        outputs = pipeline_state["model"].predict(feed)
         logits = np.asarray(outputs["logits"])
         label_ids = logits[0].argmax(axis=-1).tolist()
         offsets = encoded.get("offset_mapping") or []
@@ -1788,6 +1894,15 @@ def main():
         help="Optional absolute direct-identifier recall floor",
     )
     parser.add_argument(
+        "--global-attention",
+        choices=("none", "first_token"),
+        default=None,
+        help=(
+            "Global attention fill policy for Longformer packages "
+            "(default: none, the token-classification default)"
+        ),
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1861,6 +1976,7 @@ def main():
         qualification_report_path=args.qualification_report,
         expected_source_revision=args.expected_source_revision,
         direct_identifier_recall_floor=args.direct_identifier_recall_floor,
+        global_attention=args.global_attention,
     )
 
 

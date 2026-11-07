@@ -44,6 +44,7 @@ The converter accepts these Hugging Face token-classification source families:
 - `xlm-roberta`
 - `deberta-v2`
 - `modernbert` (qualification-gated, see below)
+- `longformer` (qualification-gated, bounded buckets, see below)
 
 Unsupported architectures fail before tracing with an error that lists the
 supported families and carries the stable `unsupported_family` reason code.
@@ -70,6 +71,30 @@ to require it, or `--no-qualify` to skip it; elsewhere the manifest records
 `status: not_run`. Gate tolerances, reason codes, and the offline reproduction
 command are in the
 [Export Format Support Matrix](export-matrix.md#modernbert-runtime-support).
+
+## Longformer Qualification
+
+Longformer packages are traced through the same family adapter and the same
+qualification harness. Each package has one static `(1, max_seq_length)`
+bucket and three inputs: `input_ids`, `attention_mask`, and an explicit
+`global_attention_mask`. `--max-seq-length` must be a multiple of the largest
+attention window, no longer than the position table allows, and its estimated
+attention working set must fit the Core ML memory ceiling; otherwise the
+request fails before weights load with `bucket_unavailable`,
+`unsupported_sequence_length`, or `memory_budget_exceeded`. Export one package
+per bucket you ship.
+
+`--global-attention none` (the default, matching the stock
+token-classification forward) or `--global-attention first_token` names the
+fill policy that qualification uses and that packages record as
+`global_attention_policy` metadata, next to `attention_windows`,
+`memory_ceiling_bytes`, and `estimated_attention_bytes`. On top of the
+ModernBERT gates, qualification sweeps minimum, typical, attention-window
+boundary, and maximum lengths (with a first/middle/last global-attention
+probe) and compares windowed long documents, with document-global offsets,
+against the windowed reference. Bounds, the memory estimate, and the windowing
+contract are in the
+[Export Format Support Matrix](export-matrix.md#longformer-runtime-support).
 
 ## Compute Units
 
