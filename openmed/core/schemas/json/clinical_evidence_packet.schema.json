@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_evidence_packet.schema.json",
+  "title": "OpenMed clinical evidence packet",
+  "schema_version": 2,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind", "packet_id", "policy_fingerprint", "references", "rejection_report",
+    "schema_version"
+  ],
+  "properties": {
+    "kind": {"const": "clinical_evidence_packet"},
+    "packet_id": {"$ref": "#/$defs/identifier"},
+    "policy_fingerprint": {"$ref": "#/$defs/digest"},
+    "references": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+    "rejection_report": {"$ref": "#/$defs/rejection_report"},
+    "schema_version": {"const": 2, "type": "integer"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "end", "policy_fingerprint", "reference_id", "review_state",
+        "review_transitions", "source_id", "start", "synthetic", "verified"
+      ],
+      "properties": {
+        "end": {"type": "integer", "minimum": 0},
+        "policy_fingerprint": {"$ref": "#/$defs/digest"},
+        "reference_id": {"$ref": "#/$defs/identifier"},
+        "review_state": {"$ref": "#/$defs/review_state"},
+        "review_transitions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/transition"}
+        },
+        "source_id": {"$ref": "#/$defs/identifier"},
+        "start": {"type": "integer", "minimum": 0},
+        "synthetic": {"const": true},
+        "verified": {"const": true}
+      }
+    },
+    "rejection_counts": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "duplicate_reference", "invalid_policy_fingerprint",
+          "invalid_reference", "invalid_review_state", "invalid_source_offset",
+          "not_synthetic", "policy_mismatch", "raw_text", "unverified"
+        ]
+      },
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "rejection_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_count", "input_count", "rejected_count", "rejection_counts"
+      ],
+      "properties": {
+        "accepted_count": {"type": "integer", "minimum": 0},
+        "input_count": {"type": "integer", "minimum": 0},
+        "rejected_count": {"type": "integer", "minimum": 0},
+        "rejection_counts": {"$ref": "#/$defs/rejection_counts"}
+      }
+    },
+    "review_state": {"enum": ["approved"]},
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id", "from_state", "policy_fingerprint",
+        "provenance_fingerprint", "reason_code", "sequence", "to_state"
+      ],
+      "properties": {
+        "event_id": {"type": "string", "minLength": 1},
+        "from_state": {"$ref": "#/$defs/review_state"},
+        "policy_fingerprint": {"$ref": "#/$defs/digest"},
+        "provenance_fingerprint": {"$ref": "#/$defs/digest"},
+        "reason_code": {"type": ["string", "null"]},
+        "sequence": {"type": "integer", "minimum": 1},
+        "to_state": {"$ref": "#/$defs/review_state"}
+      }
+    }
+  }
+}

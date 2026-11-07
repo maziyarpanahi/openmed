@@ -113,6 +113,250 @@ OpenMed emits R4 `issue.expression` for element paths. It accepts legacy
 `location` as input for adapter compatibility, but it never emits
 `issue.location` because that field is deprecated in FHIR R4.
 
+## Governed write AuditEvents
+
+`to_governed_write_audit_event()` projects already-classified create/update
+attempts from a `GovernedWriteAuditAttempt`. The projection is local: it returns
+an R4 AuditEvent for the caller to retain or submit through a separately
+reviewed governed path. It reads no clinical payload, resolves no credentials,
+contacts no server and installs no ledger storage or write adapter.
+
+| Controller outcome | Create / update action | R4 audit outcome | Controlled subtype |
+| --- | --- | --- | --- |
+| Success | `C` / `U` | `0` | `success` |
+| Server rejection | `C` / `U` | `4` | `server_rejected` |
+| Commit unknown | `C` / `U` | `8` | `commit_unknown` |
+| Policy denial | `C` / `U` | `4` | `policy_denied` |
+| Admission refusal | `C` / `U` | `4` | `admission_refused` |
+
+For `commit_unknown`, outcome `8` records the controller's failure to confirm
+the attempt. The subtype retains target-effect uncertainty. It is not proof
+that a clinical write failed or is absent: reconcile durable effects before
+any retry, using the [workflow recovery contract](agent/workflow-recovery.md).
+Admission and policy refusals can be recorded before review or materialization
+without inventing a reviewer, receipt or target reference.
+
+This runnable synthetic refusal has no approval or clinical input. Its fixed
+clock makes repeated projection deterministic and prints only audit codes:
+
+```python
+# Runnable: synthetic local audit projection; no request or clinical payload.
+from datetime import datetime, timezone
+
+from openmed.clinical.exporters.fhir import (
+    GovernedWriteAuditAttempt,
+    GovernedWriteOutcome,
+    to_governed_write_audit_event,
+)
+
+attempt = GovernedWriteAuditAttempt(
+    action="create",
+    outcome=GovernedWriteOutcome.POLICY_DENIED,
+    software_agent_ref="urn:uuid:00000000-0000-4000-8000-000000000001",
+)
+instant = datetime(2026, 1, 2, tzinfo=timezone.utc)
+event = to_governed_write_audit_event(attempt, clock=lambda: instant)
+assert event == to_governed_write_audit_event(attempt, clock=lambda: instant)
+print({"action": event["action"], "outcome": event["outcome"]})
+```
+
+Inputs are closed action/outcome enums, opaque references, an optional controlled
+reviewer category and a receipt digest. Reviewer categories are `reviewer`,
+`clinical_reviewer`, `privacy_reviewer`, `operations_reviewer` and
+`security_reviewer`. Trusted code explicitly maps its verified policy role to
+one category; that classification does not replace the policy role or identify
+a person. Role and digest must be supplied together. Success, server rejection
+and unknown commit require that pair and at least one target/proposal reference.
+The projection does not verify signatures, receipt freshness, permissions,
+reviewer identity or actual server effects. The application must derive those
+assertions from its governed controller and protected evidence.
+
+Software/target references accept canonical lowercase UUIDv4 URNs only. Direct
+clinical IDs, private URLs, free text, query strings, fragments and unsupported
+UUID shapes are refused. Target references are sorted and deduplicated, with a
+128-input limit. UUID syntax is not proof of opaque provenance, unlinkability
+or reference resolution: the caller owns the protected mapping, disclosure
+policy and resolution context. Treat even opaque audit metadata as controlled
+information. A receipt digest must have `sha256:` followed by 64 lowercase hex
+characters; it links to local evidence and creates no approval.
+
+The software Device appears as the initiating agent and source observer. A
+supplied reviewer category appears in a separate agent without a person
+reference or name. Resources contain controlled coding, technical recorded
+time, opaque references and optional receipt digests. There are no source
+payloads, narrative, diagnoses, diagnostics, credentials, endpoints, reviewer
+names or raw exceptions. Error messages contain only fixed projection codes.
+
+Projection rebuilds and validates a bounded local metadata snapshot before
+calling the injected clock. Invalidated native attempts fail with a fixed error
+without invoking the clock; a callback cannot change the projected references
+or receipt digest by modifying the original attempt.
+
+The injected clock is called once and must return an aware datetime. Recorded
+time is normalized to UTC with microsecond precision. Identical metadata and
+clock values produce identical resources and IDs; retain the original recorded
+instant when reproducing an event. These IDs bind the projection's metadata,
+not authority or durable commit proof. Each call returns a fresh resource.
+
+The [FHIR R4 AuditEvent structure](https://hl7.org/fhir/R4/auditevent.html),
+[action codes](https://hl7.org/fhir/R4/valueset-audit-event-action.html) and
+[outcome codes](https://hl7.org/fhir/R4/codesystem-audit-event-outcome.html)
+define the interoperability shape. Local structural and synthetic composition
+checks are engineering evidence, not target-server or clinical validation.
+
+## Passive SDOH Observations
+
+`to_sdoh_observations()` projects value-free SDOH evidence into local R4
+`Observation` and `Provenance` resources. It accepts aligned `SDOHEvidence`,
+`SDOHExperiencerEvidence` and `SDOHTemporalEvidence` contracts rather than raw
+findings or source text. It performs no extraction, server write, credential
+resolution, approval verification or storage. Applications retain responsibility
+for authentic review, approved terminology and disclosure policy.
+
+The category mapping pins [SDOH Clinical Care 2.3.0](https://hl7.org/fhir/us/sdoh-clinicalcare/STU2.3/ValueSet-SDOHCC-ValueSetSDOHCategory.html)
+and [US Core Category 7.0.0](https://hl7.org/fhir/us/core/STU7/CodeSystem-us-core-category.html),
+alongside R4 `social-history`. These are explicit interoperability baselines,
+not claims to use the latest IG. Only HL7 category codes are bundled; clinical
+observation and answer codes come from trusted caller configuration. No
+SNOMED CT, UMLS, corpus data, restricted terminology expansion or weights are
+shipped or fetched.
+
+This synthetic record is pending review and therefore remains preliminary.
+The example prints only a count and controlled status:
+
+```python
+# Runnable: synthetic passive SDOH projection with explicit caller bindings.
+from datetime import datetime, timezone
+
+from openmed.clinical.exporters.fhir import (
+    SDOHFHIRCode,
+    SDOHFHIRRecord,
+    SDOHObservationBinding,
+    to_sdoh_observations,
+)
+from openmed.clinical.sdoh_evidence import SDOHEvidence
+from openmed.clinical.sdoh_experiencer import SDOHExperiencerEvidence
+from openmed.clinical.sdoh_sensitive_use import SDOHPurpose
+from openmed.clinical.sdoh_temporal import SDOHTemporalEvidence
+
+offsets = (10, 20)
+record = SDOHFHIRRecord(
+    evidence=SDOHEvidence(
+        "self_report",
+        "present",
+        "social_history",
+        offsets,
+        "needs_review",
+        "food_insecurity",
+    ),
+    experiencer=SDOHExperiencerEvidence(offsets, "patient", source="provided"),
+    temporal=SDOHTemporalEvidence(offsets, "current"),
+)
+system = "https://synthetic.example/CodeSystem/sdoh"
+binding = SDOHObservationBinding(
+    SDOHFHIRCode(system, "synthetic-assessment"),
+    SDOHFHIRCode(system, "synthetic-reviewed-answer"),
+)
+result = to_sdoh_observations(
+    [record],
+    terminology={0: binding},
+    subject_reference="urn:uuid:00000000-0000-4000-8000-000000000001",
+    source_reference="urn:uuid:00000000-0000-4000-8000-000000000002",
+    software_reference="urn:uuid:00000000-0000-4000-8000-000000000003",
+    purpose=SDOHPurpose.CLINICAL_REVIEW,
+    clock=lambda: datetime(2026, 1, 2, tzinfo=timezone.utc),
+)
+print(
+    {
+        "exported_count": len(result.observations),
+        "status": result.observations[0]["status"],
+    }
+)
+```
+
+The terminology map uses each input record's integer index. This allows two
+records with the same determinant to carry different explicitly reviewed
+answers. The exporter never infers an answer from a determinant, assertion or
+source surface. Missing bindings produce `terminology_unmapped` exclusions.
+A binding without an answer retains a preliminary Observation with
+`dataAbsentReason=unknown` and an `answer_unmapped` partial loss. Syntax checks
+cannot establish a code's clinical meaning, licensing or absence of identifiers;
+bindings must come from approved configuration, never source text.
+
+| Determinant | Pinned domain category |
+| --- | --- |
+| `food_insecurity` | `food-insecurity` |
+| `employment`, `employment_status` | `employment-status` |
+| `housing`, `housing_insecurity` | Explicit `housing-instability`, `homelessness` or `inadequate-housing` |
+| `financial_strain` | `financial-insecurity` |
+| `transportation` | `transportation-insecurity` |
+| `education` | `educational-attainment` |
+| `insurance` | `health-insurance-coverage-status` |
+| `social_support` | `social-connection` |
+| `utilities` | `utility-insecurity` |
+
+Housing requires `SDOHObservationBinding(domain_category=...)`: generic housing
+evidence cannot establish which of its three distinct domains applies. Omission
+is a `domain_ambiguous` exclusion; a category from another determinant is a
+`domain_binding_mismatch` exclusion. Other unsupported determinants produce
+`domain_unmapped` rather than a guessed category or patient observation.
+
+Only affirmative patient evidence with review completed, a current resolved
+temporal qualifier and an explicit answer can be final. Unreviewed or pending
+records remain preliminary. Historical, future, unknown or temporally unresolved
+records remain preliminary even after assertion review. Negated needs,
+non-patient/unresolved experiencers, uncertain assertions, rejected review and
+unconfirmed evidence are explicit exclusions. `losses` contains only input
+indices, controlled codes and an `excluded` flag. Partial answer losses can
+coexist with an exported preliminary record. Identical duplicates are reported
+as exclusions rather than silently disappearing.
+
+The three references must be distinct canonical lowercase UUIDv4 URNs for the
+Patient, DocumentReference and Device. UUID syntax does not prove opacity,
+provenance or unlinkability. The application owns protected mappings and their
+resolution. `Provenance.target` links the Observation, and its source entity
+carries the source reference, half-open offsets and controlled evidence,
+review, assertion, section, experiencer and temporal labels. Offsets must align
+across the three input contracts and fit the FHIR unsigned integer range.
+No source surfaces, names, direct identifiers, display text, narrative,
+diagnostics, credential values or source URLs are copied into resources/errors.
+
+Every exported Observation and Provenance carries the same restrictive
+`meta.security` labels: sensitive SDOH, required human review, allowed purposes
+and all five prohibited automated uses from the existing sensitive-use
+contract. An explicit `SDOHPurpose` must be allowed by the record's policy;
+weakened review/prohibited-use labels produce `sensitive_use_refused` exclusions.
+Labels preserve policy metadata; receiving systems must enforce it. They do
+not confer authority, verify review or permit automated eligibility,
+underwriting, employment, care denial or diagnosis decisions.
+
+Temporal classes do not contain calendar anchors. Optional `effective_start`
+and `effective_end` use only caller-approved calendar values: exact ISO dates
+or aware datetimes with seconds and at most six fractional digits. Dates keep
+day precision; datetimes normalize to UTC. A matching-precision end creates an
+`effectivePeriod` and cannot precede its start. Unknown/conflicting temporal
+classes reject supplied calendar values. No effective time uses the wall clock.
+The caller must apply required date shifting/disclosure controls before passing
+clinical dates. The injected clock supplies only technical `Provenance.recorded`,
+is called once per exported batch and is skipped when all records are excluded.
+
+At most 512 typed records and 512 indexed bindings are accepted. Terminology
+mappings are inspected once into a bounded local snapshot; projection never
+reinvokes provider getters. Exported qualifier codes must be exact built-in
+strings, and malformed UTC offset minutes are refused before normalization. Errors use
+fixed codes and suppress raw clock/calendar exceptions. Identical inputs and
+recorded instants produce identical resources; retain that instant for replay.
+Observation IDs bind the emitted metadata; Provenance IDs also bind recorded
+time. These digests establish neither review authenticity nor clinical validity.
+
+Each Observation passes the existing local base-R4 structural checker. Tests
+also exercise `check_bundle()` against an authored synthetic profile with a
+negative missing-category control. This is partial structural engineering
+evidence. The exporter does not declare `meta.profile` or claim full conformance
+to the [SDOHCC Observation Assessment profile](https://hl7.org/fhir/us/sdoh-clinicalcare/STU2.3/StructureDefinition-SDOHCC-ObservationAssessment.html).
+For deployment, validate a caller-supplied local IG snapshot and all unsupported
+constraints with an appropriate complete validator before declaring conformance.
+
 ## Bundles
 
 Use `to_fhir()` when the inputs are grounded clinical spans. The facade routes

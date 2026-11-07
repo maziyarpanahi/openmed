@@ -119,31 +119,31 @@ def test_missing_image_reference_is_validated(tmp_path: Path) -> None:
     assert any("internal link target is missing" in error for error in report.errors)
 
 
-@pytest.mark.parametrize(
-    "target",
-    (
+def test_local_link_bypasses_are_rejected_without_echoing_targets(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for target in (
         "file:///synthetic-sensitive-value",
         "C:\\synthetic-sensitive-value\\policy.md",
         "..\\synthetic-sensitive-value.md",
-    ),
-)
-def test_local_link_bypasses_are_rejected_without_echoing_targets(
-    tmp_path: Path,
-    target: str,
-) -> None:
-    validator = _load_validator()
-    _write_fixture_repo(
-        tmp_path,
-        body=f"\n[unsafe local reference]({target})\n",
-        pack_entries=["./skills/synthetic-check"],
-    )
+    ):
+        with subtests.test(target=target):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            validator = _load_validator()
+            _write_fixture_repo(
+                tmp_path,
+                body=f"\n[unsafe local reference]({target})\n",
+                pack_entries=["./skills/synthetic-check"],
+            )
 
-    report = validator.validate_repository(tmp_path, run_helper_help=False)
-    output = validator.format_report(report)
+            report = validator.validate_repository(tmp_path, run_helper_help=False)
+            output = validator.format_report(report)
 
-    assert not report.ok
-    assert "internal link target is invalid" in output
-    assert "synthetic-sensitive-value" not in output
+            assert not report.ok
+            assert "internal link target is invalid" in output
+            assert "synthetic-sensitive-value" not in output
 
 
 def test_malformed_link_target_is_a_path_only_error(tmp_path: Path) -> None:
@@ -333,6 +333,18 @@ def test_validator_help_command_is_successful_and_local() -> None:
     assert "without network access" in result.stdout
 
 
+def test_missing_repository_root_returns_a_fixed_error(tmp_path: Path) -> None:
+    validator = _load_validator()
+    report = validator.validate_repository(
+        tmp_path / "synthetic-private-missing-root", run_helper_help=False
+    )
+    output = validator.format_report(report)
+    assert not report.ok
+    assert "repository root cannot be resolved" in output
+    assert "synthetic-private-missing-root" not in output
+    assert str(tmp_path) not in output
+
+
 def test_helper_environment_drops_ambient_credentials(
     tmp_path: Path,
     monkeypatch,
@@ -367,9 +379,11 @@ def test_pack_builder_uses_its_existing_focused_test() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("test_source", "expected_error"),
-    (
+def test_helper_tests_require_assertions_and_a_helper_reference(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for test_source, expected_error in (
         (
             "def test_helper_contract():\n    pass\n",
             "focused helper test has no assertion",
@@ -378,30 +392,27 @@ def test_pack_builder_uses_its_existing_focused_test() -> None:
             "def test_unrelated_contract():\n    assert True\n",
             "focused helper test does not reference helper",
         ),
-    ),
-)
-def test_helper_tests_require_assertions_and_a_helper_reference(
-    tmp_path: Path,
-    test_source: str,
-    expected_error: str,
-) -> None:
-    validator = _load_validator()
-    _write_fixture_repo(
-        tmp_path,
-        body="\n# Synthetic fixture\n",
-        pack_entries=["./skills/synthetic-check"],
-    )
-    helper = tmp_path / "scripts" / "skills" / "helper.py"
-    helper.parent.mkdir(parents=True)
-    helper.write_text("def main():\n    return 0\n", encoding="utf-8")
-    test_path = tmp_path / "tests" / "unit" / "skills" / "test_helper.py"
-    test_path.parent.mkdir(parents=True)
-    test_path.write_text(test_source, encoding="utf-8")
+    ):
+        with subtests.test(test_source=test_source, expected_error=expected_error):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            validator = _load_validator()
+            _write_fixture_repo(
+                tmp_path,
+                body="\n# Synthetic fixture\n",
+                pack_entries=["./skills/synthetic-check"],
+            )
+            helper = tmp_path / "scripts" / "skills" / "helper.py"
+            helper.parent.mkdir(parents=True)
+            helper.write_text("def main():\n    return 0\n", encoding="utf-8")
+            test_path = tmp_path / "tests" / "unit" / "skills" / "test_helper.py"
+            test_path.parent.mkdir(parents=True)
+            test_path.write_text(test_source, encoding="utf-8")
 
-    report = validator.validate_repository(tmp_path, run_helper_help=False)
+            report = validator.validate_repository(tmp_path, run_helper_help=False)
 
-    assert not report.ok
-    assert any(expected_error in error for error in report.errors)
+            assert not report.ok
+            assert any(expected_error in error for error in report.errors)
 
 
 def test_workflow_runs_every_focused_skill_test() -> None:

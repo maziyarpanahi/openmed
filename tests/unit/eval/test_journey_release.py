@@ -32,6 +32,122 @@ from tests.fixtures.journey_release import (
 SIGNING_KEY = "synthetic-release-signing-key-32-bytes-minimum"
 
 
+def test_v1_legacy_reports_parse_without_inventing_consistency_proof(
+    tmp_path: Path,
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    manifest["schema_version"] = "1.0.0"
+    for report in manifest["gate_reports"]:
+        report["schema_version"] = "1.0.0"
+    legacy = gate_report(manifest, "privacy")
+    for field in (
+        "date_shift_inconsistency_count",
+        "surrogate_inconsistency_count",
+        "consistency_checked_format_count",
+        "consistency_unsupported_format_count",
+    ):
+        legacy["metrics"].pop(field)
+    Draft202012Validator(load_journey_release_manifest_schema()).validate(manifest)
+    path = root / "legacy-manifest.json"
+    path.write_text(json.dumps(manifest))
+    loaded = load_journey_release_manifest(path)
+    packet = evaluate_journey_release(loaded, repo_root=root, signing_key=SIGNING_KEY)
+    privacy = next(item for item in packet.gates if item.gate == "privacy")
+    assert packet.schema_version == "1.1.0"
+    assert packet.decision == JOURNEY_RELEASE_NOT_READY
+    assert packet.verify(SIGNING_KEY)
+    assert privacy.metrics == legacy["metrics"]
+    assert "missing:date_shift_inconsistency_count" in privacy.blocking_codes
+    assert "missing:surrogate_inconsistency_count" in privacy.blocking_codes
+    assert "missing:consistency_checked_format_count" in privacy.blocking_codes
+    assert "missing:consistency_unsupported_format_count" in privacy.blocking_codes
+    Draft202012Validator(load_journey_release_packet_schema()).validate(
+        packet.to_dict()
+    )
+
+
+def test_same_major_packet_signatures_remain_verifiable(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for version in ["1.0.0", "1.1.0"]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            from dataclasses import replace
+
+            root, _commit, manifest = make_release_repository(tmp_path)
+            packet = evaluate_journey_release(
+                manifest, repo_root=root, signing_key=SIGNING_KEY
+            )
+            historical = replace(packet, schema_version=version).sign(
+                SIGNING_KEY, key_id="historical"
+            )
+            restored = JourneyReleasePacket.from_dict(historical.to_dict())
+            assert restored.verify(SIGNING_KEY)
+            assert not restored.verify("different-synthetic-key-at-least-32-bytes")
+
+
+def test_unknown_or_malformed_release_versions_are_not_silently_accepted(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for version in ["1.2.0", "2.0.0", "private-version", [], True]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, _commit, manifest = make_release_repository(tmp_path)
+            manifest["schema_version"] = version
+            with pytest.raises(
+                JourneyReleaseError, match="unsupported Journey release schema_version"
+            ):
+                evaluate_journey_release(
+                    manifest, repo_root=root, signing_key=SIGNING_KEY
+                )
+
+
+def test_privacy_coverage_cannot_pass_with_empty_partial_or_extra_formats(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for checked, unsupported in [(0, 0), (1, 0), (4, 0), (6, 0), (5, 1)]:
+        with subtests.test(checked=checked, unsupported=unsupported):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, _commit, manifest = make_release_repository(tmp_path)
+            metrics = gate_report(manifest, "privacy")["metrics"]
+            metrics["consistency_checked_format_count"] = checked
+            metrics["consistency_unsupported_format_count"] = unsupported
+            packet = evaluate_journey_release(
+                manifest, repo_root=root, signing_key=SIGNING_KEY
+            )
+            privacy = next(item for item in packet.gates if item.gate == "privacy")
+            assert packet.decision == JOURNEY_RELEASE_NOT_READY
+            assert "consistency_coverage_incomplete" in privacy.blocking_codes
+
+
+def test_report_version_controls_the_exact_privacy_metric_contract(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for version, mutation in [("1.1.0", "missing"), ("1.0.0", "extra")]:
+        with subtests.test(version=version, mutation=mutation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, _commit, manifest = make_release_repository(tmp_path)
+            report = gate_report(manifest, "privacy")
+            report["schema_version"] = version
+            if mutation == "missing":
+                report["metrics"].pop("date_shift_inconsistency_count")
+            assert list(
+                Draft202012Validator(
+                    load_journey_release_manifest_schema()
+                ).iter_errors(manifest)
+            )
+            with pytest.raises(JourneyReleaseError, match="privacy.metrics"):
+                evaluate_journey_release(
+                    manifest, repo_root=root, signing_key=SIGNING_KEY
+                )
+
+
 def test_complete_tagged_evidence_produces_verifiable_ready_packet(
     tmp_path: Path,
 ) -> None:
@@ -73,9 +189,9 @@ def test_manifest_and_packet_satisfy_bundled_strict_schemas(tmp_path: Path) -> N
     assert list(Draft202012Validator(packet_schema).iter_errors(unsafe_packet))
 
 
-@pytest.mark.parametrize(
-    ("gate", "metric"),
-    [
+def test_every_critical_failure_blocks_release(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for gate, metric in [
         ("schema", "invalid_schema_count"),
         ("schema", "invalid_span_count"),
         ("schema", "invalid_evidence_count"),
@@ -85,6 +201,9 @@ def test_manifest_and_packet_satisfy_bundled_strict_schemas(tmp_path: Path) -> N
         ("clinical_nlp", "abstention_failure_count"),
         ("privacy", "critical_leakage_count"),
         ("privacy", "raw_value_finding_count"),
+        ("privacy", "date_shift_inconsistency_count"),
+        ("privacy", "surrogate_inconsistency_count"),
+        ("privacy", "consistency_unsupported_format_count"),
         ("interoperability", "conformance_failure_count"),
         ("interoperability", "roundtrip_loss_without_disclosure_count"),
         ("application", "failed_test_count"),
@@ -99,46 +218,44 @@ def test_manifest_and_packet_satisfy_bundled_strict_schemas(tmp_path: Path) -> N
         ("security", "unmitigated_threat_count"),
         ("licensing", "unchecked_asset_count"),
         ("licensing", "prohibited_distribution_count"),
-    ],
-)
-def test_every_critical_failure_blocks_release(
-    tmp_path: Path,
-    gate: str,
-    metric: str,
-) -> None:
-    root, _commit, manifest = make_release_repository(tmp_path)
-    gate_report(manifest, gate)["metrics"][metric] = 1
+    ]:
+        with subtests.test(gate=gate, metric=metric):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, _commit, manifest = make_release_repository(tmp_path)
+            gate_report(manifest, gate)["metrics"][metric] = 1
 
-    packet = evaluate_journey_release(
-        manifest,
-        repo_root=root,
-        signing_key=SIGNING_KEY,
-    )
+            packet = evaluate_journey_release(
+                manifest,
+                repo_root=root,
+                signing_key=SIGNING_KEY,
+            )
 
-    assert packet.decision == JOURNEY_RELEASE_NOT_READY
-    result = next(item for item in packet.gates if item.gate == gate)
-    assert result.passed is False
-    assert f"nonzero:{metric}" in result.blocking_codes
+            assert packet.decision == JOURNEY_RELEASE_NOT_READY
+            result = next(item for item in packet.gates if item.gate == gate)
+            assert result.passed is False
+            assert f"nonzero:{metric}" in result.blocking_codes
 
 
-@pytest.mark.parametrize("state", JOURNEY_RELEASE_STATES[1:])
-def test_typed_non_success_states_are_preserved_and_block(
-    tmp_path: Path,
-    state: str,
-) -> None:
-    root, _commit, manifest = make_release_repository(tmp_path)
-    gate_report(manifest, "application")["state"] = state
+def test_typed_non_success_states_are_preserved_and_block(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for state in JOURNEY_RELEASE_STATES[1:]:
+        with subtests.test(state=state):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, _commit, manifest = make_release_repository(tmp_path)
+            gate_report(manifest, "application")["state"] = state
 
-    packet = evaluate_journey_release(
-        manifest,
-        repo_root=root,
-        signing_key=SIGNING_KEY,
-    )
+            packet = evaluate_journey_release(
+                manifest,
+                repo_root=root,
+                signing_key=SIGNING_KEY,
+            )
 
-    result = next(item for item in packet.gates if item.gate == "application")
-    assert packet.decision == JOURNEY_RELEASE_NOT_READY
-    assert result.state == state
-    assert f"state:{state}" in result.blocking_codes
+            result = next(item for item in packet.gates if item.gate == "application")
+            assert packet.decision == JOURNEY_RELEASE_NOT_READY
+            assert result.state == state
+            assert f"state:{state}" in result.blocking_codes
 
 
 def test_stale_or_future_artifacts_fail_closed(tmp_path: Path) -> None:
