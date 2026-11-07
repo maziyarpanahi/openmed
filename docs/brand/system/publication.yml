@@ -515,6 +515,7 @@ classification:
     - multimodal/reference-workflow.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
+    - multimodal/iso-bmff-preflight.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
     - multimodal/edf-reader.md
