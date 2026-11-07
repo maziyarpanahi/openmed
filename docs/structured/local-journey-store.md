@@ -88,6 +88,37 @@ blob and atomically writes artifact metadata, evidence, facts, and conflicts.
 Replaying identical records is idempotent and creates neither duplicate rows nor
 an empty revision.
 
+## Bounded waits
+
+Writes run under the earliest of `transaction(deadline=...)`, the ambient
+`store_deadline(...)` scope, and `StoreTimeouts.operation_seconds` (default 30
+seconds, `OPENMED_JOURNEY_STORE_TIMEOUT_SECONDS`). Waiting for the store's
+connection and for SQLite's write lock (`busy_timeout`) is capped by
+`StoreTimeouts.lock_wait_seconds` (default 5 seconds,
+`OPENMED_JOURNEY_STORE_LOCK_WAIT_SECONDS`) or the time left, whichever is less.
+
+```python
+from openmed.structured.store import StoreTimeouts, store_deadline
+
+metadata = SQLiteJourneyStore(
+    "./journey-data/journey.sqlite3",
+    timeouts=StoreTimeouts(lock_wait_seconds=1),
+)
+with store_deadline(2.0):
+    result = metadata.put_artifact(artifact, committed_at="2026-01-02T03:04:05Z")
+```
+
+A busy connection or write lock returns `failure` with `store_busy`. A statement
+still running at the deadline is interrupted, and work is never committed after
+the deadline; both roll back and return `store_deadline_exceeded`. If `COMMIT`
+fails after SQLite has already ended the transaction, the outcome cannot be
+proven and the result is `unknown` with `commit_status_unknown`; replay the same
+idempotent records to reconcile. `LocalJourneyStore.ingest_graph()` removes a
+newly written blob after `store_busy` or `store_deadline_exceeded`, and keeps it
+for `commit_status_unknown`. See
+[PostgreSQL and object-backed Journey storage](postgres-object-journey-store.md#bounded-waits-and-cancellation)
+for the shared deadline API.
+
 ## Point-in-time history
 
 Facts are immutable rows. A correction is a new `ClinicalFact` whose

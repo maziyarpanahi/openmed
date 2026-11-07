@@ -26,6 +26,18 @@ from openmed.clinical.journey_contracts import (
     sha256_digest,
 )
 
+from .deadlines import (
+    STORE_TIMEOUTS_INVALID_CODE,
+    ConnectionCheckout,
+    StoreBusyError,
+    StoreDeadline,
+    StoreDeadlineExceededError,
+    StoreDeadlineInput,
+    StoreTimeouts,
+    StoreTimeoutsError,
+    StoreWaitError,
+    resolve_store_timeouts,
+)
 from .migrations import LATEST_MIGRATION_VERSION, MIGRATIONS
 from .protocols import (
     AllowAllStoragePolicy,
@@ -46,6 +58,12 @@ _TIMESTAMP_RE = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
     r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
 )
+# SQLite primary result codes for lock contention and progress interruption.
+_SQLITE_BUSY = 5
+_SQLITE_LOCKED = 6
+_SQLITE_INTERRUPT = 9
+# Virtual-machine steps between deadline checks while a statement runs.
+_SQLITE_PROGRESS_STEPS = 1000
 
 T = TypeVar("T")
 
@@ -212,18 +230,32 @@ class LocalArtifactStore:
 
 
 class SQLiteJourneyStore:
-    """Append-only SQLite store with revisions and deterministic migrations."""
+    """Append-only SQLite store with revisions and deterministic migrations.
+
+    Args:
+        path: SQLite database path.
+        policy: Optional storage policy.
+        timeouts: Caps for connection checkout, write-lock waits, and
+            transaction time. ``None`` reads ``StoreTimeouts.from_env()``.
+
+    Raises:
+        StoreTimeoutsError: If the timeout configuration is invalid.
+        StoreCompatibilityError: If the persisted schema is unsupported.
+        LocalStoreError: If the database cannot be opened.
+    """
 
     def __init__(
         self,
         path: str | Path,
         *,
         policy: StoragePolicy | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> None:
         assert_contract_compatibility()
+        self.timeouts = resolve_store_timeouts(timeouts)
         self.path = Path(path)
         self.policy = policy or AllowAllStoragePolicy()
-        self._lock = threading.RLock()
+        self._lock = ConnectionCheckout(self.timeouts)
         self._closed = False
         self._prepare_path()
         try:
@@ -237,7 +269,9 @@ class SQLiteJourneyStore:
             self._connection.execute("PRAGMA foreign_keys = ON")
             self._connection.execute("PRAGMA journal_mode = WAL")
             self._connection.execute("PRAGMA synchronous = FULL")
-            self._connection.execute("PRAGMA busy_timeout = 5000")
+            self._connection.execute(
+                f"PRAGMA busy_timeout = {self._baseline_busy_timeout_ms}"
+            )
             self._apply_migrations()
         except StoreCompatibilityError:
             self._close_after_failed_open()
@@ -252,11 +286,14 @@ class SQLiteJourneyStore:
         path: str | Path,
         *,
         policy: StoragePolicy | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> StoreResult["SQLiteJourneyStore"]:
         """Open a store with typed compatibility and failure outcomes."""
 
         try:
-            return StoreResult.success(cls(path, policy=policy))
+            return StoreResult.success(cls(path, policy=policy, timeouts=timeouts))
+        except StoreTimeoutsError:
+            return StoreResult.outcome(StoreState.FAILURE, STORE_TIMEOUTS_INVALID_CODE)
         except StoreCompatibilityError:
             return StoreResult.outcome(StoreState.UNSUPPORTED, "schema_unsupported")
         except LocalStoreError:
@@ -299,31 +336,73 @@ class SQLiteJourneyStore:
         self.close()
 
     @contextmanager
-    def transaction(self, *, committed_at: str) -> Iterator["SQLiteJourneyTransaction"]:
-        """Open one atomic append-only transaction at a supplied timestamp."""
+    def transaction(
+        self,
+        *,
+        committed_at: str,
+        deadline: StoreDeadlineInput = None,
+    ) -> Iterator["SQLiteJourneyTransaction"]:
+        """Open one atomic append-only transaction at a supplied timestamp.
+
+        The transaction runs under the earliest of ``deadline``, the ambient
+        ``store_deadline`` scope, and ``timeouts.operation_seconds``. Waiting
+        for the connection or the database write lock is bounded, a statement
+        still running at the deadline is interrupted, and work is never
+        committed after the deadline.
+
+        Args:
+            committed_at: Timezone-aware ISO timestamp for the revision.
+            deadline: Optional caller deadline: a ``StoreDeadline``, a started
+                ``BudgetClock``, or seconds from now.
+
+        Yields:
+            The transaction mutation surface.
+
+        Raises:
+            ValueError: If ``committed_at`` is not a timezone-aware timestamp.
+            StoreBusyError: If the connection or write lock stayed busy.
+            StoreDeadlineExceededError: If the deadline passed; the
+                transaction was rolled back.
+            CommitStatusUnknown: If ``COMMIT`` failed after SQLite ended the
+                transaction, so the outcome cannot be proven. Replaying the
+                same idempotent records reconciles it.
+        """
 
         if not _valid_timestamp(committed_at):
             raise ValueError("committed_at must be a timezone-aware ISO timestamp")
         self._require_open()
-        with self._lock:
-            try:
-                self._connection.execute("BEGIN IMMEDIATE")
-                cursor = self._connection.execute(
-                    "INSERT INTO store_revisions(committed_at) VALUES (?)",
-                    (committed_at,),
-                )
-                if cursor.lastrowid is None:
-                    raise LocalStoreError("local store revision was not allocated")
-                transaction = SQLiteJourneyTransaction(self, int(cursor.lastrowid))
-                yield transaction
-                if transaction.failed or not transaction.mutated:
-                    self._connection.execute("ROLLBACK")
-                else:
-                    self._connection.execute("COMMIT")
-            except BaseException:
-                if self._connection.in_transaction:
-                    self._connection.execute("ROLLBACK")
+        bound = self.timeouts.operation_deadline(deadline)
+        self._lock.acquire(bound)
+        wait_failure: StoreWaitError | None = None
+        try:
+            self._require_open()
+            self._arm_sqlite_deadline(bound)
+            self._connection.execute("BEGIN IMMEDIATE")
+            cursor = self._connection.execute(
+                "INSERT INTO store_revisions(committed_at) VALUES (?)",
+                (committed_at,),
+            )
+            if cursor.lastrowid is None:
+                raise LocalStoreError("local store revision was not allocated")
+            transaction = SQLiteJourneyTransaction(self, int(cursor.lastrowid))
+            yield transaction
+            if transaction.failed or not transaction.mutated:
+                self._disarm_sqlite_deadline()
+                self._connection.execute("ROLLBACK")
+            else:
+                self._commit_before_deadline(bound)
+        except BaseException as exc:
+            self._disarm_sqlite_deadline()
+            if not self._closed and self._connection.in_transaction:
+                self._connection.execute("ROLLBACK")
+            wait_failure = _sqlite_wait_failure(exc)
+            if wait_failure is None:
                 raise
+        finally:
+            self._disarm_sqlite_deadline()
+            self._lock.release()
+        if wait_failure is not None:
+            raise wait_failure
 
     def put_artifact(
         self,
@@ -887,6 +966,8 @@ class SQLiteJourneyStore:
                 result = operation(transaction)
         except CommitStatusUnknown:
             return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
+        except StoreWaitError as error:
+            return error.outcome()
         except (LocalStoreError, sqlite3.Error, ValueError, TypeError):
             return StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
         if not result.ok:
@@ -1000,6 +1081,44 @@ class SQLiteJourneyStore:
     def _require_open(self) -> None:
         if self._closed:
             raise LocalStoreError("local metadata store is closed")
+
+    @property
+    def _baseline_busy_timeout_ms(self) -> int:
+        return max(1, int(self.timeouts.lock_wait_seconds * 1000))
+
+    def _arm_sqlite_deadline(self, deadline: StoreDeadline) -> None:
+        """Bound the write-lock wait and interrupt statements at the deadline."""
+
+        busy_ms = deadline.milliseconds(self.timeouts.lock_wait_seconds)
+        self._connection.execute(f"PRAGMA busy_timeout = {busy_ms}")
+        self._connection.set_progress_handler(
+            lambda: 1 if deadline.expired else 0,
+            _SQLITE_PROGRESS_STEPS,
+        )
+
+    def _disarm_sqlite_deadline(self) -> None:
+        """Restore the connection's baseline wait settings before reuse."""
+
+        try:
+            self._connection.set_progress_handler(None, 0)
+            self._connection.execute(
+                f"PRAGMA busy_timeout = {self._baseline_busy_timeout_ms}"
+            )
+        except sqlite3.Error:
+            return
+
+    def _commit_before_deadline(self, deadline: StoreDeadline) -> None:
+        """Commit only before the deadline; report an unprovable outcome."""
+
+        deadline.check()
+        self._disarm_sqlite_deadline()
+        try:
+            self._connection.execute("COMMIT")
+            return
+        except sqlite3.Error:
+            if self._connection.in_transaction:
+                raise
+        raise CommitStatusUnknown("sqlite commit status is unknown")
 
 
 class SQLiteJourneyTransaction:
@@ -1393,10 +1512,15 @@ class LocalJourneyStore:
         root: str | Path,
         *,
         policy: StoragePolicy | None = None,
+        timeouts: StoreTimeouts | None = None,
     ) -> None:
         root_path = Path(root)
         self.artifacts = LocalArtifactStore(root_path / "artifacts", policy=policy)
-        self.metadata = SQLiteJourneyStore(root_path / "journey.sqlite3", policy=policy)
+        self.metadata = SQLiteJourneyStore(
+            root_path / "journey.sqlite3",
+            policy=policy,
+            timeouts=timeouts,
+        )
 
     def close(self) -> None:
         """Close the metadata store."""
@@ -1461,6 +1585,11 @@ class LocalJourneyStore:
                         failure = conflict_result
                     else:
                         created_metadata = created_metadata or conflict_result.created
+        except CommitStatusUnknown:
+            # Keep the blob: an unacknowledged commit may already reference it.
+            return StoreResult.outcome(StoreState.UNKNOWN, "commit_status_unknown")
+        except StoreWaitError as error:
+            failure = error.outcome()
         except (LocalStoreError, sqlite3.Error, TypeError, ValueError):
             failure = StoreResult.outcome(StoreState.FAILURE, "transaction_failed")
 
@@ -1500,6 +1629,22 @@ def _valid_timestamp(value: Any) -> bool:
 
 def _valid_opaque_id(value: Any) -> bool:
     return isinstance(value, str) and _OPAQUE_ID_RE.fullmatch(value) is not None
+
+
+def _sqlite_wait_failure(error: BaseException) -> StoreWaitError | None:
+    """Classify SQLite lock contention and deadline interruption."""
+
+    if isinstance(error, StoreWaitError):
+        return error
+    if not isinstance(error, sqlite3.OperationalError):
+        return None
+    code = getattr(error, "sqlite_errorcode", None)
+    primary = code & 0xFF if isinstance(code, int) else None
+    if primary in {_SQLITE_BUSY, _SQLITE_LOCKED}:
+        return StoreBusyError()
+    if primary == _SQLITE_INTERRUPT:
+        return StoreDeadlineExceededError()
+    return None
 
 
 def _fsync_directory(path: Path) -> None:

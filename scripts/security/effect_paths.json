@@ -562,6 +562,21 @@
     },
     {
       "classification": "operational",
+      "function": "SQLiteJourneyStore._arm_sqlite_deadline",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._commit_before_deadline",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._disarm_sqlite_deadline",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
       "function": "SQLiteJourneyStore.close",
       "module": "openmed.structured.store.local"
     },
@@ -612,7 +627,32 @@
     },
     {
       "classification": "operational",
+      "function": "PostgresJourneyStore._bounded_unit",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresJourneyStore._commit_or_report_unknown",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresJourneyStore._reset_session",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
       "function": "PostgresJourneyStore.transaction",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "_PostgresConnectionAdapter._enforce_deadline",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "_PostgresConnectionAdapter.arm",
       "module": "openmed.structured.store.postgres"
     },
     {
