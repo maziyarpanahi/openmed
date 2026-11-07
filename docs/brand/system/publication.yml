@@ -212,6 +212,7 @@ classification:
     - serving/kserve-triton.md
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md
+    - deploy/service-recovery.md
     - offline-install.md
     - install/standalone.md
     - install/smoke-check.md

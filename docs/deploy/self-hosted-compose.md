@@ -148,6 +148,11 @@ point. Encrypt the backup and test restore into a separate namespace. After
 restore, run `openmed-journey migrate`, then `journey-golden`, before admitting
 traffic. Never run a restore over the active database or artifact volume.
 
+For local SQLite Journey stores, job metadata, registry state, and audit
+chains, `openmed recovery` creates encrypted, integrity-checked recovery
+points and restores them into an inactive directory before an explicit
+activation; see [Encrypted Service Backup and Restore](service-recovery.md).
+
 ## Upgrade and rollback
 
 Pin immutable image digests in production. Before an upgrade:

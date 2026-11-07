@@ -633,6 +633,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_completion_command(subparsers)
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
+    from .recovery import add_recovery_command
+
+    add_recovery_command(subparsers)
     add_active_learning_command(subparsers)
     add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
