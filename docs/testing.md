@@ -95,6 +95,41 @@ python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 `tests/run-tests.sh` stitches together lint, format checks, unit tests, and slow smoke checks. Use it as the baseline
 for CI.
 
+## Service fault-injection matrix
+
+`tests/faults/` holds a test-only harness that injects disk (ENOSPC, EIO,
+partial write, fsync failure), clock (skew, forward and backward jumps,
+monotonic stall), process (kill and restart from a crash image), network
+(refused, timeout, reset, egress denied), cancellation and corrupted-state
+(truncated or garbled store files) faults at documented adapter boundaries.
+
+- `tests/faults/service_fault_plan.json` is the seeded matrix. It validates
+  against `openmed/core/schemas/json/service_fault_plan.schema.json`; each case
+  names a component, a fault, an injection point, a phase relative to the
+  component's commit point, a trigger (an explicit call or a seeded range) and
+  one documented outcome: `no_effect`, `retryable`, `quarantined`,
+  `rolled_back` or `committed_exactly_once`.
+- Every case runs twice. The control run must pass through the seam and reach
+  the component's baseline; the fault run must fire and reach the declared
+  outcome. Cancellation and kill cases can also require that no temp file,
+  orphaned blob or permit is left behind.
+- The runner emits a value-free manifest (case IDs and digests, adapter names,
+  states, counts and reason codes) that validates against
+  `service_fault_manifest.schema.json`. The same plan and seed always give the
+  same bytes:
+  `OPENMED_PROFILE=test python -m tests.faults.runner --output manifest.json`.
+- Master behaviour that misses a documented outcome is recorded in the plan as
+  a `known_gap` with its owning issue, and pinned by an `xfail(strict=True)`
+  test so the matrix fails as soon as that issue lands.
+- The harness never ships in the wheel. It refuses to import when
+  `OPENMED_PROFILE=prod` and arms only under `OPENMED_PROFILE=test`. No
+  environment variable, config key or endpoint can turn a fault on.
+
+To cover a new component, register an adapter in `tests/faults/scenarios.py`
+(its commit point, supported fault and injection-point pairs, and baseline
+outcome), then add cases to the plan. The seams, runner and manifest are
+shared.
+
 ## Docs & API checks
 
 - Add `uv run mkdocs build --strict` to your CI to fail on missing nav entries, duplicate anchors, or broken markdown.
