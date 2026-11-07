@@ -143,6 +143,7 @@ def test_runtime_helper_reports_missing_optional_extra(monkeypatch):
         medspacy_context.process_to_canonical("synthetic", nlp=lambda value: value)
 
 
+@pytest.mark.slow
 def test_core_import_does_not_import_medspacy_or_spacy():
     code = """
 import sys
@@ -168,11 +169,12 @@ assert blocked == [], blocked
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("offset", [True, 1.5, "1"])
-def test_offsets_are_not_silently_truncated(offset):
-    doc = {"text": "abc", "ents": [{"start_char": offset, "end_char": 2}]}
-    with pytest.raises(ValueError, match="offsets must be integers"):
-        medspacy_context.to_canonical(doc)
+def test_offsets_are_not_silently_truncated(subtests):
+    for offset in [True, 1.5, "1"]:
+        with subtests.test(offset=offset):
+            doc = {"text": "abc", "ents": [{"start_char": offset, "end_char": 2}]}
+            with pytest.raises(ValueError, match="offsets must be integers"):
+                medspacy_context.to_canonical(doc)
 
 
 def test_explicit_text_must_match_processed_doc():

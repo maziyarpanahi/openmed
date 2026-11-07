@@ -182,35 +182,46 @@ def test_node_serialization_is_identifier_only() -> None:
     ]
 
 
-@pytest.mark.parametrize("value", ["", "-lead", "trail-", "a" * 129, 7, None, b"x"])
-def test_invalid_action_identifiers_fail_closed(value) -> None:
-    with pytest.raises(ActionGraphError) as excinfo:
-        ActionNode(action_id=value, tool_id=TOOL)
-    assert (excinfo.value.code, excinfo.value.field_name) == (
-        "invalid_identifier",
-        "action_id",
-    )
+def test_invalid_action_identifiers_fail_closed(subtests) -> None:
+    for value in ["", "-lead", "trail-", "a" * 129, 7, None, b"x"]:
+        with subtests.test(value=value):
+            with pytest.raises(ActionGraphError) as excinfo:
+                ActionNode(action_id=value, tool_id=TOOL)
+            assert (excinfo.value.code, excinfo.value.field_name) == (
+                "invalid_identifier",
+                "action_id",
+            )
 
 
-@pytest.mark.parametrize("value", ["", "-lead", 7, None])
-def test_invalid_dependency_identifiers_fail_closed(value) -> None:
-    with pytest.raises(ActionGraphError, match="^depends_on: invalid_identifier$"):
-        ActionNode(action_id="a", tool_id=TOOL, depends_on=(value,))
+def test_invalid_dependency_identifiers_fail_closed(subtests) -> None:
+    for value in ["", "-lead", 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                ActionGraphError, match="^depends_on: invalid_identifier$"
+            ):
+                ActionNode(action_id="a", tool_id=TOOL, depends_on=(value,))
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["", "summarize", "policy:openmed.agent/summarize", "tool:openmed/Summarize", 7],
-)
-def test_invalid_tool_identifiers_fail_closed(value) -> None:
-    with pytest.raises(ActionGraphError, match="^tool_id: invalid_tool_id$"):
-        ActionNode(action_id="a", tool_id=value)
+def test_invalid_tool_identifiers_fail_closed(subtests) -> None:
+    for value in [
+        "",
+        "summarize",
+        "policy:openmed.agent/summarize",
+        "tool:openmed/Summarize",
+        7,
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(ActionGraphError, match="^tool_id: invalid_tool_id$"):
+                ActionNode(action_id="a", tool_id=value)
 
 
-@pytest.mark.parametrize("value", ["abc", b"abc", 7, None])
-def test_invalid_dependency_containers_fail_closed(value) -> None:
-    with pytest.raises(ActionGraphError, match="^depends_on: invalid_sequence$"):
-        ActionNode(action_id="a", tool_id=TOOL, depends_on=value)
+def test_invalid_dependency_containers_fail_closed(subtests) -> None:
+    for value in ["abc", b"abc", 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                ActionGraphError, match="^depends_on: invalid_sequence$"
+            ):
+                ActionNode(action_id="a", tool_id=TOOL, depends_on=value)
 
 
 def test_dependency_fan_in_is_bounded() -> None:
@@ -220,12 +231,13 @@ def test_dependency_fan_in_is_bounded() -> None:
         ActionNode("a", TOOL, dependencies + ("extra",))
 
 
-@pytest.mark.parametrize("nodes", [node("a"), "abc", b"abc", 5, None, [node("a"), 1]])
-def test_invalid_node_containers_fail_closed(nodes) -> None:
-    with pytest.raises(ActionGraphError) as excinfo:
-        validate_action_graph(nodes)
-    assert excinfo.value.code in {"invalid_sequence", "invalid_node_type"}
-    assert excinfo.value.field_name == "nodes"
+def test_invalid_node_containers_fail_closed(subtests) -> None:
+    for nodes in [node("a"), "abc", b"abc", 5, None, [node("a"), 1]]:
+        with subtests.test(nodes=nodes):
+            with pytest.raises(ActionGraphError) as excinfo:
+                validate_action_graph(nodes)
+            assert excinfo.value.code in {"invalid_sequence", "invalid_node_type"}
+            assert excinfo.value.field_name == "nodes"
 
 
 def test_oversized_graphs_fail_closed() -> None:

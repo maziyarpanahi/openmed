@@ -217,41 +217,40 @@ def test_risk_discover_can_scan_safe_combination_candidates(
     )
 
 
-@pytest.mark.parametrize(
-    ("option", "value"),
-    [
+def test_risk_discover_rejects_unknown_explicit_columns_as_usage_error(
+    subtests, tmp_path, capsys
+) -> None:
+    case_root = tmp_path
+    for option, value in [
         ("--privacy-unit", "not_a_column"),
         ("--qi", "not_a_column"),
         ("--sensitive", "not_a_column"),
         ("--role", "not_a_column=safe"),
-    ],
-)
-def test_risk_discover_rejects_unknown_explicit_columns_as_usage_error(
-    option: str,
-    value: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    output = tmp_path / "discovery.json"
+    ]:
+        with subtests.test(option=option, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            output = tmp_path / "discovery.json"
 
-    code = main_module.main(
-        [
-            "risk",
-            "discover",
-            str(source),
-            "--output",
-            str(output),
-            option,
-            value,
-        ]
-    )
+            code = main_module.main(
+                [
+                    "risk",
+                    "discover",
+                    str(source),
+                    "--output",
+                    str(output),
+                    option,
+                    value,
+                ]
+            )
 
-    assert code == 2
-    error = capsys.readouterr().err
-    assert "configuration does not match the input schema" in error
-    assert "not_a_column" not in error
-    assert not output.exists()
+            assert code == 2
+            error = capsys.readouterr().err
+            assert "configuration does not match the input schema" in error
+            assert "not_a_column" not in error
+            assert not output.exists()
 
 
 def test_risk_discover_rejects_duplicate_role_overrides_without_echo(
@@ -283,42 +282,41 @@ def test_risk_discover_rejects_duplicate_role_overrides_without_echo(
     assert not output.exists()
 
 
-@pytest.mark.parametrize(
-    ("suffix", "payload"),
-    [
+def test_risk_discover_rejects_malformed_rows_without_echoing_values(
+    subtests, tmp_path, capsys
+) -> None:
+    case_root = tmp_path
+    for suffix, payload in [
         (".csv", "age,disease\n30,flu,sensitive-overflow-canary\n"),
         (
             ".jsonl",
             '{"age":{"nested":"sensitive-nested-canary"}}\n',
         ),
-    ],
-)
-def test_risk_discover_rejects_malformed_rows_without_echoing_values(
-    suffix: str,
-    payload: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = tmp_path / f"malformed{suffix}"
-    source.write_text(payload, encoding="utf-8")
-    output = tmp_path / "discovery.json"
+    ]:
+        with subtests.test(suffix=suffix, payload=payload):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = tmp_path / f"malformed{suffix}"
+            source.write_text(payload, encoding="utf-8")
+            output = tmp_path / "discovery.json"
 
-    code = main_module.main(
-        [
-            "risk",
-            "discover",
-            str(source),
-            "--output",
-            str(output),
-            "--full-scan",
-        ]
-    )
+            code = main_module.main(
+                [
+                    "risk",
+                    "discover",
+                    str(source),
+                    "--output",
+                    str(output),
+                    "--full-scan",
+                ]
+            )
 
-    assert code == 1
-    error = capsys.readouterr().err
-    assert "Failed to discover structured quasi-identifiers" in error
-    assert "sensitive-" not in error
-    assert not output.exists()
+            assert code == 1
+            error = capsys.readouterr().err
+            assert "Failed to discover structured quasi-identifiers" in error
+            assert "sensitive-" not in error
+            assert not output.exists()
 
 
 def test_risk_assess_writes_safe_patient_level_report(
@@ -801,6 +799,7 @@ def test_reviewed_assumptions_notes_are_digest_bound_without_content_disclosure(
     assert "assumptions-notes-canary" not in evidence.read_text(encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_expert_review_verify_rejects_duplicate_json_keys_without_echo(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -984,41 +983,44 @@ def test_risk_anonymize_fails_closed_on_lattice_exhaustion_without_echoing_data(
     assert not evidence.exists()
 
 
-@pytest.mark.parametrize("suffix", [".csv", ".tsv"])
 def test_risk_anonymize_validates_delimited_output_lexically(
-    tmp_path: Path,
-    suffix: str,
+    subtests, tmp_path
 ) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    release = tmp_path / f"release{suffix}"
-    evidence = tmp_path / "evidence.json"
+    case_root = tmp_path
+    for suffix in [".csv", ".tsv"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = _write_csv(tmp_path / "source.csv")
+            release = tmp_path / f"release{suffix}"
+            evidence = tmp_path / "evidence.json"
 
-    code = main_module.main(
-        [
-            "risk",
-            "anonymize",
-            str(source),
-            "--output",
-            str(release),
-            "--evidence",
-            str(evidence),
-            *_policy_args(),
-            "--privacy-unit-kind",
-            "patient",
-            "--release-model",
-            "restricted",
-            "--recipient-model",
-            "named_researchers",
-            "--auxiliary-data-model",
-            "reasonably_available",
-        ]
-    )
+            code = main_module.main(
+                [
+                    "risk",
+                    "anonymize",
+                    str(source),
+                    "--output",
+                    str(release),
+                    "--evidence",
+                    str(evidence),
+                    *_policy_args(),
+                    "--privacy-unit-kind",
+                    "patient",
+                    "--release-model",
+                    "restricted",
+                    "--recipient-model",
+                    "named_researchers",
+                    "--auxiliary-data-model",
+                    "reasonably_available",
+                ]
+            )
 
-    assert code == 0
-    assert len(read_table(release)) == 4
-    assert ExpertReviewEvidenceReport.from_json(
-        evidence.read_text(encoding="utf-8")
-    ).verify()
+            assert code == 0
+            assert len(read_table(release)) == 4
+            assert ExpertReviewEvidenceReport.from_json(
+                evidence.read_text(encoding="utf-8")
+            ).verify()
 
 
 def test_risk_anonymize_does_not_publish_release_if_evidence_build_fails(
@@ -1100,67 +1102,70 @@ def test_risk_anonymize_rejects_overlapping_output_paths(
     assert not output.exists()
 
 
-@pytest.mark.parametrize("command", ["discover", "assess"])
 def test_structured_commands_reject_symlink_aliases_with_overwrite(
-    command: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    subtests, tmp_path, capsys
 ) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    original = source.read_bytes()
-    output = tmp_path / "source-alias.json"
-    output.symlink_to(source)
-    args = ["risk", command, str(source), "--output", str(output)]
-    if command == "assess":
-        args.extend(_policy_args())
-    args.append("--overwrite")
+    case_root = tmp_path
+    for command in ["discover", "assess"]:
+        with subtests.test(command=command):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            original = source.read_bytes()
+            output = tmp_path / "source-alias.json"
+            output.symlink_to(source)
+            args = ["risk", command, str(source), "--output", str(output)]
+            if command == "assess":
+                args.extend(_policy_args())
+            args.append("--overwrite")
 
-    code = main_module.main(args)
+            code = main_module.main(args)
 
-    assert code == 2
-    assert "distinct after resolving symlinks" in capsys.readouterr().err
-    assert source.read_bytes() == original
-    assert output.is_symlink()
+            assert code == 2
+            assert "distinct after resolving symlinks" in capsys.readouterr().err
+            assert source.read_bytes() == original
+            assert output.is_symlink()
 
 
-@pytest.mark.parametrize(
-    "alias_role",
-    ["release", "evidence", "markdown", "hierarchies"],
-)
 def test_risk_anonymize_rejects_source_aliases_for_every_path_role(
-    alias_role: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    subtests, tmp_path, capsys
 ) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    original = source.read_bytes()
-    release = tmp_path / "release.jsonl"
-    evidence = tmp_path / "evidence.json"
-    markdown = tmp_path / "evidence.md"
-    hierarchies = tmp_path / "hierarchies.json"
-    aliases = {
-        "release": release,
-        "evidence": evidence,
-        "markdown": markdown,
-        "hierarchies": hierarchies,
-    }
-    aliases[alias_role].symlink_to(source)
+    case_root = tmp_path
+    for alias_role in ["release", "evidence", "markdown", "hierarchies"]:
+        with subtests.test(alias_role=alias_role):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            original = source.read_bytes()
+            release = tmp_path / "release.jsonl"
+            evidence = tmp_path / "evidence.json"
+            markdown = tmp_path / "evidence.md"
+            hierarchies = tmp_path / "hierarchies.json"
+            aliases = {
+                "release": release,
+                "evidence": evidence,
+                "markdown": markdown,
+                "hierarchies": hierarchies,
+            }
+            aliases[alias_role].symlink_to(source)
 
-    code = main_module.main(
-        _anonymize_args(
-            source,
-            release,
-            evidence,
-            markdown=markdown,
-            hierarchies=hierarchies if alias_role == "hierarchies" else None,
-            overwrite=True,
-        )
-    )
+            code = main_module.main(
+                _anonymize_args(
+                    source,
+                    release,
+                    evidence,
+                    markdown=markdown,
+                    hierarchies=hierarchies if alias_role == "hierarchies" else None,
+                    overwrite=True,
+                )
+            )
 
-    assert code == 2
-    assert "distinct after resolving symlinks" in capsys.readouterr().err
-    assert source.read_bytes() == original
-    assert aliases[alias_role].is_symlink()
+            assert code == 2
+            assert "distinct after resolving symlinks" in capsys.readouterr().err
+            assert source.read_bytes() == original
+            assert aliases[alias_role].is_symlink()
 
 
 def test_risk_anonymize_rejects_broken_symlink_alias_between_outputs(
@@ -1539,66 +1544,69 @@ def test_invalid_release_policy_is_usage_error(
     assert not output.exists()
 
 
-@pytest.mark.parametrize("command", ["assess", "anonymize"])
 def test_release_config_error_surfaces_safe_value_error_cause(
-    command: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    subtests, tmp_path, capsys
 ) -> None:
-    rows = [
-        {**row, "encounter_id": f"encounter-{index}"}
-        for index, row in enumerate(ROWS, start=1)
-    ]
-    source = _write_csv(tmp_path / "source.csv", rows)
-    output = tmp_path / "output.json"
-    policy_args = [
-        "--qi-column",
-        "age,zip,visit_date",
-        "--sensitive-column",
-        "disease",
-        "--direct-id-column",
-        "full_name,encounter_id",
-        "--privacy-unit",
-        "patient_id",
-        "--k",
-        "2",
-        "--l",
-        "2",
-        "--t",
-        "0",
-    ]
-    if command == "assess":
-        args = [
-            "risk",
-            "assess",
-            str(source),
-            "--output",
-            str(output),
-            *policy_args,
-        ]
-    else:
-        args = _anonymize_args(
-            source,
-            tmp_path / "release.jsonl",
-            tmp_path / "evidence.json",
-            policy_args=policy_args,
-        )
-    args.append("--json")
+    case_root = tmp_path
+    for command in ["assess", "anonymize"]:
+        with subtests.test(command=command):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            rows = [
+                {**row, "encounter_id": f"encounter-{index}"}
+                for index, row in enumerate(ROWS, start=1)
+            ]
+            source = _write_csv(tmp_path / "source.csv", rows)
+            output = tmp_path / "output.json"
+            policy_args = [
+                "--qi-column",
+                "age,zip,visit_date",
+                "--sensitive-column",
+                "disease",
+                "--direct-id-column",
+                "full_name,encounter_id",
+                "--privacy-unit",
+                "patient_id",
+                "--k",
+                "2",
+                "--l",
+                "2",
+                "--t",
+                "0",
+            ]
+            if command == "assess":
+                args = [
+                    "risk",
+                    "assess",
+                    str(source),
+                    "--output",
+                    str(output),
+                    *policy_args,
+                ]
+            else:
+                args = _anonymize_args(
+                    source,
+                    tmp_path / "release.jsonl",
+                    tmp_path / "evidence.json",
+                    policy_args=policy_args,
+                )
+            args.append("--json")
 
-    code = main_module.main(args)
+            code = main_module.main(args)
 
-    assert code == 2
-    payload = json.loads(capsys.readouterr().out)
-    message = payload["error"]["message"]
-    assert payload["error"]["code"] == "invalid_release_config"
-    assert "Cause (ValueError):" in message
-    assert "Declared policy columns are absent from the table" in message
-    assert "age,zip,visit_date" in message
-    assert "full_name,encounter_id" in message
-    for row in rows:
-        for value in row.values():
-            assert value not in message
-    assert not output.exists()
+            assert code == 2
+            payload = json.loads(capsys.readouterr().out)
+            message = payload["error"]["message"]
+            assert payload["error"]["code"] == "invalid_release_config"
+            assert "Cause (ValueError):" in message
+            assert "Declared policy columns are absent from the table" in message
+            assert "age,zip,visit_date" in message
+            assert "full_name,encounter_id" in message
+            for row in rows:
+                for value in row.values():
+                    assert value not in message
+            assert not output.exists()
 
 
 @pytest.mark.parametrize("temporal_kind", ["timestamp_ns", "time64_ns"])
@@ -1664,31 +1672,29 @@ def test_unclassified_source_column_is_usage_error(
     assert not output.exists()
 
 
-@pytest.mark.parametrize(
-    ("command", "source_suffix", "output_suffix"),
-    [
+def test_invalid_structured_suffix_is_usage_error(subtests, tmp_path, capsys) -> None:
+    case_root = tmp_path
+    for command, source_suffix, output_suffix in [
         ("discover", ".txt", ".json"),
         ("assess", ".csv", ".txt"),
-    ],
-)
-def test_invalid_structured_suffix_is_usage_error(
-    command: str,
-    source_suffix: str,
-    output_suffix: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = _write_csv(tmp_path / f"source{source_suffix}")
-    output = tmp_path / f"output{output_suffix}"
-    args = ["risk", command, str(source), "--output", str(output)]
-    if command == "assess":
-        args.extend(_policy_args())
+    ]:
+        with subtests.test(
+            command=command, source_suffix=source_suffix, output_suffix=output_suffix
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / f"source{source_suffix}")
+            output = tmp_path / f"output{output_suffix}"
+            args = ["risk", command, str(source), "--output", str(output)]
+            if command == "assess":
+                args.extend(_policy_args())
 
-    code = main_module.main(args)
+            code = main_module.main(args)
 
-    assert code == 2
-    assert "unsupported file suffix" in capsys.readouterr().err
-    assert not output.exists()
+            assert code == 2
+            assert "unsupported file suffix" in capsys.readouterr().err
+            assert not output.exists()
 
 
 def test_invalid_hierarchy_config_is_usage_error(
@@ -1719,9 +1725,11 @@ def test_invalid_hierarchy_config_is_usage_error(
     assert not evidence.exists()
 
 
-@pytest.mark.parametrize(
-    "levels",
-    [
+def test_cli_rejects_noncanonical_hierarchy_identity_as_usage_error(
+    subtests, tmp_path, capsys
+) -> None:
+    case_root = tmp_path
+    for levels in [
         [{"name": "collapsed", "loss": 0.0, "default": "*"}],
         [{"name": "mapped", "loss": 0.0, "values": {"30": "all"}}],
         [{"name": "not-exact", "loss": 0.5}],
@@ -1729,37 +1737,37 @@ def test_invalid_hierarchy_config_is_usage_error(
             {"name": "exact", "loss": 0.0},
             {"name": "collapsed", "loss": 0.0, "default": "*"},
         ],
-    ],
-)
-def test_cli_rejects_noncanonical_hierarchy_identity_as_usage_error(
-    levels: list[dict[str, object]],
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    ]:
+        with subtests.test(levels=levels):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            release = tmp_path / "release.jsonl"
+            evidence = tmp_path / "evidence.json"
+            hierarchies = tmp_path / "hierarchies.json"
+            hierarchies.write_text(json.dumps({"age": levels}), encoding="utf-8")
+
+            code = main_module.main(
+                _anonymize_args(
+                    source,
+                    release,
+                    evidence,
+                    hierarchies=hierarchies,
+                )
+            )
+
+            assert code == 2
+            assert "hierarchy configuration is invalid" in capsys.readouterr().err
+            assert not release.exists()
+            assert not evidence.exists()
+
+
+def test_cli_rejects_reserved_hierarchy_outputs_as_usage_error(
+    subtests, tmp_path, capsys
 ) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    release = tmp_path / "release.jsonl"
-    evidence = tmp_path / "evidence.json"
-    hierarchies = tmp_path / "hierarchies.json"
-    hierarchies.write_text(json.dumps({"age": levels}), encoding="utf-8")
-
-    code = main_module.main(
-        _anonymize_args(
-            source,
-            release,
-            evidence,
-            hierarchies=hierarchies,
-        )
-    )
-
-    assert code == 2
-    assert "hierarchy configuration is invalid" in capsys.readouterr().err
-    assert not release.exists()
-    assert not evidence.exists()
-
-
-@pytest.mark.parametrize(
-    "coarsening",
-    [
+    case_root = tmp_path
+    for coarsening in [
         {
             "name": "mapped",
             "loss": 0.5,
@@ -1770,42 +1778,40 @@ def test_cli_rejects_noncanonical_hierarchy_identity_as_usage_error(
             "loss": 0.5,
             "default": "__OPENMED_INTERNAL_QI__:state:missing",
         },
-    ],
-)
-def test_cli_rejects_reserved_hierarchy_outputs_as_usage_error(
-    coarsening: dict[str, object],
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    release = tmp_path / "release.jsonl"
-    evidence = tmp_path / "evidence.json"
-    hierarchies = tmp_path / "hierarchies.json"
-    hierarchies.write_text(
-        json.dumps(
-            {
-                "age": [
-                    {"name": "exact", "loss": 0.0},
-                    coarsening,
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
+    ]:
+        with subtests.test(coarsening=coarsening):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            release = tmp_path / "release.jsonl"
+            evidence = tmp_path / "evidence.json"
+            hierarchies = tmp_path / "hierarchies.json"
+            hierarchies.write_text(
+                json.dumps(
+                    {
+                        "age": [
+                            {"name": "exact", "loss": 0.0},
+                            coarsening,
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
 
-    code = main_module.main(
-        _anonymize_args(
-            source,
-            release,
-            evidence,
-            hierarchies=hierarchies,
-        )
-    )
+            code = main_module.main(
+                _anonymize_args(
+                    source,
+                    release,
+                    evidence,
+                    hierarchies=hierarchies,
+                )
+            )
 
-    assert code == 2
-    assert "hierarchy configuration is invalid" in capsys.readouterr().err
-    assert not release.exists()
-    assert not evidence.exists()
+            assert code == 2
+            assert "hierarchy configuration is invalid" in capsys.readouterr().err
+            assert not release.exists()
+            assert not evidence.exists()
 
 
 def test_cli_rejects_hierarchy_split_after_merge_as_usage_error(
@@ -1852,41 +1858,41 @@ def test_cli_rejects_hierarchy_split_after_merge_as_usage_error(
     assert not evidence.exists()
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_hierarchy_json_rejects_duplicate_keys_and_nonfinite_numbers(
+    subtests, tmp_path, capsys
+) -> None:
+    case_root = tmp_path
+    for payload in [
         ('{"age":[{"values":{"30":"bucket","30":"sensitive-hierarchy-canary"}}]}'),
         '{"age":[{"loss":NaN}]}',
         '{"age":[{"loss":1e9999}]}',
-    ],
-)
-def test_hierarchy_json_rejects_duplicate_keys_and_nonfinite_numbers(
-    payload: str,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    release = tmp_path / "release.jsonl"
-    evidence = tmp_path / "evidence.json"
-    hierarchies = tmp_path / "hierarchies.json"
-    hierarchies.write_text(payload, encoding="utf-8")
+    ]:
+        with subtests.test(payload=payload):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            release = tmp_path / "release.jsonl"
+            evidence = tmp_path / "evidence.json"
+            hierarchies = tmp_path / "hierarchies.json"
+            hierarchies.write_text(payload, encoding="utf-8")
 
-    code = main_module.main(
-        _anonymize_args(
-            source,
-            release,
-            evidence,
-            hierarchies=hierarchies,
-        )
-    )
+            code = main_module.main(
+                _anonymize_args(
+                    source,
+                    release,
+                    evidence,
+                    hierarchies=hierarchies,
+                )
+            )
 
-    assert code == 2
-    error = capsys.readouterr().err
-    assert "hierarchy configuration is invalid" in error
-    assert "sensitive-hierarchy-canary" not in error
-    assert not release.exists()
-    assert not evidence.exists()
-    assert not evidence.with_suffix(".md").exists()
+            assert code == 2
+            error = capsys.readouterr().err
+            assert "hierarchy configuration is invalid" in error
+            assert "sensitive-hierarchy-canary" not in error
+            assert not release.exists()
+            assert not evidence.exists()
+            assert not evidence.with_suffix(".md").exists()
 
 
 def test_missing_structured_input_is_usage_error(
@@ -1912,53 +1918,52 @@ def test_missing_structured_input_is_usage_error(
     assert not output.exists()
 
 
-@pytest.mark.parametrize(
-    ("privacy_unit_args", "kind"),
-    [
+def test_inconsistent_privacy_unit_kind_is_usage_error(
+    subtests, tmp_path, capsys
+) -> None:
+    case_root = tmp_path
+    for privacy_unit_args, kind in [
         (["--privacy-unit", "patient_id"], None),
         (["--privacy-unit", "patient_id"], "row"),
         ([], "patient"),
-    ],
-)
-def test_inconsistent_privacy_unit_kind_is_usage_error(
-    privacy_unit_args: list[str],
-    kind: str | None,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = _write_csv(tmp_path / "source.csv")
-    release = tmp_path / "release.jsonl"
-    evidence = tmp_path / "evidence.json"
-    policy_args = [
-        "--qi",
-        "age,zip,visit_date",
-        "--sensitive",
-        "disease",
-        "--direct-id",
-        "full_name,patient_id",
-        "--k",
-        "2",
-        "--l",
-        "2",
-        "--t",
-        "0",
-        *privacy_unit_args,
-    ]
+    ]:
+        with subtests.test(privacy_unit_args=privacy_unit_args, kind=kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            source = _write_csv(tmp_path / "source.csv")
+            release = tmp_path / "release.jsonl"
+            evidence = tmp_path / "evidence.json"
+            policy_args = [
+                "--qi",
+                "age,zip,visit_date",
+                "--sensitive",
+                "disease",
+                "--direct-id",
+                "full_name,patient_id",
+                "--k",
+                "2",
+                "--l",
+                "2",
+                "--t",
+                "0",
+                *privacy_unit_args,
+            ]
 
-    code = main_module.main(
-        _anonymize_args(
-            source,
-            release,
-            evidence,
-            policy_args=policy_args,
-            privacy_unit_kind=kind,
-        )
-    )
+            code = main_module.main(
+                _anonymize_args(
+                    source,
+                    release,
+                    evidence,
+                    policy_args=policy_args,
+                    privacy_unit_kind=kind,
+                )
+            )
 
-    assert code == 2
-    assert "privacy-unit" in capsys.readouterr().err
-    assert not release.exists()
-    assert not evidence.exists()
+            assert code == 2
+            assert "privacy-unit" in capsys.readouterr().err
+            assert not release.exists()
+            assert not evidence.exists()
 
 
 def test_row_level_anonymization_derives_row_privacy_unit(

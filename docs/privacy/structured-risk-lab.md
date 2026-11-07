@@ -104,6 +104,27 @@ is `openmed risk dp-aggregate` with a local JSON object of named numeric
 aggregates and explicit `--epsilon`, `--budget-epsilon`, and
 `--budget-delta` choices.
 
+Release schema version 2 publishes only the noisy value, accounting metadata,
+and a `test_only` flag. It does not retain or serialize the noise draw or a
+seed digest, including through dataclass serialization and representations.
+Earlier release files containing both `value` and `noise` disclose the exact
+input aggregate and must be treated as sensitive source data.
+
+Omit `seed` for production system randomness. Supplying it is for synthetic
+experiments only, labels the result `test_only: true`, and provides no production
+privacy guarantee. The CLI requires `--test-mode` with `--seed`; neither flag
+is appropriate for releasing real aggregates. Accounting records and their
+digests are unchanged.
+
+The separate `openmed.risk.differential_privacy` Gaussian helpers now use the
+analytic privacy profile from [Balle and Wang, Theorem 8](https://proceedings.mlr.press/v80/balle18a.html),
+including epsilon values above one. `gaussian_privacy_delta` checks achieved
+privacy loss with a bounded CDF rounding allowance; near severe floating-point
+cancellation it returns a conservative tail bound. Unrepresentable scales fail closed. Spend records identify
+`analytic_gaussian` calibration without recording the noise draw or result.
+Seeded Gaussian outputs change deliberately because the old classical scale
+was not valid for general epsilon. Laplace calibration is unchanged.
+
 ## Limitations
 
 The lab is intentionally bounded and local. k/l/t metrics depend on the

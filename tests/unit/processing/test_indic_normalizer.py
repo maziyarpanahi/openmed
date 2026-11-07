@@ -91,22 +91,19 @@ def test_normalization_offset_map_round_trips_multiscript_phi_spans():
         raw_cursor += len(token) + 1
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected", "script"),
-    [
+def test_required_script_specific_cases(subtests):
+    for raw, expected, script in [
         ("ന്\u200d", "ൻ", "Malayalam"),
         ("र्\u200d", "र्", "Devanagari"),
         ("ੱਕੰ", "ਕ੍ਕਂ", "Gurmukhi"),
         ("ଵ", "ବ", "Odia"),
-    ],
-)
-def test_required_script_specific_cases(raw: str, expected: str, script: str):
-    assert IndicNormalizer().normalize(raw, script=script) == expected
+    ]:
+        with subtests.test(raw=raw, expected=expected, script=script):
+            assert IndicNormalizer().normalize(raw, script=script) == expected
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected", "script"),
-    [
+def test_vowels_and_punctuation_use_script_specific_canonical_forms(subtests):
+    for raw, expected, script in [
         ("কো", "কো", "Bengali"),
         ("கொ", "கொ", "Tamil"),
         ("காெ", "கொ", "Tamil"),
@@ -116,14 +113,9 @@ def test_required_script_specific_cases(raw: str, expected: str, script: str):
         ("अग्नि|", "अग्नि।", "Devanagari"),
         ("নাম:", "নামঃ", "Bengali"),
         ("र्\u200d:", "र्ः", "Devanagari"),
-    ],
-)
-def test_vowels_and_punctuation_use_script_specific_canonical_forms(
-    raw: str,
-    expected: str,
-    script: str,
-):
-    assert IndicNormalizer().normalize(raw, script=script) == expected
+    ]:
+        with subtests.test(raw=raw, expected=expected, script=script):
+            assert IndicNormalizer().normalize(raw, script=script) == expected
 
 
 def test_tunable_flags_are_explicit_and_safe_by_default():

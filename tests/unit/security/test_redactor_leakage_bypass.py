@@ -150,10 +150,13 @@ def test_ac01_zero_width_split_card_is_recovered_by_normalize_then_sweep():
     )
     text = f"card {obfuscated}"
 
-    # The raw sweep alone is bypassed -- this is *why* the normalize layer exists.
-    assert "credit_debit_card" not in _swept_labels(safety_sweep(text, []))
+    # Every sweep entrypoint now applies the offset-preserving detection view.
+    swept = safety_sweep(text, [])
+    assert "credit_debit_card" in _swept_labels(swept)
+    card = next(span for span in swept if span.label == "credit_debit_card")
+    assert text[card.start : card.end] == obfuscated
 
-    # The documented mitigation chain recovers it.
+    # Explicit normalization remains supported as well.
     assert "credit_debit_card" in _sweep_after_normalize(text)
 
 
@@ -177,80 +180,73 @@ def test_ac01_zero_width_chars_are_all_stripped_offset_preserving():
 # --- AC-02: punctuation-split structured identifiers -------------------------
 
 
-@pytest.mark.parametrize(
-    "split",
-    ["1.2.3-4.5-6.7.8.9", "1,2,3-4,5-6,7,8,9", "·".join("123456789")],
-)
-def test_ac02_split_ssn_has_exact_offsets_and_no_critical_leakage(split):
+def test_ac02_split_ssn_has_exact_offsets_and_no_critical_leakage(subtests):
     """The deterministic sweep recovers a synthetic split SSN without ML help."""
-    text = f"SSN {split} is synthetic."
-    normalized = normalize_for_pii_detection(text)
-    entities = safety_sweep(normalized.text, [])
-    matches = [entity for entity in entities if entity.label == "ssn"]
-    assert len(matches) == 1
-    start, end = normalized.remap_span(matches[0].start, matches[0].end)
-    assert (start, end) == (4, 4 + len(split))
-    assert text[start:end] == split
-    output = _deidentify_with_blind_model(text)
-    assert split not in output
-    assert "ssn" in output.lower()
+    for split in ["1.2.3-4.5-6.7.8.9", "1,2,3-4,5-6,7,8,9", "·".join("123456789")]:
+        with subtests.test(split=split):
+            text = f"SSN {split} is synthetic."
+            normalized = normalize_for_pii_detection(text)
+            entities = safety_sweep(normalized.text, [])
+            matches = [entity for entity in entities if entity.label == "ssn"]
+            assert len(matches) == 1
+            start, end = normalized.remap_span(matches[0].start, matches[0].end)
+            assert (start, end) == (4, 4 + len(split))
+            assert text[start:end] == split
+            output = _deidentify_with_blind_model(text)
+            assert split not in output
+            assert "ssn" in output.lower()
 
 
-@pytest.mark.parametrize(
-    ("text", "label"),
-    [
+def test_ac02_other_split_identifiers_are_recovered(subtests):
+    """Checksum or explicit context gates the remaining structured shapes."""
+    for text, label in [
         ("Card 4.111.111.111.111.111", "credit_debit_card"),
         ("MRN 1,2,3,4,5,6", "medical_record_number"),
         ("IBAN GB82.WE.ST.1234.5698.7654.32", "iban"),
-    ],
-)
-def test_ac02_other_split_identifiers_are_recovered(text, label):
-    """Checksum or explicit context gates the remaining structured shapes."""
-    assert label in _swept_labels(safety_sweep(text, []))
+    ]:
+        with subtests.test(text=text, label=label):
+            assert label in _swept_labels(safety_sweep(text, []))
 
 
-@pytest.mark.parametrize("prefix", ["MRN: ", "MRN #", "MRN: #", "mrn:"])
-def test_ac02_mrn_prefix_variants_preserve_full_source_span(prefix):
-    surface = f"{prefix}1,2,3,4,5,6"
-    text = f"Synthetic {surface} is recorded."
-    matches = [
-        entity
-        for entity in safety_sweep(text, [])
-        if entity.label == "medical_record_number"
-    ]
-    assert len(matches) == 1
-    assert text[matches[0].start : matches[0].end] == surface
-    assert surface not in _deidentify_with_blind_model(text)
+def test_ac02_mrn_prefix_variants_preserve_full_source_span(subtests):
+    for prefix in ["MRN: ", "MRN #", "MRN: #", "mrn:"]:
+        with subtests.test(prefix=prefix):
+            surface = f"{prefix}1,2,3,4,5,6"
+            text = f"Synthetic {surface} is recorded."
+            matches = [
+                entity
+                for entity in safety_sweep(text, [])
+                if entity.label == "medical_record_number"
+            ]
+            assert len(matches) == 1
+            assert text[matches[0].start : matches[0].end] == surface
+            assert surface not in _deidentify_with_blind_model(text)
 
 
-@pytest.mark.parametrize(
-    ("text", "label"),
-    [
+def test_ac02_overlong_split_runs_are_not_partial_identifiers(subtests):
+    for text, label in [
         ("SSN 1.2.3.4.5.6.7.8.9.0", "ssn"),
         ("SSN 0.1.2.3.4.5.6.7.8.9.0", "ssn"),
         ("Card 4.111.111.111.111.111.0", "credit_debit_card"),
         ("MRN: 1,2,3,4,5,6,7,8,9,0,1", "medical_record_number"),
-    ],
-)
-def test_ac02_overlong_split_runs_are_not_partial_identifiers(text, label):
-    assert label not in _swept_labels(safety_sweep(text, []))
+    ]:
+        with subtests.test(text=text, label=label):
+            assert label not in _swept_labels(safety_sweep(text, []))
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_ac02_clinical_numbers_and_invalid_card_are_not_identifiers(subtests):
+    """Clinical punctuation and failed checksums do not become identifiers."""
+    for text in [
         "BP 1.2.3.4.5.6.7.8.9 mmHg",
         "dose 1,2,3,4,5,6,7,8,9 mg",
         "HbA1c 6.7, glucose 8.9 mmol/L",
         "Card 4.111.111.111.111.112",
-    ],
-)
-def test_ac02_clinical_numbers_and_invalid_card_are_not_identifiers(text):
-    """Clinical punctuation and failed checksums do not become identifiers."""
-    labels = _swept_labels(safety_sweep(text, []))
-    assert not labels.intersection(
-        {"ssn", "credit_debit_card", "medical_record_number", "iban"}
-    )
+    ]:
+        with subtests.test(text=text):
+            labels = _swept_labels(safety_sweep(text, []))
+            assert not labels.intersection(
+                {"ssn", "credit_debit_card", "medical_record_number", "iban"}
+            )
 
 
 # --- AC-03: unicode confusable / mixed-script obfuscation ---------------------

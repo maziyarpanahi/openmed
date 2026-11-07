@@ -556,6 +556,60 @@ class TestBengaliValidators:
     def test_bengali_postcode_rejects_invalid_formats(self, value):
         assert not validate_bengali_postcode(value)
 
+    @pytest.mark.parametrize("date_text", ("২০.০৭.২০২৬", "20.07.2026"))
+    def test_dotted_date_year_is_not_a_bengali_postcode(self, date_text):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = f"কৃত্রিম নোট: ফলো-আপ {date_text}, পোস্টকোড ১২১৬।"
+        date_start = text.index(date_text)
+        postcode_start = text.index("১২১৬")
+        expected = {
+            (date_start, date_start + len(date_text), "date"),
+            (postcode_start, postcode_start + 4, "postcode"),
+        }
+
+        units = find_semantic_units(text, get_patterns_for_language("bn"))
+        swept = safety_sweep(text, [], lang="bn")
+
+        assert {(unit[0], unit[1], unit[2]) for unit in units if unit[5]} == expected
+        assert {(span.start, span.end, span.label) for span in swept} == expected
+
+    def test_bengali_postcode_skips_only_dotted_date_years(self):
+        postcode = next(
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == "postcode"
+        )
+
+        def matches(text):
+            return [
+                match.group(0)
+                for match in re.finditer(postcode.pattern, text, postcode.flags)
+            ]
+
+        for dotted_date in ("২০.০৭.২০২৬", "৫.৭.২০২৬", "২০২৬.০৭.২০", "20.07.2026"):
+            assert matches(dotted_date) == []
+        # Dash- and slash-joined groups keep their match: they may be the only
+        # rule covering part of a domestic phone number or a reference.
+        assert matches("ফোন ০১৬৮৩-৮৫৯৮০৬") == ["৮৫৯৮০৬"]
+        assert matches("ঢাকা-১২০৬") == ["১২০৬"]
+        assert matches("বাড়ি ১২/৪৫৬৭") == ["৪৫৬৭"]
+        # Six-digit PIN codes are outside the four-digit date-year grammar.
+        from openmed.core.safety_sweep import safety_sweep
+
+        for text in ("পোস্টকোড ৭০০০০১.০৭.২০", "পোস্টকোড ২০.০৭.৭০০০০১"):
+            assert matches(text) == ["৭০০০০১"]
+            assert any(
+                span.text == "৭০০০০১" and span.label == "postcode"
+                for span in safety_sweep(text, [], lang="bn")
+            )
+            assert any(
+                text[start:end] == "৭০০০০১" and label == "postcode"
+                for start, end, label, *_ in find_semantic_units(
+                    text, get_patterns_for_language("bn")
+                )
+            )
+
 
 class TestGujaratiValidators:
     """Validator and fused-name coverage for the Gujarati language pack."""
@@ -653,7 +707,12 @@ class TestPersianPIIPatterns:
 
         assert persian_patterns
         assert all(
-            any(pattern is observed for observed in combined)
+            any(
+                pattern.pattern == observed.pattern
+                and pattern.entity_type == observed.entity_type
+                and pattern.validator is observed.validator
+                for observed in combined
+            )
             for pattern in persian_patterns
         )
 
@@ -744,6 +803,21 @@ class TestEastAfricanNationalIds:
         assert not validate_tanzania_nida("18991231123456789012")
         assert not validate_tanzania_nida("19850712-1234-567890-12")
         assert not validate_tanzania_nida(None)
+
+    @pytest.mark.parametrize("separator", ["", "-", " "])
+    def test_swahili_nida_rule_validates_every_grouping(self, separator):
+        from openmed.core.safety_sweep import safety_sweep
+
+        valid = separator.join(["19850712", "12345", "67890", "12"])
+        invalid = separator.join(["19851312", "12345", "67890", "12"])
+
+        for value, expected in ((valid, [valid]), (invalid, [])):
+            text = f"Namba ya NIDA {value} imerekodiwa."
+            assert [
+                span.text
+                for span in safety_sweep(text, [], lang="sw")
+                if span.label == "national_id"
+            ] == expected
 
     def test_uganda_nin_validator_checks_class_gender_and_length(self):
         assert validate_uganda_nin("CM123456789ABC")
@@ -3237,6 +3311,52 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Thai address pattern should match"
 
+    @pytest.mark.parametrize(
+        "date_text",
+        [
+            "15/03/2567",
+            "15-03-67",
+            "๑๕/๐๓/๒๕๖๗",
+            "2024-03-15",
+            "15 มกราคม 2567",
+            "15 ม.ค. 2567",
+        ],
+    )
+    def test_thai_address_tail_stops_before_a_following_date(self, date_text):
+        from openmed.core.safety_sweep import safety_sweep
+
+        for address in (
+            "12 ถนนสุขุมวิท แขวงคลองเตย วันที่",
+            "12 ซอย 5",
+            "12 ซอย5",
+            "12 ถนน ก",
+        ):
+            text = f"ที่อยู่ {address} {date_text} ติดตามผล"
+            address_start = text.index(address)
+            date_start = text.index(date_text, address_start + len(address))
+            expected = {
+                (address_start, address_start + len(address), "street_address"),
+                (date_start, date_start + len(date_text), "date"),
+            }
+
+            swept = safety_sweep(text, [], lang="th")
+            units = find_semantic_units(text, get_patterns_for_language("th"))
+
+            assert {(span.start, span.end, span.label) for span in swept} == expected
+            assert {(unit[0], unit[1], unit[2]) for unit in units} == expected
+
+    def test_thai_address_keeps_house_number_ranges_in_its_tail(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = "ที่อยู่ 99 ซอย 3/12-14 แขวงคลองเตย"
+        address = "99 ซอย 3/12-14 แขวงคลองเตย"
+
+        swept = safety_sweep(text, [], lang="th")
+
+        assert [(span.text, span.label) for span in swept] == [
+            (address, "street_address")
+        ]
+
     def test_thai_postcode_pattern(self):
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "postcode"
@@ -3593,6 +3713,7 @@ class TestGetPatternsForLanguage:
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
             + len(INDIA_HEALTH_ID_PII_PATTERNS)
+            + 1  # Shared locale-validated numeric Gregorian date pattern.
         )
 
     @pytest.mark.parametrize(
@@ -3600,6 +3721,8 @@ class TestGetPatternsForLanguage:
         sorted((SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES) - {"en"}),
     )
     def test_language_includes_universal_base_and_language_patterns(self, lang):
+        from openmed.core.calendar_month_dates import calendar_month_date_patterns
+
         patterns = get_patterns_for_language(lang)
         base_count = (
             len(PII_PATTERNS)
@@ -3623,7 +3746,50 @@ class TestGetPatternsForLanguage:
             not any(pattern is existing for existing in LANGUAGE_PII_PATTERNS[lang])
             for pattern in locale_patterns
         )
-        assert len(patterns) == base_count + language_count + locale_count
+        # Non-Gregorian month-name date patterns compile from their own tables.
+        calendar_count = len(calendar_month_date_patterns(lang))
+        assert len(patterns) == (
+            base_count + language_count + locale_count + calendar_count + 1
+        )
+
+    @pytest.mark.parametrize(
+        "lang",
+        sorted(
+            SUPPORTED_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
+        ),
+    )
+    def test_every_registered_language_retains_validated_dot_dates(self, lang):
+        from openmed.core.locale_formats import LOCALE_DATE_ORDER
+        from openmed.core.safety_sweep import safety_sweep
+
+        order = LOCALE_DATE_ORDER[lang]
+        value = {"dmy": "15.01.1980", "mdy": "01.15.1980", "ymd": "1980.01.15"}[order]
+        assert any(
+            e.label == "date" and e.text == value
+            for e in safety_sweep("DOB " + value, [], lang=lang)
+        )
+
+    @pytest.mark.parametrize("lang", ["fa", "ur"])
+    def test_native_and_arabic_variants_match_all_pack_context_words(self, lang):
+        from functools import partial
+
+        from openmed.core.pii_entity_merger import find_context_words
+        from openmed.core.script_detect import fold_perso_arabic_letters
+
+        native_to_arabic = str.maketrans({"ک": "ك", "ی": "ي", "ہ": "ه", "ھ": "ه"})
+        for pattern in LANGUAGE_PII_PATTERNS[lang]:
+            for word in pattern.context_words:
+                for spelling in (word, word.translate(native_to_arabic)):
+                    text = spelling + " 12345"
+                    assert find_context_words(
+                        text,
+                        len(spelling) + 1,
+                        len(text),
+                        [word],
+                        normalizer=partial(fold_perso_arabic_letters, lang=lang),
+                    )
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -3987,9 +4153,15 @@ class TestVietnameseLanguagePack:
         )
         negative_entities = safety_sweep(hard_negative, [], lang="vi")
         assert not any(
-            entity.text in {"003203123456", "123456789", "10000", "02838221234"}
+            entity.text in {"123456789", "10000", "02838221234"}
             for entity in negative_entities
         )
+        # "Mã bệnh án" labels a medical record number, never a CCCD.
+        assert {
+            entity.label
+            for entity in negative_entities
+            if entity.text == "003203123456"
+        } == {"medical_record_number"}
 
     def test_replace_surrogates_render_vietnamese_dates_day_first(self):
         """`method="replace"` must honour the `dmy` locale contract for `vi`.
@@ -5708,7 +5880,7 @@ def test_czech_format_preserving_dates_are_day_first():
         surrogate = anonymizer.format_preserving_surrogate("05/06/2020", "date")
 
     assert surrogate == "14/05/1951"
-    assert preserve.call_args.kwargs["day_first"] is True
+    assert preserve.call_args.kwargs["date_order"] == "dmy"
 
 
 def test_czech_clinical_sample_expected_spans():
@@ -6229,6 +6401,26 @@ class TestNigerianIdentifiers:
     )
     def test_nin_validator_rejects_trivial_or_malformed_values(self, value):
         assert not validate_nigeria_nin(value)
+
+    @pytest.mark.parametrize("lang", ["ha", "ig", "yo"])
+    @pytest.mark.parametrize(
+        ("value", "masked"),
+        [
+            ("36787753186", True),
+            ("٣٦٧٨٧٧٥٣١٨٦", True),
+            ("11111111111", False),
+            ("١١١١١١١١١١١", False),
+            ("98765432109", False),
+        ],
+    )
+    def test_language_pack_nin_rules_apply_nin_validation(self, lang, value, masked):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = f"NIN {value}."
+
+        assert [span.text for span in safety_sweep(text, [], lang=lang)] == (
+            [value] if masked else []
+        )
 
     def test_bvn_validator_accepts_non_trivial_eleven_digit_values(self):
         assert validate_nigeria_bvn("24107152688")
