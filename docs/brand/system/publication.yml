@@ -663,6 +663,7 @@ classification:
     - security/key-management.md
     - security/key-custody-metadata.md
     - security/audit-key-rotation.md
+    - security/audit-continuity.md
     - security/encrypted-surrogate-vault.md
     - security/access-review.md
     - security/surrogate-key-providers.md

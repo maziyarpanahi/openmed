@@ -604,6 +604,7 @@ nav:
       - Key Management and Rotation: security/key-management.md
       - Key Custody Metadata: security/key-custody-metadata.md
       - Audit-report Signing Key Rotation: security/audit-key-rotation.md
+      - Audit Continuity Across Rotation and Retention: security/audit-continuity.md
       - Encrypted Surrogate Mappings: security/encrypted-surrogate-vault.md
       - Structured Access Review: security/access-review.md
       - Surrogate-key Providers: security/surrogate-key-providers.md

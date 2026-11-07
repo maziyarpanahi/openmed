@@ -3,10 +3,17 @@
 The chain stores only canonical labels, offsets, and cryptographic hashes from
 an :class:`~openmed.core.audit.AuditReport`. It deliberately excludes source
 text, replacements, detector evidence, context, and reversible mappings.
+
+A chain may be pruned under a retention policy. A pruned chain keeps the
+sequence number and entry hash of its last removed entry as a retained base,
+so the remaining entries still link and verify. The removed prefix is
+described elsewhere by value-free tombstones in the continuity manifest
+(:mod:`openmed.core.audit_continuity`).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -20,8 +27,23 @@ from .labels import CANONICAL_LABELS, normalize_label
 
 CHAIN_FORMAT = "openmed.audit-chain"
 CHAIN_VERSION = 1
+PRUNED_CHAIN_VERSION = 2
+SUPPORTED_CHAIN_VERSIONS = frozenset({CHAIN_VERSION, PRUNED_CHAIN_VERSION})
 GENESIS_HASH = stable_hash(
     {"format": CHAIN_FORMAT, "version": CHAIN_VERSION, "sequence": -1}
+)
+CHAIN_VERIFICATION_CODES = frozenset(
+    {
+        "valid",
+        "entry_count_excess",
+        "entry_count_deficit",
+        "sequence_reordered",
+        "sequence_gap",
+        "broken_link",
+        "entry_hash_mismatch",
+        "head_mismatch",
+        "chain_invalid",
+    }
 )
 
 _CHAIN_FIELDS = {
@@ -32,6 +54,7 @@ _CHAIN_FIELDS = {
     "head_hash",
     "entries",
 }
+_PRUNED_CHAIN_FIELDS = _CHAIN_FIELDS | {"base_sequence", "base_hash"}
 _ENTRY_FIELDS = {
     "sequence",
     "previous_hash",
@@ -74,6 +97,55 @@ def _reject_unknown_fields(
 ) -> None:
     if any(key not in allowed for key in data):
         raise ValueError(f"{object_name} contains unsupported fields")
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Best-effort flush of a directory entry after an atomic rename."""
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError:  # pragma: no cover - platform/filesystem dependent
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:  # pragma: no cover - platform/filesystem dependent
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _atomic_write_text(path: Path, text: str) -> Path:
+    """Durably replace ``path`` with ``text`` via a same-directory rename.
+
+    The temporary file is flushed and fsynced before the rename and the parent
+    directory is fsynced afterwards, so a crash leaves either the previous or
+    the complete new document. A failed write removes its temporary file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            dir=path.parent,
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+        _fsync_directory(path.parent)
+    finally:
+        if temporary is not None:
+            with contextlib.suppress(OSError):
+                temporary.unlink()
+    return path
 
 
 @dataclass(frozen=True)
@@ -208,12 +280,30 @@ class AuditChainEntry:
 
 @dataclass(frozen=True)
 class ChainVerificationResult:
-    """Detailed result of an offline audit-chain verification."""
+    """Detailed result of an offline audit-chain verification.
+
+    Attributes:
+        valid: Whether the chain verified.
+        checked_entries: Number of entries checked before the result.
+        reason: Human-readable, value-free description.
+        entry_index: Position of the failing entry when one is identifiable.
+        code: Stable value-free reason code from
+            :data:`CHAIN_VERIFICATION_CODES`.
+    """
 
     valid: bool
     checked_entries: int
     reason: str
     entry_index: int | None = None
+    code: str | None = None
+
+    def __post_init__(self) -> None:
+        code = self.code
+        if code is None:
+            code = "valid" if self.valid else "chain_invalid"
+        if code not in CHAIN_VERIFICATION_CODES or (code == "valid") != self.valid:
+            raise ValueError("audit chain verification code is not supported")
+        object.__setattr__(self, "code", code)
 
     def __bool__(self) -> bool:
         return self.valid
@@ -278,7 +368,19 @@ def _entry_from_report(
 
 
 class AuditChain:
-    """Append-only sequence of PHI-safe de-identification audit entries."""
+    """Append-only sequence of PHI-safe de-identification audit entries.
+
+    Args:
+        entries: Retained entries in sequence order.
+        declared_entry_count: Retained entry count recorded with the chain.
+        declared_head_hash: Retained head hash recorded with the chain.
+        base_sequence: Sequence number of the first retained entry. It is
+            ``0`` for an unpruned chain and the number of pruned entries after
+            policy-approved pruning.
+        base_hash: Entry hash of the last pruned entry, which the first
+            retained entry links to. It is :data:`GENESIS_HASH` when nothing
+            was pruned.
+    """
 
     GENESIS_HASH = GENESIS_HASH
 
@@ -288,14 +390,22 @@ class AuditChain:
         *,
         declared_entry_count: int | None = None,
         declared_head_hash: str | None = None,
+        base_sequence: int = 0,
+        base_hash: str | None = None,
     ) -> None:
+        if type(base_sequence) is not int or base_sequence < 0:
+            raise ValueError("audit chain base_sequence must be a non-negative integer")
+        resolved_base = self.GENESIS_HASH if base_hash is None else base_hash
+        _require_sha256_hash(resolved_base, "audit chain base_hash")
+        if (base_sequence == 0) != (resolved_base == self.GENESIS_HASH):
+            raise ValueError("audit chain base_hash does not match base_sequence")
+        self._base_sequence = base_sequence
+        self._base_hash = resolved_base
         self._entries = list(entries or ())
         self._declared_entry_count = (
             len(self._entries) if declared_entry_count is None else declared_entry_count
         )
-        current_head = (
-            self._entries[-1].entry_hash if self._entries else self.GENESIS_HASH
-        )
+        current_head = self._entries[-1].entry_hash if self._entries else resolved_base
         self._declared_head_hash = (
             current_head if declared_head_hash is None else declared_head_hash
         )
@@ -310,6 +420,35 @@ class AuditChain:
         """Return the retained head hash that anchors the serialized chain."""
         return self._declared_head_hash
 
+    @property
+    def base_sequence(self) -> int:
+        """Return the sequence number of the first retained entry."""
+        return self._base_sequence
+
+    @property
+    def base_hash(self) -> str:
+        """Return the hash the first retained entry links to."""
+        return self._base_hash
+
+    @property
+    def next_sequence(self) -> int:
+        """Return the sequence number the next appended entry will receive."""
+        return self._base_sequence + len(self._entries)
+
+    @property
+    def is_pruned(self) -> bool:
+        """Return whether a policy-approved prefix has been removed."""
+        return self._base_sequence > 0
+
+    def entry_at(self, sequence: int) -> AuditChainEntry | None:
+        """Return the retained entry at ``sequence``, or ``None`` if absent."""
+        if type(sequence) is not int:
+            return None
+        offset = sequence - self._base_sequence
+        if not 0 <= offset < len(self._entries):
+            return None
+        return self._entries[offset]
+
     def append(self, report: AuditReport) -> AuditChainEntry:
         """Verify and append one audit report without retaining raw PHI fields."""
         current = self.verify()
@@ -318,11 +457,11 @@ class AuditChain:
                 f"cannot append to an invalid audit chain: {current.reason}"
             )
         previous_hash = (
-            self._entries[-1].entry_hash if self._entries else self.GENESIS_HASH
+            self._entries[-1].entry_hash if self._entries else self._base_hash
         )
         entry = _entry_from_report(
             report,
-            sequence=len(self._entries),
+            sequence=self.next_sequence,
             previous_hash=previous_hash,
         )
         self._entries.append(entry)
@@ -332,6 +471,40 @@ class AuditChain:
 
     append_report = append
 
+    def prune_through(self, last_sequence: int) -> tuple[AuditChainEntry, ...]:
+        """Remove retained entries up to and including ``last_sequence``.
+
+        The chain keeps the last removed entry hash as its new base so the
+        remaining entries still verify. Callers that need continuity evidence
+        should record a tombstone first, for example through
+        :meth:`openmed.core.audit_continuity.AuditContinuityStore.prune_through`.
+
+        Args:
+            last_sequence: Highest retained sequence number to remove.
+
+        Returns:
+            The removed entries, in sequence order.
+
+        Raises:
+            ValueError: If the chain is invalid or ``last_sequence`` is not a
+                retained sequence number.
+        """
+        current = self.verify()
+        if not current.valid:
+            raise ValueError(f"cannot prune an invalid audit chain: {current.reason}")
+        if (
+            type(last_sequence) is not int
+            or not self._base_sequence <= last_sequence < self.next_sequence
+        ):
+            raise ValueError("prune sequence must name a retained audit chain entry")
+        cut = last_sequence - self._base_sequence + 1
+        removed = tuple(self._entries[:cut])
+        self._entries = self._entries[cut:]
+        self._base_sequence = last_sequence + 1
+        self._base_hash = removed[-1].entry_hash
+        self._declared_entry_count = len(self._entries)
+        return removed
+
     def verify(self) -> ChainVerificationResult:
         """Verify count, order, links, entry hashes, and retained head offline."""
         actual_count = len(self._entries)
@@ -340,26 +513,32 @@ class AuditChain:
                 False,
                 0,
                 "insertion detected: chain contains more entries than declared",
+                code="entry_count_excess",
             )
         if actual_count < self._declared_entry_count:
             return ChainVerificationResult(
                 False,
                 0,
                 "deletion detected: chain contains fewer entries than declared",
+                code="entry_count_deficit",
             )
 
         sequences = [entry.sequence for entry in self._entries]
-        expected_sequences = list(range(actual_count))
+        expected_sequences = list(
+            range(self._base_sequence, self._base_sequence + actual_count)
+        )
         if sequences != expected_sequences:
             if sorted(sequences) == expected_sequences:
                 reason = "reordering detected: entry sequence is out of order"
+                code = "sequence_reordered"
             else:
                 reason = (
                     "insertion or deletion detected: entry sequence is not contiguous"
                 )
-            return ChainVerificationResult(False, 0, reason)
+                code = "sequence_gap"
+            return ChainVerificationResult(False, 0, reason, code=code)
 
-        previous_hash = self.GENESIS_HASH
+        previous_hash = self._base_hash
         for index, entry in enumerate(self._entries):
             if entry.previous_hash != previous_hash:
                 return ChainVerificationResult(
@@ -367,6 +546,7 @@ class AuditChain:
                     index,
                     f"reordering or mutation detected: broken link at entry {index}",
                     index,
+                    code="broken_link",
                 )
             if entry.entry_hash != entry.compute_hash():
                 return ChainVerificationResult(
@@ -374,6 +554,7 @@ class AuditChain:
                     index,
                     f"mutation detected: hash mismatch at entry {index}",
                     index,
+                    code="entry_hash_mismatch",
                 )
             previous_hash = entry.entry_hash
 
@@ -382,6 +563,7 @@ class AuditChain:
                 False,
                 actual_count,
                 "deletion or mutation detected: retained head hash does not match",
+                code="head_mismatch",
             )
         return ChainVerificationResult(
             True,
@@ -396,8 +578,12 @@ class AuditChain:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the versioned chain envelope and retained head anchor."""
-        return {
+        """Return the versioned chain envelope and retained head anchor.
+
+        Unpruned chains keep the version 1 layout. Pruned chains use version 2,
+        which adds ``base_sequence`` and ``base_hash``.
+        """
+        payload: dict[str, Any] = {
             "format": CHAIN_FORMAT,
             "version": CHAIN_VERSION,
             "genesis_hash": self.GENESIS_HASH,
@@ -405,6 +591,11 @@ class AuditChain:
             "head_hash": self._declared_head_hash,
             "entries": [entry.to_dict() for entry in self._entries],
         }
+        if self.is_pruned:
+            payload["version"] = PRUNED_CHAIN_VERSION
+            payload["base_sequence"] = self._base_sequence
+            payload["base_hash"] = self._base_hash
+        return payload
 
     def to_json(self) -> str:
         """Serialize the chain deterministically."""
@@ -413,11 +604,26 @@ class AuditChain:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "AuditChain":
         """Load a versioned audit chain from a mapping."""
-        _reject_unknown_fields(data, _CHAIN_FIELDS, "audit chain")
+        version = data.get("version")
+        pruned = type(version) is int and version == PRUNED_CHAIN_VERSION
+        _reject_unknown_fields(
+            data,
+            _PRUNED_CHAIN_FIELDS if pruned else _CHAIN_FIELDS,
+            "audit chain",
+        )
         if data.get("format") != CHAIN_FORMAT:
             raise ValueError(f"audit chain format must be {CHAIN_FORMAT!r}")
-        if data.get("version") != CHAIN_VERSION:
+        if type(version) is not int or version not in SUPPORTED_CHAIN_VERSIONS:
             raise ValueError("unsupported audit chain version")
+        base_sequence: Any = 0
+        base_hash = GENESIS_HASH
+        if pruned:
+            base_sequence = data.get("base_sequence")
+            if type(base_sequence) is not int or base_sequence < 1:
+                raise ValueError("audit chain base_sequence must be a positive integer")
+            base_hash = _require_sha256_hash(
+                data.get("base_hash"), "audit chain base_hash"
+            )
         if data.get("genesis_hash") != GENESIS_HASH:
             raise ValueError("audit chain genesis_hash does not match this format")
         declared_count = data.get("entry_count")
@@ -438,6 +644,8 @@ class AuditChain:
             loaded_entries,
             declared_entry_count=declared_count,
             declared_head_hash=declared_head,
+            base_sequence=base_sequence,
+            base_hash=base_hash,
         )
 
     @classmethod
@@ -457,21 +665,8 @@ class AuditChain:
         return cls.from_json(Path(path).read_text(encoding="utf-8"))
 
     def write(self, path: str | Path) -> Path:
-        """Atomically persist the complete chain document."""
-        destination = Path(path)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            "w",
-            delete=False,
-            dir=destination.parent,
-            encoding="utf-8",
-            prefix=f".{destination.name}.",
-        ) as handle:
-            handle.write(self.to_json())
-            handle.write("\n")
-            temporary = Path(handle.name)
-        os.replace(temporary, destination)
-        return destination
+        """Atomically and durably persist the complete chain document."""
+        return _atomic_write_text(Path(path), self.to_json() + "\n")
 
 
 def verify_chain(chain: AuditChain | Mapping[str, Any]) -> ChainVerificationResult:
@@ -495,9 +690,12 @@ __all__ = [
     "AuditChainEntry",
     "AuditChainSpan",
     "CHAIN_FORMAT",
+    "CHAIN_VERIFICATION_CODES",
     "CHAIN_VERSION",
     "ChainVerificationResult",
     "GENESIS_HASH",
+    "PRUNED_CHAIN_VERSION",
+    "SUPPORTED_CHAIN_VERSIONS",
     "append_to_chain_file",
     "verify_chain",
 ]
