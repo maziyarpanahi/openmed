@@ -440,6 +440,7 @@ classification:
     - training/synthetic/clinical-note-grammars.md
     - training/synthetic/document-rendering.md
     - training/synthetic/dicom-overlays.md
+    - training/synthetic/waveform-records.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
