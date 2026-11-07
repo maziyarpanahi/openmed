@@ -529,6 +529,146 @@
     {
       "kind": "provider_result",
       "canonical_json": "{\"abstention_code\":\"phi_uncertainty\",\"count_metadata\":{},\"duration_ms\":2.0,\"guard_metadata\":{\"decision\":\"withhold\",\"detector_version_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"policy_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"report_digest\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\"},\"input_digest\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"model_id\":\"offline-fixture\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
-    }
+    },
+      {
+        "kind": "asset_manifest",
+        "canonical_json": "{\"asset_id\":\"synth-waveform\",\"byte_size\":1024,\"channel_count\":2,\"duration_seconds\":2,\"media_type\":\"application/edf\",\"sample_rate_hz\":125.5,\"samples_per_channel\":251,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+      },
+      {
+        "kind": "asset_manifest",
+        "canonical_json": "{\"asset_id\":\"synth-waveform\",\"byte_size\":1024,\"channel_count\":2,\"duration_seconds\":2,\"media_type\":\"application/wfdb\",\"sample_rate_hz\":125.5,\"samples_per_channel\":251,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+      },
+      {
+        "kind": "asset_manifest",
+        "canonical_json": "{\"asset_id\":\"synth-waveform\",\"byte_size\":1024,\"channel_count\":2,\"dicom_subprofile\":\"waveform\",\"duration_seconds\":2,\"media_type\":\"application/dicom\",\"sample_rate_hz\":125.5,\"samples_per_channel\":251,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+      },
+      {
+        "kind": "asset_manifest",
+        "canonical_json": "{\"asset_id\":\"synth-non-pixel\",\"byte_size\":1024,\"dicom_subprofile\":\"non_pixel\",\"media_type\":\"application/dicom\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+      },
+      {
+        "kind": "manifest_profile",
+        "canonical_json": "{\"modality\":\"waveform\",\"version\":\"1.1\"}"
+      },
+      {
+        "kind": "manifest_profile",
+        "canonical_json": "{\"modality\":\"dicom_non_pixel\",\"version\":\"1.1\"}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"arithmetic_saturated\",\"field_name\":\"total_samples\",\"limit\":60000,\"observed\":9223372036854775807}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"sample_rate_hz\",\"limit\":125.5,\"observed\":128.0}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"sample_count_mismatch\",\"field_name\":\"samples_per_channel\",\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_size_limit\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_header_missing\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_encrypted\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_object_limit\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_decompression_limit\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_object_stream_unsupported\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_catalog_missing\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_page_tree_invalid\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_page_limit\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"page_count_mismatch\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"media_box_missing\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"media_box_invalid\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"crop_box_invalid\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"crop_box_outside_media_box\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"rotation_invalid\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_inventory_invalid\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_annotations\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_form_values\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_embedded_files\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_xfa\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_optional_content\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_javascript\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_open_action\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_launch_action\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_incremental_revisions\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      },
+      {
+        "kind": "preflight_finding",
+        "canonical_json": "{\"check\":\"pdf_content\",\"reason_code\":\"pdf_media_type_required\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+      }
   ]
 }

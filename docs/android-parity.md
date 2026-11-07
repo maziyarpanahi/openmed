@@ -90,15 +90,17 @@ media, align intake, or render UI.
 | Kotlin type | Python reference | Accepted version |
 | --- | --- | --- |
 | `AssetManifest` | `AssetManifest` | integer `version: 1` (defaults to 1 if omitted) |
-| `ManifestProfile` | `PreflightReport.metadata_profile` | string `version: "1.0"` |
+| `ManifestProfile` | `PreflightReport.metadata_profile` | string `version: "1.0"` or `"1.1"`, selected by modality |
 | `PreflightFinding` | `PreflightFinding.to_dict()` | inherited from the containing preflight report v1; no standalone version field |
 | `AbstentionRecord` | `AbstentionRecord` | integer schema version selected by the reason code (1 or 2) |
 | `ProviderResultEnvelope` | `ProviderResultEnvelope` | provider result v1 or v2, selected by the abstention reason |
 
 Call `Type.fromJson(payload)` to construct a validated instance, and `toJson()`
 to serialize it. Profile references carry only modality and version; their
-required, optional, and inapplicable field sets come from the existing Python
-v1.0 profiles. No new profile wire schema or preflight orchestration is added.
+required, optional, and inapplicable fields follow the Python profiles. Waveform
+and non-pixel DICOM use v1.1. Existing modalities retain v1.0. The manifest
+carries the same optional waveform counts and DICOM selector as Python. Findings
+cover the generic checks and the optional structural PDF check.
 
 Provider guard metadata accepts only the release decision and three SHA-256
 digests. The parser rejects a decision that conflicts with the outcome.

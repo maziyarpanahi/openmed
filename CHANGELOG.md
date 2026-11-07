@@ -105,6 +105,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
 
+- Waveform manifest metadata and v1.1 profiles for EDF-, WFDB- and DICOM-ECG-shaped
+  inputs, explicit non-pixel DICOM admission, bounded waveform ceilings and
+  saturating decoded-memory plans. Legacy v1 serialization stays unchanged;
+  unknown WFDB source types still abstain. Resource admission is non-diagnostic
+  and does not qualify readers or clinical use (#3814).
+
 - Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
   16, 212 and 80 with windowed integer outputs, streamed checksum verification,
   value-safe metadata
@@ -162,6 +168,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
 
 - Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
+
+- Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
+  retention, provenance and review/export threats to enforcing code/tests or
+  tracked gaps, with offline dangling-reference and publication regression gates.
 
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
@@ -269,10 +279,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decompression, and report archive failures using content-free codes/counts
   (#3812).
 
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
   token IDs. Callers must supply a local guard and asset provenance to release text.
+
+- Local barcode, QR and DataMatrix region detection across image, DICOM pixel
+  and PDF raster redaction, with a caller-installed optional ZXing backend,
+  deterministic fake, payload-free coverage reports, explicit unavailable
+  coverage policy and residual-code verification.
 
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
 

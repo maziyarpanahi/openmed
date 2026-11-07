@@ -46,9 +46,11 @@ from .asset_batch import (
 )
 from .asset_limits import (
     DESKTOP_V1,
+    DESKTOP_V1_1,
     LIMIT_FIELDS,
     LIMIT_REASON_CODES,
     MOBILE_V1,
+    MOBILE_V1_1,
     AssetLimitError,
     LimitFinding,
     LimitProfile,
@@ -97,6 +99,16 @@ from .chw_forms import (
     classify_chw_field,
     parse_xform_path,
     redact_chw_form,
+)
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegion,
+    CodeRegionDetector,
+    FakeCodeRegionDetector,
+    ZXingCodeRegionDetector,
+    detect_code_regions,
 )
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
@@ -232,9 +244,11 @@ from .layout import (
 )
 from .manifest_profiles import (
     AUDIO_V1,
+    DICOM_NON_PIXEL_V1,
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    WAVEFORM_V1,
     ManifestProfile,
     ManifestProfileError,
     ValidationFinding,
@@ -445,6 +459,14 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "CodeCoverageReport",
+    "CodeDetectionError",
+    "CodeDetectionPolicy",
+    "CodeRegion",
+    "CodeRegionDetector",
+    "FakeCodeRegionDetector",
+    "ZXingCodeRegionDetector",
+    "detect_code_regions",
     "SESSION_SCHEMA_VERSION",
     "AssetHandle",
     "DocumentProvider",
@@ -465,8 +487,10 @@ __all__ = [
     "AbstentionValidationError",
     "AUDIO_V1",
     "DICOM_V1",
+    "DICOM_NON_PIXEL_V1",
     "IMAGE_V1",
     "PDF_V1",
+    "WAVEFORM_V1",
     "ManifestProfile",
     "ManifestProfileError",
     "ValidationFinding",
@@ -481,12 +505,14 @@ __all__ = [
     "AssetManifestError",
     "AssetLimitError",
     "DESKTOP_V1",
+    "DESKTOP_V1_1",
     "LIMIT_FIELDS",
     "LIMIT_REASON_CODES",
     "LimitFinding",
     "LimitProfile",
     "RedactionAdmissionError",
     "MOBILE_V1",
+    "MOBILE_V1_1",
     "evaluate_asset_limits",
     "PREFLIGHT_CHECKS",
     "PREFLIGHT_SCHEMA_VERSION",

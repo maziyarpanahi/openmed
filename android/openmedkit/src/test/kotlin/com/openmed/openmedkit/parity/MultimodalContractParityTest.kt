@@ -56,7 +56,7 @@ class MultimodalContractParityTest {
     fun sharedVectorsRoundTripByteIdentically() {
         assertEquals(1, fixture.getValue("version").jsonPrimitive.int)
         assertTrue(fixture.getValue("synthetic").jsonPrimitive.boolean)
-        assertEquals(132, vectors.size)
+        assertEquals(167, vectors.size)
         for (vector in vectors) {
             val expected = payload(vector)
             assertContentEquals(expected.toByteArray(Charsets.UTF_8), parse(kind(vector), expected).toByteArray(Charsets.UTF_8))
@@ -181,23 +181,42 @@ class MultimodalContractParityTest {
 
     @Test
     fun profileFieldsMatchPythonAndPublicTypesHaveNoContentFields() {
-        for (modality in Modality.values()) {
-            val profile = ManifestProfile.fromJson("{\"modality\":\"${modality.code}\",\"version\":\"1.0\"}")
-            assertTrue(profile.optionalFields.isEmpty())
-            assertEquals(MetadataField.values().toSet(), profile.requiredFields + profile.inapplicableFields)
-            assertTrue((profile.requiredFields intersect profile.inapplicableFields).isEmpty())
-        }
         val required = mapOf(
             Modality.IMAGE to setOf(MetadataField.WIDTH, MetadataField.HEIGHT),
             Modality.PDF to setOf(MetadataField.PAGES),
             Modality.DICOM to setOf(MetadataField.FRAMES, MetadataField.WIDTH, MetadataField.HEIGHT),
             Modality.AUDIO to setOf(MetadataField.DURATION_SECONDS),
             Modality.VIDEO to setOf(MetadataField.DURATION_SECONDS, MetadataField.FRAMES, MetadataField.HEIGHT, MetadataField.WIDTH),
+            Modality.WAVEFORM to setOf(MetadataField.DURATION_SECONDS, MetadataField.CHANNEL_COUNT, MetadataField.SAMPLE_RATE_HZ, MetadataField.SAMPLES_PER_CHANNEL),
+            Modality.DICOM_NON_PIXEL to emptySet(),
         )
+        val waveformFields = setOf(MetadataField.CHANNEL_COUNT, MetadataField.SAMPLE_RATE_HZ, MetadataField.SAMPLES_PER_CHANNEL)
+        assertEquals(Modality.values().toSet(), required.keys)
         for ((modality, expected) in required) {
-            val profile = ManifestProfile.fromJson("{\"modality\":\"${modality.code}\",\"version\":\"1.0\"}")
+            val waveform = modality in setOf(Modality.WAVEFORM, Modality.DICOM_NON_PIXEL)
+            val version = if (waveform) "1.1" else "1.0"
+            val fields = mapOf("modality" to JsonPrimitive(modality.code), "version" to JsonPrimitive(version))
+            val profile = ManifestProfile.fromJson(JsonObject(fields).toString())
             assertEquals(expected, profile.requiredFields)
+            assertTrue(profile.optionalFields.isEmpty())
+            val classified = if (waveform) MetadataField.values().toSet() else MetadataField.values().toSet() - waveformFields
+            assertEquals(classified - expected, profile.inapplicableFields)
+            rejected("manifest_profile", fields + ("version" to JsonPrimitive(if (waveform) "1.0" else "1.1")))
         }
+        val waveformAsset = first("asset_manifest") + mapOf(
+            "media_type" to JsonPrimitive("application/edf"),
+            "channel_count" to JsonPrimitive(2),
+            "sample_rate_hz" to JsonPrimitive(125.5),
+            "samples_per_channel" to JsonPrimitive(251),
+        )
+        rejected("asset_manifest", waveformAsset + ("dicom_subprofile" to JsonPrimitive("waveform")))
+        rejected("asset_manifest", waveformAsset + ("channel_count" to JsonPrimitive(1.5)))
+        rejected("asset_manifest", waveformAsset + ("sample_rate_hz" to JsonPrimitive(0)))
+        rejected("asset_manifest", waveformAsset + ("samples_per_channel" to JsonPrimitive("251")))
+        rejected("asset_manifest", waveformAsset + mapOf(
+            "media_type" to JsonPrimitive("application/dicom"),
+            "dicom_subprofile" to JsonPrimitive("SYNTH_PRIVATE_SENTINEL"),
+        ))
         val fields = mapOf(
             AssetManifest::class.java to setOf("assetId", "mediaType", "sha256", "byteSize", "metadata"),
             ManifestProfile::class.java to setOf("modality"),

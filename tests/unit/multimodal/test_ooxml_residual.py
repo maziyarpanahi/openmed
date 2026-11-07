@@ -22,7 +22,8 @@ def package(parts):
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
         for name, payload in parts.items():
-            archive.writestr(name, payload)
+            # Import-time ZIP cases must have the same bytes in every pytest worker.
+            archive.writestr(zipfile.ZipInfo(name), payload)
     return output.getvalue()
 
 
