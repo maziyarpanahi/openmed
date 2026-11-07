@@ -18,7 +18,9 @@ OpenMed does not bundle the Qualcomm SDK, QNN backend libraries, or a
 proprietary QNN-enabled AAR. Applications that opt into QNN are responsible for
 supplying compatible runtime libraries and complying with their licenses. The
 standard OpenMedKit dependency can still select NNAPI where the packaged ONNX
-Runtime and device expose it.
+Runtime and device expose it. See
+[Export Toolchains, Artifact Licenses and Redistribution](../security/export-redistribution.md)
+for the default posture of QNN and the other vendor components.
 
 ## Configure a Session
 

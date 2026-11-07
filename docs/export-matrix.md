@@ -81,3 +81,4 @@ truth is the backend code, but the essentials are:
 - [Android ONNX Export](export-onnx-android.md)
 - [Transformers.js Export](export-transformersjs.md)
 - [GGUF Embedding Export](export-gguf.md)
+- [Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md)
