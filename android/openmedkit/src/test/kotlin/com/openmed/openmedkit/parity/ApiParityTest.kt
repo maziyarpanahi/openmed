@@ -1,3 +1,6 @@
+// The MLX-named store members stay present (deprecated) for source compatibility.
+@file:Suppress("DEPRECATION")
+
 package com.openmed.openmedkit.parity
 
 import com.openmed.openmedkit.EntityPrediction
