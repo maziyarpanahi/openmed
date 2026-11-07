@@ -151,6 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Associate form values and controls with original visual labels and sections, retain ambiguous alternatives, and require exact-content association and handwriting review before protected structured export (#2797).
 
+- Opt-in experimental single-asset REST preflight with in-memory binary intake,
+  core report byte parity, bounded manifests and bodies, and content-free errors
+  and access logs (#3835).
+
 - Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
 
 - Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
