@@ -443,6 +443,10 @@ nav:
       - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
+      - Transcript Language Routing: multimodal/transcript-language-routing.md
+      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
+      - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
@@ -455,6 +459,7 @@ nav:
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
@@ -494,6 +499,7 @@ nav:
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
+      - Transcript Accuracy: evaluation/transcript-accuracy.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md

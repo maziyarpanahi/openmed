@@ -503,6 +503,10 @@ classification:
     - multimodal/generated-text-guard.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
+    - multimodal/asr-hallucination-check.md
+    - multimodal/transcript-language-routing.md
+    - multimodal/speech-endpoints.md
+    - multimodal/offline-asr-provider.md
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
     - multimodal/wav-preflight.md
@@ -515,6 +519,7 @@ classification:
     - multimodal/ecg-annotation-privacy.md
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
+    - multimodal/ecg-evidence-windows.md
     - multimodal/streaming/local-diarization.md
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md
@@ -554,6 +559,7 @@ classification:
     - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
     - evaluation/multimodal-clinical-validation.md
+    - evaluation/transcript-accuracy.md
     - evaluation/local-guardrail-bypass.md
     - evaluation/synthetic-memorization.md
     - clinical-validation-protocol.md
