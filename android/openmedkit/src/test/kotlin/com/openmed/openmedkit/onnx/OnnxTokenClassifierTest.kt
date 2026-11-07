@@ -1,8 +1,14 @@
 package com.openmed.openmedkit.onnx
 
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
@@ -200,6 +206,47 @@ class OnnxTokenClassifierTest {
     }
 
     @Test
+    fun closeDuringANativeRunDefersSessionReleaseUntilTheRunReturns() {
+        val entered = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        val session = BlockingSession(entered, proceed)
+        val classifier = OnnxTokenClassifier(
+            environment = null,
+            session = session,
+            id2Label = mapOf(0 to "O", 1 to "B-NAME"),
+        )
+
+        kotlinx.coroutines.runBlocking {
+            val run = async(Dispatchers.IO) {
+                classifier.run(
+                    inputIds = intArrayOf(1),
+                    attentionMask = intArrayOf(1),
+                    offsets = listOf(TokenOffset(0, 1)),
+                )
+            }
+            assertTrue(entered.await(10, TimeUnit.SECONDS))
+
+            classifier.close()
+            assertEquals(0, session.closeCount.get())
+            assertFailsWith<InferenceError.InvalidInput> {
+                classifier.run(
+                    inputIds = intArrayOf(1),
+                    attentionMask = intArrayOf(1),
+                    offsets = listOf(TokenOffset(0, 1)),
+                )
+            }
+
+            proceed.countDown()
+            assertEquals(1, run.await().size)
+        }
+
+        assertEquals(1, session.closeCount.get())
+        assertFalse(session.closedWhileRunning.get())
+        classifier.close()
+        assertEquals(1, session.closeCount.get())
+    }
+
+    @Test
     fun invalidInputLengthsRaiseTypedError() = runTest {
         val classifier = classifier(
             RecordingSession(
@@ -298,6 +345,40 @@ class OnnxTokenClassifierTest {
             closeCount += 1
             closed = true
         }
+    }
+}
+
+private class BlockingSession(
+    private val entered: CountDownLatch,
+    private val proceed: CountDownLatch,
+) : TokenClassificationSession {
+    private val running = AtomicBoolean(false)
+    val closeCount = AtomicInteger(0)
+    val closedWhileRunning = AtomicBoolean(false)
+
+    override val inputNames: Set<String> = setOf(
+        OnnxTokenClassifier.INPUT_IDS_NAME,
+        OnnxTokenClassifier.ATTENTION_MASK_NAME,
+    )
+
+    override fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?> {
+        running.set(true)
+        try {
+            entered.countDown()
+            check(proceed.await(10, TimeUnit.SECONDS)) { "native run never released" }
+            return mapOf(
+                OnnxTokenClassifier.LOGITS_NAME to arrayOf(arrayOf(floatArrayOf(0f, 3f))),
+            )
+        } finally {
+            running.set(false)
+        }
+    }
+
+    override fun close() {
+        if (running.get()) {
+            closedWhileRunning.set(true)
+        }
+        closeCount.incrementAndGet()
     }
 }
 

@@ -2,11 +2,15 @@ package com.openmed.openmedkit
 
 import com.openmed.openmedkit.onnx.AcceleratorConfig
 import com.openmed.openmedkit.policy.PolicyProfiles
+import com.openmed.openmedkit.util.LeaseGate
 import com.openmed.openmedkit.util.SafeLog
 import com.openmed.openmedkit.util.SafeLogOperation
 import com.openmed.openmedkit.util.toSafeLogSpan
+import com.openmed.openmedkit.util.withLease
 import java.io.Closeable
 import java.io.File
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * OpenMedKit public Kotlin facade for on-device clinical NLP.
@@ -16,6 +20,13 @@ import java.io.File
  * contain labels, offsets, and hashes rather than raw span text. Results are
  * assistive software output, not diagnosis, treatment advice, or a medical
  * device decision.
+ *
+ * Every operation holds a lease on the classifier. [close] is idempotent: it
+ * refuses new operations with [OpenMedRuntimeFailureReason.RUNTIME_CLOSED] and
+ * frees the native session only after in-flight operations finish. Operations
+ * check for coroutine cancellation before tokenization, after native
+ * inference, and after decoding, merging, and policy application. Hosts that
+ * need lifecycle, memory-pressure, or model-swap handling use [OpenMedRuntime].
  */
 class OpenMedKit(
     private val classifier: OnnxTokenClassifier,
@@ -49,26 +60,15 @@ class OpenMedKit(
         deidentifyEngine = deidentifyEngine,
     )
 
+    private val gate = LeaseGate { classifier.close() }
+
     /**
      * Run token classification and return entities above the confidence threshold.
      */
     suspend fun analyzeText(
         text: String,
         confidenceThreshold: Float = 0.5f,
-    ): List<EntityPrediction> {
-        require(confidenceThreshold in 0.0f..1.0f) {
-            "confidenceThreshold must be between 0.0 and 1.0"
-        }
-        val predictions = classifier.predict(text)
-        val entities = decoder.decode(predictions, text)
-            .filter { it.confidence >= confidenceThreshold }
-            .sortedByOffset()
-        SafeLog.record(
-            SafeLogOperation.ANALYZE_TEXT,
-            entities.map { it.toSafeLogSpan() },
-        )
-        return entities
-    }
+    ): List<EntityPrediction> = leased { analyzeTextLeased(text, confidenceThreshold) }
 
     /**
      * Run PII detection with span repair and optional smart merging.
@@ -77,21 +77,8 @@ class OpenMedKit(
         text: String,
         confidenceThreshold: Float = 0.5f,
         useSmartMerging: Boolean = true,
-    ): List<EntityPrediction> {
-        val repaired = SpanRepair.repair(
-            analyzeText(text, confidenceThreshold),
-            text,
-        )
-        val entities = if (useSmartMerging) {
-            merger.merge(repaired, text)
-        } else {
-            repaired.sortedByOffset()
-        }
-        SafeLog.record(
-            SafeLogOperation.EXTRACT_PII,
-            entities.map { it.toSafeLogSpan() },
-        )
-        return entities
+    ): List<EntityPrediction> = leased {
+        extractPiiLeased(text, confidenceThreshold, useSmartMerging)
     }
 
     /**
@@ -105,10 +92,27 @@ class OpenMedKit(
         chunkTokenLimit: Int = 256,
         tokenOverlap: Int = 32,
         useSmartMerging: Boolean = true,
+    ): List<EntityPrediction> = leased {
+        extractPiiChunkedLeased(
+            text,
+            confidenceThreshold,
+            chunkTokenLimit,
+            tokenOverlap,
+            useSmartMerging,
+        )
+    }
+
+    private suspend fun extractPiiChunkedLeased(
+        text: String,
+        confidenceThreshold: Float,
+        chunkTokenLimit: Int,
+        tokenOverlap: Int,
+        useSmartMerging: Boolean,
     ): List<EntityPrediction> {
+        checkpoint()
         val chunks = makeTokenChunks(text, chunkTokenLimit, tokenOverlap)
         if (chunks.size <= 1) {
-            return extractPii(text, confidenceThreshold, useSmartMerging)
+            return extractPiiLeased(text, confidenceThreshold, useSmartMerging)
         }
 
         val chunkEntities = chunks.flatMap { chunk ->
@@ -117,7 +121,7 @@ class OpenMedKit(
                 text,
                 chunk.start,
             )
-            extractPii(chunkText, confidenceThreshold, useSmartMerging)
+            extractPiiLeased(chunkText, confidenceThreshold, useSmartMerging)
                 .mapNotNull { it.offsetBy(baseScalarOffset, text) }
         }
 
@@ -130,6 +134,7 @@ class OpenMedKit(
         } else {
             deduplicateOverlappingEntities(repaired)
         }
+        checkpoint()
         SafeLog.record(
             SafeLogOperation.EXTRACT_PII_CHUNKED,
             entities.map { it.toSafeLogSpan() },
@@ -164,19 +169,85 @@ class OpenMedKit(
         policy: String = PolicyProfiles.DEFAULT_PROFILE,
         confidenceThreshold: Float = 0.5f,
         useSmartMerging: Boolean = true,
-    ): PolicyDeidentificationResult {
+    ): PolicyDeidentificationResult = leased {
         val profile = PolicyProfiles.load(policy)
-        val entities = extractPii(text, confidenceThreshold, useSmartMerging)
+        val entities = extractPiiLeased(text, confidenceThreshold, useSmartMerging)
         val result = deidentifyEngine.deidentify(text, entities, profile)
+        // After policy application: a cancelled caller never receives the result.
+        checkpoint()
         SafeLog.record(
             SafeLogOperation.DEIDENTIFY,
             entities.map { it.toSafeLogSpan() },
         )
-        return result
+        result
     }
 
+    /**
+     * Close idempotently.
+     *
+     * New operations fail with [OpenMedRuntimeFailureReason.RUNTIME_CLOSED].
+     * The classifier and its native session are closed once in-flight
+     * operations finish, never while one is running.
+     */
     override fun close() {
-        classifier.close()
+        gate.close()
+    }
+
+    private suspend fun analyzeTextLeased(
+        text: String,
+        confidenceThreshold: Float,
+    ): List<EntityPrediction> {
+        require(confidenceThreshold in 0.0f..1.0f) {
+            "confidenceThreshold must be between 0.0 and 1.0"
+        }
+        // Before tokenization and native inference.
+        checkpoint()
+        val predictions = classifier.predict(text)
+        // Immediately after native inference.
+        checkpoint()
+        val entities = decoder.decode(predictions, text)
+            .filter { it.confidence >= confidenceThreshold }
+            .sortedByOffset()
+        checkpoint()
+        SafeLog.record(
+            SafeLogOperation.ANALYZE_TEXT,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return entities
+    }
+
+    private suspend fun extractPiiLeased(
+        text: String,
+        confidenceThreshold: Float,
+        useSmartMerging: Boolean,
+    ): List<EntityPrediction> {
+        val repaired = SpanRepair.repair(
+            analyzeTextLeased(text, confidenceThreshold),
+            text,
+        )
+        checkpoint()
+        val entities = if (useSmartMerging) {
+            merger.merge(repaired, text)
+        } else {
+            repaired.sortedByOffset()
+        }
+        checkpoint()
+        SafeLog.record(
+            SafeLogOperation.EXTRACT_PII,
+            entities.map { it.toSafeLogSpan() },
+        )
+        return entities
+    }
+
+    private inline fun <T> leased(block: () -> T): T = gate.withLease(
+        onClosed = {
+            throw OpenMedRuntimeException(OpenMedRuntimeFailureReason.RUNTIME_CLOSED)
+        },
+        block = block,
+    )
+
+    private suspend fun checkpoint() {
+        currentCoroutineContext().ensureActive()
     }
 
     internal fun makeTokenChunks(
@@ -230,14 +301,7 @@ class OpenMedKit(
             modelDirectory: File,
             variant: String = "int8",
         ): OpenMedKit {
-            val modelFileName = when (variant.lowercase()) {
-                "int8" -> "model_int8.onnx"
-                "fp32" -> "model.onnx"
-                "fp16" -> "model_fp16.onnx"
-                else -> throw IllegalArgumentException(
-                    "variant must be int8, fp32, or fp16",
-                )
-            }
+            val modelFileName = modelFileNameForVariant(variant)
             return OpenMedKit(
                 OpenMedBackend(
                     modelDirectory = modelDirectory,
@@ -245,6 +309,16 @@ class OpenMedKit(
                 ),
             )
         }
+
+        internal fun modelFileNameForVariant(variant: String): String =
+            when (variant.lowercase()) {
+                "int8" -> "model_int8.onnx"
+                "fp32" -> "model.onnx"
+                "fp16" -> "model_fp16.onnx"
+                else -> throw IllegalArgumentException(
+                    "variant must be int8, fp32, or fp16",
+                )
+            }
 
         internal fun deduplicateOverlappingEntities(
             entities: List<EntityPrediction>,

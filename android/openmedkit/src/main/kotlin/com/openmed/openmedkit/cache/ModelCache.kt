@@ -10,9 +10,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Offline-first app-private cache for downloaded OpenMed model artifacts.
@@ -37,6 +39,8 @@ class ModelCache(
         rootDirectory.mkdirs()
     }
 
+    private val leaseCounts = mutableMapOf<String, Int>()
+
     @Synchronized
     fun isAvailable(repoId: String): Boolean =
         isAvailable(repoId, expectedIntegrityHash = null)
@@ -59,15 +63,62 @@ class ModelCache(
         }
     }
 
+    /**
+     * Delete a cached model unless an open session holds a lease on it.
+     *
+     * @param repoId Repository identifier of the cached model.
+     * @return True when the model existed and was deleted; false when it was
+     * missing or is leased (leased models are never deleted underneath a run).
+     */
     @Synchronized
     fun evict(repoId: String): Boolean {
         val directory = modelDirectory(repoId)
+        if (isLeasedLocked(directory)) {
+            return false
+        }
         val existed = directory.exists()
         if (existed) {
             directory.deleteRecursively()
         }
         return existed
     }
+
+    /**
+     * Lease a verified cached model so it cannot be evicted while in use.
+     *
+     * The entry's integrity metadata is re-checked on every call. Budget
+     * trimming and [evict] skip leased models until every lease is closed.
+     *
+     * @param entry Catalog entry whose integrity hash must match.
+     * @return A lease, or null when no verified copy is cached.
+     */
+    @Synchronized
+    fun acquireLease(entry: ModelCatalogEntry): ModelCacheLease? {
+        if (!isAvailable(entry.repoId, entry.reproducibilityHash)) {
+            return null
+        }
+        val directory = modelDirectory(entry.repoId)
+        val key = directory.name
+        leaseCounts[key] = (leaseCounts[key] ?: 0) + 1
+        return ModelCacheLease(directory) { releaseLease(key) }
+    }
+
+    /** Whether an open lease currently protects [repoId] from eviction. */
+    @Synchronized
+    fun isLeased(repoId: String): Boolean = isLeasedLocked(modelDirectory(repoId))
+
+    @Synchronized
+    private fun releaseLease(key: String) {
+        val remaining = (leaseCounts[key] ?: return) - 1
+        if (remaining <= 0) {
+            leaseCounts.remove(key)
+        } else {
+            leaseCounts[key] = remaining
+        }
+    }
+
+    private fun isLeasedLocked(directory: File): Boolean =
+        (leaseCounts[directory.name] ?: 0) > 0
 
     fun modelDirectory(repoId: String): File =
         File(rootDirectory, cacheKey(repoId))
@@ -194,7 +245,10 @@ class ModelCache(
             if (totalSizeBytes <= cacheBudgetBytes) {
                 return
             }
-            if (readyDirectory.metadata.repoId == protectedRepoId) {
+            if (
+                readyDirectory.metadata.repoId == protectedRepoId ||
+                isLeasedLocked(readyDirectory.directory)
+            ) {
                 continue
             }
             val directorySizeBytes = payloadSizeBytes(readyDirectory.directory)
@@ -306,6 +360,31 @@ class ModelCache(
 
         private val json = Json {
             ignoreUnknownKeys = true
+        }
+    }
+}
+
+/**
+ * Open lease on a verified cached model directory.
+ *
+ * While any lease is open, [ModelCache.evict] and budget trimming leave the
+ * directory in place. Closing is idempotent.
+ *
+ * @property directory The leased model directory.
+ */
+class ModelCacheLease internal constructor(
+    val directory: File,
+    private val onClose: () -> Unit,
+) : Closeable {
+    private val open = AtomicBoolean(true)
+
+    /** Whether this lease is still open. */
+    val isOpen: Boolean
+        get() = open.get()
+
+    override fun close() {
+        if (open.compareAndSet(true, false)) {
+            onClose()
         }
     }
 }

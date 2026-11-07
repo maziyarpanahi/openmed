@@ -14,72 +14,64 @@ import com.facebook.react.uimanager.ViewManager
 import com.openmed.openmedkit.DeidentifiedSpanAction
 import com.openmed.openmedkit.EntityPrediction
 import com.openmed.openmedkit.OpenMedBackend
+import com.openmed.openmedkit.OpenMedHostScope
 import com.openmed.openmedkit.OpenMedKit
+import com.openmed.openmedkit.OpenMedRuntimeException
+import com.openmed.openmedkit.OpenMedSessionFactory
+import com.openmed.openmedkit.OpenMedTrimMemorySource
 import java.io.File
 import java.security.SecureRandom
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 
 @ReactModule(name = OpenMedKitRnModule.NAME)
 class OpenMedKitRnModule(
     reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var runtime: OpenMedKit? = null
-    private var loadedCacheKey: String? = null
+    // Scope, runtime, and trim-memory registration live exactly as long as
+    // this module; invalidate() cancels the scope and releases sessions.
+    private val host = OpenMedHostScope(
+        lifecycleSources = listOf(OpenMedTrimMemorySource(reactContext)),
+    )
 
     override fun getName(): String = NAME
+
+    override fun invalidate() {
+        host.invalidate()
+        super.invalidate()
+    }
 
     @ReactMethod
     fun loadModel(
         options: ReadableMap,
         promise: Promise,
     ) {
-        scope.launch {
-            try {
-                val modelPath = options.requiredString("modelPath")
-                val backendName = options.string("backend") ?: "onnx"
-                val cacheKey = options.string("cacheKey") ?: "$backendName:$modelPath"
+        launchOperation(promise, "openmedkit_load_failed") {
+            val modelPath = options.requiredString("modelPath")
+            val backendName = options.string("backend") ?: "onnx"
+            val cacheKey = options.string("cacheKey") ?: "$backendName:$modelPath"
+            require(backendName == "onnx") { "unsupported OpenMedKit Android backend" }
+            val id2Label = readId2Label(options.string("id2LabelPath"))
 
-                if (loadedCacheKey == cacheKey && runtime != null) {
-                    promise.resolve(
-                        Arguments.createMap().apply {
-                            putString("cacheKey", cacheKey)
-                            putString("modelPath", modelPath)
-                            putString("backend", backendName)
-                            putString("platform", "android")
-                            putBoolean("loaded", false)
-                        },
-                    )
-                    return@launch
-                }
-
-                require(backendName == "onnx") {
-                    "unsupported OpenMedKit Android backend: $backendName"
-                }
-                runtime = OpenMedKit(
+            val loaded = host.load(cacheKey) {
+                OpenMedKit(
                     OpenMedBackend(
                         modelDirectory = File(modelPath),
-                        id2Label = readId2Label(options.string("id2LabelPath")),
+                        id2Label = id2Label,
                     ),
                 )
-                loadedCacheKey = cacheKey
-                promise.resolve(
-                    Arguments.createMap().apply {
-                        putString("cacheKey", cacheKey)
-                        putString("modelPath", modelPath)
-                        putString("backend", backendName)
-                        putString("platform", "android")
-                        putBoolean("loaded", true)
-                    },
-                )
-            } catch (error: Throwable) {
-                promise.reject("openmedkit_load_failed", error.message, error)
+            }
+            Arguments.createMap().apply {
+                putString("cacheKey", cacheKey)
+                putString("modelPath", modelPath)
+                putString("backend", backendName)
+                putString("platform", "android")
+                putBoolean("loaded", loaded)
             }
         }
     }
@@ -90,25 +82,20 @@ class OpenMedKitRnModule(
         options: ReadableMap?,
         promise: Promise,
     ) {
-        scope.launch {
-            try {
-                val bridgeOptions = BridgeOptions(options)
-                val entities = requireRuntime().analyzeText(
-                    text = text,
-                    confidenceThreshold = bridgeOptions.confidenceThreshold,
-                )
-                promise.resolve(
-                    entityArray(
-                        entities = entities,
-                        text = text,
-                        options = bridgeOptions,
-                        action = "keep",
-                        replacement = null,
-                    ),
-                )
-            } catch (error: Throwable) {
-                promise.reject("openmedkit_analyze_failed", error.message, error)
-            }
+        launchOperation(promise, "openmedkit_analyze_failed") {
+            val bridgeOptions = BridgeOptions(options)
+            val entities = host.requireRuntime().analyzeText(
+                text = text,
+                confidenceThreshold = bridgeOptions.confidenceThreshold,
+            )
+            currentCoroutineContext().ensureActive()
+            entityArray(
+                entities = entities,
+                text = text,
+                options = bridgeOptions,
+                action = "keep",
+                replacement = null,
+            )
         }
     }
 
@@ -118,26 +105,21 @@ class OpenMedKitRnModule(
         options: ReadableMap?,
         promise: Promise,
     ) {
-        scope.launch {
-            try {
-                val bridgeOptions = BridgeOptions(options)
-                val entities = requireRuntime().extractPii(
-                    text = text,
-                    confidenceThreshold = bridgeOptions.confidenceThreshold,
-                    useSmartMerging = bridgeOptions.useSmartMerging,
-                )
-                promise.resolve(
-                    entityArray(
-                        entities = entities,
-                        text = text,
-                        options = bridgeOptions,
-                        action = "keep",
-                        replacement = null,
-                    ),
-                )
-            } catch (error: Throwable) {
-                promise.reject("openmedkit_extract_failed", error.message, error)
-            }
+        launchOperation(promise, "openmedkit_extract_failed") {
+            val bridgeOptions = BridgeOptions(options)
+            val entities = host.requireRuntime().extractPii(
+                text = text,
+                confidenceThreshold = bridgeOptions.confidenceThreshold,
+                useSmartMerging = bridgeOptions.useSmartMerging,
+            )
+            currentCoroutineContext().ensureActive()
+            entityArray(
+                entities = entities,
+                text = text,
+                options = bridgeOptions,
+                action = "keep",
+                replacement = null,
+            )
         }
     }
 
@@ -147,37 +129,115 @@ class OpenMedKitRnModule(
         options: ReadableMap?,
         promise: Promise,
     ) {
-        scope.launch {
-            try {
-                val bridgeOptions = BridgeOptions(options)
-                val result = requireRuntime().deidentify(
-                    text = text,
-                    policy = bridgeOptions.policy,
-                    confidenceThreshold = bridgeOptions.confidenceThreshold,
-                    useSmartMerging = bridgeOptions.useSmartMerging,
+        launchOperation(promise, "openmedkit_deidentify_failed") {
+            val bridgeOptions = BridgeOptions(options)
+            val result = host.requireRuntime().deidentify(
+                text = text,
+                policy = bridgeOptions.policy,
+                confidenceThreshold = bridgeOptions.confidenceThreshold,
+                useSmartMerging = bridgeOptions.useSmartMerging,
+            )
+            currentCoroutineContext().ensureActive()
+            Arguments.createMap().apply {
+                putString("text", text)
+                putString("deidentifiedText", result.redactedText)
+                putArray(
+                    "spans",
+                    actionArray(
+                        actions = result.actions,
+                        text = text,
+                        options = bridgeOptions,
+                    ),
                 )
-                promise.resolve(
-                    Arguments.createMap().apply {
-                        putString("text", text)
-                        putString("deidentifiedText", result.redactedText)
-                        putArray(
-                            "spans",
-                            actionArray(
-                                actions = result.actions,
-                                text = text,
-                                options = bridgeOptions,
-                            ),
-                        )
-                    },
-                )
-            } catch (error: Throwable) {
-                promise.reject("openmedkit_deidentify_failed", error.message, error)
             }
         }
     }
 
-    private fun requireRuntime(): OpenMedKit =
-        runtime ?: throw IllegalStateException("OpenMedKit model is not loaded")
+    /**
+     * Run [operation] in the module-owned scope and settle [promise] once.
+     *
+     * Results are resolved only while the scope is active, so a cancelled or
+     * invalidated operation never resolves with a late result. Failures are
+     * rejected with value-free messages; the underlying throwable is never
+     * forwarded because its message may contain paths or input text.
+     */
+    private fun launchOperation(
+        promise: Promise,
+        failureCode: String,
+        operation: suspend () -> Any?,
+    ) {
+        val settled = AtomicBoolean(false)
+        val job = host.launch {
+            try {
+                val value = operation()
+                currentCoroutineContext().ensureActive()
+                if (settled.compareAndSet(false, true)) {
+                    promise.resolve(value)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                if (settled.compareAndSet(false, true)) {
+                    rejectValueFree(promise, failureCode, error)
+                }
+            }
+        }
+        job.invokeOnCompletion { cause ->
+            if (cause != null && settled.compareAndSet(false, true)) {
+                try {
+                    promise.reject(
+                        CANCELLED_CODE,
+                        "OpenMedKit operation was cancelled",
+                        failureInfo(reason = "cancelled", retry = null),
+                    )
+                } catch (_: RuntimeException) {
+                    // The bridge may already be torn down; nothing to report.
+                }
+            }
+        }
+    }
+
+    private fun rejectValueFree(
+        promise: Promise,
+        failureCode: String,
+        error: Throwable,
+    ) {
+        if (error is OpenMedRuntimeException) {
+            promise.reject(
+                failureCode,
+                "OpenMedKit runtime: ${error.code}",
+                failureInfo(
+                    reason = error.code,
+                    retry = error.retryGuidance.name,
+                    retryAfterMillis = error.retryAfterMillis,
+                ),
+            )
+        } else {
+            promise.reject(
+                failureCode,
+                "OpenMedKit operation failed",
+                failureInfo(reason = "operation_failed", retry = null),
+            )
+        }
+    }
+
+    private fun failureInfo(
+        reason: String,
+        retry: String?,
+        retryAfterMillis: Long? = null,
+    ): WritableMap = Arguments.createMap().apply {
+        putString("reason", reason)
+        if (retry == null) {
+            putNull("retry")
+        } else {
+            putString("retry", retry)
+        }
+        if (retryAfterMillis == null) {
+            putNull("retryAfterMillis")
+        } else {
+            putDouble("retryAfterMillis", retryAfterMillis.toDouble())
+        }
+    }
 
     private fun entityArray(
         entities: List<EntityPrediction>,
@@ -266,7 +326,9 @@ class OpenMedKitRnModule(
             }
             putNull("reversible_id")
             putNull("section")
-            putMap("metadata", options.metadata)
+            // putMap consumes a native map, so every span gets its own instance;
+            // the JS layer merges caller metadata into each span.
+            putMap("metadata", Arguments.createMap())
         }
     }
 
@@ -315,6 +377,7 @@ class OpenMedKitRnModule(
 
     companion object {
         const val NAME = "OpenMedKitRN"
+        private const val CANCELLED_CODE = "openmedkit_cancelled"
 
         private val clinicalConceptLabels = setOf(
             "MICROORGANISM",
@@ -416,7 +479,6 @@ private class BridgeOptions(options: ReadableMap?) {
         } else {
             null
         }
-    val metadata: WritableMap = Arguments.createMap()
     val policy: String =
         if (options?.hasKey("policy") == true && !options.isNull("policy")) {
             options.getString("policy") ?: "hipaa_safe_harbor"
