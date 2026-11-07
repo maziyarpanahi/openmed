@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .asset_limits import LimitProfile
 from .base import ExtractedDocument, SourceSpan
 from .documents_pdf import (
     ProjectedRectangle,
@@ -25,6 +26,7 @@ from .documents_pdf import (
     extract_pdf,
     project_text_spans,
 )
+from .redaction_admission import check_limit
 
 _PDFPLUMBER_HINT = 'Install with: pip install "openmed[multimodal]".'
 _LINE_TOLERANCE = 2.0
@@ -253,6 +255,8 @@ class PdfRegions:
 def extract_pdf_regions(
     path: str | Path | BinaryIO,
     document: ExtractedDocument | None = None,
+    *,
+    _limit_profile: LimitProfile | None = None,
 ) -> PdfRegions:
     """Extract table cells and caption lines from ``path``.
 
@@ -271,8 +275,9 @@ def extract_pdf_regions(
     tables: list[TableRegion] = []
 
     with pdfplumber.open(path) as pdf:
-        pages = tuple(getattr(pdf, "pages", ()))
-        for page_index, page in enumerate(pages):
+        for page_index, page in enumerate(getattr(pdf, "pages", ())):
+            if _limit_profile is not None:
+                check_limit(_limit_profile, "pages", page_index + 1)
             page_spans = tuple(
                 span for span in flat_document.spans if span.page == page_index
             )

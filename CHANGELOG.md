@@ -197,6 +197,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
+
 - Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
   archive-safety limits before parsing, verify actual member sizes with bounded
   decompression, and report archive failures using content-free codes/counts
