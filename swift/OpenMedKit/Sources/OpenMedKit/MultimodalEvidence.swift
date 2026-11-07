@@ -106,6 +106,22 @@ public enum MultimodalAbstention: String, Sendable, CaseIterable {
     case phiUncertainty = "phi_uncertainty"
     case speakerUncertainty = "speaker_uncertainty"
     case temporalInstability = "temporal_instability"
+    case consentUnavailable = "consent_unavailable"
+    case consentWithdrawn = "consent_withdrawn"
+    case captureInterrupted = "capture_interrupted"
+    case languageUnsupported = "language_unsupported"
+    case languageUncertain = "language_uncertain"
+    case policyRefused = "policy_refused"
+
+    fileprivate var wireVersion: String {
+        switch self {
+        case .consentUnavailable, .consentWithdrawn, .captureInterrupted,
+            .languageUnsupported, .languageUncertain, .policyRefused:
+            return "openmed.multimodal.provider_result.v2"
+        default:
+            return "openmed.multimodal.provider_result.v1"
+        }
+    }
 }
 
 public struct MultimodalProviderResult: Sendable, Equatable {
@@ -455,7 +471,8 @@ private enum Wire {
 
     static func provider(_ p: [String: Any]) throws -> MultimodalProviderResult {
         _ = try object(p, "schema_version provider_id model_id input_digest output_digest outcome abstention_code duration_f64 count_metadata")
-        try check(p["schema_version"] as? String == "openmed.multimodal.provider_result.v1", .schema)
+        let version = p["schema_version"] as? String
+        try check(version == "openmed.multimodal.provider_result.v1" || version == "openmed.multimodal.provider_result.v2", .schema)
         let providerID = try identifier(p["provider_id"])
         let modelID = try identifier(p["model_id"])
         let input = try hex(p["input_digest"])
@@ -479,6 +496,7 @@ private enum Wire {
             try check(p["abstention_code"] is NSNull)
             abstention = nil
         }
+        try check(version == (abstention?.wireVersion ?? "openmed.multimodal.provider_result.v1"), .schema)
         guard let rawCounts = p["count_metadata"] as? [String: Any] else { throw MultimodalContractRefusal.invalid }
         let allowed = Set(["detection_count", "frame_count", "input_bytes", "input_items", "output_items", "page_count", "sample_count", "segment_count", "token_count"])
         try check(Set(rawCounts.keys).isSubset(of: allowed))
