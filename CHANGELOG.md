@@ -269,6 +269,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decompression, and report archive failures using content-free codes/counts
   (#3812).
 
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
