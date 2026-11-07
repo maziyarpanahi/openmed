@@ -63,7 +63,7 @@ def test_unsupported_family_keeps_message_and_gains_reason_code() -> None:
         resolve_supported_model_type(config)
     assert error.value.reason is ExportReason.UNSUPPORTED_FAMILY
     assert "Supported families: bert, distilbert" in str(error.value)
-    assert str(error.value).endswith("deberta-v2, modernbert.")
+    assert str(error.value).endswith("deberta-v2, modernbert, openai-privacy-filter.")
 
 
 def _install_stubs(

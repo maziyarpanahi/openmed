@@ -16,6 +16,7 @@ MODEL_FILENAMES = {
     "int8": "model_int8.onnx",
 }
 DEFAULT_VARIANT_ORDER = ("int8", "fp32", "fp16")
+DECODER_PROFILE_FILENAME = "openmed-decoder-profile.json"
 
 
 @dataclass(frozen=True)
@@ -189,11 +190,19 @@ class OnnxModel:
         self.config = _read_json(self.artifact_dir / "config.json")
         self.id2label = _read_id2label(self.artifact_dir, self.config)
         # Qualified exports (for example ModernBERT) reject unqualified
-        # variants and providers before a runtime session exists.
+        # variants, providers, unknown families, and stale adapter versions
+        # before a runtime session exists.
         self.qualification = _check_qualified_artifact(
             self.artifact_dir,
             self.model_path,
             providers=providers,
+        )
+        # Families with a canonical decoder (Privacy Filter) ship a decoder
+        # profile; predictions then use that decoder instead of argmax.
+        self.decoder_profile = _load_bundle_decoder_profile(
+            self.artifact_dir,
+            self.id2label,
+            expected_sha256=(self.qualification or {}).get("decoder_profile_sha256"),
         )
         np, ort, auto_tokenizer = _load_runtime_dependencies()
         self._np = np
@@ -526,6 +535,7 @@ class OnnxModel:
                     self.id2label,
                     text,
                     threshold=threshold,
+                    decoder_profile=self.decoder_profile,
                 )
             results.append(
                 OnnxPrediction(
@@ -602,11 +612,14 @@ def _check_qualified_artifact(
         check_qualified_request,
         load_qualification_report,
     )
+    from openmed.torch.export_adapters import require_registered_adapter
 
     report_path = artifact_dir / EXPORT_QUALIFICATION_FILENAME
     if not report_path.is_file():
         return None
     report = load_qualification_report(report_path)
+    # Only families with a reviewed adapter at the recorded version may load.
+    require_registered_adapter(report.get("family"), report.get("adapter_version"))
     try:
         relative = model_path.resolve().relative_to(artifact_dir.resolve())
         artifact = relative.as_posix()
@@ -619,12 +632,45 @@ def _check_qualified_artifact(
         providers=list(providers),
     )
     contract = report.get("io_contract") or {}
-    return {
+    summary = {
         "family": report.get("family"),
         "variant": variant.get("name"),
         "claim": variant.get("claim"),
         "max_sequence_length": contract.get("max_sequence_length"),
     }
+    decoder = report.get("decoder")
+    if isinstance(decoder, Mapping) and decoder.get("sha256"):
+        summary["decoder_profile_sha256"] = decoder["sha256"]
+    return summary
+
+
+def _load_bundle_decoder_profile(
+    artifact_dir: Path,
+    id2label: Mapping[int, str],
+    *,
+    expected_sha256: str | None = None,
+) -> dict[str, Any] | None:
+    """Load and verify a bundled decoder profile, when the bundle has one."""
+
+    from openmed.eval.export_qualification import (
+        ExportQualificationError,
+        ExportReason,
+        label_map_identity,
+    )
+
+    profile_path = artifact_dir / DECODER_PROFILE_FILENAME
+    if not profile_path.is_file():
+        if expected_sha256:
+            raise ExportQualificationError(ExportReason.ARTIFACT_MISSING)
+        return None
+    from openmed.torch.privacy_filter_export import load_decoder_profile
+
+    profile = load_decoder_profile(profile_path)
+    if expected_sha256 and profile.get("sha256") != expected_sha256:
+        raise ExportQualificationError(ExportReason.ARTIFACT_DIGEST_MISMATCH)
+    if label_map_identity(id2label)["sha256"] != profile.get("label_map_sha256"):
+        raise ExportQualificationError(ExportReason.LABEL_MAP_MISMATCH)
+    return profile
 
 
 def load_onnx_model(
@@ -842,7 +888,28 @@ def _decode_entities(
     text: str,
     *,
     threshold: float,
+    decoder_profile: Mapping[str, Any] | None = None,
 ) -> list[OnnxEntity]:
+    if decoder_profile is not None:
+        from openmed.torch.privacy_filter_export import decode_privacy_filter_logits
+
+        return [
+            OnnxEntity(
+                label=str(span["label"]),
+                score=float(span["score"]),
+                start=int(span["start"]),
+                end=int(span["end"]),
+                text=text[int(span["start"]) : int(span["end"])],
+            )
+            for span in decode_privacy_filter_logits(
+                logits.tolist(),
+                [(int(item[0]), int(item[1])) for item in offsets],
+                text,
+                id2label=id2label,
+                biases=decoder_profile["viterbi"]["biases"],
+                confidence_threshold=threshold,
+            )
+        ]
     shifted = logits - logits.max(axis=-1, keepdims=True)
     probabilities = np.exp(shifted)
     probabilities /= probabilities.sum(axis=-1, keepdims=True)

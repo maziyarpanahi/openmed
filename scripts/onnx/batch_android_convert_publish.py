@@ -5,6 +5,13 @@ The runner consumes the canonical ``models.jsonl`` manifest, selects PyTorch
 token-classification source checkpoints, converts each with the Android ONNX
 profile, and optionally uploads the resulting artifact repositories as private
 Hugging Face model repos.
+
+Privacy Filter checkpoints are excluded unless their declaration in
+``openmed.torch.privacy_filter_export.PRIVACY_FILTER_CHECKPOINTS`` pins a
+reviewed revision and published qualification evidence for every Android
+variant the batch emits. Included checkpoints convert at that pinned revision
+and still pass the export qualification gates, so an unqualified variant can
+never be published.
 """
 
 from __future__ import annotations
@@ -26,6 +33,10 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from openmed.core.hf_publish import publish_artifact, target_repo_id  # noqa: E402
 from openmed.onnx.convert import convert  # noqa: E402
+from openmed.torch.privacy_filter_export import (  # noqa: E402
+    PrivacyFilterCheckpoint,
+    privacy_filter_checkpoint,
+)
 
 DEFAULT_MANIFEST = Path("models.jsonl")
 DEFAULT_OUTPUT_ROOT = Path("dist/onnx-android")
@@ -45,6 +56,12 @@ DERIVED_FORMAT_PREFIXES = ("mlx", "coreml", "onnx", "tflite")
 ANDROID_FORMAT_PREFIXES = ("onnx", "tflite")
 UNSUPPORTED_ANDROID_ARCHITECTURES = {"gliner", "privacy-filter"}
 UNSUPPORTED_ANDROID_REPO_PREFIXES = ("OpenMed/privacy-filter-",)
+PRIVACY_FILTER_ARCHITECTURES = {"privacy-filter", "openai-privacy-filter"}
+PRIVACY_FILTER_REPO_PREFIXES = ("openmed/privacy-filter", "openai/privacy-filter")
+# Variants the Android profile emits; a Privacy Filter source is batched only
+# when every one of them has published qualification evidence.
+ANDROID_PRIVACY_FILTER_VARIANTS = ("onnx-android-fp32", "onnx-android-fp16")
+ANDROID_PRIVACY_FILTER_INT8_VARIANTS = ("onnx-int8",)
 DERIVED_REPO_SUFFIXES = (
     "-mlx",
     "-mlx-8bit",
@@ -87,6 +104,39 @@ def normalize_token(value: object) -> str:
     return str(value).strip().lower().replace("_", "-")
 
 
+def is_privacy_filter_row(row: Mapping[str, Any]) -> bool:
+    """Return whether a manifest row is a Privacy Filter checkpoint."""
+
+    architecture = normalize_token(row.get("architecture") or "")
+    repo_id = str(row.get("repo_id") or "").strip().lower()
+    if architecture in PRIVACY_FILTER_ARCHITECTURES:
+        return True
+    return repo_id.startswith(PRIVACY_FILTER_REPO_PREFIXES)
+
+
+def qualified_privacy_filter_source(
+    repo_id: str,
+    *,
+    include_int8: bool = True,
+) -> PrivacyFilterCheckpoint | None:
+    """Return the declared checkpoint if its Android variants are qualified.
+
+    A checkpoint qualifies only when its declaration pins a reviewed revision
+    and lists published qualification evidence for every Android variant the
+    batch would emit (``onnx-int8`` too unless *include_int8* is false).
+    """
+
+    checkpoint = privacy_filter_checkpoint(repo_id)
+    if checkpoint is None:
+        return None
+    required = ANDROID_PRIVACY_FILTER_VARIANTS + (
+        ANDROID_PRIVACY_FILTER_INT8_VARIANTS if include_int8 else ()
+    )
+    if not checkpoint.qualified_for("onnx", required):
+        return None
+    return checkpoint
+
+
 def load_manifest_rows(path: Path) -> list[dict[str, Any]]:
     """Load manifest JSONL rows from *path*."""
 
@@ -112,17 +162,22 @@ def is_android_source_candidate(
     *,
     include_derived: bool = False,
     include_existing_android: bool = False,
+    include_int8: bool = True,
 ) -> bool:
     """Return whether *row* should enter the Android ONNX batch."""
 
     repo_id = str(row.get("repo_id") or "").strip()
     if not repo_id:
         return False
-    if repo_id.startswith(UNSUPPORTED_ANDROID_REPO_PREFIXES):
-        return False
     if normalize_token(row.get("task")) != "token-classification":
         return False
-    if normalize_token(row.get("architecture")) in UNSUPPORTED_ANDROID_ARCHITECTURES:
+    if is_privacy_filter_row(row):
+        # Only declared checkpoints with qualified Android variants pass.
+        if qualified_privacy_filter_source(repo_id, include_int8=include_int8) is None:
+            return False
+    elif repo_id.startswith(UNSUPPORTED_ANDROID_REPO_PREFIXES):
+        return False
+    elif normalize_token(row.get("architecture")) in UNSUPPORTED_ANDROID_ARCHITECTURES:
         return False
 
     formats = [normalize_token(item) for item in row.get("formats") or []]
@@ -153,6 +208,7 @@ def select_candidates(
     family_filters: Sequence[str] = (),
     start_after: str | None = None,
     limit: int | None = None,
+    include_int8: bool = True,
 ) -> list[Candidate]:
     """Return ordered conversion candidates from manifest *rows*."""
 
@@ -169,6 +225,7 @@ def select_candidates(
             row,
             include_derived=include_derived,
             include_existing_android=include_existing_android,
+            include_int8=include_int8,
         ):
             continue
         repo_id = str(row["repo_id"])
@@ -252,6 +309,7 @@ def run(
         family_filters=args.family,
         start_after=args.start_after,
         limit=args.limit,
+        include_int8=not args.no_int8,
     )
 
     final_statuses = PUBLISH_FINAL_STATUSES if args.publish_to_hub else FINAL_STATUSES
@@ -319,6 +377,9 @@ def run(
                     max_seq_length=args.max_seq_length,
                     eval_suite_path=args.eval_suite,
                     publish_to_hub=False,
+                    **_privacy_filter_convert_options(
+                        candidate, include_int8=not args.no_int8
+                    ),
                 )
             event = {
                 **base_event,
@@ -448,6 +509,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     return run(build_parser().parse_args(argv))
 
 
+def _privacy_filter_convert_options(
+    candidate: Candidate,
+    *,
+    include_int8: bool,
+) -> dict[str, Any]:
+    """Return the pinned-revision options for a qualified Privacy Filter."""
+
+    if not is_privacy_filter_row(candidate.row):
+        return {}
+    checkpoint = qualified_privacy_filter_source(
+        candidate.repo_id, include_int8=include_int8
+    )
+    if checkpoint is None:  # pragma: no cover - selection already excludes it
+        raise ValueError("Privacy Filter source is not qualified for Android")
+    return {"expected_source_revision": checkpoint.revision}
+
+
 def _repo_matches(repo_id: str, filters: set[str]) -> bool:
     return repo_id in filters or repo_id.rsplit("/", 1)[-1] in filters
 
@@ -486,6 +564,14 @@ def _load_existing_artifact_result(
     if ANDROID_FORMAT not in formats:
         return None
     if include_int8 and "onnx-int8" not in formats:
+        return None
+    qualification = manifest.get("qualification")
+    if qualification is not None and (
+        not isinstance(qualification, Mapping)
+        or qualification.get("passed") is not True
+    ):
+        # Adapter families (Privacy Filter, ModernBERT) never reuse artifacts
+        # whose export qualification did not pass.
         return None
 
     required_files = {

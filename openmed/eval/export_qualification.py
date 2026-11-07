@@ -15,8 +15,11 @@ family or a runtime:
 - identity digests for the source revision, tokenizer, label map, and artifact
   files, plus offline verification of a written report.
 
-Family adapters (ModernBERT today; Longformer, Privacy Filter, and GLiNER
-later) supply the runners. A runner receives one padded feed such as
+Family adapters (ModernBERT and Privacy Filter today; Longformer and GLiNER
+later) supply the runners and, through :class:`QualificationBinding`, an
+optional canonical span decoder, decoder profile, and default suite. Every
+variant also passes span-integrity and per-language recall checks. A runner
+receives one padded feed such as
 ``{"input_ids": array[1, S], "attention_mask": array[1, S]}`` and returns
 logits shaped ``[1, S, num_labels]``. Reports carry only revisions, versions,
 digests, dimensions, counts, aggregate metrics, timings, and reason codes:
@@ -130,6 +133,11 @@ class ExportReason(StrEnum):
     DIRECT_IDENTIFIER_RECALL_FAILED = "direct_identifier_recall_failed"
     CRITICAL_LEAKAGE_DETECTED = "critical_leakage_detected"
     QUANTIZATION_DELTA_EXCEEDED = "quantization_delta_exceeded"
+    UNSUPPORTED_CONFIGURATION = "unsupported_configuration"
+    UNSUPPORTED_REMOTE_CODE = "unsupported_remote_code"
+    ADAPTER_VERSION_MISMATCH = "adapter_version_mismatch"
+    SPAN_INTEGRITY_FAILED = "span_integrity_failed"
+    MULTILINGUAL_RECALL_FAILED = "multilingual_recall_failed"
 
 
 _REASON_MESSAGES: Mapping[ExportReason, str] = {
@@ -170,6 +178,21 @@ _REASON_MESSAGES: Mapping[ExportReason, str] = {
     ),
     ExportReason.QUANTIZATION_DELTA_EXCEEDED: (
         "quantized recall delta exceeds the documented limit"
+    ),
+    ExportReason.UNSUPPORTED_CONFIGURATION: (
+        "model configuration shape is not covered by the family adapter"
+    ),
+    ExportReason.UNSUPPORTED_REMOTE_CODE: (
+        "checkpoint requires repository code; only reviewed adapters may load"
+    ),
+    ExportReason.ADAPTER_VERSION_MISMATCH: (
+        "artifact was qualified by a different family adapter version"
+    ),
+    ExportReason.SPAN_INTEGRITY_FAILED: (
+        "decoded spans are out of bounds, empty, or overlapping"
+    ),
+    ExportReason.MULTILINGUAL_RECALL_FAILED: (
+        "direct-identifier recall fell for at least one suite language"
     ),
 }
 
@@ -460,6 +483,32 @@ class EncodedFixture:
 
 
 LogitRunner = Callable[[Mapping[str, Any]], Any]
+# A family span decoder receives ``[S, num_labels]`` logit rows plus keyword
+# arguments ``offsets``, ``attention``, ``id2label``, and ``text`` and returns
+# ``{"label", "start", "end"}`` spans. Text is passed in memory only so a
+# family can apply its canonical span refinement; it is never serialized.
+SpanDecoder = Callable[..., list[dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class QualificationBinding:
+    """Family-specific decoding and suite options for qualification.
+
+    Attributes:
+        decoder_profile: Value-free decoder and threshold profile recorded in
+            the report and manifests, or ``None`` for the generic decoder.
+        span_decoder: Family decoder used for both the reference and every
+            candidate, or ``None`` for :func:`decode_token_spans`.
+        fixtures_path: Default synthetic suite for the family when the caller
+            does not supply one.
+        gate_languages: Whether per-language direct-identifier recall gates
+            the variant in addition to the suite-wide gate.
+    """
+
+    decoder_profile: Mapping[str, Any] | None = None
+    span_decoder: SpanDecoder | None = None
+    fixtures_path: Path | None = None
+    gate_languages: bool = False
 
 
 @dataclass(frozen=True)
@@ -513,6 +562,8 @@ class VariantQualification:
     latency_ms: Mapping[str, Any] = field(default_factory=dict)
     process_peak_rss_bytes: int | None = None
     evidence: Mapping[str, Any] = field(default_factory=dict)
+    span_integrity: Mapping[str, Any] = field(default_factory=dict)
+    multilingual_recall: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def claim(self) -> str:
@@ -551,6 +602,8 @@ class VariantQualification:
             "latency_ms": dict(self.latency_ms),
             "process_peak_rss_bytes": self.process_peak_rss_bytes,
             "evidence": dict(self.evidence),
+            "span_integrity": dict(self.span_integrity),
+            "multilingual_recall": dict(self.multilingual_recall),
         }
 
 
@@ -571,6 +624,7 @@ class ExportQualificationReport:
     variants: tuple[VariantQualification, ...]
     artifacts: Mapping[str, str]
     task: str = "token-classification"
+    decoder: Mapping[str, Any] | None = None
 
     @property
     def passed(self) -> bool:
@@ -616,6 +670,7 @@ class ExportQualificationReport:
             "suite": dict(self.suite),
             "variants": [item.to_dict() for item in self.variants],
             "artifacts": dict(sorted(self.artifacts.items())),
+            **({"decoder": dict(self.decoder)} if self.decoder is not None else {}),
         }
 
     def raise_for_failure(self) -> None:
@@ -991,8 +1046,19 @@ def collect_runner_outputs(
     encoded: Sequence[EncodedFixture],
     *,
     id2label: Mapping[Any, str],
+    span_decoder: SpanDecoder | None = None,
+    texts: Mapping[str, str] | None = None,
 ) -> tuple[dict[str, list[list[float]]], dict[str, list[dict[str, Any]]], list[float]]:
     """Run *runner* on every encoded fixture.
+
+    Args:
+        runner: Logits runner for one padded feed.
+        encoded: Encoded fixtures from :func:`encode_fixtures`.
+        id2label: Label map shared by the reference and candidates.
+        span_decoder: Optional family decoder; defaults to the generic BIOES
+            argmax decoder :func:`decode_token_spans`.
+        texts: In-memory fixture texts keyed by fixture id, passed to
+            *span_decoder* only.
 
     Returns:
         ``(logits, spans, latencies_ms)``: real-token logit rows and decoded
@@ -1029,12 +1095,27 @@ def collect_runner_outputs(
         logits_by_fixture[item.fixture_id] = [
             rows[index] for index in range(item.bucket) if item.attention[index]
         ]
-        spans_by_fixture[item.fixture_id] = decode_token_spans(
-            rows,
-            offsets=item.offsets,
-            attention=item.attention,
-            id2label=id2label,
-        )
+        if span_decoder is None:
+            spans_by_fixture[item.fixture_id] = decode_token_spans(
+                rows,
+                offsets=item.offsets,
+                attention=item.attention,
+                id2label=id2label,
+            )
+            continue
+        try:
+            spans_by_fixture[item.fixture_id] = span_decoder(
+                rows,
+                offsets=item.offsets,
+                attention=item.attention,
+                id2label=id2label,
+                text=(texts or {}).get(item.fixture_id, ""),
+            )
+        except ExportQualificationError:
+            raise
+        except Exception:
+            # Decoder errors may echo inputs; keep only the reason code.
+            raise ExportQualificationError(ExportReason.INFERENCE_FAILED) from None
     return logits_by_fixture, spans_by_fixture, latencies
 
 
@@ -1119,6 +1200,73 @@ def critical_leaks(
     return leaks
 
 
+def span_integrity(
+    fixtures: Sequence[Any],
+    spans_by_fixture: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Return value-free span-integrity counts for decoded spans.
+
+    A span is intact when it has a non-empty label, ``0 <= start < end`` within
+    the fixture text, and does not overlap another span of the same fixture.
+    Only counts are returned; offsets stay in memory.
+    """
+
+    checked = 0
+    violations = 0
+    for fixture in fixtures:
+        length = len(fixture.text)
+        spans = sorted(
+            spans_by_fixture.get(str(fixture.fixture_id), ()),
+            key=lambda span: (int(span["start"]), int(span["end"])),
+        )
+        previous_end = 0
+        for span in spans:
+            checked += 1
+            start, end = int(span["start"]), int(span["end"])
+            label = span.get("label")
+            if (
+                not isinstance(label, str)
+                or not label
+                or not 0 <= start < end <= length
+                or start < previous_end
+            ):
+                violations += 1
+            previous_end = max(previous_end, end)
+    return {"spans_checked": checked, "violations": violations}
+
+
+def recall_by_language(
+    fixtures: Sequence[Any],
+    reference_spans: Mapping[str, Sequence[Mapping[str, Any]]],
+    candidate_spans: Mapping[str, Sequence[Mapping[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    """Return per-language direct-identifier recall deltas.
+
+    Each suite language with at least one direct-identifier gold span gets the
+    worst per-label recall loss of the candidate against the reference and
+    the lowest candidate recall. Only aggregates are returned.
+    """
+
+    by_language: dict[str, list[Any]] = {}
+    for fixture in fixtures:
+        by_language.setdefault(str(fixture.language), []).append(fixture)
+    result: dict[str, dict[str, Any]] = {}
+    for language, subset in sorted(by_language.items()):
+        labels = direct_identifier_labels(subset)
+        if not labels:
+            continue
+        reference = recall_by_label(subset, reference_spans, labels=labels)
+        candidate = recall_by_label(subset, candidate_spans, labels=labels)
+        deltas = [max(reference[label] - candidate[label], 0.0) for label in labels]
+        result[language] = {
+            "fixtures": len(subset),
+            "labels": len(labels),
+            "max_delta": max(deltas),
+            "min_candidate_recall": min(candidate.values()),
+        }
+    return result
+
+
 def qualify_variant(
     *,
     candidate: VariantCandidate,
@@ -1131,6 +1279,8 @@ def qualify_variant(
     reference_spans: Mapping[str, Sequence[Mapping[str, Any]]],
     artifact_root: str | Path | None = None,
     direct_identifier_recall_floor: float | None = None,
+    span_decoder: SpanDecoder | None = None,
+    gate_languages: bool = False,
 ) -> VariantQualification:
     """Run every gate for one candidate against precomputed reference outputs.
 
@@ -1138,6 +1288,10 @@ def qualify_variant(
     by *support* before the candidate runs. Inference failures and wrong
     output shapes are recorded as failing reasons rather than raised, so one
     broken variant never hides the evidence for its siblings.
+
+    Span integrity always gates. Per-language direct-identifier recall is
+    always recorded and gates only when *gate_languages* is set, using the
+    same per-label limit as the suite-wide gate.
 
     Raises:
         ExportQualificationError: For combinations *support* does not declare.
@@ -1174,7 +1328,11 @@ def qualify_variant(
     rss_before = _peak_rss_bytes()
     try:
         logits, spans, latencies = collect_runner_outputs(
-            candidate.runner, encoded, id2label=id2label
+            candidate.runner,
+            encoded,
+            id2label=id2label,
+            span_decoder=span_decoder,
+            texts=_fixture_texts(fixtures) if span_decoder is not None else None,
         )
     except ExportQualificationError as exc:
         return VariantQualification(
@@ -1279,6 +1437,25 @@ def qualify_variant(
     if not leak_payload["passed"]:
         reasons.append(ExportReason.CRITICAL_LEAKAGE_DETECTED.value)
 
+    integrity_payload = span_integrity(fixtures, spans)
+    integrity_payload["passed"] = integrity_payload["violations"] == 0
+    if not integrity_payload["passed"]:
+        reasons.append(ExportReason.SPAN_INTEGRITY_FAILED.value)
+
+    languages = recall_by_language(fixtures, reference_spans, spans)
+    language_failed = any(
+        item["max_delta"] > policy.recall_delta_limit + 1e-12
+        for item in languages.values()
+    )
+    multilingual_payload = {
+        "languages": languages,
+        "limit": policy.recall_delta_limit,
+        "gated": bool(gate_languages),
+        "passed": not language_failed,
+    }
+    if gate_languages and language_failed:
+        reasons.append(ExportReason.MULTILINGUAL_RECALL_FAILED.value)
+
     return VariantQualification(
         passed=not reasons,
         reasons=tuple(dict.fromkeys(reasons)),
@@ -1289,6 +1466,8 @@ def qualify_variant(
         quantization_delta=quant_payload,
         latency_ms=_latency_summary(latencies),
         process_peak_rss_bytes=max(rss_before or 0, rss_after or 0) or None,
+        span_integrity=integrity_payload,
+        multilingual_recall=multilingual_payload,
         **base,
     )
 
@@ -1311,6 +1490,7 @@ def qualify_export(
     exclude_artifact_names: Iterable[str] = (),
     direct_identifier_recall_floor: float | None = None,
     environment: Mapping[str, Any] | None = None,
+    binding: QualificationBinding | None = None,
 ) -> ExportQualificationReport:
     """Qualify every candidate variant of one export against its reference.
 
@@ -1332,6 +1512,8 @@ def qualify_export(
             as manifests rewritten after qualification.
         direct_identifier_recall_floor: Optional absolute recall floor.
         environment: Converter environment; defaults to the installed one.
+        binding: Optional family decoder, decoder profile, default suite, and
+            per-language gate. The profile is recorded in the report.
 
     Returns:
         The complete report. Call :meth:`ExportQualificationReport.raise_for_failure`
@@ -1342,12 +1524,21 @@ def qualify_export(
             support violations detected before inference.
     """
 
+    binding = binding or QualificationBinding()
     label_identity = label_map_identity(id2label)
     token_identity = tokenizer_identity(tokenizer)
-    fixtures, suite = load_qualification_fixtures(fixtures_path)
+    if fixtures_path is None and binding.fixtures_path is not None:
+        fixtures, suite = load_qualification_fixtures(binding.fixtures_path)
+        suite["default"] = True
+    else:
+        fixtures, suite = load_qualification_fixtures(fixtures_path)
     encoded = encode_fixtures(fixtures, tokenizer, io_contract)
     reference_logits, reference_spans, _ = collect_runner_outputs(
-        reference_runner, encoded, id2label=id2label
+        reference_runner,
+        encoded,
+        id2label=id2label,
+        span_decoder=binding.span_decoder,
+        texts=(_fixture_texts(fixtures) if binding.span_decoder is not None else None),
     )
     variants = tuple(
         qualify_variant(
@@ -1361,6 +1552,8 @@ def qualify_export(
             reference_spans=reference_spans,
             artifact_root=artifact_root,
             direct_identifier_recall_floor=direct_identifier_recall_floor,
+            span_decoder=binding.span_decoder,
+            gate_languages=binding.gate_languages,
         )
         for candidate in candidates
     )
@@ -1386,6 +1579,11 @@ def qualify_export(
         suite=suite,
         variants=variants,
         artifacts=digests,
+        decoder=(
+            dict(binding.decoder_profile)
+            if binding.decoder_profile is not None
+            else None
+        ),
     )
 
 
@@ -1423,6 +1621,11 @@ def summarize_report(report: ExportQualificationReport) -> dict[str, Any]:
         "label_map_sha256": payload["label_map"].get("sha256"),
         "sequence_buckets": payload["io_contract"]["sequence_buckets"],
         "stable_sha256": payload["stable_sha256"],
+        **(
+            {"decoder_profile_sha256": payload["decoder"].get("sha256")}
+            if isinstance(payload.get("decoder"), Mapping)
+            else {}
+        ),
         "variants": {
             item["name"]: {
                 "claim": item["claim"],
@@ -1629,6 +1832,10 @@ def _span_parity(
     }
 
 
+def _fixture_texts(fixtures: Sequence[Any]) -> dict[str, str]:
+    return {str(fixture.fixture_id): str(fixture.text) for fixture in fixtures}
+
+
 def _span_key(span: Mapping[str, Any]) -> tuple[str, int, int]:
     return (str(span["label"]), int(span["start"]), int(span["end"]))
 
@@ -1774,8 +1981,10 @@ __all__ = [
     "ExportQualificationReport",
     "ExportReason",
     "LogitRunner",
+    "QualificationBinding",
     "QualificationPolicy",
     "RuntimeSupport",
+    "SpanDecoder",
     "VariantCandidate",
     "VariantQualification",
     "artifact_file_digests",
@@ -1793,8 +2002,10 @@ __all__ = [
     "qualify_export",
     "qualify_variant",
     "recall_by_label",
+    "recall_by_language",
     "sha256_file",
     "source_identity",
+    "span_integrity",
     "summarize_report",
     "tokenizer_identity",
     "verify_qualification_report",

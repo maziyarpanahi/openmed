@@ -10,10 +10,17 @@ An adapter declares:
 - the runtime support table qualification may claim for Core ML and ONNX;
 - a pre-load request check that rejects unsupported precision, provider,
   sequence, and converter-environment combinations with stable, value-free
-  :class:`~openmed.eval.export_qualification.ExportReason` codes.
+  :class:`~openmed.eval.export_qualification.ExportReason` codes;
+- optionally, a pre-load source check (eligible checkpoints, remote code,
+  configuration shape, pinned revision), a reference loader, a qualification
+  binding (canonical decoder, decoder profile, default suite), and the ONNX
+  operator set the family's graphs are qualified for.
 
-The same adapter is reused by later families (Longformer, Privacy Filter,
-GLiNER) by registering another :class:`ExportFamilyAdapter`.
+The registry is versioned: every qualified artifact records its family and
+adapter version, and :func:`require_registered_adapter` rejects unknown
+families and stale adapter versions at load time. Families register another
+:class:`ExportFamilyAdapter` (ModernBERT here, Privacy Filter in
+:mod:`openmed.torch.privacy_filter_export`).
 """
 
 from __future__ import annotations
@@ -21,7 +28,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import metadata
-from typing import Any, Callable, ContextManager, Iterator, Mapping
+from typing import Any, Callable, ContextManager, Iterable, Iterator, Mapping
 
 from openmed.eval.export_qualification import (
     QUANTIZATION_NONE,
@@ -29,6 +36,7 @@ from openmed.eval.export_qualification import (
     SHAPE_MODE_STATIC,
     ExportQualificationError,
     ExportReason,
+    QualificationBinding,
     RuntimeSupport,
 )
 
@@ -79,6 +87,22 @@ class ExportFamilyAdapter:
         check_environment: Raises when installed converters are unqualified.
         max_sequence_length: Returns the largest qualifiable length for a
             configuration.
+        check_source: Optional ``(config, *, model_id, expected_revision) ->
+            dict`` pre-load check. It raises a stable reason code for
+            ineligible checkpoints, repository code, unsupported configuration
+            shapes, or a missing pin, and returns a value-free eligibility
+            record for manifests.
+        load_reference: Optional ``(torch_module, model_id, cache_dir) ->
+            model`` reference loader for qualification. Defaults to a stock
+            float32 ``AutoModelForTokenClassification`` without repository
+            code.
+        qualification_binding: Optional ``(config, model_id, cache_dir) ->
+            QualificationBinding`` with the family's canonical decoder.
+        onnx_operators: Optional ``domain:op`` set the family's ONNX graphs
+            are qualified for; any other operator fails closed.
+        coreml_fp32_ops: Optional Core ML MIL op types kept in float32 when a
+            package is converted with float16 compute precision, matching
+            reference sections that compute in float32.
     """
 
     family: str
@@ -90,6 +114,13 @@ class ExportFamilyAdapter:
     trace_context: Callable[[Any, Any], ContextManager[None]]
     check_environment: Callable[[], None]
     max_sequence_length: Callable[[Any], int | None]
+    check_source: Callable[..., Mapping[str, Any]] | None = None
+    load_reference: Callable[[Any, str, str | None], Any] | None = None
+    qualification_binding: (
+        Callable[[Any, str, str | None], QualificationBinding] | None
+    ) = None
+    onnx_operators: frozenset[str] | None = None
+    coreml_fp32_ops: frozenset[str] | None = None
 
     def support_for(self, runtime: str) -> RuntimeSupport:
         """Return the declared support table for *runtime*.
@@ -138,6 +169,70 @@ class ExportFamilyAdapter:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_SEQUENCE_LENGTH)
         return support
 
+    def source_eligibility(
+        self,
+        config: Any,
+        *,
+        model_id: str,
+        expected_revision: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Run the family's pre-load source check, if it declares one.
+
+        Returns:
+            A value-free eligibility record, or ``None`` for families without
+            a source check.
+
+        Raises:
+            ExportQualificationError: With the family's stable reason code.
+        """
+
+        if self.check_source is None:
+            return None
+        return dict(
+            self.check_source(
+                config, model_id=model_id, expected_revision=expected_revision
+            )
+        )
+
+    def reference_model(
+        self, torch_module: Any, model_id: str, cache_dir: str | None = None
+    ) -> Any:
+        """Load the float32 PyTorch reference checkpoint for qualification."""
+
+        if self.load_reference is not None:
+            return self.load_reference(torch_module, model_id, cache_dir)
+        from transformers import AutoModelForTokenClassification
+
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_id,
+            cache_dir=cache_dir,
+            trust_remote_code=False,
+        )
+        model.to(dtype=torch_module.float32)
+        model.eval()
+        return model
+
+    def binding(
+        self, config: Any, model_id: str, cache_dir: str | None = None
+    ) -> QualificationBinding | None:
+        """Return the family's qualification binding, if it declares one."""
+
+        if self.qualification_binding is None:
+            return None
+        return self.qualification_binding(config, model_id, cache_dir)
+
+    def check_onnx_operators(self, operator_types: Iterable[str]) -> None:
+        """Reject an ONNX graph that uses an operator the family lacks.
+
+        Raises:
+            ExportQualificationError: ``unsupported_operator``.
+        """
+
+        if self.onnx_operators is None:
+            return
+        if set(operator_types) - set(self.onnx_operators):
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_OPERATOR)
+
     def describe(self) -> dict[str, Any]:
         """Return a JSON-ready description for manifests and docs."""
         return {
@@ -171,6 +266,40 @@ def resolve_export_adapter(model_type: str | None) -> ExportFamilyAdapter | None
 def registered_export_families() -> tuple[str, ...]:
     """Return the canonical family names with a registered adapter."""
     return tuple(sorted({adapter.family for adapter in _ADAPTERS.values()}))
+
+
+def export_adapter_for_family(family: str | None) -> ExportFamilyAdapter | None:
+    """Return the adapter registered under canonical *family*, if any."""
+    if not family:
+        return None
+    wanted = _normalize(family)
+    for adapter in _ADAPTERS.values():
+        if _normalize(adapter.family) == wanted:
+            return adapter
+    return None
+
+
+def require_registered_adapter(
+    family: str | None, adapter_version: Any
+) -> ExportFamilyAdapter:
+    """Return the adapter that qualified an artifact, or fail closed.
+
+    Args:
+        family: Family recorded in a qualification report or manifest.
+        adapter_version: Adapter version recorded alongside it.
+
+    Raises:
+        ExportQualificationError: ``unsupported_family`` when no reviewed
+            adapter is registered for *family*, or ``adapter_version_mismatch``
+            when the artifact was qualified by a different adapter version.
+    """
+
+    adapter = export_adapter_for_family(family)
+    if adapter is None:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+    if isinstance(adapter_version, bool) or adapter_version != adapter.version:
+        raise ExportQualificationError(ExportReason.ADAPTER_VERSION_MISMATCH)
+    return adapter
 
 
 def _normalize(model_type: str) -> str:
@@ -346,6 +475,11 @@ MODERNBERT_EXPORT_ADAPTER = register_export_adapter(
 )
 
 
+# Registers the Privacy Filter adapter on import. It comes last because that
+# module builds on the registry defined above; it is never read here, so an
+# import that starts from that module resolves cleanly too.
+from openmed.torch import privacy_filter_export  # noqa: E402, F401
+
 __all__ = [
     "COREML_RUNTIME",
     "MODERNBERT_ADAPTER_VERSION",
@@ -356,9 +490,11 @@ __all__ = [
     "MODERNBERT_ONNX_SUPPORT",
     "ONNX_RUNTIME",
     "ExportFamilyAdapter",
+    "export_adapter_for_family",
     "modernbert_sliding_window",
     "register_export_adapter",
     "registered_export_families",
+    "require_registered_adapter",
     "resolve_export_adapter",
     "torch_reference_runner",
 ]

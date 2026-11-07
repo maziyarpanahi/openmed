@@ -69,7 +69,11 @@ def test_matrix_is_in_mkdocs_nav_and_cross_linked() -> None:
 
 
 def _modernbert_support_rows(text: str) -> dict[str, dict[str, list[str]]]:
-    section = text.split("## ModernBERT runtime support", 1)[1]
+    return _support_rows(text, "## ModernBERT runtime support")
+
+
+def _support_rows(text: str, heading: str) -> dict[str, dict[str, list[str]]]:
+    section = text.split(heading, 1)[1]
     section = section.split("### ", 1)[0]
     rows: dict[str, dict[str, list[str]]] = {}
     for line in section.splitlines():
@@ -106,3 +110,36 @@ def test_matrix_lists_every_export_qualification_reason_code() -> None:
     tokens = _backtick_tokens(DOC.read_text(encoding="utf-8"))
     missing = {reason.value for reason in ExportReason} - tokens
     assert not missing, f"undocumented reason codes: {sorted(missing)}"
+
+
+def test_privacy_filter_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.privacy_filter_export import PRIVACY_FILTER_EXPORT_ADAPTER
+
+    documented = _support_rows(
+        DOC.read_text(encoding="utf-8"), "## Privacy Filter runtime support"
+    )
+    declared = PRIVACY_FILTER_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_matrix_lists_every_declared_privacy_filter_checkpoint() -> None:
+    from openmed.torch.privacy_filter_export import PRIVACY_FILTER_CHECKPOINTS
+
+    section = DOC.read_text(encoding="utf-8").split("### Eligible checkpoints", 1)[1]
+    section = section.split("### ", 1)[0]
+    rows = {}
+    for line in section.splitlines():
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 5 and "/" in cells[0]:
+            rows[cells[0]] = cells
+    assert set(rows) == {item.repo_id for item in PRIVACY_FILTER_CHECKPOINTS}
+    for item in PRIVACY_FILTER_CHECKPOINTS:
+        _, label_space, labels, revision, evidence = rows[item.repo_id]
+        assert (label_space, int(labels)) == (item.label_space, item.num_labels)
+        assert revision == (item.revision or "none yet")
+        assert evidence == ("published" if item.evidence_sha256 else "none yet")
