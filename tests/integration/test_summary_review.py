@@ -67,26 +67,27 @@ def test_caller_declared_reviewer_receipt_is_bound_and_complete():
     assert not evaluate_summary_gate(**values, review_import=review)[0].passed
 
 
-@pytest.mark.parametrize("state", ["missing", "incomplete", "disputed"])
-def test_partial_reviews_fail_even_with_zero_support_threshold(state):
-    _, _, bundle, args = vector(evidence_kind="reviewer")
-    if state == "missing":
-        bundle["decisions"] = []
-    elif state == "incomplete":
-        bundle["decisions"] = bundle["decisions"][:1]
-    else:
-        for index, row in enumerate(bundle["decisions"]):
-            row["reason"] = "evidence_quality"
-            row["label"] = "supports" if index % 2 == 0 else "contradicts"
-    review = import_summary_review(bundle, **args)
-    values = gate_inputs(args)
-    values["thresholds"]["citation_support_min"] = 0
-    checks = {
-        check.gate: check
-        for check in evaluate_summary_gate(**values, review_import=review)
-    }
-    assert not checks["summary_review"].passed
-    assert not checks["summary_citation_support"].passed
+def test_partial_reviews_fail_even_with_zero_support_threshold(subtests):
+    for state in ["missing", "incomplete", "disputed"]:
+        with subtests.test(state=state):
+            _, _, bundle, args = vector(evidence_kind="reviewer")
+            if state == "missing":
+                bundle["decisions"] = []
+            elif state == "incomplete":
+                bundle["decisions"] = bundle["decisions"][:1]
+            else:
+                for index, row in enumerate(bundle["decisions"]):
+                    row["reason"] = "evidence_quality"
+                    row["label"] = "supports" if index % 2 == 0 else "contradicts"
+            review = import_summary_review(bundle, **args)
+            values = gate_inputs(args)
+            values["thresholds"]["citation_support_min"] = 0
+            checks = {
+                check.gate: check
+                for check in evaluate_summary_gate(**values, review_import=review)
+            }
+            assert not checks["summary_review"].passed
+            assert not checks["summary_citation_support"].passed
 
 
 def test_import_cannot_mix_legacy_labels_or_stale_citation_spans():

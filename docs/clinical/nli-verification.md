@@ -1,5 +1,8 @@
 # Clinical NLI verification
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+to inspect development verdicts, an injected calibration double and review flags.
+
 See [local backends and typed outcomes](local-backends.md) for executable
 synthetic provider wiring and the complete exception/refusal tables.
 

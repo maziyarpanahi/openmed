@@ -116,9 +116,8 @@ def test_missing_assertion_axis_is_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "metadata",
-    (
+def test_conflicting_redundant_assertion_fields_are_rejected(subtests) -> None:
+    for metadata in (
         {
             "negation": AFFIRMED,
             "certainty": CERTAIN,
@@ -137,18 +136,15 @@ def test_missing_assertion_axis_is_rejected() -> None:
             "temporality": RECENT,
             "hypothetical": True,
         },
-    ),
-)
-def test_conflicting_redundant_assertion_fields_are_rejected(
-    metadata: dict[str, object],
-) -> None:
-    with pytest.raises(InconsistentAssertionMetadataError):
-        build_nli_pair(
-            SYNTHETIC_PREMISE,
-            SYNTHETIC_HYPOTHESIS,
-            premise_assertion=metadata,
-            hypothesis_assertion=_assertion(),
-        )
+    ):
+        with subtests.test(metadata=metadata):
+            with pytest.raises(InconsistentAssertionMetadataError):
+                build_nli_pair(
+                    SYNTHETIC_PREMISE,
+                    SYNTHETIC_HYPOTHESIS,
+                    premise_assertion=metadata,
+                    hypothesis_assertion=_assertion(),
+                )
 
 
 def test_invalid_assertion_value_is_not_echoed() -> None:
@@ -251,21 +247,22 @@ def test_pair_disclaimer_requires_human_review() -> None:
     assert "autonomous clinical decision" in NLI_ASSERTION_PAIR_ADVISORY
 
 
-@pytest.mark.parametrize("flag", ["hypothetical", "is_hypothetical"])
-def test_historical_nonhypothetical_metadata_round_trips(flag: str) -> None:
-    pair = build_nli_pair(
-        SYNTHETIC_PREMISE,
-        SYNTHETIC_HYPOTHESIS,
-        premise_assertion={**_assertion(temporality=HISTORICAL), flag: False},
-        hypothesis_assertion=_assertion(),
-    )
-    rebuilt = build_nli_pair(
-        SYNTHETIC_PREMISE,
-        SYNTHETIC_HYPOTHESIS,
-        premise_assertion=pair.premise_assertion.to_dict(),
-        hypothesis_assertion=pair.hypothesis_assertion.to_dict(),
-    )
-    assert rebuilt == pair
+def test_historical_nonhypothetical_metadata_round_trips(subtests) -> None:
+    for flag in ["hypothetical", "is_hypothetical"]:
+        with subtests.test(flag=flag):
+            pair = build_nli_pair(
+                SYNTHETIC_PREMISE,
+                SYNTHETIC_HYPOTHESIS,
+                premise_assertion={**_assertion(temporality=HISTORICAL), flag: False},
+                hypothesis_assertion=_assertion(),
+            )
+            rebuilt = build_nli_pair(
+                SYNTHETIC_PREMISE,
+                SYNTHETIC_HYPOTHESIS,
+                premise_assertion=pair.premise_assertion.to_dict(),
+                hypothesis_assertion=pair.hypothesis_assertion.to_dict(),
+            )
+            assert rebuilt == pair
 
 
 def test_historical_hypothetical_conflict_is_rejected() -> None:
@@ -281,13 +278,18 @@ def test_historical_hypothetical_conflict_is_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize("value", [False, True])
-def test_certainty_booleans_require_explicit_uncertainty_alias(value: bool) -> None:
-    with pytest.raises(ValueError):
-        AssertionMetadata.from_value(
-            {"negation": "affirmed", "certainty": value, "temporality": "recent"}
-        )
-    assertion = AssertionMetadata.from_value(
-        {"negation": "affirmed", "uncertainty": value, "temporality": "recent"}
-    )
-    assert assertion.uncertain is value
+def test_certainty_booleans_require_explicit_uncertainty_alias(subtests) -> None:
+    for value in [False, True]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError):
+                AssertionMetadata.from_value(
+                    {
+                        "negation": "affirmed",
+                        "certainty": value,
+                        "temporality": "recent",
+                    }
+                )
+            assertion = AssertionMetadata.from_value(
+                {"negation": "affirmed", "uncertainty": value, "temporality": "recent"}
+            )
+            assert assertion.uncertain is value

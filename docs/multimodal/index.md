@@ -1,9 +1,8 @@
 # Multimodal overview
 
 OpenMed's local-first multimodal tools connect bounded media intake, document
-extraction, redaction and content-free processing evidence. Use the navigation
-groups in this section to follow a workflow from intake to review. Existing
-guide URLs remain unchanged.
+extraction, redaction, waveform reading and evidence for human review. The
+navigation follows a workflow from intake to review.
 
 ## Supported contracts and experimental surfaces
 
@@ -18,8 +17,10 @@ where specified; no model weights or restricted datasets are bundled here.
 | Documents and PDF redaction | Format-specific extraction and redaction, source-offset projection, locally rendered redacted PDFs and fidelity checks. | Extraction is not redaction. A format's extraction guide does not promise an exporter. Scanned-page completeness needs separate OCR and residual-text review. |
 | Images and OCR | Header and geometry checks, OCR word boxes, span projection and a local streaming Tesseract adapter. | OCR outputs remain **preview**. Confidence does not establish clinical correctness or identifier recall; selected-region pixel verification does not prove every identifier was selected. |
 | DICOM | DICOM header and burned-in pixel redaction are listed in the [feature map](../feature-map.md); DICOM-SR provenance links findings to structural paths and offsets. | Provenance mapping does not interpret findings or copy DICOM values. Header redaction alone does not remove burned-in identifiers. |
+| Waveforms | Bounded readers for [HL7 aECG](aecg-reader.md), [EDF and EDF+](edf-reader.md) and [WFDB ECG](wfdb-reader.md), with supported formats listed in each guide. | Sample windows, quality flags and interval candidates require review of their source evidence. |
 | Audio | WAV metadata, ASR input-profile comparison, format summaries, resampling plans and bounded window plans. | These contracts do not transcribe, resample, downmix or qualify an ASR provider. Compatibility is a format statement only. |
 | Video and provider evidence | Frame-sampling manifests and content-free provider-result envelopes. | A sampling manifest does not decode video; an envelope does not invoke or validate a provider. Model-driven interpretation and ambient clinical outputs remain experimental unless separately qualified with measured evidence. |
+| Speech and ambient | Explicit [consent and capture state](ambient-session-policy.md), local speech providers, [retention controls](streaming/audio-retention.md) and cited [ambient drafts](streaming/ambient-note-evidence.md). | Configure the installed local provider and retention policy. Drafts and unresolved speaker roles require explicit review. |
 
 ## Start with the preflight pipeline
 
