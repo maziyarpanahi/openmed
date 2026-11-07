@@ -251,3 +251,6 @@ files.
   artifacts.
 - [Android Span Parity](android-parity.md) defines cross-platform offset and
   label guarantees.
+- [Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md)
+  lists the runtime libraries the AAR brings into an app, their licenses, and
+  the ML Kit posture.

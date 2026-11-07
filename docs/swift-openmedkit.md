@@ -163,6 +163,10 @@ watchOS and visionOS use the CoreML-only `PlatformModel` surface and require an
 INT8 Nano-tier artifact. See [Apple Platform Support](./runtimes/apple-platforms.md)
 for selection limits and simulator validation.
 
+The Swift packages OpenMedKit links, their licenses, and the files each backend
+loads offline are listed in
+[Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md).
+
 Maple Preview 2-bit is a multi-gigabyte generative model. Test it on recent
 Apple hardware with sufficient storage and memory; keep a smaller specialized
 model available when the product must support constrained devices.

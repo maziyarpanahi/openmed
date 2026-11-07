@@ -779,6 +779,7 @@ classification:
     - security/policy-impact.md
     - security/license-inventory.md
     - compliance/multimodal-dependency-licenses.md
+    - security/export-redistribution.md
     - security/exception-taxonomy.md
     - security/budget-migrations.md
     - security/policy-simulation.md
