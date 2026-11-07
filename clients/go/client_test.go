@@ -1192,6 +1192,55 @@ func TestGetJobEscapesPath(t *testing.T) {
 	}
 }
 
+func TestGetJobDecodesKeyedAndOmittedDigests(t *testing.T) {
+	digest := `{"alg":"hmac-sha256","key_id":"synthetic-key","value":"` + strings.Repeat("a", 64) + `"}`
+	bodies := map[string]string{
+		"keyed": `{"schema_version":3,"id":"keyed","status":"done",` +
+			`"digests":{"mode":"keyed","alg":"hmac-sha256","key_id":"synthetic-key","reason":null},` +
+			`"spans":[{"document_id":"d","start":0,"end":4,"label":"ID","text_digest":` + digest + `,"confidence":0.9}],` +
+			`"documents":[{"id":"d","length":4,"text_digest":` + digest + `}],` +
+			`"webhook":{"configured":true,"url_digest":` + digest + `,"max_attempts":1,"backoff_seconds":0}}`,
+		"omitted": `{"schema_version":3,"id":"omitted","status":"done",` +
+			`"digests":{"mode":"omitted","alg":null,"key_id":null,"reason":"digest_key_unconfigured"},` +
+			`"spans":[{"document_id":"d","start":0,"end":4,"label":"ID","text_digest":null,"confidence":0.9}],` +
+			`"documents":[{"id":"d","length":4,"text_digest":null}],` +
+			`"webhook":{"configured":true,"url_digest":null,"max_attempts":1,"backoff_seconds":0}}`,
+	}
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, bodies[strings.TrimPrefix(r.URL.Path, "/jobs/")])
+	})
+
+	keyed, err := client.GetJob(context.Background(), "keyed")
+	if err != nil {
+		t.Fatalf("GetJob keyed: %v", err)
+	}
+	if keyed.SchemaVersion != 3 || keyed.Digests == nil || keyed.Digests.Mode != "keyed" {
+		t.Fatalf("keyed record markers = %d %+v", keyed.SchemaVersion, keyed.Digests)
+	}
+	for _, got := range []*openmed.KeyedDigest{
+		keyed.Spans[0].TextDigest,
+		keyed.Documents[0].TextDigest,
+		keyed.Webhook.URLDigest,
+	} {
+		if got == nil || got.Alg != "hmac-sha256" || got.KeyID != "synthetic-key" || len(got.Value) != 64 {
+			t.Fatalf("keyed digest = %+v", got)
+		}
+	}
+
+	omitted, err := client.GetJob(context.Background(), "omitted")
+	if err != nil {
+		t.Fatalf("GetJob omitted: %v", err)
+	}
+	if omitted.Digests == nil || omitted.Digests.Mode != "omitted" || omitted.Digests.Reason == nil ||
+		*omitted.Digests.Reason != "digest_key_unconfigured" || omitted.Digests.KeyID != nil {
+		t.Fatalf("omitted record markers = %+v", omitted.Digests)
+	}
+	if omitted.Spans[0].TextDigest != nil || omitted.Documents[0].TextDigest != nil || omitted.Webhook.URLDigest != nil {
+		t.Fatal("omitted record decoded a digest")
+	}
+}
+
 func TestJobMethodsRejectAmbiguousPathSegments(t *testing.T) {
 	called := false
 	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -1246,7 +1295,7 @@ func TestCreateJobSupportsFractionalWebhookBackoff(t *testing.T) {
 			"status":"queued",
 			"webhook":{
 				"configured":true,
-				"url_hash":"sha256",
+				"url_digest":null,
 				"max_attempts":3,
 				"backoff_seconds":0.25
 			}

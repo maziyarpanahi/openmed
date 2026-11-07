@@ -738,32 +738,54 @@ type SMARTBackendJobStatus struct {
 	Error     *string                       `json:"error"`
 }
 
+// KeyedDigest is a keyed, domain-separated HMAC-SHA256 digest. Values are
+// comparable only between digests that share a KeyID.
+type KeyedDigest struct {
+	Alg   string `json:"alg"`
+	KeyID string `json:"key_id"`
+	Value string `json:"value"`
+}
+
+// JobDigests describes how the digests in a job record were made. Mode is
+// "keyed" (Alg and KeyID are set) or "omitted" (Reason is
+// "digest_key_unconfigured" or "legacy_digests_removed", and every digest in
+// the record is nil).
+type JobDigests struct {
+	Mode   string  `json:"mode"`
+	Alg    *string `json:"alg"`
+	KeyID  *string `json:"key_id"`
+	Reason *string `json:"reason"`
+}
+
 // JobDocumentMetadata describes one document in a job response. Document text
-// is represented by its length and hash. ID echoes the caller-supplied
-// identifier, so callers should keep document identifiers free of PHI.
+// is represented by its length and a keyed digest, which is nil when digests
+// are omitted. ID echoes the caller-supplied identifier, so callers should
+// keep document identifiers free of PHI.
 type JobDocumentMetadata struct {
-	ID       string `json:"id"`
-	Length   int    `json:"length"`
-	TextHash string `json:"text_hash"`
+	ID         string       `json:"id"`
+	Length     int          `json:"length"`
+	TextDigest *KeyedDigest `json:"text_digest"`
 }
 
-// JobSpan is a detected span in a job response, carrying offsets and a hash
-// instead of plaintext. DocumentID echoes the caller-supplied document ID.
+// JobSpan is a detected span in a job response, carrying offsets and a keyed
+// digest instead of plaintext; TextDigest is nil when digests are omitted.
+// DocumentID echoes the caller-supplied document ID.
 type JobSpan struct {
-	DocumentID string   `json:"document_id"`
-	Start      int      `json:"start"`
-	End        int      `json:"end"`
-	Label      string   `json:"label"`
-	TextHash   string   `json:"text_hash"`
-	Confidence *float64 `json:"confidence"`
+	DocumentID string       `json:"document_id"`
+	Start      int          `json:"start"`
+	End        int          `json:"end"`
+	Label      string       `json:"label"`
+	TextDigest *KeyedDigest `json:"text_digest"`
+	Confidence *float64     `json:"confidence"`
 }
 
-// JobWebhookMetadata reports webhook configuration on a job.
+// JobWebhookMetadata reports webhook configuration on a job. The callback URL
+// is represented only by a keyed digest, nil when digests are omitted.
 type JobWebhookMetadata struct {
-	Configured     bool    `json:"configured"`
-	URLHash        string  `json:"url_hash"`
-	MaxAttempts    int     `json:"max_attempts"`
-	BackoffSeconds float64 `json:"backoff_seconds"`
+	Configured     bool         `json:"configured"`
+	URLDigest      *KeyedDigest `json:"url_digest"`
+	MaxAttempts    int          `json:"max_attempts"`
+	BackoffSeconds float64      `json:"backoff_seconds"`
 }
 
 // JobWebhookDelivery reports the outcome of a webhook delivery attempt.
@@ -780,8 +802,10 @@ type JobErrorSummary struct {
 	Message string `json:"message"`
 }
 
-// JobResponse is returned by POST /jobs and GET /jobs/{job_id}.
+// JobResponse is returned by POST /jobs and GET /jobs/{job_id}. SchemaVersion
+// is 3 for records that carry keyed digests.
 type JobResponse struct {
+	SchemaVersion   int                   `json:"schema_version"`
 	ID              string                `json:"id"`
 	Status          JobStatus             `json:"status"`
 	ProgressPercent float64               `json:"progress_percent"`
@@ -789,6 +813,7 @@ type JobResponse struct {
 	ProcessedCount  int                   `json:"processed_count"`
 	FailedCount     int                   `json:"failed_count"`
 	LabelHistogram  map[string]int        `json:"label_histogram"`
+	Digests         *JobDigests           `json:"digests"`
 	Spans           []JobSpan             `json:"spans"`
 	Documents       []JobDocumentMetadata `json:"documents"`
 	Error           *JobErrorSummary      `json:"error"`

@@ -156,11 +156,14 @@ digest key. In `dev` and `test` it falls back to a random per-process key, so
 `/jobs` records persisted by one process are visible only to administrators
 after a restart. Changing the key has the same effect: records whose digest
 was made by another key fail closed and remain visible to administrators until
-their TTL expires.
+their TTL expires. The same key also makes the span, document and webhook URL
+digests in job records and webhook payloads; see
+[Keyed Digests](async-jobs.md#keyed-digests).
 
 Records created while authentication was disabled, and `/jobs` records written
 by releases before this binding existed, have no owner. The local job store
-upgrades its file to schema version 2 and marks such records as unowned. Once
+upgrades its file to the current schema version and marks such records as
+unowned. Once
 authentication is enabled they are visible only to `jobs:admin` principals,
 except in the `dev` and `test` profiles where any authenticated caller with
 `jobs:read` can still read them. With authentication disabled, job routes
