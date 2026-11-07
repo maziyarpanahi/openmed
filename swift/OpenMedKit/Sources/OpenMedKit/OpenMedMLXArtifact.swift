@@ -115,25 +115,42 @@ enum OpenMedMLXFamily: String, Sendable {
     }
 }
 
-enum OpenMedMLXArtifactError: LocalizedError {
-    case invalidManifestFormat(String)
-    case missingTokenizerAssets(URL)
-    case missingTokenizerReference(URL)
-    case unsupportedArchitecture(String)
-    case missingWeights(URL)
+/// Value-free MLX artifact failures.
+///
+/// Cases name a file role or a closed task/family vocabulary. They never hold
+/// a directory, URL, path, file name or manifest-supplied string.
+enum OpenMedMLXArtifactError: LocalizedError, Equatable {
+    /// Artifact files referenced by role instead of by path.
+    enum File: String, CaseIterable, Sendable {
+        case manifest
+        case config
+        case labelMap = "label_map"
+    }
+
+    case invalidManifestFormat
+    case missingTokenizerAssets
+    case missingTokenizerReference
+    /// `nil` means the manifest value is outside the recognized vocabulary.
+    case unsupportedArchitecture(task: OpenMedMLXTask?, family: OpenMedMLXFamily?)
+    case unreadableFile(File)
+    case malformedFile(File)
 
     var errorDescription: String? {
         switch self {
-        case .invalidManifestFormat(let format):
-            return "Unsupported MLX manifest format: \(format)"
-        case .missingTokenizerAssets(let url):
-            return "Missing tokenizer assets in \(url.path)"
-        case .missingTokenizerReference(let url):
-            return "No tokenizer assets or source tokenizer reference were found in \(url.path)"
-        case .unsupportedArchitecture(let family):
-            return "Unsupported MLX architecture for Swift runtime: \(family)"
-        case .missingWeights(let url):
-            return "No MLX weights were found in \(url.path)"
+        case .invalidManifestFormat:
+            return "The MLX artifact manifest does not declare the openmed-mlx format."
+        case .missingTokenizerAssets:
+            return "The MLX artifact is missing its declared tokenizer assets."
+        case .missingTokenizerReference:
+            return "The MLX artifact has no tokenizer assets or source tokenizer reference."
+        case .unsupportedArchitecture(let task, let family):
+            let taskCode = task?.rawValue ?? "unrecognized"
+            let familyCode = family?.rawValue ?? "unrecognized"
+            return "The Swift MLX runtime does not support task \(taskCode) with family \(familyCode)."
+        case .unreadableFile(let file):
+            return "The MLX artifact \(file.rawValue) file could not be read."
+        case .malformedFile(let file):
+            return "The MLX artifact \(file.rawValue) file is not valid JSON for its schema."
         }
     }
 }
@@ -477,19 +494,21 @@ struct OpenMedMLXArtifact: Sendable {
         // Refuse every declared path before any manifest-driven local read.
         let declaredManifest =
             try FileManager.default.fileExists(atPath: manifestURL.path)
-            ? JSONDecoder().decode(OpenMedMLXManifest.self, from: Data(contentsOf: manifestURL)) : nil
+            ? Self.decode(OpenMedMLXManifest.self, file: .manifest, at: manifestURL) : nil
         if let declaredManifest { try boundary.validate(declaredManifest) }
 
-        let decoder = JSONDecoder()
         let configURL = try boundary.fileURL("config.json")
-        let configData = try Data(contentsOf: configURL)
-        let configuration = try decoder.decode(OpenMedMLXBertConfiguration.self, from: configData)
+        let configuration = try Self.decode(
+            OpenMedMLXBertConfiguration.self,
+            file: .config,
+            at: configURL
+        )
 
         let manifest: OpenMedMLXManifest
         if let declaredManifest {
             manifest = declaredManifest
             guard manifest.format == "openmed-mlx" else {
-                throw OpenMedMLXArtifactError.invalidManifestFormat(manifest.format)
+                throw OpenMedMLXArtifactError.invalidManifestFormat
             }
         } else {
             manifest = Self.makeLegacyManifest(
@@ -499,12 +518,17 @@ struct OpenMedMLXArtifact: Sendable {
         }
         try boundary.validate(manifest)
 
+        let declaredTask = OpenMedMLXTask(manifestValue: manifest.task)
+        let declaredFamily = OpenMedMLXFamily(manifestValue: manifest.family)
         guard
-            let task = OpenMedMLXTask(manifestValue: manifest.task),
-            let family = OpenMedMLXFamily(manifestValue: manifest.family),
+            let task = declaredTask,
+            let family = declaredFamily,
             Self.supports(task: task, family: family)
         else {
-            throw OpenMedMLXArtifactError.unsupportedArchitecture(manifest.family)
+            throw OpenMedMLXArtifactError.unsupportedArchitecture(
+                task: declaredTask,
+                family: declaredFamily
+            )
         }
 
         let tokenizerDirectoryURL =
@@ -523,28 +547,27 @@ struct OpenMedMLXArtifact: Sendable {
         let hasUsableDiscoveredTokenizer = Self.hasUsableTokenizerAssets(discoveredTokenizerFiles)
         if !listedTokenizerFiles.isEmpty {
             guard hasListedTokenizerAssets else {
-                throw OpenMedMLXArtifactError.missingTokenizerAssets(tokenizerDirectoryURL)
+                throw OpenMedMLXArtifactError.missingTokenizerAssets
             }
             if hasUsableListedTokenizer {
                 resolvedTokenizerDirectoryURL = tokenizerDirectoryURL
             } else if configuration.sourceModelName != nil {
                 resolvedTokenizerDirectoryURL = nil
             } else {
-                throw OpenMedMLXArtifactError.missingTokenizerAssets(tokenizerDirectoryURL)
+                throw OpenMedMLXArtifactError.missingTokenizerAssets
             }
         } else if hasUsableDiscoveredTokenizer {
             resolvedTokenizerDirectoryURL = tokenizerDirectoryURL
         } else if configuration.sourceModelName != nil {
             resolvedTokenizerDirectoryURL = nil
         } else {
-            throw OpenMedMLXArtifactError.missingTokenizerReference(modelDirectoryURL)
+            throw OpenMedMLXArtifactError.missingTokenizerReference
         }
 
         let labelMap: [Int: String]
         if let labelMapPath = manifest.labelMapPath {
             let labelURL = try boundary.fileURL(labelMapPath)
-            let data = try Data(contentsOf: labelURL)
-            let raw = try decoder.decode([String: String].self, from: data)
+            let raw = try Self.decode([String: String].self, file: .labelMap, at: labelURL)
             labelMap = Dictionary(
                 uniqueKeysWithValues: raw.compactMap { key, value in
                     Int(key).map { ($0, value) }
@@ -572,6 +595,26 @@ struct OpenMedMLXArtifact: Sendable {
                 NSOrderedSet(array: manifest.availableWeights + [manifest.preferredWeights] + manifest.fallbackWeights)
             ) as? [String] ?? []
         return candidates.map { directoryURL.appending(path: $0) }
+    }
+
+    /// Read and decode one artifact file without surfacing Foundation errors,
+    /// which can carry the absolute path or content fragments.
+    private static func decode<Value: Decodable>(
+        _ type: Value.Type,
+        file: OpenMedMLXArtifactError.File,
+        at url: URL
+    ) throws -> Value {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw OpenMedMLXArtifactError.unreadableFile(file)
+        }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            throw OpenMedMLXArtifactError.malformedFile(file)
+        }
     }
 
     private static func discoverTokenizerFiles(in directoryURL: URL) -> [String] {
