@@ -27,9 +27,26 @@ SERVICE_JOBS_WORKERS_ENV_VAR = "OPENMED_SERVICE_JOBS_WORKERS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
 TERMINAL_STATUSES = frozenset({"done", "failed"})
+JOB_STORE_SCHEMA_VERSION = 1
+"""Version of the job metadata document; files without the field are version 1."""
+_JOB_STORE_FIELDS = frozenset({"jobs", "schema_version"})
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
+
+
+class JobStoreSchemaError(ValueError):
+    """Value-free refusal of a job metadata document this binary cannot read.
+
+    Attributes:
+        code: ``job_store_schema_unsupported`` for a newer or invalid version,
+            or ``job_store_unknown_fields`` for fields this binary would
+            otherwise drop on its next write.
+    """
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(f"Job metadata store cannot be read ({code})")
 
 
 @dataclass(frozen=True)
@@ -172,6 +189,13 @@ class LocalJobStore:
             raise ValueError("Job metadata store contains invalid JSON") from None
         if not isinstance(raw, dict):
             raise ValueError("Job metadata store must contain a JSON object")
+        # Refuse before any write: a newer document, or one with fields this
+        # binary does not know, would otherwise be silently rewritten.
+        version = raw.get("schema_version", JOB_STORE_SCHEMA_VERSION)
+        if type(version) is not int or not 1 <= version <= JOB_STORE_SCHEMA_VERSION:
+            raise JobStoreSchemaError("job_store_schema_unsupported")
+        if set(raw) - _JOB_STORE_FIELDS:
+            raise JobStoreSchemaError("job_store_unknown_fields")
         jobs = raw.get("jobs")
         if not isinstance(jobs, dict):
             raise ValueError("Job metadata store must contain a jobs object")
@@ -181,7 +205,7 @@ class LocalJobStore:
 
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"jobs": self._records}
+        payload = {"jobs": self._records, "schema_version": JOB_STORE_SCHEMA_VERSION}
         temp_name: str | None = None
         try:
             with tempfile.NamedTemporaryFile(
