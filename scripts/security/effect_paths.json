@@ -487,12 +487,7 @@
     },
     {
       "classification": "operational",
-      "function": "DeidentifyJobQueue._discard_payload",
-      "module": "openmed.service.jobs"
-    },
-    {
-      "classification": "operational",
-      "function": "DeidentifyJobQueue.submit",
+      "function": "DeidentifyJobQueue._delete_payload",
       "module": "openmed.service.jobs"
     },
     {

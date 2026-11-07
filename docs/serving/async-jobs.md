@@ -34,6 +34,15 @@ curl -s http://127.0.0.1:8080/jobs \
 The response uses HTTP `202` and includes `id`, `status`, `progress_percent`,
 `document_count`, and `status_url`.
 
+To make a retried submission safe, send an `Idempotency-Key` header with a
+random value (16-128 letters, digits, or `._~:-`; a UUID works). A repeat with
+the same key and the same request returns the existing job with HTTP `202` and
+`Idempotent-Replayed: true` instead of creating a second one. Reusing the key
+for a different request returns HTTP `409` with error code
+`idempotency_key_conflict`. The key is bound to the authenticated principal and
+stored only as a scoped digest; it is remembered for as long as the job record
+is retained.
+
 ## Poll Status
 
 ```bash
@@ -41,9 +50,14 @@ curl -s http://127.0.0.1:8080/jobs/<job-id>
 ```
 
 Status moves from `queued` to `running` and then to `done` or `failed`. A job
+can also end `cancelled`, or wait in `quarantined` until an operator replays it
+(see [Durability and Recovery](#durability-and-recovery)). A retried job goes
+back to `queued` until its backoff elapses. With memory-only payloads, a job
 whose work never started when the service shut down is recorded as `cancelled`
 with error code `cancelled_on_shutdown`; running and finished jobs keep their
-own states. Progress is updated after each document. Terminal records include:
+own states. Progress is updated after each document. Every write increments
+`state_version`, and `recovery` carries the value-free recovery metadata.
+Terminal records include:
 
 - `processed_count` and `failed_count`
 - `label_histogram`
@@ -141,7 +155,8 @@ ciphertext (it is `null` in memory-only mode), never a digest of the content.
 Lifecycle:
 
 - The input payload is created at submission and deleted (`consumed`) when the
-  job reaches a terminal state, or (`cancelled`) when shutdown cancels the job.
+  job reaches a terminal state, or (`cancelled`) when the job is cancelled. A
+  quarantined job keeps its input until a replay or the retention deadline.
 - The terminal-event payload holds the webhook body plus its delivery target.
   It is deleted after a successful delivery (`delivered`). In encrypted mode a
   failed delivery keeps it until its deadline so a later retry can reference
@@ -198,6 +213,74 @@ reference, payload kind, ciphertext digest, timestamp, and a controlled reason
 code. `DeidentifyJobQueue.payloads.lifecycle_evidence()` returns recent
 receipts and per-event counts for audit evidence.
 
+## Durability and Recovery
+
+The queue is durable: the input payload reference, the request digest, and the
+idempotency key digest are written to the job store before a job is handed to
+a worker. The recovery records reuse the Journey ingestion contracts (lease,
+checkpoint, retry, cancellation, quarantine result, and quarantine promotion
+from `openmed.interop.ingest.contracts`), adapted in
+`openmed.service.job_recovery`.
+
+- **Leases.** A worker claims a job with an expiring lease
+  (`OPENMED_SERVICE_JOBS_LEASE_SECONDS`, default 60). Each claim increments the
+  lease epoch, and every progress, retry, quarantine, and terminal write checks
+  that epoch, so two workers can never hold a valid lease for the same epoch
+  and a worker that lost its lease cannot commit. Workers renew the lease at
+  every checkpoint, and the periodic reconcile pass renews leases held by live
+  workers.
+- **Checkpoints.** Each document's result is committed together with a
+  checkpoint and a chained output digest. A job that is resumed after a crash
+  or a lease reclaim starts after the last committed document, so committed
+  results are never duplicated.
+- **Terminal state and webhook intent.** The terminal state, the reference to
+  the sealed terminal-event payload, and a pending webhook intent are committed
+  in one write. A pending intent left by a crash is delivered again once its
+  delivery claim expires, from the same immutable payload. Delivery is
+  at-least-once: a crash after the HTTP request but before its result is
+  recorded can repeat a webhook with an identical body.
+- **Retries and backoff.** Transient, resource, contention, and dependency
+  failures release the job for a retry with capped exponential backoff
+  (`OPENMED_SERVICE_JOBS_RETRY_BASE_SECONDS`, default 5, up to
+  `OPENMED_SERVICE_JOBS_RETRY_MAX_SECONDS`, default 300). Other document errors
+  are recorded as failed documents, as before.
+- **Poison quarantine.** A job that fails or loses its lease on
+  `OPENMED_SERVICE_JOBS_MAX_ATTEMPTS` attempts (default 3), or whose input
+  payload is damaged, fails authentication, or does not match the submission,
+  moves to `quarantined` with a value-free reason code and keeps its input
+  payload. It never runs again on its own.
+- **Replay.** `DeidentifyJobQueue.replay(job_id, JobReplayAuthorization(...))`
+  re-queues a quarantined job as a new, linked execution with a fresh attempt
+  budget. The authorization carries only a reviewer digest, an evidence digest,
+  and a reason code; an optional `replay_authorizer` hook can enforce your own
+  policy. The quarantine result and every earlier transition stay in the
+  record. The service ships no replay route: expose replay to remote callers
+  only behind your own authorization.
+- **Cancellation.** `DeidentifyJobQueue.cancel(job_id)` is committed before
+  anything else and fences a running worker. A cancelled job never returns to
+  `queued`.
+- **Startup reconcile.** When the queue starts, and every
+  `OPENMED_SERVICE_JOBS_RECONCILE_SECONDS` (default 5; `0` disables the
+  background pass), it reclaims expired leases, resumes queued work whose
+  backoff has elapsed, quarantines jobs that exhausted their attempts, fails
+  queued jobs whose input expired or (in memory-only mode) did not survive the
+  restart, and re-drives expired webhook intents. A record whose recovery state
+  is corrupt or ambiguous fails closed with `recovery_state_invalid` and never
+  becomes a success.
+- **Shutdown.** With encrypted payloads, jobs that never started stay `queued`
+  and resume at the next start, and an interrupted running job does not use up
+  an attempt. With memory-only payloads, they are `cancelled` as described
+  above, because their input cannot survive the process.
+
+Restart-safe resume needs encrypted payload retention; memory-only payloads
+are lost with the process. Recovery metadata never contains payload content,
+worker identity, lease identifiers, storage paths, or secrets. Append-only
+decision receipts for quarantine, lease reclaim, cancellation, recovery
+failure, and replay are available from
+`DeidentifyJobQueue.decision_receipts()`, and
+`DeidentifyJobQueue.recovery_evidence()` returns value-free counts and receipts
+for audit evidence.
+
 ## Local Store Configuration
 
 The default metadata store is
@@ -223,5 +306,17 @@ Payload retention is configured separately:
 | `OPENMED_SERVICE_JOBS_PAYLOAD_DIR` | `~/.cache/openmed/service-job-payloads` | Directory for encrypted payload files, created with mode `0700`. |
 | `OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS` | `86400` | Maximum payload retention; also the default when a job requests none. |
 
-Payload retention does not make jobs restart-safe by itself: queued work is
-still process-local, and a restart does not resume interrupted jobs.
+Recovery is configured with these variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENMED_SERVICE_JOBS_LEASE_SECONDS` | `60` | Lease duration; a crashed worker's job is reclaimed after it. |
+| `OPENMED_SERVICE_JOBS_MAX_ATTEMPTS` | `3` | Attempts per execution before poison quarantine. |
+| `OPENMED_SERVICE_JOBS_RETRY_BASE_SECONDS` | `5` | Backoff before the second attempt; it doubles per attempt. |
+| `OPENMED_SERVICE_JOBS_RETRY_MAX_SECONDS` | `300` | Backoff ceiling. |
+| `OPENMED_SERVICE_JOBS_RECONCILE_SECONDS` | `5` | Interval of the background reconcile pass; `0` disables it. |
+
+Jobs resume across restarts only with encrypted payload retention. Metadata
+writes replace the store file atomically, so they survive a process crash. The
+store serves one service process; it does not coordinate writers across
+processes.

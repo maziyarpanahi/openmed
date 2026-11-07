@@ -41,6 +41,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "circuit_breaker_open",
     "forbidden",
     "grounding_invalid_request",
+    "idempotency_key_conflict",
     "inbound_duplicate_mapping",
     "inbound_duplicate_placeholder",
     "inbound_duplicate_response_key",
