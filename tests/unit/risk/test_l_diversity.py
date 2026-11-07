@@ -137,23 +137,18 @@ def test_mapping_access_and_plural_sensitive_attribute_alias() -> None:
     assert report["t_closeness"]["achieved"] == pytest.approx(0.25)
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
+def test_invalid_policy_values_fail_closed(subtests) -> None:
+    for kwargs, message in [
         ({"target_l": 0}, "target_l"),
         ({"target_l": True}, "target_l"),
         ({"target_t": -0.1}, "target_t"),
         ({"target_t": 1.1}, "target_t"),
         ({"l_metric": "ratio"}, "l_metric"),
         ({"t_distance": "earth_mover"}, "t_distance"),
-    ],
-)
-def test_invalid_policy_values_fail_closed(
-    kwargs: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        LDiversityEngine(["group"], "diagnosis", **kwargs)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(kwargs=kwargs, message=message):
+            with pytest.raises(ValueError, match=message):
+                LDiversityEngine(["group"], "diagnosis", **kwargs)  # type: ignore[arg-type]
 
 
 def test_empty_table_does_not_claim_to_meet_policy() -> None:

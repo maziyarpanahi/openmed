@@ -7,9 +7,13 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from openmed.multimodal.documents_docx import extract_docx, write_redacted_docx
+from openmed.multimodal.documents_docx import (
+    _docx_handler,
+    extract_docx,
+    write_redacted_docx,
+)
 from openmed.multimodal.ooxml_residual import OoxmlResidualError
-from openmed.multimodal.pptx import extract_pptx, write_redacted_pptx
+from openmed.multimodal.pptx import _pptx_handler, extract_pptx, write_redacted_pptx
 from openmed.multimodal.xlsx import redact_xlsx
 
 pytestmark = pytest.mark.integration
@@ -249,3 +253,22 @@ def test_nested_text_in_existing_run_is_not_declared_covered(tmp_path, kind):
     with pytest.raises(OoxmlResidualError, match="uncovered_text"):
         _write(source, output, kind)
     assert not output.exists()
+
+
+@pytest.mark.parametrize("kind", ["docx", "pptx"])
+def test_write_back_uses_the_source_snapshot_reviewed_by_the_detector(tmp_path, kind):
+    source = tmp_path / f"source.{kind}"
+    output = tmp_path / f"output.{kind}"
+    _fixture(source, kind)
+    replacement = b"synthetic source replacement"
+
+    def detect(text, **kwargs):
+        start = text.index("Jane Doe")
+        source.write_bytes(replacement)
+        return [{"start": start, "end": start + 8, "label": "PERSON"}]
+
+    handler = _docx_handler if kind == "docx" else _pptx_handler
+    handler(source, policy={"output_path": output}, models=detect)
+    extract = extract_docx if kind == "docx" else extract_pptx
+    assert "Patient [PERSON]" in extract(output).text
+    assert source.read_bytes() == replacement

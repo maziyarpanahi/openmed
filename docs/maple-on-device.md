@@ -143,9 +143,8 @@ its matching `past_key_values.*` input during decode.
 
 ### Reproducible portable export
 
-Use Python 3.11 or newer for this exact conversion stack: ONNX Runtime 1.25.1
-does not publish Python 3.10 wheels. This recipe-specific requirement does not
-change the base SDK's Python 3.10 minimum. Install the exact stack printed by
+Use Python 3.11 or newer for this exact conversion stack, which matches the base
+SDK's Python minimum. Install the exact stack printed by
 the exporter. The pinned set is
 `accelerate==1.11.0`, `huggingface-hub==0.35.3`, `numpy==2.2.6`,
 `onnx==1.21.0`, `onnx-ir==0.2.0`, `onnxruntime==1.25.1`,
@@ -157,8 +156,9 @@ The current recipe uses the patched Torch security floor. This version change
 does not requalify previously exported model artifacts or establish a successful
 full 40 GB conversion with the new stack. Re-run the complete export and target
 runtime gates before issuing a new qualification receipt; tiny synthetic checks
-are compatibility smoke tests only. Torch 2.13 wheels require Python 3.10+;
-macOS wheels require Apple Silicon and macOS 14+, with no Intel macOS wheel.
+are compatibility smoke tests only. Torch 2.13 wheels cover every supported
+Python version; macOS wheels require Apple Silicon and macOS 14+, with no Intel
+macOS wheel.
 
 ```bash
 python -m openmed.onnx.maple_export requirements \

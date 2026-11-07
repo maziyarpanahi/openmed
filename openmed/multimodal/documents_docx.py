@@ -19,9 +19,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
-from .ooxml_residual import _check_source, _publish, _run_coverage
+from .ooxml_residual import _check_source, _publish, _read_source, _run_coverage
 
 _DOCX_HINT = 'Install with: pip install "openmed[multimodal]".'
 _BLOCK_SEPARATOR = "\n"
@@ -128,15 +131,26 @@ def _import_docx_types() -> tuple[Any, Any, Any, Any]:
     return CT_P, CT_Tbl, Paragraph, Table
 
 
-def extract_docx(path: str | Path) -> ExtractedDocument:
+def extract_docx(
+    path: str | Path, *, archive_policy: ArchiveSafetyPolicy | None = None
+) -> ExtractedDocument:
     """Extract normalized DOCX text plus char-offset source spans.
 
     Paragraphs are separated with newlines. Each non-empty Word run becomes a
     :class:`SourceSpan` whose metadata includes the document-wide run index and
     paragraph/table/header/footer location needed for write-back.
+
+    Args:
+        path: Local package path or seekable binary stream.
+        archive_policy: Optional tighter ZIP admission policy.
+
+    Raises:
+        ArchiveDocumentError: If container admission fails, with codes/counts only.
     """
-    docx = _import_docx()
-    word_document = docx.Document(path)
+    with admitted_zip(path, archive_policy) as archive:
+        docx = _import_docx()
+        archive.fp.seek(0)
+        word_document = docx.Document(archive.fp)
     state = _ExtractionState()
 
     for context in _iter_docx_paragraphs(word_document):
@@ -218,9 +232,10 @@ def write_redacted_docx(
     replacement: str | None = None,
 ) -> Path:
     """Write a redacted DOCX by applying normalized-text spans to source runs."""
-    document = extract_docx(source_path)
+    source_data = _read_source(source_path)
+    document = extract_docx(io.BytesIO(source_data))
     redactions = map_text_spans_to_docx_runs(document, spans, replacement=replacement)
-    _write_docx_redactions(source_path, output_path, redactions)
+    _write_docx_redactions(source_data, output_path, redactions)
     return Path(output_path)
 
 
@@ -464,14 +479,16 @@ def _source_span_to_run_range(
 
 
 def _write_docx_redactions(
-    source_path: str | Path,
-    output_path: str | Path,
+    source_data: bytes,
+    output_path: str | Path | BinaryIO,
     redactions: Sequence[DocxRedaction],
 ) -> None:
-    docx = _import_docx()
-    word_document = docx.Document(source_path)
+    with admitted_zip(io.BytesIO(source_data)) as archive:
+        docx = _import_docx()
+        archive.fp.seek(0)
+        word_document = docx.Document(archive.fp)
     runs = _collect_runs(word_document)
-    _check_source(source_path, _docx_coverage(word_document))
+    _check_source(source_data, _docx_coverage(word_document))
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 
     for redaction in _non_overlapping_redactions(redactions):
@@ -694,22 +711,23 @@ def _docx_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    _rewind(path)
-    document = extract_docx(path)
+    output_path = _policy_value(
+        policy, "output_path", "redacted_path", "destination_path"
+    )
+    snapshot = _read_source(path) if output_path is not None else None
+    source = io.BytesIO(snapshot) if snapshot is not None else path
+    _rewind(source)
+    document = extract_docx(source)
     entities = _iter_entity_inputs(_detect_entities(document, models, lang))
     replacement = _coerce_optional_str(_policy_value(policy, "replacement"))
     redactions = map_text_spans_to_docx_runs(
         document, entities, replacement=replacement
     )
-    output_path = _policy_value(
-        policy, "output_path", "redacted_path", "destination_path"
-    )
     if not redactions and output_path is None:
         return document
 
-    if output_path is not None:
-        _rewind(path)
-        _write_docx_redactions(path, output_path, redactions)
+    if snapshot is not None:
+        _write_docx_redactions(snapshot, output_path, redactions)
 
     metadata = dict(document.metadata)
     metadata.update(

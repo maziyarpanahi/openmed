@@ -189,36 +189,32 @@ def test_hashing_requires_a_protected_value_without_echoing_other_fields() -> No
         )
 
 
-@pytest.mark.parametrize(
-    ("start", "end"),
-    ((-1, 2), (2, 2), (4, 3), (True, 2), (1, False)),
-)
-def test_invalid_offsets_fail_closed(start: object, end: object) -> None:
-    with pytest.raises((TypeError, ValueError), match="source offsets"):
-        EvidenceRecord.from_extraction(
-            source_start=start,
-            source_end=end,
-            assertion_status=AssertionStatus.AFFIRMED,
-            confidence=0.9,
-            review_required=False,
-        )
+def test_invalid_offsets_fail_closed(subtests) -> None:
+    for start, end in ((-1, 2), (2, 2), (4, 3), (True, 2), (1, False)):
+        with subtests.test(start=start, end=end):
+            with pytest.raises((TypeError, ValueError), match="source offsets"):
+                EvidenceRecord.from_extraction(
+                    source_start=start,
+                    source_end=end,
+                    assertion_status=AssertionStatus.AFFIRMED,
+                    confidence=0.9,
+                    review_required=False,
+                )
 
 
-@pytest.mark.parametrize(
-    "confidence",
-    (-0.01, 1.01, math.nan, math.inf, True, "secret-confidence"),
-)
-def test_invalid_confidence_fails_without_echoing_value(confidence: object) -> None:
-    with pytest.raises((TypeError, ValueError)) as exc_info:
-        EvidenceRecord.from_extraction(
-            source_start=1,
-            source_end=5,
-            assertion_status=AssertionStatus.AFFIRMED,
-            confidence=confidence,
-            review_required=False,
-        )
+def test_invalid_confidence_fails_without_echoing_value(subtests) -> None:
+    for confidence in (-0.01, 1.01, math.nan, math.inf, True, "secret-confidence"):
+        with subtests.test(confidence=confidence):
+            with pytest.raises((TypeError, ValueError)) as exc_info:
+                EvidenceRecord.from_extraction(
+                    source_start=1,
+                    source_end=5,
+                    assertion_status=AssertionStatus.AFFIRMED,
+                    confidence=confidence,
+                    review_required=False,
+                )
 
-    assert "secret-confidence" not in str(exc_info.value)
+            assert "secret-confidence" not in str(exc_info.value)
 
 
 def test_unknown_assertion_fails_without_echoing_value() -> None:

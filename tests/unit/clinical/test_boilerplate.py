@@ -249,16 +249,14 @@ def test_template_and_evaluation_data_are_synthetic_and_unrestricted() -> None:
         assert restricted_source not in corpus_text
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    (
+def test_copy_forward_rejects_invalid_options(subtests) -> None:
+    for kwargs, message in (
         ({"shingle_size": 1}, "shingle_size"),
         ({"shingle_size": 9, "min_tokens": 8}, "min_tokens"),
         ({"document_id": ""}, "document_id"),
-    ),
-)
-def test_copy_forward_rejects_invalid_options(kwargs: dict, message: str) -> None:
-    with pytest.raises(ValueError, match=message):
-        detect_copy_forward(
-            "Synthetic text with enough words for validation.", **kwargs
-        )
+    ):
+        with subtests.test(kwargs=kwargs, message=message):
+            with pytest.raises(ValueError, match=message):
+                detect_copy_forward(
+                    "Synthetic text with enough words for validation.", **kwargs
+                )

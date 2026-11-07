@@ -38,20 +38,21 @@ def test_empty_coding_array_with_text_reports_only_empty_coding_array():
     assert findings[0]["code"] == "structure"
 
 
-@pytest.mark.parametrize("text", ["Creatinine", "creatinine", "  CREATININE  "])
-def test_matching_display_and_text_produces_no_findings(text):
-    concept = {
-        "coding": [
-            {
-                "system": "http://loinc.org",
-                "code": "2160-0",
-                "display": "Creatinine",
+def test_matching_display_and_text_produces_no_findings(subtests):
+    for text in ["Creatinine", "creatinine", "  CREATININE  "]:
+        with subtests.test(text=text):
+            concept = {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "2160-0",
+                        "display": "Creatinine",
+                    }
+                ],
+                "text": text,
             }
-        ],
-        "text": text,
-    }
 
-    assert check_codeable_concept(concept) == []
+            assert check_codeable_concept(concept) == []
 
 
 def test_text_with_no_matching_display_produces_soft_mismatch():
@@ -117,21 +118,19 @@ def test_findings_are_json_serializable_and_deterministic():
     assert json.loads(json.dumps(first)) == first
 
 
-@pytest.mark.parametrize(
-    "malformed",
-    [
+def test_checker_never_raises_on_malformed_input(subtests):
+    for malformed in [
         None,
         [],
         "not a mapping",
         {"coding": None, "text": None},
         {"coding": ["bad", 42, {"display": object()}], "text": object()},
-    ],
-)
-def test_checker_never_raises_on_malformed_input(malformed):
-    findings = check_codeable_concept(malformed)
+    ]:
+        with subtests.test(malformed=malformed):
+            findings = check_codeable_concept(malformed)
 
-    assert isinstance(findings, list)
-    json.dumps(findings)
+            assert isinstance(findings, list)
+            json.dumps(findings)
 
 
 def test_findings_map_directly_to_operation_outcome_builder():

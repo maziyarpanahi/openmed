@@ -16,10 +16,21 @@ import tempfile
 import zipfile
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, BinaryIO
 from xml.etree import ElementTree as ET
+
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
+from .exceptions import ArchiveDocumentError
+
+_OOXML_POLICY = ArchiveSafetyPolicy(
+    max_entries=4096,
+    max_total_uncompressed_bytes=128 * 1024 * 1024,
+)
+_MAX_PACKAGE_BYTES = 144 * 1024 * 1024
 
 Coverage = Mapping[str, set[tuple[int, ...]]]
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -71,15 +82,27 @@ def _finding(category: str, data: bytes, count: int = 1) -> OoxmlResidualFinding
     return OoxmlResidualFinding(category, count, hashlib.sha256(data).hexdigest())
 
 
-def _parts(data: bytes) -> dict[str, bytes]:
+def _parts(
+    data: bytes, archive_policy: ArchiveSafetyPolicy | None = None
+) -> dict[str, bytes]:
+    if len(data) > _MAX_PACKAGE_BYTES:
+        raise ArchiveDocumentError("archive_byte_limit")
+    policy = _OOXML_POLICY
+    if archive_policy is not None:
+        policy = replace(
+            archive_policy,
+            max_entries=min(archive_policy.max_entries, policy.max_entries),
+            max_total_uncompressed_bytes=min(
+                archive_policy.max_total_uncompressed_bytes,
+                policy.max_total_uncompressed_bytes,
+            ),
+        )
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        with admitted_zip(io.BytesIO(data), policy) as archive:
             infos = archive.infolist()
             names = [info.filename for info in infos]
             if (
                 not infos
-                or len(infos) > 4096
-                or sum(info.file_size for info in infos) > 128 * 1024 * 1024
                 or len(names) != len(set(names))
                 or archive.comment
                 or any(info.comment or info.extra for info in infos)
@@ -89,6 +112,8 @@ def _parts(data: bytes) -> dict[str, bytes]:
             ):
                 raise ValueError
             return {info.filename: archive.read(info) for info in infos}
+    except ArchiveDocumentError:
+        raise
     except (OSError, ValueError, RuntimeError, zipfile.BadZipFile):
         raise OoxmlResidualError((_finding("invalid_package", data),)) from None
 
@@ -244,6 +269,8 @@ def inspect_ooxml(
             findings.extend(
                 _finding(key, payload, count) for key, count in sorted(counts.items())
             )
+    except ArchiveDocumentError:
+        findings.append(_finding("invalid_package", data))
     except OoxmlResidualError as exc:
         findings.extend(exc.findings)
     return tuple(findings)
@@ -358,17 +385,30 @@ def verify_ooxml(data: bytes, *, covered_text: Coverage | None = None) -> None:
 
 
 def _read_source(source: str | Path | BinaryIO) -> bytes:
-    if hasattr(source, "read"):
-        source.seek(0)
-        data = source.read()
-        source.seek(0)
-        return data
-    return Path(source).read_bytes()
+    """Read one bounded snapshot for extraction, coverage, and redaction."""
+    try:
+        if isinstance(source, (str, os.PathLike)):
+            with open(source, "rb") as stream:
+                data = stream.read(_MAX_PACKAGE_BYTES + 1)
+        else:
+            position = source.tell()
+            try:
+                source.seek(0)
+                data = source.read(_MAX_PACKAGE_BYTES + 1)
+            finally:
+                source.seek(position)
+    except (AttributeError, OSError, TypeError, ValueError):
+        raise ArchiveDocumentError("archive_invalid") from None
+    if not isinstance(data, bytes):
+        raise ArchiveDocumentError("archive_invalid")
+    if len(data) > _MAX_PACKAGE_BYTES:
+        raise ArchiveDocumentError("archive_byte_limit")
+    return data
 
 
-def _check_source(source: str | Path | BinaryIO, coverage: Coverage) -> bytes:
+def _check_source(data: bytes, coverage: Coverage) -> bytes:
     # Check the original ZIP too: optional writers can silently drop unknown parts.
-    sanitized = _sanitize(_read_source(source))
+    sanitized = _sanitize(data)
     verify_ooxml(sanitized, covered_text=coverage)
     return sanitized
 
@@ -392,17 +432,21 @@ def _run_coverage(
     return dict(coverage)
 
 
-def _xlsx_coverage(data: bytes) -> dict[str, set[tuple[int, ...]]]:
+def _xlsx_coverage(
+    data: bytes, archive_policy: ArchiveSafetyPolicy | None = None
+) -> dict[str, set[tuple[int, ...]]]:
     try:
-        return _xlsx_coverage_impl(data)
+        return _xlsx_coverage_impl(data, archive_policy)
     except (KeyError, ValueError, IndexError) as exc:
-        if isinstance(exc, OoxmlResidualError):
+        if isinstance(exc, (ArchiveDocumentError, OoxmlResidualError)):
             raise
         raise OoxmlResidualError((_finding("invalid_package", data),)) from None
 
 
-def _xlsx_coverage_impl(data: bytes) -> dict[str, set[tuple[int, ...]]]:
-    parts = _parts(data)
+def _xlsx_coverage_impl(
+    data: bytes, archive_policy: ArchiveSafetyPolicy | None
+) -> dict[str, set[tuple[int, ...]]]:
+    parts = _parts(data, archive_policy)
     workbook = _xml(parts["xl/workbook.xml"])
     ids = {element.get(f"{{{_R}}}id") for element in workbook.iter(f"{{{_S}}}sheet")}
     relations = _xml(parts["xl/_rels/workbook.xml.rels"])

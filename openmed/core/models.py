@@ -425,6 +425,24 @@ class ModelLoader:
         **kwargs,
     ):
         """Create an inference pipeline for the configured backend."""
+        from openmed.ner.indexing import (
+            SPAN_MODEL_FAMILIES,
+            resolve_model_record,
+        )
+
+        family = kwargs.pop("family", None)
+        record = resolve_model_record(
+            self._resolve_model_name(model_name), family=family
+        )
+        if record is not None and record.family in SPAN_MODEL_FAMILIES:
+            from openmed.ner.infer import SpanPipeline
+
+            if task != "token-classification":
+                raise ValueError("Native span models support token-classification only")
+            if getattr(self.config, "backend", None) not in {None, "hf"}:
+                raise ValueError("Native span models require the local default backend")
+            return SpanPipeline(record, self.config, **kwargs)
+
         from openmed.core.backends import HuggingFaceBackend, get_backend
 
         backend = get_backend(getattr(self.config, "backend", None), config=self.config)

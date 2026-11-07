@@ -112,5 +112,9 @@ writable; successful writes replace their contents and truncate any old trailing
 bytes. Unsupported streams receive an `invalid_destination` refusal. Refusal preserves sources and
 existing destinations. The XLSX API still disallows in-place writes; DOCX/PPTX
 allow verified in-place writes. No unverified Office package is written to a
-temporary file. Package verification refuses more than 4,096 entries or 128 MiB
-of decompressed content. It adds no network calls or dependencies.
+temporary file. Package verification caps the input and output archives at
+144 MiB, 4,096 entries, and 128 MiB of decompressed content.
+
+ZIP input admission enforces entry, size, ratio and path limits before parsing.
+See [ZIP document admission](asset-limits.md#zip-document-admission) for defaults,
+configurable tighter limits, content-free errors and allocation-test scope.

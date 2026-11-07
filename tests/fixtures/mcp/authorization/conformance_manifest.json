@@ -419,6 +419,201 @@
       "transport": {
         "forward_authorization": false
       }
+    },
+    {
+      "id": "positive-governance-preflight",
+      "kind": "positive",
+      "behavior": "read-only governed workflow preflight without inline authority",
+      "failure_boundary": "tool_authorization",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "read-verifier",
+          "challenge_ref": "read-verifier"
+        },
+        "client_key_ref": "read-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "read-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_workflow_preflight",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "positive-governance-preview",
+      "kind": "positive",
+      "behavior": "read-only governed workflow preview without inline authority",
+      "failure_boundary": "tool_authorization",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "read-verifier",
+          "challenge_ref": "read-verifier"
+        },
+        "client_key_ref": "read-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "read-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_workflow_preview",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "positive-governance-status",
+      "kind": "positive",
+      "behavior": "read-only governed workflow status without inline authority",
+      "failure_boundary": "tool_authorization",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "read-verifier",
+          "challenge_ref": "read-verifier"
+        },
+        "client_key_ref": "read-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.read"
+        ],
+        "confirmation_key_ref": "read-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_workflow_status",
+        "required_scope": "mcp.tools.read",
+        "payload_bytes": 96,
+        "state_change": false,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "positive-governance-review",
+      "kind": "positive",
+      "behavior": "human handoff with server-held single-use consent; no action approval",
+      "failure_boundary": "state_change_policy",
+      "expected_failure": null,
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "state-verifier",
+          "challenge_ref": "state-verifier"
+        },
+        "client_key_ref": "state-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "confirmation_key_ref": "state-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_workflow_request_review",
+        "required_scope": "mcp.tools.state_change",
+        "payload_bytes": 128,
+        "state_change": true,
+        "approval": true
+      },
+      "transport": {
+        "forward_authorization": false
+      }
+    },
+    {
+      "id": "negative-governance-review",
+      "kind": "negative",
+      "behavior": "reject handoff without human-channel consent",
+      "failure_boundary": "state_change_policy",
+      "expected_failure": "unapproved_state_change",
+      "authorization_request": {
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "redirect_uri": "http://127.0.0.1:8765/callback",
+        "pkce": {
+          "method": "S256",
+          "verifier_ref": "state-verifier",
+          "challenge_ref": "state-verifier"
+        },
+        "client_key_ref": "state-client-key"
+      },
+      "token_claims": {
+        "audience": "https://mcp.synthetic.invalid",
+        "issuer": "https://auth.synthetic.invalid",
+        "resource": "https://mcp.synthetic.invalid",
+        "scopes": [
+          "mcp.tools.state_change"
+        ],
+        "confirmation_key_ref": "state-client-key"
+      },
+      "tool_call": {
+        "name": "openmed_workflow_request_review",
+        "required_scope": "mcp.tools.state_change",
+        "payload_bytes": 128,
+        "state_change": true,
+        "approval": false
+      },
+      "transport": {
+        "forward_authorization": false
+      }
     }
   ]
 }

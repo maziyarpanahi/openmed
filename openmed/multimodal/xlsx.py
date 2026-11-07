@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.labels import OTHER, normalize_label
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
 
 from .base import ExtractedDocument
 from .exceptions import MissingDependencyError
@@ -96,6 +97,7 @@ def redact_xlsx(
     keep_year: bool = True,
     sample_size: int = 50,
     cell_deidentifier: CellDeidentifier | None = None,
+    archive_policy: ArchiveSafetyPolicy | None = None,
 ) -> XlsxRedactionResult:
     """Redact PHI in XLSX string cells while preserving workbook structure.
 
@@ -107,6 +109,7 @@ def redact_xlsx(
 
     Args:
         source: Input ``.xlsx`` workbook path.
+        archive_policy: Optional tighter ZIP admission policy.
         output_path: Destination ``.xlsx`` path. It must differ from ``source``.
         policy: Optional tabular mapping with ``header_heuristics`` and
             ``action_overrides``, or a core policy profile name for the default
@@ -142,7 +145,9 @@ def redact_xlsx(
         raise ValueError("sample_size must be at least 1")
 
     source_data = _read_source(source_path)
-    prepared_source = _check_source(source_path, _xlsx_coverage(source_data))
+    prepared_source = _check_source(
+        source_data, _xlsx_coverage(source_data, archive_policy)
+    )
     load_workbook = _load_workbook_function()
     workbook = load_workbook(
         filename=io.BytesIO(prepared_source),

@@ -94,9 +94,10 @@ def test_detected_canonical_sections_drive_context_priors() -> None:
         assert family.experiencer == FAMILY_EXPERIENCER
 
 
-@pytest.mark.parametrize(
-    ("language", "text", "expected"),
-    (
+def test_script_aware_headers_do_not_require_latin_whitespace_boundaries(
+    subtests,
+) -> None:
+    for language, text, expected in (
         (
             "zh",
             "前言。\n既往史：儿童期哮喘。\n计划：随访。",
@@ -112,16 +113,11 @@ def test_detected_canonical_sections_drive_context_priors() -> None:
             "רקע.\nהיסטוריה רפואית: אסתמה בעבר.\nתוכנית: מעקב.",
             [UNSECTIONED_SECTION, "past_medical_history", "plan"],
         ),
-    ),
-)
-def test_script_aware_headers_do_not_require_latin_whitespace_boundaries(
-    language: str,
-    text: str,
-    expected: list[str],
-) -> None:
-    sections = detect_sections(text, language=language)
+    ):
+        with subtests.test(language=language, text=text, expected=expected):
+            sections = detect_sections(text, language=language)
 
-    assert [section["label"] for section in sections] == expected
+            assert [section["label"] for section in sections] == expected
 
 
 def test_section_aliases_are_visible_to_context_canonicalization() -> None:

@@ -150,9 +150,8 @@ def test_laboratory_fact_preserves_range_unit_and_partial_date() -> None:
     assert result.value.fact.effective_time["start"] == "2026-03"
 
 
-@pytest.mark.parametrize(
-    ("profile", "status", "fields"),
-    [
+def test_common_fact_profiles_preserve_declared_fields(subtests) -> None:
+    for profile, status, fields in [
         (
             "medication",
             "active",
@@ -196,19 +195,16 @@ def test_laboratory_fact_preserves_range_unit_and_partial_date() -> None:
                 "value": {"code": "synthetic-housing-state"},
             },
         ),
-    ],
-)
-def test_common_fact_profiles_preserve_declared_fields(
-    profile: str, status: str, fields: dict[str, object]
-) -> None:
-    result = _normalize(
-        _request(_fragment(fields=fields | {"status": status}), profile=profile)
-    )
+    ]:
+        with subtests.test(profile=profile, status=status, fields=fields):
+            result = _normalize(
+                _request(_fragment(fields=fields | {"status": status}), profile=profile)
+            )
 
-    assert result.ok
-    assert result.value is not None
-    assert result.value.fact.fact_type == profile
-    assert result.value.fact.status == status
+            assert result.ok
+            assert result.value is not None
+            assert result.value.fact.fact_type == profile
+            assert result.value.fact.status == status
 
 
 def test_missing_required_value_is_unknown_not_invented() -> None:
@@ -326,24 +322,20 @@ def test_mapping_adapter_returns_typed_malformed_outcomes() -> None:
     assert nonfinite.code == "component_contract_invalid"
 
 
-@pytest.mark.parametrize(
-    "effective_time",
-    [
+def test_invalid_temporal_values_are_typed_unsupported(subtests) -> None:
+    for effective_time in [
         {"precision": "day", "start": "2026-02-30"},
         {"precision": "month", "start": "2026"},
         {"precision": "second", "start": "2026-01-01T00:00:00"},
         {"precision": "day", "start": "2026-02-03", "end": "2025-01-01"},
-    ],
-)
-def test_invalid_temporal_values_are_typed_unsupported(
-    effective_time: dict[str, str],
-) -> None:
-    fields = _condition_fields() | {"effective_time": effective_time}
+    ]:
+        with subtests.test(effective_time=effective_time):
+            fields = _condition_fields() | {"effective_time": effective_time}
 
-    result = _normalize(_request(_fragment(fields=fields)))
+            result = _normalize(_request(_fragment(fields=fields)))
 
-    assert result.state is StoreState.UNSUPPORTED
-    assert result.code == "effective_time_unsupported"
+            assert result.state is StoreState.UNSUPPORTED
+            assert result.code == "effective_time_unsupported"
 
 
 def test_unsupported_status_and_axes_are_not_guessed() -> None:

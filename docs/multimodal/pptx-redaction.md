@@ -98,3 +98,7 @@ redaction provenance without writing a presentation.
   properties, alt text and printer settings are cleared before publication.
 - All Office writers use the mandatory [package verification policy](xlsx-cell-redaction.md#office-package-verification),
   including typed refusals and destination-preserving staged verification.
+
+ZIP input admission enforces entry, size, ratio and path limits before parsing.
+See [ZIP document admission](asset-limits.md#zip-document-admission) for defaults,
+configurable tighter limits, content-free errors and allocation-test scope.
