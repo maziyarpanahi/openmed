@@ -49,6 +49,12 @@ Progress is updated after each document. Terminal records include:
 The job API does not return raw redacted text. Use synchronous
 `POST /pii/deidentify` when a caller needs the redacted payload in the response.
 
+When service authentication is enabled, a job is visible only to the principal
+that submitted it and to principals holding `jobs:admin`; every other caller
+receives `404`. See [Job Ownership](authentication.md#job-ownership) for the
+required `OPENMED_SERVICE_DIGEST_KEY` setting and how older records are
+handled.
+
 ## Webhook Payloads
 
 Terminal jobs trigger a signed webhook when `webhook` is provided. The payload

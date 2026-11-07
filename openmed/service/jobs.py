@@ -27,6 +27,9 @@ SERVICE_JOBS_WORKERS_ENV_VAR = "OPENMED_SERVICE_JOBS_WORKERS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
 TERMINAL_STATUSES = frozenset({"done", "failed"})
+# Version 2 adds the keyed submitting-principal digest to every record.
+JOB_STORE_SCHEMA_VERSION = 2
+OWNER_DIGEST_FIELD = "owner_digest"
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
@@ -177,11 +180,18 @@ class LocalJobStore:
             raise ValueError("Job metadata store must contain a jobs object")
         if any(not isinstance(record, dict) for record in jobs.values()):
             raise ValueError("Job metadata store contains an invalid job record")
-        return {str(job_id): dict(record) for job_id, record in jobs.items()}
+        version = raw.get("schema_version", 1)
+        if type(version) is not int or not 1 <= version <= JOB_STORE_SCHEMA_VERSION:
+            raise ValueError("Job metadata store has an unsupported schema version")
+        records = {str(job_id): dict(record) for job_id, record in jobs.items()}
+        for record in records.values():
+            # Version 1 records predate ownership; mark them explicitly unowned.
+            record.setdefault(OWNER_DIGEST_FIELD, None)
+        return records
 
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"jobs": self._records}
+        payload = {"jobs": self._records, "schema_version": JOB_STORE_SCHEMA_VERSION}
         temp_name: str | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -259,13 +269,27 @@ class DeidentifyJobQueue:
             max_workers=parse_jobs_workers(os.getenv(SERVICE_JOBS_WORKERS_ENV_VAR)),
         )
 
-    def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        """Submit one de-identification job and return its initial metadata."""
+    def submit(
+        self,
+        payload: DeidentifyJobRequest,
+        *,
+        owner_digest: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
+        """Submit one de-identification job and return its initial metadata.
+
+        Args:
+            payload: Validated job request; raw text stays in memory only.
+            owner_digest: Keyed digest of the submitting principal, or ``None``
+                when authentication is disabled.
+
+        Returns:
+            The persisted initial record.
+        """
         self.runtime.validate_served_model(payload.model_name)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
-            record = self._new_record(payload)
+            record = self._new_record(payload, owner_digest=owner_digest)
             self.store.create(record)
             self._executor.submit(self._run_job, _JobWorkItem(record["id"], payload))
             return _copy_record(record)
@@ -288,7 +312,12 @@ class DeidentifyJobQueue:
         )
         return _isoformat(expires_at)
 
-    def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
+    def _new_record(
+        self,
+        payload: DeidentifyJobRequest,
+        *,
+        owner_digest: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
         now = self.clock()
         documents = [
             _document_metadata(index, document)
@@ -312,6 +341,7 @@ class DeidentifyJobQueue:
             "started_at": None,
             "completed_at": None,
             "expires_at": self._expiry_timestamp(now),
+            OWNER_DIGEST_FIELD: None if owner_digest is None else dict(owner_digest),
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
@@ -518,8 +548,13 @@ def job_response_payload(
     *,
     status_url: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Return the public REST representation of a job record."""
+    """Return the public REST representation of a job record.
+
+    The stored owner digest is internal authorization state and is never
+    returned to callers.
+    """
     payload = _copy_record(record)
+    payload.pop(OWNER_DIGEST_FIELD, None)
     if status_url is not None:
         payload["status_url"] = status_url
     return payload

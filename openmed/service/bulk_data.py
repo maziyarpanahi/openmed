@@ -289,6 +289,7 @@ class _JobRecord:
     status: FHIRBulkJobStatus
     task: asyncio.Task[Any]
     cancel_event: Event
+    owner_digest: dict[str, str] | None = None
 
 
 class FHIRBulkJobManager:
@@ -310,8 +311,20 @@ class FHIRBulkJobManager:
         *,
         deidentifier: Any = None,
         job_id: str | None = None,
+        owner_digest: dict[str, str] | None = None,
     ) -> FHIRBulkJobStatus:
-        """Start one asynchronous job and return its polling status."""
+        """Start one asynchronous job and return its polling status.
+
+        Args:
+            config: Validated job configuration.
+            deidentifier: Optional de-identification callable.
+            job_id: Optional pre-reserved job id.
+            owner_digest: Keyed digest of the submitting principal, kept out
+                of every status payload; ``None`` when auth is disabled.
+
+        Returns:
+            The initial polling status.
+        """
 
         self._validate_config(config)
         run_id = job_id or uuid.uuid4().hex
@@ -330,6 +343,7 @@ class FHIRBulkJobManager:
             status=status,
             task=task,
             cancel_event=cancel_event,
+            owner_digest=None if owner_digest is None else dict(owner_digest),
         )
         return status
 
@@ -340,6 +354,18 @@ class FHIRBulkJobManager:
         if record is None:
             raise KeyError(job_id)
         return record.status
+
+    def owner_digest(self, job_id: str) -> dict[str, str] | None:
+        """Return the stored owner digest of one job.
+
+        Raises:
+            KeyError: If the job does not exist.
+        """
+
+        record = self._jobs.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        return None if record.owner_digest is None else dict(record.owner_digest)
 
     def report(self, job_id: str) -> dict[str, Any]:
         """Return the completed PHI-free report."""

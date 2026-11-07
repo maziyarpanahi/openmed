@@ -596,7 +596,8 @@ class _FakeManager:
             summary=self.completed_summary,
         )
 
-    def start(self, config, *, deidentifier=None, job_id=None):
+    def start(self, config, *, deidentifier=None, job_id=None, owner_digest=None):
+        del owner_digest
         self.started = True
         self.started_config = config
         return self.status

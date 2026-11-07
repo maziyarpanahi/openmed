@@ -106,6 +106,66 @@ routes with an unrelated scope must receive the matching grant. `*` and
 `namespace:*` still work. The deny-by-default setting remains available for
 unmatched requests; it does not disable declared route scopes.
 
+## Job Ownership
+
+When API-key, JWT or mTLS authentication is enabled, every record created by
+`POST /jobs`, `POST /fhir/bulk/exports`, `POST /fhir/bulk/imports` and
+`POST /fhir/smart-backend/ingestions` is bound to the principal that submitted
+it. Only that principal can read or cancel the record afterwards:
+
+| Route | Owner check |
+|---|---|
+| `GET /jobs/{job_id}` | owner or `jobs:admin` |
+| `GET` bulk export/import status, `/manifest` and `/report` | owner or `bulk:admin` |
+| `DELETE` bulk export/import | owner or `bulk:admin` |
+| `GET` SMART ingestion status and `/summary`, `DELETE` ingestion | owner or `bulk:admin` |
+
+Any other authenticated principal receives the same `404` envelope as a
+request for an unknown job id, so job ids cannot be used to probe whether
+another caller's job exists. A non-owner never learns that a job is still
+running either: the `409` "not completed" answer is reserved for callers who
+may see the job.
+
+The owner is the credential type, the JWT issuer when present, and the subject
+(the API-key `principal`, the JWT `sub`, or the mapped mTLS principal). API-key
+ids are not part of the owner, so rotating a key for the same configured
+principal keeps access to its jobs. `jobs:admin` and `bulk:admin` are matched
+literally and are needed in addition to the route's read or write scope;
+wildcard grants such as `*` or `jobs:*` do not override ownership.
+
+The service never stores the principal itself. It stores a keyed,
+domain-separated HMAC-SHA256 digest with `alg` and `key_id` markers, which
+cannot be mapped back to a principal name without the deployment key. The
+digest is internal state: it is not returned by any job, bulk or SMART route,
+not included in webhook payloads, and not logged.
+
+Configure the digest key whenever authentication is enabled:
+
+```bash
+OPENMED_SERVICE_DIGEST_KEY="$(openssl rand -hex 32)" \
+OPENMED_SERVICE_DIGEST_KEY_ID=jobs-2026-11 \
+OPENMED_SERVICE_AUTH_ENABLED=true \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+`OPENMED_SERVICE_DIGEST_KEY` must contain at least 32 bytes and is used as-is
+(its UTF-8 bytes). `OPENMED_SERVICE_DIGEST_KEY_ID` is optional; without it the
+service derives a public key id from the key. Outside the `dev` and `test`
+profiles the service refuses to start with authentication enabled and no
+digest key. In `dev` and `test` it falls back to a random per-process key, so
+`/jobs` records persisted by one process are visible only to administrators
+after a restart. Changing the key has the same effect: records whose digest
+was made by another key fail closed and remain visible to administrators until
+their TTL expires.
+
+Records created while authentication was disabled, and `/jobs` records written
+by releases before this binding existed, have no owner. The local job store
+upgrades its file to schema version 2 and marks such records as unowned. Once
+authentication is enabled they are visible only to `jobs:admin` principals,
+except in the `dev` and `test` profiles where any authenticated caller with
+`jobs:read` can still read them. With authentication disabled, job routes
+behave exactly as before.
+
 ## Errors and Failed Attempts
 
 Missing or invalid credentials return the standard service error envelope with

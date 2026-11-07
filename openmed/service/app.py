@@ -47,6 +47,7 @@ from openmed.utils.validation import validate_model_name
 
 from .auth import (
     ROUTE_POLICIES,
+    AuthPrincipal,
     ServiceAuth,
     parse_service_auth_config,
     request_needs_admission,
@@ -67,7 +68,8 @@ from .bulk_data import (
 )
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
-from .jobs import DeidentifyJobQueue, job_response_payload
+from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
+from .jobs import OWNER_DIGEST_FIELD, DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
@@ -742,6 +744,54 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     return queue
 
 
+def _get_job_ownership(request: Request) -> JobOwnershipPolicy:
+    policy = getattr(request.app.state, "job_ownership", None)
+    if policy is None:
+        raise InternalError(
+            "The job ownership policy is not initialized. Restart the service "
+            "and report the startup invariant if it recurs."
+        )
+    return policy
+
+
+def _submitting_owner_digest(request: Request) -> Optional[dict[str, str]]:
+    """Return the keyed digest of the authenticated submitter, if any."""
+    return _get_job_ownership(request).owner_digest(request.scope.get("openmed.auth"))
+
+
+def _job_visible(
+    request: Request,
+    *,
+    admin_scope: str,
+    owner_digest: Callable[[], Any],
+) -> bool:
+    """Return whether the caller may read or cancel a job record.
+
+    The owner lookup is deferred so auth-disabled requests never consult it.
+    Callers answer ``False`` exactly like an unknown job id, so other
+    principals cannot probe which ids exist.
+    """
+    policy = _get_job_ownership(request)
+    principal = request.scope.get("openmed.auth")
+    if not isinstance(principal, AuthPrincipal):
+        return policy.permits(None, None, admin_scope=admin_scope)
+    return policy.permits(principal, owner_digest(), admin_scope=admin_scope)
+
+
+def _require_visible_bulk_job(
+    request: Request,
+    manager: FHIRBulkJobManager | SMARTBackendJobManager,
+    job_id: str,
+) -> None:
+    """Raise ``KeyError`` for an unknown job or one the caller does not own."""
+    if not _job_visible(
+        request,
+        admin_scope=BULK_ADMIN_SCOPE,
+        owner_digest=lambda: manager.owner_digest(job_id),
+    ):
+        raise KeyError(job_id)
+
+
 def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
     catalog = getattr(request.app.state, "journey_resources", None)
     if catalog is None:
@@ -927,6 +977,9 @@ def create_app(
     app.state.mtls = ServiceMTLS(
         parse_service_mtls_config(),
         error_response=_error_response,
+    )
+    app.state.job_ownership = JobOwnershipPolicy.from_env(
+        authentication_enabled=app.state.auth.enabled or app.state.mtls.enabled
     )
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
@@ -1848,8 +1901,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).get(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.get(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1868,8 +1923,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).manifest(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.manifest(job_id)
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1890,8 +1947,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).report(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.report(job_id)
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1914,8 +1973,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            status = await _get_fhir_bulk_manager(request).cancel(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            status = await manager.cancel(job_id)
             return status.to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
@@ -1966,15 +2027,22 @@ def create_app(
         )
         config = replace(config, output_dir=output, checkpoint_path=checkpoint)
         deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(config, deidentifier=deidentifier, job_id=job_id).to_dict()
+        return manager.start(
+            config,
+            deidentifier=deidentifier,
+            job_id=job_id,
+            owner_digest=_submitting_owner_digest(request),
+        ).to_dict()
 
     @app.get("/fhir/smart-backend/ingestions/{job_id}")
     async def smart_backend_ingestion_status(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return _get_smart_backend_manager(request).get(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.get(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1986,8 +2054,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return _get_smart_backend_manager(request).summary(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.summary(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -2008,8 +2078,10 @@ def create_app(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return (await _get_smart_backend_manager(request).cancel(job_id)).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return (await manager.cancel(job_id)).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -2023,14 +2095,18 @@ def create_app(
     ) -> Dict[str, Any]:
         _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
-        record = queue.submit(payload)
+        record = queue.submit(payload, owner_digest=_submitting_owner_digest(request))
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
 
     @app.get("/jobs/{job_id}")
     async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
         queue = _get_job_queue(request)
         record = queue.get(job_id)
-        if record is None:
+        if record is None or not _job_visible(
+            request,
+            admin_scope=JOBS_ADMIN_SCOPE,
+            owner_digest=lambda: record.get(OWNER_DIGEST_FIELD),
+        ):
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
@@ -2682,7 +2758,12 @@ def _start_fhir_bulk_job(
     )
     configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
     deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
-    return manager.start(config, deidentifier=deidentifier, job_id=job_id)
+    return manager.start(
+        config,
+        deidentifier=deidentifier,
+        job_id=job_id,
+        owner_digest=_submitting_owner_digest(request),
+    )
 
 
 def _fhir_bulk_deidentifier(

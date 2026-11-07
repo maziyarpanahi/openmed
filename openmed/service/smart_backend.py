@@ -768,6 +768,7 @@ class SMARTBackendJobStatus:
 class _JobRecord:
     status: SMARTBackendJobStatus
     task: asyncio.Task[Any]
+    owner_digest: dict[str, str] | None = None
 
 
 class SMARTBackendJobManager:
@@ -789,8 +790,20 @@ class SMARTBackendJobManager:
         *,
         deidentifier: Deidentifier | None = None,
         job_id: str | None = None,
+        owner_digest: dict[str, str] | None = None,
     ) -> SMARTBackendJobStatus:
-        """Start one background ingestion job."""
+        """Start one background ingestion job.
+
+        Args:
+            config: SMART backend configuration.
+            deidentifier: Optional de-identification callable.
+            job_id: Optional pre-reserved job id.
+            owner_digest: Keyed digest of the submitting principal, kept out
+                of every status payload; ``None`` when auth is disabled.
+
+        Returns:
+            The initial job status.
+        """
 
         run_id = job_id or uuid.uuid4().hex
         if run_id in self._jobs:
@@ -803,7 +816,11 @@ class SMARTBackendJobManager:
             updated_at=now,
         )
         task = asyncio.create_task(self._run(run_id, config, deidentifier))
-        self._jobs[run_id] = _JobRecord(status=status, task=task)
+        self._jobs[run_id] = _JobRecord(
+            status=status,
+            task=task,
+            owner_digest=None if owner_digest is None else dict(owner_digest),
+        )
         return status
 
     def get(self, job_id: str) -> SMARTBackendJobStatus:
@@ -813,6 +830,18 @@ class SMARTBackendJobManager:
         if record is None:
             raise KeyError(job_id)
         return record.status
+
+    def owner_digest(self, job_id: str) -> dict[str, str] | None:
+        """Return the stored owner digest of one ingestion job.
+
+        Raises:
+            KeyError: If the job does not exist.
+        """
+
+        record = self._jobs.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        return None if record.owner_digest is None else dict(record.owner_digest)
 
     def summary(self, job_id: str) -> SMARTBackendIngestionSummary:
         """Return the completed job summary."""
