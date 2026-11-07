@@ -33,6 +33,48 @@ from examples import (
 deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
 
 
+def test_federated_round_walkthrough_is_import_safe(capsys):
+    root = Path(__file__).resolve().parents[2]
+    namespace = runpy.run_path(
+        str(root / "examples/federated_round_walkthrough.py"),
+        run_name="example_import",
+    )
+    assert callable(namespace["run_example"])
+    assert callable(namespace["main"])
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("output_format", ("json", "markdown"))
+def test_federated_round_walkthrough_cli_matches_golden_bytes(output_format):
+    root = Path(__file__).resolve().parents[2]
+    extension = "json" if output_format == "json" else "md"
+    expected = (
+        root / f"tests/fixtures/training/federated_round_walkthrough.{extension}"
+    ).read_bytes()
+    assert expected.endswith(b"\n")
+    assert not expected.endswith(b"\n\n")
+    outputs = []
+    for _ in range(2):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "examples.federated_round_walkthrough",
+                "--format",
+                output_format,
+            ],
+            cwd=root,
+            input=b"EXTERNAL_INPUT_MUST_NOT_BE_READ\n",
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        assert result.stderr == b""
+        assert result.stdout == expected
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1]
+
+
 def _assert_sdoh_timeline_demo_output(output: str) -> None:
     records = [json.loads(line) for line in output.splitlines()]
     assert len(records) == 12
