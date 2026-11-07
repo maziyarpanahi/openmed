@@ -67,7 +67,7 @@ container_args=(
   --env "OPENMED_PROFILE=$SERVICE_PROFILE"
   --env "OPENMED_SERVICE_PRELOAD_MODELS=$PRELOAD_MODELS"
   --env "OPENMED_SERVICE_KEEP_ALIVE=$KEEP_ALIVE"
-  --env HF_HOME=/root/.cache/huggingface
+  --env HF_HOME=/home/nonroot/.cache/huggingface
 )
 
 if [[ -n "${OPENMED_OFFLINE+x}" ]]; then

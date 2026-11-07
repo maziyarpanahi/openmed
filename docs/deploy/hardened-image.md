@@ -82,10 +82,10 @@ volume, verifies `/livez` and `/readyz`, and runs a synthetic
 | Area | Current service image (`Dockerfile`) | Distroless image |
 |---|---|---|
 | Runtime base | `python:3.11-slim` | `gcr.io/distroless/python3-debian12:nonroot` |
-| Runtime user | Root by default | Fixed non-root UID/GID `65532` |
+| Runtime user | Fixed non-root UID/GID `65532` (`nonroot`, `HOME=/home/nonroot`) | Fixed non-root UID/GID `65532` |
 | Shell and package manager | Debian shell, `apt` database, and `pip` remain available | No shell or package manager in the final stage |
 | Python dependencies | Installed into the image's system environment | Copied from the builder into `/opt/openmed/python` |
-| Model cache | `/root/.cache/huggingface` | Writable `/cache` volume with `OPENMED_CACHE_DIR=/cache/openmed` |
+| Model cache | `/home/nonroot/.cache`, the volume mount point used by Compose and the Helm chart | Writable `/cache` volume with `OPENMED_CACHE_DIR=/cache/openmed` |
 | Root filesystem | Writable unless runtime flags override it | Designed for `--read-only` with a `/tmp` tmpfs |
 | Linux capabilities | Docker default capability set unless overridden | Run command drops all capabilities |
 | Healthcheck | `/health` | `/readyz`, with `/livez` kept separate for liveness |

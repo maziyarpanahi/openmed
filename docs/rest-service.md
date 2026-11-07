@@ -1100,8 +1100,10 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 
 Use the provided `docker-compose.yml` to build and start the service with a
 single command. The Compose setup publishes host port **8080**, sets
-`OPENMED_PROFILE=prod`, and persists the standard Hugging Face cache directory
-in a named volume so downloads placed in that cache are reused across restarts.
+`OPENMED_PROFILE=prod`, and persists the image user's cache directory
+(`/home/nonroot/.cache`, holding the OpenMed and Hugging Face caches) in the
+`openmed-cache` named volume so downloads are reused across restarts. The image
+runs as the non-root UID/GID `65532`.
 `OPENMED_CACHE_DIR` is also passed through for data and deployment workflows
 that explicitly read it; it is not a generic `OpenMedConfig.cache_dir`
 override.
