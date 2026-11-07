@@ -169,6 +169,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
 
+- Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
+  retention, provenance and review/export threats to enforcing code/tests or
+  tracked gaps, with offline dangling-reference and publication regression gates.
+
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
 - Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
