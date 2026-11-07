@@ -1,22 +1,36 @@
 import Foundation
 
-public enum OpenMedModelStoreError: LocalizedError {
-    case invalidResponse(URL)
-    case httpError(URL, Int)
-    case missingManifest(URL)
-    case missingWeights(URL)
+/// Value-free model-store failures. No case carries a URL, repository id,
+/// revision, or filesystem path, so errors are safe to log and report.
+public enum OpenMedModelStoreError: LocalizedError, Equatable, Sendable {
+    case invalidResponse
+    case httpError(statusCode: Int)
+    case missingManifest
+    case missingWeights
+    /// Carries a controlled confinement reason code such as `outside_snapshot`.
     case invalidManifestPath(String)
+
+    /// Stable reason code for logs and metrics.
+    public var reason: String {
+        switch self {
+        case .invalidResponse: return "invalid_response"
+        case .httpError: return "http_status"
+        case .missingManifest: return "missing_manifest"
+        case .missingWeights: return "missing_weights"
+        case .invalidManifestPath: return "invalid_manifest_path"
+        }
+    }
 
     public var errorDescription: String? {
         switch self {
-        case .invalidResponse(let url):
-            return "Invalid response while downloading \(url.absoluteString)"
-        case .httpError(let url, let statusCode):
-            return "HTTP \(statusCode) while downloading \(url.absoluteString)"
-        case .missingManifest(let url):
-            return "Downloaded MLX model is missing openmed-mlx.json in \(url.path)"
-        case .missingWeights(let url):
-            return "Downloaded MLX model does not contain any usable weight file in \(url.path)"
+        case .invalidResponse:
+            return "Invalid response while downloading an MLX model file."
+        case .httpError(let statusCode):
+            return "HTTP \(statusCode) while downloading an MLX model file."
+        case .missingManifest:
+            return "Downloaded MLX model is missing openmed-mlx.json."
+        case .missingWeights:
+            return "Downloaded MLX model does not contain any usable weight file."
         case .invalidManifestPath:
             return "MLX artifact path rejected by snapshot confinement."
         }
@@ -151,6 +165,20 @@ public enum OpenMedModelStore {
         "added_tokens.json",
     ]
 
+    /// Crash-safe generation cache for signed portable bundles, stored next to
+    /// the MLX snapshots (`Caches/OpenMed/Bundles` by default). Unlike the MLX
+    /// snapshot path, it verifies every declared file against the signed
+    /// bundle manifest before a generation becomes ready.
+    public static func bundleCache(
+        cacheDirectory: URL? = nil,
+        options: OpenMedBundleCacheOptions = OpenMedBundleCacheOptions()
+    ) throws -> OpenMedBundleCache {
+        let root =
+            try cacheDirectory
+            ?? defaultCacheDirectory().deletingLastPathComponent().appending(path: "Bundles", directoryHint: .isDirectory)
+        return try OpenMedBundleCache(rootDirectory: root, options: options)
+    }
+
     public static func downloadMLXModel(
         repoID: String,
         revision: String = "main",
@@ -209,7 +237,7 @@ public enum OpenMedModelStore {
                     let exists = try await fetch(name, optional: true)
                     hasWeights = hasWeights || exists
                 }
-                guard hasWeights else { throw OpenMedModelStoreError.missingWeights(modelDirectory) }
+                guard hasWeights else { throw OpenMedModelStoreError.missingWeights }
                 for name in legacyTokenizerFiles { _ = try await fetch(name, optional: true) }
                 try markArtifactReadyIfComplete(boundary: boundary)
                 return modelDirectory
@@ -235,7 +263,7 @@ public enum OpenMedModelStore {
                     continue
                 }
             }
-            guard downloadedWeights else { throw OpenMedModelStoreError.missingWeights(modelDirectory) }
+            guard downloadedWeights else { throw OpenMedModelStoreError.missingWeights }
 
             for file in manifest.tokenizer.files {
                 _ = try await fetch(boundary.tokenizerPath(base: manifest.tokenizer.path, file: file))
@@ -389,10 +417,10 @@ public enum OpenMedModelStore {
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw OpenMedModelStoreError.invalidResponse(remoteURL)
+            throw OpenMedModelStoreError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw OpenMedModelStoreError.httpError(remoteURL, httpResponse.statusCode)
+            throw OpenMedModelStoreError.httpError(statusCode: httpResponse.statusCode)
         }
 
         // URLSession suspends: check again before creating directories or writing.
@@ -421,7 +449,7 @@ public enum OpenMedModelStore {
                 boundary: boundary, session: session
             )
             return try boundary.containsFile(relativePath)
-        } catch OpenMedModelStoreError.httpError(_, 404) {
+        } catch OpenMedModelStoreError.httpError(statusCode: 404) {
             return try boundary.containsFile(relativePath)
         }
     }
@@ -449,9 +477,7 @@ public enum OpenMedModelStore {
                 string: "https://huggingface.co/\(encodedRepo)/resolve/\(encodedRevision)/\(encodedPath)?download=1"
             )
         else {
-            throw OpenMedModelStoreError.invalidResponse(
-                URL(fileURLWithPath: "/\(repoID)/\(relativePath)")
-            )
+            throw OpenMedModelStoreError.invalidResponse
         }
         return url
     }
