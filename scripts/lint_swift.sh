@@ -8,6 +8,7 @@ PATHS=(
   "$ROOT/swift/OpenMedKit/Package.swift"
   "$ROOT/swift/OpenMedKit/Sources"
   "$ROOT/swift/OpenMedKit/Tests"
+  "$ROOT/swift/RootPackageConsumer/Sources"
 )
 
 swift format lint --strict --recursive --parallel --configuration "$CONFIG" "${PATHS[@]}"

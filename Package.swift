@@ -2,6 +2,11 @@
 
 import PackageDescription
 
+// Consumer-facing manifest: SwiftPM resolves this file when an app adds the
+// repository URL. swift/OpenMedKit/Package.swift mirrors it for the demos and
+// simulator lanes and may differ only in target source paths; CI enforces that
+// with scripts/release/check_swift_manifest_drift.py. Change both together.
+
 let package = Package(
     name: "OpenMedKit",
     platforms: [
@@ -37,7 +42,15 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
-            exact: "0.31.3"
+            exact: "0.32.3"
+        ),
+        // 3.32.3 is the first tag that contains upstream #419, which preserves
+        // multimodal RoPE state from prefill into autoregressive decode. A tag is
+        // required here: SwiftPM rejects revision pins inside packages that
+        // consumers require by version.
+        .package(
+            url: "https://github.com/ml-explore/mlx-swift-lm.git",
+            exact: "3.32.3"
         ),
         .package(
             url: "https://github.com/weichsel/ZIPFoundation.git",
@@ -71,6 +84,16 @@ let package = Package(
                 .product(
                     name: "MLXNN",
                     package: "mlx-swift",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXLMCommon",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.iOS, .macOS])
+                ),
+                .product(
+                    name: "MLXLLM",
+                    package: "mlx-swift-lm",
                     condition: .when(platforms: [.iOS, .macOS])
                 ),
                 .product(

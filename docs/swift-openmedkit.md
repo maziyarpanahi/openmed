@@ -151,7 +151,9 @@ ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families ar
 ## Requirements
 
 - iOS 17+ / macOS 14+ / watchOS 10+ / visionOS 1+
-- Xcode 15+
+- Xcode 26.4+ (Swift 6.3 toolchain). The pinned `mlx-swift` 0.32.3 manifest
+  needs it, and SwiftPM resolves the whole dependency graph, so CoreML-only
+  apps need it too.
 - For MLX:
   - Apple Silicon Mac, or
   - a real iPhone/iPad device
@@ -206,6 +208,37 @@ Then add the product:
     ]
 )
 ```
+
+### Which manifest SwiftPM resolves
+
+Adding the repository URL resolves the root `Package.swift`. That is the
+consumer-facing manifest. `swift/OpenMedKit/Package.swift` is a mirror that the
+demos and the iOS, watchOS and visionOS CI lanes build. The two must declare
+the same dependencies, version requirements, products, platforms and target
+conditions; only target source paths differ. The Swift workflow runs
+`scripts/release/check_swift_manifest_drift.py` to compare normalized
+`swift package dump-package` output for both. It also runs
+`scripts/check_swift_root_consumer.sh` to build a consumer that requires the
+root package by version and references `OpenMedMaple` and the Compass runtime
+on macOS and for iOS.
+
+Every dependency is a tagged release. `mlx-swift-lm` 3.32.3 is the first tag
+that carries the multimodal RoPE state fix that Compass needs. SwiftPM refuses
+revision-pinned dependencies inside a package that apps require by version.
+
+Some symbols compile only on some platforms:
+
+| Symbols | Compiled when | Platforms |
+|---|---|---|
+| `OpenMed`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | `MLX` and `Tokenizers` are importable | iOS, macOS |
+| MLX token-classification, GLiNER and privacy-filter runtimes | `MLX` is importable | iOS, macOS |
+| `OpenMedMaple`, including `brief(source:originalIdentifiers:...)` | `MLX`, `MLXNN`, `MLXLMCommon`, `MLXLLM` and `Tokenizers` are importable | iOS, macOS |
+| `OpenMedVisionLanguageModel` and `OpenMedVisionLanguageGeneration` (Compass) | `MLXLMCommon` and `Tokenizers` are importable | iOS, macOS |
+| `PlatformModel` and the CoreML path | always | iOS, macOS, watchOS, visionOS |
+
+The MLX, `mlx-swift-lm`, `swift-transformers` and ZIPFoundation products are
+linked only for iOS and macOS. iOS Simulator builds compile the MLX symbols, but
+MLX cannot run there.
 
 ## Quick Start: Swift MLX
 
