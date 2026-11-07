@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 TimexType = Literal["DATE", "DURATION", "SET"]
 RelativeDirection = Literal[
     "none",
@@ -388,8 +390,8 @@ def _canonical_reference_time(
     if not normalized:
         raise ValueError("document_time must not be empty")
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
-        return date.fromisoformat(normalized).isoformat()
-    return datetime.fromisoformat(normalized.replace("Z", "+00:00")).isoformat()
+        return parse_iso_date(normalized).isoformat()
+    return parse_iso_datetime(normalized.replace("Z", "+00:00")).isoformat()
 
 
 def _date_expression(
@@ -471,7 +473,7 @@ def _duration_expression(
 def _parse_iso_date(match: re.Match[str]) -> TemporalExpression | None:
     value = match.group("date")
     try:
-        date.fromisoformat(value)
+        parse_iso_date(value)
     except ValueError:
         return None
     return _date_expression(match, value=value, metadata={"precision": "day"})

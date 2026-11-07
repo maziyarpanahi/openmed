@@ -106,26 +106,30 @@ def test_format_hint_covers_backlog_language_pack_locales() -> None:
     assert BACKLOG_LOCALES <= set(LOCALE_NUMBER_SEP)
 
 
-@pytest.mark.parametrize("lang", sorted(WIRED_LOCALES | BACKLOG_LOCALES))
-def test_format_hint_returns_date_order_and_separators(lang: str) -> None:
-    hint = format_hint(lang)
+def test_format_hint_returns_date_order_and_separators(subtests) -> None:
+    for lang in sorted(WIRED_LOCALES | BACKLOG_LOCALES):
+        with subtests.test(lang=lang):
+            hint = format_hint(lang)
 
-    assert hint.lang == lang
-    assert hint.date_order in {"dmy", "mdy", "ymd"}
-    assert hint.decimal_separator
-    assert hint.number.decimal_separators
-
-
-@pytest.mark.parametrize("locale", ["ar_eg", "ar_ma"])
-def test_north_africa_locale_format_examples_match_declared_data(locale: str) -> None:
-    for spec in LOCALE_PII_FORMATS[locale]:
-        for example in spec.examples:
-            assert re.search(spec.pattern, example, spec.flags), (spec.name, example)
+            assert hint.lang == lang
+            assert hint.date_order in {"dmy", "mdy", "ymd"}
+            assert hint.decimal_separator
+            assert hint.number.decimal_separators
 
 
-@pytest.mark.parametrize(
-    ("locale", "format_name", "contextual_text", "value", "invalid", "validator"),
-    [
+def test_north_africa_locale_format_examples_match_declared_data(subtests) -> None:
+    for locale in ["ar_eg", "ar_ma"]:
+        with subtests.test(locale=locale):
+            for spec in LOCALE_PII_FORMATS[locale]:
+                for example in spec.examples:
+                    assert re.search(spec.pattern, example, spec.flags), (
+                        spec.name,
+                        example,
+                    )
+
+
+def test_north_africa_national_ids_round_trip_through_locale_sweep(subtests) -> None:
+    for locale, format_name, contextual_text, value, invalid, validator in [
         (
             "ar_EG",
             "egyptian_national_id",
@@ -142,85 +146,86 @@ def test_north_africa_locale_format_examples_match_declared_data(locale: str) ->
             "123456",
             validate_moroccan_cin,
         ),
-    ],
-)
-def test_north_africa_national_ids_round_trip_through_locale_sweep(
-    locale,
-    format_name,
-    contextual_text,
-    value,
-    invalid,
-    validator,
-) -> None:
-    locale_key = locale.casefold()
-    declared = next(
-        spec for spec in LOCALE_PII_FORMATS[locale_key] if spec.name == format_name
-    )
-    runtime = next(
-        pattern
-        for pattern in LOCALE_PII_PATTERNS[locale_key]
-        if pattern.pattern == declared.pattern
-    )
+    ]:
+        with subtests.test(
+            locale=locale,
+            format_name=format_name,
+            contextual_text=contextual_text,
+            value=value,
+            invalid=invalid,
+            validator=validator,
+        ):
+            locale_key = locale.casefold()
+            declared = next(
+                spec
+                for spec in LOCALE_PII_FORMATS[locale_key]
+                if spec.name == format_name
+            )
+            runtime = next(
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale_key]
+                if pattern.pattern == declared.pattern
+            )
 
-    assert validator(value) is True
-    assert validator(invalid) is False
-    assert runtime.validator is validator
-    assert runtime in get_patterns_for_language("ar", locale=locale)
+            assert validator(value) is True
+            assert validator(invalid) is False
+            assert runtime.validator is validator
+            assert runtime in get_patterns_for_language("ar", locale=locale)
 
-    swept = safety_sweep(contextual_text, [], lang="ar", locale=locale)
-    assert [(entity.text, entity.label) for entity in swept] == [(value, "national_id")]
+            swept = safety_sweep(contextual_text, [], lang="ar", locale=locale)
+            assert [(entity.text, entity.label) for entity in swept] == [
+                (value, "national_id")
+            ]
 
 
-@pytest.mark.parametrize(
-    ("locale", "phone"),
-    [
+def test_african_fr_pt_phone_formats_match_country_prefix(subtests) -> None:
+    for locale, phone in [
         ("fr_sn", "+221 77 642 18 35"),
         ("fr_ci", "+225 07 48 26 15 39"),
         ("fr_cm", "+237 6 71 24 83 59"),
         ("pt_mz", "+258 84 362 7185"),
         ("pt_ao", "+244 923 461 785"),
-    ],
-)
-def test_african_fr_pt_phone_formats_match_country_prefix(locale, phone) -> None:
-    phone_patterns = [
-        pattern
-        for pattern in LOCALE_PII_PATTERNS[locale]
-        if pattern.entity_type == "phone_number"
-    ]
+    ]:
+        with subtests.test(locale=locale, phone=phone):
+            phone_patterns = [
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale]
+                if pattern.entity_type == "phone_number"
+            ]
 
-    assert phone.startswith(AFRICAN_FR_PT_PHONE_PREFIXES[locale])
-    assert any(
-        re.fullmatch(pattern.pattern, phone, pattern.flags)
-        for pattern in phone_patterns
-    )
+            assert phone.startswith(AFRICAN_FR_PT_PHONE_PREFIXES[locale])
+            assert any(
+                re.fullmatch(pattern.pattern, phone, pattern.flags)
+                for pattern in phone_patterns
+            )
 
 
-@pytest.mark.parametrize(
-    ("lang", "locale", "contextual_text", "bare_value"),
-    [
+def test_context_only_national_id_formats_do_not_claim_a_validator(subtests) -> None:
+    for lang, locale, contextual_text, bare_value in [
         ("fr", "fr_SN", "CNI: 1002199012345", "1002199012345"),
         ("pt", "pt_AO", "Bilhete de Identidade: 009523666HO041", "009523666HO041"),
-    ],
-)
-def test_context_only_national_id_formats_do_not_claim_a_validator(
-    lang,
-    locale,
-    contextual_text,
-    bare_value,
-) -> None:
-    detected = safety_sweep(contextual_text, [], lang=lang, locale=locale)
-    without_context = safety_sweep(bare_value, [], lang=lang, locale=locale)
-    matching_patterns = [
-        pattern
-        for pattern in LOCALE_PII_PATTERNS[locale.casefold()]
-        if pattern.entity_type == "national_id"
-        and re.fullmatch(pattern.pattern, bare_value, pattern.flags)
-    ]
+    ]:
+        with subtests.test(
+            lang=lang,
+            locale=locale,
+            contextual_text=contextual_text,
+            bare_value=bare_value,
+        ):
+            detected = safety_sweep(contextual_text, [], lang=lang, locale=locale)
+            without_context = safety_sweep(bare_value, [], lang=lang, locale=locale)
+            matching_patterns = [
+                pattern
+                for pattern in LOCALE_PII_PATTERNS[locale.casefold()]
+                if pattern.entity_type == "national_id"
+                and re.fullmatch(pattern.pattern, bare_value, pattern.flags)
+            ]
 
-    assert [(span.text, span.label) for span in detected] == [
-        (bare_value, "national_id")
-    ]
-    assert without_context == []
-    assert matching_patterns
-    assert all(pattern.validator is None for pattern in matching_patterns)
-    assert all(pattern.safety_sweep_requires_context for pattern in matching_patterns)
+            assert [(span.text, span.label) for span in detected] == [
+                (bare_value, "national_id")
+            ]
+            assert without_context == []
+            assert matching_patterns
+            assert all(pattern.validator is None for pattern in matching_patterns)
+            assert all(
+                pattern.safety_sweep_requires_context for pattern in matching_patterns
+            )

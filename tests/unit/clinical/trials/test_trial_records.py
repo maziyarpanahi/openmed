@@ -155,10 +155,11 @@ def test_explicit_source_failure_is_typed() -> None:
         source.fetch_page(retrieved_at="2026-09-21T08:00:00Z")
 
 
-@pytest.mark.parametrize("timeout", [math.nan, math.inf, -math.inf])
-def test_source_rejects_nonfinite_timeout(timeout: float) -> None:
-    with pytest.raises(TrialContractError):
-        ClinicalTrialSource(timeout_seconds=timeout)
+def test_source_rejects_nonfinite_timeout(subtests) -> None:
+    for timeout in [math.nan, math.inf, -math.inf]:
+        with subtests.test(timeout=timeout):
+            with pytest.raises(TrialContractError):
+                ClinicalTrialSource(timeout_seconds=timeout)
 
 
 def test_unexpected_transport_exception_is_value_free() -> None:
