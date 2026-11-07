@@ -1,0 +1,30 @@
+# Reviewed, expiring exceptions to the 16 KB ELF LOAD-alignment gate
+# (scripts/android/check_elf_page_alignment.py).
+#
+# Every 64-bit native library that ships with OpenMedKit or a demo APK must
+# have PT_LOAD p_align >= 16384, or it cannot be mapped on Android 15+ devices
+# that use 16 KB memory pages. A library listed here is reported as ALLOW
+# instead of FAIL until `expires`; after that date the gate fails again. The
+# release AAR gate runs with --strict-allowlist, so an entry that no longer
+# matches a misaligned library also fails and must be removed.
+#
+# Adding or extending an entry needs a reviewed change that names an owner, a
+# tracking issue and the upstream fix it waits for. Keep `artifact` in step with
+# gradle/libs.versions.toml; a unit test checks that it does.
+
+schema_version = 1
+
+[[exceptions]]
+library = "libdjl_tokenizer.so"
+abis = ["arm64-v8a", "x86_64"]
+artifact = "ai.djl.android:tokenizer-native:0.33.0"
+owner = "maziyarpanahi"
+expires = 2027-02-01
+tracking = "https://github.com/maziyarpanahi/openmed/issues/3927"
+upstream = "https://github.com/deepjavalibrary/djl/issues/3815"
+reason = """
+ai.djl.android:tokenizer-native 0.33.0 is the newest release on Maven Central,
+and its 64-bit libdjl_tokenizer.so is linked with 4 KB LOAD alignment. The
+upstream issue is open and no 16 KB-aligned release exists to move to. Bump
+djl-tokenizers and delete this entry once a 16 KB-aligned release is published.
+"""
