@@ -129,6 +129,89 @@ await session.dispose();
 The session also emits local-only warm/cold per-device benchmark records and
 provides fail-closed Python-reference parity and critical-label recall gates.
 
+## Inference Workers
+
+Run tokenization and inference in a dedicated worker so long notes do not block
+the UI thread. The worker serves a token-classification pipeline; the page
+routes calls through a bounded, cancellable client and keeps hashing and
+redaction on the host.
+
+```ts
+// openmed.worker.ts, bundled as a module worker
+import { loadOnnxModel, serveInferenceWorker } from "openmed";
+
+serveInferenceWorker({
+  async load(spec) {
+    const pipeline = await loadOnnxModel(spec.modelRef, {
+      localFilesOnly: spec.localOnly,
+    });
+    return { pipeline, backend: "wasm", localOnly: spec.localOnly };
+  },
+});
+```
+
+```ts
+import { createInferenceWorkerClient, deidentify } from "openmed";
+
+const client = createInferenceWorkerClient({
+  createWorker: () =>
+    new Worker(new URL("./openmed.worker.ts", import.meta.url), {
+      type: "module",
+    }),
+  maxQueueSize: 8,
+});
+await client.load({
+  modelRef: "/models/openmed/pii",
+  allowedBackends: ["webgpu", "wasm"],
+});
+
+const controller = new AbortController();
+const result = await deidentify(clinicalNote, {
+  pipeline: client.pipeline({ signal: controller.signal }),
+});
+```
+
+- **Bounded admission.** Up to `maxQueueSize` requests (default 16) wait on
+  the host and `maxInFlight` (default 1) run in the worker. Overflow rejects
+  at once with an `InferenceWorkerError` whose `code` is `queue_full`. The
+  worker server keeps its own bounded queue as well.
+- **Cancellation.** Aborting the signal drops a queued request before its
+  text is sent, or tells the worker, which aborts the `context.signal` passed
+  as the pipeline's third argument. The promise rejects with `cancelled`
+  immediately. A cancelled request keeps its in-flight slot until the worker
+  acknowledges it, the worker posts no result for it, and any late result is
+  dropped and counted in `stats().suppressedLateResults`.
+- **Model generations.** Each `load()` starts a new generation. Outstanding
+  requests from earlier generations reject with `superseded`, and a pipeline
+  returned by `client.pipeline()` rejects with `stale_generation` once a later
+  `load()` replaces its model.
+- **Device loss and restarts.** Return the `lost` promise of the runtime's
+  `GPUDevice` as `deviceLost`. On loss the worker releases the runtime and the
+  client becomes `invalidated`: calls reject with `device_lost` or
+  `plan_invalidated` until `recover()` succeeds. A worker `error`,
+  `messageerror` or malformed message makes the client `failed`, and
+  `recover()` starts a fresh worker. Call `invalidate()` when the page itself
+  sees device loss or replaces the runtime. Recovery reloads with
+  `localOnly: true` and must return a plan with the same model reference, the
+  same `modelDigest` when one was reported, and an allowed backend; otherwise
+  it fails with `plan_incompatible`. A verified recovery keeps the generation,
+  so existing pipelines resume. A new load waits for the running request to
+  stop, so pass `{ restart: true }` to `load()` or `recover()` to replace a
+  worker whose runtime cannot be interrupted.
+- **Local-only loads.** `load()` defaults to `localOnly: true`, rejects
+  remote URL model references, and requires the worker to report a
+  local-only runtime.
+- **Transfer and privacy.** Input text crosses as a transferred UTF-16 buffer,
+  so offsets match the source exactly. Results come back as transferred
+  typed-array columns holding only labels, scores, token indices and offsets;
+  token text is dropped after alignment in the worker. Errors carry a fixed
+  message and a code from `INFERENCE_WORKER_ERROR_CODES`, never input text or
+  an underlying error message. The client cancels worker `error` events so the
+  browser does not report their messages to the console, and neither side
+  logs, caches or stores input text.
+- **Teardown.** `dispose()` rejects outstanding work with `disposed`, asks the
+  worker to release its runtime and terminates it.
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.
