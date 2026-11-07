@@ -218,67 +218,74 @@ def test_recovery_refuses_incomplete_duplicate_failed_and_misbound_runs():
         )
 
 
-@pytest.mark.parametrize("kind", ["replay", "reference_server", "clinician_agreement"])
-def test_json_sources_are_deterministic_and_content_free(kind):
-    source = source_report(kind)
-    evidence = import_source(source)[0]
-    assert (
-        evidence
-        == json_release_evidence(
-            json.dumps(source, sort_keys=True, indent=2),
-            expected_kind=kind,
-            expected_case_digests=tuple(
-                case["case_digest"] for case in source["cases"]
-            ),
-        )[0]
-    )
-    assert evidence.sample_size == 2
-    assert evidence.limitations == (
-        "host_supplied_report",
-        "synthetic_only",
-        "default_corpus",
-    )
-    encoded = json.dumps(evidence.to_dict())
-    assert all(case["case_digest"] not in encoded for case in source["cases"])
-    assert "cases" not in encoded
-    canonical = json.dumps(
-        source, ensure_ascii=True, sort_keys=True, separators=(",", ":")
-    )
-    assert (
-        evidence.evidence_digest
-        == "sha256:" + hashlib.sha256(canonical.encode("ascii")).hexdigest()
-    )
-    if kind == "clinician_agreement":
-        source["statistics"]["overall"] = {
-            "value": 0.88,
-            "ci_lower": 0.82,
-            "ci_upper": 0.94,
-        }
-    else:
-        source["cases"][0]["success"] = False
-    assert import_source(source)[0].evidence_digest != evidence.evidence_digest
+def test_json_sources_are_deterministic_and_content_free(subtests):
+    for kind in ["replay", "reference_server", "clinician_agreement"]:
+        with subtests.test(kind=kind):
+            source = source_report(kind)
+            evidence = import_source(source)[0]
+            assert (
+                evidence
+                == json_release_evidence(
+                    json.dumps(source, sort_keys=True, indent=2),
+                    expected_kind=kind,
+                    expected_case_digests=tuple(
+                        case["case_digest"] for case in source["cases"]
+                    ),
+                )[0]
+            )
+            assert evidence.sample_size == 2
+            assert evidence.limitations == (
+                "host_supplied_report",
+                "synthetic_only",
+                "default_corpus",
+            )
+            encoded = json.dumps(evidence.to_dict())
+            assert all(case["case_digest"] not in encoded for case in source["cases"])
+            assert "cases" not in encoded
+            canonical = json.dumps(
+                source, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+            )
+            assert (
+                evidence.evidence_digest
+                == "sha256:" + hashlib.sha256(canonical.encode("ascii")).hexdigest()
+            )
+            if kind == "clinician_agreement":
+                source["statistics"]["overall"] = {
+                    "value": 0.88,
+                    "ci_lower": 0.82,
+                    "ci_upper": 0.94,
+                }
+            else:
+                source["cases"][0]["success"] = False
+            assert import_source(source)[0].evidence_digest != evidence.evidence_digest
 
 
-@pytest.mark.parametrize("kind", ["replay", "reference_server", "clinician_agreement"])
-@pytest.mark.parametrize(
-    "fault", ["missing", "duplicate", "failed", "truncated", "payload", "version"]
-)
-def test_json_negative_controls(kind, fault):
-    source = source_report(kind)
-    inventory = tuple(case["case_digest"] for case in source["cases"])
-    if fault == "missing":
-        source["cases"].pop()
-    elif fault == "duplicate":
-        source["cases"].append(source["cases"][0])
-    elif fault in ("failed", "truncated"):
-        source["status"] = fault
-    elif fault == "payload":
-        source["cases"][0]["payload"] = "SYNTHETIC_PHI_CANARY"
-    else:
-        source["schema_version"] = "unknown"
-    with pytest.raises(AgentReleaseAdapterError) as error:
-        import_source(source, inventory)
-    assert "SYNTHETIC_PHI_CANARY" not in str(error.value)
+def test_json_negative_controls(subtests):
+    for kind in ["replay", "reference_server", "clinician_agreement"]:
+        for fault in [
+            "missing",
+            "duplicate",
+            "failed",
+            "truncated",
+            "payload",
+            "version",
+        ]:
+            with subtests.test(kind=kind, fault=fault):
+                source = source_report(kind)
+                inventory = tuple(case["case_digest"] for case in source["cases"])
+                if fault == "missing":
+                    source["cases"].pop()
+                elif fault == "duplicate":
+                    source["cases"].append(source["cases"][0])
+                elif fault in ("failed", "truncated"):
+                    source["status"] = fault
+                elif fault == "payload":
+                    source["cases"][0]["payload"] = "SYNTHETIC_PHI_CANARY"
+                else:
+                    source["schema_version"] = "unknown"
+                with pytest.raises(AgentReleaseAdapterError) as error:
+                    import_source(source, inventory)
+                assert "SYNTHETIC_PHI_CANARY" not in str(error.value)
 
 
 def test_json_duplicate_keys_invalid_intervals_and_nonboolean_outcomes():
@@ -345,7 +352,11 @@ def test_executed_report_output_contains_no_default_case_payloads():
     ['{"/private/patient-token":', "[" * 2000 + "0" + "]" * 2000],
     ids=["malformed", "deep"],
 )
-def test_private_json_parser_context_is_not_retained(serialized):
+def test_private_json_parser_context_is_not_retained(
+    serialized, force_json_recursion_error
+):
+    if serialized.startswith("["):
+        force_json_recursion_error()
     with pytest.raises(AgentReleaseAdapterError, match="^invalid_json$") as error:
         json_release_evidence(
             serialized, expected_kind="replay", expected_case_digests=()

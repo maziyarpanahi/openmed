@@ -1,6 +1,7 @@
 """Unit tests for utility functions."""
 
 import logging
+import os
 from unittest.mock import Mock, patch
 
 import pytest
@@ -274,3 +275,11 @@ class TestSuspiciousContentDetection:
         # Excessive special characters should be detected
         suspicious_text = "!@#$%^&*()_+" * 10
         assert _contains_suspicious_content(suspicious_text)
+
+
+@pytest.mark.parametrize("payload", ["synthetic" * 10000, b"synthetic" * 10000])
+def test_large_parameters_preserve_payload_and_bound_test_metadata(payload, request):
+    """Large-input controls must execute within Windows environment limits."""
+    assert len(payload) == 90000
+    assert len(request.node.nodeid) < 512
+    assert len(os.environ["PYTEST_CURRENT_TEST"]) < 512

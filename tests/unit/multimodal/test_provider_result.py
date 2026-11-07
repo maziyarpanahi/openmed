@@ -36,9 +36,8 @@ def _result(**changes: object) -> ProviderResultEnvelope:
     return ProviderResultEnvelope(**values)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    ("outcome", "output_digest", "abstention_code"),
-    [
+def test_all_outcomes_round_trip_deterministically(subtests) -> None:
+    for outcome, output_digest, abstention_code in [
         (ProviderResultOutcome.SUCCESS, OUTPUT_DIGEST, None),
         (
             ProviderResultOutcome.ABSTENTION,
@@ -47,31 +46,30 @@ def _result(**changes: object) -> ProviderResultEnvelope:
         ),
         (ProviderResultOutcome.PROVIDER_UNAVAILABLE, None, None),
         (ProviderResultOutcome.VALIDATION_FAILURE, None, None),
-    ],
-)
-def test_all_outcomes_round_trip_deterministically(
-    outcome: ProviderResultOutcome,
-    output_digest: str | None,
-    abstention_code: ProviderAbstentionCode | None,
-) -> None:
-    result = _result(
-        outcome=outcome,
-        output_digest=output_digest,
-        abstention_code=abstention_code,
-    )
+    ]:
+        with subtests.test(
+            outcome=outcome,
+            output_digest=output_digest,
+            abstention_code=abstention_code,
+        ):
+            result = _result(
+                outcome=outcome,
+                output_digest=output_digest,
+                abstention_code=abstention_code,
+            )
 
-    encoded = result.to_json()
-    restored = ProviderResultEnvelope.from_json(encoded)
+            encoded = result.to_json()
+            restored = ProviderResultEnvelope.from_json(encoded)
 
-    assert restored == result
-    assert restored.to_json() == encoded
-    assert encoded == json.dumps(
-        json.loads(encoded),
-        allow_nan=False,
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
+            assert restored == result
+            assert restored.to_json() == encoded
+            assert encoded == json.dumps(
+                json.loads(encoded),
+                allow_nan=False,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
 
 
 def test_mapping_order_does_not_change_canonical_json() -> None:
@@ -101,9 +99,8 @@ def test_to_dict_returns_fresh_nested_data() -> None:
     assert result.count_metadata["page_count"] == 2
 
 
-@pytest.mark.parametrize(
-    ("outcome", "output_digest", "abstention_code", "message"),
-    [
+def test_outcome_cross_field_invariants(subtests) -> None:
+    for outcome, output_digest, abstention_code, message in [
         (ProviderResultOutcome.SUCCESS, None, None, "requires output digest"),
         (
             ProviderResultOutcome.SUCCESS,
@@ -135,72 +132,71 @@ def test_to_dict_returns_fresh_nested_data() -> None:
             ProviderAbstentionCode.RESOURCE_LIMIT,
             "abstention code is invalid",
         ),
-    ],
-)
-def test_outcome_cross_field_invariants(
-    outcome: ProviderResultOutcome,
-    output_digest: str | None,
-    abstention_code: ProviderAbstentionCode | None,
-    message: str,
-) -> None:
-    with pytest.raises(ProviderResultError, match=message):
-        _result(
+    ]:
+        with subtests.test(
             outcome=outcome,
             output_digest=output_digest,
             abstention_code=abstention_code,
-        )
+            message=message,
+        ):
+            with pytest.raises(ProviderResultError, match=message):
+                _result(
+                    outcome=outcome,
+                    output_digest=output_digest,
+                    abstention_code=abstention_code,
+                )
 
 
-@pytest.mark.parametrize("outcome", ["complete", "error", "", 1, True, None])
-def test_unknown_outcomes_are_rejected_without_echo(outcome: object) -> None:
-    with pytest.raises(ProviderResultError) as error:
-        _result(outcome=outcome)
-    assert (
-        not isinstance(outcome, str) or not outcome or outcome not in str(error.value)
-    )
+def test_unknown_outcomes_are_rejected_without_echo(subtests) -> None:
+    for outcome in ["complete", "error", "", 1, True, None]:
+        with subtests.test(outcome=outcome):
+            with pytest.raises(ProviderResultError) as error:
+                _result(outcome=outcome)
+            assert (
+                not isinstance(outcome, str)
+                or not outcome
+                or outcome not in str(error.value)
+            )
 
 
-@pytest.mark.parametrize("code", ["provider_unavailable", "other", "", 1, True])
-def test_unknown_abstention_codes_are_rejected_without_echo(code: object) -> None:
-    with pytest.raises(ProviderResultError) as error:
-        _result(
-            outcome=ProviderResultOutcome.ABSTENTION,
-            output_digest=None,
-            abstention_code=code,
-        )
-    assert not isinstance(code, str) or not code or code not in str(error.value)
+def test_unknown_abstention_codes_are_rejected_without_echo(subtests) -> None:
+    for code in ["provider_unavailable", "other", "", 1, True]:
+        with subtests.test(code=code):
+            with pytest.raises(ProviderResultError) as error:
+                _result(
+                    outcome=ProviderResultOutcome.ABSTENTION,
+                    output_digest=None,
+                    abstention_code=code,
+                )
+            assert not isinstance(code, str) or not code or code not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "digest",
-    ["A" * 64, "a" * 63, "g" * 64, "sha256:" + "a" * 64, b"raw bytes"],
-)
-@pytest.mark.parametrize("field", ["input_digest", "output_digest"])
-def test_invalid_digests_are_rejected_without_echo(field: str, digest: object) -> None:
-    with pytest.raises(ProviderResultError) as error:
-        _result(**{field: digest})
-    assert str(digest) not in str(error.value)
+def test_invalid_digests_are_rejected_without_echo(subtests) -> None:
+    for digest in ["A" * 64, "a" * 63, "g" * 64, "sha256:" + "a" * 64, b"raw bytes"]:
+        for field in ["input_digest", "output_digest"]:
+            with subtests.test(digest=digest, field=field):
+                with pytest.raises(ProviderResultError) as error:
+                    _result(**{field: digest})
+                assert str(digest) not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "duration",
-    [-1, math.inf, -math.inf, math.nan, 86_400_001, True, "12.5", None],
-)
-def test_invalid_timings_are_rejected_without_echo(duration: object) -> None:
-    with pytest.raises(ProviderResultError) as error:
-        _result(duration_ms=duration)
-    assert str(duration) not in str(error.value)
+def test_invalid_timings_are_rejected_without_echo(subtests) -> None:
+    for duration in [-1, math.inf, -math.inf, math.nan, 86_400_001, True, "12.5", None]:
+        with subtests.test(duration=duration):
+            with pytest.raises(ProviderResultError) as error:
+                _result(duration_ms=duration)
+            assert str(duration) not in str(error.value)
 
 
-@pytest.mark.parametrize("duration", [0, 0.0, 1, 12.5, 86_400_000])
-def test_finite_bounded_timings_round_trip(duration: float) -> None:
-    result = _result(duration_ms=duration)
-    assert ProviderResultEnvelope.from_json(result.to_json()) == result
+def test_finite_bounded_timings_round_trip(subtests) -> None:
+    for duration in [0, 0.0, 1, 12.5, 86_400_000]:
+        with subtests.test(duration=duration):
+            result = _result(duration_ms=duration)
+            assert ProviderResultEnvelope.from_json(result.to_json()) == result
 
 
-@pytest.mark.parametrize(
-    "counts",
-    [
+def test_count_metadata_is_closed_and_bounded(subtests) -> None:
+    for counts in [
         {"unknown": 1},
         {"page_count": -1},
         {"page_count": 1 << 63},
@@ -209,16 +205,14 @@ def test_finite_bounded_timings_round_trip(duration: float) -> None:
         {"page_count": "1"},
         {1: 1},
         [1],
-    ],
-)
-def test_count_metadata_is_closed_and_bounded(counts: object) -> None:
-    with pytest.raises(ProviderResultError):
-        _result(count_metadata=counts)
+    ]:
+        with subtests.test(counts=counts):
+            with pytest.raises(ProviderResultError):
+                _result(count_metadata=counts)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
+def test_documented_count_fields_accept_exact_integer_bounds(subtests) -> None:
+    for name in [
         "input_bytes",
         "input_items",
         "output_items",
@@ -228,17 +222,15 @@ def test_count_metadata_is_closed_and_bounded(counts: object) -> None:
         "segment_count",
         "token_count",
         "detection_count",
-    ],
-)
-def test_documented_count_fields_accept_exact_integer_bounds(name: str) -> None:
-    for value in (0, (1 << 63) - 1):
-        result = _result(count_metadata={name: value})
-        assert result.count_metadata[name] == value
+    ]:
+        with subtests.test(name=name):
+            for value in (0, (1 << 63) - 1):
+                result = _result(count_metadata={name: value})
+                assert result.count_metadata[name] == value
 
 
-@pytest.mark.parametrize(
-    "unsafe",
-    [
+def test_unsafe_identifiers_are_rejected_without_echo(subtests) -> None:
+    for unsafe in [
         "Patient Jane synthetic chart text",
         "/srv/charts/patient.dcm",
         "C:\\clinical\\patient.dcm",
@@ -249,20 +241,16 @@ def test_documented_count_fields_accept_exact_integer_bounds(name: str) -> None:
         b"raw identifier bytes",
         "a" * 129,
         "UPPERCASE",
-    ],
-)
-@pytest.mark.parametrize("field", ["provider_id", "model_id"])
-def test_unsafe_identifiers_are_rejected_without_echo(
-    field: str, unsafe: object
-) -> None:
-    with pytest.raises(ProviderResultError) as error:
-        _result(**{field: unsafe})
-    assert str(unsafe) not in str(error.value)
+    ]:
+        for field in ["provider_id", "model_id"]:
+            with subtests.test(unsafe=unsafe, field=field):
+                with pytest.raises(ProviderResultError) as error:
+                    _result(**{field: unsafe})
+                assert str(unsafe) not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "sentinel"),
-    [
+def test_inline_sensitive_fields_never_appear_in_output_or_errors(subtests) -> None:
+    for field, sentinel in [
         ("output", "SENTINEL_OCR_TEXT"),
         ("transcript", "SENTINEL_TRANSCRIPT_TEXT"),
         ("dicom_value", "SENTINEL_DICOM_VALUE"),
@@ -272,19 +260,16 @@ def test_unsafe_identifiers_are_rejected_without_echo(
         ("path", "/synthetic/private/patient.dcm"),
         ("url", "https://private.invalid/result"),
         ("binary_data", "SENTINEL_PIXEL_OR_WAVEFORM_DATA"),
-    ],
-)
-def test_inline_sensitive_fields_never_appear_in_output_or_errors(
-    field: str, sentinel: str
-) -> None:
-    payload = _result().to_dict()
-    payload[field] = sentinel
+    ]:
+        with subtests.test(field=field, sentinel=sentinel):
+            payload = _result().to_dict()
+            payload[field] = sentinel
 
-    with pytest.raises(ProviderResultError) as error:
-        ProviderResultEnvelope.from_dict(payload)
+            with pytest.raises(ProviderResultError) as error:
+                ProviderResultEnvelope.from_dict(payload)
 
-    assert sentinel not in str(error.value)
-    assert sentinel not in _result().to_json()
+            assert sentinel not in str(error.value)
+            assert sentinel not in _result().to_json()
 
 
 def test_unknown_fields_are_rejected_even_when_value_is_binary() -> None:
@@ -309,13 +294,16 @@ def test_duplicate_json_keys_are_rejected_without_echo() -> None:
     assert sentinel not in str(error.value)
 
 
-@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
-def test_non_finite_json_numbers_are_rejected(constant: str) -> None:
-    payload = (
-        _result().to_json().replace('"duration_ms":12.5', f'"duration_ms":{constant}')
-    )
-    with pytest.raises(ProviderResultError, match="JSON is invalid"):
-        ProviderResultEnvelope.from_json(payload)
+def test_non_finite_json_numbers_are_rejected(subtests) -> None:
+    for constant in ["NaN", "Infinity", "-Infinity"]:
+        with subtests.test(constant=constant):
+            payload = (
+                _result()
+                .to_json()
+                .replace('"duration_ms":12.5', f'"duration_ms":{constant}')
+            )
+            with pytest.raises(ProviderResultError, match="JSON is invalid"):
+                ProviderResultEnvelope.from_json(payload)
 
 
 def test_json_size_limit_is_measured_in_utf8_bytes() -> None:
@@ -326,10 +314,11 @@ def test_json_size_limit_is_measured_in_utf8_bytes() -> None:
             ProviderResultEnvelope.from_json(payload)
 
 
-@pytest.mark.parametrize("payload", [None, b"{}", [], {}, "[]", "null", "{"])
-def test_malformed_or_non_object_json_is_rejected(payload: object) -> None:
-    with pytest.raises(ProviderResultError):
-        ProviderResultEnvelope.from_json(payload)  # type: ignore[arg-type]
+def test_malformed_or_non_object_json_is_rejected(subtests) -> None:
+    for payload in [None, b"{}", [], {}, "[]", "null", "{"]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ProviderResultError):
+                ProviderResultEnvelope.from_json(payload)  # type: ignore[arg-type]
 
 
 def test_missing_optional_fields_receive_canonical_defaults() -> None:
@@ -393,18 +382,22 @@ def test_dataclass_replace_revalidates_cross_field_invariants() -> None:
         replace(_result(), outcome=ProviderResultOutcome.VALIDATION_FAILURE)
 
 
-@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
-def test_huge_duration_is_a_value_free_validation_error(value):
-    with pytest.raises(ProviderResultError, match="^provider duration is invalid$"):
-        _result(duration_ms=value)
+def test_huge_duration_is_a_value_free_validation_error(subtests):
+    for value in [10**1000, -(10**1000)]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                ProviderResultError, match="^provider duration is invalid$"
+            ):
+                _result(duration_ms=value)
 
 
-@pytest.mark.parametrize("field", ["outcome", "abstention_code"])
-def test_unknown_enum_does_not_retain_submitted_value(field):
-    with pytest.raises(ProviderResultError) as caught:
-        _result(**{field: "synthetic-private-note"})
-    assert caught.value.__context__ is None
-    assert caught.value.__cause__ is None
+def test_unknown_enum_does_not_retain_submitted_value(subtests):
+    for field in ["outcome", "abstention_code"]:
+        with subtests.test(field=field):
+            with pytest.raises(ProviderResultError) as caught:
+                _result(**{field: "synthetic-private-note"})
+            assert caught.value.__context__ is None
+            assert caught.value.__cause__ is None
 
 
 def test_malformed_json_does_not_retain_source_content():
