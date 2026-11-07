@@ -454,6 +454,7 @@ nav:
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Reviewed Ambient FHIR Documents: multimodal/ambient-fhir.md
       - Apple Audio Capture: multimodal/apple-audio-capture.md
       - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md

@@ -514,6 +514,7 @@ classification:
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
     - multimodal/ambient-session-policy.md
+    - multimodal/ambient-fhir.md
     - multimodal/apple-audio-capture.md
     - multimodal/reference-workflow.md
     - multimodal/wav-preflight.md
