@@ -536,6 +536,7 @@ classification:
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md
     - multimodal/streaming/ambient-note-evidence.md
+    - multimodal/ambient-corrections.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
