@@ -144,6 +144,7 @@ def export_android_fp16(
         keep_io_types=keep_io_types,
     )
     _copy_missing_model_metadata(fp16_model, model)
+    sort_graph_topologically(fp16_model)
     onnx.save(fp16_model, str(output_path))
     if validate:
         validate_android_profile(output_path, expected_opset=expected_opset)
@@ -198,6 +199,64 @@ def _load_and_check_onnx(path: Path) -> Any:
 
     model = onnx.load(str(path))
     onnx.checker.check_model(str(path))
+    return model
+
+
+def sort_graph_topologically(model: Any) -> Any:
+    """Reorder top-level graph nodes so each input is produced before use.
+
+    ``onnxruntime.transformers.float16`` appends the ``Cast`` nodes it adds
+    around operators kept in float32 (for example ``TopK``) after their
+    consumers, which the ONNX checker rejects. Already-sorted graphs keep
+    their order; a graph with a cycle is returned unchanged for the checker
+    to report.
+
+    Args:
+        model: An ``onnx.ModelProto``; its graph is reordered in place.
+
+    Returns:
+        The same model.
+    """
+
+    import heapq
+
+    graph = getattr(model, "graph", None)
+    if graph is None:
+        return model
+    nodes = list(graph.node)
+    external = {item.name for item in graph.input}
+    external.update(item.name for item in graph.initializer)
+    producers: dict[str, int] = {}
+    for index, node in enumerate(nodes):
+        for name in node.output:
+            if name:
+                producers[name] = index
+    users: list[list[int]] = [[] for _ in nodes]
+    pending = [0] * len(nodes)
+    for index, node in enumerate(nodes):
+        sources = {
+            producers[name]
+            for name in node.input
+            if name and name not in external and name in producers
+        }
+        sources.discard(index)
+        pending[index] = len(sources)
+        for source in sources:
+            users[source].append(index)
+    ready = [index for index, count in enumerate(pending) if count == 0]
+    heapq.heapify(ready)
+    order: list[int] = []
+    while ready:
+        index = heapq.heappop(ready)
+        order.append(index)
+        for user in users[index]:
+            pending[user] -= 1
+            if pending[user] == 0:
+                heapq.heappush(ready, user)
+    if len(order) != len(nodes) or order == list(range(len(nodes))):
+        return model
+    del graph.node[:]
+    graph.node.extend(nodes[index] for index in order)
     return model
 
 

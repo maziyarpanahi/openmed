@@ -36,7 +36,7 @@ when a new family is added to the code.
 | DeBERTa-v2 | `deberta`, `deberta-v2` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ backbone only |
 | ModernBERT | `modernbert`, `modern-bert` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ⚠️ qualification-gated, static buckets | ⚠️ INT8-if-recall-holds | ⚠️ qualification-gated (CPU provider; WebGPU fp16 is a CPU proxy) | ⚠️ qualification-gated (CPU provider) | ❌ rejected, no qualified path | ❌ |
 | Longformer | `longformer` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ⚠️ upstream ONNX support required | ⚠️ same as ONNX (default) | ⚠️ same as ONNX (default) | ❌ |
-| OpenAI Privacy Filter | `openai-privacy-filter`, `privacy-filter`, `privacy-filter-nemotron`, `nemotron-privacy-filter`, `privacy-filter-multilingual`, `multilingual-privacy-filter` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ❌ family not in CoreML allowlist | ❌ | ❌ no ONNX converter path today | ❌ | ❌ | ❌ |
+| OpenAI Privacy Filter | `openai-privacy-filter`, `privacy-filter`, `privacy-filter-nemotron`, `nemotron-privacy-filter`, `privacy-filter-multilingual`, `multilingual-privacy-filter` | ✅ | ✅ | ⚠️ INT4-if-recall-holds | ⚠️ qualification-gated, declared checkpoints, pinned revision, static buckets | ⚠️ INT8-if-recall-holds | ⚠️ qualification-gated (CPU provider; WebGPU fp16 is a CPU proxy; unoptimized graph only) | ⚠️ qualification-gated; batch converts only declared, qualified variants | ❌ rejected, no qualified path | ❌ |
 | GLiNER (span) | `gliner-uni-encoder-span` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | GLiClass | `gliclass-uni-encoder` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | GLiNER (token-relex) | `gliner-uni-encoder-token-relex` | ✅ (MLX custom family) | ✅ | ⚠️ INT4-if-recall-holds | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -55,14 +55,20 @@ truth is the backend code, but the essentials are:
   [GGUF Embedding Export](export-gguf.md).
 - **CoreML is token-classification-only and enforces a family allowlist.**
   `openmed.coreml.convert.SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES` accepts
-  `bert`, `distilbert`, `electra`, `roberta`, `xlm-roberta`, `deberta-v2`, and
-  `modernbert`. Any other architecture fails before tracing with the
-  `unsupported_family` reason and an error that lists the supported families.
-  See [CoreML Packaging](coreml-export.md).
+  `bert`, `distilbert`, `electra`, `roberta`, `xlm-roberta`, `deberta-v2`,
+  `modernbert`, and `openai-privacy-filter`. Any other architecture fails
+  before tracing with the `unsupported_family` reason and an error that lists
+  the supported families. See [CoreML Packaging](coreml-export.md).
 - **ModernBERT exports are qualification-gated.** ModernBERT is traced through
   a family adapter and every exported variant is qualified against the PyTorch
   reference checkpoint before it is claimed; see
   [ModernBERT runtime support](#modernbert-runtime-support).
+- **Privacy Filter exports are qualification-gated and declared.** Only the
+  checkpoint families listed in
+  [Privacy Filter runtime support](#privacy-filter-runtime-support) export,
+  always at a pinned source revision, with the canonical Viterbi decoder and
+  threshold profile shipped next to the graph. The MLX-only aliases above do
+  not reach the Core ML or ONNX exporters.
 - **MLX enforces a family allowlist.** The MLX dispatcher resolves architectures
   through `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES` (BERT-family,
   DeBERTa-v2, ModernBERT, and Longformer) plus the MLX-custom set
@@ -125,6 +131,12 @@ records:
 | Span parity | decoded spans identical | recorded, not gated |
 | Direct-identifier recall | no per-label loss | INT8 `0.005`, INT4 `0.010` per-label delta |
 | Critical leakage | no high-risk span the reference caught may leak | same |
+| Span integrity | spans in bounds, non-empty, labelled, non-overlapping | same |
+| Per-language recall | recorded for every suite language; gates when the family binds it | same limit as direct-identifier recall |
+
+A family may bind its canonical span decoder, decoder profile, and default
+suite through `QualificationBinding`; the reference and every candidate are
+then decoded the same way, and the profile is recorded in the report.
 
 A variant that fails any gate, raises, or returns the wrong shape fails
 closed. The converter writes the evidence, then raises
@@ -155,7 +167,10 @@ Reason codes: `unsupported_family`, `unsupported_runtime`,
 `artifact_missing`, `artifact_digest_mismatch`, `report_invalid`,
 `variant_not_qualified`, `inference_failed`, `logit_parity_failed`,
 `span_parity_failed`, `direct_identifier_recall_failed`,
-`critical_leakage_detected`, `quantization_delta_exceeded`.
+`critical_leakage_detected`, `quantization_delta_exceeded`,
+`unsupported_configuration`, `unsupported_remote_code`,
+`adapter_version_mismatch`, `span_integrity_failed`,
+`multilingual_recall_failed`.
 
 ### Offline reproduction
 
@@ -181,6 +196,124 @@ qualification, loading, and inference open no network connection and write no
 synthetic sentinel to logs, output, or artifacts. Release evidence for a
 pinned production ModernBERT checkpoint is produced separately with the
 commands above; until it is published the cells stay ⚠️.
+
+## Privacy Filter runtime support
+
+The OpenAI Privacy Filter is a bidirectional token classifier with grouped
+query attention over a banded window (`|i - j| <= sliding_window`) with
+learned attention sinks, interleaved YaRN rotary embeddings, and a top-k
+mixture of clamped SwiGLU experts. The Transformers expert loop is data
+dependent, so the family adapter in `openmed.torch.privacy_filter_export`
+maps the checkpoint (fused QKV, flattened expert projections, optional
+classifier bias) onto a trace-friendly module. The router runs exactly as in
+the reference (top-k, softmax, `1 / k` scaling); every expert is then
+evaluated densely with zero routing weight for unselected experts, which
+keeps the graph free of control flow. Because dense experts hold
+`tokens x experts x 2 x intermediate` activations, qualified exports are
+bounded to 512 tokens.
+
+The adapter declares this support table. Anything else fails before weights
+load or inference with a stable reason code.
+
+| Runtime | Precisions | Quantizations | Providers | Shape modes | Target |
+|---|---|---|---|---|---|
+| coreml | float32, float16 | none, int8 | all, cpuAndNeuralEngine, cpuOnly | static | iOS16 |
+| onnx | float32, float16 | none, int8 | CPUExecutionProvider | dynamic | opset>=18 |
+
+### Eligible checkpoints
+
+Only these Transformers-format checkpoint families export. A Hub id must be
+listed and match its label space; a local directory must carry one of these
+label spaces. Every request must pin `--expected-source-revision` (the Hub
+commit, or the `sha256:` content digest of a local directory), otherwise it
+fails with `source_revision_unavailable`. No revision is reviewed or
+release-qualified yet, so the matrix cells stay ⚠️.
+
+| Checkpoint | Label space | Labels | Reviewed revision | Release evidence |
+|---|---|---|---|---|
+| `openai/privacy-filter` | `openai-privacy-filter-v1` | 33 | none yet | none yet |
+| `OpenMed/privacy-filter-nemotron` | `nemotron_fine_v1` | 221 | none yet | none yet |
+| `OpenMed/privacy-filter-nemotron-v2` | `nemotron_fine_v1` | 221 | none yet | none yet |
+| `OpenMed/privacy-filter-multilingual` | `openmed_pii54_multi_v1` | 217 | none yet | none yet |
+| `OpenMed/privacy-filter-multilingual-v2` | `openmed_pii54_multi_v1` | 217 | none yet | none yet |
+
+Fail-closed rules:
+
+- Configurations that declare `auto_map` or custom pipelines fail with
+  `unsupported_remote_code`, and the exporter and reference loader never pass
+  `trust_remote_code`. Transformers releases older than 5.6, which only load
+  the family through repository code, fail with
+  `unsupported_converter_environment`.
+- The original OPF format (`privacy_filter`) and the MLX aliases are not
+  export sources and fail with `unsupported_family`.
+- Unsupported shapes (heads not divisible by key-value heads, odd head size,
+  more experts per token than experts, a negative window, rotary types other
+  than `yarn` and `default`) fail with `unsupported_configuration`. So do
+  missing, unexpected, or mis-shaped weights.
+- ONNX graphs may only use the adapter's operator set
+  (`PRIVACY_FILTER_ONNX_OPERATORS`); control flow, data-dependent shape
+  operators, and fused or contrib operators fail with `unsupported_operator`.
+  Graph optimization is therefore rejected up front: export with
+  `--no-onnx-optimization`.
+- Float16 Core ML packages keep the attention softmax (`exp`, `real_div`,
+  `reduce_sum`) in float32, as the reference does; the package metadata
+  records `float32_ops`.
+
+### Decoder and threshold profile
+
+Every export writes the canonical decoder and threshold profile:
+`openmed-decoder-profile.json` in ONNX bundles and
+`<stem>_decoder_profile.json` next to Core ML packages. The profile names the
+BIOES Viterbi decoder over log-softmax emissions with the six learned
+transition biases (read offline from the checkpoint's
+`viterbi_calibration.json`, else zero), the threshold profile (mean token
+probability at least `0.5`, the `extract_pii` default), the span construction
+(grapheme snapping, whitespace trim, `refine_privacy_filter_span`), and the
+label space and label-map digest. Its digest is recorded in the manifest, the
+qualification report, and the Core ML metadata.
+
+Qualification decodes the reference and every candidate with that decoder,
+maps the upstream labels (`private_person`, `private_email`, and so on) to
+canonical direct identifiers for the recall and leakage gates, and gates
+per-language recall on the multilingual synthetic suite
+`openmed/eval/fixtures/export_qualification_privacy_filter.jsonl` (12
+languages across Latin, Devanagari, Arabic, Han, kana, and Hangul scripts).
+`OnnxModel` verifies the profile against the report and the label map before
+it loads a bundle and then decodes with it; an unknown family or another
+adapter version fails with `unsupported_family` or
+`adapter_version_mismatch`.
+
+### Android batch conversion
+
+`scripts/onnx/batch_android_convert_publish.py` still excludes every Privacy
+Filter row unless its declaration pins a reviewed revision and lists
+published evidence for every Android variant the batch emits
+(`onnx-android-fp32`, `onnx-android-fp16`, and `onnx-int8` unless `--no-int8`).
+Included rows convert at that revision and must still pass the gates, and
+existing artifacts whose qualification did not pass are never reused.
+
+### Offline reproduction
+
+```bash
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+python -m openmed.coreml.convert --model ./checkpoints/privacy-filter \
+  --output ./dist/PrivacyFilter.mlpackage --max-seq-length 512 \
+  --precision float16 --compute-units cpuAndNeuralEngine --quantize int8 \
+  --qualify --expected-source-revision sha256:<content digest>
+python -m openmed.onnx.convert --model ./checkpoints/privacy-filter \
+  --output ./dist/privacy-filter-onnx --max-seq-length 512 \
+  --no-onnx-optimization --expected-source-revision sha256:<content digest>
+```
+
+The committed tests build a tiny native Privacy Filter in-test:
+`tests/unit/torch/test_privacy_filter_export.py`,
+`tests/unit/onnx/test_onnx_privacy_filter.py`, and
+`tests/unit/coreml/test_coreml_privacy_filter.py` (macOS with
+`coremltools`). They prove mapping and graph parity, decoder and threshold
+equivalence, multilingual spans, and that export, qualification, loading,
+and inference open no network connection and write no synthetic sentinel to
+logs, output, or artifacts. Release evidence for the declared checkpoints is
+produced separately with the commands above.
 
 ## See also
 

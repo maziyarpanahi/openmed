@@ -187,6 +187,11 @@ def test_reason_codes_are_stable_and_value_free() -> None:
         "direct_identifier_recall_failed",
         "critical_leakage_detected",
         "quantization_delta_exceeded",
+        "unsupported_configuration",
+        "unsupported_remote_code",
+        "adapter_version_mismatch",
+        "span_integrity_failed",
+        "multilingual_recall_failed",
     }
     error = ExportQualificationError(ExportReason.UNSUPPORTED_PROVIDER)
     assert isinstance(error, ValueError)
@@ -599,3 +604,171 @@ def test_rule_fixture_rows_match_gold_offsets() -> None:
     for row in rule_fixture_rows():
         for span in row["gold_spans"]:
             assert row["text"][span["start"] : span["end"]] == span["text"]
+
+
+def _multilingual_fixtures(tmp_path: Path) -> Path:
+    rows = []
+    for index, (language, text, name) in enumerate(
+        (
+            ("en", "seen ZORVAK QUILLAN today", "ZORVAK QUILLAN"),
+            ("fr", "vu ÉLODIE VARNESSE hier", "ÉLODIE VARNESSE"),
+        ),
+        start=1,
+    ):
+        start = text.index(name)
+        rows.append(
+            {
+                "id": f"ml-{index}",
+                "language": language,
+                "text": text,
+                "gold_spans": [
+                    {
+                        "start": start,
+                        "end": start + len(name),
+                        "label": "PERSON",
+                        "text": name,
+                    }
+                ],
+                "metadata": {"synthetic": True},
+            }
+        )
+    path = tmp_path / "multilingual.jsonl"
+    path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_binding_decoder_profile_and_default_suite_reach_the_report(
+    tmp_path: Path,
+) -> None:
+    decoded: list[str] = []
+
+    def decoder(rows, *, offsets, attention, id2label, text):
+        decoded.append(text)
+        return eq.decode_token_spans(
+            rows, offsets=offsets, attention=attention, id2label=id2label
+        )
+
+    profile = {"decoder": "custom", "sha256": "cd" * 32}
+    binding = eq.QualificationBinding(
+        decoder_profile=profile,
+        span_decoder=decoder,
+        fixtures_path=write_rule_fixtures(tmp_path / "family.jsonl"),
+    )
+    report = _qualify(
+        tmp_path, _candidate(tmp_path), fixtures_path=None, binding=binding
+    )
+    assert report.passed is True
+    assert report.suite["default"] is True
+    payload = report.to_dict()
+    assert payload["decoder"] == profile
+    assert eq.summarize_report(report)["decoder_profile_sha256"] == "cd" * 32
+    assert set(decoded) == {row["text"] for row in rule_fixture_rows()}
+    serialized = json.dumps(payload)
+    assert not any(value in serialized for value in SENTINELS)
+    # Reports without a profile keep their previous shape.
+    plain = _qualify(tmp_path, _candidate(tmp_path)).to_dict()
+    assert "decoder" not in plain
+    assert "decoder_profile_sha256" not in eq.summarize_report(
+        _qualify(tmp_path, _candidate(tmp_path))
+    )
+
+
+def test_span_integrity_gate_rejects_broken_decoders(tmp_path: Path) -> None:
+    def broken(rows, *, offsets, attention, id2label, text):
+        return [{"label": "PERSON", "start": 0, "end": len(text) + 5}]
+
+    report = _qualify(
+        tmp_path,
+        _candidate(tmp_path),
+        binding=eq.QualificationBinding(span_decoder=broken),
+    )
+    variant = report.variants[0]
+    assert variant.span_integrity["passed"] is False
+    assert variant.span_integrity["violations"] > 0
+    assert "span_integrity_failed" in variant.reasons
+
+    def failing(rows, *, offsets, attention, id2label, text):
+        raise RuntimeError(f"echo {text}")
+
+    with pytest.raises(ExportQualificationError) as error:
+        _qualify(
+            tmp_path,
+            _candidate(tmp_path),
+            binding=eq.QualificationBinding(span_decoder=failing),
+        )
+    assert error.value.reason is ExportReason.INFERENCE_FAILED
+    assert not any(value in str(error.value) for value in SENTINELS)
+
+
+def test_span_integrity_counts_overlaps_and_empty_labels() -> None:
+    fixture = SimpleNamespace(fixture_id="a", text="abcdef", language="en")
+    spans = {
+        "a": [
+            {"label": "PERSON", "start": 0, "end": 3},
+            {"label": "PERSON", "start": 2, "end": 4},
+            {"label": "", "start": 4, "end": 5},
+            {"label": "PERSON", "start": 5, "end": 5},
+        ]
+    }
+    assert eq.span_integrity([fixture], spans) == {
+        "spans_checked": 4,
+        "violations": 3,
+    }
+
+
+def test_multilingual_gate_catches_a_single_language_regression(
+    tmp_path: Path,
+) -> None:
+    fixtures = _multilingual_fixtures(tmp_path)
+
+    class AccentTokenizer(CharTokenizer):
+        def __call__(self, text: str, **kwargs: Any) -> dict[str, Any]:
+            encoded = super().__call__(text, **kwargs)
+            # Accented capitals mark the French row for the degraded runner.
+            if "É" in text:
+                encoded["input_ids"] = [
+                    99 if token == _NAME_ID else token for token in encoded["input_ids"]
+                ]
+            return encoded
+
+    def reference(feed):
+        ids = np.asarray(feed["input_ids"])[0]
+        logits = np.zeros((1, ids.shape[0], len(LABELS)), dtype=np.float32)
+        for index, token in enumerate(ids):
+            logits[0, index, 1 if token in (_NAME_ID, 99) else 0] = 5.0
+        return logits
+
+    def english_only(feed):
+        ids = np.asarray(feed["input_ids"])[0]
+        logits = np.zeros((1, ids.shape[0], len(LABELS)), dtype=np.float32)
+        for index, token in enumerate(ids):
+            logits[0, index, 1 if token == _NAME_ID else 0] = 5.0
+        return logits
+
+    def run(gate_languages: bool):
+        return _qualify(
+            tmp_path,
+            _candidate(
+                tmp_path,
+                name="onnx-int8",
+                runner=english_only,
+                quantization="int8",
+            ),
+            tokenizer=AccentTokenizer(),
+            reference_runner=reference,
+            fixtures_path=fixtures,
+            binding=eq.QualificationBinding(gate_languages=gate_languages),
+        ).variants[0]
+
+    gated = run(True)
+    languages = gated.multilingual_recall["languages"]
+    assert languages["en"]["max_delta"] == 0.0
+    assert languages["fr"]["max_delta"] == 1.0
+    assert gated.multilingual_recall["gated"] is True
+    assert "multilingual_recall_failed" in gated.reasons
+    ungated = run(False)
+    assert ungated.multilingual_recall["passed"] is False
+    assert "multilingual_recall_failed" not in ungated.reasons
