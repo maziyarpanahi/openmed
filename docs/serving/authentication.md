@@ -133,6 +133,13 @@ principal keeps access to its jobs. `jobs:admin` and `bulk:admin` are matched
 literally and are needed in addition to the route's read or write scope;
 wildcard grants such as `*` or `jobs:*` do not override ownership.
 
+`Idempotency-Key` retries of the bulk export, bulk import and SMART
+ingestion start routes are scoped to the same owner: a principal (including
+the same principal on a rotated API key) replays only its own starts, and
+another principal reusing that key starts its own job without learning that
+the key was used. See
+[Idempotent starts](../interop/fhir-bulk-data.md#idempotent-starts).
+
 The service never stores the principal itself. It stores a keyed,
 domain-separated HMAC-SHA256 digest with `alg` and `key_id` markers, which
 cannot be mapped back to a principal name without the deployment key. The

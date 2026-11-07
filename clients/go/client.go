@@ -53,6 +53,9 @@ const (
 	pathSMARTBackendIngestionSummary = "/fhir/smart-backend/ingestions/{job_id}/summary"
 )
 
+// idempotencyKeyHeader deduplicates retried job starts on the service.
+const idempotencyKeyHeader = "Idempotency-Key"
+
 // AggregationStrategy selects how token-level predictions are grouped by the
 // /analyze endpoint.
 type AggregationStrategy string
@@ -1584,6 +1587,27 @@ func (c *Client) StartSMARTBackendIngestion(ctx context.Context, req SMARTBacken
 	return &out, nil
 }
 
+// StartSMARTBackendIngestionWithIdempotencyKey calls
+// POST /fhir/smart-backend/ingestions with an Idempotency-Key header. Retrying
+// with the same key and request returns the original job instead of starting
+// another export; reusing the key for a different request fails with HTTP 409.
+func (c *Client) StartSMARTBackendIngestionWithIdempotencyKey(
+	ctx context.Context,
+	req SMARTBackendIngestionRequest,
+	idempotencyKey string,
+) (*SMARTBackendJobStatus, error) {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return nil, errors.New("openmed: idempotency key must not be empty")
+	}
+	var out SMARTBackendJobStatus
+	header := http.Header{}
+	header.Set(idempotencyKeyHeader, idempotencyKey)
+	if err := c.postWithHeader(ctx, "/fhir/smart-backend/ingestions", req, &out, header); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // SMARTBackendIngestionStatus calls GET /fhir/smart-backend/ingestions/{job_id}.
 func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) (*SMARTBackendJobStatus, error) {
 	path, err := fillJobID(pathSMARTBackendIngestionStatus, jobID)
@@ -1631,6 +1655,19 @@ func (c *Client) post(ctx context.Context, path string, in, out any) error {
 	return decodeInto(path, body, out)
 }
 
+func (c *Client) postWithHeader(
+	ctx context.Context,
+	path string,
+	in, out any,
+	header http.Header,
+) error {
+	body, err := c.rawWithHeader(ctx, http.MethodPost, path, in, "application/json", header)
+	if err != nil {
+		return err
+	}
+	return decodeInto(path, body, out)
+}
+
 // fillJobID substitutes the {job_id} placeholder in a path template with the
 // URL-escaped job identifier.
 func fillJobID(template, jobID string) (string, error) {
@@ -1670,7 +1707,17 @@ func (c *Client) rawWithAccept(
 	in any,
 	accept string,
 ) ([]byte, error) {
-	resp, err := c.do(ctx, method, path, in, accept)
+	return c.rawWithHeader(ctx, method, path, in, accept, nil)
+}
+
+func (c *Client) rawWithHeader(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+	header http.Header,
+) ([]byte, error) {
+	resp, err := c.doWithHeader(ctx, method, path, in, accept, header)
 	if err != nil {
 		return nil, err
 	}
@@ -1696,6 +1743,16 @@ func (c *Client) do(
 	in any,
 	accept string,
 ) (*http.Response, error) {
+	return c.doWithHeader(ctx, method, path, in, accept, nil)
+}
+
+func (c *Client) doWithHeader(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+	header http.Header,
+) (*http.Response, error) {
 	label := endpointLabel(path)
 	var reader io.Reader
 	if in != nil {
@@ -1709,6 +1766,11 @@ func (c *Client) do(
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("openmed: build %s request", label)
+	}
+	for name, values := range header {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	req.Header.Set("Accept", accept)
 	if in != nil {
