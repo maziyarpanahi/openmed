@@ -22,6 +22,14 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .base import ExtractedDocument, register_handler
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+    merge_code_coverage,
+)
 from .exceptions import MissingDependencyError
 
 _DICOM_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -160,6 +168,8 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
+    code_detector: CodeRegionDetector | None = None
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete"
     overlay_mode: str = "remove"
     redact_encapsulated_documents: bool = False
     document_policy: Any = None
@@ -168,14 +178,17 @@ class DicomPixelRedactionPolicy:
 
 @dataclass(frozen=True)
 class DicomPixelFinding:
-    """Audit-safe description of one OCR-projected pixel redaction."""
+    """Audit-safe OCR or code-region pixel redaction.
+
+    Code findings have no text or model confidence; those fields are null.
+    """
 
     frame_index: int
     bbox: tuple[int, int, int, int]
     label: str
-    confidence: float
-    text_sha256: str
-    text_length: int
+    confidence: float | None
+    text_sha256: str | None
+    text_length: int | None
     sources: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -200,6 +213,7 @@ class DicomResidualTextReport:
 
     frame_count: int
     residuals: tuple[DicomPixelFinding, ...] = ()
+    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
 
     @property
     def residual_entity_count(self) -> int:
@@ -211,7 +225,7 @@ class DicomResidualTextReport:
     def passed(self) -> bool:
         """Whether residual OCR found zero PHI."""
 
-        return self.residual_entity_count == 0
+        return self.residual_entity_count == 0 and not self.code_coverage.regions
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable residual report."""
@@ -221,6 +235,7 @@ class DicomResidualTextReport:
             "passed": self.passed,
             "residual_entity_count": self.residual_entity_count,
             "residuals": [finding.to_dict() for finding in self.residuals],
+            "code_coverage": self.code_coverage.to_dict(),
         }
 
 
@@ -233,6 +248,7 @@ class DicomPixelRedactionResult:
     frames_processed: int
     findings: tuple[DicomPixelFinding, ...]
     residual_report: DicomResidualTextReport
+    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
     carrier_actions: tuple[DicomHeaderAction, ...] = ()
     pixel_status: DicomPixelStatus = DicomPixelStatus.NOT_CLEANED
     _processed_document_digests: tuple[str, ...] = field(default=(), repr=False)
@@ -250,6 +266,7 @@ class DicomPixelRedactionResult:
         frame_counts = Counter(finding.frame_index for finding in self.findings)
         return {
             "type": "dicom_pixel_ocr_redaction",
+            "code_coverage": self.code_coverage.to_dict(),
             "source_path_sha256": _hash_value(str(self.source_path)),
             "output_path_sha256": _hash_value(str(self.output_path)),
             "source_suffix": self.source_path.suffix.lower(),
@@ -1749,12 +1766,17 @@ def redact_dicom_pixels(
     fail_on_residual: bool | None = None,
     custom_recognizer: Any = None,
     lang: str | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy | None = None,
 ) -> DicomPixelRedactionResult:
     """Redact burned-in PHI text from DICOM pixels using OCR bboxes.
 
     Header values from the source DICOM seed a per-image custom recognizer
     before header de-identification clears them. Returned reports intentionally
     exclude raw OCR/header text and carry hashes, labels, bboxes, and counts.
+    Code regions from ``code_detector`` (or the optional local ZXing backend)
+    are always blacked out. ``code_detection_policy`` selects fail-closed or
+    explicit incomplete coverage when detection is unavailable.
     """
     result, _dataset = _redact_pixels(
         path,
@@ -1769,6 +1791,8 @@ def redact_dicom_pixels(
         fail_on_residual=fail_on_residual,
         custom_recognizer=custom_recognizer,
         lang=lang,
+        code_detector=code_detector,
+        code_detection_policy=code_detection_policy,
     )
     return result
 
@@ -1787,6 +1811,8 @@ def _redact_pixels(
     fail_on_residual: bool | None = None,
     custom_recognizer: Any = None,
     lang: str | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy | None = None,
     save: bool = True,
 ) -> tuple[DicomPixelRedactionResult, Any]:
 
@@ -1802,6 +1828,15 @@ def _redact_pixels(
         verify_residual=verify_residual,
         fail_on_residual=fail_on_residual,
         custom_recognizer=custom_recognizer,
+    )
+    resolved_policy = replace(
+        resolved_policy,
+        code_detector=code_detector
+        if code_detector is not None
+        else resolved_policy.code_detector,
+        code_detection_policy=code_detection_policy
+        if code_detection_policy is not None
+        else resolved_policy.code_detection_policy,
     )
     destination = (
         Path(resolved_policy.output_path)
@@ -1852,6 +1887,7 @@ def _redact_pixels(
     frame_views = tuple(_iter_pixel_frames(pixel_array, dataset))
     _burn_overlay_planes(frame_views, overlays, dataset)
     findings: list[DicomPixelFinding] = []
+    code_reports = []
 
     for frame_index, frame in enumerate(frame_views):
         frame_findings = _detect_frame_pixel_findings(
@@ -1862,6 +1898,25 @@ def _redact_pixels(
             model_name=model,
             header_recognizer=header_recognizer,
             lang=lang,
+        )
+        code_report = detect_code_regions(
+            _frame_for_ocr(frame, dataset),
+            detector=resolved_policy.code_detector,
+            policy=resolved_policy.code_detection_policy,
+            page=frame_index,
+        )
+        code_reports.append(code_report)
+        frame_findings += tuple(
+            DicomPixelFinding(
+                frame_index,
+                region.bbox,
+                "CODE_REGION",
+                None,
+                None,
+                None,
+                ("code_region",),
+            )
+            for region in code_report.regions
         )
         for finding in frame_findings:
             _blackout_bbox(frame, finding.bbox, dataset)
@@ -1903,6 +1958,7 @@ def _redact_pixels(
         frames_processed=len(frame_views),
         findings=tuple(findings),
         residual_report=residual_report,
+        code_coverage=merge_code_coverage(code_reports),
         carrier_actions=tuple(context.actions),
         pixel_status=pixel_status,
         _processed_document_digests=tuple(sorted(context.processed_document_digests)),
@@ -1948,6 +2004,10 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
             verify_residual=bool(policy.get("verify_residual", True)),
             fail_on_residual=bool(policy.get("fail_on_residual", True)),
             custom_recognizer=policy.get("custom_recognizer"),
+            code_detector=policy.get("code_detector"),
+            code_detection_policy=policy.get(
+                "code_detection_policy", "coverage_incomplete"
+            ),
             **_carrier_policy_fields(policy),
         )
     return DicomPixelRedactionPolicy(
@@ -1969,6 +2029,10 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
         verify_residual=bool(getattr(policy, "verify_residual", True)),
         fail_on_residual=bool(getattr(policy, "fail_on_residual", True)),
         custom_recognizer=getattr(policy, "custom_recognizer", None),
+        code_detector=getattr(policy, "code_detector", None),
+        code_detection_policy=getattr(
+            policy, "code_detection_policy", "coverage_incomplete"
+        ),
         **_carrier_policy_fields(policy),
     )
 
@@ -1986,6 +2050,8 @@ def _override_pixel_policy(
     custom_recognizer: Any,
 ) -> DicomPixelRedactionPolicy:
     return DicomPixelRedactionPolicy(
+        code_detector=policy.code_detector,
+        code_detection_policy=policy.code_detection_policy,
         output_path=output_path if output_path is not None else policy.output_path,
         ocr_engine=ocr_engine if ocr_engine is not None else policy.ocr_engine,
         model_name=model_name if model_name is not None else policy.model_name,
@@ -2578,6 +2644,7 @@ def _residual_text_report(
     lang: str | None,
 ) -> DicomResidualTextReport:
     residuals: list[DicomPixelFinding] = []
+    code_reports = []
     for frame_index, frame in enumerate(frame_views):
         residuals.extend(
             _detect_frame_pixel_findings(
@@ -2590,7 +2657,17 @@ def _residual_text_report(
                 lang=lang,
             )
         )
+        code_report = detect_code_regions(
+            _frame_for_ocr(frame, dataset),
+            detector=policy.code_detector,
+            policy=policy.code_detection_policy,
+            page=frame_index,
+        )
+        if policy.fail_on_residual:
+            assert_no_residual_codes(code_report)
+        code_reports.append(code_report)
     return DicomResidualTextReport(
+        code_coverage=merge_code_coverage(code_reports),
         frame_count=len(frame_views),
         residuals=tuple(residuals),
     )
