@@ -5,6 +5,17 @@
     import MLX
     import Tokenizers
 
+    /// Deterministic in-process span source behind the public extraction path.
+    ///
+    /// The shared Swift-Kotlin parity tests inject a recognizer so the golden
+    /// fixture runs through `extractPII` and `deidentify` without loading a
+    /// model. The seam is internal rather than public API, loads no tokenizer
+    /// or model assets, and has no network path.
+    protocol OpenMedSpanRecognizer {
+        /// Return entities whose offsets are Unicode scalar offsets into `text`.
+        func recognize(_ text: String) throws -> [EntityPrediction]
+    }
+
     /// OpenMedKit — On-device clinical NLP for iOS and macOS.
     ///
     /// Provides NER and PII detection using either CoreML or MLX models
@@ -27,6 +38,7 @@
             case coreML(NERPipeline)
             case mlx(MLXTokenClassificationPipeline)
             case privacyFilter(OpenMedPrivacyFilterPipeline)
+            case recognizer(any OpenMedSpanRecognizer)
         }
 
         private let runtime: Runtime
@@ -119,6 +131,17 @@
             )
         }
 
+        /// Initialize OpenMed over a deterministic in-process span recognizer.
+        ///
+        /// Internal test seam for the shared native parity gate. It loads no
+        /// tokenizer or model assets and never enables a network fallback; the
+        /// public backends and their defaults are unchanged.
+        init(recognizer: any OpenMedSpanRecognizer) {
+            self.runtime = .recognizer(recognizer)
+            self.tokenizer = nil
+            self.maxSeqLength = 512
+        }
+
         /// Run NER on the given text and return detected entities.
         ///
         /// - Parameters:
@@ -150,6 +173,8 @@
                 )
             case .privacyFilter(let pipeline):
                 entities = try pipeline.predict(text)
+            case .recognizer(let recognizer):
+                entities = try recognizer.recognize(text)
             }
 
             return entities.filter { $0.confidence >= confidenceThreshold }
@@ -182,7 +207,7 @@
                     allowSemanticOnlyMatches: false,
                     allowSemanticLabelExpansion: false
                 )
-            case .coreML, .mlx:
+            case .coreML, .mlx, .recognizer:
                 return PostProcessing.mergePIIEntities(
                     repairedEntities,
                     text: text,
@@ -392,6 +417,9 @@
                 return Self.buildOffsets(tokens: tokens, in: text)
             case .privacyFilter(let pipeline):
                 return try pipeline.tokenOffsets(in: text)
+            case .recognizer:
+                // The recognizer seam scores the whole text in one window.
+                return []
             }
         }
 
@@ -420,7 +448,7 @@
                     allowSemanticOnlyMatches: false,
                     allowSemanticLabelExpansion: false
                 )
-            case .coreML, .mlx:
+            case .coreML, .mlx, .recognizer:
                 merged = PostProcessing.mergePIIEntities(
                     repaired,
                     text: text,
