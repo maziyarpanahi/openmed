@@ -441,6 +441,7 @@ classification:
     - training/synthetic/document-rendering.md
     - training/synthetic/dicom-overlays.md
     - training/synthetic/waveform-records.md
+    - training/synthetic/speech-rendering.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
