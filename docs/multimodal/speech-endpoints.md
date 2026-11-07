@@ -89,5 +89,6 @@ Each returned event binds a non-diagnostic notice and
 Downstream applications must obtain explicit reviewer confirmation for consequential
 outputs; segmentation itself grants no consent or authorization. Keep audio in
 caller-controlled memory, apply ASR privacy/stability gates separately, and never
-log payloads or add a cloud fallback. This independent slice does not depend on
-the pending streaming-ASR contract or qualify an ASR provider.
+log payloads or add a cloud fallback. Use endpoint decisions to drive the
+[local ASR session](offline-asr-provider.md) while applying its separate privacy
+and stability gates; this endpoint adapter does not qualify an ASR provider.

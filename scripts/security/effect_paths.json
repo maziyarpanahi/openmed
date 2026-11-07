@@ -356,13 +356,13 @@
       "module": "openmed.mcp.workflow"
     },
     {
-      "module": "openmed.multimodal.decoder_guard",
-      "function": "probe_media",
+      "module": "openmed.multimodal.generated_text_guard",
+      "function": "GeneratedTextGuard._detect.run",
       "classification": "operational"
     },
     {
-      "module": "openmed.multimodal.generated_text_guard",
-      "function": "GeneratedTextGuard._detect.run",
+      "module": "openmed.multimodal.decoder_guard",
+      "function": "probe_media",
       "classification": "operational"
     },
     {

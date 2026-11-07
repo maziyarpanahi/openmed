@@ -443,10 +443,12 @@ nav:
       - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
+      - Transcript Language Routing: multimodal/transcript-language-routing.md
+      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
       - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
-      - Bounded Speech Endpoints: multimodal/speech-endpoints.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
@@ -457,14 +459,13 @@ nav:
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
-      - Transcript Language Routing: multimodal/transcript-language-routing.md
       - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
-      - ASR Hallucination Check: multimodal/asr-hallucination-check.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
