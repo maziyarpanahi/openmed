@@ -1,12 +1,19 @@
 {
   "exports": [
+    "KIT_PARITY_ACTIONS",
+    "KIT_PARITY_CANONICAL_LABELS",
+    "KIT_PARITY_PROFILE",
+    "KIT_PARITY_PROFILE_VERSION",
     "OPENMED_REACT_NATIVE_MODULE_NAME",
     "OPENMED_SPAN_SCHEMA_VERSION",
+    "OpenMedKitParityError",
     "analyzeText",
     "deidentify",
     "extractPii",
     "loadModel",
-    "setOpenMedKitNativeModuleForTests"
+    "serializeKitParityResult",
+    "setOpenMedKitNativeModuleForTests",
+    "toKitParityResult"
   ],
   "packagePeerDependencies": {
     "react": ">=18",
@@ -23,6 +30,6 @@
   "packageScripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/mobile/test_rn_bridge_parity.ts"
+    "test:node": "tsx --test ../../tests/mobile/test_rn_bridge_parity.ts ../../tests/mobile/test_rn_kit_parity.ts"
   }
 }

@@ -50,6 +50,37 @@ export {
 } from "./decoder";
 export { alignTokenOffsets } from "./offsets";
 export {
+  KIT_PARITY_ACTIONS,
+  KIT_PARITY_CANONICAL_LABELS,
+  KIT_PARITY_CONFIDENCE_SCALE,
+  KIT_PARITY_DECODER_CONTRACT_VERSIONS,
+  KIT_PARITY_OFFSET_CONTRACT_VERSIONS,
+  KIT_PARITY_OFFSET_UNIT,
+  KIT_PARITY_PROFILE,
+  KIT_PARITY_PROFILE_VERSION,
+  KitParityError,
+  acceptKitParityResult,
+  applyKitParitySpans,
+  checkKitParityCompatibility,
+  confidenceToPpm,
+  parseKitParityResult,
+  scalarLength,
+  scalarToUtf16Offset,
+  scalarToUtf8Offset,
+  serializeKitParityResult,
+  toKitParityResult,
+  utf16ToScalarOffset,
+  utf8ToScalarOffset,
+  validateKitParityResult,
+  verifyKitParityResult,
+} from "./kit-parity";
+export type {
+  KitParityAction,
+  KitParityBundleContract,
+  KitParityResult,
+  KitParitySpan,
+} from "./kit-parity";
+export {
   isLocalModelReference,
   loadOnnxModel,
   loadTokenClassificationPipeline,

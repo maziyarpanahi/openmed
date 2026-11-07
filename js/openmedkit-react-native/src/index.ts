@@ -1,3 +1,16 @@
+import { OpenMedKitParityError } from "./kit-parity";
+
+export {
+  KIT_PARITY_ACTIONS,
+  KIT_PARITY_CANONICAL_LABELS,
+  KIT_PARITY_PROFILE,
+  KIT_PARITY_PROFILE_VERSION,
+  OpenMedKitParityError,
+  serializeKitParityResult,
+  toKitParityResult,
+} from "./kit-parity";
+export type { KitParityResult, KitParitySpan } from "./kit-parity";
+
 export const OPENMED_REACT_NATIVE_MODULE_NAME = "OpenMedKitRN" as const;
 export const OPENMED_SPAN_SCHEMA_VERSION = 1 as const;
 
@@ -304,13 +317,22 @@ function normalizeSpans(
       : [];
 
   return rawSpans
-    .map((span) => normalizeSpan(span, options))
+    .map((span, index) => normalizeSpan(span, options, `$.spans[${index}]`))
     .sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
+/**
+ * Map one native span onto the bridge record.
+ *
+ * Native modules report Unicode scalar offsets. Missing or non-integer
+ * offsets and unknown action names are rejected with a value-free
+ * {@link OpenMedKitParityError} instead of being coerced, so a malformed
+ * native payload never reaches the app as a plausible span.
+ */
 function normalizeSpan(
   span: NativeSpan,
   options: OpenMedBridgeOptions,
+  path: string,
 ): OpenMedSpan {
   const record = asRecord(span);
   const canonicalLabel =
@@ -328,8 +350,8 @@ function normalizeSpan(
   return {
     schema_version: OPENMED_SPAN_SCHEMA_VERSION,
     doc_id: stringValue(record.doc_id) ?? stringValue(record.docId) ?? "document",
-    start: numberValue(record.start) ?? 0,
-    end: numberValue(record.end) ?? 0,
+    start: offsetValue(record, "start", path),
+    end: offsetValue(record, "end", path),
     text_hash:
       textHashValue(record.text_hash) ??
       textHashValue(record.textHash) ??
@@ -347,7 +369,7 @@ function normalizeSpan(
       options.detector ??
       `${OPENMED_REACT_NATIVE_MODULE_NAME}:${currentPlatform()}`,
     evidence: recordValue(record.evidence) ?? {},
-    action: spanActionValue(record.action) ?? "keep",
+    action: actionValue(record.action, path),
     replacement: stringValue(record.replacement) ?? null,
     reversible_id:
       stringValue(record.reversible_id) ?? stringValue(record.reversibleId) ?? null,
@@ -420,6 +442,32 @@ function textHashValue(value: unknown): TextHash | undefined {
     (value.startsWith("hmac-sha256:") || value.startsWith("sha256:"))
     ? (value as TextHash)
     : undefined;
+}
+
+function offsetValue(
+  record: Record<string, unknown>,
+  key: "start" | "end",
+  path: string,
+): number {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    throw new OpenMedKitParityError("field_missing", `${path}.${key}`);
+  }
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new OpenMedKitParityError("field_type_invalid", `${path}.${key}`);
+  }
+  return value;
+}
+
+function actionValue(value: unknown, path: string): SpanAction {
+  if (value === undefined || value === null) {
+    return "keep";
+  }
+  const action = spanActionValue(value);
+  if (action === undefined) {
+    throw new OpenMedKitParityError("action_unknown", `${path}.action`);
+  }
+  return action;
 }
 
 function spanActionValue(value: unknown): SpanAction | undefined {

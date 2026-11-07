@@ -197,11 +197,25 @@ def test_write_refreshes_derived_fields_and_digests(fixture_copy: Path) -> None:
         span["utf8_start"] = span["utf16_start"] = 0
     case["expected_deidentified_text"] = ""
     _dump(fixture_copy, payload)
+    vectors = fixture_copy / "kit_parity_vectors.json"
+    shutil.copyfile(fixture_tool.KIT_VECTORS_FILE, vectors)
 
-    assert fixture_tool.main(["--write", "--fixture-dir", str(fixture_copy)]) == 0
+    assert (
+        fixture_tool.main(
+            [
+                "--write",
+                "--fixture-dir",
+                str(fixture_copy),
+                "--vectors-file",
+                str(vectors),
+            ]
+        )
+        == 0
+    )
 
     for name in FIXTURE_FILES:
         assert (fixture_copy / name).read_bytes() == (FIXTURE_DIR / name).read_bytes()
+    assert vectors.read_bytes() == fixture_tool.KIT_VECTORS_FILE.read_bytes()
 
 
 def test_manifest_names_every_consumer_and_its_ci_gate() -> None:

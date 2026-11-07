@@ -9,6 +9,7 @@ on:
       - 'fixtures/parity/**'
       - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/kit_parity_vectors.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
@@ -18,6 +19,7 @@ on:
       - 'fixtures/parity/**'
       - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/kit_parity_vectors.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
 permissions:
@@ -52,13 +54,14 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
 
-    - name: Run Android offset-contract and span-equivalence parity suites
+    - name: Run Android offset-contract, span-equivalence, and kit-parity suites
       working-directory: android
       run: >-
         ./gradlew :openmedkit:testDebugUnitTest
         --tests '*OffsetContractParityTest'
         --tests '*IcuSegmentationFallbackTest'
         --tests '*SpanEquivalenceTest'
+        --tests '*KitParityVectorTest'
         --stacktrace
 
     - name: Verify Android library budgets
