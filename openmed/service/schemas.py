@@ -560,6 +560,7 @@ if PYDANTIC_V2:
         lang: PIILanguage = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
+        payload_retention_seconds: Optional[int] = Field(default=None, ge=1)
 
         @field_validator("documents", mode="before")
         @classmethod
@@ -922,6 +923,7 @@ else:
         lang: PIILanguage = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
+        payload_retention_seconds: Optional[int] = Field(default=None, ge=1)
 
         @validator("documents", pre=True)
         def _validate_documents(cls, value: Any) -> list[DeidentifyJobDocument]:

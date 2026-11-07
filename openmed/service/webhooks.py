@@ -23,7 +23,12 @@ DEFAULT_WEBHOOK_TIMEOUT_SECONDS = 10.0
 
 @dataclass(frozen=True)
 class WebhookDeliveryResult:
-    """Terminal webhook delivery status."""
+    """Terminal webhook delivery status.
+
+    ``error`` is value-free: ``"HTTP <status>"`` for a non-2xx response or a
+    controlled code such as ``"timeout"`` or ``"transport_error"``. It never
+    contains endpoint URLs, response bodies, or exception text.
+    """
 
     success: bool
     attempts: int
@@ -140,7 +145,7 @@ def deliver_webhook(
                     )
                 last_error = f"HTTP {response.status_code}"
             except httpx.HTTPError as exc:
-                last_error = str(exc)
+                last_error = _transport_error_code(exc)
 
             if attempt < max_attempts and backoff_seconds:
                 sleeper(backoff_seconds * (2 ** (attempt - 1)))
@@ -154,3 +159,10 @@ def deliver_webhook(
         status_code=last_status_code,
         error=last_error,
     )
+
+
+def _transport_error_code(exc: httpx.HTTPError) -> str:
+    """Return a controlled code; exception text can echo endpoint URLs."""
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    return "transport_error"

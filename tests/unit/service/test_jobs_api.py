@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
@@ -34,6 +36,37 @@ class FakeLoader:
         return {}
 
 
+class CaptureExecutor:
+    """Executor double that records queued work without running it."""
+
+    def __init__(self, **_: Any) -> None:
+        self.work: list[Any] = []
+        self.futures: list[Future[None]] = []
+
+    def submit(self, _operation: Any, item: Any) -> Future[None]:
+        future: Future[None] = Future()
+        self.work.append(item)
+        self.futures.append(future)
+        return future
+
+    def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
+        del wait
+        if cancel_futures:
+            for future in self.futures:
+                future.cancel()
+
+
+def _captured_queue(
+    monkeypatch: pytest.MonkeyPatch,
+    store: jobs.LocalJobStore,
+    **kwargs: Any,
+) -> jobs.DeidentifyJobQueue:
+    runtime = SimpleNamespace(validate_served_model=lambda _model_name: None)
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs, "ThreadPoolExecutor", CaptureExecutor)
+        return jobs.DeidentifyJobQueue(runtime, store=store, **kwargs)
+
+
 @pytest.fixture(autouse=True)
 def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
     names = [
@@ -56,6 +89,9 @@ def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "OPENMED_SERVICE_JOBS_STORE_PATH",
         "OPENMED_SERVICE_JOBS_TTL_SECONDS",
         "OPENMED_SERVICE_JOBS_WORKERS",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_MODE",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_DIR",
+        "OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS",
     ]
     for name in names:
         monkeypatch.delenv(name, raising=False)
@@ -148,22 +184,18 @@ def test_invalid_result_span_fails_only_its_document(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
-    from types import SimpleNamespace
-
-    from openmed.service import jobs
     from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 
     path = tmp_path / "jobs.json"
     store = jobs.LocalJobStore(path)
-    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store)
+    queue = _captured_queue(monkeypatch, store)
     payload = DeidentifyJobRequest(
         documents=[
             DeidentifyJobDocument(id="synthetic-0", text="synthetic first"),
             DeidentifyJobDocument(id="synthetic-1", text="synthetic second"),
         ]
     )
-    record = queue._new_record(payload)
-    store.create(record)
+    record = queue.submit(payload)
     seen: list[str] = []
 
     def entity(start: int | str) -> SimpleNamespace:
@@ -178,7 +210,7 @@ def test_invalid_result_span_fails_only_its_document(
 
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(queue._executor.work[0])
     finally:
         queue.shutdown()
 
@@ -200,8 +232,6 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from types import SimpleNamespace
-
     from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 
     now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
@@ -210,16 +240,11 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
         ttl_seconds=10,
         clock=lambda: now[0],
     )
-    queue = jobs.DeidentifyJobQueue(
-        SimpleNamespace(),
-        store=store,
-        clock=lambda: now[0],
-    )
+    queue = _captured_queue(monkeypatch, store, clock=lambda: now[0])
     payload = DeidentifyJobRequest(
         documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
     )
-    record = queue._new_record(payload)
-    store.create(record)
+    record = queue.submit(payload)
 
     def process(_payload: DeidentifyJobRequest, _document: DeidentifyJobDocument):
         now[0] += timedelta(seconds=11)
@@ -227,7 +252,7 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
 
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(queue._executor.work[0])
     finally:
         queue.shutdown()
 
@@ -411,6 +436,7 @@ def test_failed_job_surfaces_error_and_records_webhook_delivery(
     assert failed["failed_count"] == 1
     assert failed["processed_count"] == 0
     assert failed["error"] == {
+        "code": "document_failed",
         "type": "RuntimeError",
         "message": "Document failed during de-identification",
     }

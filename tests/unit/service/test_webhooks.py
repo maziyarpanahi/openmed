@@ -120,6 +120,32 @@ def test_deliver_webhook_reports_failure_after_attempts() -> None:
     assert result.error == "HTTP 500"
 
 
+def test_deliver_webhook_records_value_free_transport_error_codes() -> None:
+    sentinel_url = "https://zqtransportsentinel.example.test/hook?token=zq-secret"
+    for error, code in [
+        (httpx.ConnectError(f"cannot reach {sentinel_url}"), "transport_error"),
+        (httpx.ReadTimeout(f"timed out reading {sentinel_url}"), "timeout"),
+    ]:
+
+        def handler(_: httpx.Request, error: Exception = error) -> httpx.Response:
+            raise error
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        result = deliver_webhook(
+            sentinel_url,
+            {"event": "job.done", "job_id": "abc", "status": "done"},
+            secret="secret",
+            max_attempts=1,
+            backoff_seconds=0,
+            client=client,
+        )
+
+        assert result.success is False
+        assert result.status_code is None
+        assert result.error == code
+        assert "zq" not in json.dumps(result.to_dict())
+
+
 def test_canonical_json_bytes_is_stable() -> None:
     payload = {"b": 2, "a": {"d": 4, "c": 3}}
 
