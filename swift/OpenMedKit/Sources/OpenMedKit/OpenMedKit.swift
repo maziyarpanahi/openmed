@@ -314,16 +314,27 @@
         }
 
         private func tokenize(_ text: String) throws -> ([Int], [Int], [Int], [(Int, Int)]) {
-            // Use swift-transformers for tokenization
-            // This ensures token IDs match the Python HuggingFace tokenizer
             guard let tokenizer else {
                 throw TokenizerError.missingConfig
             }
+            return Self.encodeForModel(tokenizer: tokenizer, text: text, maxSeqLength: maxSeqLength)
+        }
+
+        /// Encode text into the CoreML and MLX model inputs.
+        ///
+        /// Uses swift-transformers so token IDs follow the Hugging Face
+        /// tokenizer, and maps tokens back to Unicode scalar offsets. The
+        /// tokenizer conformance vectors exercise this exact adapter.
+        static func encodeForModel(
+            tokenizer: any Tokenizer,
+            text: String,
+            maxSeqLength: Int
+        ) -> ([Int], [Int], [Int], [(Int, Int)]) {
             let inputIds = Array(tokenizer(text, addSpecialTokens: true).prefix(maxSeqLength))
             let tokens = tokenizer.convertIdsToTokens(inputIds).map { $0 ?? "" }
             let attentionMask = Array(repeating: 1, count: inputIds.count)
             let tokenTypeIDs = Array(repeating: 0, count: inputIds.count)
-            let offsets = Self.buildOffsets(tokens: tokens, in: text)
+            let offsets = buildOffsets(tokens: tokens, in: text)
 
             return (inputIds, attentionMask, tokenTypeIDs, offsets)
         }
@@ -337,8 +348,27 @@
                 return []
             }
 
-            let tokenOffsets = try tokenOffsets(in: text)
-                .filter { $0.0 < $0.1 }
+            let offsets = try tokenOffsets(in: text)
+            return Self.makeTokenChunks(
+                tokenOffsets: offsets,
+                text: text,
+                chunkTokenLimit: chunkTokenLimit,
+                tokenOverlap: tokenOverlap
+            )
+        }
+
+        /// Split content-token offsets into overlapping chunk windows.
+        static func makeTokenChunks(
+            tokenOffsets allTokenOffsets: [(Int, Int)],
+            text: String,
+            chunkTokenLimit: Int,
+            tokenOverlap: Int
+        ) -> [TextChunk] {
+            guard !text.isEmpty else {
+                return []
+            }
+
+            let tokenOffsets = allTokenOffsets.filter { $0.0 < $0.1 }
 
             let tokenLimit = max(1, chunkTokenLimit)
             guard tokenOffsets.count > tokenLimit else {
@@ -387,12 +417,17 @@
                 guard let tokenizer else {
                     throw TokenizerError.missingConfig
                 }
-                let inputIDs = tokenizer(text, addSpecialTokens: false)
-                let tokens = tokenizer.convertIdsToTokens(inputIDs).map { $0 ?? "" }
-                return Self.buildOffsets(tokens: tokens, in: text)
+                return Self.contentTokenOffsets(tokenizer: tokenizer, text: text)
             case .privacyFilter(let pipeline):
                 return try pipeline.tokenOffsets(in: text)
             }
+        }
+
+        /// Unicode scalar offsets of the content tokens, without special tokens.
+        static func contentTokenOffsets(tokenizer: any Tokenizer, text: String) -> [(Int, Int)] {
+            let inputIDs = tokenizer(text, addSpecialTokens: false)
+            let tokens = tokenizer.convertIdsToTokens(inputIDs).map { $0 ?? "" }
+            return buildOffsets(tokens: tokens, in: text)
         }
 
         func mergeChunkedPIIEntities(
@@ -765,7 +800,7 @@
             return try await AutoTokenizer.from(pretrained: tokenizerName)
         }
 
-        private static func loadTokenizerFromDirectory(
+        static func loadTokenizerFromDirectory(
             _ directoryURL: URL,
             fallbackTokenizerName: String?
         ) throws -> any Tokenizer {

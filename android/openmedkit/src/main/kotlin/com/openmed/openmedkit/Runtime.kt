@@ -134,15 +134,6 @@ class BackendOnnxTokenClassifier private constructor(
     @Synchronized
     private fun encode(text: String): Encoding = tokenizer.encode(text)
 
-    private fun Encoding.toTokenOffsets(): List<TokenOffset> =
-        charTokenSpans.map { span ->
-            if (span == null) {
-                TokenOffset(0, 0)
-            } else {
-                TokenOffset(span.start, span.end)
-            }
-        }
-
     private fun loadTokenizer(backend: OpenMedBackend): HuggingFaceTokenizer {
         require(backend.tokenizerJson.isFile) {
             "tokenizer.json does not exist: ${backend.tokenizerJson.path}"
@@ -155,6 +146,21 @@ private data class BackendClassifierConfiguration(
     val backend: OpenMedBackend,
     val acceleratorConfig: AcceleratorConfig,
 )
+
+/**
+ * Source offsets the classifier feeds to ONNX Runtime for one DJL encoding.
+ *
+ * Tokens without a character span, such as template special tokens, use
+ * `(0, 0)`. The tokenizer conformance vectors exercise this exact mapping.
+ */
+internal fun Encoding.toTokenOffsets(): List<TokenOffset> =
+    charTokenSpans.map { span ->
+        if (span == null) {
+            TokenOffset(0, 0)
+        } else {
+            TokenOffset(span.start, span.end)
+        }
+    }
 
 internal fun aggregateTokenPredictions(
     text: String,

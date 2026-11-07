@@ -41,6 +41,11 @@ The Kotlin tests register `fixtures/parity` as a JVM test resource directory in
 expected spans from the test classpath, runs `OpenMed.extractPII(...)`, and
 asserts exact span equivalence.
 
+Before span parity runs, both kits check their tokenizer adapters against the
+shared vectors described in [Portable Tokenizer
+Conformance](tokenizer-conformance.md), so drift in normalization,
+special tokens or windows is reported before any model output is compared.
+
 Swift tests should consume the same files from the repository root instead of
 copying fixture data into the Swift package. A Swift test can resolve the repo
 fixture directory relative to the package checkout and decode the expected
