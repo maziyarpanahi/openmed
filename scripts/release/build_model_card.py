@@ -32,6 +32,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fairness-report", default=None)
     parser.add_argument("--quant-delta", default=None)
     parser.add_argument("--training-provenance", default=None)
+    parser.add_argument(
+        "--privacy-disclosure",
+        default=None,
+        help="Optional differential-privacy and federation disclosure JSON",
+    )
+    parser.add_argument(
+        "--privacy-evidence",
+        default=None,
+        help="Injected promotion-evidence digests JSON for the privacy disclosure",
+    )
     parser.add_argument("--output", default=None, help="README.md output path")
     parser.add_argument(
         "--datasheet-output",
@@ -63,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
             fairness_report=args.fairness_report,
             quant_delta=args.quant_delta,
             training_provenance=args.training_provenance,
+            privacy_disclosure=args.privacy_disclosure,
+            privacy_evidence=args.privacy_evidence,
         )
     except (OSError, ValueError, ModelCardBuilderError) as exc:
         sys.stderr.write(f"Failed to build model card: {exc}\n")
