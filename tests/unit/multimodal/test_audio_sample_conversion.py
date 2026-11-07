@@ -217,6 +217,7 @@ def test_profile_transform_and_duration_guards():
     metadata, plan, profile = contracts(samples)
     profiles = [
         replace(profile, allow_resample=False),
+        replace(profile, sample_rates_hz=(16000, 48000), allow_resample=False),
         replace(profile, max_duration_seconds=0.0001),
         replace(profile, bit_depths=(32,)),
         replace(profile, channel_counts=(1,), allow_downmix=False),

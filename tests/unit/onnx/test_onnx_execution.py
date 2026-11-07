@@ -8,10 +8,11 @@ import pytest
 from openmed.onnx.execution import OnnxExecutionCancelled, OnnxExecutionControl
 
 
-@pytest.mark.parametrize("timeout", [0, -1, True, float("nan"), float("inf")])
-def test_invalid_deadlines_are_rejected(timeout):
-    with pytest.raises(ValueError):
-        OnnxExecutionControl(timeout_seconds=timeout)
+def test_invalid_deadlines_are_rejected(subtests):
+    for timeout in [0, -1, True, float("nan"), float("inf")]:
+        with subtests.test(timeout=timeout):
+            with pytest.raises(ValueError):
+                OnnxExecutionControl(timeout_seconds=timeout)
 
 
 def test_cancelled_scope_has_safe_error_before_any_native_work():

@@ -138,6 +138,7 @@ def _make_adapter(
     return client, OpenMRSAdapter(client, deidentifier=_fake_deidentify)
 
 
+@pytest.mark.slow
 def test_registry_is_lazy_and_does_not_import_openmrs_or_httpx() -> None:
     script = """
 import sys
@@ -253,27 +254,22 @@ def test_rest_pull_paginates_retries_and_uses_basic_auth() -> None:
     client.close()
 
 
-@pytest.mark.parametrize(
-    ("resource_name", "path_suffix"),
-    [
+def test_legacy_client_targets_all_required_endpoints(subtests) -> None:
+    for resource_name, path_suffix in [
         ("obs", "/ws/rest/v1/obs"),
         ("encounter", "/ws/rest/v1/encounter"),
         ("patient", "/ws/rest/v1/patient"),
-    ],
-)
-def test_legacy_client_targets_all_required_endpoints(
-    resource_name: str,
-    path_suffix: str,
-) -> None:
-    server = _FixtureServer()
-    server.rest_obs_failures = 0
-    client, _ = _make_adapter(server)
+    ]:
+        with subtests.test(resource_name=resource_name, path_suffix=path_suffix):
+            server = _FixtureServer()
+            server.rest_obs_failures = 0
+            client, _ = _make_adapter(server)
 
-    resources = client.pull_rest(resource_name)
+            resources = client.pull_rest(resource_name)
 
-    assert resources
-    assert server.requests[0].url.path.endswith(path_suffix)
-    client.close()
+            assert resources
+            assert server.requests[0].url.path.endswith(path_suffix)
+            client.close()
 
 
 def test_session_token_uses_openmrs_session_cookie() -> None:

@@ -1271,6 +1271,20 @@ def _validate_claims(errors: list[str]) -> None:
     )
     if entity_tile not in website_text:
         errors.append("website PII entity-type tile differs from the governed claim")
+    model_backed = claims["model_backed_pii_languages"]["value"]
+    supported = claims["supported_pii_languages"]["value"]
+    for count in re.findall(r"(\d+) model-backed", website_text):
+        if int(count) != model_backed:
+            errors.append(
+                f"website says {count} model-backed languages; the claim is {model_backed}"
+            )
+    for count in re.findall(
+        r"(\d+) supported (?:codes|PII language codes)", website_text
+    ):
+        if int(count) != supported:
+            errors.append(
+                f"website says {count} supported codes; the claim is {supported}"
+            )
 
     package = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     expected_description = (
@@ -1903,6 +1917,22 @@ def _validate_accessibility_evidence(errors: list[str]) -> None:
         errors.append("manual accessibility evidence lacks its qualification")
 
 
+def _without_marketing_beacon(source: str, *, marketing_page: bool) -> str:
+    """Exclude only the approved homepage analytics tag from the remote scan."""
+
+    if not marketing_page:
+        return source
+    approved_beacon = (
+        r'<script\s+type="module"\s+'
+        r'src="https://static\.cloudflareinsights\.com/beacon\.min\.js"\s+'
+        r"data-cf-beacon='\{\"token\":\s*"
+        r'"86108e13d57f44f69a4c67a445df1f17"'
+        r"\}'\s*>\s*</script>"
+    )
+    # A second beacon or any different remote script still fails the scan.
+    return re.sub(approved_beacon, "", source, count=1)
+
+
 def _validate_governance(errors: list[str]) -> None:
     register = (REPO_ROOT / "docs/brand/system/asset-register.md").read_text(
         encoding="utf-8"
@@ -2146,7 +2176,10 @@ def _validate_governance(errors: list[str]) -> None:
         REPO_ROOT / "docs/javascripts/openmed.js",
     ]
     browser_text = "\n".join(
-        path.read_text(encoding="utf-8")
+        _without_marketing_beacon(
+            path.read_text(encoding="utf-8"),
+            marketing_page=path == REPO_ROOT / "docs/website/index.html",
+        )
         for path in owned_browser_sources
         if path.is_file()
     )

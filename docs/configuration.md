@@ -32,6 +32,18 @@ entities = ner("Dapagliflozin added for HFpEF symptom relief.")
 
 ### Minimal TOML file
 
+Credentials stay in memory: use `HF_TOKEN`, not a config/profile setting.
+`OpenMedConfig.to_dict()` omits `hf_token`, and `openmed config show` reports
+only `hf_token_present`. Config/profile saves never serialize credentials,
+including legacy or environment-derived values. Legacy files still load with
+a value-free `persisted_credential` warning; `openmed doctor` reports the same
+finding without printing the value. Remove stored tokens and rotate any that
+were previously exposed. Saving a config rewrites it without the stored token.
+
+Config and profile writes atomically replace a same-directory temporary file.
+New and replaced files are owner-only (`0600`) on POSIX. Windows does not use
+POSIX mode bits; configure the parent directory's ACL for the intended owner.
+
 ```toml title="~/.config/openmed/config.toml"
 default_org = "OpenMed"
 device = "cuda"

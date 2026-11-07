@@ -202,6 +202,8 @@ def _validate_contract(
         rounding=plan.rounding,
     ):
         raise AudioConversionError("conversion_plan_mismatch")
+    if plan.source_rate_hz != plan.target_rate_hz and not profile.allow_resample:
+        raise AudioConversionError("conversion_source_incompatible")
     source_report = check_asr_compatibility(metadata, profile)
     if source_report.compatibility in (
         AsrCompatibility.REVIEW,

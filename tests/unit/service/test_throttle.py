@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +18,12 @@ from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
+# Bounds the wait for a model worker thread to start. A loaded runner can
+# stall thread scheduling for most of a second; passing runs return at once.
+_WORKER_START_WAIT_SECONDS = 5
+# One token per 100 s, so a slow runner cannot refill a one-token bucket
+# between back-to-back requests.
+_SLOW_REFILL_RATE_LIMIT_RPS = "0.01"
 
 _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_PRELOAD_MODELS",
@@ -38,6 +45,9 @@ _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY",
     "OPENMED_SERVICE_THROTTLE_KEY",
     "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS",
+    "OPENMED_SERVICE_COALESCING_ENABLED",
+    "OPENMED_SERVICE_METRICS_ENABLED",
+    "OPENMED_SERVICE_RETRY_MAX_ATTEMPTS",
 )
 
 
@@ -118,7 +128,7 @@ def test_service_throttle_config_reads_env(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_rate_limit_returns_429_with_retry_after(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", _SLOW_REFILL_RATE_LIMIT_RPS)
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
     calls: list[str] = []
 
@@ -175,7 +185,9 @@ def test_concurrency_limit_returns_503_after_bounded_wait(
                 first_task = asyncio.create_task(
                     client.post("/analyze", json={"text": "held"})
                 )
-                assert await asyncio.to_thread(first_started.wait, 1)
+                assert await asyncio.to_thread(
+                    first_started.wait, _WORKER_START_WAIT_SECONDS
+                )
                 busy = await client.post("/analyze", json={"text": "queued"})
                 release_first.set()
                 first = await first_task
@@ -241,7 +253,7 @@ def test_batch_backpressure_returns_retry_after_before_model_work(
 
 
 def test_probe_paths_do_not_consume_rate_limit(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", _SLOW_REFILL_RATE_LIMIT_RPS)
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
 
     def fake_analyze(text: str, **_: Any) -> PredictionResult:
@@ -291,3 +303,367 @@ def test_throttle_middleware_is_noop_when_limits_unset(
 
     assert [response.status_code for response in responses] == [200, 200, 200]
     assert calls == ["one", "two", "three"]
+
+
+def _orphaned_work(app) -> int:
+    line = next(
+        line
+        for line in app.state.metrics.render().splitlines()
+        if line.startswith("openmed_service_orphaned_work ")
+    )
+    return int(line.split()[1])
+
+
+async def _wait_for_work_to_finish(app) -> None:
+    async def wait():
+        while app.state.inflight or _orphaned_work(app):
+            await asyncio.sleep(0.01)
+
+    await asyncio.wait_for(wait(), 2)
+
+
+def _advance_loop_clock(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """Make the running loop's pending timers due *seconds* early."""
+    loop = asyncio.get_running_loop()
+    clock = loop.time
+    monkeypatch.setattr(loop, "time", lambda: clock() + seconds)
+
+
+def _model_request(mode: str, text: str) -> tuple[str, dict[str, Any]]:
+    if mode == "graphql":
+        return "/graphql", {
+            "query": "query($input: AnalyzeInput!) { analyze(input: $input) { modelName } }",
+            "variables": {"input": {"text": text}},
+        }
+    return "/analyze", {"text": text}
+
+
+@pytest.mark.parametrize("mode", ["rest", "batch", "graphql"])
+@pytest.mark.parametrize("worker_fails", [False, True])
+@pytest.mark.parametrize("limit", [0, 1])
+def test_timeout_retains_capacity_until_model_work_finishes(
+    monkeypatch: pytest.MonkeyPatch, caplog, mode: str, worker_fails: bool, limit: int
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", str(limit))
+    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "0.01")
+    monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_RETRY_MAX_ATTEMPTS", "1")
+    if mode == "batch":
+        monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
+        monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "1")
+        monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "0")
+    release = threading.Event()
+    started = threading.Event()
+    lock = threading.Lock()
+    state = {"active": 0, "peak": 0, "calls": 0}
+
+    def model(text: str, **_: Any) -> PredictionResult:
+        with lock:
+            state["calls"] += 1
+            index = state["calls"]
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+        try:
+            if index == 1:
+                started.set()
+                assert release.wait(5)
+                if worker_fails:
+                    raise RuntimeError("SYNTHETIC_PRIVATE_FAILURE")
+            return _prediction_result(text)
+        finally:
+            with lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(openmed, "analyze_text", model)
+    app = create_app()
+    timeout_seconds = 30.0
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            # The timeout cannot elapse on its own: the loop clock jumps past it
+            # once the worker holds the model. A loaded runner therefore cannot
+            # time out (or, for batches, abandon) the request before work starts.
+            app.state.runtime.config.timeout = timeout_seconds
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport, base_url=LOOPBACK_BASE_URL
+            ) as client:
+                path, body = _model_request(mode, "SYNTHETIC_PRIVATE_INPUT")
+                try:
+                    request = asyncio.create_task(client.post(path, json=body))
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
+                    _advance_loop_clock(monkeypatch, timeout_seconds)
+                    first = await request
+                    assert started.is_set()
+                    if mode == "graphql":
+                        assert first.status_code == 200
+                        assert (
+                            first.json()["errors"][0]["extensions"]["code"]
+                            == "OPENMED_RESOLVER_ERROR"
+                        )
+                    else:
+                        payload = _assert_error_payload(first, 504, "timeout")
+                        assert payload["error"]["details"] == {
+                            "timeout_seconds": timeout_seconds
+                        }
+                    assert "SYNTHETIC_PRIVATE_INPUT" not in first.text
+                    assert _orphaned_work(app) == 1
+                    assert app.state.inflight == 1
+                    if limit:
+                        for _ in range(2):
+                            busy = await client.post(path, json=body)
+                            _assert_error_payload(busy, 503, "service_busy")
+                    assert state == {"active": 1, "peak": 1, "calls": 1}
+                finally:
+                    release.set()
+                    await _wait_for_work_to_finish(app)
+                assert state["active"] == 0
+                recovered = await client.post(path, json=body)
+                assert recovered.status_code == 200
+                if mode == "graphql":
+                    assert "errors" not in recovered.json()
+                await _wait_for_work_to_finish(app)
+
+    asyncio.run(scenario())
+    assert state == {"active": 0, "peak": 1, "calls": 2}
+    assert "SYNTHETIC_PRIVATE_FAILURE" not in caplog.text
+
+
+@pytest.mark.parametrize("mode", ["rest", "batch", "coalesced"])
+def test_cancelled_http_wait_retains_running_work(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
+    if mode == "batch":
+        monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
+        monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "1")
+        monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "0")
+    if mode == "coalesced":
+        monkeypatch.setenv("OPENMED_SERVICE_COALESCING_ENABLED", "true")
+    release = threading.Event()
+    started = threading.Event()
+    calls = []
+
+    def model(text: str, **_: Any) -> PredictionResult:
+        calls.append(text)
+        started.set()
+        assert release.wait(5)
+        return _prediction_result(text)
+
+    monkeypatch.setattr(openmed, "analyze_text", model)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            app.state.runtime.config.timeout = 0
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport, base_url=LOOPBACK_BASE_URL
+            ) as client:
+                task = asyncio.create_task(
+                    client.post("/analyze", json={"text": "synthetic"})
+                )
+                try:
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
+                    task.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await task
+                    assert _orphaned_work(app) == 1
+                    assert app.state.inflight == 1
+                    busy = await client.post("/analyze", json={"text": "synthetic"})
+                    _assert_error_payload(busy, 503, "service_busy")
+                    assert calls == ["synthetic"]
+                finally:
+                    release.set()
+                    await _wait_for_work_to_finish(app)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("limit", [1, 2])
+def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
+    monkeypatch: pytest.MonkeyPatch, limit: int
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", str(limit))
+    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "0.01")
+    monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
+    release = threading.Event()
+    started = threading.Event()
+    lock = threading.Lock()
+    state = {"active": 0, "peak": 0, "calls": 0}
+
+    def model(text: str, **_: Any) -> PredictionResult:
+        with lock:
+            state["calls"] += 1
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+            if state["active"] == limit:
+                started.set()
+        try:
+            assert release.wait(5)
+            return _prediction_result(text)
+        finally:
+            with lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(openmed, "analyze_text", model)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            app.state.runtime.config.timeout = 0
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport, base_url=LOOPBACK_BASE_URL
+            ) as client:
+                request = asyncio.create_task(
+                    client.post(
+                        "/graphql",
+                        json={
+                            "query": """query($input: AnalyzeInput!) {
+                            first: analyze(input: $input) { modelName }
+                            second: analyze(input: $input) { modelName }
+                        }""",
+                            "variables": {"input": {"text": "synthetic"}},
+                        },
+                    )
+                )
+                try:
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
+                    assert state["calls"] == limit
+                    assert state["peak"] == limit
+                    busy = await client.post("/analyze", json={"text": "synthetic"})
+                    _assert_error_payload(busy, 503, "service_busy")
+                finally:
+                    release.set()
+                    response = await asyncio.wait_for(request, 2)
+                    await _wait_for_work_to_finish(app)
+                assert response.status_code == 200
+                if limit == 1:
+                    assert len(response.json()["errors"]) == 1
+                    assert (
+                        response.json()["errors"][0]["extensions"]["code"]
+                        == "OPENMED_RESOLVER_ERROR"
+                    )
+                else:
+                    assert "errors" not in response.json()
+
+    asyncio.run(scenario())
+    assert state["active"] == 0
+
+
+@pytest.mark.parametrize("cancel_wait", [False, True])
+def test_abandoned_queued_batch_does_not_start_model_work(
+    monkeypatch: pytest.MonkeyPatch, cancel_wait: bool
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "8")
+    # Only the request timeout or cancellation may end the queued wait. A one
+    # second flush could win that race on a stalled runner and start the model;
+    # abandoning the job cancels this timer.
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "60000")
+    calls = []
+
+    def model(text: str, **_: Any) -> PredictionResult:
+        calls.append(text)
+        return _prediction_result(text)
+
+    monkeypatch.setattr(openmed, "analyze_text", model)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            app.state.runtime.config.timeout = 0 if cancel_wait else 0.1
+            batcher = app.state.analyze_batcher
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport, base_url=LOOPBACK_BASE_URL
+            ) as client:
+                request = asyncio.create_task(
+                    client.post("/analyze", json={"text": "abandoned"})
+                )
+                if cancel_wait:
+
+                    async def wait_for_queue():
+                        while not sum((await batcher.queue_depths()).values()):
+                            await asyncio.sleep(0)
+
+                    await asyncio.wait_for(wait_for_queue(), 2)
+                    request.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await request
+                else:
+                    _assert_error_payload(await request, 504, "timeout")
+                assert sum((await batcher.queue_depths()).values()) == 0
+                await _wait_for_work_to_finish(app)
+                assert calls == []
+                batcher.max_wait_ms = 0
+                app.state.runtime.config.timeout = 1
+                recovered = await client.post("/analyze", json={"text": "recovered"})
+                assert recovered.status_code == 200
+                await _wait_for_work_to_finish(app)
+                assert calls == ["recovered"]
+
+    asyncio.run(scenario())
+
+
+def test_parallel_graphql_fields_reuse_capacity_after_worker_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
+    # The second field queues until the first worker releases its slot, so this
+    # budget only bounds a failure. A loaded runner can stall the first worker
+    # past one second; a slot leaked until the response ends still fails here.
+    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "10")
+    lock = threading.Lock()
+    state = {"active": 0, "peak": 0, "calls": 0}
+
+    def model(text: str, **_: Any) -> PredictionResult:
+        with lock:
+            state["active"] += 1
+            state["calls"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+        try:
+            time.sleep(0.03)
+            return _prediction_result(text)
+        finally:
+            with lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(openmed, "analyze_text", model)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            app.state.runtime.config.timeout = 0
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport, base_url=LOOPBACK_BASE_URL
+            ) as client:
+                response = await client.post(
+                    "/graphql",
+                    json={
+                        "query": """query($input: AnalyzeInput!) {
+                            first: analyze(input: $input) { modelName }
+                            second: analyze(input: $input) { modelName }
+                        }""",
+                        "variables": {"input": {"text": "synthetic"}},
+                    },
+                )
+                assert response.status_code == 200
+                assert "errors" not in response.json()
+                assert response.json()["data"]["first"] is not None
+                assert response.json()["data"]["second"] is not None
+                assert app.state.inflight == 0
+
+    asyncio.run(scenario())
+    assert state == {"active": 0, "peak": 1, "calls": 2}

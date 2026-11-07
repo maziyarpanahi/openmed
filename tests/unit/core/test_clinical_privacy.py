@@ -97,38 +97,40 @@ def test_runtime_protection_uses_one_snapshot_for_filtering_and_review(
     assert result.status == ("needs_review" if initially_protected else "complete")
 
 
-@pytest.mark.parametrize("separator", [" ", "\t"])
-@pytest.mark.parametrize(
-    "heading", ["Diagnose", "DOB", "Date of birth", "Blood pressure"]
-)
-def test_inline_headers_remain_outside_name_spans(separator, heading):
-    source = f"Patient: Anna Beispiel{separator}{heading}: Befund."
-    result = processor().process_batch([doc(source)])[0]
-    assert result.complete
-    assert result.deidentified_text == source.replace("Anna Beispiel", "[PERSON]")
+def test_inline_headers_remain_outside_name_spans(subtests):
+    for separator in [" ", "\t"]:
+        for heading in ["Diagnose", "DOB", "Date of birth", "Blood pressure"]:
+            with subtests.test(separator=separator, heading=heading):
+                source = f"Patient: Anna Beispiel{separator}{heading}: Befund."
+                result = processor().process_batch([doc(source)])[0]
+                assert result.complete
+                assert result.deidentified_text == source.replace(
+                    "Anna Beispiel", "[PERSON]"
+                )
 
 
-@pytest.mark.parametrize("separator", ["\n", "\r\n", "\n\n", "\r"])
-def test_header_names_do_not_consume_following_fields_after_normalization(separator):
-    source = separator.join(
-        [
-            "Patientin: Anna Beispiel",
-            "Geburtsdatum: 29.02.1980",
-            "Behandelnde Ärztin: Dr. Eva Muster",
-            "Aufnahme: 28.02.2024.",
-            "Keine Dyspnoe. Metoprolol 47,5 mg zweimal täglich.",
-        ]
-    )
-    result = processor().process_batch([doc(source)])[0]
-    assert result.complete
-    expected = (
-        source.replace("Anna Beispiel", "[PERSON]")
-        .replace("Eva Muster", "[PERSON]")
-        .replace("29.02.1980", "[DATE_OF_BIRTH]")
-    )
-    assert result.deidentified_text == expected
-    for span in result.spans:
-        assert not any(c in source[span["start"] : span["end"]] for c in "\r\n")
+def test_header_names_do_not_consume_following_fields_after_normalization(subtests):
+    for separator in ["\n", "\r\n", "\n\n", "\r"]:
+        with subtests.test(separator=separator):
+            source = separator.join(
+                [
+                    "Patientin: Anna Beispiel",
+                    "Geburtsdatum: 29.02.1980",
+                    "Behandelnde Ärztin: Dr. Eva Muster",
+                    "Aufnahme: 28.02.2024.",
+                    "Keine Dyspnoe. Metoprolol 47,5 mg zweimal täglich.",
+                ]
+            )
+            result = processor().process_batch([doc(source)])[0]
+            assert result.complete
+            expected = (
+                source.replace("Anna Beispiel", "[PERSON]")
+                .replace("Eva Muster", "[PERSON]")
+                .replace("29.02.1980", "[DATE_OF_BIRTH]")
+            )
+            assert result.deidentified_text == expected
+            for span in result.spans:
+                assert not any(c in source[span["start"] : span["end"]] for c in "\r\n")
 
 
 def test_name_hash_is_independent_of_the_following_header():

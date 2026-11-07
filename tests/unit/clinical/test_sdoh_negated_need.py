@@ -50,9 +50,8 @@ def test_determinant_negation_stays_with_its_finding() -> None:
     assert results[1].review_required is False
 
 
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
+def test_independent_determinant_assertions_do_not_leak(subtests) -> None:
+    for text, expected in [
         (
             "Reports food insecurity, denies transportation barrier.",
             [AFFIRMED, NEGATED],
@@ -69,32 +68,28 @@ def test_determinant_negation_stays_with_its_finding() -> None:
             "Reports food insecurity and denies transportation barrier.",
             [AFFIRMED, NEGATED],
         ),
-    ],
-)
-def test_independent_determinant_assertions_do_not_leak(
-    text: str,
-    expected: list[str],
-) -> None:
-    lower = text.casefold()
-    food_start = lower.index("food insecurity")
-    transport_start = lower.index("transportation barrier")
-    findings = [
-        {
-            "start": food_start,
-            "end": food_start + len("food insecurity"),
-            "category": "food_insecurity",
-        },
-        {
-            "start": transport_start,
-            "end": transport_start + len("transportation barrier"),
-            "category": "transportation_barrier",
-        },
-    ]
+    ]:
+        with subtests.test(text=text, expected=expected):
+            lower = text.casefold()
+            food_start = lower.index("food insecurity")
+            transport_start = lower.index("transportation barrier")
+            findings = [
+                {
+                    "start": food_start,
+                    "end": food_start + len("food insecurity"),
+                    "category": "food_insecurity",
+                },
+                {
+                    "start": transport_start,
+                    "end": transport_start + len("transportation barrier"),
+                    "category": "transportation_barrier",
+                },
+            ]
 
-    results = resolve_sdoh_negated_needs(text, findings)
+            results = resolve_sdoh_negated_needs(text, findings)
 
-    assert [result.assertion for result in results] == expected
-    assert all(not result.review_required for result in results)
+            assert [result.assertion for result in results] == expected
+            assert all(not result.review_required for result in results)
 
 
 def test_one_denial_can_cover_a_coordinated_need_list() -> None:

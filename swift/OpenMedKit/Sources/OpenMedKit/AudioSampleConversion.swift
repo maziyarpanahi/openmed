@@ -137,7 +137,7 @@ public enum LocalAudioSampleConversion {
         let sourceDuration = Double(plan.sourceFrames) / Double(plan.sourceRate)
         let duration = Double(plan.targetFrames) / Double(plan.targetRate)
         guard profile.rates.contains(plan.targetRate), profile.channels.contains(channels),
-            profile.allowResample || profile.rates.contains(plan.sourceRate),
+            profile.allowResample || plan.sourceRate == plan.targetRate,
             profile.channels.contains(sourceChannels) || (profile.allowDownmix && sourceChannels > profile.channels.max()!),
             channels == sourceChannels || profile.allowDownmix,
             sourceDuration >= profile.minDuration, sourceDuration <= profile.maxDuration,

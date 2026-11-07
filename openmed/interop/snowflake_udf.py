@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 DEFAULT_HANDLER = "openmed.interop.snowflake_udf.deidentify_udf"
 DEFAULT_NAME = "OPENMED_DEIDENTIFY"
-DEFAULT_RUNTIME_VERSION = "3.10"
+DEFAULT_RUNTIME_VERSION = "3.11"
 
 
 def deidentify_udf(
@@ -132,7 +132,7 @@ def generate_create_function_sql(
 
     Args:
         name: SQL function name, optionally qualified by database and schema.
-        runtime_version: Snowflake Python runtime version, such as ``"3.10"``.
+        runtime_version: Snowflake Python runtime version, such as ``"3.11"``.
         packages: Snowflake package references for ``PACKAGES``.
         imports: Optional stage paths for the SQL ``IMPORTS`` clause.
         handler: Fully qualified Python handler path.

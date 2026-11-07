@@ -52,6 +52,16 @@ final class AudioSampleConversionTests: XCTestCase {
         }
     }
 
+    func testProfileDisablesResamplingEvenWhenBothRatesAreAccepted() throws {
+        let plan = try AudioSampleConversionPlan(sourceRate: 48000, targetRate: 16000, sourceFrames: 12)
+        let profile = try AudioSampleConversionProfile(rates: [16000, 48000], channels: [1], allowResample: false)
+        XCTAssertThrowsError(
+            try LocalAudioSampleConversion.convert(chunks: [[Double](repeating: 0, count: 12)], sourceChannels: 1, plan: plan, profile: profile, channelPolicy: .preserve)
+        ) { error in
+            XCTAssertEqual(error as? AudioSampleConversionError, .incompatibleProfile)
+        }
+    }
+
     func testInvalidSamplesBudgetsAndCancellation() throws {
         let plan = try AudioSampleConversionPlan(sourceRate: 48000, targetRate: 16000, sourceFrames: 100)
         let profile = try AudioSampleConversionProfile(rates: [16000], channels: [1])

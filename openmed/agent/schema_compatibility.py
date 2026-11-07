@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Final
 
 from .artifact_reference import ArtifactKind
+from .outcomes import _bounded_governance_json
 
 COMPATIBILITY_SCHEMA_VERSION: Final = "openmed.agent.schema_compatibility.v1"
 
@@ -327,10 +328,12 @@ class CompatibilityResult:
     def from_json(cls, payload: str | bytes | bytearray) -> CompatibilityResult:
         """Build and validate a result from a JSON payload."""
         try:
-            data = json.loads(payload)
-        except (ValueError, TypeError):
-            raise SchemaCompatibilityError("malformed_json") from None
-        return cls.from_dict(data)
+            data = _bounded_governance_json(payload)
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            pass
+        else:
+            return cls.from_dict(data)
+        raise SchemaCompatibilityError("malformed_json")
 
 
 def check_schema_compatibility(

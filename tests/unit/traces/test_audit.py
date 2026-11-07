@@ -120,31 +120,27 @@ def test_collector_is_read_only_and_accepts_opaque_status_items() -> None:
     assert _SENSITIVE_VALUE not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    "file_label, directory",
-    [
+def test_file_labels_are_hashed_without_exposing_paths(subtests) -> None:
+    for file_label, directory in [
         ("/private/example/synthetic-trace.jsonl", "/private/example"),
         (r"C:\private\example\synthetic-trace.jsonl", "C:/private/example"),
-    ],
-)
-def test_file_labels_are_hashed_without_exposing_paths(
-    file_label: str, directory: str
-) -> None:
-    report = build_trace_audit(
-        [
-            {
-                "store": "synthetic",
-                "category": "message",
-                "file": file_label,
-                "start": 3,
-                "end": 7,
-            }
-        ]
-    )
+    ]:
+        with subtests.test(file_label=file_label, directory=directory):
+            report = build_trace_audit(
+                [
+                    {
+                        "store": "synthetic",
+                        "category": "message",
+                        "file": file_label,
+                        "start": 3,
+                        "end": 7,
+                    }
+                ]
+            )
 
-    assert str(report.files[0]["file"]).startswith("file_sha256_")
-    assert "synthetic-trace.jsonl" not in report.to_json()
-    assert directory not in report.to_terminal()
+            assert str(report.files[0]["file"]).startswith("file_sha256_")
+            assert "synthetic-trace.jsonl" not in report.to_json()
+            assert directory not in report.to_terminal()
 
 
 def test_caller_controlled_dimensions_are_hashed() -> None:
