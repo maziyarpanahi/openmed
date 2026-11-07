@@ -599,6 +599,7 @@ classification:
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
     - multimodal/dicom-transfer-syntax-preflight.md
+    - multimodal/dicom-ecg-waveforms.md
     - multimodal/vision/dicom-series-sampling.md
     - multimodal/vision/dicom-pixel-provenance.md
     - evaluation/model-provenance-diff.md

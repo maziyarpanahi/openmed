@@ -97,7 +97,7 @@ their consequential-use boundary. A notice does not replace consent, clinical
 validation, provenance or an authorization receipt.
 
 `validate_notice_registry` checks covered frozen dataclasses for a declared notice
-kind and a required notice field. The static registry test inventories public
+kind and a required or fixed catalog notice. The static registry test inventories public
 multimodal data/result classes and the MLX vision result. Newly added classes
 fail until registered as notice-bound outputs or explicitly reviewed as
 non-clinical operational/ingestion types. Existing transport, preflight, geometry,

@@ -75,12 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
-- Bind versioned non-diagnostic notices to multimodal review references and
-  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
-  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
-  fixtures and public result registry/wording gates (#3828). Direct generation
-  construction now requires its notice; Python text generation includes it.
-
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
@@ -134,6 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
 - Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
+
+- Bounded, offline DICOM ECG multiplex decoding with physical calibration,
+  source-coded channels, relative skew, withheld annotation counts, static
+  rejection codes and explicit reviewer confirmation (#3825).
 
 - Record actual DICOM decoding and display transforms in reproducible digest chains, bind downstream image regions and local VLM evidence to their pixels, and reject stale or unreproducible evidence (#2801).
 
@@ -200,6 +198,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Define an offline streaming-ASR provider contract with typed audio, hypotheses, token timing, provenance, bounded session accounting and explicit cancellation (#2812).
 
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
+
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry checks. Structured vision results carry
+  the fixed catalog notice (#3828).
 
 ### Security
 
