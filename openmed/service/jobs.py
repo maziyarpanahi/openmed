@@ -17,6 +17,24 @@ from typing import Any, Callable, Optional
 import openmed
 from openmed.core.audit import hash_text
 
+from .compatibility import (
+    CURRENT_CONTRACT,
+    JOB_DEIDENTIFY_CAPABILITY,
+    JOB_STORE_COMPONENT,
+    JOB_STORE_SCHEMA_VERSION,
+    JOB_WEBHOOK_CAPABILITY,
+    CompatibilityDescriptor,
+    CompatibilityState,
+    ComponentCompatibility,
+    IncompatibleStateError,
+    SchemaObservation,
+    WorkEnvelope,
+    check_work,
+    evaluate_component,
+    job_store_observation,
+    local_descriptor,
+    model_generation_ref,
+)
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
 from .webhooks import WebhookDeliveryResult, deliver_webhook
@@ -96,12 +114,28 @@ def _copy_record(record: dict[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(record)
 
 
+_FileSignature = tuple[int, int, int]
+
+
+def _file_signature(path: Path) -> Optional[_FileSignature]:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+
+
 class LocalJobStore:
     """Durable local metadata store for async jobs.
 
     The store intentionally persists only metadata and no raw submitted text or
     redacted output. Raw job payloads live in memory until a worker processes
     them.
+
+    The file records its schema version. A store persisted by a build outside
+    this build's compatibility window is never loaded or overwritten: every
+    operation raises :class:`IncompatibleStateError` before mutation, including
+    when another process replaces the file while this one is running.
     """
 
     def __init__(
@@ -115,11 +149,27 @@ class LocalJobStore:
         self.ttl_seconds = int(ttl_seconds)
         self.clock = clock
         self._lock = threading.RLock()
+        self._schema = CURRENT_CONTRACT.durable_schemas[JOB_STORE_COMPONENT]
+        self._blocked: Optional[ComponentCompatibility] = None
+        self._published_signature: Optional[_FileSignature] = None
         self._records: dict[str, dict[str, Any]] = self._load()
+
+    @property
+    def compatibility(self) -> ComponentCompatibility:
+        """Return the value-free compatibility of the persisted store."""
+        with self._lock:
+            if self._blocked is not None:
+                return self._blocked
+            if self._published_signature is None:
+                return evaluate_component(self._schema, SchemaObservation.absent())
+            return evaluate_component(
+                self._schema, SchemaObservation.at(JOB_STORE_SCHEMA_VERSION)
+            )
 
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         """Persist a new job record."""
         with self._lock:
+            self._require_compatible_locked()
             previous = _copy_record(self._records)
             self.cleanup_expired_locked()
             job_id = str(record["id"])
@@ -130,6 +180,7 @@ class LocalJobStore:
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
         """Return one job record, if present."""
         with self._lock:
+            self._require_compatible_locked()
             self.cleanup_expired_locked()
             record = self._records.get(job_id)
             return None if record is None else _copy_record(record)
@@ -137,6 +188,7 @@ class LocalJobStore:
     def update(self, job_id: str, **changes: Any) -> dict[str, Any]:
         """Apply changes to a job record and persist them."""
         with self._lock:
+            self._require_compatible_locked()
             previous = _copy_record(self._records)
             record = self._records[job_id]
             record.update(_copy_record(changes))
@@ -147,6 +199,7 @@ class LocalJobStore:
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
+            self._require_compatible_locked()
             previous = _copy_record(self._records)
             if self.cleanup_expired_locked():
                 self._publish_locked(previous)
@@ -172,16 +225,45 @@ class LocalJobStore:
             raise ValueError("Job metadata store contains invalid JSON") from None
         if not isinstance(raw, dict):
             raise ValueError("Job metadata store must contain a JSON object")
+        if "schema_version" in raw:
+            compatibility = evaluate_component(
+                self._schema, SchemaObservation.at(raw["schema_version"])
+            )
+            if compatibility.state is CompatibilityState.UNKNOWN:
+                raise ValueError("Job metadata store schema version is invalid")
+            if not compatibility.usable:
+                # Leave newer or older state untouched for a compatible build.
+                self._blocked = compatibility
+                return {}
         jobs = raw.get("jobs")
         if not isinstance(jobs, dict):
             raise ValueError("Job metadata store must contain a jobs object")
         if any(not isinstance(record, dict) for record in jobs.values()):
             raise ValueError("Job metadata store contains an invalid job record")
+        self._published_signature = _file_signature(self.path)
         return {str(job_id): dict(record) for job_id, record in jobs.items()}
 
+    def _require_compatible_locked(self) -> None:
+        if self._blocked is not None:
+            raise IncompatibleStateError(JOB_STORE_COMPONENT, self._blocked.code)
+
+    def _verify_on_disk_schema_locked(self) -> None:
+        """Refuse to replace a file another build rewrote outside the window."""
+        signature = _file_signature(self.path)
+        if signature is None or signature == self._published_signature:
+            return
+        compatibility = evaluate_component(
+            self._schema, job_store_observation(self.path)
+        )
+        if compatibility.usable:
+            return
+        self._blocked = compatibility
+        raise IncompatibleStateError(JOB_STORE_COMPONENT, compatibility.code)
+
     def _persist_locked(self) -> None:
+        self._verify_on_disk_schema_locked()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"jobs": self._records}
+        payload = {"schema_version": JOB_STORE_SCHEMA_VERSION, "jobs": self._records}
         temp_name: str | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -194,6 +276,7 @@ class LocalJobStore:
                 json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
                 handle.write("\n")
             os.replace(temp_name, self.path)
+            self._published_signature = _file_signature(self.path)
         except BaseException:
             if temp_name is not None:
                 try:
@@ -224,7 +307,12 @@ def _parse_timestamp(raw_value: Any) -> datetime:
 
 
 class DeidentifyJobQueue:
-    """Bounded local worker pool for async de-identification jobs."""
+    """Bounded local worker pool for async de-identification jobs.
+
+    Every record is stamped with a :class:`WorkEnvelope` naming the contract
+    and model generation it was admitted under, and a worker checks that
+    envelope with :func:`check_work` before it marks the job running.
+    """
 
     def __init__(
         self,
@@ -234,11 +322,15 @@ class DeidentifyJobQueue:
         max_workers: int = DEFAULT_JOBS_WORKERS,
         webhook_sender: WebhookSender = deliver_webhook,
         clock: Callable[[], datetime] = _utc_now,
+        descriptor: Optional[CompatibilityDescriptor] = None,
     ) -> None:
         self.runtime = runtime
         self.store = store
         self.webhook_sender = webhook_sender
         self.clock = clock
+        self.descriptor = (
+            descriptor if descriptor is not None else local_descriptor(runtime)
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
             thread_name_prefix="openmed-job",
@@ -312,9 +404,53 @@ class DeidentifyJobQueue:
             "started_at": None,
             "completed_at": None,
             "expires_at": self._expiry_timestamp(now),
+            "compatibility": self._work_envelope(payload).to_dict(),
         }
 
+    def _work_envelope(self, payload: DeidentifyJobRequest) -> WorkEnvelope:
+        capabilities = {JOB_DEIDENTIFY_CAPABILITY}
+        if payload.webhook is not None:
+            capabilities.add(JOB_WEBHOOK_CAPABILITY)
+        # Pin the model generation whenever this node publishes the generations
+        # it serves, so a claimant that does not serve it refuses the job.
+        model_generation = (
+            model_generation_ref(payload.model_name)
+            if self.descriptor.model_generations
+            else None
+        )
+        return WorkEnvelope.for_work(
+            self.descriptor,
+            components=(JOB_STORE_COMPONENT,),
+            required_capabilities=capabilities,
+            model_generation=model_generation,
+        )
+
+    def _refuse_incompatible_work(self, item: _JobWorkItem) -> bool:
+        """Fail a job this worker cannot handle before claiming it."""
+        record = self.store.get(item.job_id)
+        if record is None:
+            return True
+        decision = check_work(self.descriptor, record.get("compatibility"))
+        if decision.compatible:
+            return False
+        completed_at = self.clock()
+        final_record = self.store.update(
+            item.job_id,
+            status="failed",
+            error={
+                "type": "IncompatibleWork",
+                "message": "Job was refused before processing",
+                "code": decision.code,
+            },
+            completed_at=_isoformat(completed_at),
+            expires_at=self._expiry_timestamp(completed_at),
+        )
+        self._send_terminal_webhook(item.payload.webhook, final_record)
+        return True
+
     def _run_job(self, item: _JobWorkItem) -> None:
+        if self._refuse_incompatible_work(item):
+            return
         started_at = self.clock()
         self.store.update(
             item.job_id,

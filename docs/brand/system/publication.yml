@@ -225,6 +225,7 @@ classification:
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md
+    - deploy/upgrades.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md

@@ -37,6 +37,9 @@ truth for exact request and response schemas. Its current public operations are:
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled.
+The operator `/v1/compatibility` route is also excluded from the generated
+schema; it publishes the value-free upgrade contract described in
+[Zero-Downtime Upgrades](deploy/upgrades.md).
 
 The service includes stricter request validation, shared model/pipeline reuse,
 optional startup preload, bounded warm-pool residency, model keep-alive
@@ -823,6 +826,10 @@ Readiness response after startup preload completes:
 
 Before startup readiness, `/readyz` returns `503` with `error.code` set to
 `not_ready`.
+When persisted shared state is outside this build's compatibility window,
+`/readyz` returns `503` with `error.code` set to `incompatible_state` and
+value-free per-component reasons; see
+[Zero-Downtime Upgrades](deploy/upgrades.md).
 
 ### `GET /models/loaded`
 

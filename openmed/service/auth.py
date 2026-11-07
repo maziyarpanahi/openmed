@@ -75,6 +75,7 @@ ROUTE_POLICIES = {
     ("POST", "/profile"): RoutePolicy(("profile:write",), "heavy"),
     ("POST", "/cohort/resolve"): RoutePolicy(("cohort:read",), "heavy"),
     ("GET", "/v1/journey/resources"): RoutePolicy(("journey:read",), "heavy"),
+    ("GET", "/v1/compatibility"): RoutePolicy(("compatibility:read",), "control"),
     ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
     ("POST", "/v1/systemone"): RoutePolicy(("decisions:write", "pii:write"), "model"),
     ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
