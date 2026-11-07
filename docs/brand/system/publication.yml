@@ -517,6 +517,7 @@ classification:
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
+    - multimodal/edf-reader.md
     - multimodal/streaming/transcript-revisions.md
     - multimodal/streaming/asr-window-stitching.md
     - multimodal/ecg-lead-layout.md

@@ -83,6 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate sustained local VLM execution and speech PHI screening on measured latency, queue age, fresh thermal state and memory pressure, preserving fallback history and withholding stale outputs (#2820).
 
+- Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
+  integer/scaled samples, withheld identification/date/annotation text, explicit
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
 - Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
   separate rhythm and representative-beat signals, withheld identifying
   metadata, controlled rejection codes and mandatory review notices (#3839).
