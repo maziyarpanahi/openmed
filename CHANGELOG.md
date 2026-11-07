@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
 
+- Experimental Android mirrors of multimodal asset manifests, profile references,
+  preflight findings, abstention records, and provider result envelopes with strict
+  content-free parsing and shared offline Python/Kotlin serialization vectors.
+
 - Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
 
 - Connect synthetic image and audio inputs through bounded preflight, actual redaction, local fixture providers, evidence fusion, clock lineage, unresolved-speaker review and conservative owned-buffer cleanup, with cancellation and resource-failure controls (#3204).
