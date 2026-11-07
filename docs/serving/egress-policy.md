@@ -124,6 +124,60 @@ queries, headers, credentials, and payloads are never recorded.
 `EgressPolicy.to_safe_dict()` returns a posture summary for deployment checks.
 The summary holds the mode, digest, and rule counts per purpose.
 
+## OS-enforced no-egress gate
+
+The policy runs inside the process, so it cannot stop a native library, a child
+process, or a raw resolver call. `scripts/security/no_egress_gate.py` checks the
+boundary outside the process. It runs a synthetic service workflow inside a
+Linux network namespace (`unshare --user --map-root-user --net`) or a container
+started with `--network none`. Only loopback exists inside either one.
+
+```bash
+python scripts/security/no_egress_gate.py --output no-egress-attestation.json
+python scripts/security/no_egress_gate.py --boundary container \
+  --container-image openmed-service:local --output no-egress-attestation.json
+python scripts/security/no_egress_gate.py --verify no-egress-attestation.json
+```
+
+Inside the boundary the gate starts the REST app, with GraphQL mounted, and the
+gRPC server on loopback. A deterministic fixture loader built from
+`tests/fixtures/security/no_egress_service_workflow.json` stands in for a cached
+checkpoint, so the gate downloads no model. The gate then runs these steps:
+
+- analyze, extract, and de-identify over REST, GraphQL, and gRPC;
+- an async job, and a webhook that this policy must refuse with `egress_denied`;
+- client cancellation of a REST stream and a gRPC stream;
+- a Journey store write, a graceful restart, a reopen check, and a shutdown.
+
+Twelve negative controls try to leave the host. They cover IPv4 and IPv6 TCP and
+UDP, the system resolver, a raw DNS query, a child interpreter, and raw libc
+sockets through `ctypes`. They target documentation addresses (RFC 5737 and
+RFC 3849) and a `.invalid` name. A control counts as blocked only when the
+kernel reports that no route or address exists. A timeout counts as
+inconclusive. Loopback positive controls show that each probe works when a route
+exists. The gate also counts the interfaces and routes inside the boundary.
+
+Container mode needs a local image with Python 3.11 or later and the `service`
+extra. The gate bind-mounts the checkout read-only and never pulls an image.
+You can also set the image with `OPENMED_NO_EGRESS_IMAGE`.
+
+The attestation validates against
+`openmed/core/schemas/json/no_egress_attestation.schema.json`. It contains only
+case identifiers, statuses, reason codes, counts, digests, the commit, and the
+declared `generated_at` timestamp. Its `repro_hash` excludes the fields listed
+in `volatile_fields`. The exit codes are:
+
+| Exit | Status | Meaning |
+| --- | --- | --- |
+| `0` | `passed` | Every negative control was blocked and every workflow case passed. |
+| `1` | `failed` | A control was not blocked, the boundary was not isolated, or the workflow or runner failed. |
+| `2` | — | Invalid arguments or an unreadable fixture. |
+| `3` | `skipped` | The host has no supported mechanism, for example macOS without container mode. This is never a pass. |
+
+The `service-no-egress` job in `.github/workflows/release-gates.yml` runs the
+gate in network-namespace mode before the release gates. It uploads the
+attestation.
+
 ## Migrating
 
 The policy is deny-by-default for the production profile. To keep a webhook,

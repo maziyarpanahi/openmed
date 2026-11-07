@@ -1,0 +1,636 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/no_egress_attestation.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed OS-enforced no-egress attestation",
+  "description": "Value-free evidence that a synthetic service workflow ran inside an operating-system network boundary that blocked every external-egress negative control. Every string is a controlled identifier, a digest, a version, or a declared timestamp.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "attestation_type",
+    "generated_at",
+    "volatile_fields",
+    "commit",
+    "openmed_version",
+    "status",
+    "reason_code",
+    "host",
+    "boundary",
+    "negative_controls",
+    "positive_controls",
+    "workflow",
+    "counts",
+    "fixtures",
+    "repro_hash",
+    "integrity_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "attestation_type": {
+      "const": "openmed.no_egress"
+    },
+    "generated_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$",
+      "type": "string"
+    },
+    "volatile_fields": {
+      "const": [
+        "generated_at",
+        "integrity_hash"
+      ]
+    },
+    "commit": {
+      "pattern": "^(unknown|[0-9a-f]{40}|[0-9a-f]{64})$",
+      "type": "string"
+    },
+    "openmed_version": {
+      "pattern": "^(unknown|[0-9][0-9A-Za-z.+-]{0,63})$",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "skipped"
+      ]
+    },
+    "reason_code": {
+      "enum": [
+        "all_controls_blocked",
+        "egress_not_blocked",
+        "negative_control_incomplete",
+        "boundary_not_isolated",
+        "positive_control_failed",
+        "workflow_failed",
+        "runner_failed",
+        "runner_timeout",
+        "runner_result_invalid",
+        "unsupported_host",
+        "boundary_unavailable"
+      ]
+    },
+    "host": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "linux",
+            "darwin",
+            "windows",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "boundary": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "enum": [
+            "auto",
+            "netns",
+            "container"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "netns",
+            "container",
+            "none"
+          ]
+        },
+        "mechanism": {
+          "enum": [
+            "linux_user_network_namespace",
+            "container_network_none",
+            "none"
+          ]
+        },
+        "kernel": {
+          "enum": [
+            "linux",
+            "unknown"
+          ]
+        },
+        "isolated": {
+          "type": "boolean"
+        },
+        "interfaces": {
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "$ref": "#/$defs/count"
+            },
+            "loopback_up": {
+              "$ref": "#/$defs/count"
+            },
+            "non_loopback_up": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "required": [
+            "total",
+            "loopback_up",
+            "non_loopback_up"
+          ],
+          "type": "object"
+        },
+        "routes": {
+          "additionalProperties": false,
+          "properties": {
+            "ipv4_non_loopback": {
+              "$ref": "#/$defs/count"
+            },
+            "ipv6_non_loopback": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "required": [
+            "ipv4_non_loopback",
+            "ipv6_non_loopback"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "requested",
+        "kind",
+        "mechanism",
+        "kernel",
+        "isolated",
+        "interfaces",
+        "routes"
+      ],
+      "type": "object"
+    },
+    "negative_controls": {
+      "items": {
+        "$ref": "#/$defs/negative_control"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "positive_controls": {
+      "items": {
+        "$ref": "#/$defs/positive_control"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "workflow": {
+      "items": {
+        "$ref": "#/$defs/workflow_case"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "counts": {
+      "additionalProperties": false,
+      "properties": {
+        "negative_controls": {
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "$ref": "#/$defs/count"
+            },
+            "blocked": {
+              "$ref": "#/$defs/count"
+            },
+            "not_blocked": {
+              "$ref": "#/$defs/count"
+            },
+            "inconclusive": {
+              "$ref": "#/$defs/count"
+            },
+            "not_run": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "required": [
+            "total",
+            "blocked",
+            "not_blocked",
+            "inconclusive",
+            "not_run"
+          ],
+          "type": "object"
+        },
+        "positive_controls": {
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "$ref": "#/$defs/count"
+            },
+            "reachable": {
+              "$ref": "#/$defs/count"
+            },
+            "unreachable": {
+              "$ref": "#/$defs/count"
+            },
+            "not_run": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "required": [
+            "total",
+            "reachable",
+            "unreachable",
+            "not_run"
+          ],
+          "type": "object"
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "$ref": "#/$defs/count"
+            },
+            "passed": {
+              "$ref": "#/$defs/count"
+            },
+            "failed": {
+              "$ref": "#/$defs/count"
+            },
+            "not_run": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "required": [
+            "total",
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "negative_controls",
+        "positive_controls",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "fixtures": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "enum": [
+              "service_workflow_fixture",
+              "no_egress_gate_runner"
+            ]
+          },
+          "digest": {
+            "$ref": "#/$defs/digest"
+          }
+        },
+        "required": [
+          "id",
+          "digest"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "type": "array"
+    },
+    "repro_hash": {
+      "$ref": "#/$defs/digest"
+    },
+    "integrity_hash": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason_code": {
+            "const": "all_controls_blocked"
+          },
+          "boundary": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "netns",
+                  "container"
+                ]
+              },
+              "kernel": {
+                "const": "linux"
+              },
+              "isolated": {
+                "const": true
+              }
+            }
+          },
+          "negative_controls": {
+            "minItems": 1
+          },
+          "positive_controls": {
+            "minItems": 1
+          },
+          "workflow": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "skipped"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason_code": {
+            "enum": [
+              "unsupported_host",
+              "boundary_unavailable"
+            ]
+          },
+          "boundary": {
+            "properties": {
+              "kind": {
+                "const": "none"
+              }
+            }
+          },
+          "negative_controls": {
+            "maxItems": 0
+          },
+          "positive_controls": {
+            "maxItems": 0
+          },
+          "workflow": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason_code": {
+            "not": {
+              "enum": [
+                "all_controls_blocked",
+                "unsupported_host",
+                "boundary_unavailable"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "probe_reason": {
+      "enum": [
+        "network_unreachable",
+        "address_unavailable",
+        "family_unsupported",
+        "permission_denied",
+        "resolver_unreachable",
+        "loopback_reachable",
+        "connection_established",
+        "datagram_sent",
+        "peer_refused",
+        "peer_reset",
+        "name_resolved",
+        "resolver_answered",
+        "host_unreachable",
+        "timeout",
+        "probe_error",
+        "executor_unavailable",
+        "dependency_failed"
+      ]
+    },
+    "negative_control": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "ipv4_tcp_socket",
+            "ipv6_tcp_socket",
+            "ipv4_udp_socket",
+            "ipv6_udp_socket",
+            "dns_system_resolver",
+            "dns_udp_query",
+            "subprocess_ipv4_tcp",
+            "subprocess_ipv6_tcp",
+            "subprocess_dns",
+            "native_ipv4_tcp",
+            "native_ipv6_tcp",
+            "native_ipv4_udp"
+          ]
+        },
+        "transport": {
+          "enum": [
+            "tcp",
+            "udp",
+            "dns"
+          ]
+        },
+        "family": {
+          "enum": [
+            "ipv4",
+            "ipv6",
+            "any"
+          ]
+        },
+        "executor": {
+          "enum": [
+            "python_socket",
+            "subprocess",
+            "native_libc",
+            "system_resolver"
+          ]
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "not_blocked",
+            "inconclusive",
+            "not_run"
+          ]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/probe_reason"
+        }
+      },
+      "required": [
+        "id",
+        "transport",
+        "family",
+        "executor",
+        "status",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "positive_control": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "loopback_ipv4_tcp_socket",
+            "loopback_ipv4_udp_socket",
+            "loopback_dns_udp_query",
+            "loopback_system_resolver",
+            "loopback_subprocess_ipv4_tcp",
+            "loopback_native_ipv4_tcp"
+          ]
+        },
+        "transport": {
+          "enum": [
+            "tcp",
+            "udp",
+            "dns"
+          ]
+        },
+        "family": {
+          "enum": [
+            "ipv4",
+            "ipv6",
+            "any"
+          ]
+        },
+        "executor": {
+          "enum": [
+            "python_socket",
+            "subprocess",
+            "native_libc",
+            "system_resolver"
+          ]
+        },
+        "status": {
+          "enum": [
+            "reachable",
+            "unreachable",
+            "not_run"
+          ]
+        },
+        "reason_code": {
+          "$ref": "#/$defs/probe_reason"
+        }
+      },
+      "required": [
+        "id",
+        "transport",
+        "family",
+        "executor",
+        "status",
+        "reason_code"
+      ],
+      "type": "object"
+    },
+    "workflow_case": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "service_start",
+            "rest_analyze",
+            "rest_extract",
+            "rest_deidentify",
+            "rest_job",
+            "rest_webhook_egress_denied",
+            "rest_stream_cancel",
+            "graphql_analyze",
+            "graphql_deidentify",
+            "grpc_analyze",
+            "grpc_extract",
+            "grpc_deidentify",
+            "grpc_stream_cancel",
+            "journey_persist",
+            "service_restart",
+            "journey_reopen",
+            "service_shutdown"
+          ]
+        },
+        "surface": {
+          "enum": [
+            "rest",
+            "graphql",
+            "grpc",
+            "journey",
+            "lifecycle"
+          ]
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run"
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "ok",
+            "unexpected_status",
+            "unexpected_result",
+            "transport_error",
+            "timeout",
+            "server_exit",
+            "not_cancelled",
+            "persistence_mismatch",
+            "dependency_unavailable",
+            "dependency_failed"
+          ]
+        },
+        "result_digest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "surface",
+        "status",
+        "reason_code",
+        "result_digest"
+      ],
+      "type": "object"
+    }
+  }
+}
