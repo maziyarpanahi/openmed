@@ -196,10 +196,11 @@ type JobStatus string
 
 // De-identification job statuses.
 const (
-	JobQueued  JobStatus = "queued"
-	JobRunning JobStatus = "running"
-	JobDone    JobStatus = "done"
-	JobFailed  JobStatus = "failed"
+	JobQueued    JobStatus = "queued"
+	JobRunning   JobStatus = "running"
+	JobDone      JobStatus = "done"
+	JobFailed    JobStatus = "failed"
+	JobCancelled JobStatus = "cancelled"
 )
 
 // JSONObject is an untyped JSON object, used for open-ended metadata fields.
@@ -453,6 +454,9 @@ type DeidentifyJobRequest struct {
 	Lang                PIILanguage             `json:"lang,omitempty"`
 	NormalizeAccents    *bool                   `json:"normalize_accents,omitempty"`
 	KeepAlive           any                     `json:"keep_alive,omitempty"`
+	// PayloadRetentionSeconds requests a retention period for the job's
+	// protected payloads; it may not exceed the service maximum.
+	PayloadRetentionSeconds *int `json:"payload_retention_seconds,omitempty"`
 }
 
 // SMARTBackendIngestionRequest is the request body for
@@ -767,17 +771,41 @@ type JobWebhookMetadata struct {
 }
 
 // JobWebhookDelivery reports the outcome of a webhook delivery attempt.
+// Error is a value-free code; PayloadRef names the immutable terminal-event
+// payload the delivery used.
 type JobWebhookDelivery struct {
 	Success    bool    `json:"success"`
 	Attempts   int     `json:"attempts"`
 	StatusCode *int    `json:"status_code"`
 	Error      *string `json:"error"`
+	PayloadRef *string `json:"payload_ref,omitempty"`
 }
 
-// JobErrorSummary describes a job-level error.
+// JobErrorSummary describes a job-level error with a value-free code.
 type JobErrorSummary struct {
+	Code    string `json:"code,omitempty"`
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+// JobPayloadRef is an opaque reference to one protected job payload.
+type JobPayloadRef struct {
+	Ref           string  `json:"ref"`
+	SchemaVersion int     `json:"schema_version"`
+	State         string  `json:"state"`
+	CreatedAt     string  `json:"created_at"`
+	ExpiresAt     string  `json:"expires_at"`
+	Digest        *string `json:"digest"`
+	Reason        *string `json:"reason"`
+}
+
+// JobPayloads reports the lifecycle of a job's protected payloads.
+type JobPayloads struct {
+	SchemaVersion    int            `json:"schema_version"`
+	Mode             string         `json:"mode"`
+	RetentionSeconds int            `json:"retention_seconds"`
+	Input            *JobPayloadRef `json:"input"`
+	TerminalEvent    *JobPayloadRef `json:"terminal_event"`
 }
 
 // JobResponse is returned by POST /jobs and GET /jobs/{job_id}.
@@ -794,6 +822,7 @@ type JobResponse struct {
 	Error           *JobErrorSummary      `json:"error"`
 	Webhook         *JobWebhookMetadata   `json:"webhook"`
 	WebhookDelivery *JobWebhookDelivery   `json:"webhook_delivery"`
+	Payloads        *JobPayloads          `json:"payloads,omitempty"`
 	CreatedAt       string                `json:"created_at"`
 	UpdatedAt       string                `json:"updated_at"`
 	StartedAt       *string               `json:"started_at"`

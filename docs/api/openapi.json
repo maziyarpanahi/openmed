@@ -536,6 +536,18 @@
             ],
             "title": "Normalize Accents"
           },
+          "payload_retention_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Retention Seconds"
+          },
           "policy": {
             "anyOf": [
               {

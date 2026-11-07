@@ -340,6 +340,8 @@ export interface DeidentifyJobRequest {
   lang?: PIILanguage;
   normalize_accents?: boolean | null;
   keep_alive?: KeepAliveValue | null;
+  /** Requested payload retention; may not exceed the service maximum. */
+  payload_retention_seconds?: number | null;
 }
 
 export interface ModelUnloadRequest {
@@ -591,7 +593,7 @@ export interface SMARTBackendJobStatus {
   error: string | null;
 }
 
-export type JobStatus = "queued" | "running" | "done" | "failed";
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export interface JobDocumentMetadata {
   id: string;
@@ -619,12 +621,34 @@ export interface JobWebhookDelivery {
   success: boolean;
   attempts: number;
   status_code: number | null;
+  /** Value-free code such as "HTTP 500", "timeout" or "transport_error". */
   error: string | null;
+  /** Opaque reference to the immutable terminal-event payload. */
+  payload_ref?: string | null;
 }
 
 export interface JobErrorSummary {
+  code?: string;
   type: string;
   message: string;
+}
+
+export interface JobPayloadRef {
+  ref: string;
+  schema_version: number;
+  state: "retained" | "deleted" | "expired";
+  created_at: string;
+  expires_at: string;
+  digest: string | null;
+  reason: string | null;
+}
+
+export interface JobPayloads {
+  schema_version: number;
+  mode: "memory" | "encrypted";
+  retention_seconds: number;
+  input: JobPayloadRef | null;
+  terminal_event: JobPayloadRef | null;
 }
 
 export interface JobResponse {
@@ -640,6 +664,7 @@ export interface JobResponse {
   error: JobErrorSummary | null;
   webhook: JobWebhookMetadata | null;
   webhook_delivery: JobWebhookDelivery | null;
+  payloads?: JobPayloads;
   created_at: string;
   updated_at: string;
   started_at: string | null;
