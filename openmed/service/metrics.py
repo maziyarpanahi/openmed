@@ -16,6 +16,8 @@ REQUEST_TOTAL_NAME = "openmed_service_request_total"
 REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
 ORPHANED_WORK_NAME = "openmed_service_orphaned_work"
+JOB_QUEUE_DEPTH_NAME = "openmed_service_job_queue_depth"
+JOB_QUEUE_TEXT_BYTES_NAME = "openmed_service_job_queue_text_bytes"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
 PAGED_KV_CACHE_OCCUPANCY_NAME = "openmed_service_mlx_paged_kv_cache_occupancy_pages"
@@ -112,6 +114,8 @@ class PrometheusMetricsRegistry:
         self._duration_sum: dict[str, float] = {}
         self._inflight_requests = 0
         self._orphaned_work = 0
+        self._job_queue_depth = 0
+        self._job_queue_text_bytes = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
         self._paged_kv_cache_occupancy_pages = 0
@@ -163,6 +167,21 @@ class PrometheusMetricsRegistry:
         """Release an orphaned request's work gauge after actual completion."""
         with self._lock:
             self._orphaned_work -= 1
+
+    def job_queue_admitted(self, *, text_bytes: int) -> None:
+        """Count one admitted async job and the document text bytes it holds."""
+        with self._lock:
+            self._job_queue_depth += 1
+            self._job_queue_text_bytes += max(int(text_bytes), 0)
+
+    def job_queue_released(self, *, text_bytes: int) -> None:
+        """Release one finished, failed or cancelled async job from the gauges."""
+        with self._lock:
+            self._job_queue_depth = max(self._job_queue_depth - 1, 0)
+            self._job_queue_text_bytes = max(
+                self._job_queue_text_bytes - max(int(text_bytes), 0),
+                0,
+            )
 
     def request_finished(
         self,
@@ -405,6 +424,8 @@ class PrometheusMetricsRegistry:
             duration_sum = dict(self._duration_sum)
             inflight_requests = self._inflight_requests
             orphaned_work = self._orphaned_work
+            job_queue_depth = self._job_queue_depth
+            job_queue_text_bytes = self._job_queue_text_bytes
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
             paged_kv_cache_occupancy_pages = self._paged_kv_cache_occupancy_pages
@@ -493,6 +514,22 @@ class PrometheusMetricsRegistry:
             "gauge",
         )
         lines.append(f"{ORPHANED_WORK_NAME} {orphaned_work}")
+
+        _append_family_header(
+            lines,
+            JOB_QUEUE_DEPTH_NAME,
+            "Async de-identification jobs admitted and not yet finished.",
+            "gauge",
+        )
+        lines.append(f"{JOB_QUEUE_DEPTH_NAME} {job_queue_depth}")
+
+        _append_family_header(
+            lines,
+            JOB_QUEUE_TEXT_BYTES_NAME,
+            "UTF-8 bytes of document text held by pending async jobs.",
+            "gauge",
+        )
+        lines.append(f"{JOB_QUEUE_TEXT_BYTES_NAME} {job_queue_text_bytes}")
 
         _append_family_header(
             lines,
