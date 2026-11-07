@@ -609,3 +609,10 @@ The optional `OpenMedSpeech` product provides a pinned Core ML English speech ad
 ## Thermal admission for multimodal work
 
 `MultimodalThermalSession` can gate a local operation against current Apple thermal state, queue age and measured latency. See [Apple session admission](multimodal/thermal-latency-gates.md#apple-session-admission) for the policy table, recovery behavior and value-free evidence.
+
+## Threat model
+
+The [OpenMedKit portable-kit threat model](security/openmedkit-threat-model.md)
+covers model downloads, caches, extensions, errors, logs and key handling for
+this package. It maps each control to source or tests, or to the issue that
+owns the missing work.
