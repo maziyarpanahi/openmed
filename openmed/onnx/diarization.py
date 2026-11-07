@@ -177,13 +177,22 @@ def _exchange(
     finally:
         if process is not None:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-            for pipe in (process.stdin, process.stdout):
-                if pipe is not None:
-                    pipe.close()
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    # macOS can deny signalling a group whose worker has exited.
+                    # If the owned child is still running, terminate it directly.
+                    if process.poll() is None:
+                        process.kill()
+                process.wait()
+            except OSError:
+                raise DiarizationError("diarization_worker_failed") from None
+            finally:
+                for pipe in (process.stdin, process.stdout):
+                    if pipe is not None:
+                        pipe.close()
 
 
 class SherpaDiarizationProvider:
