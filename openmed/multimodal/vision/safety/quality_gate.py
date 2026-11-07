@@ -12,12 +12,13 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from enum import Enum
 from io import BytesIO
-from typing import Any, Iterator
+from typing import Any, ClassVar, Iterator
 
 from openmed.multimodal.image_header import (
     ImageHeaderError,
     read_image_header,
 )
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 from openmed.multimodal.vision.providers.base import (
     EdgeVLMProvider,
     ImageInput,
@@ -160,6 +161,10 @@ class QualityMetrics:
 @dataclass(frozen=True, slots=True)
 class QualityReport:
     """Content-free assessment bound to exact encoded bytes and task thresholds."""
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[
+        NoticeKind.VISUAL_DESCRIPTION
+    ]
 
     image_digest: str
     policy: QualityPolicy
