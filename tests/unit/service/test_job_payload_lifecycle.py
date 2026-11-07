@@ -299,14 +299,14 @@ def test_shutdown_surfaces_persistence_failures_without_values(
     queue = _queue(monkeypatch, tmp_path, clock=Clock())
     broken_id = queue.submit(_request())["id"]
     other_id = queue.submit(_request())["id"]
-    original_update = queue.store.update
+    original_transition = queue.store.transition
 
-    def update(job_id: str, **changes: Any) -> dict[str, Any]:
-        if job_id == broken_id and changes.get("status") == "cancelled":
+    def transition(job_id: str, apply: Any) -> Optional[dict[str, Any]]:
+        if job_id == broken_id:
             raise OSError(f"synthetic failure writing {tmp_path}")
-        return original_update(job_id, **changes)
+        return original_transition(job_id, apply)
 
-    monkeypatch.setattr(queue.store, "update", update)
+    monkeypatch.setattr(queue.store, "transition", transition)
     with pytest.raises(RuntimeError) as caught:
         queue.shutdown()
 
@@ -457,9 +457,14 @@ def test_terminal_event_write_failure_skips_delivery_with_a_code(
     assert list((tmp_path / "payloads").iterdir()) == []
 
 
-def test_unreadable_input_fails_closed_and_keeps_the_payload(
+def test_unreadable_input_is_quarantined_and_keeps_the_payload(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """An unauthenticated input fails closed into quarantine (#3574).
+
+    It is never promoted into a result and the payload is kept, so an
+    authorized replay can run it once the right key is configured.
+    """
     clock = Clock()
     queue = _queue(
         monkeypatch,
@@ -481,12 +486,14 @@ def test_unreadable_input_fails_closed_and_keeps_the_payload(
     wrong._run_job(item)
 
     record = wrong.get(job_id)
-    assert record["status"] == "failed"
+    assert record["status"] == "quarantined"
     assert record["error"] == {
         "code": "envelope_authentication_failed",
         "type": "JobPayloadError",
         "message": "Job input payload could not be read",
     }
+    assert record["recovery"]["quarantine"]["classification"] == "malformed"
+    assert record["completed_at"] is None
     assert record["payloads"]["input"]["state"] == "retained"
     assert _all_bytes(tmp_path / "payloads") == before
     assert wrong.webhook_sender.calls == []

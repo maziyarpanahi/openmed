@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -68,6 +68,7 @@ from .bulk_data import (
 )
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
+from .job_recovery import IdempotencyConflictError
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -735,6 +736,20 @@ def _get_fhir_bulk_manager(request: Request) -> FHIRBulkJobManager:
         manager = FHIRBulkJobManager()
         request.app.state.fhir_bulk_jobs = manager
     return manager
+
+
+def _job_idempotency_scope(request: Request) -> Optional[str]:
+    """Return the opaque scope an idempotency key is bound to.
+
+    The scope is only ever hashed together with the client key; it is never
+    stored, logged, or returned.
+    """
+    principal = request.scope.get("openmed.auth")
+    subject = getattr(principal, "subject", None)
+    if not isinstance(subject, str) or not subject:
+        return None
+    credential_type = getattr(principal, "credential_type", "")
+    return f"{credential_type}:{subject}"
 
 
 def _get_job_queue(request: Request) -> DeidentifyJobQueue:
@@ -2032,10 +2047,27 @@ def create_app(
     async def create_job(
         payload: DeidentifyJobRequest,
         request: Request,
+        response: Response,
+        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     ) -> Dict[str, Any]:
         _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
-        record = queue.submit(payload)
+        try:
+            submission = queue.submit_job(
+                payload,
+                idempotency_key=idempotency_key,
+                idempotency_scope=_job_idempotency_scope(request),
+            )
+        except IdempotencyConflictError:
+            return _error_response(
+                409,
+                "idempotency_key_conflict",
+                "Idempotency key was already used for a different request",
+                details={"reason": "request_digest_mismatch"},
+            )
+        record = submission.record
+        if not submission.created:
+            response.headers["Idempotent-Replayed"] = "true"
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
 
     @app.get("/jobs/{job_id}")
