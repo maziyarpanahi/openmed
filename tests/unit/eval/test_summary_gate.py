@@ -64,9 +64,8 @@ def test_pass_and_value_free_report():
     assert "Juniper" not in report and "Dehydration" not in report
 
 
-@pytest.mark.parametrize(
-    "change,gate",
-    [
+def test_gate_rejects(subtests):
+    for change, gate in [
         ({"summary": "Juniper Example improved."}, "summary_leakage"),
         ({"summary_facts": []}, "summary_clinical_fact_recall"),
         ({"adjudications": None}, "summary_citation_support"),
@@ -85,21 +84,21 @@ def test_pass_and_value_free_report():
             "summary_fact_coverage",
         ),
         ({"source_facts": []}, "summary_evidence"),
-    ],
-)
-def test_gate_rejects(change, gate):
-    values = sample()
-    values.update(change)
-    checks = {c.gate: c for c in evaluate_summary_gate(**values)}
-    assert gate in checks, {k: v.to_dict() for k, v in checks.items()}
-    assert not checks[gate].passed
+    ]:
+        with subtests.test(change=change, gate=gate):
+            values = sample()
+            values.update(change)
+            checks = {c.gate: c for c in evaluate_summary_gate(**values)}
+            assert gate in checks, {k: v.to_dict() for k, v in checks.items()}
+            assert not checks[gate].passed
 
 
-@pytest.mark.parametrize("value", [True, float("nan"), -1, 2])
-def test_invalid_thresholds_fail_closed(value):
-    values = sample()
-    values["thresholds"]["fact_coverage_min"] = value
-    assert not evaluate_summary_gate(**values)[0].passed
+def test_invalid_thresholds_fail_closed(subtests):
+    for value in [True, float("nan"), -1, 2]:
+        with subtests.test(value=value):
+            values = sample()
+            values["thresholds"]["fact_coverage_min"] = value
+            assert not evaluate_summary_gate(**values)[0].passed
 
 
 def test_missing_dua_corpus_fails_closed(monkeypatch):

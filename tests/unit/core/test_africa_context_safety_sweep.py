@@ -72,13 +72,14 @@ def test_data_file_declares_every_initial_african_profile() -> None:
     assert DATA_FILE.name == "africa_context_terms.json"
 
 
-@pytest.mark.parametrize("profile_name", sorted(_AFRICAN_PROFILES))
-def test_african_profile_context_defaults_are_non_keep(profile_name: str) -> None:
-    profile = _profile_for_contract(profile_name)
+def test_african_profile_context_defaults_are_non_keep(subtests) -> None:
+    for profile_name in sorted(_AFRICAN_PROFILES):
+        with subtests.test(profile_name=profile_name):
+            profile = _profile_for_contract(profile_name)
 
-    assert profile.policy_label_actions[SENSITIVE_ATTRIBUTE] != "keep"
-    for label in _PROTECTED_CONTEXT_LABELS:
-        assert profile.action_for(label) != "keep"
+            assert profile.policy_label_actions[SENSITIVE_ATTRIBUTE] != "keep"
+            for label in _PROTECTED_CONTEXT_LABELS:
+                assert profile.action_for(label) != "keep"
 
 
 @pytest.mark.parametrize("profile_name", sorted(_AFRICAN_PROFILES))
@@ -117,20 +118,18 @@ def test_context_terms_do_not_trigger_without_identifying_shape_or_context() -> 
     assert not {entity.label for entity in entities} & set(_PROTECTED_CONTEXT_LABELS)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_ethnicity_terms_require_word_bounded_context_in_every_pattern_path(
+    subtests,
+) -> None:
+    for text in [
         "A Zulu translation was requested after the routine clinic visit.",
         "The raceway trace showed a Yoruba translation request.",
-    ],
-)
-def test_ethnicity_terms_require_word_bounded_context_in_every_pattern_path(
-    text: str,
-) -> None:
-    from openmed.core.safety_sweep import safety_sweep
+    ]:
+        with subtests.test(text=text):
+            from openmed.core.safety_sweep import safety_sweep
 
-    assert ETHNICITY not in {entity.label for entity in safety_sweep(text, [])}
-    assert ETHNICITY not in {unit[2] for unit in find_semantic_units(text)}
+            assert ETHNICITY not in {entity.label for entity in safety_sweep(text, [])}
+            assert ETHNICITY not in {unit[2] for unit in find_semantic_units(text)}
 
 
 def test_generic_lowercase_facility_reference_is_not_a_named_organization() -> None:

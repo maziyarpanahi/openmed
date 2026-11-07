@@ -122,29 +122,30 @@ def _finding(field_name, limit, observed):
     return LimitFinding(field_name, "limit_exceeded", limit, observed)
 
 
-@pytest.mark.parametrize("modality", ["image", "pdf", "dicom", "audio"])
-def test_bytes_boundary_on_every_modality(modality):
-    extra = {
-        "image": {"width": 10, "height": 10},
-        "pdf": {"pages": 1},
-        "dicom": {"width": 10, "height": 10, "frames": 1},
-        "audio": {"duration_seconds": 1.0},
-    }[modality]
-    limit = MOBILE_V1.max_byte_size
-    below = evaluate_asset_limits(
-        MOBILE_V1, manifest(byte_size=limit - 1, **extra), modality
-    )
-    equal = evaluate_asset_limits(
-        MOBILE_V1, manifest(byte_size=limit, **extra), modality
-    )
-    above = evaluate_asset_limits(
-        MOBILE_V1, manifest(byte_size=limit + 1, **extra), modality
-    )
-    assert not [f for f in below if f.field_name == "byte_size"]
-    assert not [f for f in equal if f.field_name == "byte_size"]
-    assert [f for f in above if f.field_name == "byte_size"] == [
-        _finding("byte_size", limit, limit + 1)
-    ]
+def test_bytes_boundary_on_every_modality(subtests):
+    for modality in ["image", "pdf", "dicom", "audio"]:
+        with subtests.test(modality=modality):
+            extra = {
+                "image": {"width": 10, "height": 10},
+                "pdf": {"pages": 1},
+                "dicom": {"width": 10, "height": 10, "frames": 1},
+                "audio": {"duration_seconds": 1.0},
+            }[modality]
+            limit = MOBILE_V1.max_byte_size
+            below = evaluate_asset_limits(
+                MOBILE_V1, manifest(byte_size=limit - 1, **extra), modality
+            )
+            equal = evaluate_asset_limits(
+                MOBILE_V1, manifest(byte_size=limit, **extra), modality
+            )
+            above = evaluate_asset_limits(
+                MOBILE_V1, manifest(byte_size=limit + 1, **extra), modality
+            )
+            assert not [f for f in below if f.field_name == "byte_size"]
+            assert not [f for f in equal if f.field_name == "byte_size"]
+            assert [f for f in above if f.field_name == "byte_size"] == [
+                _finding("byte_size", limit, limit + 1)
+            ]
 
 
 def test_pdf_pages_boundary():
@@ -181,19 +182,20 @@ def test_pdf_pixels_are_never_inferred_from_page_count_or_smuggled_geometry():
     assert all(f.observed is None for f in findings)
 
 
-@pytest.mark.parametrize("modality", ["image", "dicom"])
-def test_pixels_per_unit_boundary(modality):
-    limit = MOBILE_V1.max_pixels  # 10_000_000 = 2_500 * 4_000
-    frames = {"frames": 1} if modality == "dicom" else {}
-    for width, expect in (
-        (2_499, []),
-        (2_500, []),
-        (2_501, [_finding("pixels", limit, 2_501 * 4_000)]),
-    ):
-        findings = evaluate_asset_limits(
-            MOBILE_V1, manifest(width=width, height=4_000, **frames), modality
-        )
-        assert [f for f in findings if f.field_name == "pixels"] == expect
+def test_pixels_per_unit_boundary(subtests):
+    for modality in ["image", "dicom"]:
+        with subtests.test(modality=modality):
+            limit = MOBILE_V1.max_pixels  # 10_000_000 = 2_500 * 4_000
+            frames = {"frames": 1} if modality == "dicom" else {}
+            for width, expect in (
+                (2_499, []),
+                (2_500, []),
+                (2_501, [_finding("pixels", limit, 2_501 * 4_000)]),
+            ):
+                findings = evaluate_asset_limits(
+                    MOBILE_V1, manifest(width=width, height=4_000, **frames), modality
+                )
+                assert [f for f in findings if f.field_name == "pixels"] == expect
 
 
 def test_image_total_pixels_is_width_times_height():
@@ -423,13 +425,16 @@ def test_errors_are_content_free():
         evaluate_asset_limits({"max_pages": 1}, manifest(), "image")  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
-def test_unbounded_numeric_inputs_have_stable_errors(value):
-    with pytest.raises(AssetLimitError):
-        MOBILE_V1.with_limits(max_duration_seconds=value)
-    with pytest.raises(AssetLimitError):
-        evaluate_asset_limits(MOBILE_V1, manifest(duration_seconds=value), "audio")
-    with pytest.raises(AssetLimitError):
-        LimitFinding("pixels", "limit_exceeded", value, None)
-    with pytest.raises(AssetLimitError):
-        LimitFinding("pixels", "limit_exceeded", 1, value)
+def test_unbounded_numeric_inputs_have_stable_errors(subtests):
+    for value in [10**1000, -(10**1000)]:
+        with subtests.test(value=value):
+            with pytest.raises(AssetLimitError):
+                MOBILE_V1.with_limits(max_duration_seconds=value)
+            with pytest.raises(AssetLimitError):
+                evaluate_asset_limits(
+                    MOBILE_V1, manifest(duration_seconds=value), "audio"
+                )
+            with pytest.raises(AssetLimitError):
+                LimitFinding("pixels", "limit_exceeded", value, None)
+            with pytest.raises(AssetLimitError):
+                LimitFinding("pixels", "limit_exceeded", 1, value)

@@ -1,8 +1,76 @@
 # Analyze Text Helper
 
-`openmed.analyze_text` is the top-level orchestrator that most users start with. It validates input, spins up a
-token-classification pipeline, segments sentences, and normalizes the output so you can copy dict/JSON/HTML/CSV payloads
+`openmed.analyze_text` is the top-level orchestrator that most users start with. It validates input, loads a
+token-classification or native span model, segments sentences, and normalizes the output so you can copy dict/JSON/HTML/CSV payloads
 straight into downstream systems.
+
+## GLiFormer and GLiNER2 (v3.2)
+
+OpenMed 3.1's token-classification pipeline cannot load GLiFormer. Starting in
+v3.2, native GLiNER, GLiFormer, and GLiNER2 / GLiNER2.5 checkpoints share the
+same `analyze_text` result and formatting interface. Install the matching extra:
+
+```bash
+pip install "openmed[gliformer]"  # GLiFormer 0.1.3
+pip install "openmed[gliner2]"    # gliner2[local] 2.1+, including GLiNER2.5
+```
+
+```python
+from openmed import OpenMedConfig, analyze_text
+
+text = "No asthma. A synthetic note documents diabetes and asthma."
+result = analyze_text(
+    text,
+    model_id="OpenMed/GLiFormer-BioNER-Disease-Base-v1",
+    threshold=0.7,
+    config=OpenMedConfig(device="cpu"),
+    assert_context=True,
+)
+for entity in result.entities:
+    assert text[entity.start:entity.end] == entity.text
+    print(entity.text, entity.label, entity.confidence)
+```
+
+This registered checkpoint defaults to `labels=["disease"]`. Extraction uses
+the model's native labels; returned OpenMed entities normalize `disease` to
+`DISEASE`. Disease mentions remain mentions even when negated: the optional
+context stage adds assertion metadata, and does not establish a diagnosis.
+
+Use explicit labels for general-purpose models:
+
+```python
+result = analyze_text(
+    "A synthetic note documents asthma.",
+    model_id="fastino/gliner2.5-base-v1",
+    labels=["disease"],
+    threshold=0.7,
+    config=OpenMedConfig(device="cpu"),
+)
+```
+
+Recognized family names and local checkpoint configurations select the native
+loader without a generated index or a Hub metadata request. For a custom Hub ID
+whose name does not identify its architecture, pass `family="gliformer"`,
+`family="gliner2"`, or `family="gliner"`. Local exports with renamed directories
+are detected from `gliner_config.json` / `config.json`; supply `labels=["disease"]`
+when the exported directory no longer identifies the registered disease model.
+
+`threshold` controls native extraction (default 0.5); `confidence_threshold`
+is a separate final output filter. Sentence chunking and absolute offsets,
+`output_format`, clinical context, and in-memory result caching still apply.
+Native pipelines accept a string or a list of strings and process chunks in
+order; `num_workers` must be zero. `aggregation_strategy` and fast-tokenizer
+selection apply to Transformers models. Native loading accepts `revision`,
+`cache_dir`, `token`, `device`, and `local_files_only`; unsupported loading
+options raise an error rather than being silently ignored. `max_length` controls
+the high-level chunk-size hint, while each native runtime owns token limits.
+
+Weights are downloaded on first use and kept in the configured local cache.
+For offline use, pre-download the checkpoint and any required tokenizer assets,
+then use a local directory or `OpenMedConfig(local_only=True, device="cpu")`.
+An uncached dependency fails offline; inference always uses the local model.
+See the [zero-shot toolkit](zero-shot-ner.md) for the
+lower-level API and [upstream GLiFormer usage](https://docs.knowledgator.com/docs/frameworks/gliformer/usage/).
 
 ## Quick reference
 

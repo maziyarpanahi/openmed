@@ -138,40 +138,42 @@ def test_duplicate_timestamps_fail_monotonicity() -> None:
         )
 
 
-@pytest.mark.parametrize("tick", [-1, 10_000, 10_001])
-def test_out_of_range_timestamps_fail(tick) -> None:
-    with pytest.raises(
-        FrameSamplingManifestError, match="^frame_sampling_timestamps_out_of_range$"
-    ):
-        manifest(
-            timestamps=(0, tick),
-            step=None,
-            mode=SamplingMode.KEYFRAME,
-            declared_digest="0" * 64,
-        )
+def test_out_of_range_timestamps_fail(subtests) -> None:
+    for tick in [-1, 10_000, 10_001]:
+        with subtests.test(tick=tick):
+            with pytest.raises(
+                FrameSamplingManifestError,
+                match="^frame_sampling_timestamps_out_of_range$",
+            ):
+                manifest(
+                    timestamps=(0, tick),
+                    step=None,
+                    mode=SamplingMode.KEYFRAME,
+                    declared_digest="0" * 64,
+                )
 
 
-@pytest.mark.parametrize("value", [None, 1.5, "0", True, []])
-def test_non_integer_timestamps_fail(value) -> None:
-    with pytest.raises(
-        FrameSamplingManifestError, match="^frame_sampling_timestamps_invalid$"
-    ):
-        manifest(
-            timestamps=(0, value),
-            step=None,
-            mode=SamplingMode.KEYFRAME,
-            declared_digest="0" * 64,
-        )
+def test_non_integer_timestamps_fail(subtests) -> None:
+    for value in [None, 1.5, "0", True, []]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                FrameSamplingManifestError, match="^frame_sampling_timestamps_invalid$"
+            ):
+                manifest(
+                    timestamps=(0, value),
+                    step=None,
+                    mode=SamplingMode.KEYFRAME,
+                    declared_digest="0" * 64,
+                )
 
 
-@pytest.mark.parametrize(
-    "num,den", [(0, 1000), (1, 0), (-1, 1000), (1.5, 1000), (True, 2)]
-)
-def test_invalid_time_bases_fail(num, den) -> None:
-    with pytest.raises(
-        FrameSamplingManifestError, match="^frame_sampling_time_base_invalid$"
-    ):
-        manifest(time_base=(num, den), step=None, mode=SamplingMode.KEYFRAME)
+def test_invalid_time_bases_fail(subtests) -> None:
+    for num, den in [(0, 1000), (1, 0), (-1, 1000), (1.5, 1000), (True, 2)]:
+        with subtests.test(num=num, den=den):
+            with pytest.raises(
+                FrameSamplingManifestError, match="^frame_sampling_time_base_invalid$"
+            ):
+                manifest(time_base=(num, den), step=None, mode=SamplingMode.KEYFRAME)
 
 
 def test_unreduced_time_base_fails() -> None:
@@ -186,12 +188,13 @@ def test_unreduced_time_base_fails() -> None:
         )
 
 
-@pytest.mark.parametrize("duration", [None, 0, -5, 1.5, True])
-def test_invalid_duration_fails(duration) -> None:
-    with pytest.raises(
-        FrameSamplingManifestError, match="^frame_sampling_duration_invalid$"
-    ):
-        manifest(duration=duration, step=None, mode=SamplingMode.KEYFRAME)
+def test_invalid_duration_fails(subtests) -> None:
+    for duration in [None, 0, -5, 1.5, True]:
+        with subtests.test(duration=duration):
+            with pytest.raises(
+                FrameSamplingManifestError, match="^frame_sampling_duration_invalid$"
+            ):
+                manifest(duration=duration, step=None, mode=SamplingMode.KEYFRAME)
 
 
 def test_unsupported_mode_fails() -> None:
@@ -201,20 +204,18 @@ def test_unsupported_mode_fails() -> None:
         manifest(mode="uniform", step=None)
 
 
-@pytest.mark.parametrize(
-    "step,category",
-    [
+def test_uniform_step_is_validated_against_positions(subtests) -> None:
+    for step, category in [
         (None, "frame_sampling_step_invalid"),
         (0, "frame_sampling_step_invalid"),
         (-1, "frame_sampling_step_invalid"),
         (1.5, "frame_sampling_step_invalid"),
         (True, "frame_sampling_step_invalid"),
         (100, "frame_sampling_step_mismatch"),
-    ],
-)
-def test_uniform_step_is_validated_against_positions(step, category) -> None:
-    with pytest.raises(FrameSamplingManifestError, match=f"^{category}$"):
-        manifest(timestamps=(0, 500, 1000), step=step)
+    ]:
+        with subtests.test(step=step, category=category):
+            with pytest.raises(FrameSamplingManifestError, match=f"^{category}$"):
+                manifest(timestamps=(0, 500, 1000), step=step)
 
 
 def test_uniform_mode_rejects_window_fields() -> None:
@@ -240,24 +241,22 @@ def test_keyframe_mode_rejects_strategy_fields() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "window,category",
-    [
+def test_invalid_windows_fail(subtests) -> None:
+    for window, category in [
         ((None, 5_000), "frame_sampling_window_invalid"),
         ((2_000, None), "frame_sampling_window_invalid"),
         ((5_000, 2_000), "frame_sampling_window_invalid"),
         ((-1, 5_000), "frame_sampling_window_invalid"),
         ((2_000, 10_001), "frame_sampling_window_invalid"),
         ((2_000, 2_000), "frame_sampling_window_invalid"),
-    ],
-)
-def test_invalid_windows_fail(window, category) -> None:
-    with pytest.raises(FrameSamplingManifestError, match=f"^{category}$"):
-        manifest(
-            mode=SamplingMode.BOUNDED_WINDOW,
-            timestamps=(2_000, 2_500),
-            window=window,
-        )
+    ]:
+        with subtests.test(window=window, category=category):
+            with pytest.raises(FrameSamplingManifestError, match=f"^{category}$"):
+                manifest(
+                    mode=SamplingMode.BOUNDED_WINDOW,
+                    timestamps=(2_000, 2_500),
+                    window=window,
+                )
 
 
 def test_window_must_cover_every_position() -> None:
@@ -300,15 +299,16 @@ def test_bounded_window_rejects_step_fields() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "declared",
-    ["", "abc", "0" * 63, "z" * 64, None, 42],
-)
-def test_malformed_declared_digest_fails(declared) -> None:
-    with pytest.raises(
-        FrameSamplingManifestError, match="^frame_sampling_coverage_digest_invalid$"
-    ):
-        manifest(declared_digest=declared, step=None, mode=SamplingMode.KEYFRAME)
+def test_malformed_declared_digest_fails(subtests) -> None:
+    for declared in ["", "abc", "0" * 63, "z" * 64, None, 42]:
+        with subtests.test(declared=declared):
+            with pytest.raises(
+                FrameSamplingManifestError,
+                match="^frame_sampling_coverage_digest_invalid$",
+            ):
+                manifest(
+                    declared_digest=declared, step=None, mode=SamplingMode.KEYFRAME
+                )
 
 
 def test_unsupported_schema_version_fails() -> None:
