@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.__about__ import __version__
 from openmed.core import hf_publish
-from openmed.core.hf_publish import publish_artifact
+from openmed.core.hf_publish import HfPublishError, publish_artifact
 from openmed.core.manifest_schema import validate_manifest_row
 
 
@@ -237,9 +240,78 @@ def test_publish_token_never_appears_in_logs_or_cli_output(
     assert "secret-token" not in caplog.text
 
 
-def _write_onnx_artifact(tmp_path: Path) -> Path:
+def test_publish_refuses_webgpu_without_passing_fp16_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path, gate=False)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    with pytest.raises(HfPublishError, match="fp16 parity gate record"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/test-model",
+            format_name="onnx",
+            formats=["onnx", "webgpu"],
+            api=fake_api,
+            git_sha="abc123",
+        )
+
+    assert fake_api.created == []
+    assert fake_api.uploaded == []
+    assert fake_api.info_calls == []
+
+
+def test_publish_refuses_webgpu_artifact_replaced_after_the_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path)
+    (artifact / "model.webgpu.onnx").write_bytes(b"ungated-fp16-graph")
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    with pytest.raises(HfPublishError, match="digest does not match") as excinfo:
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/test-model",
+            format_name="onnx",
+            api=fake_api,
+            git_sha="abc123",
+        )
+
+    assert str(tmp_path) not in str(excinfo.value)
+    assert fake_api.uploaded == []
+
+
+def test_publish_refuses_requested_webgpu_format_without_onnx_manifest(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     artifact = tmp_path / "artifact"
     artifact.mkdir()
+    (artifact / "model.webgpu.onnx").write_bytes(b"fp16-graph")
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    with pytest.raises(HfPublishError, match="fp16 parity gate record"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/test-model",
+            format_name="onnx-webgpu",
+            api=fake_api,
+            git_sha="abc123",
+        )
+
+    assert fake_api.uploaded == []
+
+
+def _write_onnx_artifact(tmp_path: Path, *, gate: bool = True) -> Path:
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    webgpu = artifact / "model.webgpu.onnx"
+    webgpu.write_bytes(b"fp16-graph")
     (artifact / "config.json").write_text(
         json.dumps(
             {
@@ -249,14 +321,24 @@ def _write_onnx_artifact(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
+    manifest = {
+        "format": "openmed-onnx",
+        "formats": ["onnx", "webgpu"],
+        "source_model_id": "OpenMed/test-model",
+        "artifacts": [
+            {"format": "onnx", "path": "model.onnx", "precision": "float32"},
+            {"format": "webgpu", "path": "model.webgpu.onnx", "precision": "float16"},
+        ],
+    }
+    if gate:
+        manifest["webgpu_fp16_gate"] = {
+            "passed": True,
+            "tolerances": {"logit_atol": 0.05, "logit_rtol": 0.02},
+            "evaluated_lengths": [8, 16],
+            "artifact_sha256": hashlib.sha256(webgpu.read_bytes()).hexdigest(),
+        }
     (artifact / "openmed-onnx.json").write_text(
-        json.dumps(
-            {
-                "format": "openmed-onnx",
-                "formats": ["onnx", "webgpu"],
-                "source_model_id": "OpenMed/test-model",
-            }
-        ),
+        json.dumps(manifest),
         encoding="utf-8",
     )
     (artifact / "model.onnx").write_bytes(b"onnx")
