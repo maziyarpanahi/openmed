@@ -16,12 +16,20 @@ import sysconfig
 import tarfile
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Sequence
 
 from ..__about__ import __version__
 from ..core.hf_hub import prefetch_model, resolve_repo_id
+from .airgap_lifecycle import (
+    LifecycleError,
+    LifecycleInputs,
+    build_lifecycle_section,
+    stage_lifecycle_inputs,
+    validate_lifecycle,
+)
 
 MANIFEST_NAME = "bundle-manifest.json"
 DEFAULT_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -112,6 +120,48 @@ def add_airgap_command(subparsers: argparse._SubParsersAction) -> None:
         "--abi",
         help="Target Python ABI tag (default: derived from the target Python).",
     )
+    lifecycle = bundle.add_argument_group(
+        "lifecycle inputs",
+        "Caller-supplied artifacts for an offline upgrade, rollback, and "
+        "recovery rehearsal. They are copied verbatim and digested; nothing "
+        "is downloaded for them.",
+    )
+    lifecycle.add_argument(
+        "--upgrade-wheels",
+        type=Path,
+        help="Directory with the next release's complete wheel/sdist set.",
+    )
+    lifecycle.add_argument(
+        "--rollback-wheels",
+        type=Path,
+        help="Directory with the previous release's artifacts for rollback.",
+    )
+    lifecycle.add_argument(
+        "--upgrade-from",
+        action="append",
+        help=(
+            "Release version the upgrade supports; repeat for a window "
+            "(default: the bundled release)."
+        ),
+    )
+    lifecycle.add_argument(
+        "--migrations",
+        type=Path,
+        help="Directory of ordered NNNN-<name> migration assets.",
+    )
+    lifecycle.add_argument(
+        "--recovery",
+        type=Path,
+        help="Directory of recovery assets for the restore phase.",
+    )
+    lifecycle.add_argument(
+        "--valid-from",
+        help="ISO-8601 start of the kit's validity window.",
+    )
+    lifecycle.add_argument(
+        "--valid-until",
+        help="ISO-8601 expiry of the kit's validity window.",
+    )
     bundle.set_defaults(handler=_handle_bundle)
 
     verify = commands.add_parser(
@@ -121,8 +171,131 @@ def add_airgap_command(subparsers: argparse._SubParsersAction) -> None:
     verify.add_argument("bundle", type=Path, help="Bundle directory or tar archive.")
     verify.set_defaults(handler=_handle_verify)
 
+    rehearse = commands.add_parser(
+        "rehearse",
+        help=(
+            "Rehearse install, upgrade, rollback, and recovery inside an "
+            "OS-enforced no-egress boundary."
+        ),
+    )
+    rehearse.add_argument(
+        "bundle",
+        type=Path,
+        help="Lifecycle bundle directory or tar archive.",
+    )
+    rehearse.add_argument(
+        "--boundary",
+        choices=("auto", "netns", "container"),
+        default="auto",
+        help="No-egress boundary mechanism (default: auto).",
+    )
+    rehearse.add_argument(
+        "--container-image",
+        help=(
+            "Local image for container mode; defaults to $OPENMED_NO_EGRESS_IMAGE. "
+            "Never pulled."
+        ),
+    )
+    rehearse.add_argument(
+        "--container-tmpfs-size",
+        default="1g",
+        help="Size cap for the container's writable /tmp (default: 1g).",
+    )
+    rehearse.add_argument(
+        "--inject-fault",
+        choices=("before_activate", "after_activate", "after_checkpoint"),
+        default="after_activate",
+        help="Where the first upgrade attempt is interrupted (default: after_activate).",
+    )
+    rehearse.add_argument(
+        "--hook",
+        dest="hooks",
+        action="append",
+        metavar="NAME=MODULE:CALLABLE",
+        help=(
+            "Recovery hook importable inside the boundary; repeat per hook "
+            "(migration, backup_restore, credential_reload, model_activation, "
+            "audit_continuity, durable_work_resume)."
+        ),
+    )
+    rehearse.add_argument(
+        "--key-file",
+        type=Path,
+        help="Caller-held HMAC key file used to sign the report (not stored).",
+    )
+    rehearse.add_argument(
+        "--key-id",
+        default="rehearsal",
+        help="Identifier recorded with the signature (default: rehearsal).",
+    )
+    rehearse.add_argument("--output", type=Path, help="Write the JSON report here.")
+    rehearse.add_argument("--markdown", type=Path, help="Write a Markdown summary.")
+    rehearse.add_argument("--commit", help="Commit recorded in the report.")
+    rehearse.add_argument(
+        "--generated-at",
+        help="Declared ISO-8601 report timestamp (excluded from the repro hash).",
+    )
+    rehearse.add_argument(
+        "--timeout",
+        type=float,
+        default=3600.0,
+        help="Seconds before the in-boundary run is abandoned (default: 3600).",
+    )
+    rehearse.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Stream installer diagnostics to stderr; never into the report.",
+    )
+    rehearse.set_defaults(handler=_handle_rehearse)
+
+    verify_report = commands.add_parser(
+        "verify-report",
+        help="Verify a rehearsal report offline.",
+    )
+    verify_report.add_argument("report", type=Path, help="Rehearsal report JSON.")
+    verify_report.add_argument(
+        "--key-file",
+        type=Path,
+        help="HMAC key file used to verify the report signature.",
+    )
+    verify_report.add_argument(
+        "--require-signature",
+        action="store_true",
+        help="Reject reports without a signature that verifies under --key-file.",
+    )
+    verify_report.set_defaults(handler=_handle_verify_report)
+
 
 def _handle_bundle(args: argparse.Namespace) -> int:
+    lifecycle_requested = any(
+        value is not None
+        for value in (
+            args.upgrade_wheels,
+            args.rollback_wheels,
+            args.upgrade_from,
+            args.migrations,
+            args.recovery,
+            args.valid_from,
+            args.valid_until,
+        )
+    )
+    lifecycle: LifecycleInputs | None = None
+    if lifecycle_requested:
+        if args.upgrade_wheels is None or args.rollback_wheels is None:
+            sys.stderr.write(
+                "Failed to build air-gap bundle: lifecycle inputs need both "
+                "--upgrade-wheels and --rollback-wheels\n"
+            )
+            return 2
+        lifecycle = LifecycleInputs(
+            upgrade=args.upgrade_wheels,
+            rollback=args.rollback_wheels,
+            upgrade_from=tuple(args.upgrade_from or ()),
+            migrations=args.migrations,
+            recovery=args.recovery,
+            not_before=args.valid_from,
+            not_after=args.valid_until,
+        )
     extras = _unique(args.extras or DEFAULT_EXTRAS)
     models = _unique(args.models or DEFAULT_MODELS)
     archive = bool(
@@ -140,6 +313,7 @@ def _handle_bundle(args: argparse.Namespace) -> int:
             python_version=args.python_version,
             implementation=args.implementation,
             abi=args.abi,
+            lifecycle=lifecycle,
         )
     except (ImportError, OSError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to build air-gap bundle: {exc}\n")
@@ -170,6 +344,18 @@ def _handle_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_rehearse(args: argparse.Namespace) -> int:
+    from .airgap_rehearsal import handle_rehearse
+
+    return handle_rehearse(args)
+
+
+def _handle_verify_report(args: argparse.Namespace) -> int:
+    from .airgap_rehearsal import handle_verify_report
+
+    return handle_verify_report(args)
+
+
 class BundleResult:
     """Summary of a completed bundle build."""
 
@@ -195,6 +381,7 @@ def build_bundle(
     python_version: str | None = None,
     implementation: str | None = None,
     abi: str | None = None,
+    lifecycle: LifecycleInputs | None = None,
 ) -> BundleResult:
     """Create a complete offline kit at a new path.
 
@@ -207,6 +394,11 @@ def build_bundle(
         python_version: Optional target Python version.
         implementation: Optional pip implementation tag.
         abi: Optional pip ABI tag.
+        lifecycle: Optional caller-supplied upgrade, rollback, migration, and
+            recovery inputs. They are copied verbatim, digested, and described
+            in the manifest's versioned ``lifecycle`` section so the kit can be
+            rehearsed with ``openmed airgap rehearse``. Nothing is downloaded
+            for them.
 
     Returns:
         Summary containing the output path and exact payload size.
@@ -214,7 +406,8 @@ def build_bundle(
     Raises:
         FileExistsError: If *output* already exists.
         RuntimeError: If a download fails or the default bundle exceeds 900 MB.
-        ValueError: If target values or downloaded paths are unsafe.
+        ValueError: If target values, downloaded paths, or lifecycle inputs are
+            unsafe, incompatible, incorrectly ordered, or expired.
     """
     output = output.expanduser().resolve(strict=False)
     if output.exists():
@@ -294,6 +487,8 @@ def build_bundle(
             encoding="utf-8",
         )
         install_script.chmod(0o755)
+        if lifecycle is not None:
+            stage_lifecycle_inputs(bundle_root, lifecycle)
 
         artifacts = _collect_artifacts(bundle_root)
         total_size = sum(item["size_bytes"] for item in artifacts)
@@ -320,6 +515,13 @@ def build_bundle(
             "default_bundle_limit_bytes": DEFAULT_BUNDLE_LIMIT_BYTES,
             "artifacts": artifacts,
         }
+        if lifecycle is not None:
+            manifest["lifecycle"] = build_lifecycle_section(
+                artifacts,
+                release_version=__version__,
+                inputs=lifecycle,
+            )
+            _require_valid_lifecycle(manifest)
         (bundle_root / MANIFEST_NAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -348,14 +550,90 @@ def verify_bundle(bundle: Path) -> list[str]:
     """Return integrity errors for a directory or tar bundle."""
     bundle = bundle.expanduser().resolve(strict=True)
     with _verified_bundle_root(bundle) as root:
-        manifest_path = root / MANIFEST_NAME
-        if not manifest_path.is_file():
-            return [f"missing {MANIFEST_NAME}"]
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            return [f"invalid {MANIFEST_NAME}: {exc}"]
-        return _verify_manifest(root, manifest)
+        return [finding.message for finding in bundle_findings(root)[1]]
+
+
+@dataclass(frozen=True)
+class BundleFinding:
+    """One bundle integrity problem.
+
+    Attributes:
+        code: Controlled reason code, safe for reports and evidence.
+        message: Operator-facing detail; may name bundle-relative paths, so it
+            belongs on the console only, never in evidence.
+    """
+
+    code: str
+    message: str
+
+
+BUNDLE_FINDING_CODES = (
+    "manifest_missing",
+    "manifest_invalid",
+    "artifact_unsafe",
+    "artifact_duplicate",
+    "artifact_missing",
+    "artifact_unreadable",
+    "artifact_modified",
+    "artifact_unexpected",
+    "inventory_mismatch",
+)
+"""Bundle finding codes, most severe first."""
+
+
+@contextmanager
+def open_bundle_root(bundle: Path) -> Iterator[Path]:
+    """Yield the root of a directory bundle or a safely extracted archive.
+
+    Args:
+        bundle: A bundle directory or ``.tar.gz``/``.tgz`` archive.
+
+    Yields:
+        The directory that holds ``bundle-manifest.json``.
+
+    Raises:
+        OSError: If the bundle cannot be read.
+        ValueError: If an archive is unsafe or has no single manifest.
+        tarfile.TarError: If an archive is corrupt.
+    """
+    with _verified_bundle_root(bundle.expanduser().resolve(strict=True)) as root:
+        yield root
+
+
+def bundle_findings(root: Path) -> tuple[dict[str, Any] | None, list[BundleFinding]]:
+    """Load a bundle manifest and check every artifact against it.
+
+    Args:
+        root: A bundle root from :func:`open_bundle_root`.
+
+    Returns:
+        The decoded manifest (``None`` when unreadable) and every finding.
+    """
+    manifest_path = root / MANIFEST_NAME
+    if not manifest_path.is_file():
+        return None, [BundleFinding("manifest_missing", f"missing {MANIFEST_NAME}")]
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, [
+            BundleFinding("manifest_invalid", f"invalid {MANIFEST_NAME}: {exc}")
+        ]
+    findings = _manifest_findings(root, manifest)
+    return (manifest if isinstance(manifest, dict) else None), findings
+
+
+def _require_valid_lifecycle(manifest: dict[str, Any]) -> None:
+    """Refuse to write a kit whose lifecycle contract would fail preflight."""
+    target = manifest.get("target")
+    validation = validate_lifecycle(
+        manifest,
+        python_version=target.get("python_version")
+        if isinstance(target, dict)
+        else None,
+    )
+    for check in validation.checks:
+        if check.status == "failed":
+            raise LifecycleError(check.reason_code)
 
 
 def _download_wheels(
@@ -448,40 +726,52 @@ def _collect_artifacts(root: Path) -> list[dict[str, Any]]:
 
 
 def _verify_manifest(root: Path, manifest: Any) -> list[str]:
+    return [finding.message for finding in _manifest_findings(root, manifest)]
+
+
+def _manifest_findings(root: Path, manifest: Any) -> list[BundleFinding]:
     if not isinstance(manifest, dict):
-        return ["manifest root must be a JSON object"]
+        return [
+            BundleFinding("manifest_invalid", "manifest root must be a JSON object")
+        ]
     if manifest.get("schema_version") != 1:
-        return ["unsupported manifest schema_version"]
+        return [
+            BundleFinding("manifest_invalid", "unsupported manifest schema_version")
+        ]
     declared = manifest.get("artifacts")
     if not isinstance(declared, list):
-        return ["manifest artifacts must be a list"]
+        return [BundleFinding("manifest_invalid", "manifest artifacts must be a list")]
 
     root_resolved = root.resolve()
-    errors: list[str] = []
+    errors: list[BundleFinding] = []
+
+    def _add(code: str, message: str) -> None:
+        errors.append(BundleFinding(code, message))
+
     expected_paths: set[str] = set()
     declared_total = 0
     for entry in declared:
         if not isinstance(entry, dict):
-            errors.append("manifest contains a non-object artifact")
+            _add("manifest_invalid", "manifest contains a non-object artifact")
             continue
         relative = entry.get("path")
         expected_hash = entry.get("sha256")
         expected_size = entry.get("size_bytes")
         expected_type = entry.get("type", "file")
         if not isinstance(relative, str) or not _safe_relative_path(relative):
-            errors.append(f"unsafe artifact path: {relative!r}")
+            _add("artifact_unsafe", f"unsafe artifact path: {relative!r}")
             continue
         if relative in expected_paths:
-            errors.append(f"duplicate artifact path: {relative}")
+            _add("artifact_duplicate", f"duplicate artifact path: {relative}")
             continue
         expected_paths.add(relative)
         if not isinstance(expected_size, int) or expected_size < 0:
-            errors.append(f"invalid size for {relative}")
+            _add("manifest_invalid", f"invalid size for {relative}")
             continue
         declared_total += expected_size
         path = root / relative
         if not (path.is_file() or path.is_symlink()):
-            errors.append(f"missing artifact: {relative}")
+            _add("artifact_missing", f"missing artifact: {relative}")
             continue
         try:
             _ensure_artifact_within(root_resolved, path)
@@ -489,26 +779,28 @@ def _verify_manifest(root: Path, manifest: Any) -> list[str]:
             actual_size = _artifact_size(path)
             actual_hash = _artifact_sha256(path)
         except OSError as exc:
-            errors.append(f"unreadable artifact {relative}: {exc}")
+            _add("artifact_unreadable", f"unreadable artifact {relative}: {exc}")
             continue
         if expected_type not in {"file", "symlink"}:
-            errors.append(f"invalid artifact type for {relative}")
+            _add("manifest_invalid", f"invalid artifact type for {relative}")
         elif actual_type != expected_type:
-            errors.append(
+            _add(
+                "artifact_modified",
                 f"type mismatch for {relative}: expected {expected_type}, "
-                f"found {actual_type}"
+                f"found {actual_type}",
             )
         if actual_type == "symlink" and entry.get(
             "link_target"
         ) != _portable_link_target(path):
-            errors.append(f"link target mismatch for {relative}")
+            _add("artifact_modified", f"link target mismatch for {relative}")
         if actual_size != expected_size:
-            errors.append(
+            _add(
+                "artifact_modified",
                 f"size mismatch for {relative}: expected {expected_size}, "
-                f"found {actual_size}"
+                f"found {actual_size}",
             )
         if not isinstance(expected_hash, str) or actual_hash != expected_hash:
-            errors.append(f"sha256 mismatch for {relative}")
+            _add("artifact_modified", f"sha256 mismatch for {relative}")
 
     actual_paths = {
         path.relative_to(root).as_posix()
@@ -516,14 +808,17 @@ def _verify_manifest(root: Path, manifest: Any) -> list[str]:
         if path.name != MANIFEST_NAME and (path.is_file() or path.is_symlink())
     }
     for unexpected in sorted(actual_paths - expected_paths):
-        errors.append(f"unexpected artifact: {unexpected}")
+        _add("artifact_unexpected", f"unexpected artifact: {unexpected}")
 
     if manifest.get("artifact_count") != len(declared):
-        errors.append("artifact_count does not match the manifest inventory")
+        _add(
+            "inventory_mismatch",
+            "artifact_count does not match the manifest inventory",
+        )
     if manifest.get("total_size_bytes") != declared_total:
-        errors.append("total_size_bytes does not match artifact sizes")
+        _add("inventory_mismatch", "total_size_bytes does not match artifact sizes")
     if manifest.get("bundle_size_bytes") != declared_total:
-        errors.append("bundle_size_bytes does not match artifact sizes")
+        _add("inventory_mismatch", "bundle_size_bytes does not match artifact sizes")
     return errors
 
 
@@ -850,11 +1145,16 @@ def _ensure_artifact_within(root: Path, path: Path) -> None:
 
 
 __all__ = [
+    "BUNDLE_FINDING_CODES",
     "DEFAULT_BUNDLE_LIMIT_BYTES",
     "DEFAULT_MODEL",
     "MANIFEST_NAME",
+    "BundleFinding",
     "BundleResult",
+    "LifecycleInputs",
     "add_airgap_command",
     "build_bundle",
+    "bundle_findings",
+    "open_bundle_root",
     "verify_bundle",
 ]

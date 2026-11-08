@@ -118,6 +118,94 @@ and activates OpenMed's socket guard around local-only inference.
     local policies, test direct-identifier recall with synthetic fixtures, and
     never place raw PHI in bundle manifests, transfer logs, or support tickets.
 
+## Rehearse upgrade, rollback, and recovery offline
+
+A kit can also carry everything an offline site needs to move between
+releases. Supply the inputs as directories you already hold; nothing is
+downloaded or substituted for them:
+
+```console
+openmed airgap bundle ./openmed-lifecycle \
+  --upgrade-wheels ./next-release-wheels \
+  --rollback-wheels ./previous-release-wheels \
+  --migrations ./migrations \
+  --recovery ./recovery-assets \
+  --valid-until 2027-06-30T00:00:00Z
+```
+
+| Input | Bundle path | Purpose |
+| --- | --- | --- |
+| `--upgrade-wheels` | `lifecycle/upgrade/` | The next release's complete wheel/sdist set. |
+| `--rollback-wheels` | `lifecycle/rollback/` | The previous release's artifacts, so a failed upgrade can be undone after an in-place install. |
+| `--migrations` | `lifecycle/migrations/` | Ordered `NNNN-<name>` migration assets for the upgrade edge. |
+| `--recovery` | `lifecycle/recovery/` | Recovery tools and synthetic backup assets for the restore phase. |
+| `--upgrade-from` | manifest only | Release versions the upgrade supports (default: the bundled release). |
+| `--valid-from`, `--valid-until` | manifest only | Validity window; an expired kit is refused. |
+
+Every file is still listed with its size and SHA-256 digest. The manifest's
+versioned `lifecycle` section adds, per set, the declared version, its files,
+and a set digest, plus the compatibility window, the migration chain, and the
+validity window. The build refuses a kit whose upgrade is not newer than the
+release, whose rollback set is not the bundled release, whose upgrade window
+excludes the release, whose migrations are out of order, or which is already
+expired.
+
+Rehearse the whole lifecycle before shipping the kit:
+
+```console
+openmed airgap rehearse ./openmed-lifecycle \
+  --key-file ./rehearsal.key \
+  --output rehearsal.json \
+  --markdown rehearsal.md
+openmed airgap verify-report rehearsal.json \
+  --key-file ./rehearsal.key --require-signature
+```
+
+Every phase runs inside the OS-enforced no-egress boundary of
+`scripts/security/no_egress_gate.py` (see
+[Egress policy](serving/egress-policy.md)): a Linux user + network namespace, or
+with `--boundary container` a local image (`--container-image` or
+`OPENMED_NO_EGRESS_IMAGE`, never pulled) started with `--network none`. The
+gate's IPv4, IPv6, TCP, UDP, DNS, child-process, and raw-libc negative controls
+run before and after the phases and must all be blocked. The command needs a
+source checkout, because the gate and its in-boundary entry point live under
+`scripts/`.
+
+| Phase | What must hold |
+| --- | --- |
+| `preflight` | Every digest, set membership, version order, upgrade window, rollback target, migration order, target interpreter, and the validity window check out before anything is installed. |
+| `install` | A clean install of the release into a fresh virtual environment with `pip install --no-index --no-deps --require-hashes`. |
+| `smoke` | The active release imports, its installed files match `RECORD`, and `pip check` passes. |
+| `upgrade` | The first upgrade attempt is interrupted at `--inject-fault` (`before_activate`, `after_activate`, or `after_checkpoint`); recovery must land on exactly one declared state and the resumed upgrade must commit exactly once. |
+| `injected_failure` | A corrupted installed file is detected and admission stays blocked. |
+| `rollback` | The previous release reinstalls from the rollback assets and matches the declared rollback target. |
+| `restore` | Backup restore and credential reload hooks. |
+| `continuity` | The transaction ledger, then model activation, audit continuity, and durable work hooks; admission resumes only when all of them pass. |
+
+Each transition writes a journal entry, builds and smoke-tests the new release
+in its own environment, moves the active pointer, and writes the last-green
+checkpoint last, so an interruption at any point recovers to the checkpoint.
+
+Recovery features plug in through `--hook NAME=module:callable` (`migration`,
+`backup_restore`, `credential_reload`, `model_activation`, `audit_continuity`,
+`durable_work_resume`). A hook receives verified paths and returns only a
+status, a controlled reason code, and an optional digest. A feature that is not
+present reports `not_available`; that is never a pass.
+
+The report is bounded and value-free: phase and check outcomes, controlled
+reason codes, versions, counts, and digests only. It carries a `repro_hash`
+over stable evidence and an `integrity_hash`, and an HMAC-SHA256 signature when
+you supply `--key-file`. The key stays with you; it is never bundled or
+written into the report.
+
+| Exit code | Status | Meaning |
+| ---: | --- | --- |
+| 0 | `passed` | Every phase passed inside an isolated boundary. |
+| 1 | `failed` | A phase, a network control, or the in-boundary runner failed. |
+| 2 | usage | Invalid arguments, an unreadable bundle, or an unusable key. |
+| 3 | `skipped` | No supported boundary on this host (for example macOS without a container image). |
+| 4 | `incomplete` | Every executed phase passed, but at least one recovery feature is `not_available`. |
+
 ## Troubleshooting
 
 - If `pip download` reports no compatible wheel, confirm the manylinux platform,
@@ -128,3 +216,6 @@ and activates OpenMed's socket guard around local-only inference.
   during installation match those present when OpenMed runs.
 - If verification fails, discard or recopy the kit. Do not edit the manifest to
   match an unexplained file change.
+- If `openmed airgap rehearse` exits 3, the host has no supported no-egress
+  boundary. Run it on Linux with unprivileged user namespaces enabled, or pass
+  a local `--container-image`. A skipped rehearsal is not evidence.

@@ -487,7 +487,141 @@ def test_inner_commands_enforce_the_boundary() -> None:
         )
 
 
+def test_boundary_command_wraps_other_workloads_with_the_same_hardening(
+    tmp_path: Path,
+) -> None:
+    script = ROOT / "scripts" / "airgap" / "rehearse_inside.py"
+    bundle = tmp_path / "kit"
+    container = gate.boundary_command(
+        gate.BoundaryPlan("container", executable="/usr/bin/docker", image="img"),
+        script,
+        ["--bundle", "/airgap/bundle"],
+        container_name="openmed-test",
+        mounts=[(bundle, "/airgap/bundle")],
+        tmpfs_size="2g",
+    )
+    netns = gate.boundary_command(
+        gate.BoundaryPlan("netns", executable="/usr/bin/unshare"),
+        script,
+        ["--bundle", str(bundle)],
+        container_name="openmed-test",
+    )
+
+    mounts = [container[i + 1] for i, arg in enumerate(container) if arg == "--mount"]
+    assert mounts == [
+        f"type=bind,src={gate.ROOT},dst={gate.CONTAINER_WORKSPACE},readonly",
+        f"type=bind,src={bundle},dst=/airgap/bundle,readonly",
+    ]
+    assert container[container.index("--network") + 1] == "none"
+    assert container[container.index("--tmpfs") + 1] == "/tmp:rw,nosuid,nodev,size=2g"
+    assert container[container.index("img") + 2] == (
+        "/workspace/scripts/airgap/rehearse_inside.py"
+    )
+    assert netns[:5] == ["/usr/bin/unshare", "--user", "--map-root-user", "--net", "--"]
+    assert netns[5:] == [sys.executable, str(script), "--bundle", str(bundle)]
+    with pytest.raises(ValueError, match="boundary_script_invalid"):
+        gate.boundary_command(
+            gate.BoundaryPlan("netns", executable="/usr/bin/unshare"),
+            tmp_path / "outside.py",
+            [],
+            container_name="x",
+        )
+
+
+def test_boundary_evidence_probes_before_any_workload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class _Responders:
+        def close(self) -> None:
+            calls.append("close")
+
+    monkeypatch.setattr(gate, "bring_loopback_up", lambda: calls.append("lo") or True)
+    monkeypatch.setattr(
+        gate,
+        "inspect_boundary",
+        lambda: (calls.append("inspect") or {"total": 1}, {"ipv4_non_loopback": 0}),
+    )
+    monkeypatch.setattr(gate, "LoopbackResponders", _Responders)
+    monkeypatch.setattr(gate, "positive_probes", lambda responders: {"p": None})
+    monkeypatch.setattr(gate, "negative_probes", lambda: {"n": None})
+
+    def _run(probes: dict[str, Any], classify: Any) -> list[dict[str, str]]:
+        calls.append("positive" if "p" in probes else "negative")
+        return [{"id": next(iter(probes))}]
+
+    monkeypatch.setattr(gate, "run_probe_set", _run)
+
+    netns = gate.collect_boundary_evidence("netns")
+    calls_netns = list(calls)
+    calls.clear()
+    gate.collect_boundary_evidence("container")
+
+    assert calls_netns == ["lo", "inspect", "positive", "close", "negative"]
+    assert calls == ["inspect", "positive", "close", "negative"]
+    assert set(netns) == {
+        "kernel",
+        "interfaces",
+        "routes",
+        "negative_controls",
+        "positive_controls",
+    }
+
+
+def test_run_in_boundary_scrubs_proxies_and_cleans_up_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def _completed(command: Any, **kwargs: Any) -> Any:
+        seen["env"] = kwargs["env"]
+        return gate.subprocess.CompletedProcess(command, 0, stdout="out")
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setattr(gate.subprocess, "run", _completed)
+    plan = gate.BoundaryPlan("container", executable="/usr/bin/docker", image="img")
+
+    run = gate.run_in_boundary(
+        plan, ["docker", "run"], container_name="c", verbose=False, timeout=5
+    )
+
+    assert run == gate.BoundaryRun("out", 0)
+    assert "HTTPS_PROXY" not in seen["env"]
+
+    def _timeout(command: Any, **kwargs: Any) -> Any:
+        raise gate.subprocess.TimeoutExpired(command, 5)
+
+    removed: list[list[str]] = []
+    monkeypatch.setattr(gate.subprocess, "run", _timeout)
+    monkeypatch.setattr(
+        gate, "run_quiet", lambda command, timeout: removed.append(command)
+    )
+
+    run = gate.run_in_boundary(
+        plan, ["docker", "run"], container_name="c", verbose=False, timeout=5
+    )
+
+    assert run.failure == "runner_timeout"
+    assert removed == [["/usr/bin/docker", "rm", "--force", "c"]]
+
+
 # -- inner output parsing ---------------------------------------------------
+
+
+def test_inner_output_parsing_accepts_a_declared_result_shape() -> None:
+    marker = gate.RESULT_MARKER
+    keys = frozenset({"kernel", "rehearsal"})
+
+    good = gate.parse_inner_output(
+        marker + json.dumps({"kernel": "linux", "rehearsal": {}}), 0, required=keys
+    )
+    service_shape = gate.parse_inner_output(
+        marker + json.dumps(_inner_result()), 0, required=keys
+    )
+
+    assert good.result == {"kernel": "linux", "rehearsal": {}}
+    assert service_shape.failure == "runner_result_invalid"
 
 
 def test_inner_output_parsing() -> None:
