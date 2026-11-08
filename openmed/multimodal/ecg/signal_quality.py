@@ -12,7 +12,9 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from statistics import median
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
+
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from .lead_layout import (
     STANDARD_LEADS,
@@ -637,6 +639,8 @@ def assess_signal_quality(
 @dataclass(frozen=True, slots=True)
 class GatedMeasurement(Generic[_T]):
     """Protected callback value and the newly generated acquisition gate report."""
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.MEASUREMENT]
 
     value: _T = field(repr=False)
     quality: SignalQualityReport

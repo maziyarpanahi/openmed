@@ -239,10 +239,8 @@ def test_redact_document_detects_on_reconstructed_text_and_projects_address(
             ]
         }
 
-    source = tmp_path / "synthetic_phi_twocol.pdf"
-    source.write_bytes(b"synthetic bytes parsed by fake_two_column_pdf")
     document = redact_document(
-        source,
+        Path(__file__).with_name("fixtures") / "synthetic_phi_twocol.pdf",
         models={"detector": detector},
     )
 

@@ -25,7 +25,14 @@ def test_image_signing_workflow_signs_and_verifies_digest():
     assert "workflows:\n      - Container Multi-Arch" in content
     assert "id-token: write" in content
     assert "packages: write" in content
-    assert "sigstore/cosign-installer@" in content
+    install = content.split("- name: Install pinned Cosign", 1)[1].split(
+        "- name: Cache pinned Syft", 1
+    )[0]
+    assert "https://api.github.com/repos/sigstore/cosign/releases/assets/" in install
+    assert install.index("sha256sum --check --strict") < install.index("verify-blob")
+    assert '--bundle "$cosign_dir/cosign.sigstore.json"' in install
+    assert "keyless@projectsigstore.iam.gserviceaccount.com" in install
+    assert '--certificate-oidc-issuer "https://accounts.google.com"' in install
     assert "anchore/sbom-action/download-syft@" in content
     assert "docker buildx imagetools inspect" in content
     assert 'cosign sign --yes "$IMAGE_DIGEST_REF"' in content

@@ -90,7 +90,8 @@ def load_openphi_vision_fixtures() -> Iterator[VisionFixtureCase]:
         ValueError: If bundled declarations, font, boxes or pixels have drifted.
     """
     root = files("openmed.eval").joinpath("fixtures", "openphi_vision_v1")
-    catalog_bytes = root.joinpath("catalog.json").read_bytes()
+    # Hash the text catalog with LF line endings on every checkout.
+    catalog_bytes = root.joinpath("catalog.json").read_bytes().replace(b"\r\n", b"\n")
     if _digest(catalog_bytes) != _CATALOG_SHA256:
         raise ValueError("vision fixture catalog digest mismatch")
     catalog = json.loads(catalog_bytes)

@@ -241,9 +241,10 @@ final class MultimodalThermalAdmissionTests: XCTestCase {
             let result = (active ?? GeneratedTextGuard(detector: nil)).release(
                 "Name: Mira Vale.", assetDigest: assetDigest ?? String(repeating: "0", count: 64),
                 identifiers: identifiers)
-            return OpenMedVisionLanguageGeneration(
+            return try OpenMedVisionLanguageGeneration(
                 text: result.text ?? "", promptTokenCount: 1, generationTokenCount: 4,
-                promptTime: 0, generationTime: 0, releaseEnvelope: result.envelope)
+                promptTime: 0, generationTime: 0, notice: MultimodalNoticeKind.visualDescription.notice,
+                releaseEnvelope: result.envelope)
         }
 
         func testVisionAdmissionPreservesPrivacyContextForTextAndImages() async throws {
@@ -333,7 +334,9 @@ final class MultimodalThermalAdmissionTests: XCTestCase {
             XCTAssertEqual(signals.callCount(), 0)
             let local = ThermalVisionWork(imageURL: URL(fileURLWithPath: "/synthetic.png")) {
                 signals.call()
-                return OpenMedVisionLanguageGeneration(text: "protected", promptTokenCount: 1, generationTokenCount: 1, promptTime: 0, generationTime: 0)
+                return try OpenMedVisionLanguageGeneration(
+                    text: "protected", promptTokenCount: 1, generationTokenCount: 1,
+                    promptTime: 0, generationTime: 0, notice: MultimodalNoticeKind.visualDescription.notice)
             }
             let admitted = await session.run(local, queuedAtMilliseconds: signals.time())
             XCTAssertEqual(admitted.value?.text, "protected")
