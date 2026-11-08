@@ -12,6 +12,8 @@ import {
 } from "./capability";
 
 const ONNXRUNTIME_WEB_MODULE = "onnxruntime-web";
+// Browsers cap a single ArrayBuffer near 2 GiB, so each shard must stay below it.
+const DEFAULT_ORT_WEB_MAX_SHARD_BYTES = 2 ** 31 - 1;
 
 export type OrtExecutionProvider = "webgpu" | "wasm";
 
@@ -70,6 +72,23 @@ export type OrtWebRuntimeProvider =
   | OrtWebRuntime
   | (() => Promise<OrtWebRuntime> | OrtWebRuntime);
 
+export interface OrtWebExternalDataShard {
+  /** File name the ONNX graph references, such as `model.onnx.data.000`. */
+  path: string;
+  /** Local or same-origin relative location ONNX Runtime Web loads. */
+  location: string;
+  /** Declared shard size, checked against the limits before loading. */
+  byteLength: number;
+}
+
+export interface OrtWebExternalDataOptions {
+  shards: readonly OrtWebExternalDataShard[];
+  /** Defaults to 2 GiB minus one byte. */
+  maxShardBytes?: number;
+  /** Unbounded by default. */
+  maxTotalBytes?: number;
+}
+
 export interface OrtWebLoaderOptions {
   modelPath: string;
   assetPath: string;
@@ -77,6 +96,7 @@ export interface OrtWebLoaderOptions {
   capabilities?: Partial<OrtWebCapabilityProfile>;
   globalScope?: CapabilityDetectionOptions["globalScope"];
   sessionOptions?: OrtSessionCreateOptions;
+  externalData?: OrtWebExternalDataOptions;
   cache?: OrtWebSessionCache;
 }
 
@@ -116,7 +136,9 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (trimmed.length === 0) {
     throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
   }
-  if (trimmed.startsWith("//") || trimmed.startsWith("\\\\")) {
+  // Browsers strip C0 controls (leading NUL..US, tab/CR/LF anywhere) and read "/\"
+  // or "\/" as "//", which would turn the path into a remote URL.
+  if (/[\u0000-\u001f]/.test(trimmed) || /^[\\/]{2}/.test(trimmed)) {
     throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
@@ -156,19 +178,77 @@ export function normalizeOrtAssetPath(path: string): string {
   return `${localPath}/`;
 }
 
+export function assertOfflineExternalData(
+  options: Pick<OrtWebLoaderOptions, "externalData" | "sessionOptions">,
+): { path: string; data: string; byteLength: number }[] | undefined {
+  if (options.sessionOptions?.externalData !== undefined) {
+    throw new Error(
+      "ONNX Runtime Web external data must use the typed externalData option.",
+    );
+  }
+  const externalData = options.externalData;
+  if (externalData === undefined) {
+    return undefined;
+  }
+  const maxShardBytes = positiveByteCount(
+    externalData.maxShardBytes ?? DEFAULT_ORT_WEB_MAX_SHARD_BYTES,
+    "external data maxShardBytes",
+  );
+  const maxTotalBytes =
+    externalData.maxTotalBytes === undefined
+      ? Number.POSITIVE_INFINITY
+      : positiveByteCount(
+          externalData.maxTotalBytes,
+          "external data maxTotalBytes",
+        );
+  const paths = new Set<string>();
+  let totalBytes = 0;
+  const files = externalData.shards.map((shard, index) => {
+    const label = `external data shard ${index}`;
+    const file = {
+      path: assertOfflineShardLocation(shard.path, `${label} path`),
+      data: assertOfflineShardLocation(shard.location, `${label} location`),
+    };
+    if (paths.has(file.path)) {
+      throw new Error("ONNX Runtime Web external data contains duplicate shard paths.");
+    }
+    paths.add(file.path);
+    const byteLength = positiveByteCount(shard.byteLength, `${label} byteLength`);
+    if (byteLength > maxShardBytes) {
+      throw new Error(
+        `ONNX Runtime Web ${label} exceeds the per-shard byte limit.`,
+      );
+    }
+    totalBytes += byteLength;
+    return { ...file, byteLength };
+  });
+  if (totalBytes > maxTotalBytes) {
+    throw new Error("ONNX Runtime Web external data exceeds the total byte limit.");
+  }
+  return files;
+}
+
 export async function loadOrtWebSession(
   options: OrtWebLoaderOptions,
 ): Promise<OrtWebLoadedSession> {
   const modelPath = assertOfflineAssetPath(options.modelPath, "model path");
   const assetPath = normalizeOrtAssetPath(options.assetPath);
+  const sessionOverrides = { ...options.sessionOptions };
+  const externalData = assertOfflineExternalData({
+    ...options,
+    sessionOptions: sessionOverrides,
+  });
   const capabilities = resolveCapabilities(options);
   const backend = selectOrtWebBackend(capabilities);
   const cache = options.cache ?? DEFAULT_ORT_WEB_SESSION_CACHE;
   const sessionOptions: OrtSessionCreateOptions = {
     graphOptimizationLevel: "all",
-    ...(options.sessionOptions ?? {}),
+    ...sessionOverrides,
     executionProviders: backend.executionProviders,
   };
+  if (externalData !== undefined) {
+    sessionOptions.externalData = externalData.map(({ path, data }) => ({ path, data }));
+  }
   const cacheKey = stableStringify({
     modelPath,
     assetPath,
@@ -178,6 +258,7 @@ export async function loadOrtWebSession(
       wasm: backend.wasm,
     },
     sessionOptions,
+    externalDataByteLengths: externalData?.map(({ byteLength }) => byteLength) ?? [],
   });
   const cached = cache.get(cacheKey);
   if (cached !== undefined) {
@@ -295,6 +376,21 @@ function resolveCapabilities(
     detectionOptions.overrides = options.capabilities;
   }
   return detectOrtWebCapabilities(detectionOptions);
+}
+
+function assertOfflineShardLocation(path: string, label: string): string {
+  const location = assertOfflineAssetPath(path, label);
+  if (location.includes("?")) {
+    throw new Error(`ONNX Runtime Web ${label} must not include a query string.`);
+  }
+  return location;
+}
+
+function positiveByteCount(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`ONNX Runtime Web ${label} must be a positive integer.`);
+  }
+  return value;
 }
 
 function stableStringify(value: unknown): string {

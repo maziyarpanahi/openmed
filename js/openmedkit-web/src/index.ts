@@ -87,6 +87,8 @@ export type {
   OrtTensorConstructor,
   OrtTensorLike,
   OrtTokenClassificationDecodeContext,
+  OrtWebExternalDataOptions,
+  OrtWebExternalDataShard,
   OrtWebLoadedSession,
   OrtWebLoaderOptions,
   OrtWebRuntime,
