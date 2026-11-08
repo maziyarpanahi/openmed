@@ -1,0 +1,1099 @@
+{
+  "schema_version": 1,
+  "notice": "synthetic_preprocessing_only_non_diagnostic",
+  "vectors": [
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          2,
+          3
+        ],
+        "target_size": [
+          2,
+          3
+        ],
+        "orientation": 1,
+        "interpolation": "nearest",
+        "color_order": "RGB",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "HWC",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        0.0,
+        10.0,
+        20.0,
+        1.0,
+        11.0,
+        21.0,
+        2.0,
+        12.0,
+        22.0,
+        3.0,
+        13.0,
+        23.0,
+        4.0,
+        14.0,
+        24.0,
+        5.0,
+        15.0,
+        25.0
+      ],
+      "geometry": [
+        "1",
+        "0",
+        "0",
+        "0",
+        "1",
+        "0"
+      ],
+      "protected_mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "profile_digest": "3343d6839c6ea978f15567c8b149cce18ef25b90f9d750c65280164ab479e017",
+      "tensor_digest": "90213169d41524d278619879a593737b0ac9bbed084ef41260b02b5c4b8a8e25",
+      "coordinate_digest": "1a388fb575045d88ab9558836ea43ffed37d5917eeb7da239d6f7c27271d182f",
+      "qualification_digest": "5edd7d3826645faed7b9d9eb5b6e5ef898e37619259ebbdb6368fc0da7cced53"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          2,
+          3
+        ],
+        "target_size": [
+          2,
+          3
+        ],
+        "orientation": 2,
+        "interpolation": "nearest",
+        "color_order": "BGR",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "CHW",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        21.0,
+        20.0,
+        23.0,
+        22.0,
+        25.0,
+        24.0,
+        11.0,
+        10.0,
+        13.0,
+        12.0,
+        15.0,
+        14.0,
+        1.0,
+        0.0,
+        3.0,
+        2.0,
+        5.0,
+        4.0
+      ],
+      "geometry": [
+        "-1",
+        "0",
+        "2",
+        "0",
+        "1",
+        "0"
+      ],
+      "protected_mask": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false
+      ],
+      "profile_digest": "f566c996e65a076e51cc754262e03ed49d578e0f2b98ebaa3a0af542fb6d1563",
+      "tensor_digest": "236a0eaf5e90db994b9f1cdac8285f73f4bdd7ae15716ce90a4ac1dd2f521b1b",
+      "coordinate_digest": "430e650dd6ba571ee8508f7446dd193ee888663a39826ce980c462948c4281a6",
+      "qualification_digest": "a30a88f51d2d33e44fb2b6f7ce67c161afc3ae780657dcbba43d8fe9c3fa3101"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          2,
+          3
+        ],
+        "target_size": [
+          2,
+          3
+        ],
+        "orientation": 3,
+        "interpolation": "nearest",
+        "color_order": "RGB",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "HWC",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        5.0,
+        15.0,
+        25.0,
+        4.0,
+        14.0,
+        24.0,
+        3.0,
+        13.0,
+        23.0,
+        2.0,
+        12.0,
+        22.0,
+        1.0,
+        11.0,
+        21.0,
+        0.0,
+        10.0,
+        20.0
+      ],
+      "geometry": [
+        "-1",
+        "0",
+        "2",
+        "0",
+        "-1",
+        "3"
+      ],
+      "protected_mask": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "profile_digest": "84d1944221b910506ae80d344794bb7ec5ab671bf4cc874eb4aa2f9ed961e519",
+      "tensor_digest": "ed4522dd81efeea94ad5b2388e18bd753e7592e8446632cc9e86553887a2ae80",
+      "coordinate_digest": "121201657cfb189801990b6ed86cba01bc61fc183ed845de10bde5ddc1a44a15",
+      "qualification_digest": "c5d1b8c2edbcec532bfa908165692f11d063ef1a0b1086f506a6572e3f483df7"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          2,
+          3
+        ],
+        "target_size": [
+          2,
+          3
+        ],
+        "orientation": 4,
+        "interpolation": "nearest",
+        "color_order": "BGR",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "CHW",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        24.0,
+        25.0,
+        22.0,
+        23.0,
+        20.0,
+        21.0,
+        14.0,
+        15.0,
+        12.0,
+        13.0,
+        10.0,
+        11.0,
+        4.0,
+        5.0,
+        2.0,
+        3.0,
+        0.0,
+        1.0
+      ],
+      "geometry": [
+        "1",
+        "0",
+        "0",
+        "0",
+        "-1",
+        "3"
+      ],
+      "protected_mask": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        false
+      ],
+      "profile_digest": "fc97190445d1e0b13a7b81549f17db152912cd9f599ac6b5ab9f5d6c7038ad4f",
+      "tensor_digest": "ca265dd3098e2669dc284049a9a5ae63db8b9f59eda19a566f7a4276f560c613",
+      "coordinate_digest": "8ed00b0eaf853e58ead76aa3c8a033ec9b056851b05d2531dcf7e5bdba2e8d9f",
+      "qualification_digest": "f6faee81e0f774d60a1bd19ee5f21888ab11c380b5c69f828ff0b07bfd9263e1"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          3,
+          2
+        ],
+        "target_size": [
+          3,
+          2
+        ],
+        "orientation": 5,
+        "interpolation": "nearest",
+        "color_order": "RGB",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "HWC",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        0.0,
+        10.0,
+        20.0,
+        2.0,
+        12.0,
+        22.0,
+        4.0,
+        14.0,
+        24.0,
+        1.0,
+        11.0,
+        21.0,
+        3.0,
+        13.0,
+        23.0,
+        5.0,
+        15.0,
+        25.0
+      ],
+      "geometry": [
+        "0",
+        "1",
+        "0",
+        "1",
+        "0",
+        "0"
+      ],
+      "protected_mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "profile_digest": "cee77a4e402e0631d2847031dd13fbf776b98f549765cc03e193d627b6599945",
+      "tensor_digest": "65ade0a3c0e683bb1e6ce734c788b2a12f6059f1157885c0f653f414d8c2ba6e",
+      "coordinate_digest": "af78dd3dfd63130a716e28ef631ba7a6d934fda29ee1ec872e8e85e9552ca9dd",
+      "qualification_digest": "bf558bb50c3e5d2e2ba749fb435b752936226869be23e51d6fc40d71f7e5206e"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          3,
+          2
+        ],
+        "target_size": [
+          3,
+          2
+        ],
+        "orientation": 6,
+        "interpolation": "nearest",
+        "color_order": "BGR",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "CHW",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        24.0,
+        22.0,
+        20.0,
+        25.0,
+        23.0,
+        21.0,
+        14.0,
+        12.0,
+        10.0,
+        15.0,
+        13.0,
+        11.0,
+        4.0,
+        2.0,
+        0.0,
+        5.0,
+        3.0,
+        1.0
+      ],
+      "geometry": [
+        "0",
+        "-1",
+        "3",
+        "1",
+        "0",
+        "0"
+      ],
+      "protected_mask": [
+        false,
+        false,
+        true,
+        false,
+        false,
+        false
+      ],
+      "profile_digest": "48327ca6a6e5a9e48b706836fc42222e18eb56d169fac3b6f2166874257eb34a",
+      "tensor_digest": "63ac9eee933d0b2b2caf8b9b6b914354e7876254f1a4e185431acc7ce4c44521",
+      "coordinate_digest": "451eed31c7e67f35d9647e8e9ee6afe439178eb70d676e6a4b2352023c96649e",
+      "qualification_digest": "d414b5393a2f1239b3397ab019f6b7ebbdf2dd0c5edc4594ab65bd88d7cb3b23"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          3,
+          2
+        ],
+        "target_size": [
+          3,
+          2
+        ],
+        "orientation": 7,
+        "interpolation": "nearest",
+        "color_order": "RGB",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "HWC",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        5.0,
+        15.0,
+        25.0,
+        3.0,
+        13.0,
+        23.0,
+        1.0,
+        11.0,
+        21.0,
+        4.0,
+        14.0,
+        24.0,
+        2.0,
+        12.0,
+        22.0,
+        0.0,
+        10.0,
+        20.0
+      ],
+      "geometry": [
+        "0",
+        "-1",
+        "3",
+        "-1",
+        "0",
+        "2"
+      ],
+      "protected_mask": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "profile_digest": "b884974c9f4678e68284ea1a71fe302b93026081b2e04563cae1328a14f1d908",
+      "tensor_digest": "83057d817282f33ec6ab992bea88d88f8c01fca93b860244d9416ef0038f741c",
+      "coordinate_digest": "30b601b091d551265c84982bd0b848d4ff1754b750dbcf3f8edea7542dce9a0b",
+      "qualification_digest": "bd5e12702692531f5aa4854bc195b0e592ba0ef804ac7a63035cc523e258fc70"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          3
+        ],
+        "crop": [
+          0,
+          0,
+          3,
+          2
+        ],
+        "target_size": [
+          3,
+          2
+        ],
+        "orientation": 8,
+        "interpolation": "nearest",
+        "color_order": "BGR",
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "scale": 1,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "CHW",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          0,
+          10,
+          20
+        ],
+        [
+          1,
+          11,
+          21
+        ],
+        [
+          2,
+          12,
+          22
+        ],
+        [
+          3,
+          13,
+          23
+        ],
+        [
+          4,
+          14,
+          24
+        ],
+        [
+          5,
+          15,
+          25
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        21.0,
+        23.0,
+        25.0,
+        20.0,
+        22.0,
+        24.0,
+        11.0,
+        13.0,
+        15.0,
+        10.0,
+        12.0,
+        14.0,
+        1.0,
+        3.0,
+        5.0,
+        0.0,
+        2.0,
+        4.0
+      ],
+      "geometry": [
+        "0",
+        "1",
+        "0",
+        "-1",
+        "0",
+        "2"
+      ],
+      "protected_mask": [
+        false,
+        false,
+        false,
+        true,
+        false,
+        false
+      ],
+      "profile_digest": "86e3bed142714c623a150c8bcaf73fc784cfe5dfaf672b56816e00fbc348492f",
+      "tensor_digest": "ea6cbac8eece7fe5c9bf009082bcb6878bfddefafa03ecc9e306cb458e6857dd",
+      "coordinate_digest": "dd79d6fb99b72969458690c5abbc1a6985b02d1e9d57c0ea57e94d976aa66503",
+      "qualification_digest": "380a1bd019a6f2fd07b51bbad5164de07130b2f8c1e067047acd68885c0bcb11"
+    },
+    {
+      "profile": {
+        "source_size": [
+          2,
+          2
+        ],
+        "crop": [
+          0,
+          0,
+          2,
+          2
+        ],
+        "target_size": [
+          3,
+          3
+        ],
+        "orientation": 1,
+        "interpolation": "bilinear",
+        "color_order": "RGB",
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "scale": 0.00392156862745098,
+        "mean": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "std": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "layout": "HWC",
+        "dtype": "float32",
+        "atol": 1e-06,
+        "version": 1
+      },
+      "pixels": [
+        [
+          255,
+          0,
+          0,
+          255
+        ],
+        [
+          0,
+          255,
+          0,
+          128
+        ],
+        [
+          0,
+          0,
+          255,
+          0
+        ],
+        [
+          255,
+          255,
+          255,
+          255
+        ]
+      ],
+      "mask": [
+        true,
+        false,
+        false,
+        false
+      ],
+      "tensor": [
+        1.0,
+        0.0,
+        0.0,
+        0.7490196228027344,
+        0.5,
+        0.24901960790157318,
+        0.49803921580314636,
+        1.0,
+        0.49803921580314636,
+        1.0,
+        0.5,
+        0.5,
+        0.8745098114013672,
+        0.75,
+        0.6245098114013672,
+        0.7490196228027344,
+        1.0,
+        0.7490196228027344,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "geometry": [
+        "3/2",
+        "0",
+        "0",
+        "0",
+        "3/2",
+        "0"
+      ],
+      "protected_mask": [
+        true,
+        true,
+        false,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false
+      ],
+      "profile_digest": "7f0a4006f2956a08d588dd9a6f35db4fe4ee96e6c5f32df0208adbf753cf98bb",
+      "tensor_digest": "76269d03669a5a28889193bef6989231d2c6dd677ceb4401f02a4334bd2123aa",
+      "coordinate_digest": "7e8804c8063553e0b017f622ee4ec03740f27f49a863a0b22f1f156f3c34a81d",
+      "qualification_digest": "d3b35a3856c4726d104ba8f95c1a87d18cb89b19bf344b89ad118c7315ff0475"
+    }
+  ]
+}

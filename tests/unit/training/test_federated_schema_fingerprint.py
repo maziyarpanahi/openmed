@@ -94,21 +94,21 @@ def test_parameter_order_and_update_values_do_not_change_schema_identity() -> No
         assert same_update_schema(baseline, equivalent)
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_schema_changes_change_fingerprint(subtests) -> None:
+    for change in [
         {"name": "adapter.lora_C.weight"},
         {"shape": (3, 3)},
         {"dtype": "float16"},
         {"model": "c"},
-    ],
-)
-def test_schema_changes_change_fingerprint(change: dict[str, object]) -> None:
-    baseline = _metadata()
-    changed = _metadata(**change)
+    ]:
+        with subtests.test(change=change):
+            baseline = _metadata()
+            changed = _metadata(**change)
 
-    assert fingerprint_update_schema(changed) != fingerprint_update_schema(baseline)
-    assert not same_update_schema(baseline, changed)
+            assert fingerprint_update_schema(changed) != fingerprint_update_schema(
+                baseline
+            )
+            assert not same_update_schema(baseline, changed)
 
 
 def test_comparison_uses_constant_time_primitive() -> None:

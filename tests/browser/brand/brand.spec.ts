@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import {
+  BrowserContext,
   ConsoleMessage,
+  Locator,
   Page,
   TestInfo,
   expect,
@@ -15,6 +17,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
 const artifactRoot = path.join(root, "site");
 const MAX_FULL_PAGE_SCREENSHOT_DIMENSION = 30_000;
+const CLOUDFLARE_BEACON_URL = "https://static.cloudflareinsights.com/beacon.min.js";
+const CLOUDFLARE_SITE_TOKEN = "86108e13d57f44f69a4c67a445df1f17";
 const GITHUB_METADATA_URLS = [
   "https://api.github.com/repos/maziyarpanahi/openmed",
   "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
@@ -134,7 +138,19 @@ const CANONICAL_VISUAL_CASES = new Set([
   "rtl-fixture/mobile-390/light",
 ]);
 
-test.beforeEach(async ({ page }) => {
+async function stubCloudflareBeacon(context: BrowserContext): Promise<void> {
+  // Exercise the installation without sending test visits to production analytics.
+  await context.route(CLOUDFLARE_BEACON_URL, (route) =>
+    route.fulfill({
+      body: "",
+      contentType: "application/javascript",
+      status: 200,
+    }),
+  );
+}
+
+test.beforeEach(async ({ context, page }) => {
+  await stubCloudflareBeacon(context);
   for (const url of GITHUB_METADATA_URLS) {
     await page.route(url, (route) =>
       route.fulfill({
@@ -215,8 +231,13 @@ function monitorPage(
   page.on("pageerror", (error) =>
     audit.pageErrors.push(redactMarker(error.message, forbiddenMarker)),
   );
+  // Firefox can request module scripts before page.url() commits the navigation.
+  let documentUrl = new URL(page.url());
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      documentUrl = url;
+    }
     if (!["GET", "HEAD"].includes(request.method())) {
       audit.unexpectedMethods.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -226,6 +247,12 @@ function monitorPage(
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
       && !isGitHubMetadataRequest(url)
+      && !(
+        url.href === CLOUDFLARE_BEACON_URL
+        && request.method() === "GET"
+        && documentUrl.origin === expectedOrigin
+        && documentUrl.pathname === "/"
+      )
     ) {
       audit.externalRequests.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -540,6 +567,22 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
       }),
   );
   expect(running, "reduced motion left active animations").toEqual([]);
+}
+
+async function waitForSearchReady(page: Page): Promise<void> {
+  // The search worker loads the page's lunr language packs after network idle.
+  // Wait for its localized ready placeholder so a test never ends, or audits
+  // the console, while that request is still in flight.
+  const placeholder = await page.evaluate(
+    () =>
+      JSON.parse(document.getElementById("__config")?.textContent ?? "{}")
+        .translations?.["search.result.placeholder"] as string | undefined,
+  );
+  expect(placeholder, "search ready placeholder").toBeTruthy();
+  await expect(page.locator(".md-search-result__meta")).toHaveText(
+    placeholder as string,
+    { timeout: 20_000 },
+  );
 }
 
 function expectCleanAudit(audit: Audit): void {
@@ -1146,89 +1189,120 @@ test("docs drawer traps focus and returns it on Escape", async ({
   expectCleanAudit(audit);
 });
 
+function docsSearchReadyState(page: Page): Locator {
+  return page
+    .locator('[data-md-component="search-result"] .md-search-result__meta')
+    .filter({ hasText: /^\s*Type to start searching\s*$/u });
+}
+
+async function expectDocsSearchReady(page: Page): Promise<void> {
+  // Keep the page open until its worker is ready, within the test's deadline.
+  await docsSearchReadyState(page).waitFor({ state: "attached" });
+}
+
+test("docs navigation readiness refuses a missing search dependency", async ({
+  context,
+  page,
+}) => {
+  let intercepted = 0;
+  await context.route("**/search/search_index.json", (route) => {
+    intercepted += 1;
+    return route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: '{"error":"synthetic missing search index"}',
+    });
+  });
+  await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
+  await expect.poll(() => intercepted).toBeGreaterThan(0);
+  const readiness = expect(docsSearchReadyState(page)).toBeAttached();
+  await expect(readiness).rejects.toThrow();
+});
+
+const governedDocRoutes = [
+  ["Signed capability grants", "/docs/agent/capability-grants/"],
+  ["Single-use approval tokens", "/docs/agent/human-approval-tokens/"],
+  ["Staged OMOP mutations", "/docs/interop/omop-staged-mutations/"],
+  ["Run summaries", "/docs/agent/run-summaries/"],
+  ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
+  ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
+  ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
+  ["Migrate from 3.0 to 3.1", "/docs/migration/3.0-to-3.1/"],
+];
+
 for (const width of [390, 1440]) {
-  test(`governed-agent docs connect lifecycle routes at ${width}px`, async ({
-    baseURL,
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await prepareTheme(page, "light");
-    const audit = monitorPage(page, baseURL);
-    await page.goto("/docs/agent-usage/", { waitUntil: "domcontentloaded" });
-    if (width === 390) {
-      await page.locator("[data-openmed-drawer]").click();
-      await page
-        .locator(".md-sidebar--primary label.md-nav__title")
-        .filter({ hasText: /Core Guides/ })
-        .click();
-      await page
-        .locator(".md-sidebar--primary")
-        .getByRole("link", { name: "Governed Agents", exact: true })
-        .click();
-    } else {
-      await page
-        .locator(".md-tabs")
-        .getByRole("link", { name: "Governed Agents", exact: true })
-        .click();
-    }
-    await expect(page).toHaveURL(new URL("/docs/agent/", baseURL).href);
-    await expectAccessible(page);
-    const routes = [
-      ["Signed capability grants", "/docs/agent/capability-grants/"],
-      ["Single-use approval tokens", "/docs/agent/human-approval-tokens/"],
-      ["Staged OMOP mutations", "/docs/interop/omop-staged-mutations/"],
-      ["Run summaries", "/docs/agent/run-summaries/"],
-      ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
-      ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
-      ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
-      ["Migrate from 3.0 to 3.1", "/docs/migration/3.0-to-3.1/"],
-    ];
-    for (const [name, route] of routes) {
+  for (const [name, route] of governedDocRoutes) {
+    test(`governed-agent docs connect ${name} at ${width}px`, async ({
+      baseURL,
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await prepareTheme(page, "light");
+      const audit = monitorPage(page, baseURL);
+      await page.goto("/docs/agent-usage/", { waitUntil: "domcontentloaded" });
+      await expectDocsSearchReady(page);
+      if (width === 390) {
+        await page.locator("[data-openmed-drawer]").click();
+        await page
+          .locator(".md-sidebar--primary label.md-nav__title")
+          .filter({ hasText: /Core Guides/ })
+          .click();
+        await page
+          .locator(".md-sidebar--primary")
+          .getByRole("link", { name: "Governed Agents", exact: true })
+          .click();
+      } else {
+        await page
+          .locator(".md-tabs")
+          .getByRole("link", { name: "Governed Agents", exact: true })
+          .click();
+      }
+      await expect(page).toHaveURL(new URL("/docs/agent/", baseURL).href);
+      await expectDocsSearchReady(page);
+      await expectAccessible(page);
       await page
         .locator(".md-content")
         .getByRole("link", { name, exact: true })
         .click();
       await expect(page).toHaveURL(new URL(route, baseURL).href);
       await expect(page.locator("h1")).toBeVisible();
+      await expectDocsSearchReady(page);
       await expectNoPageOverflow(page);
-      await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
-    }
+      expectCleanAudit(audit);
+    });
+  }
+}
+
+const clinicalOverview = "/docs/clinical/clinical-brief/";
+const clinicalDocRoutes = [
+  ["Clinical NLI", "/docs/clinical/nli-label-contract/", clinicalOverview],
+  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "/docs/clinical/nli-label-contract/"],
+  ["Social Determinants", "/docs/clinical/sdoh-extraction/", clinicalOverview],
+  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "/docs/clinical/sdoh-extraction/"],
+  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", clinicalOverview],
+  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "/docs/clinical/journey-contracts/"],
+] as const;
+
+for (const [name, route, parentRoute] of clinicalDocRoutes) {
+  test(`docs clinical topics expose ${name}`, async ({ baseURL, page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await prepareTheme(page, "light");
+    const audit = monitorPage(page, baseURL);
+    await page.goto(parentRoute, { waitUntil: "domcontentloaded" });
+    await expectDocsSearchReady(page);
+    await page
+      .locator(".md-sidebar--primary")
+      .getByRole("link", { name, exact: true })
+      .click();
+    await expect(page).toHaveURL(new URL(route, baseURL).href);
+    await expect(page.locator("h1")).toBeVisible();
+    await expectDocsSearchReady(page);
+    await expectNoPageOverflow(page);
     expectCleanAudit(audit);
   });
 }
-
-test("docs clinical topics expose the previously unlisted guide routes", async ({
-  baseURL,
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await prepareTheme(page, "light");
-  const audit = monitorPage(page, baseURL);
-  await page.goto("/docs/clinical/clinical-brief/", {
-    waitUntil: "domcontentloaded",
-  });
-  const navigation = page.locator(".md-sidebar--primary");
-  const follow = async (name: string, route: string): Promise<void> => {
-    await navigation.getByRole("link", { name, exact: true }).click();
-    await expect(page).toHaveURL(new URL(route, baseURL).href);
-    await expect(page.locator("h1")).toBeVisible();
-    await expectNoPageOverflow(page);
-  };
-  await follow("Clinical NLI", "/docs/clinical/nli-label-contract/");
-  await follow("Clinical NLI Checkpoints", "/docs/models/clinical-nli/");
-  await follow("Social Determinants", "/docs/clinical/sdoh-temporal-qualifiers/");
-  await follow(
-    "Synthetic SDOH Counterfactuals",
-    "/docs/evaluation/sdoh-counterfactuals/",
-  );
-  await follow(
-    "Synthetic SDOH False-positive Stress",
-    "/docs/evaluation/sdoh-false-positive-stress/",
-  );
-  await follow("Context, Grounding and Journey", "/docs/clinical/journey-contracts/");
-  await follow("Clinical Context Analysis", "/docs/clinical/context-analysis/");
-  expectCleanAudit(audit);
-});
 
 test("docs search, locale, theme, and code copy controls operate", async ({
   baseURL,
@@ -1268,12 +1342,41 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await search.click();
   await expect(search).toBeFocused();
   await expect(page.locator("#__search")).toBeChecked();
-  await search.pressSequentially("OpenMedSpan");
+  // Material submits on keyup. Fill first, then submit one complete query so
+  // partial-query results cannot replace the overflow fixture attached below.
+  await search.fill("OpenMedSpan");
+  await search.press("End");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
   await expect(page.locator(".md-search-result__link").first()).toBeVisible();
+  // Wait for the complete query, then exercise a newly inserted long snippet.
+  // Its width is independent of platform fonts and search-index ranking.
+  const resultArticle = page.locator(".md-search-result__article")
+    .filter({ hasText: "OpenMedSpan" }).first();
+  await expect(resultArticle).toBeVisible();
+  await resultArticle.evaluate((article) => {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.id = "synthetic-search-overflow";
+    code.textContent = "synthetic_long_reference_".repeat(80);
+    pre.append(code);
+    article.append(pre);
+  });
+  const searchCode = page.locator("#synthetic-search-overflow");
+  await expect(searchCode).toBeVisible();
+  expect(await searchCode.evaluate((region) =>
+    region.scrollWidth > region.clientWidth + 1,
+  )).toBe(true);
+  await expect(searchCode).toHaveAttribute("tabindex", "0");
+  await searchCode.focus();
+  await expect(searchCode).toBeFocused();
+  await searchCode.press("ArrowRight");
+  await expect.poll(async () =>
+    searchCode.evaluate((region) => region.scrollLeft),
+  ).toBeGreaterThan(0);
+  await search.focus();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
@@ -1291,6 +1394,9 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     "data-md-color-scheme",
     "slate",
   );
+  // Worker language requests can outlive page network idle after a reload.
+  // Finish initialization before navigation tears down the worker.
+  await waitForSearchReady(page);
 
   await page.goto("/docs/getting-started/", { waitUntil: "networkidle" });
   const copy = page.getByRole("button", { name: "Copy to clipboard" }).first();
@@ -1301,11 +1407,14 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
+  await waitForSearchReady(page);
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+  await waitForSearchReady(page);
   await page.goto("/docs/hi/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await waitForSearchReady(page);
   expectCleanAudit(audit);
 });
 
@@ -1322,7 +1431,9 @@ test("docs deep links, admonitions, tabs, and tables are explicit", async ({
   );
   expect(apiResponse?.status()).toBe(200);
   await expect(page.locator("#openmed\\.PIIEntity")).toBeAttached();
-  await expect(page).toHaveURL(/#openmed\.PIIEntity$/);
+  await expect(page.locator("#piientity")).toBeInViewport();
+  // Material's navigation.tracking may normalize the API alias to its heading.
+  await expect(page).toHaveURL(/#(?:openmed\.PIIEntity|piientity)$/);
 
   await page.goto("/docs/onboarding-india/", {
     waitUntil: "networkidle",
@@ -1703,14 +1814,17 @@ test("representative routes respect first-party transfer budgets", async ({
   browserName,
 }) => {
   test.skip(browserName !== "chromium", "Transfer budgets use Chromium");
-  const routeBudgets = JSON.parse(
+  const budgets = JSON.parse(
     fs.readFileSync(path.join(here, "budgets.json"), "utf8"),
-  ).route_transfer_bytes;
+  );
+  const routeBudgets = budgets.route_transfer_bytes;
   const origin = new URL(baseURL ?? "http://127.0.0.1:4173").origin;
   for (const [route, maximum] of Object.entries(routeBudgets)) {
     const context = await browser.newContext({ baseURL });
+    await stubCloudflareBeacon(context);
     const page = await context.newPage();
     let firstPartyBytes = 0;
+    let searchBytes = 0;
     const responseErrors: string[] = [];
     page.on("response", (response) => {
       if (new URL(response.url()).origin !== origin) return;
@@ -1718,7 +1832,12 @@ test("representative routes respect first-party transfer budgets", async ({
         responseErrors.push(`${response.status()} ${response.url()}`);
       }
       const contentLength = Number(response.headers()["content-length"] ?? 0);
-      if (Number.isFinite(contentLength)) firstPartyBytes += contentLength;
+      if (Number.isFinite(contentLength)) {
+        firstPartyBytes += contentLength;
+        if (new URL(response.url()).pathname === "/docs/search/search_index.json") {
+          searchBytes += contentLength;
+        }
+      }
     });
     await page.goto(route, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
@@ -1740,6 +1859,22 @@ test("representative routes respect first-party transfer budgets", async ({
     expect(firstPartyBytes, `${route} transfer bytes`).toBeLessThanOrEqual(
       maximum as number,
     );
+    if (route.startsWith("/docs/")) {
+      const searchLimit =
+        budgets.governed_payload_bytes["docs/search/search_index.json"];
+      const fixedLimit = budgets.route_fixed_transfer_bytes[route];
+      expect(maximum, "docs route budget composition").toBe(
+        fixedLimit + searchLimit,
+      );
+      expect(searchBytes, "docs search transfer").toBeGreaterThan(0);
+      expect(searchBytes, "docs search transfer").toBeLessThanOrEqual(searchLimit);
+      expect(
+        firstPartyBytes - searchBytes,
+        "docs fixed-asset transfer",
+      ).toBeLessThanOrEqual(
+        fixedLimit,
+      );
+    }
     expect(responseErrors, `${route} first-party response errors`).toEqual([]);
     await context.close();
   }
@@ -1832,4 +1967,61 @@ test("docs preload only the above-fold local IBM Plex face", async ({
     },
   ]);
   expect(JSON.stringify(preloads)).not.toMatch(/Newsreader/iu);
+});
+
+test("homepage loads exactly one Cloudflare beacon for the configured site", async ({
+  baseURL,
+  page,
+}) => {
+  const audit = monitorPage(page, baseURL);
+  const beaconRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url() === CLOUDFLARE_BEACON_URL) {
+      beaconRequests.push(request.method());
+    }
+  });
+
+  await page.goto("/", { waitUntil: "load" });
+  const beacon = page.locator("script[data-cf-beacon]");
+  await expect(beacon).toHaveCount(1);
+  await expect(beacon).toHaveAttribute("src", CLOUDFLARE_BEACON_URL);
+  await expect(beacon).toHaveAttribute("type", "module");
+  expect(JSON.parse((await beacon.getAttribute("data-cf-beacon"))!)).toEqual({
+    token: CLOUDFLARE_SITE_TOKEN,
+  });
+  expect(beaconRequests).toEqual(["GET"]);
+  expect(audit.externalRequests).toEqual([]);
+  expect(audit.unexpectedMethods).toEqual([]);
+  expect(audit.failedRequests).toEqual([]);
+  expect(audit.pageErrors).toEqual([]);
+  expect(audit.consoleErrors).toEqual([]);
+});
+
+test("clinical demo pages do not install the marketing analytics beacon", async ({
+  request,
+}) => {
+  for (const route of ["/docs/demo/web/", "/docs/demo/privacy-playground/"]) {
+    const response = await request.get(route);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).not.toMatch(/cloudflareinsights|data-cf-beacon/i);
+  }
+});
+
+
+test("network audit rejects the marketing beacon outside the homepage", async ({
+  baseURL,
+  page,
+}) => {
+  // A controlled document lets the request reach the audit; clinical-page CSP
+  // independently blocks this script before a network request can be made.
+  await page.route("**/docs/analytics-audit-negative-control/", (route) =>
+    route.fulfill({
+      body: "<!doctype html><title>Network audit control</title>",
+      contentType: "text/html",
+    }),
+  );
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/analytics-audit-negative-control/", { waitUntil: "load" });
+  await page.addScriptTag({ url: CLOUDFLARE_BEACON_URL, type: "module" });
+  expect(audit.externalRequests).toEqual([`GET ${CLOUDFLARE_BEACON_URL}`]);
 });

@@ -45,21 +45,24 @@ def test_fixture_rows_are_synthetic():
     assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
-@pytest.mark.parametrize("row", _load_fixture())
-def test_extractor_matches_gold_row(row):
-    produced = extract_measurement_trends(
-        row["points"], reference_date=row.get("reference_date")
-    )
-    got = _by_entity(produced)
-    assert len(produced) == len(row["gold"]["trends"])
-    for gold in row["gold"]["trends"]:
-        trend = got[gold["entity"].casefold()]
-        assert trend["direction"] == gold["direction"], gold["entity"]
-        assert trend["comparable_count"] == gold["comparable_count"], gold["entity"]
-        assert len(trend["incomparable_points"]) == gold["incomparable_count"], gold[
-            "entity"
-        ]
-        assert trend["direction"] in DIRECTIONS
+def test_extractor_matches_gold_row(subtests):
+    for row in _load_fixture():
+        with subtests.test(row=row):
+            produced = extract_measurement_trends(
+                row["points"], reference_date=row.get("reference_date")
+            )
+            got = _by_entity(produced)
+            assert len(produced) == len(row["gold"]["trends"])
+            for gold in row["gold"]["trends"]:
+                trend = got[gold["entity"].casefold()]
+                assert trend["direction"] == gold["direction"], gold["entity"]
+                assert trend["comparable_count"] == gold["comparable_count"], gold[
+                    "entity"
+                ]
+                assert (
+                    len(trend["incomparable_points"]) == gold["incomparable_count"]
+                ), gold["entity"]
+                assert trend["direction"] in DIRECTIONS
 
 
 # ---------------------------------------------------------------------------
@@ -572,25 +575,35 @@ def test_serialization_does_not_reorder_the_callers_trends():
     assert json.dumps(trends, sort_keys=True) == before
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_serialization_rejects_non_finite_derived_trend_values(subtests):
+    for field, value in [
         ("delta", float("nan")),
         ("first_value", float("inf")),
         ("last_value", float("-inf")),
-    ],
-)
-def test_serialization_rejects_non_finite_derived_trend_values(field, value):
-    trend = extract_measurement_trends(
-        [
-            {"entity": "Weight", "value": 80, "unit": "kg", "timepoint": "2026-01-01"},
-            {"entity": "Weight", "value": 78, "unit": "kg", "timepoint": "2026-02-01"},
-        ]
-    )[0]
-    trend[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            trend = extract_measurement_trends(
+                [
+                    {
+                        "entity": "Weight",
+                        "value": 80,
+                        "unit": "kg",
+                        "timepoint": "2026-01-01",
+                    },
+                    {
+                        "entity": "Weight",
+                        "value": 78,
+                        "unit": "kg",
+                        "timepoint": "2026-02-01",
+                    },
+                ]
+            )[0]
+            trend[field] = value
 
-    with pytest.raises(ValueError, match=f"{field} for 'Weight' must be finite"):
-        serialize_measurement_trends([trend])
+            with pytest.raises(
+                ValueError, match=f"{field} for 'Weight' must be finite"
+            ):
+                serialize_measurement_trends([trend])
 
 
 def test_serialization_rejects_non_finite_point_magnitude():

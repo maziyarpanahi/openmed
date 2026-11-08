@@ -139,17 +139,20 @@ class TestGenerators:
 
 
 class TestRegistry:
-    @pytest.mark.parametrize("id_type", ["medicare", "tfn"])
-    def test_registry_specs_generate_valid_surrogates(self, id_type):
-        faker = Faker("en_AU")
-        register_clinical_providers(faker)
-        faker.seed_instance(42)
+    def test_registry_specs_generate_valid_surrogates(self, subtests):
+        for id_type in ["medicare", "tfn"]:
+            with subtests.test(id_type=id_type):
+                faker = Faker("en_AU")
+                register_clinical_providers(faker)
+                faker.seed_instance(42)
 
-        spec = get_national_id("en", id_type)
-        assert spec is not None
-        for _ in range(40):
-            surrogate = getattr(faker, spec.faker_method)()
-            assert spec.validate(surrogate), f"{id_type} generated {surrogate!r}"
+                spec = get_national_id("en", id_type)
+                assert spec is not None
+                for _ in range(40):
+                    surrogate = getattr(faker, spec.faker_method)()
+                    assert spec.validate(surrogate), (
+                        f"{id_type} generated {surrogate!r}"
+                    )
 
     def test_registry_lookup_aliases(self):
         for id_type in ("medicare", "tfn"):

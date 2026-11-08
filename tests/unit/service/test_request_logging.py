@@ -34,6 +34,7 @@ PHI_SUBSTRINGS = (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("level", ["INFO", "off"])
 def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
     import os
@@ -53,10 +54,14 @@ def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
             "OPENMED_SERVICE_LOG_LEVEL": level,
             "OPENMED_PROFILE": "test",
             "OPENMED_OFFLINE": "1",
+            # Windows terminate() kills the server, so nothing buffered
+            # in its stdout would ever reach the file.
+            "PYTHONUNBUFFERED": "1",
         }
     )
     # Capture to a file so the server never waits for an undrained output pipe.
-    output_file = (tmp_path / "synthetic-service-output.log").open("w+")
+    output_path = tmp_path / "synthetic-service-output.log"
+    output_file = output_path.open("w+")
     process = subprocess.Popen(
         [
             sys.executable,
@@ -100,6 +105,18 @@ def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
                     pass
             except urllib.error.HTTPError:
                 pass
+        if level != "off":
+            # The server writes each access record after its response, so
+            # wait for the last one before stopping it.
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and (
+                sum(
+                    line.startswith("{")
+                    for line in output_path.read_text().splitlines()
+                )
+                < 4
+            ):
+                time.sleep(0.05)
     finally:
         process.terminate()
         process.communicate(timeout=15)
@@ -306,29 +323,27 @@ def test_access_log_format_can_be_plain(
     assert "request_id=req-plain-log" in records[0].getMessage()
 
 
-@pytest.mark.parametrize(
-    ("path", "expected"),
-    [
+def test_access_template_uses_registered_route_when_scope_path_is_empty(subtests):
+    for path, expected in [
         ("/graphql", "/graphql"),
         ("/jobs/SYNTHETIC-PRIVATE-ID", "/jobs/{job_id}"),
         ("/SYNTHETIC-PRIVATE-ID", "unknown"),
-    ],
-)
-def test_access_template_uses_registered_route_when_scope_path_is_empty(path, expected):
-    from types import SimpleNamespace
+    ]:
+        with subtests.test(path=path, expected=expected):
+            from types import SimpleNamespace
 
-    from openmed.service.logging import _route_template
+            from openmed.service.logging import _route_template
 
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": path,
-        "root_path": "",
-        "headers": [],
-        "query_string": b"value=SYNTHETIC-PRIVATE-QUERY",
-        "route": SimpleNamespace(path=""),
-        "app": create_app(),
-    }
-    template = _route_template(scope)
-    assert template == expected
-    assert "SYNTHETIC-PRIVATE" not in template
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": path,
+                "root_path": "",
+                "headers": [],
+                "query_string": b"value=SYNTHETIC-PRIVATE-QUERY",
+                "route": SimpleNamespace(path=""),
+                "app": create_app(),
+            }
+            template = _route_template(scope)
+            assert template == expected
+            assert "SYNTHETIC-PRIVATE" not in template

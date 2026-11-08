@@ -46,9 +46,11 @@ from .asset_batch import (
 )
 from .asset_limits import (
     DESKTOP_V1,
+    DESKTOP_V1_1,
     LIMIT_FIELDS,
     LIMIT_REASON_CODES,
     MOBILE_V1,
+    MOBILE_V1_1,
     AssetLimitError,
     LimitFinding,
     LimitProfile,
@@ -98,6 +100,16 @@ from .chw_forms import (
     parse_xform_path,
     redact_chw_form,
 )
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegion,
+    CodeRegionDetector,
+    FakeCodeRegionDetector,
+    ZXingCodeRegionDetector,
+    detect_code_regions,
+)
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomDeidentificationError,
@@ -129,6 +141,21 @@ from .dicom_sr_provenance import (
     map_dicom_sr_provenance,
     render_dicom_sr_provenance,
     serialize_dicom_sr_provenance,
+)
+from .dicom_transfer_syntax import (
+    DEFAULT_MAX_FILE_META_BYTES,
+    DEFAULT_MAX_FILE_META_ELEMENTS,
+    DEFAULT_MAX_TRANSFER_SYNTAX_UID_BYTES,
+    TRANSFER_SYNTAX_CATALOG,
+    TRANSFER_SYNTAX_OUTCOMES,
+    TRANSFER_SYNTAX_REASON_CODES,
+    TRANSFER_SYNTAX_SCHEMA_VERSION,
+    TransferSyntaxCapability,
+    TransferSyntaxError,
+    TransferSyntaxOutcome,
+    TransferSyntaxReport,
+    describe_transfer_syntax,
+    read_dicom_transfer_syntax,
 )
 from .document_graph import (
     BBox,
@@ -217,9 +244,11 @@ from .layout import (
 )
 from .manifest_profiles import (
     AUDIO_V1,
+    DICOM_NON_PIXEL_V1,
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    WAVEFORM_V1,
     ManifestProfile,
     ManifestProfileError,
     ValidationFinding,
@@ -239,6 +268,18 @@ from .metadata_scrub import (
     assert_metadata_clean,
     scrub_metadata,
     verify_metadata,
+)
+from .notices import (
+    NOTICE_CATALOG,
+    NOTICE_RESULT_TYPES,
+    DraftReviewResult,
+    MeasurementReviewResult,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
+    VisualDescriptionResult,
+    validate_notice_registry,
 )
 
 # Importing the OCR module registers remaining OCR-only image-format handlers
@@ -283,6 +324,14 @@ from .page_rotation import (
     transform_point,
     transform_source_spans,
 )
+from .pdf_inventory import (
+    PDF_ANNOTATION_SUBTYPES,
+    PDF_CONTENT_REASON_CODES,
+    PdfContentInventory,
+    PdfContentProfile,
+    PdfInventoryReport,
+    read_pdf_inventory,
+)
 from .pptx import (
     PptxRedaction,
     PptxRunRange,
@@ -291,6 +340,7 @@ from .pptx import (
     write_redacted_pptx,
 )
 from .preflight import (
+    PDF_PREFLIGHT_CHECKS,
     PREFLIGHT_CHECKS,
     PREFLIGHT_SCHEMA_VERSION,
     PreflightError,
@@ -298,6 +348,7 @@ from .preflight import (
     PreflightReport,
     PreflightStatus,
     preflight_asset,
+    preflight_pdf_asset,
 )
 from .processing_diff import (
     PROCESSING_DIFF_SCHEMA_VERSION,
@@ -323,6 +374,7 @@ from .processing_summary import (
     render_processing_summary_markdown,
     summarize_processing_run,
 )
+from .redaction_admission import RedactionAdmissionError
 from .render_pdf import (
     PdfLayoutFidelityError,
     PdfLayoutFidelityReport,
@@ -341,6 +393,21 @@ from .render_raster import (
     render_redacted_raster_pages,
 )
 from .rtf import extract_rtf, write_redacted_rtf
+from .runtime_session import (
+    SESSION_SCHEMA_VERSION,
+    AssetHandle,
+    DocumentProvider,
+    MultimodalSession,
+    ProviderLease,
+    RuntimeSessionError,
+    SessionEvent,
+    SessionLimits,
+    SessionOperation,
+    SessionOutcome,
+    SessionResult,
+    SessionState,
+    SpeechExecutionProvider,
+)
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -392,6 +459,27 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "CodeCoverageReport",
+    "CodeDetectionError",
+    "CodeDetectionPolicy",
+    "CodeRegion",
+    "CodeRegionDetector",
+    "FakeCodeRegionDetector",
+    "ZXingCodeRegionDetector",
+    "detect_code_regions",
+    "SESSION_SCHEMA_VERSION",
+    "AssetHandle",
+    "DocumentProvider",
+    "MultimodalSession",
+    "ProviderLease",
+    "RuntimeSessionError",
+    "SessionEvent",
+    "SessionLimits",
+    "SessionOperation",
+    "SessionOutcome",
+    "SessionResult",
+    "SessionState",
+    "SpeechExecutionProvider",
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
     "AbstentionRecord",
@@ -399,8 +487,10 @@ __all__ = [
     "AbstentionValidationError",
     "AUDIO_V1",
     "DICOM_V1",
+    "DICOM_NON_PIXEL_V1",
     "IMAGE_V1",
     "PDF_V1",
+    "WAVEFORM_V1",
     "ManifestProfile",
     "ManifestProfileError",
     "ValidationFinding",
@@ -415,14 +505,25 @@ __all__ = [
     "AssetManifestError",
     "AssetLimitError",
     "DESKTOP_V1",
+    "DESKTOP_V1_1",
     "LIMIT_FIELDS",
     "LIMIT_REASON_CODES",
     "LimitFinding",
     "LimitProfile",
+    "RedactionAdmissionError",
     "MOBILE_V1",
+    "MOBILE_V1_1",
     "evaluate_asset_limits",
     "PREFLIGHT_CHECKS",
     "PREFLIGHT_SCHEMA_VERSION",
+    "PDF_ANNOTATION_SUBTYPES",
+    "PDF_CONTENT_REASON_CODES",
+    "PDF_PREFLIGHT_CHECKS",
+    "PdfContentInventory",
+    "PdfContentProfile",
+    "PdfInventoryReport",
+    "read_pdf_inventory",
+    "preflight_pdf_asset",
     "PreflightError",
     "PreflightFinding",
     "PreflightReport",
@@ -611,6 +712,16 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "NOTICE_CATALOG",
+    "NOTICE_RESULT_TYPES",
+    "DraftReviewResult",
+    "MeasurementReviewResult",
+    "MultimodalNotice",
+    "MultimodalNoticeError",
+    "NoticeBoundOutput",
+    "NoticeKind",
+    "VisualDescriptionResult",
+    "validate_notice_registry",
     "PROCESSING_DIFF_SCHEMA_VERSION",
     "AbstentionDelta",
     "DigestChange",
@@ -697,4 +808,17 @@ __all__ = [
     "map_dicom_sr_provenance",
     "render_dicom_sr_provenance",
     "serialize_dicom_sr_provenance",
+    "DEFAULT_MAX_FILE_META_BYTES",
+    "DEFAULT_MAX_FILE_META_ELEMENTS",
+    "DEFAULT_MAX_TRANSFER_SYNTAX_UID_BYTES",
+    "TRANSFER_SYNTAX_CATALOG",
+    "TRANSFER_SYNTAX_OUTCOMES",
+    "TRANSFER_SYNTAX_REASON_CODES",
+    "TRANSFER_SYNTAX_SCHEMA_VERSION",
+    "TransferSyntaxCapability",
+    "TransferSyntaxError",
+    "TransferSyntaxOutcome",
+    "TransferSyntaxReport",
+    "describe_transfer_syntax",
+    "read_dicom_transfer_syntax",
 ]

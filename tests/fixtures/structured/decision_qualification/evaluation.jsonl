@@ -1,0 +1,20 @@
+{"id": "synthetic-eval-01", "mode": "fixed_choice", "input_text": "Synthetic admission priority is clearly urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-eval-02", "mode": "fixed_choice", "input_text": "Synthetic admission priority is clearly routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-eval-03", "mode": "fixed_choice", "input_text": "Synthetic referral priority is clearly urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-eval-04", "mode": "fixed_choice", "input_text": "Synthetic referral priority is likely routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-eval-05", "mode": "fixed_choice", "input_text": "Synthetic referral priority is likely urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-eval-06", "mode": "fixed_choice", "input_text": "Synthetic referral priority is clearly routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-eval-07", "mode": "fixed_choice", "input_text": "Synthetic referral lists urgent and routine tasks.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-eval-08", "mode": "fixed_choice", "input_text": "Synthetic referral priority is unstated.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-eval-09", "mode": "boolean_choice", "input_text": "Synthetic enrollment flag is clearly yes.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-eval-10", "mode": "boolean_choice", "input_text": "Synthetic enrollment flag is clearly no.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-eval-11", "mode": "boolean_choice", "input_text": "Synthetic screening flag is likely yes.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-eval-12", "mode": "boolean_choice", "input_text": "Synthetic screening flag is clearly no.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-eval-13", "mode": "boolean_choice", "input_text": "Synthetic screening answer is missing.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-eval-14", "mode": "boolean_choice", "input_text": "Synthetic enrollment form shows yes and no marks.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-eval-15", "mode": "multi_label", "input_text": "Synthetic triage clearly lists fever.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever"]}
+{"id": "synthetic-eval-16", "mode": "multi_label", "input_text": "Synthetic triage clearly lists cough and rash.", "options": ["fever", "cough", "rash"], "expected_choices": ["cough", "rash"]}
+{"id": "synthetic-eval-17", "mode": "multi_label", "input_text": "Synthetic triage likely lists fever and cough.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever", "cough"]}
+{"id": "synthetic-eval-18", "mode": "multi_label", "input_text": "Synthetic triage clearly lists rash.", "options": ["fever", "cough", "rash"], "expected_choices": ["rash"]}
+{"id": "synthetic-eval-19", "mode": "multi_label", "input_text": "Synthetic triage lists cough only.", "options": ["fever", "cough", "rash"], "expected_choices": ["cough"]}
+{"id": "synthetic-eval-20", "mode": "multi_label", "input_text": "Synthetic triage mentions no listed finding.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever"]}

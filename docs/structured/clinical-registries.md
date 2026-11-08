@@ -197,17 +197,18 @@ item identifiers and value-path names as trusted schema metadata without patient
 information. The resolver is trusted local code, not sandboxed code; its standard
 output and error are suppressed, but its side effects are the caller's concern.
 
-All values are validated in memory before writing a new file with mode `0600`.
-Existing files and final-component symlinks are refused. A failed write removes
-only the newly created inode. The receipt contains counts, digests and indexed
-losses, never XML, patient/fact identifiers, output paths or clinical values.
-Public failures discard private exception context and never evaluate error
-getters on foreign subclasses. Cases, mappings and dictionary items are copied
-once into bounded snapshots before validation; reported lengths cannot waive
-the limits. Schema option codes require exact built-in strings.
-Identical inputs and HMAC secret produce stable XML bytes without a wall-clock
-timestamp. The XML file itself contains protected clinical values and requires
-the caller's privacy controls.
+Values are validated in memory before creating a file with POSIX mode `0600`
+or a protected owner-only Windows DACL. Filesystems that cannot preserve that
+DACL are refused before writing values. Existing files and final-component
+symlinks are refused. Failed writes remove only the newly created inode.
+Receipts contain counts, digests and indexed losses, never XML, patient/fact
+identifiers, output paths or clinical values. Public failures discard private
+exception context without evaluating foreign-subclass error getters. Cases,
+mappings and dictionary items are copied once into bounded snapshots; reported
+lengths cannot waive limits. Schema option codes require exact built-in strings.
+Identical inputs and HMAC secret produce stable XML bytes without wall-clock
+timestamps. The XML contains protected clinical values and requires the caller's
+privacy controls.
 
 Operational bounds are 128 cases, 256 fields per case, 512 mappings, 4,096 resolver
 calls, 8,192 dictionary items and 4 MiB each for dictionary/case/XML payloads and
