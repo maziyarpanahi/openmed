@@ -12,6 +12,20 @@ services:
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          from http.client import HTTPConnection;
+          connection = HTTPConnection("127.0.0.1", 8080, timeout=3);
+          connection.request("GET", "/readyz");
+          raise SystemExit(connection.getresponse().status != 200)
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 6
 
   mcp:
     build:
