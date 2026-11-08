@@ -1,0 +1,2940 @@
+{
+  "schema_version": "openmed.tests.decision_encoder_parity.v1",
+  "synthetic": true,
+  "decision_schema_version": "1.2.0",
+  "reference": "openmed.structured.decision_gliclass.GLiClassOnnxRunner + openmed.structured.decision.decide",
+  "tolerance": {
+    "logits": 1e-05,
+    "scores": 1e-06
+  },
+  "tokenizer": {
+    "kind": "openmed.tests.word_level.v1",
+    "vocab": ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "<<LABEL>>", "<<SEP>>", "<<EXAMPLE>>", "a", "after", "and", "at", "blood", "chest", "classify", "clinic", "cough", "day", "deferred", "fall", "fever", "follow", "for", "headache", "high", "in", "is", "labels", "low", "mentions", "moderate", "months", "needs", "no", "note", "of", "ordinary", "pain", "pressure", "priority", "rash", "rest", "review", "risk", "routine", "second", "since", "stable", "started", "summary", "synthetic", "the", "three", "triage", "up", "urgent", "very", "visit", "yes", "yesterday", ":", ",", ".", "-", "{", "}", "\"", "[", "]"],
+    "unk_token": "[UNK]",
+    "cls_token": "[CLS]",
+    "sep_token": "[SEP]",
+    "markers": ["<<LABEL>>", "<<SEP>>", "<<EXAMPLE>>"],
+    "lowercase": "ascii",
+    "word_pattern": "[a-z0-9]+|[^ \\t\\n\\ra-z0-9]"
+  },
+  "encoder": {
+    "kind": "openmed.tests.tiny_gliclass_encoder.v1",
+    "seed": 4266,
+    "hidden_size": 8,
+    "embeddings": [
+      [-0.080521, 0.030233, 0.932768, 0.556269, 0.170838, 0.515373, 0.40095, -0.872175],
+      [0.808138, -0.794931, -0.221937, 0.423539, 0.708673, 0.736486, -0.410279, 0.080611],
+      [-0.873848, 0.176674, -0.850064, -0.107089, -0.905813, -0.513212, 0.300092, -0.763595],
+      [0.37667, 0.588187, -0.107945, 0.782994, -0.057883, -0.626612, -0.760926, 0.300442],
+      [0.453849, -0.119149, -0.672035, -0.59752, 0.578415, 0.064466, -0.160541, -0.510229],
+      [-0.014563, 0.74642, -0.914538, -0.642135, 0.014256, -0.0006, -0.673705, -0.194836],
+      [-0.375297, 0.294912, -0.743862, -0.674747, 0.571015, -0.452798, 0.650226, -0.633964],
+      [-0.897773, 0.974547, 0.317097, 0.956116, -0.33718, 0.392676, -0.88248, -0.459531],
+      [0.50788, 0.840075, -0.547894, -0.635628, -0.370925, -0.879238, 0.893964, 0.257308],
+      [-0.940883, 0.684046, 0.475643, -0.190671, 0.355217, -0.490309, 0.808816, 0.190765],
+      [0.854872, 0.262375, -0.990377, 0.803367, -0.381568, -0.092408, 0.197818, 0.661761],
+      [-0.023137, -0.120412, -0.152895, -0.884963, -0.774613, 0.989302, 0.95389, -0.093043],
+      [-0.503017, -0.942283, 0.084193, 0.997738, -0.130312, 0.987343, 0.230212, 0.449128],
+      [0.238962, -0.077634, -0.268831, 0.909559, -0.893201, 0.581926, 0.076999, 0.656649],
+      [0.638718, 0.880599, 0.418631, -0.343992, 0.36715, 0.050241, 0.586894, 0.483375],
+      [-0.129124, -0.506134, -0.584757, 0.42098, 0.813478, 0.313643, -0.96973, -0.177935],
+      [-0.983383, 0.697656, -0.374423, 0.378196, 0.848195, 0.303696, 0.565408, 0.764633],
+      [0.7795, 0.26836, 0.935995, -0.74371, 0.998351, -0.026717, 0.789981, 0.481876],
+      [0.320929, -0.211692, -0.12897, 0.836367, -0.896859, -0.490848, 0.749536, -0.928448],
+      [-0.064384, 0.580738, 0.22193, -0.789453, -0.653896, 0.444985, -0.96783, -0.110276],
+      [0.822109, 0.040649, -0.877324, -0.725018, 0.260487, 0.492853, -0.126027, 0.524719],
+      [0.773807, 0.923383, -0.958424, -0.201715, -0.133467, 0.126757, -0.773456, 0.407253],
+      [-0.726582, -0.924741, 0.100855, -0.603148, 0.467499, -0.103347, -0.869134, 0.272473],
+      [-0.393069, 0.685512, -0.143855, -0.942036, 0.42168, 0.638931, 0.309095, -0.516421],
+      [-0.335841, -0.934717, 0.343572, 0.796907, 0.977599, -0.828618, 0.042763, 0.181661],
+      [-0.189093, 0.867711, -0.460813, -0.284682, 0.467416, -0.076327, 0.187501, -0.025292],
+      [0.925791, -0.139464, 0.494472, 0.208956, -0.822745, -0.915476, 0.034323, 0.999781],
+      [0.384437, 0.634155, -0.618575, 0.077912, -0.661289, 0.034081, -0.120941, -0.876049],
+      [0.970852, -0.175358, 0.189255, 0.462259, 0.674486, -0.861816, -0.325406, -0.168535],
+      [0.457825, -0.59459, 0.797612, 0.336772, -0.340534, 0.518521, -0.631145, 0.01236],
+      [0.383546, -0.502589, 0.830245, -0.622424, -0.926019, 0.47923, -0.053423, -0.905262],
+      [-0.186342, 0.419178, -0.545256, 0.100334, 0.497468, -0.703975, 0.938153, 0.077203],
+      [0.257007, 0.443183, -0.377742, -0.145217, -0.266489, 0.603151, -0.361469, -0.363679],
+      [0.244799, -0.358681, -0.200268, -0.311483, -0.399588, -0.321394, -0.793145, 0.848517],
+      [-0.121749, -0.04065, -0.788984, 0.88778, 0.237757, 0.024532, -0.664657, 0.960834],
+      [0.867359, 0.735456, 0.323524, 0.207836, -0.567544, 0.782823, 0.931146, 0.328213],
+      [0.926886, -0.142894, 0.381397, 0.683044, -0.189214, 0.487554, 0.366983, 0.811641],
+      [-0.449792, 0.782414, -0.058778, 0.255381, 0.299905, 0.942517, 0.716034, -0.141438],
+      [0.153319, -0.16765, -0.630035, -0.26368, 0.808007, -0.508336, 0.916974, -0.981743],
+      [0.940983, 0.897611, 0.231777, 0.863358, 0.224533, -0.598748, -0.467359, 0.420262],
+      [0.823621, 0.536869, -0.892015, -0.712603, 0.182693, 0.967375, 0.972764, 0.463705],
+      [0.54969, -0.515694, -0.357006, -0.295755, 0.357995, -0.771027, 0.893621, -0.105908],
+      [0.126465, 0.993889, 0.737288, 0.872791, -0.998757, 0.307983, -0.89006, -0.165616],
+      [0.46036, -0.181151, -0.733776, 0.869524, 0.021737, 0.526251, 0.687848, -0.652975],
+      [0.87485, -0.005065, 0.786599, -0.484183, -0.92223, -0.058218, 0.33804, -0.043844],
+      [0.760863, 0.530634, -0.74989, 0.621167, -0.529469, 0.709424, 0.914007, 0.82558],
+      [-0.217841, -0.318263, 0.179698, -0.493952, 0.817305, 0.309757, 0.290921, 0.179227],
+      [0.572383, 0.638236, -0.552789, -0.00073, 0.619796, 0.25736, -0.612381, 0.607829],
+      [0.611119, 0.47448, -0.196706, -0.080681, -0.044167, 0.846999, -0.195298, -0.805688],
+      [-0.466296, 0.049373, -0.34931, -0.605007, -0.902261, 0.177406, 0.978211, 0.259241],
+      [-0.925758, 0.254578, -0.633312, -0.850437, -0.762115, 0.024954, -0.395874, -0.822692],
+      [-0.417662, 0.358743, 0.978858, 0.283016, 0.561969, 0.867633, 0.326666, 0.989579],
+      [0.246209, -0.925285, -0.575307, -0.618297, -0.99988, 0.922755, -0.841346, 0.230957],
+      [-0.656915, -0.50834, -0.935057, 0.140325, -0.305229, 0.439819, 0.499032, 0.864337],
+      [0.944222, 0.565876, -0.059015, 0.432507, -0.146737, -0.268161, 0.155237, 0.755762],
+      [-0.136082, 0.760313, 0.207582, 0.431266, -0.103234, -0.923771, 0.438783, -0.921308],
+      [-0.673112, -0.224956, -0.776801, -0.432945, -0.937094, -0.493334, -0.89113, 0.170787],
+      [-0.812033, 0.905604, -0.088024, -0.203105, -0.009985, 0.132584, 0.404087, -0.287858],
+      [-0.348352, 0.896671, -0.218748, -0.507544, -0.373551, -0.288733, -0.200368, 0.656494],
+      [-0.705748, 0.878244, 0.157934, 0.625175, 0.832958, 0.137018, -0.771045, -0.591889],
+      [-0.297066, 0.536942, 0.294304, -0.460001, -0.451586, 0.84355, 0.468291, -0.396352],
+      [0.757508, 0.045125, 0.220773, -0.47959, 0.102757, 0.176712, -0.428258, 0.880717],
+      [-0.329109, -0.429664, -0.635894, 0.739744, 0.289778, -0.871013, 0.999742, 0.705282],
+      [-0.251076, -0.845366, -0.48975, 0.460019, -0.066684, -0.761483, 0.999351, 0.423302],
+      [-0.667132, 0.12286, -0.35624, -0.978385, -0.684144, 0.8447, -0.006236, 0.727601],
+      [0.163845, 0.378659, 0.852243, -0.102248, 0.555893, -0.901296, -0.946435, -0.794835],
+      [0.192415, 0.940163, -0.040226, -0.732328, -0.239364, 0.964166, 0.091021, -0.890403],
+      [0.987696, -0.339477, 0.385758, 0.884619, 0.000269, 0.565561, -0.383124, 0.31611]
+    ],
+    "projection": [
+      [0.376171, -0.649335, 0.81799, -0.044392, -0.212947, -0.398779, -0.126027, 0.37068],
+      [0.619674, 0.715527, 0.368433, 0.21315, 0.092712, 0.09242, -0.983408, 0.471372],
+      [-0.746795, 0.250407, 0.545359, -0.933184, 0.950219, 0.593073, 0.464141, 0.735689],
+      [-0.119569, 0.584188, -0.705303, -0.134819, 0.820264, -0.721722, 0.424534, -0.496034],
+      [-0.405927, 0.856641, 0.77453, -0.273863, 0.567021, -0.297426, -0.558989, -0.946978],
+      [-0.019871, -0.325121, -0.768074, -0.576837, -0.534838, -0.410973, 0.794417, -0.885898],
+      [0.227782, -0.444627, -0.012371, -0.010617, -0.964607, -0.693478, 0.981406, 0.613972],
+      [-0.00129, -0.361305, -0.322068, 0.555397, -0.616771, -0.560565, -0.24848, 0.565923]
+    ],
+    "projection_bias": [0.057949, 0.091578, -0.014206, 0.015268, 0.096882, 0.024553, -0.020272, 0.028473],
+    "logit_scale": 8.0,
+    "logit_bias": -2.0,
+    "label_token_id": 4,
+    "separator_token_id": 5,
+    "ignored_token_ids": [0, 1, 2, 3, 5, 6],
+    "input_names": ["input_ids", "attention_mask"],
+    "output_name": "logits",
+    "output_dtype": "float32"
+  },
+  "backend": {
+    "backend_id": "openmed.tests.tiny_gliclass.v1",
+    "model_id": "openmed/tiny-random-gliclass-encoder",
+    "revision": "1.0.0",
+    "license_id": "Apache-2.0",
+    "runtime": "onnxruntime"
+  },
+  "runtimes": {
+    "default": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": null
+    },
+    "prompted": {
+      "prompt": "Classify the synthetic triage note.",
+      "examples": [
+        {
+          "text": "Synthetic note: chest pain at rest.",
+          "labels": ["urgent"]
+        }
+      ],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": null
+    },
+    "legacy_layout": {
+      "prompt": "Classify the synthetic triage note.",
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": false,
+      "max_length": 2048,
+      "fault": null
+    },
+    "three_levels": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["low", "moderate", "high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": null
+    },
+    "short_budget": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 12,
+      "fault": null
+    },
+    "encoder_raises": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": "raise"
+    },
+    "encoder_short_output": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": "short"
+    },
+    "encoder_non_finite": {
+      "prompt": null,
+      "examples": [],
+      "score_levels": ["very low", "low", "moderate", "high", "very high"],
+      "prompt_first": true,
+      "max_length": 2048,
+      "fault": "non_finite"
+    }
+  },
+  "cases": [
+    {
+      "id": "fixed_choice_success",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553, -0.846278965473175]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.8988964205730088
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.08311841651995146
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.01798516290703965
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.8988964205730088,
+          "margin": 0.8157780040530573,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "fixed_choice_low_confidence",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic summary of an ordinary clinic day.",
+        "options": ["urgent", "routine", "deferred", "review", "visit"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 4, 41, 4, 56, 5, 49, 48, 34, 1, 35, 14, 16, 61, 3],
+            "logits": [3.051640748977661, 1.770588755607605, -1.0360361337661743, 1.950621247291565, 0.3517730236053467]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "abstained",
+          "code": "low_confidence",
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.5902248992954631
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.16393199154934943
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.009902891317455734
+            },
+            {
+              "index": 3,
+              "option": "review",
+              "score": 0.19626860364785978
+            },
+            {
+              "index": 4,
+              "option": "visit",
+              "score": 0.03967161418987199
+            }
+          ],
+          "choice": null,
+          "choices": [],
+          "ranking": ["urgent", "review", "routine", "visit", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.5902248992954631,
+          "margin": 0.39395629564760326,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "low_confidence"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "low_confidence"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "fixed_choice_ambiguous_with_supplied_profile",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic note: urgent or routine follow-up review.",
+        "options": ["urgent", "routine", "deferred", "review", "visit"],
+        "calibration_id": "openmed.tests.lenient.v1",
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": [
+        {
+          "calibration_id": "openmed.tests.lenient.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.4,
+          "minimum_margin": 0.3,
+          "multi_label_threshold": 0.55,
+          "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 4, 41, 4, 56, 5, 49, 33, 59, 54, 1, 43, 20, 62, 53, 41, 61, 3],
+            "logits": [3.708218812942505, 2.054901123046875, -1.25638747215271, 3.3427834510803223, 1.7062575817108154]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "abstained",
+          "code": "ambiguous_scores",
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.4932525248563237
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.09441534130868216
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.003443247196492451
+            },
+            {
+              "index": 3,
+              "option": "review",
+              "score": 0.3422652091323855
+            },
+            {
+              "index": 4,
+              "option": "visit",
+              "score": 0.06662367750611616
+            }
+          ],
+          "choice": null,
+          "choices": [],
+          "ranking": ["urgent", "review", "routine", "visit", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.4932525248563237,
+          "margin": 0.1509873157239382,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.tests.lenient.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.4,
+            "minimum_margin": 0.3,
+            "multi_label_threshold": 0.55,
+            "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "ambiguous_scores"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "ambiguous_scores"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "supplied_profile_changes_the_outcome",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic summary of an ordinary clinic day.",
+        "options": ["urgent", "routine", "deferred", "review", "visit"],
+        "calibration_id": "openmed.tests.lenient.v1",
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": [
+        {
+          "calibration_id": "openmed.tests.lenient.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.4,
+          "minimum_margin": 0.3,
+          "multi_label_threshold": 0.55,
+          "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 4, 41, 4, 56, 5, 49, 48, 34, 1, 35, 14, 16, 61, 3],
+            "logits": [3.051640748977661, 1.770588755607605, -1.0360361337661743, 1.950621247291565, 0.3517730236053467]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.5902248992954631
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.16393199154934943
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.009902891317455734
+            },
+            {
+              "index": 3,
+              "option": "review",
+              "score": 0.19626860364785978
+            },
+            {
+              "index": 4,
+              "option": "visit",
+              "score": 0.03967161418987199
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "review", "routine", "visit", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.5902248992954631,
+          "margin": 0.39395629564760326,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.tests.lenient.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.4,
+            "minimum_margin": 0.3,
+            "multi_label_threshold": 0.55,
+            "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "boolean_choice_base_contract",
+      "runtime": "default",
+      "request": {
+        "mode": "boolean_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553]
+          }
+        ],
+        "result": {
+          "mode": "boolean_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.9153593068247264
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.08464069317527352
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine"],
+          "scalar_score": null,
+          "confidence": 0.9153593068247264,
+          "margin": 0.8307186136494529,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "ordered_preference_strips_options",
+      "runtime": "default",
+      "request": {
+        "mode": "ordered_preference",
+        "input_text": "Synthetic follow-up note: stable blood pressure, routine visit in months.",
+        "options": [" routine ", "urgent", "deferred", "follow-up"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 43, 4, 54, 4, 17, 4, 20, 62, 53, 5, 49, 20, 62, 53, 33, 59, 46, 11, 37, 60, 43, 56, 24, 30, 61, 3],
+            "logits": [0.9348049759864807, -1.3965389728546143, -3.2949886322021484, 2.632960796356201]
+          }
+        ],
+        "result": {
+          "mode": "ordered_preference",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "routine",
+              "score": 0.15207778815627643
+            },
+            {
+              "index": 1,
+              "option": "urgent",
+              "score": 0.014776649602518718
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.002213552178890453
+            },
+            {
+              "index": 3,
+              "option": "follow-up",
+              "score": 0.8309320100623144
+            }
+          ],
+          "choice": "follow-up",
+          "choices": ["follow-up"],
+          "ranking": ["follow-up", "routine", "urgent", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.8309320100623144,
+          "margin": 0.6788542219060381,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "multi_label_success",
+      "runtime": "default",
+      "request": {
+        "mode": "multi_label",
+        "input_text": "Synthetic note mentions fever and cough since yesterday.",
+        "options": ["fever", "cough", "rash", "headache"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 19, 4, 15, 4, 39, 4, 22, 5, 49, 33, 28, 19, 9, 15, 45, 58, 61, 3],
+            "logits": [0.5251826047897339, -3.36146879196167, 0.9859676957130432, -3.206338405609131]
+          }
+        ],
+        "result": {
+          "mode": "multi_label",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "fever",
+              "score": 0.6283588318975623
+            },
+            {
+              "index": 1,
+              "option": "cough",
+              "score": 0.03352160487862429
+            },
+            {
+              "index": 2,
+              "option": "rash",
+              "score": 0.7282907314257179
+            },
+            {
+              "index": 3,
+              "option": "headache",
+              "score": 0.03892789286799979
+            }
+          ],
+          "choice": "rash",
+          "choices": ["rash"],
+          "ranking": ["rash", "fever", "headache", "cough"],
+          "scalar_score": null,
+          "confidence": 0.7282907314257179,
+          "margin": 0.09993189952815562,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "multi_label_supplied_threshold_keeps_input_order",
+      "runtime": "default",
+      "request": {
+        "mode": "multi_label",
+        "input_text": "Synthetic note mentions fever and cough since yesterday.",
+        "options": ["fever", "cough", "rash", "headache"],
+        "calibration_id": "openmed.tests.lenient.v1",
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": [
+        {
+          "calibration_id": "openmed.tests.lenient.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.4,
+          "minimum_margin": 0.3,
+          "multi_label_threshold": 0.55,
+          "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ],
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 19, 4, 15, 4, 39, 4, 22, 5, 49, 33, 28, 19, 9, 15, 45, 58, 61, 3],
+            "logits": [0.5251826047897339, -3.36146879196167, 0.9859676957130432, -3.206338405609131]
+          }
+        ],
+        "result": {
+          "mode": "multi_label",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "fever",
+              "score": 0.6283588318975623
+            },
+            {
+              "index": 1,
+              "option": "cough",
+              "score": 0.03352160487862429
+            },
+            {
+              "index": 2,
+              "option": "rash",
+              "score": 0.7282907314257179
+            },
+            {
+              "index": 3,
+              "option": "headache",
+              "score": 0.03892789286799979
+            }
+          ],
+          "choice": "fever",
+          "choices": ["fever", "rash"],
+          "ranking": ["rash", "fever", "headache", "cough"],
+          "scalar_score": null,
+          "confidence": 0.7282907314257179,
+          "margin": 0.09993189952815562,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.tests.lenient.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.4,
+            "minimum_margin": 0.3,
+            "multi_label_threshold": 0.55,
+            "in_domain_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "out_of_domain_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "multi_label_no_label_above_threshold",
+      "runtime": "default",
+      "request": {
+        "mode": "multi_label",
+        "input_text": "Synthetic summary of an ordinary clinic day.",
+        "options": ["fever", "cough", "rash", "headache"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 19, 4, 15, 4, 39, 4, 22, 5, 49, 48, 34, 1, 35, 14, 16, 61, 3],
+            "logits": [-1.8822367191314697, -3.4077470302581787, -0.6758719682693481, -5.466952323913574]
+          }
+        ],
+        "result": {
+          "mode": "multi_label",
+          "state": "abstained",
+          "code": "no_label_above_threshold",
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "fever",
+              "score": 0.13213217055485968
+            },
+            {
+              "index": 1,
+              "option": "cough",
+              "score": 0.03205422617702685
+            },
+            {
+              "index": 2,
+              "option": "rash",
+              "score": 0.33718325836504753
+            },
+            {
+              "index": 3,
+              "option": "headache",
+              "score": 0.004206318355729942
+            }
+          ],
+          "choice": null,
+          "choices": [],
+          "ranking": ["rash", "fever", "cough", "headache"],
+          "scalar_score": null,
+          "confidence": 0.33718325836504753,
+          "margin": 0.20505108781018785,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "no_label_above_threshold"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "no_label_above_threshold"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "scalar_score_backend_levels",
+      "runtime": "three_levels",
+      "request": {
+        "mode": "scalar_score",
+        "input_text": "Synthetic risk is high after the second fall.",
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 27, 4, 29, 4, 23, 5, 49, 42, 25, 23, 8, 50, 44, 18, 61, 3],
+            "logits": [1.3210258483886719, -4.481684684753418, -0.19333598017692566]
+          }
+        ],
+        "result": {
+          "mode": "scalar_score",
+          "state": "success",
+          "code": null,
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": 0.18108258698902535,
+          "confidence": 0.8176829735554374,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "scalar_score_low_confidence",
+      "runtime": "default",
+      "request": {
+        "mode": "scalar_score",
+        "input_text": "Synthetic risk is high after the second fall.",
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 55, 27, 4, 27, 4, 29, 4, 23, 4, 55, 23, 5, 49, 42, 25, 23, 8, 50, 44, 18, 61, 3],
+            "logits": [0.9245191812515259, 1.3210258483886719, -4.481684684753418, -0.19333598017692566, -0.08505535125732422]
+          }
+        ],
+        "result": {
+          "mode": "scalar_score",
+          "state": "abstained",
+          "code": "low_confidence",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": 0.4671291569739626,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "low_confidence"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "low_confidence"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "request_levels_are_backend_unsupported",
+      "runtime": "default",
+      "request": {
+        "mode": "scalar_score",
+        "input_text": "Synthetic risk is high after the second fall.",
+        "levels": ["low", "high"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "scalar_score",
+          "state": "unsupported",
+          "code": "backend_unsupported",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_unsupported"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "request_instructions_are_backend_unsupported",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "instructions": "Pick the review priority."
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "unsupported",
+          "code": "backend_unsupported",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_unsupported"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.1.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "question_set_success",
+      "runtime": "default",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "questions": [
+          {
+            "question_id": "priority",
+            "mode": "fixed_choice",
+            "options": ["urgent", "routine", "deferred"]
+          },
+          {
+            "question_id": "stability",
+            "mode": "boolean_choice",
+            "options": ["stable", "urgent"]
+          }
+        ]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553, -0.846278965473175]
+          },
+          {
+            "input_ids": [2, 4, 46, 4, 54, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [-2.515768527984619, 3.0653417110443115]
+          }
+        ],
+        "result": {
+          "mode": "question_set",
+          "state": "success",
+          "code": null,
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [
+            {
+              "question_id": "priority",
+              "mode": "fixed_choice",
+              "state": "success",
+              "code": null,
+              "option_scores": [
+                {
+                  "index": 0,
+                  "option": "urgent",
+                  "score": 0.8988964205730088
+                },
+                {
+                  "index": 1,
+                  "option": "routine",
+                  "score": 0.08311841651995146
+                },
+                {
+                  "index": 2,
+                  "option": "deferred",
+                  "score": 0.01798516290703965
+                }
+              ],
+              "choice": "urgent",
+              "choices": ["urgent"],
+              "ranking": ["urgent", "routine", "deferred"],
+              "scalar_score": null,
+              "confidence": 0.8988964205730088,
+              "margin": 0.8157780040530573,
+              "level_scores": [],
+              "expected_level": null,
+              "warnings": ["human_review_required"],
+              "review": {
+                "required": true,
+                "reasons": ["clinical_use_requires_review"]
+              }
+            },
+            {
+              "question_id": "stability",
+              "mode": "boolean_choice",
+              "state": "success",
+              "code": null,
+              "option_scores": [
+                {
+                  "index": 0,
+                  "option": "stable",
+                  "score": 0.0037542320229499875
+                },
+                {
+                  "index": 1,
+                  "option": "urgent",
+                  "score": 0.99624576797705
+                }
+              ],
+              "choice": "urgent",
+              "choices": ["urgent"],
+              "ranking": ["urgent", "stable"],
+              "scalar_score": null,
+              "confidence": 0.99624576797705,
+              "margin": 0.9924915359541,
+              "level_scores": [],
+              "expected_level": null,
+              "warnings": ["human_review_required"],
+              "review": {
+                "required": true,
+                "reasons": ["clinical_use_requires_review"]
+              }
+            }
+          ],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.1.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "question_set_partial",
+      "runtime": "default",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "questions": [
+          {
+            "question_id": "priority",
+            "mode": "fixed_choice",
+            "options": ["urgent", "routine", "deferred"]
+          },
+          {
+            "question_id": "symptoms",
+            "mode": "multi_label",
+            "options": ["fever", "rash", "headache"]
+          },
+          {
+            "question_id": "worded",
+            "mode": "fixed_choice",
+            "options": ["yes", "no"],
+            "instructions": "Is review needed?"
+          }
+        ],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553, -0.846278965473175]
+          },
+          {
+            "input_ids": [2, 4, 19, 4, 39, 4, 22, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [-1.669974684715271, -0.9163593649864197, -4.992788314819336]
+          }
+        ],
+        "result": {
+          "mode": "question_set",
+          "state": "partial",
+          "code": "question_set_partial",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [
+            {
+              "question_id": "priority",
+              "mode": "fixed_choice",
+              "state": "success",
+              "code": null,
+              "option_scores": [
+                {
+                  "index": 0,
+                  "option": "urgent",
+                  "score": 0.8988964205730088
+                },
+                {
+                  "index": 1,
+                  "option": "routine",
+                  "score": 0.08311841651995146
+                },
+                {
+                  "index": 2,
+                  "option": "deferred",
+                  "score": 0.01798516290703965
+                }
+              ],
+              "choice": "urgent",
+              "choices": ["urgent"],
+              "ranking": ["urgent", "routine", "deferred"],
+              "scalar_score": null,
+              "confidence": 0.8988964205730088,
+              "margin": 0.8157780040530573,
+              "level_scores": [],
+              "expected_level": null,
+              "warnings": ["human_review_required"],
+              "review": {
+                "required": true,
+                "reasons": ["clinical_use_requires_review"]
+              }
+            },
+            {
+              "question_id": "symptoms",
+              "mode": "multi_label",
+              "state": "abstained",
+              "code": "no_label_above_threshold",
+              "option_scores": [
+                {
+                  "index": 0,
+                  "option": "fever",
+                  "score": 0.15842755405874012
+                },
+                {
+                  "index": 1,
+                  "option": "rash",
+                  "score": 0.2857002791626819
+                },
+                {
+                  "index": 2,
+                  "option": "headache",
+                  "score": 0.006740965579061636
+                }
+              ],
+              "choice": null,
+              "choices": [],
+              "ranking": ["rash", "fever", "headache"],
+              "scalar_score": null,
+              "confidence": 0.2857002791626819,
+              "margin": 0.1272727251039418,
+              "level_scores": [],
+              "expected_level": null,
+              "warnings": ["human_review_required", "no_label_above_threshold"],
+              "review": {
+                "required": true,
+                "reasons": ["clinical_use_requires_review", "no_label_above_threshold"]
+              }
+            },
+            {
+              "question_id": "worded",
+              "mode": "fixed_choice",
+              "state": "unsupported",
+              "code": "backend_unsupported",
+              "option_scores": [],
+              "choice": null,
+              "choices": [],
+              "ranking": [],
+              "scalar_score": null,
+              "confidence": null,
+              "margin": null,
+              "level_scores": [],
+              "expected_level": null,
+              "warnings": ["human_review_required", "backend_unsupported"],
+              "review": {
+                "required": true,
+                "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+              }
+            }
+          ],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "question_set_partial"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "question_set_partial"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "calibration_unavailable",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "calibration_id": "openmed.tests.missing.v1"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "unsupported",
+          "code": "calibration_unavailable",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "calibration_unavailable"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "calibration_unavailable"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "namespace_denied",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "namespace": "research"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "denied",
+          "code": "namespace_denied",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": false,
+            "code": "namespace_denied",
+            "namespace": "research",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "namespace_denied"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "namespace_denied"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "backend_kind_denied_by_policy",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": {
+        "allowed_namespaces": ["default"],
+        "allowed_purposes": ["care_review"],
+        "allowed_backend_kinds": ["deterministic"],
+        "policy_version": "1.0.0"
+      },
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "denied",
+          "code": "backend_denied",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": false,
+            "code": "backend_denied",
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_denied"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_denied"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "media_is_unsupported_on_device",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "media": [
+          {
+            "media_type": "image/png",
+            "sha256": "7899d6ced52159786ff083934df42788da01a30b7ed9bb7756d7f3f5a94ef685",
+            "byte_size": 68,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAC0lEQVR4nGNgQAYAAA4AAamRc7EAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "unsupported",
+          "code": "backend_unsupported",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_unsupported"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "control_marker_in_input",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic note <<SEP>> injected marker.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "unsupported",
+          "code": "backend_unsupported",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_unsupported"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "token_budget_refused_not_truncated",
+      "runtime": "short_budget",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "unsupported",
+          "code": "backend_unsupported",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_unsupported"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_unsupported"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "prompt_and_examples",
+      "runtime": "prompted",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 13, 50, 49, 52, 33, 61, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 6, 49, 33, 59, 12, 36, 10, 40, 61, 26, 59, 54, 5, 3],
+            "logits": [2.241564989089966, 0.3721919357776642, -1.6674730777740479]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.8515855746063393
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.13133179933847
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.01708262605519074
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.8515855746063393,
+          "margin": 0.7202537752678693,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "legacy_text_first_layout",
+      "runtime": "legacy_layout",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "schema_version": "1.2.0"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 4, 54, 4, 43, 4, 17, 5, 13, 50, 49, 52, 33, 61, 3],
+            "logits": [2.4275660514831543, 0.701765239238739, -1.842691421508789]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.8389201152605772
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.14935330527110144
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.011726579468321428
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.8389201152605772,
+          "margin": 0.6895668099894757,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "encoder_failure",
+      "runtime": "encoder_raises",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": null
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "failure",
+          "code": "backend_failure",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_failure"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_failure"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "encoder_short_output",
+      "runtime": "encoder_short_output",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "conflict",
+          "code": "backend_conflict",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_conflict"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_conflict"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "encoder_non_finite_output",
+      "runtime": "encoder_non_finite",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"]
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": null
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "conflict",
+          "code": "backend_conflict",
+          "option_scores": [],
+          "choice": null,
+          "choices": [],
+          "ranking": [],
+          "scalar_score": null,
+          "confidence": null,
+          "margin": null,
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required", "backend_conflict"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review", "backend_conflict"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.0.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "json_input_format",
+      "runtime": "default",
+      "request": {
+        "mode": "boolean_choice",
+        "input_text": "{\"note\": \"synthetic urgent review\", \"priority\": \"urgent\"}",
+        "options": ["urgent", "routine"],
+        "input_format": "json"
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 5, 63, 65, 33, 65, 59, 65, 49, 54, 41, 65, 60, 65, 38, 65, 59, 65, 54, 65, 64, 3],
+            "logits": [-0.5172389149665833, -6.452836990356445]
+          }
+        ],
+        "result": {
+          "mode": "boolean_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.9973633292265404
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.002636670773459592
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine"],
+          "scalar_score": null,
+          "confidence": 0.9973633292265404,
+          "margin": 0.9947266584530807,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.1.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    },
+    {
+      "id": "future_minor_serves_current_contract",
+      "runtime": "default",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["urgent", "routine", "deferred"],
+        "schema_version": "1.9.0",
+        "max_input_chars": 512
+      },
+      "calibration_profiles": null,
+      "policy": null,
+      "expected": {
+        "encoder_calls": [
+          {
+            "input_ids": [2, 4, 54, 4, 43, 4, 17, 5, 49, 52, 33, 59, 12, 36, 47, 10, 40, 9, 31, 54, 41, 61, 3],
+            "logits": [3.0653417110443115, 0.6844401955604553, -0.846278965473175]
+          }
+        ],
+        "result": {
+          "mode": "fixed_choice",
+          "state": "success",
+          "code": null,
+          "option_scores": [
+            {
+              "index": 0,
+              "option": "urgent",
+              "score": 0.8988964205730088
+            },
+            {
+              "index": 1,
+              "option": "routine",
+              "score": 0.08311841651995146
+            },
+            {
+              "index": 2,
+              "option": "deferred",
+              "score": 0.01798516290703965
+            }
+          ],
+          "choice": "urgent",
+          "choices": ["urgent"],
+          "ranking": ["urgent", "routine", "deferred"],
+          "scalar_score": null,
+          "confidence": 0.8988964205730088,
+          "margin": 0.8157780040530573,
+          "level_scores": [],
+          "expected_level": null,
+          "questions": [],
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "version": "1.0.0",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+          },
+          "backend": {
+            "backend_id": "openmed.tests.tiny_gliclass.v1",
+            "kind": "encoder",
+            "runtime": "onnxruntime",
+            "model_id": "openmed/tiny-random-gliclass-encoder",
+            "revision": "1.0.0",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "deterministic": false
+          },
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "purpose": "care_review",
+            "policy_version": "1.0.0"
+          },
+          "warnings": ["human_review_required"],
+          "review": {
+            "required": true,
+            "reasons": ["clinical_use_requires_review"]
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "schema_version": "1.2.0",
+          "compatibility_policy": "same_major",
+          "extensions": {}
+        }
+      }
+    }
+  ],
+  "invalid_requests": [
+    {
+      "id": "unknown_field",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "x": 1
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "missing_input",
+      "request": {
+        "mode": "fixed_choice",
+        "options": ["a", "b"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "blank_input",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "   ",
+        "options": ["a", "b"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "nul_in_input",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "a\u0000b",
+        "options": ["a", "b"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "input_over_declared_bound",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "max_input_chars": 16
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "bad_mode",
+      "request": {
+        "mode": "free_text",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "one_option",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["only"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "boolean_with_three_options",
+      "request": {
+        "mode": "boolean_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b", "c"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "duplicate_options_after_normalization",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["Urgent", " urgent"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "option_with_control_character",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a\tb", "c"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "blank_option",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "  "]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "scalar_with_options",
+      "request": {
+        "mode": "scalar_score",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "levels_without_scalar_mode",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "levels": ["low", "high"]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "uppercase_namespace",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "namespace": "Default"
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "zero_timeout",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "timeout_ms": 0
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "boolean_timeout",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "timeout_ms": true
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "malformed_schema_version",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "schema_version": "1.2"
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "unsupported_schema_major",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "schema_version": "2.0.0"
+      },
+      "error": "unsupported_contract"
+    },
+    {
+      "id": "question_fields_on_base_contract",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "question_id": "priority",
+        "schema_version": "1.0.0"
+      },
+      "error": "unsupported_contract"
+    },
+    {
+      "id": "media_on_question_contract",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "schema_version": "1.1.0",
+        "media": [
+          {
+            "media_type": "image/png",
+            "sha256": "7899d6ced52159786ff083934df42788da01a30b7ed9bb7756d7f3f5a94ef685",
+            "byte_size": 68,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAC0lEQVR4nGNgQAYAAA4AAamRc7EAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "error": "unsupported_contract"
+    },
+    {
+      "id": "media_with_unsupported_type",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "media": [
+          {
+            "media_type": "image/gif",
+            "sha256": "7899d6ced52159786ff083934df42788da01a30b7ed9bb7756d7f3f5a94ef685",
+            "byte_size": 68,
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAC0lEQVR4nGNgQAYAAA4AAamRc7EAAAAASUVORK5CYII="
+          }
+        ]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "other_compatibility_policy",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "compatibility_policy": "strict"
+      },
+      "error": "unsupported_contract"
+    },
+    {
+      "id": "question_set_with_top_level_options",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "questions": [
+          {
+            "question_id": "q",
+            "mode": "boolean_choice",
+            "options": ["a", "b"]
+          }
+        ]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "question_set_duplicate_identifiers",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "questions": [
+          {
+            "question_id": "q",
+            "mode": "boolean_choice",
+            "options": ["a", "b"]
+          },
+          {
+            "question_id": "q",
+            "mode": "boolean_choice",
+            "options": ["c", "d"]
+          }
+        ]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "nested_question_set",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "questions": [
+          {
+            "question_id": "q",
+            "mode": "question_set"
+          }
+        ]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "question_with_unknown_field",
+      "request": {
+        "mode": "question_set",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "questions": [
+          {
+            "question_id": "q",
+            "mode": "boolean_choice",
+            "options": ["a", "b"],
+            "weight": 1
+          }
+        ]
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "json_input_that_is_not_a_container",
+      "request": {
+        "mode": "boolean_choice",
+        "input_text": "42",
+        "options": ["a", "b"],
+        "input_format": "json"
+      },
+      "error": "invalid_request"
+    },
+    {
+      "id": "misaligned_option_descriptions",
+      "request": {
+        "mode": "fixed_choice",
+        "input_text": "Synthetic triage note: chest pain started at rest and needs urgent review.",
+        "options": ["a", "b"],
+        "option_descriptions": ["only one"]
+      },
+      "error": "invalid_request"
+    }
+  ]
+}
