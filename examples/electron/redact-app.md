@@ -26,15 +26,25 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  protocol,
   session,
   utilityProcess,
 } from "electron/main";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ElectronDeidentifyService,
+  OPENMED_RENDERER_CSP,
+  createHardenedWebPreferences,
+  hardenOpenMedSession,
+  hardenOpenMedWebContents,
   registerElectronDeidentifyIpc,
 } from "@openmed/openmedkit-electron";
 
+const APP_ORIGIN = "app://openmed";
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { standard: true, secure: true } },
+]);
 await app.whenReady();
 
 const offlineSession = session.fromPartition("openmed-offline-inference", {
@@ -52,25 +62,48 @@ const service = new ElectronDeidentifyService({
   ),
 });
 
-const window = new BrowserWindow({
-  webPreferences: {
-    contextIsolation: true,
-    nodeIntegration: false,
-    preload: join(__dirname, "preload.cjs"),
-  },
+// Serve the renderer from a local app scheme with the OpenMed CSP.
+const rendererSession = session.fromPartition("openmed-renderer");
+const rendererFiles = new Set(["/index.html", "/renderer.js"]);
+rendererSession.protocol.handle("app", async (request) => {
+  const { host, pathname } = new URL(request.url);
+  if (host !== "openmed" || !rendererFiles.has(pathname)) {
+    return new Response(null, { status: 404 });
+  }
+  return new Response(await readFile(join(__dirname, "renderer", pathname)), {
+    headers: {
+      "content-type": pathname.endsWith(".html") ? "text/html" : "text/javascript",
+      "content-security-policy": OPENMED_RENDERER_CSP,
+    },
+  });
 });
+hardenOpenMedSession(rendererSession, { allowedOrigins: [APP_ORIGIN] });
+
+const window = new BrowserWindow({
+  webPreferences: createHardenedWebPreferences({
+    preload: join(__dirname, "preload.cjs"),
+    partition: "openmed-renderer",
+  }),
+});
+hardenOpenMedWebContents(window.webContents, { allowedOrigins: [APP_ORIGIN] });
 const unregister = registerElectronDeidentifyIpc(ipcMain, service, {
   isTrustedSender: (event) =>
     event.sender === window.webContents &&
     event.senderFrame === window.webContents.mainFrame,
 });
-await window.loadFile("index.html");
+await window.loadURL(`${APP_ORIGIN}/index.html`);
 
 app.once("before-quit", () => {
   unregister();
   service.dispose();
 });
 ```
+
+`registerElectronDeidentifyIpc` refuses any sender whose web preferences are
+relaxed, even when `isTrustedSender` accepts it, so always build windows with
+`createHardenedWebPreferences`. To run a signed portable bundle instead of an
+unverified model directory, pass `bundle` in place of `modelPath` (see
+[Electron In-Process De-identification](../../docs/runtimes/electron.md)).
 
 Create the service once, outside the window factory. Every window then shares
 the same utility process and its in-memory pipeline cache.
@@ -87,6 +120,11 @@ contextBridge.exposeInMainWorld(
 );
 ```
 
+Sandboxed preloads can only `require("electron")`, so bundle the preload into
+one CommonJS file (for example with esbuild, `--platform=browser
+--format=cjs --external:electron --external:node:*`; the renderer client never
+reaches the `openmed` package's Node-only fallbacks).
+
 ## Renderer
 
 ```ts
@@ -94,12 +132,20 @@ import { redactTextWithSpans } from "@openmed/openmedkit-electron/renderer";
 
 const note =
   "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
-const result = await window.openmed.deidentify(note);
-document.querySelector("#redacted")!.textContent = redactTextWithSpans(
-  note,
-  result.spans,
-);
+const task = window.openmed.submit(note);
+// `outcome` never rejects, so its error code survives the context bridge.
+const outcome = await task.outcome;
+if (outcome.ok) {
+  document.querySelector("#redacted")!.textContent = redactTextWithSpans(
+    note,
+    outcome.spans,
+  );
+} else {
+  document.querySelector("#status")!.textContent = outcome.errorCode;
+}
 ```
+
+Call `task.cancel()` to drop a request; it settles with `CANCELLED`.
 
 The rendered output is:
 

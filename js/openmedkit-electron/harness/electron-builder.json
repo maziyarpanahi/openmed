@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/app-builder-lib/scheme.json",
+  "appId": "org.openmed.harness.electron",
+  "productName": "OpenMedKit Electron Harness",
+  "directories": {
+    "app": "build/app",
+    "output": "dist",
+    "buildResources": "build/build-resources"
+  },
+  "electronDist": "node_modules/electron/dist",
+  "files": ["**/*"],
+  "asar": true,
+  "extraResources": [
+    {
+      "from": "build/resources/openmed-harness",
+      "to": "openmed-harness"
+    }
+  ],
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false,
+  "includePdb": false,
+  "publish": null,
+  "electronFuses": {
+    "runAsNode": false,
+    "enableCookieEncryption": true,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true,
+    "grantFileProtocolExtraPrivileges": false,
+    "resetAdHocDarwinSignature": true
+  },
+  "mac": {
+    "target": ["dir"],
+    "identity": null,
+    "hardenedRuntime": false,
+    "notarize": false
+  },
+  "linux": {
+    "target": ["dir"],
+    "executableName": "openmedkit-electron-harness",
+    "category": "Development"
+  },
+  "win": {
+    "target": ["dir"],
+    "signAndEditExecutable": false
+  }
+}

@@ -1,0 +1,91 @@
+name: Electron packaged harness
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/electron-harness.yml'
+      - 'js/openmedkit-electron/**'
+      - 'js/openmedkit-web/src/**'
+      - 'tests/web/electron_test_support.ts'
+      - 'tests/web/test_electron_*'
+      - 'tests/web/fixtures/npm_deidentify_golden.json'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/portable_bundle/**'
+  pull_request:
+    paths:
+      - '.github/workflows/electron-harness.yml'
+      - 'js/openmedkit-electron/**'
+      - 'js/openmedkit-web/src/**'
+      - 'tests/web/electron_test_support.ts'
+      - 'tests/web/test_electron_*'
+      - 'tests/web/fixtures/npm_deidentify_golden.json'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/portable_bundle/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  packaged-harness:
+    name: Packaged Electron harness (Linux, xvfb)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            js/openmedkit-electron/package-lock.json
+            js/openmedkit-electron/harness/package-lock.json
+
+      - name: Install the virtual display and Electron runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libnss3 libgbm1 libgtk-3-0t64 libasound2t64
+
+      - name: Test the Electron integration with fakes
+        run: |
+          npm ci --prefix js/openmedkit-electron
+          npm --prefix js/openmedkit-electron test
+
+      - name: Install the pinned harness toolchain
+        run: npm ci --prefix js/openmedkit-electron/harness
+
+      - name: Package the harness (unsigned local directory build)
+        run: npm --prefix js/openmedkit-electron/harness run package
+
+      # The Chromium renderer sandbox stays on; the SUID helper is configured
+      # the way a Linux package installer would configure it.
+      - name: Configure the Chromium sandbox helper
+        run: |
+          helper=js/openmedkit-electron/harness/dist/linux-unpacked/chrome-sandbox
+          sudo chown root:root "$helper"
+          sudo chmod 4755 "$helper"
+
+      - name: Run the packaged harness headlessly
+        env:
+          OPENMED_ELECTRON_HARNESS_EVIDENCE: ${{ runner.temp }}/electron-harness
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" \
+            npm --prefix js/openmedkit-electron/harness test
+
+      - name: Upload the value-free harness report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: electron-harness-report
+          path: ${{ runner.temp }}/electron-harness/
+          if-no-files-found: warn
+          retention-days: 14
