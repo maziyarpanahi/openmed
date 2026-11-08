@@ -66,6 +66,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
     "FixedOptionDecisionRequest": "FixedOptionDecisionRequest",
+    "OpenAIDecisionsRequest": "OpenAIDecisionsRequest",
     "SystemOneRequest": "SystemOneRequest",
     "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
@@ -116,13 +117,29 @@ def test_go_client_covers_openapi_paths_and_request_fields() -> None:
         ), f"Client.{method_name} does not call {path}."
 
         operation = spec["paths"][path][http_method]
-        request_schema = _request_schema(operation, spec)
-        if request_schema is None:
+        if operation.get("requestBody") is None:
             continue
 
-        schema_name = _request_schema_name(operation)
-        assert schema_name is not None
-        assert schema_name in GO_REQUEST_STRUCT_BY_SCHEMA
+        schema_names = _request_schema_names(operation)
+        assert schema_names
+        for schema_name in schema_names:
+            assert schema_name in GO_REQUEST_STRUCT_BY_SCHEMA
+
+
+def test_go_decision_bodies_have_one_method_per_shape() -> None:
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+
+    for method_name, request_type, response_type in (
+        ("Decision", "FixedOptionDecisionRequest", "FixedOptionDecisionResult"),
+        ("OpenAIDecisions", "OpenAIDecisionsRequest", "OpenAIDecisionsResponse"),
+    ):
+        assert re.search(
+            rf"^func \(c \*Client\) {method_name}\(ctx context\.Context, "
+            rf"req {request_type}\) \(\*{response_type}, error\) \{{",
+            source,
+            re.MULTILINE,
+        ), f"Client.{method_name} must send {request_type}."
+        assert '"/v1/decisions"' in _go_client_method_body(source, method_name)
 
 
 def test_go_request_structs_match_openapi_components() -> None:
@@ -336,31 +353,14 @@ def _go_client_method_body(source: str, method_name: str) -> str:
     raise AssertionError(f"Go client method {method_name} has an unclosed body.")
 
 
-def _request_schema(
-    operation: dict[str, Any], spec: dict[str, Any]
-) -> dict[str, Any] | None:
+def _request_schema_names(operation: dict[str, Any]) -> list[str]:
     request_body = operation.get("requestBody")
     if request_body is None:
-        return None
-
-    content = request_body["content"]["application/json"]
-    schema = content["schema"]
-    ref = schema.get("$ref")
-    if not ref:
-        return schema
-
-    schema_name = ref.removeprefix("#/components/schemas/")
-    return spec["components"]["schemas"][schema_name]
-
-
-def _request_schema_name(operation: dict[str, Any]) -> str | None:
-    request_body = operation.get("requestBody")
-    if request_body is None:
-        return None
-    ref = request_body["content"]["application/json"]["schema"].get("$ref")
-    if ref is None:
-        return None
-    return ref.removeprefix("#/components/schemas/")
+        return []
+    schema = request_body["content"]["application/json"]["schema"]
+    # A negotiated body lists one component per accepted shape.
+    refs = [variant.get("$ref") for variant in schema.get("oneOf", [schema])]
+    return [ref.removeprefix("#/components/schemas/") for ref in refs if ref]
 
 
 def _go_struct_json_fields(source: str, struct_name: str) -> set[str]:
@@ -393,8 +393,7 @@ def _openapi_request_schema_names(spec: dict[str, Any]) -> set[str]:
     pending = [
         schema_name
         for method, path in _openapi_operations(spec)
-        for operation in [spec["paths"][path][method]]
-        if (schema_name := _request_schema_name(operation)) is not None
+        for schema_name in _request_schema_names(spec["paths"][path][method])
     ]
 
     while pending:

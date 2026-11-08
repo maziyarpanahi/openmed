@@ -214,6 +214,9 @@ export type DecisionState =
 
 export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
 
+/** Decision contract versions this client reads and writes. */
+export type DecisionSchemaVersion = "1.0.0" | "1.1.0" | "1.2.0";
+
 export interface DecisionQuestion {
   question_id: string;
   mode: DecisionQuestionMode;
@@ -244,7 +247,7 @@ export interface FixedOptionDecisionRequest {
   purpose?: string;
   calibration_id?: string;
   timeout_ms?: number;
-  schema_version?: "1.0.0" | "1.1.0";
+  schema_version?: DecisionSchemaVersion;
   compatibility_policy?: "same_major";
   question_id?: string;
   instructions?: string | null;
@@ -307,9 +310,80 @@ export interface FixedOptionDecisionResult {
   review: { required: true; reasons: string[] };
   advisory: string;
   autonomous_action: false;
-  schema_version: "1.0.0" | "1.1.0";
+  schema_version: DecisionSchemaVersion;
   compatibility_policy: "same_major";
   extensions: JsonObject;
+}
+
+/** One question of an OpenAI-compatible Decisions body. */
+export type OpenAIDecisionsQuestion =
+  | { type: "predicate"; name: string; instructions?: string | null }
+  | {
+      type: "choice";
+      name: string;
+      instructions?: string | null;
+      choices: { value: string; description?: string | null }[];
+    }
+  | {
+      type: "score";
+      name: string;
+      instructions?: string | null;
+      levels: { label: string }[];
+    };
+
+/**
+ * Text-only OpenAI-compatible Decisions body for POST /v1/decisions.
+ * `model` must name the model the service decides with.
+ */
+export interface OpenAIDecisionsRequest {
+  model: string;
+  input: string;
+  questions: OpenAIDecisionsQuestion[];
+}
+
+/** Non-success questions carry their OpenMed state and code. */
+export interface OpenAIDecisionsOutcome {
+  state?: Exclude<DecisionState, "success">;
+  code?: string | null;
+}
+
+export type OpenAIDecisionsAnswer =
+  | ({ type: "predicate"; name: string; probability: number | null } &
+      OpenAIDecisionsOutcome)
+  | ({
+      type: "choice";
+      name: string;
+      choice: string | null;
+      confidence: number | null;
+      probabilities?: { value: string; probability: number }[];
+    } & OpenAIDecisionsOutcome)
+  | ({
+      type: "score";
+      name: string;
+      score: number | null;
+      confidence: number | null;
+      probabilities?: { label: string; value: number; probability: number }[];
+    } & OpenAIDecisionsOutcome);
+
+/** Review requirement, advisory and provenance of the underlying result. */
+export interface OpenAIDecisionsReview {
+  state: DecisionState;
+  code: string | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  schema_version: DecisionSchemaVersion;
+  compatibility_policy: "same_major";
+}
+
+export interface OpenAIDecisionsResponse {
+  model: string;
+  answers: OpenAIDecisionsAnswer[];
+  openmed?: OpenAIDecisionsReview;
 }
 
 export interface DeidentifyJobDocument {
@@ -774,6 +848,13 @@ export class OpenMedClient {
   async decision(
     request: FixedOptionDecisionRequest,
   ): Promise<FixedOptionDecisionResult> {
+    return this.post("/v1/decisions", request);
+  }
+
+  /** Send an OpenAI-compatible Decisions body; the answer has the same shape. */
+  async openaiDecisions(
+    request: OpenAIDecisionsRequest,
+  ): Promise<OpenAIDecisionsResponse> {
     return this.post("/v1/decisions", request);
   }
 

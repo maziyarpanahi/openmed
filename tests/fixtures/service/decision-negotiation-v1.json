@@ -1,0 +1,490 @@
+{
+  "cases": [
+    {
+      "name": "openmed_fixed_choice",
+      "request": {
+        "input_text": "Synthetic review priority is urgent.",
+        "mode": "fixed_choice",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "response": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": "urgent",
+        "choices": [
+          "urgent"
+        ],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": 1.0,
+        "extensions": {},
+        "margin": 0.95,
+        "mode": "fixed_choice",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          }
+        ],
+        "ranking": [
+          "urgent",
+          "routine"
+        ],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.0.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      },
+      "shape": "openmed",
+      "status": 200,
+      "typed": true
+    },
+    {
+      "name": "openmed_question_set",
+      "request": {
+        "input_text": "Synthetic review priority is urgent; severity is high.",
+        "mode": "question_set",
+        "questions": [
+          {
+            "mode": "fixed_choice",
+            "options": [
+              "urgent",
+              "routine"
+            ],
+            "question_id": "priority"
+          },
+          {
+            "levels": [
+              "low",
+              "high"
+            ],
+            "mode": "scalar_score",
+            "question_id": "severity"
+          }
+        ]
+      },
+      "response": {
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "policy_version": "1.0.0",
+          "purpose": "care_review"
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "deterministic": true,
+          "kind": "deterministic",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "runtime": "python"
+        },
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+          "version": "1.0.0"
+        },
+        "choice": null,
+        "choices": [],
+        "code": null,
+        "compatibility_policy": "same_major",
+        "confidence": null,
+        "expected_level": null,
+        "extensions": {},
+        "level_scores": [],
+        "margin": null,
+        "mode": "question_set",
+        "option_scores": [],
+        "questions": [
+          {
+            "choice": "urgent",
+            "choices": [
+              "urgent"
+            ],
+            "code": null,
+            "confidence": 1.0,
+            "expected_level": null,
+            "level_scores": [],
+            "margin": 0.95,
+            "mode": "fixed_choice",
+            "option_scores": [
+              {
+                "index": 0,
+                "option": "urgent",
+                "score": 1.0
+              },
+              {
+                "index": 1,
+                "option": "routine",
+                "score": 0.05
+              }
+            ],
+            "question_id": "priority",
+            "ranking": [
+              "urgent",
+              "routine"
+            ],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": null,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          },
+          {
+            "choice": null,
+            "choices": [],
+            "code": null,
+            "confidence": 0.9523809523809523,
+            "expected_level": 0.9523809523809523,
+            "level_scores": [
+              {
+                "index": 0,
+                "level": "low",
+                "score": 0.05
+              },
+              {
+                "index": 1,
+                "level": "high",
+                "score": 1.0
+              }
+            ],
+            "margin": null,
+            "mode": "scalar_score",
+            "option_scores": [],
+            "question_id": "severity",
+            "ranking": [],
+            "review": {
+              "reasons": [
+                "clinical_use_requires_review"
+              ],
+              "required": true
+            },
+            "scalar_score": 0.9523809523809523,
+            "state": "success",
+            "warnings": [
+              "human_review_required"
+            ]
+          }
+        ],
+        "ranking": [],
+        "review": {
+          "reasons": [
+            "clinical_use_requires_review"
+          ],
+          "required": true
+        },
+        "scalar_score": null,
+        "schema_version": "1.1.0",
+        "state": "success",
+        "warnings": [
+          "human_review_required"
+        ]
+      },
+      "shape": "openmed",
+      "status": 200,
+      "typed": true
+    },
+    {
+      "name": "openai_question_set",
+      "request": {
+        "input": "Synthetic review priority is urgent; severity is high.",
+        "model": "openmed/deterministic-fixed-option",
+        "questions": [
+          {
+            "choices": [
+              {
+                "value": "urgent"
+              },
+              {
+                "value": "routine"
+              }
+            ],
+            "name": "priority",
+            "type": "choice"
+          },
+          {
+            "name": "flag",
+            "type": "predicate"
+          },
+          {
+            "levels": [
+              {
+                "label": "low"
+              },
+              {
+                "label": "high"
+              }
+            ],
+            "name": "severity",
+            "type": "score"
+          }
+        ]
+      },
+      "response": {
+        "answers": [
+          {
+            "choice": "urgent",
+            "confidence": 1.0,
+            "name": "priority",
+            "probabilities": [
+              {
+                "probability": 1.0,
+                "value": "urgent"
+              },
+              {
+                "probability": 0.05,
+                "value": "routine"
+              }
+            ],
+            "type": "choice"
+          },
+          {
+            "code": "low_confidence",
+            "name": "flag",
+            "probability": 0.05,
+            "state": "abstained",
+            "type": "predicate"
+          },
+          {
+            "confidence": 0.9523809523809523,
+            "name": "severity",
+            "probabilities": [
+              {
+                "label": "low",
+                "probability": 0.05,
+                "value": 0
+              },
+              {
+                "label": "high",
+                "probability": 1.0,
+                "value": 1
+              }
+            ],
+            "score": 0.9523809523809523,
+            "type": "score"
+          }
+        ],
+        "model": "openmed/deterministic-fixed-option",
+        "openmed": {
+          "access": {
+            "allowed": true,
+            "code": null,
+            "namespace": "default",
+            "policy_version": "1.0.0",
+            "purpose": "care_review"
+          },
+          "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "autonomous_action": false,
+          "backend": {
+            "backend_id": "openmed.deterministic.fixed_option.v1",
+            "deterministic": true,
+            "kind": "deterministic",
+            "license_id": "Apache-2.0",
+            "local": true,
+            "model_id": "openmed/deterministic-fixed-option",
+            "revision": "1.0.0",
+            "runtime": "python"
+          },
+          "calibration": {
+            "calibration_id": "openmed.synthetic.fixed_option.v1",
+            "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+            "method": "deterministic_margin",
+            "minimum_confidence": 0.7,
+            "minimum_margin": 0.15,
+            "multi_label_threshold": 0.7,
+            "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+            "version": "1.0.0"
+          },
+          "code": "question_set_partial",
+          "compatibility_policy": "same_major",
+          "review": {
+            "reasons": [
+              "clinical_use_requires_review",
+              "question_set_partial"
+            ],
+            "required": true
+          },
+          "schema_version": "1.2.0",
+          "state": "partial",
+          "warnings": [
+            "human_review_required",
+            "question_set_partial"
+          ]
+        }
+      },
+      "shape": "openai_decisions",
+      "status": 200,
+      "typed": true
+    },
+    {
+      "error": {
+        "code": "model_not_served",
+        "details": null
+      },
+      "name": "openai_model_not_served",
+      "request": {
+        "input": "Synthetic review priority is urgent.",
+        "model": "synthetic-org/other-decider",
+        "questions": [
+          {
+            "choices": [
+              {
+                "value": "urgent"
+              },
+              {
+                "value": "routine"
+              }
+            ],
+            "name": "priority",
+            "type": "choice"
+          }
+        ]
+      },
+      "shape": "openai_decisions",
+      "status": 422,
+      "typed": true
+    },
+    {
+      "error": {
+        "code": "decision_request_ambiguous",
+        "details": {
+          "reason": "both_shapes"
+        }
+      },
+      "name": "both_shapes_refused",
+      "request": {
+        "input_text": "Synthetic review priority is urgent.",
+        "mode": "fixed_choice",
+        "model": "openmed/deterministic-fixed-option",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "shape": null,
+      "status": 422,
+      "typed": false
+    },
+    {
+      "error": {
+        "code": "decision_request_ambiguous",
+        "details": {
+          "reason": "no_shape"
+        }
+      },
+      "name": "no_shape_refused",
+      "request": {
+        "questions": [
+          {
+            "choices": [
+              {
+                "value": "urgent"
+              },
+              {
+                "value": "routine"
+              }
+            ],
+            "name": "priority",
+            "type": "choice"
+          }
+        ]
+      },
+      "shape": null,
+      "status": 422,
+      "typed": false
+    },
+    {
+      "error": {
+        "code": "decision_media_unsupported",
+        "details": {
+          "reason": "media_unsupported"
+        }
+      },
+      "name": "openai_media_refused",
+      "request": {
+        "input": "Synthetic review priority is urgent.",
+        "media": [],
+        "model": "openmed/deterministic-fixed-option",
+        "questions": [
+          {
+            "choices": [
+              {
+                "value": "urgent"
+              },
+              {
+                "value": "routine"
+              }
+            ],
+            "name": "priority",
+            "type": "choice"
+          }
+        ]
+      },
+      "shape": "openai_decisions",
+      "status": 422,
+      "typed": false
+    }
+  ],
+  "decision_schema_version": "1.2.0",
+  "description": "Synthetic POST /v1/decisions exchanges shared by the Python, TypeScript and Go clients. OpenMed requests receive OpenMed results, OpenAI-compatible bodies receive OpenAI-compatible responses, and bodies without exactly one shape are refused with a controlled code. 'typed' marks requests a typed client can express. Regenerate with the live service after an intentional contract change.",
+  "fixture_version": 1
+}

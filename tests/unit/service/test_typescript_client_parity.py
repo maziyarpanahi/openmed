@@ -61,14 +61,42 @@ def test_typescript_client_covers_openapi_paths_and_request_fields() -> None:
         assert f'"{path}"' in source, f"{path} is not called by the SDK."
 
         operation = _first_operation(spec["paths"][path])
-        request_schema = _request_schema(operation)
-        if request_schema is None:
-            continue
+        for request_schema in _request_schemas(operation):
+            assert request_schema.get("properties"), f"{path} has no fields."
+            for field_name in sorted(request_schema["properties"]):
+                assert re.search(rf"\b{re.escape(field_name)}\??:", source), (
+                    f"{field_name!r} from {path} is missing from TypeScript types."
+                )
 
-        for field_name in sorted(request_schema.get("properties", {})):
-            assert re.search(rf"\b{re.escape(field_name)}\??:", source), (
-                f"{field_name!r} from {path} is missing from TypeScript types."
-            )
+
+def test_typescript_decision_bodies_have_one_method_per_shape() -> None:
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+
+    for method_name, request_type, response_type in (
+        ("decision", "FixedOptionDecisionRequest", "FixedOptionDecisionResult"),
+        ("openaiDecisions", "OpenAIDecisionsRequest", "OpenAIDecisionsResponse"),
+    ):
+        assert re.search(
+            rf"async {method_name}\(\s*request: {request_type},\s*\): "
+            rf"Promise<{response_type}> \{{\s*return this\.post\(\"/v1/decisions\"",
+            source,
+        ), f"{method_name} must post {request_type} to /v1/decisions."
+
+
+def test_typescript_decision_schema_versions_match_the_contract() -> None:
+    from openmed.structured.decision import SUPPORTED_DECISION_SCHEMA_VERSIONS
+
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"export type DecisionSchemaVersion =(?P<body>[^;]*);",
+        source,
+    )
+    assert match is not None
+    assert set(re.findall(r'"([0-9.]+)"', match.group("body"))) == set(
+        SUPPORTED_DECISION_SCHEMA_VERSIONS
+    )
+    assert "schema_version?: DecisionSchemaVersion;" in source
+    assert "schema_version: DecisionSchemaVersion;" in source
 
 
 def test_typescript_client_package_is_dependency_light_and_strict() -> None:
@@ -138,13 +166,18 @@ def _first_operation(path_item: dict[str, Any]) -> dict[str, Any]:
     raise AssertionError(f"No HTTP operation found in path item: {path_item}")
 
 
-def _request_schema(operation: dict[str, Any]) -> dict[str, Any] | None:
+def _request_schemas(operation: dict[str, Any]) -> list[dict[str, Any]]:
     request_body = operation.get("requestBody")
     if request_body is None:
-        return None
+        return []
 
     content = request_body["content"]["application/json"]
     schema = content["schema"]
+    # A negotiated body lists one variant per accepted shape.
+    return [_resolve(variant) for variant in schema.get("oneOf", [schema])]
+
+
+def _resolve(schema: dict[str, Any]) -> dict[str, Any]:
     ref = schema.get("$ref")
     if not ref:
         return schema

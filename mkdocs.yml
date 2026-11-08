@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - Migrate from 3.3 to 4.0: migration/3.3-to-4.0.md
       - OpenMed 3.2.0 Release Notes: release/v3.2.0.md
       - Migrate from 3.1 to 3.2: migration/3.1-to-3.2.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md

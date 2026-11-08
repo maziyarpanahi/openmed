@@ -586,7 +586,7 @@
         "type": "object"
       },
       "FixedOptionDecisionRequest": {
-        "$id": "https://openmed.dev/schemas/decision-request/1.1.0",
+        "$id": "https://openmed.dev/schemas/decision-request/1.2.0",
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "allOf": [
@@ -772,6 +772,25 @@
                     "const": "question_set"
                   }
                 }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "schema_version": {
+                  "const": "1.1.0"
+                }
+              },
+              "required": [
+                "schema_version"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "media"
+                ]
               }
             }
           },
@@ -1091,10 +1110,11 @@
             "type": "array"
           },
           "schema_version": {
-            "description": "Omitted, it resolves to 1.1.0 when a 1.1.0 field is present and to 1.0.0 otherwise.",
+            "description": "Omitted, it resolves to the lowest version carrying every field present: 1.2.0 with media, 1.1.0 with another extension field and 1.0.0 otherwise.",
             "enum": [
               "1.0.0",
-              "1.1.0"
+              "1.1.0",
+              "1.2.0"
             ],
             "type": "string"
           },
@@ -2529,6 +2549,182 @@
           "records_jsonl"
         ],
         "title": "OmopLoadRequest",
+        "type": "object"
+      },
+      "OpenAIDecisionsRequest": {
+        "$id": "https://openmed.dev/schemas/decision-openai-request/1.2.0",
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "description": "Text-only OpenAI-compatible Decisions body for ``POST /v1/decisions``.\n\nThe OpenAPI component is the canonical OpenAI-compatible request schema.\nThe converter performs the full validation of each question; the service\napplies the default policy fields and input bound.",
+        "properties": {
+          "input": {
+            "description": "Text input; messages and media are refused.",
+            "maxLength": 8192,
+            "minLength": 1,
+            "type": "string"
+          },
+          "model": {
+            "description": "Must name the model the service decides with.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instructions": {
+                      "anyOf": [
+                        {
+                          "maxLength": 2048,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Optional question wording passed to the backend."
+                    },
+                    "name": {
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "predicate"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "name"
+                  ]
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "choices": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "description": {
+                            "anyOf": [
+                              {
+                                "maxLength": 1024,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "value"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "instructions": {
+                      "anyOf": [
+                        {
+                          "maxLength": 2048,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Optional question wording passed to the backend."
+                    },
+                    "name": {
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "choice"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "name",
+                    "choices"
+                  ]
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "instructions": {
+                      "anyOf": [
+                        {
+                          "maxLength": 2048,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Optional question wording passed to the backend."
+                    },
+                    "levels": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "label": {
+                            "maxLength": 256,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 64,
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "name": {
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "score"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "name",
+                    "levels"
+                  ]
+                }
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "model",
+          "input",
+          "questions"
+        ],
+        "title": "OpenAI-compatible Decisions Request",
         "type": "object"
       },
       "PIIDeidentifyRequest": {
@@ -4365,13 +4561,21 @@
     },
     "/v1/decisions": {
       "post": {
-        "description": "Evaluate a bounded local decision and return a typed review result.",
+        "description": "Evaluate a bounded local decision and return a typed review result.\n\nThe body is either an OpenMed decision request or an OpenAI-compatible\nDecisions body; the response uses the same shape as the request.",
         "operationId": "fixed_option_decision_v1_decisions_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FixedOptionDecisionRequest"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/FixedOptionDecisionRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OpenAIDecisionsRequest"
+                  }
+                ],
+                "title": "Payload"
               }
             }
           },
@@ -4382,103 +4586,270 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$id": "https://openmed.dev/schemas/decision-result/1.1.0",
-                  "$schema": "https://json-schema.org/draft/2020-12/schema",
-                  "additionalProperties": false,
-                  "allOf": [
+                  "oneOf": [
                     {
-                      "else": {
-                        "required": [
-                          "questions",
-                          "level_scores",
-                          "expected_level"
-                        ]
-                      },
-                      "if": {
-                        "properties": {
-                          "schema_version": {
-                            "const": "1.0.0"
+                      "$id": "https://openmed.dev/schemas/decision-result/1.2.0",
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "else": {
+                            "required": [
+                              "questions",
+                              "level_scores",
+                              "expected_level"
+                            ]
+                          },
+                          "if": {
+                            "properties": {
+                              "schema_version": {
+                                "const": "1.0.0"
+                              }
+                            }
+                          },
+                          "then": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "questions"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "level_scores"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "expected_level"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "mode": {
+                                "not": {
+                                  "const": "question_set"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "else": {
+                            "properties": {
+                              "questions": {
+                                "maxItems": 0
+                              }
+                            }
+                          },
+                          "if": {
+                            "properties": {
+                              "mode": {
+                                "const": "question_set"
+                              }
+                            }
+                          },
+                          "then": {
+                            "properties": {
+                              "questions": {
+                                "minItems": 1
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "else": {
+                            "properties": {
+                              "expected_level": {
+                                "type": "null"
+                              },
+                              "level_scores": {
+                                "maxItems": 0
+                              }
+                            }
+                          },
+                          "if": {
+                            "properties": {
+                              "mode": {
+                                "const": "scalar_score"
+                              }
+                            }
                           }
                         }
-                      },
-                      "then": {
-                        "not": {
-                          "anyOf": [
-                            {
-                              "required": [
-                                "questions"
+                      ],
+                      "properties": {
+                        "access": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "allowed": {
+                              "type": "boolean"
+                            },
+                            "code": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
                               ]
                             },
-                            {
-                              "required": [
-                                "level_scores"
-                              ]
+                            "namespace": {
+                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                              "type": "string"
                             },
-                            {
-                              "required": [
-                                "expected_level"
-                              ]
+                            "policy_version": {
+                              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                              "type": "string"
+                            },
+                            "purpose": {
+                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                              "type": "string"
                             }
+                          },
+                          "required": [
+                            "allowed",
+                            "code",
+                            "namespace",
+                            "purpose",
+                            "policy_version"
+                          ],
+                          "type": "object"
+                        },
+                        "advisory": {
+                          "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+                          "type": "string"
+                        },
+                        "autonomous_action": {
+                          "const": false,
+                          "type": "boolean"
+                        },
+                        "backend": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "backend_id": {
+                              "maxLength": 256,
+                              "type": "string"
+                            },
+                            "deterministic": {
+                              "type": "boolean"
+                            },
+                            "kind": {
+                              "enum": [
+                                "deterministic",
+                                "encoder",
+                                "cross_encoder",
+                                "specialist"
+                              ],
+                              "type": "string"
+                            },
+                            "license_id": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
+                              "type": "string"
+                            },
+                            "license_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "local": {
+                              "const": true,
+                              "type": "boolean"
+                            },
+                            "model_id": {
+                              "maxLength": 256,
+                              "type": "string"
+                            },
+                            "revision": {
+                              "maxLength": 256,
+                              "type": "string"
+                            },
+                            "runtime": {
+                              "maxLength": 256,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "backend_id",
+                            "kind",
+                            "runtime",
+                            "model_id",
+                            "revision",
+                            "license_id",
+                            "local",
+                            "deterministic"
+                          ],
+                          "type": "object"
+                        },
+                        "calibration": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "calibration_id": {
+                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                              "type": "string"
+                            },
+                            "in_domain_digest": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "method": {
+                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                              "type": "string"
+                            },
+                            "minimum_confidence": {
+                              "maximum": 1.0,
+                              "minimum": 0.0,
+                              "type": "number"
+                            },
+                            "minimum_margin": {
+                              "maximum": 1.0,
+                              "minimum": 0.0,
+                              "type": "number"
+                            },
+                            "multi_label_threshold": {
+                              "maximum": 1.0,
+                              "minimum": 0.0,
+                              "type": "number"
+                            },
+                            "out_of_domain_digest": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "version": {
+                              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "calibration_id",
+                            "version",
+                            "method",
+                            "minimum_confidence",
+                            "minimum_margin",
+                            "multi_label_threshold",
+                            "in_domain_digest",
+                            "out_of_domain_digest"
+                          ],
+                          "type": "object"
+                        },
+                        "choice": {
+                          "maxLength": 256,
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
-                        "properties": {
-                          "mode": {
-                            "not": {
-                              "const": "question_set"
-                            }
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "else": {
-                        "properties": {
-                          "questions": {
-                            "maxItems": 0
-                          }
-                        }
-                      },
-                      "if": {
-                        "properties": {
-                          "mode": {
-                            "const": "question_set"
-                          }
-                        }
-                      },
-                      "then": {
-                        "properties": {
-                          "questions": {
-                            "minItems": 1
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "else": {
-                        "properties": {
-                          "expected_level": {
-                            "type": "null"
+                        "choices": {
+                          "items": {
+                            "maxLength": 256,
+                            "type": "string"
                           },
-                          "level_scores": {
-                            "maxItems": 0
-                          }
-                        }
-                      },
-                      "if": {
-                        "properties": {
-                          "mode": {
-                            "const": "scalar_score"
-                          }
-                        }
-                      }
-                    }
-                  ],
-                  "properties": {
-                    "access": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "allowed": {
-                          "type": "boolean"
+                          "maxItems": 64,
+                          "type": "array"
                         },
                         "code": {
                           "anyOf": [
@@ -4491,597 +4862,911 @@
                             }
                           ]
                         },
-                        "namespace": {
-                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                        "compatibility_policy": {
+                          "const": "same_major",
                           "type": "string"
                         },
-                        "policy_version": {
-                          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
-                          "type": "string"
+                        "confidence": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
-                        "purpose": {
-                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "allowed",
-                        "code",
-                        "namespace",
-                        "purpose",
-                        "policy_version"
-                      ],
-                      "type": "object"
-                    },
-                    "advisory": {
-                      "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
-                      "type": "string"
-                    },
-                    "autonomous_action": {
-                      "const": false,
-                      "type": "boolean"
-                    },
-                    "backend": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "backend_id": {
-                          "maxLength": 256,
-                          "type": "string"
+                        "expected_level": {
+                          "maximum": 63.0,
+                          "minimum": 0.0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
-                        "deterministic": {
-                          "type": "boolean"
+                        "extensions": {
+                          "type": "object"
                         },
-                        "kind": {
+                        "level_scores": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "index": {
+                                "minimum": 0.0,
+                                "type": "integer"
+                              },
+                              "level": {
+                                "maxLength": 256,
+                                "type": "string"
+                              },
+                              "score": {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "level",
+                              "score"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 64,
+                          "type": "array"
+                        },
+                        "margin": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "mode": {
                           "enum": [
-                            "deterministic",
-                            "encoder",
-                            "cross_encoder",
-                            "specialist"
+                            "fixed_choice",
+                            "boolean_choice",
+                            "ordered_preference",
+                            "scalar_score",
+                            "multi_label",
+                            "question_set"
                           ],
                           "type": "string"
                         },
-                        "license_id": {
-                          "maxLength": 128,
-                          "minLength": 1,
-                          "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
-                          "type": "string"
-                        },
-                        "license_sha256": {
-                          "pattern": "^[0-9a-f]{64}$",
-                          "type": "string"
-                        },
-                        "local": {
-                          "const": true,
-                          "type": "boolean"
-                        },
-                        "model_id": {
-                          "maxLength": 256,
-                          "type": "string"
-                        },
-                        "revision": {
-                          "maxLength": 256,
-                          "type": "string"
-                        },
-                        "runtime": {
-                          "maxLength": 256,
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "backend_id",
-                        "kind",
-                        "runtime",
-                        "model_id",
-                        "revision",
-                        "license_id",
-                        "local",
-                        "deterministic"
-                      ],
-                      "type": "object"
-                    },
-                    "calibration": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "calibration_id": {
-                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                          "type": "string"
-                        },
-                        "in_domain_digest": {
-                          "pattern": "^sha256:[0-9a-f]{64}$",
-                          "type": "string"
-                        },
-                        "method": {
-                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                          "type": "string"
-                        },
-                        "minimum_confidence": {
-                          "maximum": 1.0,
-                          "minimum": 0.0,
-                          "type": "number"
-                        },
-                        "minimum_margin": {
-                          "maximum": 1.0,
-                          "minimum": 0.0,
-                          "type": "number"
-                        },
-                        "multi_label_threshold": {
-                          "maximum": 1.0,
-                          "minimum": 0.0,
-                          "type": "number"
-                        },
-                        "out_of_domain_digest": {
-                          "pattern": "^sha256:[0-9a-f]{64}$",
-                          "type": "string"
-                        },
-                        "version": {
-                          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "calibration_id",
-                        "version",
-                        "method",
-                        "minimum_confidence",
-                        "minimum_margin",
-                        "multi_label_threshold",
-                        "in_domain_digest",
-                        "out_of_domain_digest"
-                      ],
-                      "type": "object"
-                    },
-                    "choice": {
-                      "maxLength": 256,
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "choices": {
-                      "items": {
-                        "maxLength": 256,
-                        "type": "string"
-                      },
-                      "maxItems": 64,
-                      "type": "array"
-                    },
-                    "code": {
-                      "anyOf": [
-                        {
-                          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "compatibility_policy": {
-                      "const": "same_major",
-                      "type": "string"
-                    },
-                    "confidence": {
-                      "maximum": 1.0,
-                      "minimum": 0.0,
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "expected_level": {
-                      "maximum": 63.0,
-                      "minimum": 0.0,
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "extensions": {
-                      "type": "object"
-                    },
-                    "level_scores": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "index": {
-                            "minimum": 0.0,
-                            "type": "integer"
-                          },
-                          "level": {
-                            "maxLength": 256,
-                            "type": "string"
-                          },
-                          "score": {
-                            "maximum": 1.0,
-                            "minimum": 0.0,
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "index",
-                          "level",
-                          "score"
-                        ],
-                        "type": "object"
-                      },
-                      "maxItems": 64,
-                      "type": "array"
-                    },
-                    "margin": {
-                      "maximum": 1.0,
-                      "minimum": 0.0,
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "mode": {
-                      "enum": [
-                        "fixed_choice",
-                        "boolean_choice",
-                        "ordered_preference",
-                        "scalar_score",
-                        "multi_label",
-                        "question_set"
-                      ],
-                      "type": "string"
-                    },
-                    "option_scores": {
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "index": {
-                            "minimum": 0.0,
-                            "type": "integer"
-                          },
-                          "option": {
-                            "maxLength": 256,
-                            "type": "string"
-                          },
-                          "score": {
-                            "maximum": 1.0,
-                            "minimum": 0.0,
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "index",
-                          "option",
-                          "score"
-                        ],
-                        "type": "object"
-                      },
-                      "maxItems": 64,
-                      "type": "array"
-                    },
-                    "questions": {
-                      "items": {
-                        "additionalProperties": false,
-                        "allOf": [
-                          {
-                            "else": {
-                              "properties": {
-                                "expected_level": {
-                                  "type": "null"
-                                },
-                                "level_scores": {
-                                  "maxItems": 0
-                                }
-                              }
-                            },
-                            "if": {
-                              "properties": {
-                                "mode": {
-                                  "const": "scalar_score"
-                                }
-                              }
-                            }
-                          }
-                        ],
-                        "properties": {
-                          "choice": {
-                            "maxLength": 256,
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "choices": {
-                            "items": {
-                              "maxLength": 256,
-                              "type": "string"
-                            },
-                            "maxItems": 64,
-                            "type": "array"
-                          },
-                          "code": {
-                            "anyOf": [
-                              {
-                                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
-                          "confidence": {
-                            "maximum": 1.0,
-                            "minimum": 0.0,
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "expected_level": {
-                            "maximum": 63.0,
-                            "minimum": 0.0,
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "level_scores": {
-                            "items": {
-                              "additionalProperties": false,
-                              "properties": {
-                                "index": {
-                                  "minimum": 0.0,
-                                  "type": "integer"
-                                },
-                                "level": {
-                                  "maxLength": 256,
-                                  "type": "string"
-                                },
-                                "score": {
-                                  "maximum": 1.0,
-                                  "minimum": 0.0,
-                                  "type": "number"
-                                }
-                              },
-                              "required": [
-                                "index",
-                                "level",
-                                "score"
-                              ],
-                              "type": "object"
-                            },
-                            "maxItems": 64,
-                            "type": "array"
-                          },
-                          "margin": {
-                            "maximum": 1.0,
-                            "minimum": 0.0,
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "mode": {
-                            "enum": [
-                              "fixed_choice",
-                              "boolean_choice",
-                              "ordered_preference",
-                              "scalar_score",
-                              "multi_label"
-                            ],
-                            "type": "string"
-                          },
-                          "option_scores": {
-                            "items": {
-                              "additionalProperties": false,
-                              "properties": {
-                                "index": {
-                                  "minimum": 0.0,
-                                  "type": "integer"
-                                },
-                                "option": {
-                                  "maxLength": 256,
-                                  "type": "string"
-                                },
-                                "score": {
-                                  "maximum": 1.0,
-                                  "minimum": 0.0,
-                                  "type": "number"
-                                }
-                              },
-                              "required": [
-                                "index",
-                                "option",
-                                "score"
-                              ],
-                              "type": "object"
-                            },
-                            "maxItems": 64,
-                            "type": "array"
-                          },
-                          "question_id": {
-                            "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
-                            "type": "string"
-                          },
-                          "ranking": {
-                            "items": {
-                              "maxLength": 256,
-                              "type": "string"
-                            },
-                            "maxItems": 64,
-                            "type": "array"
-                          },
-                          "review": {
+                        "option_scores": {
+                          "items": {
                             "additionalProperties": false,
                             "properties": {
-                              "reasons": {
+                              "index": {
+                                "minimum": 0.0,
+                                "type": "integer"
+                              },
+                              "option": {
+                                "maxLength": 256,
+                                "type": "string"
+                              },
+                              "score": {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "option",
+                              "score"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 64,
+                          "type": "array"
+                        },
+                        "questions": {
+                          "items": {
+                            "additionalProperties": false,
+                            "allOf": [
+                              {
+                                "else": {
+                                  "properties": {
+                                    "expected_level": {
+                                      "type": "null"
+                                    },
+                                    "level_scores": {
+                                      "maxItems": 0
+                                    }
+                                  }
+                                },
+                                "if": {
+                                  "properties": {
+                                    "mode": {
+                                      "const": "scalar_score"
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "properties": {
+                              "choice": {
+                                "maxLength": 256,
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "choices": {
+                                "items": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                },
+                                "maxItems": 64,
+                                "type": "array"
+                              },
+                              "code": {
+                                "anyOf": [
+                                  {
+                                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "confidence": {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "expected_level": {
+                                "maximum": 63.0,
+                                "minimum": 0.0,
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "level_scores": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "index": {
+                                      "minimum": 0.0,
+                                      "type": "integer"
+                                    },
+                                    "level": {
+                                      "maxLength": 256,
+                                      "type": "string"
+                                    },
+                                    "score": {
+                                      "maximum": 1.0,
+                                      "minimum": 0.0,
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "index",
+                                    "level",
+                                    "score"
+                                  ],
+                                  "type": "object"
+                                },
+                                "maxItems": 64,
+                                "type": "array"
+                              },
+                              "margin": {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "mode": {
+                                "enum": [
+                                  "fixed_choice",
+                                  "boolean_choice",
+                                  "ordered_preference",
+                                  "scalar_score",
+                                  "multi_label"
+                                ],
+                                "type": "string"
+                              },
+                              "option_scores": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "index": {
+                                      "minimum": 0.0,
+                                      "type": "integer"
+                                    },
+                                    "option": {
+                                      "maxLength": 256,
+                                      "type": "string"
+                                    },
+                                    "score": {
+                                      "maximum": 1.0,
+                                      "minimum": 0.0,
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "index",
+                                    "option",
+                                    "score"
+                                  ],
+                                  "type": "object"
+                                },
+                                "maxItems": 64,
+                                "type": "array"
+                              },
+                              "question_id": {
+                                "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                                "type": "string"
+                              },
+                              "ranking": {
+                                "items": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                },
+                                "maxItems": 64,
+                                "type": "array"
+                              },
+                              "review": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "reasons": {
+                                    "items": {
+                                      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                      "type": "string"
+                                    },
+                                    "maxItems": 32,
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "uniqueItems": true
+                                  },
+                                  "required": {
+                                    "const": true,
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "required",
+                                  "reasons"
+                                ],
+                                "type": "object"
+                              },
+                              "scalar_score": {
+                                "maximum": 1.0,
+                                "minimum": 0.0,
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "state": {
+                                "enum": [
+                                  "success",
+                                  "abstained",
+                                  "partial",
+                                  "unknown",
+                                  "conflict",
+                                  "unsupported",
+                                  "denied",
+                                  "failure"
+                                ],
+                                "type": "string"
+                              },
+                              "warnings": {
                                 "items": {
                                   "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
                                   "type": "string"
                                 },
                                 "maxItems": 32,
-                                "minItems": 1,
                                 "type": "array",
                                 "uniqueItems": true
-                              },
-                              "required": {
-                                "const": true,
-                                "type": "boolean"
                               }
                             },
                             "required": [
-                              "required",
-                              "reasons"
+                              "question_id",
+                              "mode",
+                              "state",
+                              "code",
+                              "option_scores",
+                              "choice",
+                              "choices",
+                              "ranking",
+                              "scalar_score",
+                              "confidence",
+                              "margin",
+                              "level_scores",
+                              "expected_level",
+                              "warnings",
+                              "review"
                             ],
                             "type": "object"
                           },
-                          "scalar_score": {
-                            "maximum": 1.0,
-                            "minimum": 0.0,
-                            "type": [
-                              "number",
-                              "null"
-                            ]
-                          },
-                          "state": {
-                            "enum": [
-                              "success",
-                              "abstained",
-                              "partial",
-                              "unknown",
-                              "conflict",
-                              "unsupported",
-                              "denied",
-                              "failure"
-                            ],
+                          "maxItems": 32,
+                          "type": "array"
+                        },
+                        "ranking": {
+                          "items": {
+                            "maxLength": 256,
                             "type": "string"
                           },
-                          "warnings": {
-                            "items": {
-                              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                              "type": "string"
-                            },
-                            "maxItems": 32,
-                            "type": "array",
-                            "uniqueItems": true
-                          }
+                          "maxItems": 64,
+                          "type": "array"
                         },
-                        "required": [
-                          "question_id",
-                          "mode",
-                          "state",
-                          "code",
-                          "option_scores",
-                          "choice",
-                          "choices",
-                          "ranking",
-                          "scalar_score",
-                          "confidence",
-                          "margin",
-                          "level_scores",
-                          "expected_level",
-                          "warnings",
-                          "review"
-                        ],
-                        "type": "object"
-                      },
-                      "maxItems": 32,
-                      "type": "array"
-                    },
-                    "ranking": {
-                      "items": {
-                        "maxLength": 256,
-                        "type": "string"
-                      },
-                      "maxItems": 64,
-                      "type": "array"
-                    },
-                    "review": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "reasons": {
+                        "review": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "reasons": {
+                              "items": {
+                                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                "type": "string"
+                              },
+                              "maxItems": 32,
+                              "minItems": 1,
+                              "type": "array",
+                              "uniqueItems": true
+                            },
+                            "required": {
+                              "const": true,
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "required",
+                            "reasons"
+                          ],
+                          "type": "object"
+                        },
+                        "scalar_score": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "schema_version": {
+                          "enum": [
+                            "1.0.0",
+                            "1.1.0",
+                            "1.2.0"
+                          ],
+                          "type": "string"
+                        },
+                        "state": {
+                          "enum": [
+                            "success",
+                            "abstained",
+                            "partial",
+                            "unknown",
+                            "conflict",
+                            "unsupported",
+                            "denied",
+                            "failure"
+                          ],
+                          "type": "string"
+                        },
+                        "warnings": {
                           "items": {
                             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
                             "type": "string"
                           },
                           "maxItems": 32,
-                          "minItems": 1,
                           "type": "array",
                           "uniqueItems": true
-                        },
-                        "required": {
-                          "const": true,
-                          "type": "boolean"
                         }
                       },
                       "required": [
-                        "required",
-                        "reasons"
+                        "mode",
+                        "state",
+                        "code",
+                        "option_scores",
+                        "choice",
+                        "choices",
+                        "ranking",
+                        "scalar_score",
+                        "confidence",
+                        "margin",
+                        "calibration",
+                        "backend",
+                        "access",
+                        "warnings",
+                        "review",
+                        "advisory",
+                        "autonomous_action",
+                        "schema_version",
+                        "compatibility_policy",
+                        "extensions"
                       ],
+                      "title": "OpenMed Fixed-Option Decision Result",
                       "type": "object"
                     },
-                    "scalar_score": {
-                      "maximum": 1.0,
-                      "minimum": 0.0,
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "schema_version": {
-                      "enum": [
-                        "1.0.0",
-                        "1.1.0"
-                      ],
-                      "type": "string"
-                    },
-                    "state": {
-                      "enum": [
-                        "success",
-                        "abstained",
-                        "partial",
-                        "unknown",
-                        "conflict",
-                        "unsupported",
-                        "denied",
-                        "failure"
-                      ],
-                      "type": "string"
-                    },
-                    "warnings": {
-                      "items": {
-                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
-                        "type": "string"
+                    {
+                      "$id": "https://openmed.dev/schemas/decision-openai-response/1.2.0",
+                      "$schema": "https://json-schema.org/draft/2020-12/schema",
+                      "additionalProperties": false,
+                      "properties": {
+                        "answers": {
+                          "items": {
+                            "oneOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "code": {
+                                    "anyOf": [
+                                      {
+                                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "probability": {
+                                    "maximum": 1.0,
+                                    "minimum": 0.0,
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "abstained",
+                                      "partial",
+                                      "unknown",
+                                      "conflict",
+                                      "unsupported",
+                                      "denied",
+                                      "failure"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "const": "predicate"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "name",
+                                  "probability"
+                                ]
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "choice": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "code": {
+                                    "anyOf": [
+                                      {
+                                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "confidence": {
+                                    "maximum": 1.0,
+                                    "minimum": 0.0,
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "probabilities": {
+                                    "items": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "probability": {
+                                          "maximum": 1.0,
+                                          "minimum": 0.0,
+                                          "type": "number"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "probability"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "maxItems": 64,
+                                    "type": "array"
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "abstained",
+                                      "partial",
+                                      "unknown",
+                                      "conflict",
+                                      "unsupported",
+                                      "denied",
+                                      "failure"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "const": "choice"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "name",
+                                  "choice",
+                                  "confidence"
+                                ]
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "code": {
+                                    "anyOf": [
+                                      {
+                                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "confidence": {
+                                    "maximum": 1.0,
+                                    "minimum": 0.0,
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "probabilities": {
+                                    "items": {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "probability": {
+                                          "maximum": 1.0,
+                                          "minimum": 0.0,
+                                          "type": "number"
+                                        },
+                                        "value": {
+                                          "minimum": 0.0,
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "label",
+                                        "value",
+                                        "probability"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    "maxItems": 64,
+                                    "type": "array"
+                                  },
+                                  "score": {
+                                    "minimum": 0.0,
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "abstained",
+                                      "partial",
+                                      "unknown",
+                                      "conflict",
+                                      "unsupported",
+                                      "denied",
+                                      "failure"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "const": "score"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "name",
+                                  "score",
+                                  "confidence"
+                                ]
+                              }
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 32,
+                          "type": "array"
+                        },
+                        "model": {
+                          "maxLength": 256,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "openmed": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "access": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "allowed": {
+                                  "type": "boolean"
+                                },
+                                "code": {
+                                  "anyOf": [
+                                    {
+                                      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "namespace": {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                },
+                                "policy_version": {
+                                  "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                                  "type": "string"
+                                },
+                                "purpose": {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "allowed",
+                                "code",
+                                "namespace",
+                                "purpose",
+                                "policy_version"
+                              ],
+                              "type": "object"
+                            },
+                            "advisory": {
+                              "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+                              "type": "string"
+                            },
+                            "autonomous_action": {
+                              "const": false,
+                              "type": "boolean"
+                            },
+                            "backend": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "backend_id": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                },
+                                "deterministic": {
+                                  "type": "boolean"
+                                },
+                                "kind": {
+                                  "enum": [
+                                    "deterministic",
+                                    "encoder",
+                                    "cross_encoder",
+                                    "specialist"
+                                  ],
+                                  "type": "string"
+                                },
+                                "license_id": {
+                                  "maxLength": 128,
+                                  "minLength": 1,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
+                                  "type": "string"
+                                },
+                                "license_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "local": {
+                                  "const": true,
+                                  "type": "boolean"
+                                },
+                                "model_id": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                },
+                                "revision": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                },
+                                "runtime": {
+                                  "maxLength": 256,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "backend_id",
+                                "kind",
+                                "runtime",
+                                "model_id",
+                                "revision",
+                                "license_id",
+                                "local",
+                                "deterministic"
+                              ],
+                              "type": "object"
+                            },
+                            "calibration": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "calibration_id": {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                },
+                                "in_domain_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "method": {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                },
+                                "minimum_confidence": {
+                                  "maximum": 1.0,
+                                  "minimum": 0.0,
+                                  "type": "number"
+                                },
+                                "minimum_margin": {
+                                  "maximum": 1.0,
+                                  "minimum": 0.0,
+                                  "type": "number"
+                                },
+                                "multi_label_threshold": {
+                                  "maximum": 1.0,
+                                  "minimum": 0.0,
+                                  "type": "number"
+                                },
+                                "out_of_domain_digest": {
+                                  "pattern": "^sha256:[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "calibration_id",
+                                "version",
+                                "method",
+                                "minimum_confidence",
+                                "minimum_margin",
+                                "multi_label_threshold",
+                                "in_domain_digest",
+                                "out_of_domain_digest"
+                              ],
+                              "type": "object"
+                            },
+                            "code": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "compatibility_policy": {
+                              "const": "same_major",
+                              "type": "string"
+                            },
+                            "review": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "reasons": {
+                                  "items": {
+                                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                    "type": "string"
+                                  },
+                                  "maxItems": 32,
+                                  "minItems": 1,
+                                  "type": "array",
+                                  "uniqueItems": true
+                                },
+                                "required": {
+                                  "const": true,
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "required",
+                                "reasons"
+                              ],
+                              "type": "object"
+                            },
+                            "schema_version": {
+                              "enum": [
+                                "1.0.0",
+                                "1.1.0",
+                                "1.2.0"
+                              ],
+                              "type": "string"
+                            },
+                            "state": {
+                              "enum": [
+                                "success",
+                                "abstained",
+                                "partial",
+                                "unknown",
+                                "conflict",
+                                "unsupported",
+                                "denied",
+                                "failure"
+                              ],
+                              "type": "string"
+                            },
+                            "warnings": {
+                              "items": {
+                                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                                "type": "string"
+                              },
+                              "maxItems": 32,
+                              "type": "array",
+                              "uniqueItems": true
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "code",
+                            "warnings",
+                            "review",
+                            "advisory",
+                            "autonomous_action",
+                            "calibration",
+                            "backend",
+                            "access",
+                            "schema_version",
+                            "compatibility_policy"
+                          ],
+                          "type": "object"
+                        }
                       },
-                      "maxItems": 32,
-                      "type": "array",
-                      "uniqueItems": true
+                      "required": [
+                        "model",
+                        "answers"
+                      ],
+                      "title": "OpenAI-compatible Decisions Response",
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "mode",
-                    "state",
-                    "code",
-                    "option_scores",
-                    "choice",
-                    "choices",
-                    "ranking",
-                    "scalar_score",
-                    "confidence",
-                    "margin",
-                    "calibration",
-                    "backend",
-                    "access",
-                    "warnings",
-                    "review",
-                    "advisory",
-                    "autonomous_action",
-                    "schema_version",
-                    "compatibility_policy",
-                    "extensions"
-                  ],
-                  "title": "OpenMed Fixed-Option Decision Result",
-                  "type": "object"
+                  ]
                 }
               }
             },
-            "description": "A calibrated fixed-option decision result."
+            "description": "A calibrated decision in the shape of the request: an OpenMed result for an OpenMed request, or an OpenAI-compatible Decisions response for that body."
           },
           "422": {
             "content": {

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -37,11 +37,19 @@ from openmed.structured.decision import (
     DETERMINISTIC_DECISION_BACKEND,
     DecisionAccessPolicy,
     DecisionError,
+    DecisionResult,
     decide,
     decision_result_schema,
 )
 from openmed.structured.decision import (
     DecisionRequest as CoreDecisionRequest,
+)
+from openmed.structured.decision_interop import (
+    DecisionRequestShapeError,
+    decision_request_shape,
+    from_openai_decisions_request,
+    openai_decisions_response_schema,
+    to_openai_decisions_response,
 )
 from openmed.utils.validation import validate_model_name
 
@@ -122,15 +130,16 @@ from .schemas import (
     BriefRequest,
     BriefResponse,
     CohortResolveRequest,
+    DecisionsRequestBody,
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
-    FixedOptionDecisionRequest,
     GroundRequest,
     GroundResponse,
     JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
+    OpenAIDecisionsRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
     PIIExtractStreamRequest,
@@ -210,6 +219,89 @@ class ServiceTimeoutError(RuntimeError):
         super().__init__(
             f"Request exceeded configured timeout of {self.timeout_seconds:g} seconds"
         )
+
+
+class _DecisionShapeRefused(Exception):
+    """A ``POST /v1/decisions`` body without exactly one decision shape."""
+
+    def __init__(self, reason_code: str) -> None:
+        super().__init__(reason_code)
+        self.reason_code = reason_code
+
+
+async def _negotiate_decision_body(request: Request) -> None:
+    """Refuse mixed, shapeless or media-carrying OpenAI-compatible bodies.
+
+    FastAPI parses the JSON body before it resolves dependencies, so this runs
+    on a decoded body and before either request model validates it. Malformed
+    JSON and non-object bodies are left to the standard validation error.
+    """
+
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return
+    if not isinstance(body, Mapping):
+        return
+    try:
+        decision_request_shape(body)
+    except DecisionRequestShapeError as exc:
+        raise _DecisionShapeRefused(exc.reason_code) from None
+
+
+def _decide_with_service_state(
+    state: Any,
+    decision_request: CoreDecisionRequest,
+) -> DecisionResult:
+    """Decide with the service's configured backend, policy and profiles."""
+
+    return decide(
+        decision_request,
+        backend=getattr(state, "decision_backend", DETERMINISTIC_DECISION_BACKEND),
+        policy=getattr(state, "decision_access_policy", DecisionAccessPolicy()),
+        calibration_profiles=getattr(state, "decision_calibration_profiles", None),
+    )
+
+
+async def _openai_compatible_decision(
+    payload: OpenAIDecisionsRequest,
+    request: Request,
+) -> Any:
+    """Decide an OpenAI-compatible body and answer in the same shape."""
+
+    body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    try:
+        decision_request = from_openai_decisions_request(body)
+    except (DecisionError, TypeError, ValueError) as exc:
+        # Decision errors carry static, value-free messages; others may not.
+        reason = str(exc) if isinstance(exc, DecisionError) else "invalid_arguments"
+        raise InputError(
+            "Invalid OpenAI-compatible decision request.",
+            details={"reason": reason},
+        ) from exc
+    backend = getattr(
+        request.app.state,
+        "decision_backend",
+        DETERMINISTIC_DECISION_BACKEND,
+    )
+    identity = getattr(backend, "identity", None)
+    if body["model"] != getattr(identity, "model_id", None):
+        # Never answer with a different model than the caller asked for.
+        return _error_response(
+            422,
+            "model_not_served",
+            "Requested model is not served",
+        )
+    result = await run_in_threadpool(
+        _decide_with_service_state,
+        request.app.state,
+        decision_request,
+    )
+    return to_openai_decisions_response(
+        decision_request,
+        result,
+        include_openmed=True,
+    )
 
 
 class _BoundedRequestBodyMiddleware:
@@ -1242,6 +1334,27 @@ def create_app(
             },
         )
 
+    @app.exception_handler(_DecisionShapeRefused)
+    async def _decision_shape_handler(
+        _: Request,
+        exc: _DecisionShapeRefused,
+    ) -> JSONResponse:
+        details = {"reason": exc.reason_code}
+        if exc.reason_code == "media_unsupported":
+            return _error_response(
+                422,
+                "decision_media_unsupported",
+                "OpenAI-compatible decision requests are text-only.",
+                details=details,
+            )
+        return _error_response(
+            422,
+            "decision_request_ambiguous",
+            "Send exactly one of an OpenMed decision request or an "
+            "OpenAI-compatible Decisions body.",
+            details=details,
+        )
+
     @app.exception_handler(OpenMedError)
     async def _openmed_error_handler(
         _: Request,
@@ -1370,21 +1483,41 @@ def create_app(
         _DECISION_PATH,
         response_model=None,
         tags=["decision"],
+        dependencies=[Depends(_negotiate_decision_body)],
         responses={
             200: {
-                "description": "A calibrated fixed-option decision result.",
-                "content": {"application/json": {"schema": decision_result_schema()}},
+                "description": (
+                    "A calibrated decision in the shape of the request: an "
+                    "OpenMed result for an OpenMed request, or an "
+                    "OpenAI-compatible Decisions response for that body."
+                ),
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "oneOf": [
+                                decision_result_schema(),
+                                openai_decisions_response_schema(),
+                            ]
+                        }
+                    }
+                },
             }
         },
     )
     async def fixed_option_decision(
-        payload: FixedOptionDecisionRequest,
+        payload: DecisionsRequestBody,
         request: Request,
-    ) -> Dict[str, Any]:
-        """Evaluate a bounded local decision and return a typed review result."""
+    ) -> Any:
+        """Evaluate a bounded local decision and return a typed review result.
 
+        The body is either an OpenMed decision request or an OpenAI-compatible
+        Decisions body; the response uses the same shape as the request.
+        """
+
+        if isinstance(payload, OpenAIDecisionsRequest):
+            return await _openai_compatible_decision(payload, request)
         # Only caller-set fields reach the core contract, so a request without
-        # 1.1.0 fields still resolves to schema 1.0.0.
+        # extension fields still resolves to schema 1.0.0.
         body = (
             payload.model_dump(exclude_unset=True)
             if hasattr(payload, "model_dump")
@@ -1402,23 +1535,9 @@ def create_app(
                 details={"reason": str(exc)},
             ) from exc
         result = await run_in_threadpool(
-            decide,
+            _decide_with_service_state,
+            request.app.state,
             decision_request,
-            backend=getattr(
-                request.app.state,
-                "decision_backend",
-                DETERMINISTIC_DECISION_BACKEND,
-            ),
-            policy=getattr(
-                request.app.state,
-                "decision_access_policy",
-                DecisionAccessPolicy(),
-            ),
-            calibration_profiles=getattr(
-                request.app.state,
-                "decision_calibration_profiles",
-                None,
-            ),
         )
         return result.to_dict()
 

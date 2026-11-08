@@ -1408,7 +1408,7 @@ def test_local_media_is_scrubbed_and_sent_only_to_loopback(start_server, kind):
         sha256=hashlib.sha256(source).hexdigest(),
     )
     server = start_server()
-    request = replace(_question_set(), media=(item,))
+    request = replace(_question_set(), media=(item,), schema_version="1.2.0")
     result = decide(request, backend=_backend(server.origin))
     assert result.state is DecisionState.SUCCESS and len(server.received) == 1
     url = server.received[0].document[key][0]
@@ -1469,7 +1469,7 @@ def test_media_rejections_precede_backend_and_wire_never_opens_paths(
             DecisionMedia(source, **fields)
     with pytest.raises(DecisionMediaError, match="limit"):
         replace(_question_set(), media=(item,) * 5)
-    req = replace(_question_set(), media=(item,))
+    req = replace(_question_set(), media=(item,), schema_version="1.2.0")
     assert decide(req).state is DecisionState.UNSUPPORTED
     private = _backend(
         "http://10.24.8.9:8000",

@@ -1,5 +1,5 @@
 {
-  "$id": "https://openmed.dev/schemas/decision-request/1.1.0",
+  "$id": "https://openmed.dev/schemas/decision-request/1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "allOf": [
@@ -185,6 +185,25 @@
               "const": "question_set"
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.1.0"
+          }
+        },
+        "required": [
+          "schema_version"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "media"
+          ]
         }
       }
     },
@@ -503,10 +522,11 @@
       "type": "array"
     },
     "schema_version": {
-      "description": "Omitted, it resolves to 1.1.0 when a 1.1.0 field is present and to 1.0.0 otherwise.",
+      "description": "Omitted, it resolves to the lowest version carrying every field present: 1.2.0 with media, 1.1.0 with another extension field and 1.0.0 otherwise.",
       "enum": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ],
       "type": "string"
     },

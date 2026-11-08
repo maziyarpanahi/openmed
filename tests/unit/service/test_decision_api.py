@@ -86,10 +86,12 @@ def test_openapi_and_mcp_share_the_canonical_decision_contract() -> None:
     openapi = create_app().openapi()
     operation = openapi["paths"]["/v1/decisions"]["post"]
     request_ref = operation["requestBody"]["content"]["application/json"]["schema"][
-        "$ref"
-    ]
+        "oneOf"
+    ][0]["$ref"]
     component = openapi["components"]["schemas"][request_ref.rsplit("/", 1)[-1]]
-    rest_result = operation["responses"]["200"]["content"]["application/json"]["schema"]
+    rest_result = operation["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]["oneOf"][0]
     mcp_spec = TOOL_REGISTRY.get("openmed_decide")
     mcp_request = deepcopy(request_schema)
     for metadata_key in ("$id", "$schema", "title"):
@@ -146,7 +148,8 @@ def test_question_sets_are_identical_across_python_rest_client_and_mcp() -> None
 
     assert response.status_code == 200
     assert response.json() == typed_result == mcp_result == expected
-    assert expected["schema_version"] == DECISION_SCHEMA_VERSION
+    # Without a declared version, question fields resolve to 1.1.0.
+    assert expected["schema_version"] == "1.1.0"
     assert [item["question_id"] for item in expected["questions"]] == [
         "priority",
         "flag",
@@ -275,12 +278,22 @@ def test_rest_and_mcp_never_silently_drop_media_on_text_only_backend() -> None:
         "sha256": hashlib.sha256(data).hexdigest(),
         "media_type": "image/png",
     }
-    payload = {**_payload(), "schema_version": "1.1.0", "media": [inline]}
+    payload = {**_payload(), "schema_version": "1.2.0", "media": [inline]}
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         result = client.post("/v1/decisions", json=payload)
         assert result.status_code == 200
         assert result.json()["state"] == "unsupported"
+        assert result.json()["schema_version"] == "1.2.0"
         assert inline["data"] not in result.text
+        undeclared = {k: v for k, v in payload.items() if k != "schema_version"}
+        resolved = client.post("/v1/decisions", json=undeclared)
+        assert resolved.json()["schema_version"] == "1.2.0"
+        older = client.post(
+            "/v1/decisions", json={**payload, "schema_version": "1.1.0"}
+        )
+        assert older.status_code == 400
+        assert older.json()["error"]["code"] == "input_error"
+        assert inline["data"] not in older.text
         bad = client.post(
             "/v1/decisions",
             json={**payload, "media": [{"path": "/private/synthetic", "byte_size": 1}]},
