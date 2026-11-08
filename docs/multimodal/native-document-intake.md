@@ -2,7 +2,7 @@
 
 OpenMedKit's Swift and Android document intake render PDF pages and decode images on the device, hand each page to a local OCR engine, and map every recognized region back to the original page. Both platforms emit the same page, crop and region records, in the same coordinates, with the same explicit outcomes. `openmed.multimodal.native_intake` is the Python reference mapping. The three implementations are checked against one synthetic fixture, `tests/fixtures/parity/document_intake_v1.json`.
 
-The intake adds no OCR model and makes no network call. Pages are rendered into memory and released after recognition; nothing is written to storage. A mapped region is structural evidence for where text was recognized. It is not a claim that the OCR is correct, and it does not authorize disclosure or redaction export.
+The intake adds no OCR model and makes no network call. Pages are rendered into memory and released after recognition; nothing is written to storage. A mapped region is structural evidence for where text was recognized. It is not a claim that the OCR is correct, and it does not authorize disclosure or redaction export. [Native redaction export](native-redaction-export.md) builds a separate, verified artifact for sharing.
 
 ## Coordinate contract
 

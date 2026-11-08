@@ -527,6 +527,7 @@ classification:
     - multimodal/ecg-evidence-windows.md
     - multimodal/openmedkit-contracts.md
     - multimodal/native-document-intake.md
+    - multimodal/native-redaction-export.md
     - multimodal/local-review.md
     - multimodal/cross-modal-clock-alignment.md
     - multimodal/apple-speech.md
