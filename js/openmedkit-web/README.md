@@ -52,6 +52,21 @@ const result = await deidentify(
 `{ variant: "fp32" }` or `{ variant: "fp16" }` when a different published
 variant is appropriate.
 
+## Node.js Example
+
+A runnable end-to-end script lives at
+[`examples/web/node_deidentify.mjs`](../../examples/web/node_deidentify.mjs).
+It de-identifies a synthetic note and prints the redacted text and span
+labels. From the repository root, after `npm run build` in this directory:
+
+```bash
+node examples/web/node_deidentify.mjs
+```
+
+Running it directly downloads the default model once; the test suite
+(`npm test`) exercises the same `run()` entry point offline with a stub
+pipeline.
+
 Transformers.js token-classification output carries no character offsets.
 OpenMed aligns every token back to the source text before decoding spans
 (case- and accent-insensitive, WordPiece `##`, SentencePiece `▁`, and
