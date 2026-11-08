@@ -749,6 +749,7 @@ classification:
     - export-matrix.md
     - openmedkit-support-matrix.md
     - openmedkit-device-qualification.md
+    - release/v4.0-kit-release-gate.md
     - maple-on-device.md
     - mlx-backend.md
     - performance-mps.md
