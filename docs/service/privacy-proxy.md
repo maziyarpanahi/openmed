@@ -59,6 +59,42 @@ asynchronous iterable of either. Placeholder tokens split across chunks are
 buffered until they can be restored; the replacement map itself is never sent
 as an event.
 
+## Messages-shaped requests
+
+Clients built on the Anthropic Messages API shape can point their base URL at
+the proxy and use `POST /v1/messages` (or `POST /messages` when the base URL
+already ends in `/v1`). The same content-type rules apply.
+
+```json
+{
+  "model": "local-fixture",
+  "max_tokens": 256,
+  "system": "The patient is Avery Example.",
+  "messages": [
+    {"role": "user", "content": [{"type": "text", "text": "Call 555-0100."}]}
+  ]
+}
+```
+
+The proxy requires `model`, a positive integer `max_tokens`, and a non-empty
+`messages` list with `user` and `assistant` roles. `content` and `system` may
+be a string or a list of `text` blocks. The `system` text and every text block
+go through the same detector, outbound tripwire and placeholder map as the
+chat route. `model`, `role`, `type`, `stop_sequences` and numeric fields are
+forwarded unchanged. Other string fields, such as `metadata`, are redacted the
+same way as on the chat route. Transport metadata carries `"api": "messages"`.
+
+Invalid requests return HTTP 400 with a stable `reason` such as
+`max_tokens_invalid`, `messages_required` or `message_role_invalid`, and no
+request text. Until their redaction rules exist, the route fails closed on
+non-text content blocks (`content_block_unsupported`) and on
+`"stream": true` (`stream_unsupported`). Inbound `x-api-key` and
+`Authorization` headers are never passed to the transport.
+
+A transport may return a Messages-shaped mapping, which is restored and
+returned as-is, or plain text, which is wrapped in a minimal `message`
+response with one text block.
+
 This is a privacy boundary, not a compliance certification or a clinical
 decision system. Use synthetic fixtures in development and validate residual
 risk for the deployment context.
