@@ -18,8 +18,10 @@ services:
         - python3
         - -c
         - >-
-          import urllib.request;
-          urllib.request.urlopen("http://127.0.0.1:8080/readyz", timeout=3).read()
+          from http.client import HTTPConnection;
+          connection = HTTPConnection("127.0.0.1", 8080, timeout=3);
+          connection.request("GET", "/readyz");
+          raise SystemExit(connection.getresponse().status != 200)
       interval: 10s
       timeout: 5s
       start_period: 15s
