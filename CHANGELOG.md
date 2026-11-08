@@ -315,6 +315,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Use the stable 1.x release of the optional `yasbd-lib` sentence segmentation backend (#3596).
+
 - Group multimodal guides into a dedicated workflow-ordered section with an
   overview of supported contracts and experimental surfaces, preserving all
   existing page URLs (#3845).
