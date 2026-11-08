@@ -125,6 +125,44 @@ export type {
   WebGpuTokenClassificationSessionOptions,
   WebGpuTokenSpan,
 } from "./runtime/webgpu-session";
+export {
+  INFERENCE_WORKER_ERROR_CODES,
+  INFERENCE_WORKER_PROTOCOL_VERSION,
+  InferenceWorkerError,
+} from "./worker/protocol";
+export type {
+  InferenceWorkerErrorCode,
+  InferenceWorkerLoadReason,
+  InferenceWorkerLoadSpec,
+  InferenceWorkerPlan,
+  NormalizedInferenceWorkerLoadSpec,
+} from "./worker/protocol";
+export {
+  InferenceWorkerClient,
+  createInferenceWorkerClient,
+} from "./worker/client";
+export type {
+  InferenceWorkerClientOptions,
+  InferenceWorkerEndpoint,
+  InferenceWorkerEventListener,
+  InferenceWorkerLoadOptions,
+  InferenceWorkerPipelineOptions,
+  InferenceWorkerRecoverOptions,
+  InferenceWorkerRunOptions,
+  InferenceWorkerState,
+  InferenceWorkerStats,
+} from "./worker/client";
+export { serveInferenceWorker } from "./worker/server";
+export type {
+  InferenceWorkerLoadContext,
+  InferenceWorkerPipeline,
+  InferenceWorkerRunContext,
+  InferenceWorkerRuntime,
+  InferenceWorkerScope,
+  InferenceWorkerServer,
+  InferenceWorkerServerStats,
+  ServeInferenceWorkerOptions,
+} from "./worker/server";
 
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";

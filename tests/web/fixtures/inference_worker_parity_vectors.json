@@ -1,0 +1,328 @@
+{
+  "schema": "openmed-inference-worker-parity/v1",
+  "description": "Synthetic parity vectors: direct and worker-routed extraction must return identical spans for each vector.",
+  "hashSecret": "synthetic-parity-secret",
+  "vectors": [
+    {
+      "name": "python-golden-offsets",
+      "text": "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.",
+      "tokens": [
+        {
+          "score": 0.99,
+          "index": 0,
+          "word": "Alice",
+          "start": 8,
+          "end": 13,
+          "entity": "B-NAME"
+        },
+        {
+          "score": 0.97,
+          "index": 1,
+          "word": "Nguyen",
+          "start": 14,
+          "end": 20,
+          "entity": "E-NAME"
+        },
+        {
+          "score": 0.96,
+          "index": 2,
+          "word": "1979-04-12",
+          "start": 26,
+          "end": 36,
+          "entity": "S-DATE_OF_BIRTH"
+        },
+        {
+          "score": 0.98,
+          "index": 3,
+          "word": "alice@example.org",
+          "start": 44,
+          "end": 61,
+          "entity": "S-EMAIL"
+        }
+      ]
+    },
+    {
+      "name": "transformersjs-wordpiece-without-offsets",
+      "text": "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.",
+      "tokens": [
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 0,
+          "word": "[CLS]"
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 1,
+          "word": "patient"
+        },
+        {
+          "entity": "B-NAME",
+          "score": 0.9,
+          "index": 2,
+          "word": "alice"
+        },
+        {
+          "entity": "I-NAME",
+          "score": 0.9,
+          "index": 3,
+          "word": "ng"
+        },
+        {
+          "entity": "I-NAME",
+          "score": 0.9,
+          "index": 4,
+          "word": "##uy"
+        },
+        {
+          "entity": "I-NAME",
+          "score": 0.9,
+          "index": 5,
+          "word": "##en"
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 6,
+          "word": ","
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 7,
+          "word": "do"
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 8,
+          "word": "##b"
+        },
+        {
+          "entity": "B-DATE_OF_BIRTH",
+          "score": 0.9,
+          "index": 9,
+          "word": "1979"
+        },
+        {
+          "entity": "I-DATE_OF_BIRTH",
+          "score": 0.9,
+          "index": 10,
+          "word": "-"
+        },
+        {
+          "entity": "I-DATE_OF_BIRTH",
+          "score": 0.9,
+          "index": 11,
+          "word": "04"
+        },
+        {
+          "entity": "I-DATE_OF_BIRTH",
+          "score": 0.9,
+          "index": 12,
+          "word": "-"
+        },
+        {
+          "entity": "I-DATE_OF_BIRTH",
+          "score": 0.9,
+          "index": 13,
+          "word": "12"
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 14,
+          "word": ","
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 15,
+          "word": "email"
+        },
+        {
+          "entity": "B-EMAIL",
+          "score": 0.9,
+          "index": 16,
+          "word": "alice"
+        },
+        {
+          "entity": "I-EMAIL",
+          "score": 0.9,
+          "index": 17,
+          "word": "@"
+        },
+        {
+          "entity": "I-EMAIL",
+          "score": 0.9,
+          "index": 18,
+          "word": "example"
+        },
+        {
+          "entity": "I-EMAIL",
+          "score": 0.9,
+          "index": 19,
+          "word": "."
+        },
+        {
+          "entity": "I-EMAIL",
+          "score": 0.9,
+          "index": 20,
+          "word": "org"
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 21,
+          "word": "."
+        },
+        {
+          "entity": "O",
+          "score": 0.9,
+          "index": 22,
+          "word": "[SEP]"
+        }
+      ]
+    },
+    {
+      "name": "batched-nested-output",
+      "text": "Synthetic patient Bao Tran visited Riverside Clinic on 2031-02-03.",
+      "batches": [
+        [
+          {
+            "score": 0.91,
+            "index": 0,
+            "word": "Bao",
+            "start": 18,
+            "end": 21,
+            "entity": "B-NAME"
+          },
+          {
+            "score": 0.93,
+            "index": 1,
+            "word": "Tran",
+            "start": 22,
+            "end": 26,
+            "entity": "I-NAME"
+          }
+        ],
+        [
+          {
+            "score": 0.81,
+            "index": 2,
+            "word": "Riverside",
+            "start": 35,
+            "end": 44,
+            "entity": "B-ORGANIZATION"
+          },
+          {
+            "score": 0.84,
+            "index": 3,
+            "word": "Clinic",
+            "start": 45,
+            "end": 51,
+            "entity": "I-ORGANIZATION"
+          },
+          {
+            "score": 0.95,
+            "index": 4,
+            "word": "2031-02-03",
+            "start": 55,
+            "end": 65,
+            "entity": "S-DATE"
+          }
+        ]
+      ]
+    },
+    {
+      "name": "astral-plane-and-accented-text",
+      "text": "Dr. Zo\u00eb \u00c5ngstr\u00f6m \ud83e\ude7a phoned +1-555-0100 from Caf\u00e9 Lumi\u00e8re.",
+      "tokens": [
+        {
+          "score": 0.88,
+          "index": 0,
+          "word": "Zo\u00eb",
+          "start": 4,
+          "end": 7,
+          "entity": "B-NAME"
+        },
+        {
+          "score": 0.86,
+          "index": 1,
+          "word": "\u00c5ngstr\u00f6m",
+          "start": 8,
+          "end": 16,
+          "entity": "I-NAME"
+        },
+        {
+          "score": 0.97,
+          "index": 2,
+          "word": "+1-555-0100",
+          "start": 27,
+          "end": 38,
+          "entity": "S-PHONE"
+        },
+        {
+          "score": 0.7,
+          "index": 3,
+          "word": "Caf\u00e9",
+          "start": 44,
+          "end": 48,
+          "entity": "B-LOCATION"
+        },
+        {
+          "score": 0.72,
+          "index": 4,
+          "word": "Lumi\u00e8re",
+          "start": 49,
+          "end": 56,
+          "entity": "E-LOCATION"
+        }
+      ]
+    },
+    {
+      "name": "aggregated-entity-groups",
+      "text": "Contact synthetic.user@example.net or user name dlee42 today.",
+      "tokens": [
+        {
+          "score": 0.99,
+          "index": 0,
+          "word": "synthetic.user@example.net",
+          "start": 8,
+          "end": 34,
+          "entity_group": "EMAIL"
+        },
+        {
+          "index": 1,
+          "word": "dlee42",
+          "start": 48,
+          "end": 54,
+          "entity_group": "USERNAME"
+        }
+      ]
+    },
+    {
+      "name": "lone-surrogate-text",
+      "text": "Note \ud83d from Mira Okafor.",
+      "tokens": [
+        {
+          "entity": "B-NAME",
+          "score": 0.9,
+          "index": 0,
+          "word": "Mira",
+          "start": 12,
+          "end": 16
+        },
+        {
+          "entity": "I-NAME",
+          "score": 0.92,
+          "index": 1,
+          "word": "Okafor",
+          "start": 17,
+          "end": 23
+        }
+      ]
+    }
+  ]
+}
