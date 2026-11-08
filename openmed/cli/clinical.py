@@ -16,6 +16,8 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any
 
+from openmed.utils import _verify_windows_output, _windows_output
+
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, command_path, emit, emit_error
 
 _NOTE_BYTES = 16_384
@@ -170,11 +172,18 @@ def _invalid(code: str) -> CliError:
 def _read(path: str, limit: int) -> bytes:
     descriptor = None
     try:
+        expected = os.stat(path, follow_symlinks=False)
+        if not stat.S_ISREG(expected.st_mode):
+            raise _invalid("clinical_input_not_regular")
         descriptor = os.open(
-            path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+            path,
+            os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
         )
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode):
+        if not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != (
+            expected.st_dev,
+            expected.st_ino,
+        ):
             raise _invalid("clinical_input_not_regular")
         if info.st_size > limit:
             raise _invalid("clinical_input_too_large")
@@ -626,9 +635,15 @@ def _write_new(path: str, envelope: dict[str, Any]) -> None:
     owned = None
     succeeded = False
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        descriptor = (
+            _windows_output(path)
+            if os.name == "nt"
+            else os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        )
         info = os.fstat(descriptor)
         owned = (info.st_dev, info.st_ino)
+        if os.name == "nt":
+            _verify_windows_output(descriptor)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             descriptor = None
             json.dump(

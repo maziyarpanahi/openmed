@@ -38,6 +38,7 @@ assets that need it unevaluable.
 | `audio_sample_rate_hz` | 1 to 2^32 - 1 | audio waveforms |
 | `audio_channels` | 1 to 1024 | audio waveforms |
 | `audio_bytes_per_sample` | 1 to 1024 | audio waveforms, per channel |
+| `waveform_bytes_per_sample` | 1 to 1024 | declared EDF, WFDB and waveform DICOM, per channel |
 
 Booleans, floats (including NaN and infinities), negative numbers, and values
 outside these bounds are rejected with `BatchMemoryError`.
@@ -51,6 +52,8 @@ The modality comes from the manifest media type:
 | image | width x height x frames x `image_bytes_per_pixel` | `width`, `height`, `frames` |
 | DICOM | width x height x frames x `dicom_bytes_per_pixel` | `width`, `height`, `frames` |
 | audio | ceil(duration x rate) x channels x `audio_bytes_per_sample` | `duration_seconds` |
+| waveform | channels x max(samples, ceil(duration x rate)) x `waveform_bytes_per_sample` | `channel_count`, `samples_per_channel`, `sample_rate_hz`, `duration_seconds` |
+| non-pixel DICOM | never estimated | no decoded-size contract |
 | PDF | never estimated | none |
 
 The audio frame count is the exact rational ceiling of `duration_seconds`
@@ -64,6 +67,17 @@ every frame, so the planner rejects with `insufficient_metadata`.
 A PDF under the PDF manifest profile carries no raster geometry, and a page
 count alone cannot stand in for it, so a PDF is always unevaluable.
 `application/dicom+json` has no geometry profile and is unevaluable too.
+DICOM with `dicom_subprofile="waveform"` uses waveform metadata rather than
+pixel geometry. `non_pixel` remains unevaluable (`decoded_bytes` missing):
+encoded bytes cannot bound decoded structured or encapsulated content.
+
+Waveform estimates require the complete waveform profile and the caller's
+explicit decoded-byte factor. Duration/rate-derived counts use exact rational
+arithmetic; the larger count is charged to prevent underestimates. Saturation
+rejects first; otherwise profile findings return `invalid_metadata`, naming
+only the first failing field. No amplitudes, labels or recording headers enter
+plans. The new policy factor is omitted from serialized policies when unset,
+so existing policies and plans retain their original output.
 
 ## Outcomes
 
@@ -74,6 +88,7 @@ estimated bytes, and, when it failed, a reason code.
 | --- | --- | --- |
 | `insufficient_metadata` | a manifest field or policy factor is missing; `field_name` names the first one | `null` |
 | `estimate_saturated` | the estimate would pass the saturation ceiling | `null` |
+| `invalid_metadata` | waveform metadata fails its profile; `field_name` names the first finding | `null` |
 | `budget_exceeded` | the asset plus one overhead does not fit the budget | the estimate |
 
 If any asset has a reason code, the plan is `reject` and carries no batches.

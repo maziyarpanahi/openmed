@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import zlib
 from typing import Any
 
 import pytest
@@ -14,94 +13,14 @@ from openmed.multimodal.pdf_geometry import (
     PdfGeometryStatus,
     read_pdf_geometry,
 )
+from tests.fixtures.pdf_inventory import (
+    _classic_pdf,
+    _object_stream_pdf,
+    _single_page,
+    _stream_object,
+)
 
 _SENTINEL = "Synthetic Patient Jane Roe MRN 000123"
-
-
-def _classic_pdf(
-    objects: dict[int, str], *, version: str = "1.7", trailer: str = ""
-) -> bytes:
-    """Build a synthetic PDF with a classic cross-reference table."""
-    output = bytearray(f"%PDF-{version}\n%\xe2\xe3\xcf\xd3\n".encode("latin-1"))
-    offsets: dict[int, int] = {}
-    for number in sorted(objects):
-        offsets[number] = len(output)
-        output += f"{number} 0 obj\n{objects[number]}\nendobj\n".encode("latin-1")
-    size = max(objects) + 1
-    xref = len(output)
-    output += f"xref\n0 {size}\n0000000000 65535 f \n".encode("ascii")
-    for number in range(1, size):
-        if number in offsets:
-            output += f"{offsets[number]:010d} 00000 n \n".encode("ascii")
-        else:
-            output += b"0000000000 65535 f \n"
-    output += (
-        f"trailer\n<< /Size {size} /Root 1 0 R {trailer}>>\nstartxref\n{xref}\n%%EOF\n"
-    ).encode("latin-1")
-    return bytes(output)
-
-
-def _stream_object(dictionary: str, payload: bytes) -> bytes:
-    return (
-        f"<< {dictionary} /Length {len(payload)} >>\nstream\n".encode("latin-1")
-        + payload
-        + b"\nendstream"
-    )
-
-
-def _object_stream_pdf(
-    compressed: dict[int, str],
-    direct: dict[int, str],
-    *,
-    filter_name: str | None = "FlateDecode",
-    corrupt: bool = False,
-) -> bytes:
-    """Build a synthetic PDF 1.5 file with an object stream and an xref stream."""
-    numbers = sorted(compressed)
-    bodies = [compressed[number].encode("latin-1") for number in numbers]
-    offsets: list[int] = []
-    position = 0
-    for body in bodies:
-        offsets.append(position)
-        position += len(body) + 1
-    index = " ".join(f"{number} {offset}" for number, offset in zip(numbers, offsets))
-    header = (index + "\n").encode("ascii")
-    payload = header + b"\n".join(bodies) + b"\n"
-    encoded = zlib.compress(payload) if filter_name == "FlateDecode" else payload
-    if corrupt:
-        encoded = b"\x00not-zlib" + encoded[8:]
-    filter_entry = f"/Filter /{filter_name}" if filter_name else ""
-    stream_number = max([*compressed, *direct]) + 1
-    output = bytearray(b"%PDF-1.5\n")
-    for number in sorted(direct):
-        output += f"{number} 0 obj\n{direct[number]}\nendobj\n".encode("latin-1")
-    output += f"{stream_number} 0 obj\n".encode("ascii")
-    output += _stream_object(
-        f"/Type /ObjStm /N {len(numbers)} /First {len(header)} {filter_entry}",
-        encoded,
-    )
-    output += b"\nendobj\n"
-    xref_number = stream_number + 1
-    xref_offset = len(output)
-    output += f"{xref_number} 0 obj\n".encode("ascii")
-    output += _stream_object(
-        f"/Type /XRef /Size {xref_number + 1} /Root 1 0 R /W [1 4 2]",
-        b"",
-    )
-    output += f"\nendobj\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
-    return bytes(output)
-
-
-def _single_page(**page_entries: str) -> dict[int, str]:
-    entries = " ".join(f"/{key} {value}" for key, value in page_entries.items())
-    return {
-        1: "<< /Type /Catalog /Pages 2 0 R >>",
-        2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        3: f"<< /Type /Page /Parent 2 0 R {entries} /Contents 4 0 R >>",
-        4: _stream_object("", f"BT ({_SENTINEL}) Tj ET".encode("latin-1")).decode(
-            "latin-1"
-        ),
-    }
 
 
 def test_single_page_letter_geometry_is_readable() -> None:
@@ -150,31 +69,39 @@ def test_mixed_page_sizes_with_inheritance_keep_page_tree_order() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("rotate", "expected"),
-    [("90", 90), ("180", 180), ("270", 270), ("-90", 270), ("450", 90), ("0", 0)],
-)
-def test_rotation_is_normalized_clockwise(rotate: str, expected: int) -> None:
-    report = read_pdf_geometry(
-        _classic_pdf(_single_page(MediaBox="[0 0 612 792]", Rotate=rotate))
-    )
+def test_rotation_is_normalized_clockwise(subtests) -> None:
+    for rotate, expected in [
+        ("90", 90),
+        ("180", 180),
+        ("270", 270),
+        ("-90", 270),
+        ("450", 90),
+        ("0", 0),
+    ]:
+        with subtests.test(rotate=rotate, expected=expected):
+            report = read_pdf_geometry(
+                _classic_pdf(_single_page(MediaBox="[0 0 612 792]", Rotate=rotate))
+            )
 
-    (page,) = report.pages
-    assert report.status is PdfGeometryStatus.READABLE
-    assert page.rotation == expected
-    swapped = expected in (90, 270)
-    assert (page.width, page.height) == ((792.0, 612.0) if swapped else (612.0, 792.0))
+            (page,) = report.pages
+            assert report.status is PdfGeometryStatus.READABLE
+            assert page.rotation == expected
+            swapped = expected in (90, 270)
+            assert (page.width, page.height) == (
+                (792.0, 612.0) if swapped else (612.0, 792.0)
+            )
 
 
-@pytest.mark.parametrize("rotate", ["45", "90.0", "(90)", "/Ninety"])
-def test_invalid_rotation_is_reviewed_and_treated_as_upright(rotate: str) -> None:
-    report = read_pdf_geometry(
-        _classic_pdf(_single_page(MediaBox="[0 0 612 792]", Rotate=rotate))
-    )
+def test_invalid_rotation_is_reviewed_and_treated_as_upright(subtests) -> None:
+    for rotate in ["45", "90.0", "(90)", "/Ninety"]:
+        with subtests.test(rotate=rotate):
+            report = read_pdf_geometry(
+                _classic_pdf(_single_page(MediaBox="[0 0 612 792]", Rotate=rotate))
+            )
 
-    assert report.status is PdfGeometryStatus.REVIEW
-    assert report.reason_codes == ("rotation_invalid",)
-    assert report.pages[0].rotation == 0
+            assert report.status is PdfGeometryStatus.REVIEW
+            assert report.reason_codes == ("rotation_invalid",)
+            assert report.pages[0].rotation == 0
 
 
 def test_missing_media_box_is_reviewed_without_geometry() -> None:
@@ -186,23 +113,21 @@ def test_missing_media_box_is_reviewed_without_geometry() -> None:
     assert page.media_box is page.crop_box is page.width is page.height is None
 
 
-@pytest.mark.parametrize(
-    "media_box",
-    [
+def test_invalid_media_box_is_reviewed(subtests) -> None:
+    for media_box in [
         "[0 0 612]",
         "[0 0 612 792 1]",
         "[0 0 0 792]",
         "[0 0 (612) 792]",
         "612",
         "[0 0 1e9 792]",
-    ],
-)
-def test_invalid_media_box_is_reviewed(media_box: str) -> None:
-    report = read_pdf_geometry(_classic_pdf(_single_page(MediaBox=media_box)))
+    ]:
+        with subtests.test(media_box=media_box):
+            report = read_pdf_geometry(_classic_pdf(_single_page(MediaBox=media_box)))
 
-    assert report.status is PdfGeometryStatus.REVIEW
-    assert report.reason_codes == ("media_box_invalid",)
-    assert report.pages[0].media_box is None
+            assert report.status is PdfGeometryStatus.REVIEW
+            assert report.reason_codes == ("media_box_invalid",)
+            assert report.pages[0].media_box is None
 
 
 def test_reversed_box_corners_and_indirect_values_are_normalized() -> None:
@@ -231,15 +156,16 @@ def test_crop_box_outside_media_box_is_clipped_and_reviewed() -> None:
     assert report.pages[0].crop_box == (0.0, 100.0, 612.0, 500.0)
 
 
-@pytest.mark.parametrize("crop_box", ["[700 800 900 900]", "[0 0 1 ]", "[0 0 0 0]"])
-def test_unusable_crop_box_falls_back_to_media_box(crop_box: str) -> None:
-    report = read_pdf_geometry(
-        _classic_pdf(_single_page(MediaBox="[0 0 612 792]", CropBox=crop_box))
-    )
+def test_unusable_crop_box_falls_back_to_media_box(subtests) -> None:
+    for crop_box in ["[700 800 900 900]", "[0 0 1 ]", "[0 0 0 0]"]:
+        with subtests.test(crop_box=crop_box):
+            report = read_pdf_geometry(
+                _classic_pdf(_single_page(MediaBox="[0 0 612 792]", CropBox=crop_box))
+            )
 
-    assert report.status is PdfGeometryStatus.REVIEW
-    assert report.reason_codes == ("crop_box_invalid",)
-    assert report.pages[0].crop_box == (0.0, 0.0, 612.0, 792.0)
+            assert report.status is PdfGeometryStatus.REVIEW
+            assert report.reason_codes == ("crop_box_invalid",)
+            assert report.pages[0].crop_box == (0.0, 0.0, 612.0, 792.0)
 
 
 def test_declared_count_mismatch_is_reviewed() -> None:
@@ -308,21 +234,22 @@ def test_uncompressed_object_streams_are_expanded() -> None:
     assert read_pdf_geometry(pdf).pages[0].media_box == (0.0, 0.0, 100.0, 200.0)
 
 
-@pytest.mark.parametrize("variant", [{"filter_name": "LZWDecode"}, {"corrupt": True}])
-def test_unreadable_object_streams_are_rejected(variant: dict[str, Any]) -> None:
-    pdf = _object_stream_pdf(
-        {
-            2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            3: "<< /Type /Page /MediaBox [0 0 612 792] >>",
-        },
-        {1: "<< /Type /Catalog /Pages 2 0 R >>"},
-        **variant,
-    )
+def test_unreadable_object_streams_are_rejected(subtests) -> None:
+    for variant in [{"filter_name": "LZWDecode"}, {"corrupt": True}]:
+        with subtests.test(variant=variant):
+            pdf = _object_stream_pdf(
+                {
+                    2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                    3: "<< /Type /Page /MediaBox [0 0 612 792] >>",
+                },
+                {1: "<< /Type /Catalog /Pages 2 0 R >>"},
+                **variant,
+            )
 
-    report = read_pdf_geometry(pdf)
+            report = read_pdf_geometry(pdf)
 
-    assert report.status is PdfGeometryStatus.REJECTED
-    assert report.reason_codes == ("pdf_object_stream_unsupported",)
+            assert report.status is PdfGeometryStatus.REJECTED
+            assert report.reason_codes == ("pdf_object_stream_unsupported",)
 
 
 def test_encrypted_documents_are_rejected_without_pages() -> None:
@@ -338,9 +265,8 @@ def test_encrypted_documents_are_rejected_without_pages() -> None:
     assert (report.version_major, report.version_minor) == (1, 7)
 
 
-@pytest.mark.parametrize(
-    ("payload", "reason"),
-    [
+def test_malformed_documents_are_rejected(subtests) -> None:
+    for payload, reason in [
         (b"", "pdf_header_missing"),
         (b"GIF89a not a pdf", "pdf_header_missing"),
         (b" " * 1100 + b"%PDF-1.7\n", "pdf_header_missing"),
@@ -351,14 +277,13 @@ def test_encrypted_documents_are_rejected_without_pages() -> None:
             b"trailer\n<< /Root 1 0 R >>\n",
             "pdf_page_tree_invalid",
         ),
-    ],
-)
-def test_malformed_documents_are_rejected(payload: bytes, reason: str) -> None:
-    report = read_pdf_geometry(payload)
+    ]:
+        with subtests.test(payload=payload, reason=reason):
+            report = read_pdf_geometry(payload)
 
-    assert report.status is PdfGeometryStatus.REJECTED
-    assert report.reason_codes == (reason,)
-    assert report.pages == ()
+            assert report.status is PdfGeometryStatus.REJECTED
+            assert report.reason_codes == (reason,)
+            assert report.pages == ()
 
 
 def test_header_within_first_kilobyte_is_accepted() -> None:
@@ -516,29 +441,26 @@ def test_report_serialization_is_deterministic() -> None:
     assert set(report.reason_codes) <= set(PDF_REASON_CODES)
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "category"),
-    [
+def test_invalid_limits_raise_value_free_errors(subtests) -> None:
+    for kwargs, category in [
         ({"max_bytes": 0}, "max_bytes_invalid"),
         ({"max_pages": True}, "max_pages_invalid"),
         ({"max_objects": -1}, "max_objects_invalid"),
         ({"max_decompressed_bytes": 1.5}, "max_decompressed_bytes_invalid"),
-    ],
-)
-def test_invalid_limits_raise_value_free_errors(
-    kwargs: dict[str, Any], category: str
-) -> None:
-    with pytest.raises(PdfGeometryError) as exc_info:
-        read_pdf_geometry(b"%PDF-1.7", **kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, category=category):
+            with pytest.raises(PdfGeometryError) as exc_info:
+                read_pdf_geometry(b"%PDF-1.7", **kwargs)
 
-    assert exc_info.value.category == category
-    assert str(exc_info.value) == category
+            assert exc_info.value.category == category
+            assert str(exc_info.value) == category
 
 
-@pytest.mark.parametrize("source", [_SENTINEL, 42, None])
-def test_invalid_sources_raise_value_free_errors(source: Any) -> None:
-    with pytest.raises(PdfGeometryError) as exc_info:
-        read_pdf_geometry(source)
+def test_invalid_sources_raise_value_free_errors(subtests) -> None:
+    for source in [_SENTINEL, 42, None]:
+        with subtests.test(source=source):
+            with pytest.raises(PdfGeometryError) as exc_info:
+                read_pdf_geometry(source)
 
-    assert exc_info.value.category == "source_invalid"
-    assert _SENTINEL not in str(exc_info.value)
+            assert exc_info.value.category == "source_invalid"
+            assert _SENTINEL not in str(exc_info.value)

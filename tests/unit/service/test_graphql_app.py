@@ -24,45 +24,50 @@ LOOPBACK_BASE_URL = "http://127.0.0.1"
 SYNTHETIC_TEXT = "Paciente: Maria Garcia"
 
 
-@pytest.mark.parametrize(
-    "selection",
-    [
+def test_graphql_authorizes_complete_document_before_resolvers(subtests, caplog):
+    for selection in [
         'analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
         'alias: deidentify(input: {text: "SYNTHETIC_FORBIDDEN"}) { deidentifiedText }',
         'entityTypes { label } hidden: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
         "...Secret",
-    ],
-)
-def test_graphql_authorizes_complete_document_before_resolvers(
-    monkeypatch, selection, caplog
-):
-    import json
+    ]:
+        with subtests.test(selection=selection):
+            caplog.clear()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import json
 
-    from openmed.service.auth import hash_api_key
+                from openmed.service.auth import hash_api_key
 
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        json.dumps(
-            [{"key_hash": hash_api_key("synthetic-key"), "scopes": ["models:read"]}]
-        ),
-    )
-    app = create_app()
-    query = "query { " + selection + " }"
-    if selection == "...Secret":
-        query += ' fragment Secret on Query { alias: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text } }'
-    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
-        response = client.post(
-            "/graphql", json={"query": query}, headers={"X-API-Key": "synthetic-key"}
-        )
-    result = response.json()
-    assert result["data"] is None
-    assert any(
-        error.get("extensions", {}).get("code") == "OPENMED_FORBIDDEN"
-        for error in result["errors"]
-    )
-    assert app.state.runtime._loader is None
-    assert "SYNTHETIC_FORBIDDEN" not in response.text + caplog.text
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    json.dumps(
+                        [
+                            {
+                                "key_hash": hash_api_key("synthetic-key"),
+                                "scopes": ["models:read"],
+                            }
+                        ]
+                    ),
+                )
+                app = create_app()
+                query = "query { " + selection + " }"
+                if selection == "...Secret":
+                    query += ' fragment Secret on Query { alias: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text } }'
+                with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+                    response = client.post(
+                        "/graphql",
+                        json={"query": query},
+                        headers={"X-API-Key": "synthetic-key"},
+                    )
+                result = response.json()
+                assert result["data"] is None
+                assert any(
+                    error.get("extensions", {}).get("code") == "OPENMED_FORBIDDEN"
+                    for error in result["errors"]
+                )
+                assert app.state.runtime._loader is None
+                assert "SYNTHETIC_FORBIDDEN" not in response.text + caplog.text
 
 
 def test_graphql_allowed_scope_preserves_results_and_rejects_unserved_models(

@@ -156,9 +156,8 @@ def test_headerless_note_returns_one_unsectioned_preamble_span() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("spans", "message"),
-    (
+def test_section_span_validator_rejects_gaps_and_overlaps(subtests) -> None:
+    for spans, message in (
         (
             (
                 SectionSpan(label="history", start=0, end=4),
@@ -174,11 +173,7 @@ def test_headerless_note_returns_one_unsectioned_preamble_span() -> None:
             "overlap",
         ),
         ((SectionSpan(label="history", start=0, end=4),), "gap"),
-    ),
-)
-def test_section_span_validator_rejects_gaps_and_overlaps(
-    spans: tuple[SectionSpan, ...],
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        validate_section_spans("abcdefgh", spans)
+    ):
+        with subtests.test(spans=spans, message=message):
+            with pytest.raises(ValueError, match=message):
+                validate_section_spans("abcdefgh", spans)

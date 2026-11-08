@@ -166,9 +166,11 @@ def test_socket_blocked_smart_job_does_not_expose_credentials_or_urls() -> None:
     assert payload["status"] == "failed"
 
 
-@pytest.mark.parametrize(
-    "submitted",
-    [
+def test_bulk_paths_reject_lexical_escapes_without_side_effects(
+    subtests, tmp_path, caplog
+):
+    case_root = tmp_path
+    for submitted in [
         "/etc/SYNTHETIC_PATH",
         "../SYNTHETIC_PATH",
         "~/.ssh",
@@ -176,32 +178,42 @@ def test_socket_blocked_smart_job_does_not_expose_credentials_or_urls() -> None:
         "one/../SYNTHETIC_PATH",
         "one//SYNTHETIC_PATH",
         "./SYNTHETIC_PATH",
-    ],
-)
-@pytest.mark.parametrize("field", ["input_dir", "output_dir", "checkpoint_path"])
-def test_bulk_paths_reject_lexical_escapes_without_side_effects(
-    tmp_path, monkeypatch, submitted, field, caplog
-):
-    monkeypatch.setenv("OPENMED_PROFILE", "test")
-    monkeypatch.setenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", str(tmp_path))
-    monkeypatch.setenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path))
-    source = tmp_path / "source"
-    _write_export(source)
-    before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
-    payload = {"input_dir": "source", "output_dir": "fresh"}
-    payload[field] = submitted
-    app = create_app()
-    app.state.fhir_bulk_deidentifier = _fake_deidentify
-    with TestClient(app, base_url="http://127.0.0.1") as client:
-        response = client.post("/fhir/bulk/exports", json=payload)
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "path_invalid"
-    assert (
-        sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
-        == before
-    )
-    assert not app.state.fhir_bulk_jobs._jobs
-    assert "SYNTHETIC_PATH" not in response.text + caplog.text
+    ]:
+        for field in ["input_dir", "output_dir", "checkpoint_path"]:
+            with subtests.test(submitted=submitted, field=field):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                caplog.clear()
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    monkeypatch.setenv("OPENMED_PROFILE", "test")
+                    monkeypatch.setenv(
+                        "OPENMED_SERVICE_BULK_INPUT_ROOTS", str(tmp_path)
+                    )
+                    monkeypatch.setenv(
+                        "OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path)
+                    )
+                    source = tmp_path / "source"
+                    _write_export(source)
+                    before = sorted(
+                        str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+                    )
+                    payload = {"input_dir": "source", "output_dir": "fresh"}
+                    payload[field] = submitted
+                    app = create_app()
+                    app.state.fhir_bulk_deidentifier = _fake_deidentify
+                    with TestClient(app, base_url="http://127.0.0.1") as client:
+                        response = client.post("/fhir/bulk/exports", json=payload)
+                    assert response.status_code == 400
+                    assert response.json()["error"]["code"] == "path_invalid"
+                    assert (
+                        sorted(
+                            str(path.relative_to(tmp_path))
+                            for path in tmp_path.rglob("*")
+                        )
+                        == before
+                    )
+                    assert not app.state.fhir_bulk_jobs._jobs
+                    assert "SYNTHETIC_PATH" not in response.text + caplog.text
 
 
 def test_bulk_roots_disabled_and_symlink_or_existing_outputs_are_rejected(
