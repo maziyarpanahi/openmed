@@ -51,7 +51,7 @@ Every top-level member is required. Optional sections are written as `null`.
 | `decoder` | `kind`, `contract_version` |
 | `segmenter` | `id`, `files` |
 | `policy` | `min_version`, `max_version_exclusive` (supported privacy-policy versions), `path` |
-| `calibration` | `profile_version`, `path` (slot for calibration profiles) |
+| `calibration` | `profile_version`, `path` (an opaque calibration file; decision thresholds go in the `org.openmed.decision_calibration` extension) |
 | `compatibility` | `sdks`: `name`, `min`, `max_exclusive` for each reading SDK |
 | `runtimes` | Runtime variants: `id`, `format`, `precision`, `entrypoint`, `files`, `platforms` (`platform`, `min_os`, `max_os_exclusive`), `min_memory_bytes`, `min_storage_bytes`, `fallback` |
 | `licenses` | `id` (lowercase SPDX identifier) and the license `files` |
@@ -92,6 +92,13 @@ dotted name such as `org.example.note`. An extension listed in
 `critical_extensions` must be implemented by the reader, or verification
 fails with `unknown_critical_extension`. Readers keep the manifest bytes
 unchanged, so unknown non-critical extensions round-trip byte for byte.
+
+Built-in extensions (`BUILTIN_EXTENSIONS`) also have their content checked
+when the reader lists them in `understood_extensions`. A malformed or
+inconsistent value then fails with `extension_invalid`. The only built-in
+extension is `org.openmed.decision_calibration`, which carries the
+[decision calibration profiles](portable-bundle-calibration.md) of a
+decision model.
 
 ## Canonical form and content identity
 
@@ -175,7 +182,7 @@ Every reader runs these checks in this order and reports the first failure.
 | Signatures | `signature_missing`, `signature_algorithm_unsupported`, `untrusted_key`, `key_revoked`, `key_not_yet_valid`, `key_expired`, `signature_invalid`, `signature_verifier_unavailable`, `signature_threshold_not_met` |
 | Canonical form | `manifest_not_canonical` |
 | Schema | `schema_unsupported`, `schema_version_unsupported`, `unknown_critical_field`, `manifest_malformed` |
-| Structure | `path_unsafe`, `executable_file_forbidden`, `runtime_combination_unsupported`, `duplicate_path`, `path_conflict`, `file_order_invalid`, `file_reference_undeclared`, `fallback_invalid`, `unknown_critical_extension`, `size_limit_exceeded` |
+| Structure | `path_unsafe`, `executable_file_forbidden`, `runtime_combination_unsupported`, `duplicate_path`, `path_conflict`, `file_order_invalid`, `file_reference_undeclared`, `fallback_invalid`, `unknown_critical_extension`, `extension_invalid`, `size_limit_exceeded` |
 | Validity and rollback | `bundle_not_yet_valid`, `bundle_expired`, `rollback_rejected` |
 | Compatibility | `sdk_incompatible`, `policy_incompatible`, `platform_incompatible` |
 | File tree | `file_missing`, `file_size_mismatch`, `file_digest_mismatch`, `file_undeclared` |
@@ -307,9 +314,10 @@ write_portable_bundle("exports/my-model-onnx", manifest, envelope)
 
 `tests/fixtures/portable_bundle/vectors.json` holds the shared conformance
 corpus: the canonical golden manifest, canonicalization vectors, RFC 8032
-signature vectors, trust policies, synthetic file trees, and 75 accepted and
+signature vectors, trust policies, synthetic file trees, and 77 accepted and
 rejected cases with the exact expected result. Python, Swift, Kotlin, and
-TypeScript tests all consume it.
+TypeScript tests all consume it. Decision calibration profiles have their own
+corpus in `tests/fixtures/portable_bundle_calibration/`.
 
 The vectors are signed with TEST-ONLY keys derived from public labels in
 `tests/fixtures/portable_bundle/generate_vectors.py`. Never add them to a

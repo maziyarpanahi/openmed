@@ -9,6 +9,12 @@
  * references. Trust roots are always supplied by the caller.
  */
 
+import {
+  DECISION_CALIBRATION_EXTENSION,
+  DecisionCalibrationError,
+  validateDecisionCalibrationExtension,
+} from "./portable-bundle-calibration";
+
 export const PORTABLE_BUNDLE_SCHEMA = "openmed.portable_bundle";
 export const PORTABLE_BUNDLE_SCHEMA_VERSION = 1;
 export const PORTABLE_BUNDLE_ENVELOPE_SCHEMA = "openmed.portable_bundle.signatures";
@@ -49,6 +55,7 @@ export const PORTABLE_BUNDLE_REASONS = [
   "file_reference_undeclared",
   "fallback_invalid",
   "unknown_critical_extension",
+  "extension_invalid",
   "size_limit_exceeded",
   "bundle_not_yet_valid",
   "bundle_expired",
@@ -947,7 +954,9 @@ export async function verifyPortableBundle(
     if (trustPolicy.revokedContentIds.has(contentId)) throw fail("bundle_revoked");
     validSignatures = await checkSignatures(parsed.signatures, manifest, trustPolicy, now);
     const value = parseCanonical(manifest);
-    const validated = validateManifest(value, new Set(context.understoodExtensions ?? []));
+    const understood = new Set(context.understoodExtensions ?? []);
+    const validated = validateManifest(value, understood);
+    await validateBuiltinExtensions(value, understood);
     const declaredBytes = validated.files.reduce(
       (total, item) => total + (item.size_bytes as number),
       0,
@@ -999,6 +1008,25 @@ export async function verifyPortableBundle(
     filesChecked,
     filesVerified: input.files !== undefined && input.files !== null,
   };
+}
+
+/**
+ * Run the content validator of every built-in extension the reader understands
+ * and the manifest carries; failures are `extension_invalid`.
+ */
+async function validateBuiltinExtensions(
+  value: Json,
+  understood: ReadonlySet<string>,
+): Promise<void> {
+  const name = DECISION_CALIBRATION_EXTENSION;
+  const extensions = (value as JsonObject).extensions as JsonObject;
+  if (!understood.has(name) || !Object.hasOwn(extensions, name)) return;
+  try {
+    await validateDecisionCalibrationExtension(value as Record<string, unknown>);
+  } catch (error) {
+    if (error instanceof DecisionCalibrationError) throw fail("extension_invalid");
+    throw error;
+  }
 }
 
 function definedLimits(context: PortableBundleContext): Partial<

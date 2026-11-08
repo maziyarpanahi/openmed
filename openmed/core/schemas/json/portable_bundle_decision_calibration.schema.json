@@ -1,0 +1,365 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/models/portable-bundle-decision-calibration.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable-bundle decision calibration extension (org.openmed.decision_calibration)",
+  "description": "Signed decision calibration profiles for the model in a portable bundle. Probabilities are integers in parts per million. Readers also require each profile_digest to match the profile, the model id and revision to match the manifest model, each runtime digest to match the declared runtime, a labels scope to match the label map digest, the evaluation report to be a declared file with that digest, unique (calibration_id, runtime) bindings, strictly increasing isotonic inputs with non-decreasing outputs, a non-zero Platt slope, minimum_margin_ppm at most minimum_confidence_ppm, and decision_schema.min below max_exclusive.",
+  "schema_version": 1,
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,8})(?:\\.(?:0|[1-9][0-9]{0,8})){2}$"
+    },
+    "ppm": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "signed_ppm": {
+      "type": "integer",
+      "minimum": -100000000,
+      "maximum": 100000000
+    },
+    "empty_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "temperature_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temperature_ppm"
+      ],
+      "properties": {
+        "temperature_ppm": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000000
+        }
+      }
+    },
+    "platt_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intercept_ppm",
+        "slope_ppm"
+      ],
+      "properties": {
+        "intercept_ppm": {
+          "$ref": "#/$defs/signed_ppm"
+        },
+        "slope_ppm": {
+          "$ref": "#/$defs/signed_ppm"
+        }
+      }
+    },
+    "isotonic_parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "points"
+      ],
+      "properties": {
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "input_ppm",
+              "output_ppm"
+            ],
+            "properties": {
+              "input_ppm": {
+                "$ref": "#/$defs/ppm"
+              },
+              "output_ppm": {
+                "$ref": "#/$defs/ppm"
+              }
+            }
+          }
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration_id",
+        "decision_schema",
+        "method",
+        "model",
+        "parameters",
+        "profile_digest",
+        "provenance",
+        "scope",
+        "thresholds",
+        "version"
+      ],
+      "properties": {
+        "calibration_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+        },
+        "version": {
+          "$ref": "#/$defs/semver"
+        },
+        "method": {
+          "enum": [
+            "deterministic_margin",
+            "isotonic_regression",
+            "platt_scaling",
+            "temperature_scaling"
+          ]
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "thresholds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimum_confidence_ppm",
+            "minimum_margin_ppm",
+            "multi_label_threshold_ppm"
+          ],
+          "properties": {
+            "minimum_confidence_ppm": {
+              "$ref": "#/$defs/ppm"
+            },
+            "minimum_margin_ppm": {
+              "$ref": "#/$defs/ppm"
+            },
+            "multi_label_threshold_ppm": {
+              "$ref": "#/$defs/ppm"
+            }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "digest",
+            "kind"
+          ],
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "kind": {
+              "enum": [
+                "labels",
+                "options",
+                "questions"
+              ]
+            }
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "revision",
+            "runtimes"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+            },
+            "revision": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runtimes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "digest",
+                  "id"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/$defs/digest"
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "decision_schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_exclusive",
+            "min"
+          ],
+          "properties": {
+            "max_exclusive": {
+              "$ref": "#/$defs/semver"
+            },
+            "min": {
+              "$ref": "#/$defs/semver"
+            }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "dataset_digest",
+            "evaluation",
+            "in_domain_digest",
+            "out_of_domain_digest"
+          ],
+          "properties": {
+            "dataset_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "evaluation": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_][A-Za-z0-9._+/-]{0,511}$"
+                    },
+                    "sha256": {
+                      "$ref": "#/$defs/digest"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "in_domain_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "out_of_domain_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        },
+        "profile_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "deterministic_margin"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "parameters": {
+                "$ref": "#/$defs/empty_parameters"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "temperature_scaling"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "parameters": {
+                "$ref": "#/$defs/temperature_parameters"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "platt_scaling"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "parameters": {
+                "$ref": "#/$defs/platt_parameters"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "isotonic_regression"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "parameters": {
+                "$ref": "#/$defs/isotonic_parameters"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profiles",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/profile"
+      }
+    }
+  }
+}

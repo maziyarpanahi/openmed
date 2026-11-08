@@ -110,6 +110,13 @@ FILE_ROLES = frozenset(
     }
 )
 OFFSET_UNITS = frozenset({"unicode_scalar", "utf16_code_unit", "utf8_byte"})
+BUILTIN_EXTENSIONS = frozenset({"org.openmed.decision_calibration"})
+"""Extensions whose content the verifier checks when a reader understands them.
+
+When a name here is in ``understood_extensions`` and present in the manifest,
+verification validates its value and fails with ``extension_invalid`` if it is
+malformed or inconsistent with the manifest.
+"""
 
 
 class PortableBundleReason(str, Enum):
@@ -148,6 +155,7 @@ class PortableBundleReason(str, Enum):
     FILE_REFERENCE_UNDECLARED = "file_reference_undeclared"
     FALLBACK_INVALID = "fallback_invalid"
     UNKNOWN_CRITICAL_EXTENSION = "unknown_critical_extension"
+    EXTENSION_INVALID = "extension_invalid"
     SIZE_LIMIT_EXCEEDED = "size_limit_exceeded"
     BUNDLE_NOT_YET_VALID = "bundle_not_yet_valid"
     BUNDLE_EXPIRED = "bundle_expired"
@@ -1416,6 +1424,7 @@ def verify_portable_bundle(
         )
         value = _parse_canonical(manifest_bytes)
         manifest = _validate_manifest(value, context.understood_extensions)
+        _validate_builtin_extensions(value, context.understood_extensions)
         if len(manifest.files) > context.max_files or (
             sum(int(item["size_bytes"]) for item in manifest.files)
             > context.max_total_bytes
@@ -1464,6 +1473,19 @@ def verify_portable_bundle(
         files_checked=checked,
         files_verified=files is not None,
     )
+
+
+def _validate_builtin_extensions(
+    value: Mapping[str, Any], understood: frozenset[str]
+) -> None:
+    from openmed.core import portable_bundle_calibration as calibration
+
+    name = calibration.DECISION_CALIBRATION_EXTENSION
+    if name in understood and name in value["extensions"]:
+        try:
+            calibration.validate_decision_calibration_extension(value)
+        except calibration.DecisionCalibrationError:
+            raise _fail(_R.EXTENSION_INVALID) from None
 
 
 def verify_portable_bundle_dir(
@@ -1883,6 +1905,7 @@ def load_portable_bundle_schema(name: str = "portable_bundle") -> dict[str, Any]
 
 
 __all__ = [
+    "BUILTIN_EXTENSIONS",
     "DEFAULT_MAX_ENVELOPE_BYTES",
     "DEFAULT_MAX_FILES",
     "DEFAULT_MAX_MANIFEST_BYTES",

@@ -1,0 +1,2876 @@
+{
+  "extension": "org.openmed.decision_calibration",
+  "extension_version": 1,
+  "golden": {
+    "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+    "manifest": "golden",
+    "profile_digests": [
+      "sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad",
+      "sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749",
+      "sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c",
+      "sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea"
+    ],
+    "runtime_digests": {
+      "coreml-fp16": "sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913",
+      "onnx-fp32": "sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267",
+      "onnx-int8": "sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b"
+    }
+  },
+  "manifests": {
+    "binding_duplicated_across_profiles": {
+      "at": 2322,
+      "base": "golden",
+      "delete": 133,
+      "insert": ",{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:28b6e01992afbe25fc08acce769f1d6d73f0d0aa4d20edbb0cb162828c825096"
+    },
+    "calibration_id_invalid": {
+      "at": 745,
+      "base": "golden",
+      "delete": 546,
+      "insert": "Triage\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:54df707998f5c1aa7ef68cf7f80b47ed74a16f326662112515d3f90adc34cc8a"
+    },
+    "critical_extension_absent": {
+      "at": 678,
+      "base": "golden",
+      "delete": 4732,
+      "insert": ""
+    },
+    "dataset_digest_invalid": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 169,
+      "insert": "cb2e068d46da8b005d198ac3dc655e165bba4459b746c2ab155e82513b8e602e\",\"provenance\":{\"dataset_digest\":\"sha256:00"
+    },
+    "decision_schema_empty_range": {
+      "at": 810,
+      "base": "golden",
+      "delete": 481,
+      "insert": "1.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:3307de30c0ca67f4d6acdf9983e2dfd4d44f1bc6a499b0cee87f5e3d0963e43e"
+    },
+    "decision_schema_inverted": {
+      "at": 810,
+      "base": "golden",
+      "delete": 481,
+      "insert": "0.9.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:80e9dc6853b10e58fb4cd694d5141ea3008f8e9052b85c3cd5e96b30fd4f2cb9"
+    },
+    "evaluation_digest_mismatch": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 310,
+      "insert": "b668116364bc831cd904ca6696e7cb6e01499b11bc8f947bc92813f5216f1418\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:e9b69db06b6b2ca1597b3fd5cd4d97028493700cbdd5d435fc9eacc6894ff180"
+    },
+    "evaluation_path_empty": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 227,
+      "insert": "5936255d61883c168c92a1b9163aabb02d9ed33468c06955bd33c84b7e2b58e3\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\""
+    },
+    "evaluation_path_outside_bundle": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 222,
+      "insert": "65ddb6abd3214b36a41d904dba67a3291c77385a33f6d2ce72d2991e2d25c3b6\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"../outside"
+    },
+    "evaluation_undeclared": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 222,
+      "insert": "0bc2afd094a9af7141b2c47cabe53e60d06244a9eb384c7610150b91c74e3d9a\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/missing"
+    },
+    "extension_missing": {
+      "at": 484,
+      "base": "golden",
+      "delete": 4926,
+      "insert": "],\"decoder\":{\"contract_version\":1,\"kind\":\"fixed-option\"},\"evidence\":[{\"kind\":\"decision-calibration\",\"path\":\"evidence/decision-calibration.json\"}],\"extensions\":{"
+    },
+    "extension_not_object": {
+      "at": 713,
+      "base": "golden",
+      "delete": 4697,
+      "insert": "[]"
+    },
+    "extension_unknown_member": {
+      "at": 715,
+      "base": "golden",
+      "delete": 0,
+      "insert": "default_profile\":\"openmed.synthetic.triage.v1\",\""
+    },
+    "golden": {
+      "text": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-decision\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":3,\"version\":\"1.0.0\"},\"calibration\":null,\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[\"org.openmed.decision_calibration\"],\"decoder\":{\"contract_version\":1,\"kind\":\"fixed-option\"},\"evidence\":[{\"kind\":\"decision-calibration\",\"path\":\"evidence/decision-calibration.json\"}],\"extensions\":{\"org.openmed.decision_calibration\":{\"profiles\":[{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"temperature_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":750000,\"minimum_margin_ppm\":200000,\"multi_label_threshold_ppm\":750000},\"version\":\"1.1.0\"},{\"calibration_id\":\"openmed.synthetic.screening.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.1.0\"},\"method\":\"platt_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{\"intercept_ppm\":250000,\"slope_ppm\":-1800000},\"profile_digest\":\"sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0\",\"kind\":\"questions\"},\"thresholds\":{\"minimum_confidence_ppm\":650000,\"minimum_margin_ppm\":100000,\"multi_label_threshold_ppm\":600000},\"version\":\"2.0.0\"},{\"calibration_id\":\"openmed.synthetic.labels.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"isotonic_regression\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"},{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"points\":[{\"input_ppm\":0,\"output_ppm\":0},{\"input_ppm\":250000,\"output_ppm\":100000},{\"input_ppm\":500000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\"kind\":\"labels\"},\"thresholds\":{\"minimum_confidence_ppm\":800000,\"minimum_margin_ppm\":250000,\"multi_label_threshold_ppm\":800000},\"version\":\"1.2.3\"}],\"schema_version\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:cfb668dd2a9b4c8a7a02b3b21916b3ba6f85fc2ac3c55ecd6974d3b459ed2c39\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:2c15692ae9397076eee67544849c50666d58d709b498026a9beea7be152551c2\",\"size_bytes\":44},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/decision-calibration.json\",\"role\":\"evidence\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\",\"size_bytes\":59},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\"size_bytes\":34},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:75388663c4995e8d174da2681674f581f9a5a74ff840f6b6261762b9d51efa6f\",\"size_bytes\":41},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:822965a9ec80e2758900e2fcb5e3810c6e1886beef02f0081657d9e87879b75c\",\"size_bytes\":41},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"fixed-option\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"decision\",\"id\":\"OpenMed/synthetic-tiny-decision\",\"languages\":[\"en\"],\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"task\":\"text-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":null,\"source_digest\":\"sha256:5bd4cd9488d1ef2ce8465a39018219753477a7db43819814ae133e5324b7c191\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":null,\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\"],\"kind\":\"wordpiece\"}}"
+    },
+    "isotonic_inputs_not_increasing": {
+      "at": 4633,
+      "base": "golden",
+      "delete": 203,
+      "insert": "250000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:924360a54f2c4dadac0d9b0724127eb84b180950b09f8ec8d8798ae2a389b6f3"
+    },
+    "isotonic_outputs_decreasing": {
+      "at": 4653,
+      "base": "golden",
+      "delete": 183,
+      "insert": "50000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:08da6063bcc21f60acca1f7ea5ad17e5bfc511eebcb61e2ade7775fd6d67069f"
+    },
+    "isotonic_point_out_of_range": {
+      "at": 4742,
+      "base": "golden",
+      "delete": 94,
+      "insert": "1}]},\"profile_digest\":\"sha256:9909090fe9f58df8b917834f1ea07207258cededa2f141bc61112cf6350e41f0"
+    },
+    "isotonic_single_point": {
+      "at": 4578,
+      "base": "golden",
+      "delete": 258,
+      "insert": "]},\"profile_digest\":\"sha256:5abf31ca2b839733f0251f3be8d08f7b5216e0b119b7a51e89f4b7d3ca2d39df"
+    },
+    "labels_scope_mismatch": {
+      "at": 4773,
+      "base": "golden",
+      "delete": 469,
+      "insert": "f2f41100cdcde1b09407b6ad2bceb66fbd3cee459363d10ead069775a043442\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:ea356a6defc054a479e05f0d0cba193a3bc4162982ef1196ef29d45c29dc9d49"
+    },
+    "labels_scope_without_label_map": {
+      "at": 7446,
+      "base": "golden",
+      "delete": 58,
+      "insert": "null"
+    },
+    "malformed_noncritical_not_understood": {
+      "at": 484,
+      "base": "golden",
+      "delete": 4905,
+      "insert": "],\"decoder\":{\"contract_version\":1,\"kind\":\"fixed-option\"},\"evidence\":[{\"kind\":\"decision-calibration\",\"path\":\"evidence/decision-calibration.json\"}],\"extensions\":{\"org.openmed.decision_calibration\":{\"profiles\":["
+    },
+    "malformed_understood": {
+      "at": 726,
+      "base": "golden",
+      "delete": 4663,
+      "insert": ""
+    },
+    "manifest_not_canonical": {
+      "at": 1,
+      "base": "golden",
+      "delete": 9546,
+      "insert": "\n \"bundle\": {\n  \"expires_at\": \"2027-05-01T00:00:00Z\",\n  \"id\": \"openmed.synthetic.tiny-decision\",\n  \"issued_at\": \"2026-10-01T00:00:00Z\",\n  \"sequence\": 3,\n  \"version\": \"1.0.0\"\n },\n \"calibration\": null,\n \"compatibility\": {\n  \"sdks\": [\n   {\n    \"max_exclusive\": \"5.0.0\",\n    \"min\": \"4.0.0\",\n    \"name\": \"openmed-python\"\n   },\n   {\n    \"max_exclusive\": \"5.0.0\",\n    \"min\": \"4.0.0\",\n    \"name\": \"openmedkit-android\"\n   },\n   {\n    \"max_exclusive\": \"5.0.0\",\n    \"min\": \"4.0.0\",\n    \"name\": \"openmedkit-swift\"\n   },\n   {\n    \"max_exclusive\": \"5.0.0\",\n    \"min\": \"4.0.0\",\n    \"name\": \"openmedkit-web\"\n   }\n  ]\n },\n \"critical_extensions\": [\n  \"org.openmed.decision_calibration\"\n ],\n \"decoder\": {\n  \"contract_version\": 1,\n  \"kind\": \"fixed-option\"\n },\n \"evidence\": [\n  {\n   \"kind\": \"decision-calibration\",\n   \"path\": \"evidence/decision-calibration.json\"\n  }\n ],\n \"extensions\": {\n  \"org.openmed.decision_calibration\": {\n   \"profiles\": [\n    {\n     \"calibration_id\": \"openmed.synthetic.triage.v1\",\n     \"decision_schema\": {\n      \"max_exclusive\": \"2.0.0\",\n      \"min\": \"1.0.0\"\n     },\n     \"method\": \"deterministic_margin\",\n     \"model\": {\n      \"id\": \"OpenMed/synthetic-tiny-decision\",\n      \"revision\": \"89abcdef0123456789abcdef0123456789abcdef\",\n      \"runtimes\": [\n       {\n        \"digest\": \"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\n        \"id\": \"coreml-fp16\"\n       },\n       {\n        \"digest\": \"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\n        \"id\": \"onnx-fp32\"\n       }\n      ]\n     },\n     \"parameters\": {},\n     \"profile_digest\": \"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\n     \"provenance\": {\n      \"dataset_digest\": \"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\n      \"evaluation\": {\n       \"path\": \"evidence/decision-calibration.json\",\n       \"sha256\": \"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"\n      },\n      \"in_domain_digest\": \"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\n      \"out_of_domain_digest\": \"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"\n     },\n     \"scope\": {\n      \"digest\": \"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\n      \"kind\": \"options\"\n     },\n     \"thresholds\": {\n      \"minimum_confidence_ppm\": 700000,\n      \"minimum_margin_ppm\": 150000,\n      \"multi_label_threshold_ppm\": 700000\n     },\n     \"version\": \"1.0.0\"\n    },\n    {\n     \"calibration_id\": \"openmed.synthetic.triage.v1\",\n     \"decision_schema\": {\n      \"max_exclusive\": \"2.0.0\",\n      \"min\": \"1.0.0\"\n     },\n     \"method\": \"temperature_scaling\",\n     \"model\": {\n      \"id\": \"OpenMed/synthetic-tiny-decision\",\n      \"revision\": \"89abcdef0123456789abcdef0123456789abcdef\",\n      \"runtimes\": [\n       {\n        \"digest\": \"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\n        \"id\": \"onnx-int8\"\n       }\n      ]\n     },\n     \"parameters\": {\n      \"temperature_ppm\": 1250000\n     },\n     \"profile_digest\": \"sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749\",\n     \"provenance\": {\n      \"dataset_digest\": \"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\n      \"evaluation\": null,\n      \"in_domain_digest\": \"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\n      \"out_of_domain_digest\": \"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"\n     },\n     \"scope\": {\n      \"digest\": \"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\n      \"kind\": \"options\"\n     },\n     \"thresholds\": {\n      \"minimum_confidence_ppm\": 750000,\n      \"minimum_margin_ppm\": 200000,\n      \"multi_label_threshold_ppm\": 750000\n     },\n     \"version\": \"1.1.0\"\n    },\n    {\n     \"calibration_id\": \"openmed.synthetic.screening.v1\",\n     \"decision_schema\": {\n      \"max_exclusive\": \"2.0.0\",\n      \"min\": \"1.1.0\"\n     },\n     \"method\": \"platt_scaling\",\n     \"model\": {\n      \"id\": \"OpenMed/synthetic-tiny-decision\",\n      \"revision\": \"89abcdef0123456789abcdef0123456789abcdef\",\n      \"runtimes\": [\n       {\n        \"digest\": \"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\n        \"id\": \"onnx-fp32\"\n       }\n      ]\n     },\n     \"parameters\": {\n      \"intercept_ppm\": 250000,\n      \"slope_ppm\": -1800000\n     },\n     \"profile_digest\": \"sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c\",\n     \"provenance\": {\n      \"dataset_digest\": \"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\n      \"evaluation\": null,\n      \"in_domain_digest\": \"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\n      \"out_of_domain_digest\": \"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"\n     },\n     \"scope\": {\n      \"digest\": \"sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0\",\n      \"kind\": \"questions\"\n     },\n     \"thresholds\": {\n      \"minimum_confidence_ppm\": 650000,\n      \"minimum_margin_ppm\": 100000,\n      \"multi_label_threshold_ppm\": 600000\n     },\n     \"version\": \"2.0.0\"\n    },\n    {\n     \"calibration_id\": \"openmed.synthetic.labels.v1\",\n     \"decision_schema\": {\n      \"max_exclusive\": \"2.0.0\",\n      \"min\": \"1.0.0\"\n     },\n     \"method\": \"isotonic_regression\",\n     \"model\": {\n      \"id\": \"OpenMed/synthetic-tiny-decision\",\n      \"revision\": \"89abcdef0123456789abcdef0123456789abcdef\",\n      \"runtimes\": [\n       {\n        \"digest\": \"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\n        \"id\": \"onnx-fp32\"\n       },\n       {\n        \"digest\": \"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\n        \"id\": \"onnx-int8\"\n       }\n      ]\n     },\n     \"parameters\": {\n      \"points\": [\n       {\n        \"input_ppm\": 0,\n        \"output_ppm\": 0\n       },\n       {\n        \"input_ppm\": 250000,\n        \"output_ppm\": 100000\n       },\n       {\n        \"input_ppm\": 500000,\n        \"output_ppm\": 450000\n       },\n       {\n        \"input_ppm\": 750000,\n        \"output_ppm\": 800000\n       },\n       {\n        \"input_ppm\": 1000000,\n        \"output_ppm\": 1000000\n       }\n      ]\n     },\n     \"profile_digest\": \"sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea\",\n     \"provenance\": {\n      \"dataset_digest\": \"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\n      \"evaluation\": null,\n      \"in_domain_digest\": \"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\n      \"out_of_domain_digest\": \"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"\n     },\n     \"scope\": {\n      \"digest\": \"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\n      \"kind\": \"labels\"\n     },\n     \"thresholds\": {\n      \"minimum_confidence_ppm\": 800000,\n      \"minimum_margin_ppm\": 250000,\n      \"multi_label_threshold_ppm\": 800000\n     },\n     \"version\": \"1.2.3\"\n    }\n   ],\n   \"schema_version\": 1\n  }\n },\n \"files\": [\n  {\n   \"executable\": false,\n   \"media_type\": \"text/plain\",\n   \"path\": \"LICENSE\",\n   \"role\": \"license\",\n   \"sha256\": \"sha256:cfb668dd2a9b4c8a7a02b3b21916b3ba6f85fc2ac3c55ecd6974d3b459ed2c39\",\n   \"size_bytes\": 61\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"config.json\",\n   \"role\": \"config\",\n   \"sha256\": \"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\n   \"size_bytes\": 54\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/vnd.apple.coreml\",\n   \"path\": \"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\n   \"role\": \"graph\",\n   \"sha256\": \"sha256:2c15692ae9397076eee67544849c50666d58d709b498026a9beea7be152551c2\",\n   \"size_bytes\": 44\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"coreml/model.mlpackage/Manifest.json\",\n   \"role\": \"graph\",\n   \"sha256\": \"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\n   \"size_bytes\": 19\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"evidence/decision-calibration.json\",\n   \"role\": \"evidence\",\n   \"sha256\": \"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\",\n   \"size_bytes\": 59\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"id2label.json\",\n   \"role\": \"labels\",\n   \"sha256\": \"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\n   \"size_bytes\": 34\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/onnx\",\n   \"path\": \"onnx/model.onnx\",\n   \"role\": \"graph\",\n   \"sha256\": \"sha256:75388663c4995e8d174da2681674f581f9a5a74ff840f6b6261762b9d51efa6f\",\n   \"size_bytes\": 41\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/onnx\",\n   \"path\": \"onnx/model_int8.onnx\",\n   \"role\": \"graph\",\n   \"sha256\": \"sha256:822965a9ec80e2758900e2fcb5e3810c6e1886beef02f0081657d9e87879b75c\",\n   \"size_bytes\": 41\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"policy/default.json\",\n   \"role\": \"policy\",\n   \"sha256\": \"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\n   \"size_bytes\": 38\n  },\n  {\n   \"executable\": false,\n   \"media_type\": \"application/json\",\n   \"path\": \"tokenizer.json\",\n   \"role\": \"tokenizer\",\n   \"sha256\": \"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\n   \"size_bytes\": 35\n  }\n ],\n \"labels\": {\n  \"count\": 3,\n  \"path\": \"id2label.json\",\n  \"scheme\": \"fixed-option\"\n },\n \"licenses\": [\n  {\n   \"files\": [\n    \"LICENSE\"\n   ],\n   \"id\": \"apache-2.0\"\n  }\n ],\n \"model\": {\n  \"architecture\": \"bert\",\n  \"family\": \"decision\",\n  \"id\": \"OpenMed/synthetic-tiny-decision\",\n  \"languages\": [\n   \"en\"\n  ],\n  \"revision\": \"89abcdef0123456789abcdef0123456789abcdef\",\n  \"task\": \"text-classification\"\n },\n \"offsets\": {\n  \"contract_version\": 1,\n  \"unit\": \"unicode_scalar\"\n },\n \"policy\": {\n  \"max_version_exclusive\": 2,\n  \"min_version\": 1,\n  \"path\": \"policy/default.json\"\n },\n \"provenance\": {\n  \"export_record\": null,\n  \"source_digest\": \"sha256:5bd4cd9488d1ef2ce8465a39018219753477a7db43819814ae133e5324b7c191\"\n },\n \"runtimes\": [\n  {\n   \"entrypoint\": \"coreml/model.mlpackage/Manifest.json\",\n   \"fallback\": \"onnx-fp32\",\n   \"files\": [\n    \"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\n    \"coreml/model.mlpackage/Manifest.json\",\n    \"config.json\"\n   ],\n   \"format\": \"coreml\",\n   \"id\": \"coreml-fp16\",\n   \"min_memory_bytes\": 268435456,\n   \"min_storage_bytes\": 1048576,\n   \"platforms\": [\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"17.0\",\n     \"platform\": \"ios\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"14.0\",\n     \"platform\": \"macos\"\n    }\n   ],\n   \"precision\": \"fp16\"\n  },\n  {\n   \"entrypoint\": \"onnx/model_int8.onnx\",\n   \"fallback\": \"onnx-fp32\",\n   \"files\": [\n    \"config.json\",\n    \"onnx/model_int8.onnx\"\n   ],\n   \"format\": \"onnx\",\n   \"id\": \"onnx-int8\",\n   \"min_memory_bytes\": 134217728,\n   \"min_storage_bytes\": 1048576,\n   \"platforms\": [\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"26\",\n     \"platform\": \"android\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": null,\n     \"platform\": \"web\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": null,\n     \"platform\": \"linux\"\n    }\n   ],\n   \"precision\": \"int8\"\n  },\n  {\n   \"entrypoint\": \"onnx/model.onnx\",\n   \"fallback\": null,\n   \"files\": [\n    \"config.json\",\n    \"onnx/model.onnx\"\n   ],\n   \"format\": \"onnx\",\n   \"id\": \"onnx-fp32\",\n   \"min_memory_bytes\": 268435456,\n   \"min_storage_bytes\": 2097152,\n   \"platforms\": [\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"26\",\n     \"platform\": \"android\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"17.0\",\n     \"platform\": \"ios\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": \"14.0\",\n     \"platform\": \"macos\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": null,\n     \"platform\": \"linux\"\n    },\n    {\n     \"max_os_exclusive\": null,\n     \"min_os\": null,\n     \"platform\": \"web\"\n    }\n   ],\n   \"precision\": \"fp32\"\n  }\n ],\n \"schema\": \"openmed.portable_bundle\",\n \"schema_version\": 1,\n \"segmenter\": null,\n \"tokenizer\": {\n  \"contract_version\": 1,\n  \"files\": [\n   \"tokenizer.json\"\n  ],\n  \"kind\": \"wordpiece\"\n }\n"
+    },
+    "margin_exceeds_confidence": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 687,
+      "insert": "ff02ab6c4b893af76493b603846491f6df2bc8d7dc0af8631fd6b9d9c794049a\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":700001"
+    },
+    "method_unknown": {
+      "at": 842,
+      "base": "golden",
+      "delete": 448,
+      "insert": "histogram_binning\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:ac60944976bfaa27c8ab148cda88c60ca4516f1b68ccdc48d5bb9e13143036e"
+    },
+    "model_id_mismatch": {
+      "at": 897,
+      "base": "golden",
+      "delete": 394,
+      "insert": "other-model\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:71f6f6cf05d949e32c8a9851598c499f144477a02a4e0633694fecf8ddae9ec5"
+    },
+    "model_revision_invalid": {
+      "at": 926,
+      "base": "golden",
+      "delete": 365,
+      "insert": "ABCDEF89ABCDEF89ABCDEF89ABCDEF89ABCDEF\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:b19f9f589b24994b732e0877607d93ec7634f4ca3208a5c502ffcceb2d73b2af"
+    },
+    "model_revision_mismatch_understood": {
+      "at": 7679,
+      "base": "golden",
+      "delete": 39,
+      "insert": "fffffffffffffffffffffffffffffffffffffff"
+    },
+    "model_revision_unpinned": {
+      "at": 4263,
+      "base": "golden",
+      "delete": 572,
+      "insert": "null,\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"},{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"points\":[{\"input_ppm\":0,\"output_ppm\":0},{\"input_ppm\":250000,\"output_ppm\":100000},{\"input_ppm\":500000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:6bc20013bd0b090e23ede7b1c10b4ad3cc38ac913fe0b6671ec33236d6b01ba"
+    },
+    "model_runtime_duplicate": {
+      "at": 1183,
+      "base": "golden",
+      "delete": 108,
+      "insert": ",{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"}]},\"parameters\":{},\"profile_digest\":\"sha256:de9a5e12500b41e778fe42bd1e84614f78fc258ff5075f7907f16898e78d4d66"
+    },
+    "model_runtimes_empty": {
+      "at": 978,
+      "base": "golden",
+      "delete": 313,
+      "insert": "]},\"parameters\":{},\"profile_digest\":\"sha256:9375b2291cca75df89098123f0c71885768253d2df7780b0cd72c82f1f7c2fba"
+    },
+    "noncritical_not_understood": {
+      "at": 484,
+      "base": "golden",
+      "delete": 34,
+      "insert": ""
+    },
+    "parameters_for_other_method": {
+      "at": 1200,
+      "base": "golden",
+      "delete": 91,
+      "insert": "\"temperature_ppm\":1000000},\"profile_digest\":\"sha256:990e022d156cb6ae2bb715396daa4c049765b05bc269c99dc2072dfcfb6f63fe"
+    },
+    "platt_intercept_out_of_range": {
+      "at": 3392,
+      "base": "golden",
+      "delete": 118,
+      "insert": "-100000001,\"slope_ppm\":-1800000},\"profile_digest\":\"sha256:e6aae14f9969b7cf3d6591677baccadc4501a1188c81ce542cab49d406e4f261"
+    },
+    "platt_slope_zero": {
+      "at": 3411,
+      "base": "golden",
+      "delete": 99,
+      "insert": "0},\"profile_digest\":\"sha256:29e1cd5bb9fe866d6c7a4b08879c3b9e524d6560885dbd835221079ae151208e"
+    },
+    "profile_digest_mismatch": {
+      "at": 3977,
+      "base": "golden",
+      "delete": 2,
+      "insert": "90"
+    },
+    "profile_digest_mismatch_understood": {
+      "at": 1880,
+      "base": "golden",
+      "delete": 1,
+      "insert": "5"
+    },
+    "profile_missing_field": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 611,
+      "insert": "e51adb1036ac462539ac6f92addbc7e12171dd1c4ec72eef7155f3dfe3bbce1f\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc"
+    },
+    "profile_not_object": {
+      "at": 5389,
+      "base": "golden",
+      "delete": 0,
+      "insert": ",\"openmed.synthetic.triage.v1\""
+    },
+    "profile_unknown_field": {
+      "at": 1187,
+      "base": "golden",
+      "delete": 104,
+      "insert": "notes\":\"synthetic\",\"parameters\":{},\"profile_digest\":\"sha256:086907e9eacf194b728ea31de2f32edb73cfd193ea00e68ad82f87f6aedbde0f"
+    },
+    "profiles_not_array": {
+      "at": 725,
+      "base": "golden",
+      "delete": 4665,
+      "insert": "{}"
+    },
+    "profiles_too_many": {
+      "at": 2086,
+      "base": "golden",
+      "delete": 3301,
+      "insert": "deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"},{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0"
+    },
+    "runtime_precision_changed": {
+      "at": 8880,
+      "base": "golden",
+      "delete": 1,
+      "insert": "4"
+    },
+    "runtime_undeclared": {
+      "at": 2311,
+      "base": "golden",
+      "delete": 144,
+      "insert": "tflite-int8\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:66a1f979abc24d9a7409ac3574bc887fbebb1978a647c286c764cda90d96ca97"
+    },
+    "scope_digest_invalid": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 594,
+      "insert": "526958164e24eb73580a5e8c3dbfbcfcba4a96c307b25b4cd245a2ff2ad626e0\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:XYZ"
+    },
+    "scope_kind_unknown": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 611,
+      "insert": "ea09da9042b026f5187156404a13bad4bd3b25c51bbf7635a8e2d4c6fefa6a24\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"labelset"
+    },
+    "stale_weights_understood": {
+      "at": 6764,
+      "base": "golden",
+      "delete": 81,
+      "insert": "9e02a4eb976e191f5ce7551e2d8f5263d1b25ec180c2a7fcd9fc9d2552347fac\",\"size_bytes\":54"
+    },
+    "temperature_too_large": {
+      "at": 2358,
+      "base": "golden",
+      "delete": 97,
+      "insert": "00000001},\"profile_digest\":\"sha256:15ec05f6c2b75ffb312ee4b0a93bf62cb3ab63d2151dbb786e707ffff822fb68"
+    },
+    "temperature_zero": {
+      "at": 2357,
+      "base": "golden",
+      "delete": 98,
+      "insert": "0},\"profile_digest\":\"sha256:85129134360be9f2fb58025d0135204c30dbe9809ae0b67c4fa3276f4c4457b1"
+    },
+    "threshold_above_scale": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 722,
+      "insert": "18b693141c6bea3539904d2fbb74a262ae707ed17714b28130b2cd072746eee7\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":1000001"
+    },
+    "threshold_boolean": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 659,
+      "insert": "c880a96804d980a64b3decc4d72239a41666e09bea58c203c32d26fa5b56da61\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":true"
+    },
+    "threshold_negative": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 687,
+      "insert": "580db2a75b6847689b4b05a296e428c2aeb0dc943316b11d2212987313e85144\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":-1"
+    },
+    "version_missing": {
+      "at": 5390,
+      "base": "golden",
+      "delete": 19,
+      "insert": ""
+    },
+    "version_not_semver": {
+      "at": 1227,
+      "base": "golden",
+      "delete": 738,
+      "insert": "4089b5ccdfa91706cf24ab1a1801591126422ae437706b715838cff2e243c77f\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1"
+    },
+    "version_string": {
+      "at": 5408,
+      "base": "golden",
+      "delete": 1,
+      "insert": "\"1\""
+    },
+    "version_unsupported": {
+      "at": 5408,
+      "base": "golden",
+      "delete": 1,
+      "insert": "2"
+    }
+  },
+  "notice": "TEST-ONLY vectors. Verification cases are signed with the TEST-ONLY keys of tests/fixtures/portable_bundle; never trust them in production.",
+  "now": "2026-11-07T00:00:00Z",
+  "read_cases": [
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profiles": [
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"temperature_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":750000,\"minimum_margin_ppm\":200000,\"multi_label_threshold_ppm\":750000},\"version\":\"1.1.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.screening.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.1.0\"},\"method\":\"platt_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{\"intercept_ppm\":250000,\"slope_ppm\":-1800000},\"profile_digest\":\"sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0\",\"kind\":\"questions\"},\"thresholds\":{\"minimum_confidence_ppm\":650000,\"minimum_margin_ppm\":100000,\"multi_label_threshold_ppm\":600000},\"version\":\"2.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.labels.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"isotonic_regression\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"},{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"points\":[{\"input_ppm\":0,\"output_ppm\":0},{\"input_ppm\":250000,\"output_ppm\":100000},{\"input_ppm\":500000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\"kind\":\"labels\"},\"thresholds\":{\"minimum_confidence_ppm\":800000,\"minimum_margin_ppm\":250000,\"multi_label_threshold_ppm\":800000},\"version\":\"1.2.3\"}"
+        ],
+        "reason": null
+      },
+      "id": "valid",
+      "manifest": "golden",
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1",
+        "ok": true,
+        "profiles": [
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"temperature_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":750000,\"minimum_margin_ppm\":200000,\"multi_label_threshold_ppm\":750000},\"version\":\"1.1.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.screening.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.1.0\"},\"method\":\"platt_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{\"intercept_ppm\":250000,\"slope_ppm\":-1800000},\"profile_digest\":\"sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0\",\"kind\":\"questions\"},\"thresholds\":{\"minimum_confidence_ppm\":650000,\"minimum_margin_ppm\":100000,\"multi_label_threshold_ppm\":600000},\"version\":\"2.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.labels.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"isotonic_regression\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"},{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"points\":[{\"input_ppm\":0,\"output_ppm\":0},{\"input_ppm\":250000,\"output_ppm\":100000},{\"input_ppm\":500000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\"kind\":\"labels\"},\"thresholds\":{\"minimum_confidence_ppm\":800000,\"minimum_margin_ppm\":250000,\"multi_label_threshold_ppm\":800000},\"version\":\"1.2.3\"}"
+        ],
+        "reason": null
+      },
+      "id": "valid_noncritical",
+      "manifest": "noncritical_not_understood",
+      "verification": {
+        "content_id": "sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profiles": [
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"deterministic_margin\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913\",\"id\":\"coreml-fp16\"},{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{},\"profile_digest\":\"sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":{\"path\":\"evidence/decision-calibration.json\",\"sha256\":\"sha256:a0856ca953249d44b1dea3ff82b50e019672cf55e017fc194c70bba5c7a48d1d\"},\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":700000,\"minimum_margin_ppm\":150000,\"multi_label_threshold_ppm\":700000},\"version\":\"1.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.triage.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"temperature_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"temperature_ppm\":1250000},\"profile_digest\":\"sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09\",\"kind\":\"options\"},\"thresholds\":{\"minimum_confidence_ppm\":750000,\"minimum_margin_ppm\":200000,\"multi_label_threshold_ppm\":750000},\"version\":\"1.1.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.screening.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.1.0\"},\"method\":\"platt_scaling\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"}]},\"parameters\":{\"intercept_ppm\":250000,\"slope_ppm\":-1800000},\"profile_digest\":\"sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0\",\"kind\":\"questions\"},\"thresholds\":{\"minimum_confidence_ppm\":650000,\"minimum_margin_ppm\":100000,\"multi_label_threshold_ppm\":600000},\"version\":\"2.0.0\"}",
+          "{\"calibration_id\":\"openmed.synthetic.labels.v1\",\"decision_schema\":{\"max_exclusive\":\"2.0.0\",\"min\":\"1.0.0\"},\"method\":\"isotonic_regression\",\"model\":{\"id\":\"OpenMed/synthetic-tiny-decision\",\"revision\":\"89abcdef0123456789abcdef0123456789abcdef\",\"runtimes\":[{\"digest\":\"sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267\",\"id\":\"onnx-fp32\"},{\"digest\":\"sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b\",\"id\":\"onnx-int8\"}]},\"parameters\":{\"points\":[{\"input_ppm\":0,\"output_ppm\":0},{\"input_ppm\":250000,\"output_ppm\":100000},{\"input_ppm\":500000,\"output_ppm\":450000},{\"input_ppm\":750000,\"output_ppm\":800000},{\"input_ppm\":1000000,\"output_ppm\":1000000}]},\"profile_digest\":\"sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea\",\"provenance\":{\"dataset_digest\":\"sha256:e6ba269a02316160c51387b026b4781634f70e101d602a7c18aa4caec12a8351\",\"evaluation\":null,\"in_domain_digest\":\"sha256:e31d3ae68ef6a6326a7a6075384a35bba16c199c6da64427387250f2fd9c6c3d\",\"out_of_domain_digest\":\"sha256:bdb65d232df8851078028dc69339a88625c2a2802cb59cb7d1dc28fa7536b5cc\"},\"scope\":{\"digest\":\"sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355\",\"kind\":\"labels\"},\"thresholds\":{\"minimum_confidence_ppm\":800000,\"minimum_margin_ppm\":250000,\"multi_label_threshold_ppm\":800000},\"version\":\"1.2.3\"}"
+        ],
+        "reason": null
+      },
+      "id": "valid_files_not_verified",
+      "manifest": "golden",
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_bundle_unverified"
+      },
+      "id": "verification_failed",
+      "manifest": "golden",
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_bundle_unverified"
+      },
+      "id": "verification_for_other_manifest",
+      "manifest": "golden",
+      "verification": {
+        "content_id": "sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:d11d2752ac2ba0047da928a6b1e5b29b402523b5efc83a6100b709873e84bfc4",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_bundle_unverified"
+      },
+      "id": "manifest_not_canonical",
+      "manifest": "manifest_not_canonical",
+      "verification": {
+        "content_id": "sha256:d11d2752ac2ba0047da928a6b1e5b29b402523b5efc83a6100b709873e84bfc4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:56452931a20dc90d851ac18daf338d32a87808cb051c37a781c584b0288ac72c",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_extension_missing"
+      },
+      "id": "extension_missing",
+      "manifest": "extension_missing",
+      "verification": {
+        "content_id": "sha256:56452931a20dc90d851ac18daf338d32a87808cb051c37a781c584b0288ac72c",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:3fd31e32524611331f57d9cf6e9d432dbe7dd7c67e2b7e4ad8dc899a946ea996",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "extension_not_object",
+      "manifest": "extension_not_object",
+      "verification": {
+        "content_id": "sha256:3fd31e32524611331f57d9cf6e9d432dbe7dd7c67e2b7e4ad8dc899a946ea996",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a41da159699dec7041d68003855afcd4ca2e25f2624ae5d12225c07300a67cf6",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "version_missing",
+      "manifest": "version_missing",
+      "verification": {
+        "content_id": "sha256:a41da159699dec7041d68003855afcd4ca2e25f2624ae5d12225c07300a67cf6",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:8146fec3d8f0db06138af7a191d178923c51682166ab13f08a3d41a767c6d476",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "version_string",
+      "manifest": "version_string",
+      "verification": {
+        "content_id": "sha256:8146fec3d8f0db06138af7a191d178923c51682166ab13f08a3d41a767c6d476",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:6e1bbb785f45085d98d9c999bb3711d8266634a00eb0b9c96fef2d26fa84f269",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_version_unsupported"
+      },
+      "id": "version_unsupported",
+      "manifest": "version_unsupported",
+      "verification": {
+        "content_id": "sha256:6e1bbb785f45085d98d9c999bb3711d8266634a00eb0b9c96fef2d26fa84f269",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:b82b89f663105d17e98dc44027fca904faa1a21d1be41761b32d2325a7b83184",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "extension_unknown_member",
+      "manifest": "extension_unknown_member",
+      "verification": {
+        "content_id": "sha256:b82b89f663105d17e98dc44027fca904faa1a21d1be41761b32d2325a7b83184",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:42c83210c89855b471de4538b6c66c0508c4fd86824a54b221d5e4fc4a80bfbd",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profiles_empty",
+      "manifest": "malformed_understood",
+      "verification": {
+        "content_id": "sha256:42c83210c89855b471de4538b6c66c0508c4fd86824a54b221d5e4fc4a80bfbd",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a061e2388e28748e44efca080ccca21ec1ed9a03cc3682807567b2ee2ae9203e",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profiles_not_array",
+      "manifest": "profiles_not_array",
+      "verification": {
+        "content_id": "sha256:a061e2388e28748e44efca080ccca21ec1ed9a03cc3682807567b2ee2ae9203e",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:202ca0b97afc6c3684594dec2a6245419ca5b5160814da24e6da8267cbcffa07",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profiles_too_many",
+      "manifest": "profiles_too_many",
+      "verification": {
+        "content_id": "sha256:202ca0b97afc6c3684594dec2a6245419ca5b5160814da24e6da8267cbcffa07",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a4449dfe2d8d3996d42e4b78660f81accdfac49b61c69f200944311e3c34338a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profile_not_object",
+      "manifest": "profile_not_object",
+      "verification": {
+        "content_id": "sha256:a4449dfe2d8d3996d42e4b78660f81accdfac49b61c69f200944311e3c34338a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:4aafd2dba64a1eb2144c862e4471e09b21527c39d9ed371d5b4905fcf13b642a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profile_unknown_field",
+      "manifest": "profile_unknown_field",
+      "verification": {
+        "content_id": "sha256:4aafd2dba64a1eb2144c862e4471e09b21527c39d9ed371d5b4905fcf13b642a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:4c35a8ba234ee62a87c39ae565032cee5f3a2aea28b635d5f630b019d14a8955",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "profile_missing_field",
+      "manifest": "profile_missing_field",
+      "verification": {
+        "content_id": "sha256:4c35a8ba234ee62a87c39ae565032cee5f3a2aea28b635d5f630b019d14a8955",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:4e855cc5e0bebaa5c12b9d7d67201a4afa4d1f2f43fd74a4600fe49df78d2ca5",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "calibration_id_invalid",
+      "manifest": "calibration_id_invalid",
+      "verification": {
+        "content_id": "sha256:4e855cc5e0bebaa5c12b9d7d67201a4afa4d1f2f43fd74a4600fe49df78d2ca5",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:72f832df972ebe368b99c330b61707ddc6f98d47937fff81bbeeaa0042e6c5f3",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "version_not_semver",
+      "manifest": "version_not_semver",
+      "verification": {
+        "content_id": "sha256:72f832df972ebe368b99c330b61707ddc6f98d47937fff81bbeeaa0042e6c5f3",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:259783268a489efc504fefef30d095953c61527b8b19f65f7754f5c2dd7e1c75",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "method_unknown",
+      "manifest": "method_unknown",
+      "verification": {
+        "content_id": "sha256:259783268a489efc504fefef30d095953c61527b8b19f65f7754f5c2dd7e1c75",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:114d7d809c8c27c956dfdffe94a37d5f75e1002b498dd274e979a12ed7de317c",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "parameters_for_other_method",
+      "manifest": "parameters_for_other_method",
+      "verification": {
+        "content_id": "sha256:114d7d809c8c27c956dfdffe94a37d5f75e1002b498dd274e979a12ed7de317c",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:0c53a8b4f3629532480bb7d39997c799ec7e11e6d598882e77816520515dea0a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "temperature_zero",
+      "manifest": "temperature_zero",
+      "verification": {
+        "content_id": "sha256:0c53a8b4f3629532480bb7d39997c799ec7e11e6d598882e77816520515dea0a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:2c7ea392d804a58363e7be9d7850bba9baf1ae1101914e2981d98090c2a1b9c9",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "temperature_too_large",
+      "manifest": "temperature_too_large",
+      "verification": {
+        "content_id": "sha256:2c7ea392d804a58363e7be9d7850bba9baf1ae1101914e2981d98090c2a1b9c9",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:2917813fc26edd66869cbaaf82541bbd6a9efb6ad06b75f3e5cbe6aaca5ed97b",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "platt_slope_zero",
+      "manifest": "platt_slope_zero",
+      "verification": {
+        "content_id": "sha256:2917813fc26edd66869cbaaf82541bbd6a9efb6ad06b75f3e5cbe6aaca5ed97b",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:3eb7ecaa92730d67955380120361b1dac214ed3024b4dcd093c62a6aadcc323d",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "platt_intercept_out_of_range",
+      "manifest": "platt_intercept_out_of_range",
+      "verification": {
+        "content_id": "sha256:3eb7ecaa92730d67955380120361b1dac214ed3024b4dcd093c62a6aadcc323d",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:d90073881108b59eed8c222ee513f5607e5ee54f6e581836d0ac6739611ec0ce",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "isotonic_single_point",
+      "manifest": "isotonic_single_point",
+      "verification": {
+        "content_id": "sha256:d90073881108b59eed8c222ee513f5607e5ee54f6e581836d0ac6739611ec0ce",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:9d1dd9c98d0fb527d2a5f2c63c770ce67e23e6e47461a26b370017240107566f",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "isotonic_inputs_not_increasing",
+      "manifest": "isotonic_inputs_not_increasing",
+      "verification": {
+        "content_id": "sha256:9d1dd9c98d0fb527d2a5f2c63c770ce67e23e6e47461a26b370017240107566f",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:bac80b4a639cc5a5ca38f13ce8ae3e0793d175c74d8da679b257b583ad04463c",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "isotonic_outputs_decreasing",
+      "manifest": "isotonic_outputs_decreasing",
+      "verification": {
+        "content_id": "sha256:bac80b4a639cc5a5ca38f13ce8ae3e0793d175c74d8da679b257b583ad04463c",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:8cf989caae7c8b4ef0b437d6ac7806a64e001f0d10163136ebabaf25ba1c28b7",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "isotonic_point_out_of_range",
+      "manifest": "isotonic_point_out_of_range",
+      "verification": {
+        "content_id": "sha256:8cf989caae7c8b4ef0b437d6ac7806a64e001f0d10163136ebabaf25ba1c28b7",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:773a0f2fd3770f3f2141ed1eb93ae23db4c1568ec0232888ce53f6b2c1d2a321",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "threshold_above_scale",
+      "manifest": "threshold_above_scale",
+      "verification": {
+        "content_id": "sha256:773a0f2fd3770f3f2141ed1eb93ae23db4c1568ec0232888ce53f6b2c1d2a321",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:9f34713afdca02c7a68444f6aea30bfa16e9d94c72099dac44d370ef4df6961a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "threshold_negative",
+      "manifest": "threshold_negative",
+      "verification": {
+        "content_id": "sha256:9f34713afdca02c7a68444f6aea30bfa16e9d94c72099dac44d370ef4df6961a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:6cf7fd628ef1c038f5a7d470f81a0c923f59aa4c162052abfce13833a22e0426",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "threshold_boolean",
+      "manifest": "threshold_boolean",
+      "verification": {
+        "content_id": "sha256:6cf7fd628ef1c038f5a7d470f81a0c923f59aa4c162052abfce13833a22e0426",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a64f4293b137843a54920ba128a250f12f3a5b6fe25ce8e89c58128942747d23",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "margin_exceeds_confidence",
+      "manifest": "margin_exceeds_confidence",
+      "verification": {
+        "content_id": "sha256:a64f4293b137843a54920ba128a250f12f3a5b6fe25ce8e89c58128942747d23",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:f73c7d88d3f887889808de3b94c9ea815610937d1fa043a0bbbe55fcf8d292f4",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "scope_kind_unknown",
+      "manifest": "scope_kind_unknown",
+      "verification": {
+        "content_id": "sha256:f73c7d88d3f887889808de3b94c9ea815610937d1fa043a0bbbe55fcf8d292f4",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:cf8c5f450d368fa1439bc638b5b4018dbb6fb7d6316297845e2ea2315bef85cc",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "scope_digest_invalid",
+      "manifest": "scope_digest_invalid",
+      "verification": {
+        "content_id": "sha256:cf8c5f450d368fa1439bc638b5b4018dbb6fb7d6316297845e2ea2315bef85cc",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:bad195b919c1fc3c9a59311bbc1e24e4b3b2ec1a87ce59f6888446fc8e8ee91a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "model_revision_invalid",
+      "manifest": "model_revision_invalid",
+      "verification": {
+        "content_id": "sha256:bad195b919c1fc3c9a59311bbc1e24e4b3b2ec1a87ce59f6888446fc8e8ee91a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:82acb2a791286caa0ff81a1813b15a6f434bec72d3efc91a96ef8694fd2ae7ca",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "model_runtimes_empty",
+      "manifest": "model_runtimes_empty",
+      "verification": {
+        "content_id": "sha256:82acb2a791286caa0ff81a1813b15a6f434bec72d3efc91a96ef8694fd2ae7ca",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:11ce90d7be6aad1bbb5952391954b6aa838006053cf14b615bc17631b31ef17b",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "model_runtime_duplicate",
+      "manifest": "model_runtime_duplicate",
+      "verification": {
+        "content_id": "sha256:11ce90d7be6aad1bbb5952391954b6aa838006053cf14b615bc17631b31ef17b",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a830fa8f4a212c9148fa1f83e1d25a32564531a6b99086e809e6bb493da2db84",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "decision_schema_inverted",
+      "manifest": "decision_schema_inverted",
+      "verification": {
+        "content_id": "sha256:a830fa8f4a212c9148fa1f83e1d25a32564531a6b99086e809e6bb493da2db84",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:193fda0005962b076365817cb2f40ae22d04ae1af127f062899c75f376991355",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "decision_schema_empty_range",
+      "manifest": "decision_schema_empty_range",
+      "verification": {
+        "content_id": "sha256:193fda0005962b076365817cb2f40ae22d04ae1af127f062899c75f376991355",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:46efec964445c68ff521e11c60ddff4076f8af499a658dd928b74b2b4211a70e",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "dataset_digest_invalid",
+      "manifest": "dataset_digest_invalid",
+      "verification": {
+        "content_id": "sha256:46efec964445c68ff521e11c60ddff4076f8af499a658dd928b74b2b4211a70e",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:adb51f4661c2bcde00fe0bf4cff01708b671c6556666f2122707d7ad39300115",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "evaluation_path_empty",
+      "manifest": "evaluation_path_empty",
+      "verification": {
+        "content_id": "sha256:adb51f4661c2bcde00fe0bf4cff01708b671c6556666f2122707d7ad39300115",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:b8b527270e10e9cb3bda310fda056e25dce90f6b0d9d1324de1dd2ad692e8e9b",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "evaluation_path_outside_bundle",
+      "manifest": "evaluation_path_outside_bundle",
+      "verification": {
+        "content_id": "sha256:b8b527270e10e9cb3bda310fda056e25dce90f6b0d9d1324de1dd2ad692e8e9b",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:eba6b29bb93d9a6b26196946abd044f7aba2e63d890743def733811e6b4b0dd7",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_malformed"
+      },
+      "id": "binding_duplicated_across_profiles",
+      "manifest": "binding_duplicated_across_profiles",
+      "verification": {
+        "content_id": "sha256:eba6b29bb93d9a6b26196946abd044f7aba2e63d890743def733811e6b4b0dd7",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:c7d07e1b3c0b014b44110e9176e93587844a343b56eae84a2c58ca5a4fe2af73",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_digest_mismatch"
+      },
+      "id": "profile_digest_mismatch",
+      "manifest": "profile_digest_mismatch",
+      "verification": {
+        "content_id": "sha256:c7d07e1b3c0b014b44110e9176e93587844a343b56eae84a2c58ca5a4fe2af73",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:2ca12276c0081098fc7cc8b221cc8cc1b31cd3a95a19e1f28d97c33fada0d03a",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "model_id_mismatch",
+      "manifest": "model_id_mismatch",
+      "verification": {
+        "content_id": "sha256:2ca12276c0081098fc7cc8b221cc8cc1b31cd3a95a19e1f28d97c33fada0d03a",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:c57a0015a7abc01799a7893199c8ea7050b21dc9d6b89ffddfea146bb9b394e9",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "model_revision_mismatch",
+      "manifest": "model_revision_mismatch_understood",
+      "verification": {
+        "content_id": "sha256:c57a0015a7abc01799a7893199c8ea7050b21dc9d6b89ffddfea146bb9b394e9",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:69b26a2d89fa33098803242b72ecb20bbf7e62d3b0adb637aa19d5999c696a2f",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "model_revision_unpinned",
+      "manifest": "model_revision_unpinned",
+      "verification": {
+        "content_id": "sha256:69b26a2d89fa33098803242b72ecb20bbf7e62d3b0adb637aa19d5999c696a2f",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:52b99881d97c377d7e7ff3886e56f46bf1dd994c8d4354cd7e6d725b0bf74b33",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_runtime_mismatch"
+      },
+      "id": "runtime_undeclared",
+      "manifest": "runtime_undeclared",
+      "verification": {
+        "content_id": "sha256:52b99881d97c377d7e7ff3886e56f46bf1dd994c8d4354cd7e6d725b0bf74b33",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:26dcf4b5254897e53e587fbb393ef4e7e9fe87b71eabaac61a86f18f21aa679d",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_runtime_mismatch"
+      },
+      "id": "runtime_weights_stale",
+      "manifest": "stale_weights_understood",
+      "verification": {
+        "content_id": "sha256:26dcf4b5254897e53e587fbb393ef4e7e9fe87b71eabaac61a86f18f21aa679d",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:cd37c447820862646de1436f05f54af5c857077a6c70815023ef4f37aae929aa",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_runtime_mismatch"
+      },
+      "id": "runtime_precision_changed",
+      "manifest": "runtime_precision_changed",
+      "verification": {
+        "content_id": "sha256:cd37c447820862646de1436f05f54af5c857077a6c70815023ef4f37aae929aa",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:ecaf2ecbb1356fbb0d2d7e2591fc6c769e4f423f874ec02d09cc70411ed8ca66",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_scope_mismatch"
+      },
+      "id": "labels_scope_mismatch",
+      "manifest": "labels_scope_mismatch",
+      "verification": {
+        "content_id": "sha256:ecaf2ecbb1356fbb0d2d7e2591fc6c769e4f423f874ec02d09cc70411ed8ca66",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:3935337a876697f5b8e64945b863f7a47c445b0a19ae64f0b30e2cbde4a1ffa1",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_scope_mismatch"
+      },
+      "id": "labels_scope_without_label_map",
+      "manifest": "labels_scope_without_label_map",
+      "verification": {
+        "content_id": "sha256:3935337a876697f5b8e64945b863f7a47c445b0a19ae64f0b30e2cbde4a1ffa1",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:8772dc9d23e1e2b5d1a08139e07e38d71960c11a8ab689ffe01bfb07815870c2",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_evidence_mismatch"
+      },
+      "id": "evaluation_undeclared",
+      "manifest": "evaluation_undeclared",
+      "verification": {
+        "content_id": "sha256:8772dc9d23e1e2b5d1a08139e07e38d71960c11a8ab689ffe01bfb07815870c2",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:a75d0955301656527d2e85d2da783d56fb89751bd5e11ed4ec2f436ac0f80189",
+        "ok": false,
+        "profiles": [],
+        "reason": "calibration_evidence_mismatch"
+      },
+      "id": "evaluation_digest_mismatch",
+      "manifest": "evaluation_digest_mismatch",
+      "verification": {
+        "content_id": "sha256:a75d0955301656527d2e85d2da783d56fb89751bd5e11ed4ec2f436ac0f80189",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    }
+  ],
+  "reason_codes": [
+    "calibration_bundle_unverified",
+    "calibration_extension_missing",
+    "calibration_malformed",
+    "calibration_version_unsupported",
+    "calibration_digest_mismatch",
+    "calibration_model_mismatch",
+    "calibration_runtime_mismatch",
+    "calibration_scope_mismatch",
+    "calibration_evidence_mismatch",
+    "calibration_profile_missing",
+    "calibration_runtime_unbound",
+    "calibration_schema_incompatible",
+    "calibration_pin_mismatch",
+    "calibration_request_invalid"
+  ],
+  "resolve_cases": [
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad",
+        "reason": null
+      },
+      "id": "triage_fp32",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad",
+        "reason": null
+      },
+      "id": "triage_coreml",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": "sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913",
+        "runtime_id": "coreml-fp16",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749",
+        "reason": null
+      },
+      "id": "triage_int8_quantized_profile",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-int8",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:ab1d67e4166341249a98be56b09c044e434374952ce87181883d9f1370aefa9c",
+        "reason": null
+      },
+      "id": "screening_questions",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.screening.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": "sha256:83b3f8fa05af21b7025cfd786a12f36718beb8417b6b89d87d317d059ed0c6e0",
+        "scope_kind": "questions"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea",
+        "reason": null
+      },
+      "id": "labels_fully_pinned",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.labels.v1",
+        "decision_schema_version": "1.0.0",
+        "model_id": "OpenMed/synthetic-tiny-decision",
+        "model_revision": "89abcdef0123456789abcdef0123456789abcdef",
+        "profile_digest": "sha256:2b6b183d87f372119132c9afc8e3cf6cc8b9012855fa78c01b02183f453ee5ea",
+        "runtime_digest": "sha256:9bda3d7db40cb8a9be1b8e20588444b8953fcd47d274a9bd0dea1cf34bb6d34b",
+        "runtime_id": "onnx-int8",
+        "scope_digest": "sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355",
+        "scope_kind": "labels"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_bundle_unverified"
+      },
+      "id": "files_not_verified",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_bundle_unverified"
+      },
+      "id": "verification_failed",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:56452931a20dc90d851ac18daf338d32a87808cb051c37a781c584b0288ac72c",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_extension_missing"
+      },
+      "id": "extension_missing",
+      "manifest": "extension_missing",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:56452931a20dc90d851ac18daf338d32a87808cb051c37a781c584b0288ac72c",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_digest_mismatch"
+      },
+      "id": "extension_digest_mismatch",
+      "manifest": "profile_digest_mismatch_understood",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_profile_missing"
+      },
+      "id": "profile_missing",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.unknown.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_runtime_unbound"
+      },
+      "id": "runtime_unbound",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.screening.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-int8",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_runtime_unbound"
+      },
+      "id": "runtime_not_declared",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "tflite-int8",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "loaded_model_id_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": "OpenMed/synthetic-other-model",
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "loaded_model_revision_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": "ffffffffffffffffffffffffffffffffffffffff",
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_model_mismatch"
+      },
+      "id": "loaded_runtime_digest_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": "sha256:7c445b8467c65b9fe17dca9511b9141b33086541a3b3a358a9c7985e793ac913",
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_schema_incompatible"
+      },
+      "id": "decision_schema_below_range",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.screening.v1",
+        "decision_schema_version": "1.0.9",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_schema_incompatible"
+      },
+      "id": "decision_schema_at_max",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "2.0.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_schema_incompatible"
+      },
+      "id": "decision_schema_numeric_order",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "10.0.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_scope_mismatch"
+      },
+      "id": "scope_digest_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": "sha256:5e31c5409a71aa87327068b3e5fffda18377aa7bed9b3c26360621410b5906fc",
+        "scope_kind": "options"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_scope_mismatch"
+      },
+      "id": "scope_kind_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": "sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09",
+        "scope_kind": "questions"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": false,
+        "profile_digest": null,
+        "reason": "calibration_pin_mismatch"
+      },
+      "id": "pin_mismatch",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": "sha256:1accf0e88db5fdbaae4cea47e882e6e649cd85674666926e6b8aeccfa7e0e749",
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "ok": true,
+        "profile_digest": "sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad",
+        "reason": null
+      },
+      "id": "pin_match",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": "sha256:a83ce405d8efb4b23d612b04722cc495b94ac7e960cf3f612812c4a56e327bad",
+        "runtime_digest": "sha256:5d50cb8a2f39c1bb4c3d61050933c689a20e1099571408e4f98cec6e1875c267",
+        "runtime_id": "onnx-fp32",
+        "scope_digest": "sha256:29ff15c1eccbc7c25823b53b41d3c56c90361f01fac020bd8392f903f2cdbe09",
+        "scope_kind": "options"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_calibration_id_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "Triage",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_runtime_id_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "ONNX",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_schema_version_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_model_revision_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": "main",
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_scope_without_digest",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": "options"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_scope_kind_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": null,
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": "sha256:f3e4b61751f084e8fecc72fae9147ad3ebd0a6a9bec00cf23d98eef6130b4355",
+        "scope_kind": "labelset"
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    },
+    {
+      "expected": {
+        "error": "calibration_request_invalid"
+      },
+      "id": "request_profile_digest_invalid",
+      "manifest": "golden",
+      "request": {
+        "calibration_id": "openmed.synthetic.triage.v1",
+        "decision_schema_version": "1.1.0",
+        "model_id": null,
+        "model_revision": null,
+        "profile_digest": "sha256:00",
+        "runtime_digest": null,
+        "runtime_id": "onnx-fp32",
+        "scope_digest": null,
+        "scope_kind": null
+      },
+      "verification": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      }
+    }
+  ],
+  "schema": "openmed.portable_bundle.decision_calibration.vectors",
+  "synthetic_only": true,
+  "target": {
+    "memory_bytes": null,
+    "os_version": "26",
+    "platform": "android",
+    "policy_version": 1,
+    "runtimes": [
+      "onnx",
+      "ort"
+    ],
+    "sdk_name": "openmedkit-android",
+    "sdk_version": "4.0.0",
+    "storage_bytes": null
+  },
+  "test_only_keys": true,
+  "tree": [
+    {
+      "path": "LICENSE",
+      "text": "Synthetic decision-calibration fixture.\nLicensed Apache-2.0.\n"
+    },
+    {
+      "path": "config.json",
+      "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+    },
+    {
+      "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+      "text": "synthetic coreml decision graph placeholder\n"
+    },
+    {
+      "path": "coreml/model.mlpackage/Manifest.json",
+      "text": "{\"synthetic\":true}\n"
+    },
+    {
+      "path": "evidence/decision-calibration.json",
+      "text": "{\"contains_source_text\":false,\"slices\":0,\"synthetic\":true}\n"
+    },
+    {
+      "path": "id2label.json",
+      "text": "{\"0\":\"no\",\"1\":\"unsure\",\"2\":\"yes\"}\n"
+    },
+    {
+      "path": "onnx/model.onnx",
+      "text": "synthetic fp32 onnx decision placeholder\n"
+    },
+    {
+      "path": "onnx/model_int8.onnx",
+      "text": "synthetic int8 onnx decision placeholder\n"
+    },
+    {
+      "path": "policy/default.json",
+      "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+    },
+    {
+      "path": "tokenizer.json",
+      "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+    }
+  ],
+  "trust_policy": {
+    "keys": [
+      {
+        "crv": "Ed25519",
+        "kid": "openmed-test-root-a",
+        "kty": "OKP",
+        "not_after": "2027-07-01T00:00:00Z",
+        "not_before": "2026-01-01T00:00:00Z",
+        "status": "active",
+        "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+      }
+    ],
+    "revoked_content_ids": [],
+    "schema": "openmed.portable_bundle.trust_policy",
+    "schema_version": 1,
+    "threshold": 1
+  },
+  "verification_cases": [
+    {
+      "envelope": "{\"content_id\":\"sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"ZgsclFJj7MNsGRct4hGX0Uu7SHQnJxDNoJ9dUTW177eAdDs2TncZJFAXJv7KD8Rrpz-9r6PRToeWE52zuF67AQ\"}]}",
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "understood_valid",
+      "manifest": "golden",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"ZgsclFJj7MNsGRct4hGX0Uu7SHQnJxDNoJ9dUTW177eAdDs2TncZJFAXJv7KD8Rrpz-9r6PRToeWE52zuF67AQ\"}]}",
+      "expected": {
+        "content_id": "sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "unknown_critical_extension",
+        "valid_signatures": 1
+      },
+      "id": "critical_not_understood",
+      "manifest": "golden",
+      "tree_set": [],
+      "understood_extensions": []
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"VBc1GOKBAzYVscU_NdJNXvO8e3wXwbSMg2XZXg-2MdmYNB2jAeVyCurcocNV9blnyrdkVy5oxyF8ovriGcIGAA\"}]}",
+      "expected": {
+        "content_id": "sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "noncritical_not_understood",
+      "manifest": "noncritical_not_understood",
+      "tree_set": [],
+      "understood_extensions": []
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"VBc1GOKBAzYVscU_NdJNXvO8e3wXwbSMg2XZXg-2MdmYNB2jAeVyCurcocNV9blnyrdkVy5oxyF8ovriGcIGAA\"}]}",
+      "expected": {
+        "content_id": "sha256:b9694015108d18ab570d99c4b371a0c05dfd3dd454e95d6e7d28a2e4b751cfd1",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "noncritical_understood",
+      "manifest": "noncritical_not_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:42c83210c89855b471de4538b6c66c0508c4fd86824a54b221d5e4fc4a80bfbd\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"--KISp4TBW5jb3Hj-K0ZQMxl8BEJY4Etnw6iyWmzCsApyFdV07l9kG82Pc7rRaOD0fx0gNg1yo2YqU9Ljh2hAQ\"}]}",
+      "expected": {
+        "content_id": "sha256:42c83210c89855b471de4538b6c66c0508c4fd86824a54b221d5e4fc4a80bfbd",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "malformed_understood",
+      "manifest": "malformed_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:683f3843593cea2e8845755443e2b9aacb6056914d216a880cd1d88f7407a781\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"bN3SjKyTM4w76N1cQ8ITOGYUkp99IR8rhMp42IVGKHlRB4fqdmyXxi2RYyqp2t1SxHqzKKoX2oFh6tHCEpAMCg\"}]}",
+      "expected": {
+        "content_id": "sha256:683f3843593cea2e8845755443e2b9aacb6056914d216a880cd1d88f7407a781",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 10,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "malformed_noncritical_not_understood",
+      "manifest": "malformed_noncritical_not_understood",
+      "tree_set": [],
+      "understood_extensions": []
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:683f3843593cea2e8845755443e2b9aacb6056914d216a880cd1d88f7407a781\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"bN3SjKyTM4w76N1cQ8ITOGYUkp99IR8rhMp42IVGKHlRB4fqdmyXxi2RYyqp2t1SxHqzKKoX2oFh6tHCEpAMCg\"}]}",
+      "expected": {
+        "content_id": "sha256:683f3843593cea2e8845755443e2b9aacb6056914d216a880cd1d88f7407a781",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "malformed_noncritical_understood",
+      "manifest": "malformed_noncritical_not_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"Vfv10Xol1p-GmpZeU1CnuzPZ28XoylWuyAiHOLRetcENfcDjcDX_Z0XS05w7C8V1Qg8FS33vBSQdUikUXCamAQ\"}]}",
+      "expected": {
+        "content_id": "sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "profile_digest_mismatch_understood",
+      "manifest": "profile_digest_mismatch_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:c57a0015a7abc01799a7893199c8ea7050b21dc9d6b89ffddfea146bb9b394e9\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"o6EM9z4XmyefXCNcF3hNTVHjs87zdj0Q5ZXSrVe6MfDFzMlalu0xlVG8YuBfZ5fT3BNvGEHgK25YHaW5h-DlDA\"}]}",
+      "expected": {
+        "content_id": "sha256:c57a0015a7abc01799a7893199c8ea7050b21dc9d6b89ffddfea146bb9b394e9",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "model_revision_mismatch_understood",
+      "manifest": "model_revision_mismatch_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:26dcf4b5254897e53e587fbb393ef4e7e9fe87b71eabaac61a86f18f21aa679d\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"XF3X1ezwcAmh1ay3uEaZLmWMSLLcp_mNOz4UuuALocsiNZJ3kEXIb2Wg47YL05z-VJQGVKkvrjXh3uChJj--CQ\"}]}",
+      "expected": {
+        "content_id": "sha256:26dcf4b5254897e53e587fbb393ef4e7e9fe87b71eabaac61a86f18f21aa679d",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "stale_weights_understood",
+      "manifest": "stale_weights_understood",
+      "tree_set": [
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx decision placeholder, re-exported\n"
+        }
+      ],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:6764c05cfe6fd6e159bfe69ab981982a0d04ca7f6908b9853b0975a783e85e37\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"jSfVg2ndSX91RLtQpP4HvV2GNmx9rAAdLSFEL1FvhWSnc7cQvhbuwF5sHVuOy818-5ylqyDDTPsYpAYZAA0yBQ\"}]}",
+      "expected": {
+        "content_id": "sha256:6764c05cfe6fd6e159bfe69ab981982a0d04ca7f6908b9853b0975a783e85e37",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "manifest_malformed",
+        "valid_signatures": 1
+      },
+      "id": "critical_extension_absent",
+      "manifest": "critical_extension_absent",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:e36ffd437fd5b259a284549efb6cc4cd76ef68e8be772a4fc43398e441b97c65\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"ZgsclFJj7MNsGRct4hGX0Uu7SHQnJxDNoJ9dUTW177eAdDs2TncZJFAXJv7KD8Rrpz-9r6PRToeWE52zuF67AQ\"}]}",
+      "expected": {
+        "content_id": "sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "content_id_mismatch",
+        "valid_signatures": 0
+      },
+      "id": "threshold_edited_after_signing",
+      "manifest": "profile_digest_mismatch_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
+    {
+      "envelope": "{\"content_id\":\"sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"ZgsclFJj7MNsGRct4hGX0Uu7SHQnJxDNoJ9dUTW177eAdDs2TncZJFAXJv7KD8Rrpz-9r6PRToeWE52zuF67AQ\"}]}",
+      "expected": {
+        "content_id": "sha256:37494e01fa360e28f7f7b99e80d758dc207a3fd5d7565e88def6a598ded44b5e",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "signature_invalid",
+        "valid_signatures": 0
+      },
+      "id": "threshold_edited_relabelled",
+      "manifest": "profile_digest_mismatch_understood",
+      "tree_set": [],
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    }
+  ],
+  "version": 1
+}

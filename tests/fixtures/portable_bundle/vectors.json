@@ -894,6 +894,47 @@
     },
     {
       "context": "default",
+      "envelope": "builtin_extension_not_understood",
+      "expected": {
+        "content_id": "sha256:926f1256a35fb263c1999c73ec80696da16b2e5b5d5a39b1957749a0f4191fde",
+        "eligible_runtimes": [
+          1,
+          2
+        ],
+        "files_checked": 14,
+        "files_verified": true,
+        "ok": true,
+        "reason": null,
+        "valid_signatures": 1
+      },
+      "id": "builtin_extension_not_understood",
+      "manifest": "builtin_extension_not_understood",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "builtin_extension_invalid",
+      "envelope": "builtin_extension_not_understood",
+      "expected": {
+        "content_id": "sha256:926f1256a35fb263c1999c73ec80696da16b2e5b5d5a39b1957749a0f4191fde",
+        "eligible_runtimes": [],
+        "files_checked": 0,
+        "files_verified": false,
+        "ok": false,
+        "reason": "extension_invalid",
+        "valid_signatures": 1
+      },
+      "id": "builtin_extension_invalid",
+      "manifest": "builtin_extension_not_understood",
+      "tree": "golden",
+      "tree_remove": [],
+      "tree_set": [],
+      "trust_policy": "default"
+    },
+    {
+      "context": "default",
       "envelope": "path_traversal",
       "expected": {
         "content_id": "sha256:7478db239c6681a2bcfae4dee02282abd76fe722ad6b3d42db32984f313cda7f",
@@ -1547,6 +1588,30 @@
     }
   ],
   "contexts": {
+    "builtin_extension_invalid": {
+      "max_envelope_bytes": 65536,
+      "max_files": 4096,
+      "max_manifest_bytes": 1048576,
+      "max_total_bytes": 68719476736,
+      "now": "2026-11-07T00:00:00Z",
+      "sequence_floors": {},
+      "target": {
+        "memory_bytes": null,
+        "os_version": "26",
+        "platform": "android",
+        "policy_version": 1,
+        "runtimes": [
+          "onnx",
+          "ort"
+        ],
+        "sdk_name": "openmedkit-android",
+        "sdk_version": "4.0.0",
+        "storage_bytes": null
+      },
+      "understood_extensions": [
+        "org.openmed.decision_calibration"
+      ]
+    },
     "bundle_expired": {
       "max_envelope_bytes": 65536,
       "max_files": 4096,
@@ -2049,6 +2114,7 @@
     }
   ],
   "envelopes": {
+    "builtin_extension_not_understood": "{\"content_id\":\"sha256:926f1256a35fb263c1999c73ec80696da16b2e5b5d5a39b1957749a0f4191fde\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"tZ-CBYB3XkQfs_3PvRB6sOwtISz4FnfIijSGg_W2l7Op3uYuX9_ajbIlIViWZ1x_vFuAoetEf2HGC-ztOyRjCA\"}]}",
     "duplicate_path": "{\"content_id\":\"sha256:c1b3147932635b38f050d3ab7faebb679ffe879740644784ff13586c3673e32c\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"s0I21LFnjtMsgPgAWpYvNzlvg6UB-oMrA-PikXSWOSEIspAVdCELDL-DQIEk8dqNtd-JsHb1qmbGq3mWZLU7DQ\"}]}",
     "duplicate_path_case_folded": "{\"content_id\":\"sha256:4c14b28e5d43b2866cd4378c18cdb2928f3824d3fca8cbbea17797904b8cd63c\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"2RPtOvdhwWsYoiJeGkMz1GzVnrdJzyfJoJg37tDEJbBInLrLwc_WmtPLraC4g0yqu2MUSGKxIpisLcLA5EOECQ\"}]}",
     "envelope_not_canonical": "{\n  \"content_id\": \"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\n  \"schema\": \"openmed.portable_bundle.signatures\",\n  \"schema_version\": 1,\n  \"signatures\": [\n    {\n      \"alg\": \"Ed25519\",\n      \"kid\": \"openmed-test-root-a\",\n      \"sig\": \"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"\n    }\n  ]\n}",
@@ -2097,6 +2163,12 @@
     "signing_input_sha256": "32a19863f36d722e40e3a3fcadd28d9b64f8c0956b16b69d38722014c8e981f9"
   },
   "manifests": {
+    "builtin_extension_not_understood": {
+      "at": 666,
+      "base": "golden",
+      "delete": 0,
+      "insert": "decision_calibration\":{\"profiles\":[],\"schema_version\":1},\"org.openmed."
+    },
     "duplicate_path": {
       "at": 3503,
       "base": "golden",
@@ -2301,6 +2373,7 @@
     "file_reference_undeclared",
     "fallback_invalid",
     "unknown_critical_extension",
+    "extension_invalid",
     "size_limit_exceeded",
     "bundle_not_yet_valid",
     "bundle_expired",
