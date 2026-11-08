@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/reviewer_disagreement_report.schema.json",
+  "title": "OpenMed reviewer disagreement report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["adjudication", "agreement", "has_suppressed_cells", "minimum_cell_size", "reason_adjudication", "schema_version", "suppressed_reason_cells"],
+  "properties": {
+    "adjudication": {"$ref": "#/$defs/published_rate"},
+    "agreement": {"$ref": "#/$defs/published_rate"},
+    "has_suppressed_cells": {"type": "boolean"},
+    "minimum_cell_size": {"type": "integer", "minimum": 2},
+    "reason_adjudication": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reason_adjudication_rate"}
+    },
+    "schema_version": {"const": "openmed.reviewer_disagreement.v1"},
+    "suppressed_reason_cells": {"type": "integer", "minimum": 0}
+  },
+  "$defs": {
+    "published_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["denominator", "numerator", "rate", "suppressed"],
+      "properties": {
+        "denominator": {"type": ["integer", "null"], "minimum": 0},
+        "numerator": {"type": ["integer", "null"], "minimum": 0},
+        "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "suppressed": {"type": "boolean"}
+      }
+    },
+    "reason_adjudication_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["denominator", "numerator", "rate", "reason", "suppressed"],
+      "properties": {
+        "denominator": {"type": ["integer", "null"], "minimum": 0},
+        "numerator": {"type": ["integer", "null"], "minimum": 0},
+        "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "reason": {
+          "type": "string",
+          "enum": [
+            "clinical_interpretation",
+            "evidence_quality",
+            "guideline_ambiguity",
+            "label_definition",
+            "other",
+            "reviewer_error"
+          ]
+        },
+        "suppressed": {"type": "boolean"}
+      }
+    }
+  }
+}
