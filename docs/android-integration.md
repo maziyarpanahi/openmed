@@ -174,10 +174,28 @@ An offline app that ships its model does not need network permission at all.
 
 ## Compose OCR, intake, and de-identification
 
-`DocumentIntake` accepts an image or PDF URI, uses the on-device
-`MlKitOcrAdapter`, and preserves page/token offsets. Feed its extracted text
-directly into the local `OpenMedKit` facade. The URI in this example points to a
-test document containing only fictional data:
+The core `openmedkit` artifact ships no OCR engine. `DocumentIntake` accepts an
+image or PDF URI, renders or decodes each page with Android framework APIs,
+hands it to the `OcrAdapter` you supply as a platform-neutral `OcrImage`
+(a `Bitmap` or encoded bytes plus the clockwise rotation that makes it
+upright), and preserves page/token offsets. Image URIs honor their EXIF
+orientation, and `DocumentPage.width`/`height` report the upright size.
+
+The ML Kit adapter, `MlKitOcrAdapter`, lives in the optional `openmedkit-mlkit`
+artifact. Add it next to the core dependency only when you want ML Kit OCR
+(see [Optional ML Kit OCR module](#optional-ml-kit-ocr-module) for what it
+adds to your app):
+
+```kotlin
+dependencies {
+    implementation("com.github.maziyarpanahi:openmed:v3.2.0")
+    // Optional ML Kit OCR adapter. Use the same tag as the core artifact.
+    implementation("com.github.maziyarpanahi:openmed-mlkit:v3.2.0")
+}
+```
+
+Feed the extracted text directly into the local `OpenMedKit` facade. The URI in
+this example points to a test document containing only fictional data:
 
 > Patient: Jane Roe (synthetic). MRN 000-00-0000. Contact 555-0100.
 
@@ -194,10 +212,10 @@ suspend fun redactSyntheticDocument(
     syntheticDocumentUri: Uri,
     readyModelDirectory: File,
 ): String {
-    val intake = DocumentIntake(
-        context = context,
-        ocrAdapter = MlKitOcrAdapter(),
-    ).extract(syntheticDocumentUri)
+    val intake = MlKitOcrAdapter().use { ocr ->
+        DocumentIntake(context = context, ocrAdapter = ocr)
+            .extract(syntheticDocumentUri)
+    }
 
     return OpenMedKit.fromDirectory(readyModelDirectory).use { kit ->
         kit.deidentify(intake.text).redactedText
@@ -208,7 +226,66 @@ suspend fun redactSyntheticDocument(
 Keep `DocumentIntakeResult.offsetMap`, `pages`, and `tokens` if the UI needs to
 map de-identification spans back to source pages. Test the full flow with
 synthetic fixtures before introducing real clinical documents, and keep human
-review in the downstream workflow.
+review in the downstream workflow. In unit tests, pass `FakeOcrAdapter` (in the
+core artifact) instead of an engine.
+
+To use another on-device OCR engine, implement `OcrAdapter.recognize(OcrImage)`
+and build the result with `buildOcrResult(...)` from `RecognizedOcrBlock`,
+`RecognizedOcrLine`, and `RecognizedOcrToken` values. Every adapter then shares
+the same block, line, and token ordering and the same offset map.
+
+### Optional ML Kit OCR module
+
+`openmedkit-mlkit` is the only OpenMedKit Android artifact that depends on
+Google ML Kit (`com.google.mlkit:text-recognition`). Adding it changes your
+app's license and network posture:
+
+- **License.** ML Kit is distributed under Google's ML Kit terms, not the
+  Apache License 2.0 that covers OpenMedKit. Review those terms before you ship
+  the module.
+- **Network permissions and telemetry.** ML Kit's dependency graph includes
+  `com.google.android.datatransport`, which ML Kit uses to send usage metrics.
+  Its manifests merge `android.permission.INTERNET` and
+  `android.permission.ACCESS_NETWORK_STATE` into your app.
+- **Auto-starting components.** ML Kit registers `MlKitInitProvider` and
+  `MlKitComponentDiscoveryService`, and datatransport adds its scheduler
+  service and receiver.
+
+Recognition itself runs on device with the bundled Latin model; OpenMedKit
+sends no document content anywhere. The core `openmedkit` artifact carries
+none of the items above. Its build runs a dependency-boundary check that fails
+if the release POM, the resolved runtime classpath, or any manifest a consumer
+would inherit contains ML Kit, Play services, datatransport, or Firebase
+artifacts, a network permission, or a dependency-contributed provider,
+service, or receiver:
+
+```bash
+cd android
+./gradlew :openmedkit:verifyDependencyBoundary :openmedkit-mlkit:verifyDependencyBoundary
+```
+
+The `:openmedkit-mlkit` task is the negative control. It fails unless the same
+scan finds the ML Kit stack, which proves the check can see it.
+
+### Migrating from the bundled ML Kit adapter
+
+**Breaking:** OpenMedKit Android no longer includes ML Kit in the core
+artifact, and the OCR contracts no longer use ML Kit types.
+
+1. Add `openmedkit-mlkit` next to the core dependency if you use
+   `MlKitOcrAdapter`. Its package, `com.openmed.openmedkit.ocr`, is unchanged.
+2. `DocumentIntake` has no default OCR engine. Pass
+   `ocrAdapter = MlKitOcrAdapter()` (or your own adapter) explicitly.
+3. `OcrAdapter.recognize` now takes an `OcrImage` instead of an ML Kit
+   `InputImage`. Wrap bitmaps with `OcrImage.fromBitmap(bitmap, rotation)` and
+   encoded captures with `OcrImage.fromEncodedBytes(bytes, rotation)`. If you
+   already hold an `InputImage`, for example from `InputImage.fromMediaImage`,
+   call the `MlKitOcrAdapter.recognize(InputImage)` overload directly.
+4. Custom `OcrAdapter` implementations and test doubles must override
+   `recognize(image: OcrImage)`. `FakeOcrAdapter.calls` now records `OcrImage`
+   values.
+5. `OcrResult`, its token offsets, and `DocumentIntakeResult.offsetMap` are
+   unchanged.
 
 ## Storage, eviction, and logging
 
@@ -244,7 +321,8 @@ files.
 - [`android/OpenMedDemo`](https://github.com/maziyarpanahi/openmed/tree/master/android/OpenMedDemo)
   shows a Compose text de-identification flow and model status UI.
 - [`android/OpenMedScanDemo`](https://github.com/maziyarpanahi/openmed/tree/master/android/OpenMedScanDemo)
-  shows on-device capture, ML Kit OCR, and redaction.
+  shows on-device capture, ML Kit OCR through the optional `openmedkit-mlkit`
+  module, and redaction.
 - [Android Quickstart](android-quickstart.md) covers dependency installation and
   the shortest catalog-to-de-identification path.
 - [Android ONNX Export](export-onnx-android.md) documents compatible model

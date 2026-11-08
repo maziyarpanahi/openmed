@@ -35,7 +35,11 @@ The `analyzeText`, `extractPii`, and `deidentify` inference paths operate only o
 caller-supplied on-device model assets and do not open sockets or invoke HTTP.
 The optional model downloader is a separate, explicit pre-inference operation;
 it is never called by inference. The library manifest intentionally requests no
-`android.permission.INTERNET` permission.
+`android.permission.INTERNET` permission, and no dependency adds one: OCR
+engines such as ML Kit live in the optional `:openmedkit-mlkit` module, and
+`./gradlew :openmedkit:verifyDependencyBoundary` fails if a vendor OCR,
+Play services, or telemetry artifact, a network permission, or a
+dependency-contributed provider, service, or receiver reaches consumers.
 
 Internal inference diagnostics are disabled by default. Library code may emit
 diagnostics only through the typed `SafeLog` boundary, which accepts labels,

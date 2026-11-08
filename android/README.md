@@ -1,11 +1,19 @@
 # OpenMedKit Android
 
-This directory contains the Gradle build for the `:openmedkit` Android library.
+This directory contains the Gradle build for the OpenMedKit Android libraries:
+
+- `:openmedkit` is the core library. It carries no OCR engine, no Google Play
+  services or ML Kit artifacts, no vendor telemetry, and no network permission.
+- `:openmedkit-mlkit` is the optional ML Kit Text Recognition adapter
+  (`MlKitOcrAdapter`). Adding it brings Google's ML Kit terms, ML Kit's
+  auto-initializing components, and the datatransport usage-metrics stack with
+  the `INTERNET` and `ACCESS_NETWORK_STATE` permissions into the host app. See
+  [Optional ML Kit OCR module](../docs/android-integration.md#optional-ml-kit-ocr-module).
 
 ## Demos
 
-- `OpenMedScanDemo` demonstrates CameraX capture, on-device OCR, and highlighted
-  identifier redaction.
+- `OpenMedScanDemo` demonstrates CameraX capture, on-device OCR through the
+  optional `:openmedkit-mlkit` module, and highlighted identifier redaction.
 - [`OpenMedMapleDemo`](OpenMedMapleDemo/README.md) is the offline Maple Clinical
   Studio for PII redaction, entity extraction, relation extraction, and
   source-grounded reasoning/chat. It runs without model weights in synthetic
@@ -39,6 +47,15 @@ dependencies {
 }
 ```
 
+OCR is optional. To use the ML Kit adapter, also add the `openmed-mlkit`
+coordinate at the same tag as the core artifact:
+
+```kotlin
+dependencies {
+    implementation("com.github.maziyarpanahi:openmed-mlkit:v3.2.0")
+}
+```
+
 After tag publication, JitPack resolves the immutable `v3.2.0` tag and builds the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials. Use a commit coordinate only when intentionally testing an
@@ -59,6 +76,18 @@ initialization (packaged catalog load plus downloader/cache setup):
 ```bash
 cd android
 ./gradlew :openmedkit:verifyAndroidBudgets --continue
+```
+
+The core dependency boundary is a separate gate. It fails when the core
+release POM, resolved runtime classpath, or any manifest a consumer would
+inherit contains ML Kit, Play services, datatransport, or Firebase artifacts, a
+network permission, or a dependency-contributed provider, service, or receiver.
+The optional module runs the same scan as a negative control and fails unless
+it detects the ML Kit stack:
+
+```bash
+cd android
+./gradlew :openmedkit:verifyDependencyBoundary :openmedkit-mlkit:verifyDependencyBoundary
 ```
 
 Reviewable ceilings live in `gradle/budgets.properties`. Measurements are
