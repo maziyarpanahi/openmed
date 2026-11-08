@@ -227,3 +227,70 @@ def test_unconfigured_proxy_is_local_and_fails_closed_without_echoing_input():
     assert health.json()["transport_configured"] is False
     assert response.status_code == 503
     assert prompt not in response.text
+
+
+def test_chat_completion_accepts_json_content_type_with_charset():
+    seen_payloads: list[dict[str, Any]] = []
+
+    def transport(payload: dict[str, Any], **_: Any) -> str:
+        seen_payloads.append(payload)
+        return payload["messages"][0]["content"]
+
+    prompt = f"Contact {SYNTHETIC_NAME} at {SYNTHETIC_PHONE}."
+    body = json.dumps(
+        {
+            "model": "local-fixture",
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    ).encode("utf-8")
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            content=body,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == prompt
+    assert len(seen_payloads) == 1
+
+
+def test_chat_completion_rejects_non_json_and_missing_content_type():
+    seen_payloads: list[dict[str, Any]] = []
+
+    def transport(payload: dict[str, Any], **_: Any) -> str:
+        seen_payloads.append(payload)
+        return payload["messages"][0]["content"]
+
+    prompt = f"Contact {SYNTHETIC_NAME} at {SYNTHETIC_PHONE}."
+    body = json.dumps(
+        {
+            "model": "local-fixture",
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    ).encode("utf-8")
+
+    with _client(transport) as client:
+        plain_response = client.post(
+            "/v1/chat/completions",
+            content=body,
+            headers={"Content-Type": "text/plain"},
+        )
+        missing_request = client.build_request("POST", "/v1/chat/completions")
+        missing_request.headers.pop("content-type", None)
+        missing_response = client.send(missing_request)
+
+    for response in (plain_response, missing_response):
+        assert response.status_code == 415
+        assert response.json() == {
+            "error": {
+                "code": "privacy_proxy_invalid_request",
+                "message": "Privacy proxy request failed",
+                "details": {"reason": "unsupported_content_type"},
+            }
+        }
+        assert SYNTHETIC_NAME not in response.text
+        assert SYNTHETIC_PHONE not in response.text
+        assert prompt not in response.text
+    assert seen_payloads == []

@@ -37,6 +37,7 @@ from .inbound import (
     InboundRestorationError,
     InboundRestorationState,
 )
+from .outbound import UnsupportedContentTypeError, _normalize_content_type
 
 DEFAULT_MODEL = "openmed-local"
 DEFAULT_REDACTION_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -64,10 +65,13 @@ class PrivacyProxyError(RuntimeError):
         message: str = "Privacy proxy request failed",
         *,
         reason_code: Optional[str] = None,
+        status_code: Optional[int] = None,
     ) -> None:
         super().__init__(message)
         if reason_code is not None:
             self.reason_code = reason_code
+        if status_code is not None:
+            self.status_code = status_code
 
 
 class PrivacyProxyRequestError(PrivacyProxyError):
@@ -460,6 +464,13 @@ def create_app(
 
     async def chat_completions(request: Request) -> Any:
         try:
+            try:
+                _normalize_content_type(request.headers.get("content-type", ""))
+            except UnsupportedContentTypeError:
+                raise PrivacyProxyRequestError(
+                    reason_code="unsupported_content_type",
+                    status_code=415,
+                ) from None
             try:
                 payload = await request.json()
             except (TypeError, ValueError):
