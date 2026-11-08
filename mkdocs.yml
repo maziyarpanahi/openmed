@@ -691,6 +691,7 @@ nav:
       - Export Format Support Matrix: export-matrix.md
       - OpenMedKit Support Matrix (v4.0): openmedkit-support-matrix.md
       - OpenMedKit Device Qualification: openmedkit-device-qualification.md
+      - OpenMedKit v4.0 Release Gate: release/v4.0-kit-release-gate.md
       - Maple Preview on Device: maple-on-device.md
       - MLX Backend: mlx-backend.md
       - Torch MPS Performance: performance-mps.md
