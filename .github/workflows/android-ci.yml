@@ -10,6 +10,7 @@ on:
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
       - 'tests/fixtures/bundle_cache/**'
+      - 'tests/fixtures/managed_import/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -19,6 +20,7 @@ on:
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
       - 'tests/fixtures/bundle_cache/**'
+      - 'tests/fixtures/managed_import/**'
 
 permissions:
   contents: read

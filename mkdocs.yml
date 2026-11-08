@@ -714,6 +714,7 @@ nav:
       - OpenMedKit Apple Platforms: runtimes/apple-platforms.md
       - iOS Share and Action Extensions: runtimes/ios-share-extension.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
+      - Managed Offline Model-Bundle Import: mobile/managed-model-bundles.md
   - Project:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md
