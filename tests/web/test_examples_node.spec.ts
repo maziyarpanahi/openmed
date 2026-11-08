@@ -29,8 +29,8 @@ const stubPipeline: TokenClassificationPipeline = (text) => {
   });
 };
 
-test("node deidentify example redacts a synthetic note with a stub pipeline", async () => {
-  const example = (await import(exampleUrl)) as {
+async function loadExample() {
+  return (await import(exampleUrl)) as {
     run: (options: {
       pipeline: TokenClassificationPipeline;
       print?: (line: string) => void;
@@ -38,8 +38,11 @@ test("node deidentify example redacts a synthetic note with a stub pipeline", as
       deidentifiedText: string;
       spans: Array<{ canonical_label: string }>;
     }>;
-    SYNTHETIC_NOTE: string;
   };
+}
+
+test("node deidentify example redacts a synthetic note with a stub pipeline", async () => {
+  const example = await loadExample();
 
   const printed: string[] = [];
   const result = await example.run({
@@ -62,4 +65,14 @@ test("node deidentify example redacts a synthetic note with a stub pipeline", as
   assert.ok(!output.includes("Alice Nguyen"));
   assert.ok(!output.includes("1979-04-12"));
   assert.ok(!output.includes("alice@example.org"));
+});
+
+test("the example prints nothing if the synthetic identifiers survive", async () => {
+  const example = await loadExample();
+  const printed: string[] = [];
+  await assert.rejects(
+    example.run({ pipeline: () => [], print: (line) => printed.push(line) }),
+    /synthetic note still contains an identifier/,
+  );
+  assert.deepEqual(printed, []);
 });

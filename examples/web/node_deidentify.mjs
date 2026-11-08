@@ -8,7 +8,7 @@
 //
 // Tests always pass a stub `pipeline`, so they run offline. Running this
 // file directly loads a real model with loadOnnxModel, which downloads the
-// model artifacts once (about 70 MB) before inferring locally.
+// model artifacts before inferring locally.
 
 import { pathToFileURL } from "node:url";
 
@@ -22,13 +22,17 @@ export const SYNTHETIC_NOTE =
   "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
 
 /**
- * De-identify `text` with an injected token-classification pipeline.
+ * De-identify the synthetic note with an injected token-classification pipeline.
  *
  * Prints the redacted text and the span labels (never the original
  * identifier values) and returns the full de-identification result.
  */
-export async function run({ pipeline, text = SYNTHETIC_NOTE, print = console.log } = {}) {
-  const result = await deidentify(text, { pipeline });
+export async function run({ pipeline, print = console.log } = {}) {
+  const result = await deidentify(SYNTHETIC_NOTE, { pipeline });
+  const identifiers = ["Alice", "Nguyen", "1979-04-12", "alice@example.org"];
+  if (identifiers.some((value) => result.deidentifiedText.includes(value))) {
+    throw new Error("The synthetic note still contains an identifier.");
+  }
   print(result.deidentifiedText);
   print(result.spans.map((span) => span.canonical_label).join(", "));
   return result;
