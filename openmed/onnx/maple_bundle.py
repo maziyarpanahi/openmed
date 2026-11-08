@@ -219,7 +219,11 @@ def validate_maple_onnx_bundle(bundle_path: str | Path) -> MapleBundleBuild:
             if entries[0].file_size > _MAX_MANIFEST_BYTES:
                 raise MapleBundleError(f"{MAPLE_BUNDLE_FILENAME} is too large")
             try:
-                manifest = json.loads(archive.read(entries[0]).decode("utf-8"))
+                manifest = json.loads(
+                    archive.read(entries[0]).decode("utf-8"),
+                    object_pairs_hook=_unique_object,
+                    parse_constant=_reject_json_constant,
+                )
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                 raise MapleBundleError(
                     f"{MAPLE_BUNDLE_FILENAME} must be valid UTF-8 JSON"
@@ -256,6 +260,23 @@ def validate_maple_onnx_bundle(bundle_path: str | Path) -> MapleBundleBuild:
     except zipfile.BadZipFile as exc:
         raise MapleBundleError("Maple bundle must be a valid ZIP archive") from exc
     return MapleBundleBuild(bundle_path=path, manifest=manifest)
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build a manifest object, refusing a key that appears more than once."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise MapleBundleError("Maple bundle manifest must not repeat object keys")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> Any:
+    """Refuse the non-finite NaN and Infinity JSON extensions."""
+
+    raise MapleBundleError("Maple bundle manifest must not contain non-finite numbers")
 
 
 def _validate_manifest(manifest: Any) -> None:
@@ -385,7 +406,7 @@ def _validate_manifest(manifest: Any) -> None:
             or not _SHA256_PATTERN.fullmatch(checksum)
             or set(checksum) == {"0"}
         ):
-            raise MapleBundleError(f"bundle file {item_path} needs a valid SHA-256")
+            raise MapleBundleError("bundle files must declare a valid SHA-256")
         total_bytes += size
     if total_bytes > _MAX_BUNDLE_BYTES:
         raise MapleBundleError("bundle exceeds the 12 GiB import limit")
