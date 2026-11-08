@@ -645,6 +645,7 @@ classification:
     - languages/code-switch-projection.md
     - languages/translation-guard.md
     - runtimes/browser-extension.md
+    - runtimes/browser-offline-install.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
     - pii-smart-merging.md

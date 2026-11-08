@@ -595,6 +595,7 @@ nav:
       - Code-switch Span Projection: languages/code-switch-projection.md
       - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
+      - Installable Offline Browser Profile: runtimes/browser-offline-install.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md

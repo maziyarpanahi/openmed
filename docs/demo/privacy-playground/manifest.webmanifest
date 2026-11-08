@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "OpenMed privacy playground",
+  "short_name": "OpenMed playground",
+  "description": "Redact synthetic text locally from a verified offline copy.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F7F8",
+  "theme_color": "#B0413E",
+  "icons": [
+    {
+      "src": "../../assets/openmed-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
