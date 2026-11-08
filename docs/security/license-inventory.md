@@ -18,6 +18,12 @@ explicit policy exception. Add a reviewed row before adding a dependency. Do
 not paste package metadata, URLs, credentials, or application data into this
 inventory.
 
+The portable kits (Swift, Android, JavaScript, Tauri and Flutter) have their
+own review tables in the [OpenMedKit dependency license
+inventory](kit-license-inventory.md), gated offline by
+`python scripts/licenses/kit_inventory.py` with the same permissive allowlist
+and restricted classes.
+
 The `extract-msg` row is intentionally restricted: it is allowed only for the
 `email-msg-gpl` extra's documented out-of-process bridge, and remains excluded
 from the bundled and in-process runtime. The exception requires the reviewed
