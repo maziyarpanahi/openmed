@@ -101,7 +101,9 @@ let package = Package(
             name: "OpenMedShareExtension",
             dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
             path: "Sources/ShareExtension",
-            resources: [.process("Resources")]
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMedActionExtension",
