@@ -73,6 +73,8 @@ GPL_BRIDGE_EXCEPTIONS = {
 }
 
 REVIEWED_LICENSES = {
+    "sherpa-onnx": "Apache-2.0",
+    "psutil": "BSD-3-Clause",
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
     "aiohttp": "Apache-2.0 AND MIT",
@@ -132,6 +134,8 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "mlx-whisper": "MIT",
+    "mlx-vlm": "MIT",
     "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "multidict": "Apache-2.0",
@@ -159,6 +163,8 @@ REVIEWED_LICENSES = {
     "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
+    # Reviewed against pyasn1/pyasn1 v0.6.5 LICENSE.rst (two-clause BSD).
+    "pyasn1": "BSD-2-Clause",
     "pycld2": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pymongo": "Apache-2.0",

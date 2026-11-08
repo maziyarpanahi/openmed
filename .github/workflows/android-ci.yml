@@ -2,18 +2,20 @@ name: Android CI (OpenMedKit)
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
 permissions:
@@ -48,12 +50,13 @@ jobs:
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
 
-    - name: Run Android offset-contract parity suite
+    - name: Run Android contract parity suites
       working-directory: android
       run: >-
         ./gradlew :openmedkit:testDebugUnitTest
         --tests '*OffsetContractParityTest'
         --tests '*IcuSegmentationFallbackTest'
+        --tests '*MultimodalContractParityTest'
         --stacktrace
 
     - name: Verify Android library budgets

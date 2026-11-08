@@ -2,7 +2,7 @@ name: Reproducibility Provenance Gate
 
 on:
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/repro-provenance.yml"
       - ".github/workflows/reproducible-lock.yml"

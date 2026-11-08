@@ -70,6 +70,7 @@ When authentication is enabled, the current built-in route scopes are:
 | `POST /cohort/resolve` | `cohort:read` |
 | `GET /v1/journey/resources` | `journey:read` |
 | `POST /v1/decisions` | `decisions:write` |
+| `POST /v1/systemone` | `decisions:write` and `pii:write` |
 | `POST /brief` / `POST /ground` | `brief:write` / `ground:write` |
 | `/graphql` | Selected field scopes; see [GraphQL](graphql.md) |
 

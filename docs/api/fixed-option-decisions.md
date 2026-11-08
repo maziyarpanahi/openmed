@@ -51,8 +51,7 @@ else:
 The dependency-free deterministic backend is conservative and intended for
 tests, explicit lexical decisions, and offline fallback. Applications can
 inject an `EncoderDecisionBackend`, `CrossEncoderDecisionBackend`, or
-`SpecialistDecisionBackend`. Learned adapters require a permissive license
-identifier and preserve the configured model ID, immutable revision, runtime,
+`SpecialistDecisionBackend`. Learned adapters record the declared weight license for the selected revision and preserve the configured model ID, immutable revision, runtime,
 and calibration identity in every result.
 
 ## GLiClass v4 backend
@@ -281,6 +280,18 @@ questions carry their OpenMed `state` and `code`; choice and expected-level
 selections are `null`, while available probabilities remain available for
 review.
 
+## De-identifying System One requests
+
+`POST /v1/systemone` is a separate, opt-in privacy route for System One clients. Set `OPENMED_SERVICE_SYSTEM_ONE=1`, enable service authentication and positive service rate limits, and use `OPENMED_OFFLINE=1` with the English PII model already available locally. The caller needs both `decisions:write` and `pii:write`. The route is documented in OpenAPI even when disabled (404). Missing security configuration refuses service (503).
+
+Send text or structured JSON in `state` and up to 32 named `questions`. The service renders structured state as text and masks it, instructions, option labels/descriptions and score-level labels with the local de-identifier. It checks for residual identifiers before calling the configured local decision backend. Question IDs and choice IDs become local ordinals during inference. The caller receives their own question and option labels back with the System One answers and a random `decision_id`.
+
+```json
+{"state":"A synthetic caller asks to change an appointment.","questions":{"callback":{"type":"noul","instructions":"Does this request need a scheduling callback?"}}}
+```
+
+Malformed bodies, images, video and audio are refused. A detector failure, abstention, malformed redaction, or residual safety-sweep finding refuses the entire request (422); no question is dispatched. The audit logger `openmed.service.systemone.audit` writes a keyed request digest, keyed question IDs, modes, answer states and entity counts. Its digest key is process-local and rotates on restart. No text or re-identification mapping is retained by this route. De-identification can miss identifiers: qualify the local detector for the language and input distribution before clinical use. System One outputs remain assistive and need human review.
+
 ## Local decision servers
 
 Many decision models need a CUDA serving stack, a custom head, or a pinned
@@ -310,8 +321,7 @@ compared without their organization prefix and letter case, and a different
 model yields `conflict` (`decision_server_model_mismatch`). The model ID,
 revision, and declared license are recorded in the backend identity, whose
 `runtime` names the protocol and scope, for example
-`system_one_server:loopback`. Undeclared or non-permissive licenses are
-rejected as for every backend. An optional `bearer_token` is sent as
+`system_one_server:loopback`. The license is model provenance; the operator checks terms. An optional `bearer_token` is sent as
 `Authorization: Bearer` and never appears in representations, errors, or logs.
 
 **Endpoint policy.** Endpoints are checked with the shared
@@ -384,9 +394,8 @@ Other servers documented by their model cards work the same way, for example
 the h2o-lightning-4b shim on port 8741 (set
 `OPENMED_DECISION_SERVER_PROTOCOL=openai_decisions` for `/v1/decisions`) or a
 Mica server on port 8010. Optional variables set the license
-(`OPENMED_DECISION_SERVER_LICENSE`, `Apache-2.0` by default), the served model
-name, and a bearer key. Serve only weights whose license you have declared;
-weights under non-commercial or other non-permissive licenses are rejected.
+(`OPENMED_DECISION_SERVER_LICENSE`, `NOASSERTION` if unspecified), the served model
+name, and a bearer key. Check the terms for your served revision and declare them accurately.
 
 ## MCP
 

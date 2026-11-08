@@ -66,6 +66,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "clinical/grounding/vocab.py": "opt-in clinical vocabulary download (offline-gated)",
     "clinical/trials/source.py": "explicit public clinical-trial metadata fetch",
     "core/offline.py": "the offline network-block guard itself (OM-005)",
+    "mlx/models/whisper.py": (
+        "isolated ASR worker installs socket and DNS denial; no network client, "
+        "endpoint, download path or remote fallback"
+    ),
     "deploy/journey.py": "explicit operator-configured worker/model readiness probes",
     "eval/datasets/drugprot.py": "opt-in evaluation dataset download",
     "eval/suites/shield.py": "opt-in evaluation dataset/rows fetch",
@@ -73,6 +77,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "interop/openmrs.py": "opt-in facility-local OpenMRS HTTP client",
     "mcp/upstream_endpoint_policy.py": (
         "opt-in user-configured upstream endpoint policy and probe"
+    ),
+    "multimodal/decoder_guard.py": (
+        "private socket-denial control after kernel isolation; "
+        "public probes have no outbound operation"
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",

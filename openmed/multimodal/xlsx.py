@@ -8,18 +8,20 @@ free-text de-identification so embedded PHI is not missed.
 
 from __future__ import annotations
 
+import io
 import os
 import re
-import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from openmed.core.labels import OTHER, normalize_label
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
 
 from .base import ExtractedDocument
 from .exceptions import MissingDependencyError
+from .ooxml_residual import _check_source, _publish, _read_source, _xlsx_coverage
 from .tabular_csv import (
     ACTION_DATE_SHIFT,
     ACTION_FREE_TEXT_REDACT,
@@ -95,6 +97,7 @@ def redact_xlsx(
     keep_year: bool = True,
     sample_size: int = 50,
     cell_deidentifier: CellDeidentifier | None = None,
+    archive_policy: ArchiveSafetyPolicy | None = None,
 ) -> XlsxRedactionResult:
     """Redact PHI in XLSX string cells while preserving workbook structure.
 
@@ -106,6 +109,7 @@ def redact_xlsx(
 
     Args:
         source: Input ``.xlsx`` workbook path.
+        archive_policy: Optional tighter ZIP admission policy.
         output_path: Destination ``.xlsx`` path. It must differ from ``source``.
         policy: Optional tabular mapping with ``header_heuristics`` and
             ``action_overrides``, or a core policy profile name for the default
@@ -140,9 +144,13 @@ def redact_xlsx(
     if sample_size < 1:
         raise ValueError("sample_size must be at least 1")
 
+    source_data = _read_source(source_path)
+    prepared_source = _check_source(
+        source_data, _xlsx_coverage(source_data, archive_policy)
+    )
     load_workbook = _load_workbook_function()
     workbook = load_workbook(
-        filename=source_path,
+        filename=io.BytesIO(prepared_source),
         read_only=False,
         data_only=False,
         keep_links=True,
@@ -474,18 +482,7 @@ def _unique_labels(labels: Iterable[str]) -> tuple[str, ...]:
 
 
 def _save_workbook_atomically(workbook: Any, destination: Path) -> None:
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            prefix=f".{destination.stem}.",
-            suffix=".xlsx",
-            dir=destination.parent,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-        workbook.save(temporary_path)
-        os.replace(temporary_path, destination)
-        temporary_path = None
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    data = buffer.getvalue()
+    _publish(data, destination, _xlsx_coverage(data))

@@ -356,9 +356,54 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.generated_text_guard",
+      "function": "GeneratedTextGuard._detect.run",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.multimodal.decoder_guard",
+      "function": "probe_media",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "StreamingTesseractEngine.recognize",
       "module": "openmed.multimodal.ocr_tesseract_stream"
+    },
+    {
+      "classification": "operational",
+      "function": "run_reference_workflow",
+      "module": "openmed.multimodal.reference_workflow"
+    },
+    {
+      "classification": "operational",
+      "function": "ThermalGate.release_speech",
+      "module": "openmed.multimodal.runtime.thermal_gate"
+    },
+    {
+      "classification": "operational",
+      "function": "ThermalGate.run_vlm",
+      "module": "openmed.multimodal.runtime.thermal_gate"
+    },
+    {
+      "classification": "operational",
+      "function": "MultimodalSession._run",
+      "module": "openmed.multimodal.runtime_session"
+    },
+    {
+      "classification": "operational",
+      "function": "WithholdingBuffer.edit",
+      "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
+    },
+    {
+      "classification": "operational",
+      "function": "WithholdingBuffer.release_ready",
+      "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
+    },
+    {
+      "classification": "operational",
+      "function": "AmbientSession.__exit__",
+      "module": "openmed.multimodal.streaming.session"
     },
     {
       "module": "openmed.onnx.streaming_loader",

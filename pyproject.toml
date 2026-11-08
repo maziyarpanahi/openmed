@@ -67,6 +67,8 @@ dev = [
   "Pillow==13.0.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
+  # Exercise real synthetic DICOM parsing in the offline CI suite.
+  "pydicom>=3.0",
   "openpyxl>=3.1,<4",
   "fastapi>=0.110",
   "httpx>=0.27",
@@ -360,10 +362,11 @@ prefect = [
   "jinja2>=3.1.6",
   "prefect>=3.7,<4",
   "h2>=4.4.1",
-  "oauthlib>=4.0.0",
+  "oauthlib>=4.0.1",
 ]
 
 cloud = [
+  "pyasn1>=0.6.5",
   "multidict>=6.9.1",
   "aiohttp>=3.14.4",
   "fsspec>=2026.6.0",
@@ -371,7 +374,7 @@ cloud = [
   "s3fs>=2025.9.0",
   "gcsfs>=2025.9.0",
   "adlfs>=2025.8.0",
-  "oauthlib>=4.0.0",
+  "oauthlib>=4.0.1",
 ]
 
 journey = [
@@ -494,6 +497,24 @@ gliner2 = [
   "torch>=2.13.0",
 ]
 
+edge-asr = [
+  "numpy>=2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx-whisper>=0.4.3,<0.5; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx>=0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "torch>=2.13.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "filelock>=4.2.1; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "fsspec>=2026.6.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "jinja2>=3.1.6; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+
+edge-vlm = [
+  # Optional reference provider; model weights are provisioned separately.
+  "mlx-vlm>=0.7.11,<0.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  # Earlier releases cannot load this checkpoint's Pillow-only image processor.
+  "transformers>=5.22.1,<6; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "Pillow>=13.0.0",
+]
+
 mlx = [
   "filelock>=4.2.1",
   "fsspec>=2026.6.0",
@@ -529,6 +550,13 @@ onnx = [
   "onnxscript>=0.1.0",
   "torch>=2.13.0",
   "transformers>=4.50",
+]
+
+# Optional local CPU diarization; weights are supplied separately by the caller.
+edge-diarization = [
+  "sherpa-onnx==2.0.1",
+  "numpy>=1.26",
+  "psutil>=7.1.3",
 ]
 
 onnx-runtime = [
@@ -589,6 +617,7 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "pyasn1>=0.6.5",
   "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "certifi>=2026.10.19",
@@ -605,7 +634,7 @@ constraint-dependencies = [
   "pymongo>=4.18.3",
   "datasets>=5.0.1",
   "h2>=4.4.1",
-  "oauthlib>=4.0.0",
+  "oauthlib>=4.0.1",
   # Keep transitive optional model backends above the checkpoint/native-op fixes.
   "torch>=2.13.0",
   "tornado>=6.6",
@@ -638,6 +667,21 @@ override-dependencies = [
   "filelock>=4.2.1",
 ]
 conflicts = [
+  # The qualified ASR numerical stack uses NumPy 2; scispacy 0.6 requires 1.x.
+  [
+    { extra = "edge-asr" },
+    { extra = "scispacy" },
+  ],
+  # AWQ pins an older Transformers runtime than the optional VLM backend.
+  [
+    { extra = "edge-vlm" },
+    { extra = "awq" },
+  ],
+  # The optional VLM runtime needs NumPy 2; SciSpaCy 0.6 requires NumPy 1.
+  [
+    { extra = "edge-vlm" },
+    { extra = "scispacy" },
+  ],
   [
     { extra = "airflow" },
     { extra = "ocr-paddle" },

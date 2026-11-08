@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
@@ -283,8 +284,8 @@ def test_redact_document_pdf_reports_detected_rectangles(
             ]
         }
 
-    source = tmp_path / "synthetic_phi.pdf"
-    source.write_bytes(b"synthetic bytes parsed by fake_pdfplumber")
+    source = BytesIO(_synthetic_pdf_bytes())
+    source.name = "synthetic_phi.pdf"
     doc = redact_document(source, models={"detector": detector}, lang="en")
 
     assert doc.text == "Patient John Doe\nMRN 12345"

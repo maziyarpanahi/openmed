@@ -758,6 +758,11 @@
                     "required": [
                       "max_input_chars"
                     ]
+                  },
+                  {
+                    "required": [
+                      "media"
+                    ]
                   }
                 ]
               },
@@ -841,6 +846,44 @@
             "maximum": 131072.0,
             "minimum": 1.0,
             "type": "integer"
+          },
+          "media": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "byte_size": {
+                  "maximum": 8388608.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "data": {
+                  "contentEncoding": "base64",
+                  "maxLength": 11184812,
+                  "type": "string"
+                },
+                "media_type": {
+                  "enum": [
+                    "image/png",
+                    "image/jpeg",
+                    "video/mp4",
+                    "audio/wav"
+                  ]
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "media_type",
+                "sha256",
+                "byte_size",
+                "data"
+              ],
+              "type": "object"
+            },
+            "maxItems": 4,
+            "type": "array"
           },
           "mode": {
             "enum": [
@@ -3470,6 +3513,42 @@
         "title": "SMARTBackendIngestionRequest",
         "type": "object"
       },
+      "SystemOneRequest": {
+        "additionalProperties": false,
+        "description": "Text or structured state and named questions for protected local decisions.",
+        "properties": {
+          "questions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Questions",
+            "type": "object"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "state",
+          "questions"
+        ],
+        "title": "SystemOneRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -3526,7 +3605,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "3.1.0"
+    "version": "3.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4462,13 +4541,13 @@
                           "type": "string"
                         },
                         "license_id": {
-                          "enum": [
-                            "Apache-2.0",
-                            "BSD-2-Clause",
-                            "BSD-3-Clause",
-                            "MIT",
-                            "MPL-2.0"
-                          ],
+                          "maxLength": 128,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
+                          "type": "string"
+                        },
+                        "license_sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
                           "type": "string"
                         },
                         "local": {
@@ -5176,6 +5255,61 @@
         ]
       }
     },
+    "/v1/systemone": {
+      "post": {
+        "description": "De-identify state and every question before scoring with the configured local backend.",
+        "operationId": "private_system_one_v1_systemone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "answers": {
+                      "type": "object"
+                    },
+                    "decision_id": {
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decision_id",
+                    "model",
+                    "answers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "System One answers plus an OpenMed decision ID."
+          },
+          "404": {
+            "description": "Route disabled (default)."
+          },
+          "422": {
+            "description": "De-identification refused; nothing forwarded."
+          }
+        },
+        "summary": "Private System One",
+        "tags": [
+          "decision"
+        ]
+      }
+    },
     "/v1/workflows/cancel": {
       "post": {
         "operationId": "workflow_cancel_v1_workflows_cancel_post",
@@ -5729,6 +5863,62 @@
         ],
         "x-max-request-bytes": 65536,
         "x-required-scope": "workflow:read"
+      }
+    }
+  },
+  "x-openmed-experimental-paths": {
+    "/experimental/multimodal/preflight": {
+      "post": {
+        "description": "Disabled by default. Supply a strict AssetManifest JSON object in X-OpenMed-Manifest (at most 8192 bytes) and raw asset bytes as application/octet-stream. Returns the unchanged core PreflightReport JSON using desktop-v1 limits. No decoding, inference or clinical action is performed.",
+        "operationId": "multimodal_preflight_experimental_multimodal_preflight_post",
+        "parameters": [
+          {
+            "description": "Strict AssetManifest JSON; opaque references only",
+            "in": "header",
+            "name": "X-OpenMed-Manifest",
+            "required": true,
+            "schema": {
+              "maxLength": 8192,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Byte-stable core PreflightReport JSON"
+          },
+          "413": {
+            "description": "Request body exceeds the configured ceiling"
+          },
+          "415": {
+            "description": "unsupported_media_type error envelope"
+          },
+          "422": {
+            "description": "malformed_manifest or digest mismatch envelope"
+          }
+        },
+        "summary": "Experimental single-asset multimodal preflight",
+        "tags": [
+          "Experimental"
+        ],
+        "x-enabled-by-default": false,
+        "x-experimental": true
       }
     }
   }

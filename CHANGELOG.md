@@ -7,6 +7,322 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Discover nested public multimodal packages in the API compatibility gate,
+  require committed baseline coverage, and document baseline updates for new
+  packages. Private packages and unavailable optional shims are skipped
+  without loading their runtimes during discovery (#3844).
+
+### Added
+
+- Document multimodal dependency licenses through the existing offline inventory,
+  with separate guidance for the Tesseract binary and TCIA collection terms (#257).
+
+- Add an optional pinned Core ML English speech adapter for OpenMedKit, with bounded PCM ownership, incremental hypotheses, acoustic timing, explicit compute refusals and cancellation that fences late results (#3823).
+
+- Session-scoped opaque voice embedding handles in Python and OpenMedKit, with
+  same-session similarity, value-free evidence, retention erasure callbacks and
+  buffer destruction on pause, withdrawal, cancellation and finalization.
+  Serialization, persistence and cross-session comparison are refused.
+
+- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
+  with digest-bound clinician confirmation, evidence/speaker references,
+  freshness and correction holds, and counts-only conversion-loss reports.
+
+- Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
+
+- Experimental Android mirrors of multimodal asset manifests, profile references,
+  preflight findings, abstention records, and provider result envelopes with strict
+  content-free parsing and shared offline Python/Kotlin serialization vectors.
+
+- Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
+
+- Connect synthetic image and audio inputs through bounded preflight, actual redaction, local fixture providers, evidence fusion, clock lineage, unresolved-speaker review and conservative owned-buffer cleanup, with cancellation and resource-failure controls (#3204).
+
+- Bind native Apple audio capture to explicit microphone permission and ambient consent, with interruption and cohort fences, bounded local PCM delivery, and owned-buffer cleanup accounting (#3680).
+
+- Add local fixed ambient-draft evaluation with separate omissions, unsupported
+  claims, contradictions, speaker/experiencer attribution and negation rates,
+  conservative small-slice suppression, descriptive confidence intervals and
+  revision-bound blinded review imports. Bundle hand-authored synthetic encounters;
+  no clinical validation or autonomous action is implied (#3822).
+
+- Dependency-free, counts-only PDF hidden-content inventory for annotations,
+  form values, embedded files, XFA, layers, JavaScript, OpenAction, Launch and
+  incremental revisions, including superseded definitions. Strict/review
+  policies and explicit PDF asset preflight expose controlled findings without
+  overriding existing raster-budget abstentions (#3824).
+
+- Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
+
+- Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
+  parser fuzz coverage, with required-resource checks and a zero-skip gate.
+
+- Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
+  two-patient packet fixtures with verified pixel/gold digests, critical flags,
+  packet splits and value-free loader representations (#3829).
+
+- Add executed OpenPHI-Vision synthetic leakage controls and immutable EdgeHealthBench device profiles with separate privacy, quality, utility, abstention, parity and measured resource gates (#3205).
+
+- Add aligned offline Python and OpenMedKit non-ECG waveform acquisition
+  contracts for PPG, respiration, pressure and capnography, with controlled
+  quality states, content-free reports and explicit reviewer confirmation.
+  These engineering checks expose no derived vital signs or alarms (#3840).
+
+- Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
+
+- Mute timed identifiers in a separate local PCM buffer under the original retention deadline; uncertain alignment withholds the entire derivative (#3838).
+
+- Gate local OpenMedKit multimodal work on Apple thermal notifications, measured queue age and rolling latency, with explicit cadence/window limits, sustained cooling before recovery and value-free evidence (#3836).
+
+- Shared consent, capture interruption, language and policy abstention codes with
+  strict stage gates and code-specific v2 wire versions. Legacy abstention and
+  provider-result records retain byte-identical v1 serialization (#3834).
+
+- Gate ambient capture on unanimous consent in Python and OpenMedKit, with explicit interruption/resume, non-renewable retention, revocable owned-memory references and draft-only review exports with conservative deletion accounting (#3208).
+
+- Add an isolated local MLX Whisper streaming provider with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
+
+- Flag ASR hypotheses over non-speech audio and repetition loops for review, using bounded provider statistics, voice-activity evidence and content-free decisions (#3815).
+
+- Score fixed transcript pairs with deterministic WER, CER, clinical-term error rates, identifier preservation and streaming revision churn, using counts-only reports and bounded uncertainty estimates (#3821).
+
+- Route finalized transcripts by language confidence in Python and OpenMedKit, with installed-pack detectors, token-boundary code-switch splits, exact source offsets and explicit review before release (#3819).
+
+- Optional bounded local audio sample conversion for ASR, with explicit channel
+  policy, anti-alias filtering, PCM16 output, rational timing lineage, protected
+  buffers and reviewer-confirmed handoff. Add the aligned on-device OpenMedKit
+  converter and synthetic offline safety controls (#3673).
+
+- Explicit offline document, transcription and ambient-draft CLI adapters over
+  injected session services, with separate protected/evidence outputs, consent
+  and review gates, interruption cleanup and synthetic examples (#3678).
+
+- Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
+
+- Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
+
+- Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
+
+- Waveform manifest metadata and v1.1 profiles for EDF-, WFDB- and DICOM-ECG-shaped
+  inputs, explicit non-pixel DICOM admission, bounded waveform ceilings and
+  saturating decoded-memory plans. Legacy v1 serialization stays unchanged;
+  unknown WFDB source types still abstain. Resource admission is non-diagnostic
+  and does not qualify readers or clinical use (#3814).
+
+- Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
+  16, 212 and 80 with windowed integer outputs, streamed checksum verification,
+  value-safe metadata
+  and MIT annotation summaries, synthetic privacy fixtures and explicit human
+  review boundaries.
+
+- Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
+
+- Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
+
+- Support separately acquired d1-omni-600M for local text, image and English voice-command decisions; record revision-bound model license provenance separately from the Apache-2.0 adapter (#4263).
+
+- Add bounded local speaker-diarization observations and an optional CPU adapter with explicit acoustic uncertainty, pinned caller-supplied artifacts, cancellation and alias lineage; clinical roles remain separate (#3676).
+
+- Reconcile fixed overlapping ASR outputs by exact token/timing evidence, preserving ambiguous alternatives and explicit gaps, emitting existing transcript revision events, and retaining PHI-withholding control over release (#3675).
+
+- Generate bounded non-diagnostic waveform stimuli with declared event timing and synthetic device metadata (#2850).
+
+- Offline synthetic dialogue rendering through licensed local speech adapters,
+  sample-exact PHI chunks and word timing manifests, a model-free waveform fixture,
+  and seeded noise, gain, overlap and bandpass augmentation provenance (#3831).
+
+- Generate reproducible synthetic DICOM files with paired metadata, burned-in identifier masks, annotation and ruler geometry, native pixel roundtrips and source-bound privacy-mask lineage (#2849).
+
+- Compare packet-scoped identity digests, page numbering, rendered pixels, template anchors and continuation cues across document pages; preserve original evidence and masks when splitting or quarantining inconsistent groups (#2805).
+
+- Gate fresh image exports on actual full-frame and carrier inspection, resolved critical-region masks, verified transform lineage and residual detection, with value-free regional evidence and no partial output on failure (#2795).
+
+- Gate sustained local VLM execution and speech PHI screening on measured latency, queue age, fresh thermal state and memory pressure, preserving fallback history and withholding stale outputs (#2820).
+
+- Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
+  integer/scaled samples, withheld identification/date/annotation text, explicit
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
+- Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
+  separate rhythm and representative-beat signals, withheld identifying
+  metadata, controlled rejection codes and mandatory review notices (#3839).
+
+- Extract review-only ECG rate, PR, QRS and QT candidates from freshly quality-gated samples, retaining original lead fiducials and algorithm provenance while withholding ambiguous or disagreeing measurements (#2809).
+
+- Local, metadata-only ambient correction ledgers in Python and OpenMedKit,
+  with revision-bound authority, dependent claim invalidation, deterministic
+  replay, and explicit review guards on current exports (#3682).
+
+- Assemble ambient note drafts from finalized, PHI-screened, role-reviewed transcript evidence with original-offset citations, local claim verification, conflict holds and current clinician-custody checks before local export (#2816).
+
+- Own bounded transient audio buffers, enforce non-renewable session deadlines, and verify lifecycle cleanup of declared buffers and enrolled local files with value-free receipts and conservative crash recovery (#2818).
+
+- Associate form values and controls with original visual labels and sections, retain ambiguous alternatives, and require exact-content association and handwriting review before protected structured export (#2797).
+
+- Opt-in experimental single-asset REST preflight with in-memory binary intake,
+  core report byte parity, bounded manifests and bodies, and content-free errors
+  and access logs (#3835).
+
+- Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
+
+- Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
+
+- Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
+  retention, provenance and review/export threats to enforcing code/tests or
+  tracked gaps, with offline dangling-reference and publication regression gates.
+
+- Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
+
+- Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
+
+- Bounded, offline DICOM ECG multiplex decoding with physical calibration,
+  source-coded channels, relative skew, withheld annotation counts, static
+  rejection codes and explicit reviewer confirmation (#3825).
+
+- Record actual DICOM decoding and display transforms in reproducible digest chains, bind downstream image regions and local VLM evidence to their pixels, and reject stale or unreproducible evidence (#2801).
+
+- Redact ECG fields and rendered annotations together, with source-bound review, cross-surface identifier matching, verified in-memory PNG export, unchanged waveforms and refusal on residual identifiers or unknown coverage (#2811).
+
+- Keep ambient speaker-role hypotheses separate from aliases and require exact-source reviewer decisions before role-sensitive extraction and note finalization, with explicit provisional drafts and stale-attribution rejection (#2817).
+
+- Bounded HEIF/M4A header preflight in Python and OpenMedKit, with primary image
+  geometry, item-role and EXIF/XMP presence inventory, declared audio metadata,
+  decoder-required results, value-free refusals and shared synthetic fixtures
+  (#3841). No media decoding or metadata-value extraction is performed.
+
+- Opt-in BigTIFF pyramid metadata preflight in Python and OpenMedKit, with
+  declared tiled IFD-chain/SubIFD profiles, bounded directory and tile-table
+  traversal, value-free failures and shared synthetic geometry fixtures (#3683).
+
+- Verify complete whole-slide tile references, original source coordinates, transform history and tissue-selection evidence before computing protected feature aggregates with value-free provenance (#2802).
+
+- Keep handwritten alternatives explicitly unverified and gate structured exports on exact-candidate reviewer selection or correction, retaining original visual coordinates and content-free review lineage (#2798).
+
+- Screen localized OCR and visual text for instruction cues, quarantine complete implicated regions, and require exact-content policy or reviewer release before including held text in prompt data (#2804).
+
+- Gate ECG measurements on versioned per-lead missingness, clipping, flatline, drift/noise proxies and acquisition calibration, with fresh source/sample binding and explicit review before downstream callbacks (#2808).
+
+- Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
+
+- Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
+
+- Carry verified local images and bounded video clips through decision requests and the loopback System One bridge; strip metadata before dispatch and keep media out of audit logs (#4261).
+
+- Add an experimental CPU ONNX streaming speech adapter for pinned local character-CTC exports, with bounded timed hypotheses and content-free reports (#3842).
+
+- Export a strict, self-contained Draft 2020-12 schema for provider capability matrix records, sharing Python identifiers, bounds and outcome/reason combinations (#3118).
+
+- Add offline `openmed multimodal preflight` with opaque reports, bounded headers, shared resource admission and opt-in symlink-safe directory traversal (#3053).
+
+- Compare versioned local multimodal provider capability declarations against
+  content-free modality profiles, with stable exact, transform-required,
+  unsupported and missing-capability JSON and Markdown reports (#3095).
+
+- Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
+
+- Ship bounded synthetic malformed-header fixtures exercising the existing multimodal preflight and batch contracts (#3007).
+
+- Run ordered multimodal batch preflight with shared per-asset reports, aggregate ceilings, duplicates and explicit stop policies (#3009).
+
+- Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
+
+- Added deterministic synthetic malformed PDF and DICOM header fixtures with
+  recorded pre-decode boundaries, expected reason codes and payload digests,
+  plus offline regression tests (#3094).
+
+- Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
+  declared file-meta transfer syntaxes into closed native, optional-decoder,
+  review, and unsupported outcomes with stable reason codes, and reports no
+  patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
+  (#3089).
+
+- Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
+
+- Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
+
+- Offline critical transcript-token classification and value-free confirmation
+  holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
+  reviewer receipts, guarded export permits and unchanged local dosing checks.
+
+- Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
+
+- Review ECG lead identity, expected sets, display positions and grouped acquisition timing before canonical reordering, with explicit rhythm-strip declarations and value-free non-diagnostic findings (#2807).
+
+- Maintain session-scoped speaker aliases through explicit diarization relabels, merges and splits, with atomic revisions, value-free lineage and reviewer-confirmed clinical roles (#2813).
+
+- Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
+
+- Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
+
+- Define an offline edge-VLM provider contract with bounded image/prompt inputs, source-linked evidence, model/preprocessing digests, shared abstentions, content-free reports and explicit human review for non-diagnostic drafts (#2791).
+
+- Define an offline streaming-ASR provider contract with typed audio, hypotheses, token timing, provenance, bounded session accounting and explicit cancellation (#2812).
+
+- Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
+
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry checks. Structured vision results carry
+  the fixed catalog notice (#3828).
+
+- Add deterministic Draft 2020-12 JSON Schema exports for the multimodal
+  preflight artifacts (asset manifests, asset batches, abstention records,
+  processing summaries and provider result envelopes) with offline resolution,
+  pinned rendering digests and drift tests binding each document to its Python
+  loader (#3051).
+
+### Security
+
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
+
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
+
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
+- Screen buffered Python MLX and OpenMedKit Compass generations with injected
+  local PHI detectors and same-asset identifier digests. Bind release decisions
+  to metadata, abstain on detector failure or timeout, and suppress reconstructable
+  token IDs. Callers must supply a local guard and asset provenance to release text.
+
+- Local barcode, QR and DataMatrix region detection across image, DICOM pixel
+  and PDF raster redaction, with a caller-installed optional ZXing backend,
+  deterministic fake, payload-free coverage reports, explicit unavailable
+  coverage policy and residual-code verification.
+
+- Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
+
+- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
+  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
+  printer settings and presentation template text; refuse unsupported hidden
+  carriers with category/count/digest evidence and preserve destinations (#3810).
+
+### Changed
+
+- Group multimodal guides into a dedicated workflow-ordered section with an
+  overview of supported contracts and experimental surfaces, preserving all
+  existing page URLs (#3845).
+
+## [3.2.0] - 2026-10-30
+
+Global languages, synthetic clinical data and local decision-model backends.
+This release candidate was prepared on 2026-10-30 from v3.1.0 and retains the
+model catalog, artifact pins and registry pointer targets. Publication and the final release
+date remain pending. See the [release notes](docs/release/v3.2.0.md) and
+[migration guide](docs/migration/3.1-to-3.2.md).
+
 ### Breaking Changes
 
 - Burned-in synthetic rendering now requires covering fonts and complex-script shaping; missing default fonts require explicit `font_fallback=True` (#3868).
@@ -231,6 +547,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
 ### Fixed
+
+- Shift Chinese, Japanese and Korean marker-based dates without dateutil, retaining numeric field widths, whitespace, two-digit years and source digit systems (#4328).
+
+- Keep HTML entity highlights aligned with original source offsets across escaped characters, preserving source text and metadata escaping (#4326).
+  Crossing, nested and adjacent spans retain each label's exact source coverage.
+
+- Make security-support guidance version independent and distinguish published stable releases from candidates (#4131, #4133).
+
+- Require banking context for pattern-only SWIFT/BIC matches so clinical section headers remain intact; retain contextual codes and model detections (#4152, #4230).
+
+- Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
+
+- Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
+
+- Preserve teacher identities on typed weak-label spans, keeping typed and mapping consensus consistent without mutating caller-owned spans (#4202, #4219).
+
+- Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
+  default and recognize saved GLiNER2.5 boundary-extractor configurations for
+  offline local loading.
+
+- Retain the `openmed.service.schemas.DECISION_SCHEMA_VERSION` compatibility
+  export while adding the decision 1.1 question-set contract.
 
 - Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
 
@@ -631,6 +969,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Require patched pyasn1 0.6.5 in the optional `cloud` profile and frozen
+  lockfile to address four ASN.1 decoder CPU-exhaustion advisories (#4372).
 - Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
   `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
   patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A

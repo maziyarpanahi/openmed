@@ -2,7 +2,7 @@ name: Low-resource profile
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
@@ -11,7 +11,7 @@ on:
       - "scripts/benchmarks/low_resource_deid.py"
       - "uv.lock"
   push:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"

@@ -22,6 +22,9 @@ from openmed.structured.decision import (
     decision_request_schema,
 )
 from openmed.structured.decision import (
+    DECISION_SCHEMA_VERSION as DECISION_SCHEMA_VERSION,
+)
+from openmed.structured.decision import (
     MAX_CONFIGURABLE_INPUT_CHARS as DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
 )
 from openmed.structured.decision import (
@@ -1072,6 +1075,13 @@ def _check_decision_input_bound(input_text: Any, max_input_chars: Any) -> None:
         )
 
 
+class SystemOneRequest(_StrictModel):
+    """Text or structured state and named questions for protected local decisions."""
+
+    state: str | dict[str, Any] | list[Any] = Field(..., repr=False)
+    questions: dict[str, dict[str, Any]] = Field(..., repr=False)
+
+
 class FixedOptionDecisionRequest(_StrictModel):
     """Canonical bounded request for ``POST /v1/decisions``.
 
@@ -1103,6 +1113,11 @@ class FixedOptionDecisionRequest(_StrictModel):
     )
     levels: list[str] = _decision_list_field(DECISION_MAX_OPTIONS)
     questions: list[dict[str, Any]] = _decision_list_field(DECISION_MAX_QUESTIONS)
+    media: list[dict[str, Any]] = Field(
+        default_factory=list,
+        repr=False,
+        **({"max_length": 4} if PYDANTIC_V2 else {"max_items": 4}),
+    )
     input_format: Literal["text", "json"] = "text"
     max_input_chars: Optional[int] = Field(
         default=None,

@@ -816,12 +816,56 @@ def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
 def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
     """Ordinary PRs never claim READY; explicit dispatch never bypasses gates."""
     case_root = tmp_path
-    for event, declared, expected, expected_base, expected_guide in [
-        ("pull_request", "3.0.0", False, "v3.0.0", ""),
-        ("pull_request", "3.1.0", True, "v3.0.0", "docs/migration/3.0-to-3.1.md"),
-        ("pull_request", "4.0.0", True, "v3.0.0", "docs/migration/3.0-to-4.0.md"),
-        ("pull_request", "3.0.1", True, "v3.0.0", "docs/migration/2.5-to-3.0.md"),
-        ("workflow_dispatch", "3.0.0", True, "v2.5.0", "docs/migration/2.5-to-3.0.md"),
+    for event, declared, release_branch, expected, expected_base, expected_guide in [
+        ("pull_request", "3.0.0", "master", False, "v3.0.0", ""),
+        (
+            "pull_request",
+            "3.1.0",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/3.0-to-3.1.md",
+        ),
+        (
+            "pull_request",
+            "4.0.0",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/3.0-to-4.0.md",
+        ),
+        (
+            "pull_request",
+            "3.0.1",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "workflow_dispatch",
+            "3.0.0",
+            "master",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "pull_request",
+            "3.0.0",
+            "release/v3.0.0",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "push",
+            "3.0.0",
+            "release/v3.0.0",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
     ]:
         with subtests.test(
             event=event,
@@ -894,6 +938,7 @@ def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
                 GITHUB_EVENT_NAME=event,
                 PR_BASE_SHA=base,
                 CANDIDATE_SHA=head,
+                RELEASE_BASE_REF=release_branch,
                 GITHUB_OUTPUT=str(output),
                 REQUESTED_VERSION="3.0.0",
                 REQUESTED_API_BASE="v2.5.0",

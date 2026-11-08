@@ -46,7 +46,9 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 121
+    assert {entry.name for entry in entries} == set(
+        inventory.parse_project_dependencies()
+    )
     assert len(records) == len(entries)
     assert {
         record.name
