@@ -309,6 +309,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   printer settings and presentation template text; refuse unsupported hidden
   carriers with category/count/digest evidence and preserve destinations (#3810).
 
+### Changed
+
+- Group multimodal guides into a dedicated workflow-ordered section with an
+  overview of supported contracts and experimental surfaces, preserving all
+  existing page URLs (#3845).
+
 ## [3.2.0] - 2026-10-30
 
 Global languages, synthetic clinical data and local decision-model backends.

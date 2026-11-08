@@ -258,12 +258,12 @@ def _assert_classified(discovered: set[str]) -> None:
 
 def test_every_public_multimodal_data_result_declares_notice_or_exemption():
     discovered = set()
-    for path in (ROOT / "openmed/multimodal").rglob("*.py"):
-        module = str(
-            path.relative_to(ROOT / "openmed/multimodal").with_suffix("")
-        ).replace("/", ".")
-        discovered |= _public_data_classes(path.read_text(), module)
-    discovered |= _public_data_classes((ROOT / "openmed/mlx/vlm.py").read_text(), "vlm")
+    root = ROOT / "openmed/multimodal"
+    for path in root.rglob("*.py"):
+        module = ".".join(path.relative_to(root).with_suffix("").parts)
+        discovered |= _public_data_classes(path.read_text(encoding="utf-8"), module)
+    vlm = (ROOT / "openmed/mlx/vlm.py").read_text(encoding="utf-8")
+    discovered |= _public_data_classes(vlm, "vlm")
     _assert_classified(discovered)
     validate_notice_registry(RESULT_TYPES.values())
     for name, kind in DECLARED_NOTICE_TYPES.items():

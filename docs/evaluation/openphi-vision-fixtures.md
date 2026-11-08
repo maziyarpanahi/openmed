@@ -93,6 +93,7 @@ assert summary["critical_count"] == 3
 ## Reproducibility and drift
 
 The catalog, font, case declarations and every page have pinned SHA-256 digests.
+The catalog digest uses LF line endings, including in Windows checkouts.
 Case digests bind the complete declaration, including gold values, boxes, flags,
 layout and packet splits. Page digests cover binary PGM: the exact ASCII header
 `P5\nWIDTH HEIGHT\n255\n` followed by grayscale bytes in row order. There is no
