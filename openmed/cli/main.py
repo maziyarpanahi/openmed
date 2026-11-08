@@ -2710,6 +2710,13 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     config_set.set_defaults(handler=_handle_config_set)
 
+    config_provenance = config_sub.add_parser(
+        "provenance",
+        help="Show which source supplied each configuration setting, "
+        "without printing values.",
+    )
+    config_provenance.set_defaults(handler=_handle_config_provenance)
+
     # Profile management subcommands
     profile_list = config_sub.add_parser(
         "profiles", help="List available configuration profiles."
@@ -7986,6 +7993,32 @@ def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
         )
 
     return emit(args, json.loads(report.to_json()), human=report.to_json())
+
+
+def _handle_config_provenance(args: argparse.Namespace) -> int:
+    from ..core.config_provenance import (
+        ConfigurationResolutionError,
+        audit_configuration,
+    )
+
+    config_path = resolve_config_path(getattr(args, "config_path", None))
+    # A missing file is not an error: audit defaults + environment only.
+    file_config = config_path if config_path.exists() else None
+    try:
+        report = audit_configuration(
+            file_config=file_config,
+            environment=dict(os.environ),
+        )
+    except ConfigurationResolutionError as exc:
+        raise CliError(
+            str(exc), code="invalid_configuration", exit_code=EXIT_USAGE
+        ) from exc
+
+    human = "\n".join(
+        f"{key}  {entry['source_class']}  {entry['conflict_category']}"
+        for key, entry in report["keys"].items()
+    )
+    return emit(args, report, human=human)
 
 
 def _handle_config_show(args: argparse.Namespace) -> int:
