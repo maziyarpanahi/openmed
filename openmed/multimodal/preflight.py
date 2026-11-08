@@ -26,12 +26,13 @@ from typing import Any, BinaryIO, Final
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_limits import (
     DESKTOP_V1,
+    DESKTOP_V1_1,
     AssetLimitError,
     LimitFinding,
     LimitProfile,
     evaluate_asset_limits,
 )
-from .asset_manifest import AssetManifest, AssetManifestError
+from .asset_manifest import WAVEFORM_MEDIA_TYPES, AssetManifest, AssetManifestError
 from .digest import (
     AssetDigest,
     DigestLimitExceededError,
@@ -40,31 +41,48 @@ from .digest import (
 )
 from .manifest_profiles import (
     AUDIO_V1,
+    DICOM_NON_PIXEL_V1,
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    VIDEO_V1,
+    WAVEFORM_V1,
     ManifestProfile,
     ManifestProfileError,
     ValidationFinding,
     validate_manifest_metadata,
 )
 from .media_type import MAX_MEDIA_TYPE_PREFIX_BYTES, MediaTypeStatus, detect_media_type
+from .pdf_geometry import (
+    DEFAULT_MAX_PDF_BYTES,
+    DEFAULT_MAX_PDF_PAGES,
+    PDF_REASON_CODES,
+    PdfGeometryStatus,
+)
+from .pdf_inventory import (
+    PDF_CONTENT_REASON_CODES,
+    PdfContentProfile,
+    read_pdf_inventory,
+)
 
 __all__ = [
     "PREFLIGHT_CHECKS",
+    "PDF_PREFLIGHT_CHECKS",
     "PREFLIGHT_SCHEMA_VERSION",
     "PreflightError",
     "PreflightFinding",
     "PreflightReport",
     "PreflightStatus",
     "preflight_asset",
+    "preflight_pdf_asset",
 ]
 
 PREFLIGHT_SCHEMA_VERSION: Final = 1
 
 # The documented, deterministic order of checks and therefore of findings.
 PREFLIGHT_CHECKS: Final = ("manifest", "media_type", "metadata", "limits", "digest")
-_CHECK_ORDER: Final = {name: index for index, name in enumerate(PREFLIGHT_CHECKS)}
+PDF_PREFLIGHT_CHECKS: Final = (*PREFLIGHT_CHECKS, "pdf_content")
+_CHECK_ORDER: Final = {name: index for index, name in enumerate(PDF_PREFLIGHT_CHECKS)}
 
 # Findings with a fixed shape: (check, reason_code) -> (field_name, carries
 # numbers). Metadata findings other than ``unsupported_modality`` are validated
@@ -79,7 +97,20 @@ _FIXED_FINDINGS: Final = {
     ("digest", "not_evaluated"): (None, False),
 }
 
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_FIXED_FINDINGS.update(
+    {
+        ("pdf_content", code): (None, False)
+        for code in (
+            *PDF_REASON_CODES,
+            *PDF_CONTENT_REASON_CODES,
+            "pdf_media_type_required",
+        )
+    }
+)
+
+_MODALITIES: Final = frozenset(
+    {"image", "pdf", "dicom", "audio", "video", "waveform", "dicom_non_pixel"}
+)
 _DETECTED_MEDIA_TYPES: Final = frozenset(
     {
         "application/pdf",
@@ -89,8 +120,15 @@ _DETECTED_MEDIA_TYPES: Final = frozenset(
         "image/gif",
         "image/webp",
         "image/bmp",
+        "image/heic",
+        "image/heic-sequence",
+        "image/heif",
+        "image/heif-sequence",
         "application/dicom",
         "audio/wav",
+        "audio/mp4",
+        "video/mp4",
+        "application/edf",
     }
 )
 _METADATA_PROFILES: Final = {
@@ -98,6 +136,9 @@ _METADATA_PROFILES: Final = {
     "pdf": PDF_V1,
     "dicom": DICOM_V1,
     "audio": AUDIO_V1,
+    "video": VIDEO_V1,
+    "waveform": WAVEFORM_V1,
+    "dicom_non_pixel": DICOM_NON_PIXEL_V1,
 }
 
 
@@ -248,12 +289,16 @@ class PreflightReport:
                 or self.media_type_status is not MediaTypeStatus.MATCH
             ):
                 raise PreflightError("an accepted report must have passed every check")
-            expected_modality = _modality_for(self.manifest.media_type)
+            expected_modality = _modality_for(self.manifest)
             expected_profile = _METADATA_PROFILES.get(expected_modality)
             if (
                 expected_profile is None
                 or self.modality != expected_modality
                 or self.metadata_profile != expected_profile
+                or (
+                    expected_modality == "waveform"
+                    and self.limit_profile.version != "1.1"
+                )
                 or self.detected_media_type != self.manifest.media_type
                 or self.digest.sha256 != self.manifest.sha256
                 or self.digest.byte_count != self.manifest.byte_size
@@ -315,7 +360,7 @@ def preflight_asset(
     manifest: Mapping[str, Any] | AssetManifest,
     source: bytes | bytearray | memoryview | BinaryIO,
     *,
-    limit_profile: LimitProfile = DESKTOP_V1,
+    limit_profile: LimitProfile | None = None,
 ) -> PreflightReport:
     """Run every preflight check over a manifest and its source bytes.
 
@@ -334,7 +379,7 @@ def preflight_asset(
     values are hashed in memory. Source failures raise :class:`PreflightError`
     with a stable category and no underlying detail.
     """
-    if not isinstance(limit_profile, LimitProfile):
+    if limit_profile is not None and not isinstance(limit_profile, LimitProfile):
         raise TypeError("limit_profile must be a LimitProfile")
     if not isinstance(manifest, (AssetManifest, Mapping)):
         raise TypeError("manifest must be a mapping or AssetManifest")
@@ -351,8 +396,15 @@ def preflight_asset(
         )
     except AssetManifestError:
         return _abstain(
-            [PreflightFinding("manifest", "malformed_manifest")], limit_profile
+            [PreflightFinding("manifest", "malformed_manifest")],
+            limit_profile or DESKTOP_V1,
         )
+
+    modality = _modality_for(validated)
+    if limit_profile is None:
+        limit_profile = DESKTOP_V1_1 if modality == "waveform" else DESKTOP_V1
+    if modality == "waveform" and limit_profile.version != "1.1":
+        raise PreflightError("waveform_limit_profile_required")
 
     reader = _Source(
         source,
@@ -366,6 +418,112 @@ def preflight_asset(
         return _run_checks(validated, reader, limit_profile)
     finally:
         reader.restore()
+
+
+def preflight_pdf_asset(
+    manifest: Mapping[str, Any] | AssetManifest,
+    source: bytes | bytearray | memoryview | BinaryIO,
+    *,
+    limit_profile: LimitProfile = DESKTOP_V1,
+    content_profile: PdfContentProfile = PdfContentProfile.STRICT,
+) -> PreflightReport:
+    """Run asset checks and bounded hidden-content inventory for a PDF.
+
+    Args:
+        manifest: Existing asset manifest, declaring application/pdf.
+        source: Bytes or a binary stream. Seekable streams are restored.
+        limit_profile: Existing resource ceilings. Input is additionally capped
+            at the PDF parser's 64 MiB default, and at the declared byte size.
+        content_profile: Strict attachment/action rejection or review policy.
+
+    Returns:
+        The existing accept/abstain report. Both inventory review and rejection
+        abstain; detailed controlled findings use the pdf_content check.
+        The separate read_pdf_inventory API supplies counts and three-way status.
+        Existing PDF raster-budget findings are preserved: the manifest cannot
+        express raster pixels, so its resource check currently abstains even for
+        plain PDFs. Inventory does not override missing evidence. Acceptance is
+        not a PHI absence or redaction completeness certificate.
+
+    Raises:
+        PreflightError: Controlled source failures or invalid arguments.
+    """
+    if not isinstance(limit_profile, LimitProfile):
+        raise TypeError("limit_profile must be a LimitProfile")
+    if not isinstance(content_profile, PdfContentProfile):
+        raise PreflightError("pdf_profile_invalid")
+    if not isinstance(manifest, (AssetManifest, Mapping)):
+        raise TypeError("manifest must be a mapping or AssetManifest")
+    try:
+        validated = (
+            manifest
+            if isinstance(manifest, AssetManifest)
+            else AssetManifest.from_dict(manifest)
+        )
+    except AssetManifestError:
+        return _abstain(
+            [PreflightFinding("manifest", "malformed_manifest")], limit_profile
+        )
+    if validated.media_type != "application/pdf":
+        return _abstain(
+            [PreflightFinding("pdf_content", "pdf_media_type_required")], limit_profile
+        )
+    # Do not snapshot content when manifest resource limits already fail.
+    if any(
+        finding.reason_code == "limit_exceeded"
+        for finding in evaluate_asset_limits(limit_profile, validated, "pdf")
+    ):
+        return preflight_asset(validated, source, limit_profile=limit_profile)
+    ceiling = min(
+        validated.byte_size, limit_profile.max_byte_size, DEFAULT_MAX_PDF_BYTES
+    )
+    reader = _Source(source, prefix_limit=min(MAX_MEDIA_TYPE_PREFIX_BYTES, ceiling + 1))
+    try:
+        data = reader.snapshot(max_bytes=ceiling)
+    finally:
+        reader.restore()
+    if data is None:
+        return PreflightReport(
+            status=PreflightStatus.ABSTAIN,
+            findings=(PreflightFinding("pdf_content", "pdf_size_limit"),),
+            limit_profile=limit_profile,
+            manifest=validated,
+            modality="pdf",
+            metadata_profile=PDF_V1,
+            abstention=AbstentionRecord(
+                AbstentionStage.PREFLIGHT, AbstentionReason.RESOURCE_LIMIT
+            ),
+        )
+    base = preflight_asset(validated, data, limit_profile=limit_profile)
+    if (
+        base.digest is None
+        or base.digest.sha256 != validated.sha256
+        or base.digest.byte_count != validated.byte_size
+        or base.media_type_status is not MediaTypeStatus.MATCH
+    ):
+        return base
+    inventory = read_pdf_inventory(
+        data,
+        profile=content_profile,
+        max_pages=min(DEFAULT_MAX_PDF_PAGES, limit_profile.max_pages),
+    )
+    if inventory.status is PdfGeometryStatus.READABLE:
+        return base
+    return PreflightReport(
+        status=PreflightStatus.ABSTAIN,
+        findings=(
+            *base.findings,
+            *(PreflightFinding("pdf_content", code) for code in inventory.reason_codes),
+        ),
+        limit_profile=limit_profile,
+        manifest=base.manifest,
+        modality=base.modality,
+        metadata_profile=base.metadata_profile,
+        detected_media_type=base.detected_media_type,
+        media_type_status=base.media_type_status,
+        digest=base.digest,
+        abstention=base.abstention or inventory.abstention,
+    )
 
 
 def _run_checks(
@@ -383,7 +541,7 @@ def _run_checks(
         media_type_status = MediaTypeStatus.MISMATCH
         findings.append(PreflightFinding("media_type", "mismatch"))
 
-    modality = _modality_for(manifest.media_type)
+    modality = _modality_for(manifest)
     metadata_profile = None
     byte_size_passed = False
     if modality is None:
@@ -478,13 +636,20 @@ def _abstain(
     )
 
 
-def _modality_for(media_type: str) -> str | None:
+def _modality_for(manifest: AssetManifest) -> str | None:
+    media_type = manifest.media_type
+    if media_type in WAVEFORM_MEDIA_TYPES or manifest.dicom_subprofile == "waveform":
+        return "waveform"
+    if manifest.dicom_subprofile == "non_pixel":
+        return "dicom_non_pixel"
     if media_type == "application/pdf":
         return "pdf"
     if media_type == "application/dicom":
         return "dicom"
     if media_type.startswith("image/"):
         return "image"
+    if media_type == "video/mp4":
+        return "video"
     if media_type.startswith("audio/"):
         return "audio"
     # application/dicom+json is a valid manifest media type with no metadata
@@ -534,6 +699,20 @@ class _Source:
             else:
                 self._prefix = _read_prefix(self._stream, self._prefix_limit)
         return self._prefix
+
+    def snapshot(self, *, max_bytes: int) -> bytes | None:
+        """Read once into bounded memory for explicit PDF structural preflight."""
+        if self._data is not None:
+            return bytes(self._data) if self._data.nbytes <= max_bytes else None
+        chunks = []
+        total = 0
+        while total <= max_bytes:
+            chunk = _read_chunk(self._stream, min(1 << 20, max_bytes + 1 - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            chunks.append(chunk)
+        return None if total > max_bytes else b"".join(chunks)
 
     def digest(self, *, max_bytes: int) -> AssetDigest:
         if self._data is not None:

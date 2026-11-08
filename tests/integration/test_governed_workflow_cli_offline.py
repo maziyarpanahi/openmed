@@ -30,6 +30,7 @@ def _private(path, content):
         stream.write(json.dumps(content))
 
 
+@pytest.mark.slow
 def test_console_entry_offline_preview_review_and_explicit_resume(tmp_path):
     action = "sha256:" + "a" * 64
     state = "sha256:" + "b" * 64
@@ -121,6 +122,7 @@ assert service.calls.count("resume") == 1
     assert str(tmp_path) not in result.stdout
 
 
+@pytest.mark.slow
 def test_installed_console_entry_has_offline_help_and_no_default_adapter(tmp_path):
     request = WorkflowCLIRequest(
         RunId("run_" + "a" * 32),

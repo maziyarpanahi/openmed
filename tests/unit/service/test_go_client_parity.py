@@ -31,6 +31,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("post", "/analyze"): "Analyze",
     ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/v1/decisions"): "Decision",
+    ("post", "/v1/systemone"): "SystemOne",
     ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
     ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
     ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
@@ -65,6 +66,7 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "DeidentifyJobDocument": "DeidentifyJobDocument",
     "DeidentifyJobRequest": "DeidentifyJobRequest",
     "FixedOptionDecisionRequest": "FixedOptionDecisionRequest",
+    "SystemOneRequest": "SystemOneRequest",
     "GroundRequest": "GroundRequest",
     "JobWebhookRequest": "JobWebhookRequest",
     "ModelUnloadRequest": "ModelUnloadRequest",

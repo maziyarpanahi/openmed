@@ -86,30 +86,33 @@ def replaced(tags, overrides):
     return merged
 
 
-@pytest.mark.parametrize("order,expected", [("<", "little"), (">", "big")])
-def test_both_byte_orders_are_read(order, expected) -> None:
-    metadata = read_tiff_metadata(tiff(order=order))
-    assert metadata.byte_order.value == expected
-    assert (metadata.width, metadata.height) == (7, 5)
+def test_both_byte_orders_are_read(subtests) -> None:
+    for order, expected in [("<", "little"), (">", "big")]:
+        with subtests.test(order=order, expected=expected):
+            metadata = read_tiff_metadata(tiff(order=order))
+            assert metadata.byte_order.value == expected
+            assert (metadata.width, metadata.height) == (7, 5)
 
 
-@pytest.mark.parametrize("order", ["<", ">"])
-def test_grayscale_inline_values(order) -> None:
-    metadata = read_tiff_metadata(tiff(order=order))
-    assert metadata.samples_per_pixel == 1
-    assert metadata.bits_per_sample == (8,)
-    assert metadata.photometric == 1
-    assert (metadata.compression, metadata.planar_configuration) == (1, 1)
-    assert metadata.ifd_entry_count == 4
+def test_grayscale_inline_values(subtests) -> None:
+    for order in ["<", ">"]:
+        with subtests.test(order=order):
+            metadata = read_tiff_metadata(tiff(order=order))
+            assert metadata.samples_per_pixel == 1
+            assert metadata.bits_per_sample == (8,)
+            assert metadata.photometric == 1
+            assert (metadata.compression, metadata.planar_configuration) == (1, 1)
+            assert metadata.ifd_entry_count == 4
 
 
-@pytest.mark.parametrize("order", ["<", ">"])
-def test_rgb_values_resolved_through_an_offset(order) -> None:
-    metadata = read_tiff_metadata(tiff(RGB_TAGS, order=order))
-    assert metadata.samples_per_pixel == 3
-    assert metadata.bits_per_sample == (8, 8, 8)
-    assert metadata.photometric == 2
-    assert metadata.ifd_entry_count == 7
+def test_rgb_values_resolved_through_an_offset(subtests) -> None:
+    for order in ["<", ">"]:
+        with subtests.test(order=order):
+            metadata = read_tiff_metadata(tiff(RGB_TAGS, order=order))
+            assert metadata.samples_per_pixel == 3
+            assert metadata.bits_per_sample == (8, 8, 8)
+            assert metadata.photometric == 2
+            assert metadata.ifd_entry_count == 7
 
 
 def test_short_and_long_dimension_types_are_both_accepted() -> None:
@@ -145,25 +148,28 @@ def test_ifd_may_start_after_a_padded_header() -> None:
     assert read_tiff_metadata(tiff(ifd_offset=64)).width == 7
 
 
-@pytest.mark.parametrize("marker", [b"IM", b"MI", b"\x00\x00", b"BM"])
-def test_invalid_byte_order_fails_closed(marker) -> None:
-    payload = marker + tiff()[2:]
-    with pytest.raises(TiffMetadataError, match="^tiff_byte_order_invalid$"):
-        read_tiff_metadata(payload)
+def test_invalid_byte_order_fails_closed(subtests) -> None:
+    for marker in [b"IM", b"MI", b"\x00\x00", b"BM"]:
+        with subtests.test(marker=marker):
+            payload = marker + tiff()[2:]
+            with pytest.raises(TiffMetadataError, match="^tiff_byte_order_invalid$"):
+                read_tiff_metadata(payload)
 
 
-@pytest.mark.parametrize("magic", [0, 41, 43, 0x2B])
-def test_invalid_magic_fails_closed(magic) -> None:
-    with pytest.raises(TiffMetadataError, match="^tiff_magic_invalid$"):
-        read_tiff_metadata(tiff(magic=magic))
+def test_invalid_magic_fails_closed(subtests) -> None:
+    for magic in [0, 41, 43, 0x2B]:
+        with subtests.test(magic=magic):
+            with pytest.raises(TiffMetadataError, match="^tiff_magic_invalid$"):
+                read_tiff_metadata(tiff(magic=magic))
 
 
-@pytest.mark.parametrize("offset", [0, 1, 7])
-def test_ifd_offset_inside_the_header_fails_closed(offset) -> None:
-    payload = bytearray(tiff())
-    struct.pack_into("<I", payload, 4, offset)
-    with pytest.raises(TiffMetadataError, match="^tiff_ifd_offset_invalid$"):
-        read_tiff_metadata(bytes(payload))
+def test_ifd_offset_inside_the_header_fails_closed(subtests) -> None:
+    for offset in [0, 1, 7]:
+        with subtests.test(offset=offset):
+            payload = bytearray(tiff())
+            struct.pack_into("<I", payload, 4, offset)
+            with pytest.raises(TiffMetadataError, match="^tiff_ifd_offset_invalid$"):
+                read_tiff_metadata(bytes(payload))
 
 
 def test_ifd_offset_past_the_prefix_fails_closed() -> None:
@@ -202,12 +208,15 @@ def test_duplicate_tags_fail_closed() -> None:
         read_tiff_metadata(bytes(payload))
 
 
-@pytest.mark.parametrize("value_type", [0, 2, 5, 7, 12, 65535])
-def test_unsupported_value_types_fail_closed(value_type) -> None:
-    payload = bytearray(tiff())
-    struct.pack_into("<H", payload, 10 + 2, value_type)
-    with pytest.raises(TiffMetadataError, match="^tiff_value_type_unsupported$"):
-        read_tiff_metadata(bytes(payload))
+def test_unsupported_value_types_fail_closed(subtests) -> None:
+    for value_type in [0, 2, 5, 7, 12, 65535]:
+        with subtests.test(value_type=value_type):
+            payload = bytearray(tiff())
+            struct.pack_into("<H", payload, 10 + 2, value_type)
+            with pytest.raises(
+                TiffMetadataError, match="^tiff_value_type_unsupported$"
+            ):
+                read_tiff_metadata(bytes(payload))
 
 
 def test_zero_value_count_fails_closed() -> None:
@@ -234,13 +243,14 @@ def test_scalar_tags_reject_multi_valued_entries() -> None:
         read_tiff_metadata(tiff(tags))
 
 
-@pytest.mark.parametrize("offset", [0, 7])
-def test_value_offset_inside_the_header_fails_closed(offset) -> None:
-    payload = bytearray(tiff(RGB_TAGS))
-    entry = 10 + sorted(RGB_TAGS).index(TAG_BITS_PER_SAMPLE) * 12
-    struct.pack_into("<I", payload, entry + 8, offset)
-    with pytest.raises(TiffMetadataError, match="^tiff_value_offset_invalid$"):
-        read_tiff_metadata(bytes(payload))
+def test_value_offset_inside_the_header_fails_closed(subtests) -> None:
+    for offset in [0, 7]:
+        with subtests.test(offset=offset):
+            payload = bytearray(tiff(RGB_TAGS))
+            entry = 10 + sorted(RGB_TAGS).index(TAG_BITS_PER_SAMPLE) * 12
+            struct.pack_into("<I", payload, entry + 8, offset)
+            with pytest.raises(TiffMetadataError, match="^tiff_value_offset_invalid$"):
+                read_tiff_metadata(bytes(payload))
 
 
 def test_value_offset_pointing_at_the_ifd_fails_closed() -> None:
@@ -319,11 +329,14 @@ def test_missing_photometric_fails_closed() -> None:
         read_tiff_metadata(tiff(tags))
 
 
-@pytest.mark.parametrize("samples", [0, 65, 1000])
-def test_invalid_samples_per_pixel_fails_closed(samples) -> None:
-    tags = replaced(GRAY_TAGS, {TAG_SAMPLES_PER_PIXEL: (LONG, (samples,))})
-    with pytest.raises(TiffMetadataError, match="^tiff_samples_per_pixel_invalid$"):
-        read_tiff_metadata(tiff(tags))
+def test_invalid_samples_per_pixel_fails_closed(subtests) -> None:
+    for samples in [0, 65, 1000]:
+        with subtests.test(samples=samples):
+            tags = replaced(GRAY_TAGS, {TAG_SAMPLES_PER_PIXEL: (LONG, (samples,))})
+            with pytest.raises(
+                TiffMetadataError, match="^tiff_samples_per_pixel_invalid$"
+            ):
+                read_tiff_metadata(tiff(tags))
 
 
 def test_bits_per_sample_count_must_match_samples_per_pixel() -> None:
@@ -332,11 +345,14 @@ def test_bits_per_sample_count_must_match_samples_per_pixel() -> None:
         read_tiff_metadata(tiff(tags))
 
 
-@pytest.mark.parametrize("bits", [0, 65])
-def test_invalid_bits_per_sample_fails_closed(bits) -> None:
-    tags = replaced(GRAY_TAGS, {TAG_BITS_PER_SAMPLE: (SHORT, (bits,))})
-    with pytest.raises(TiffMetadataError, match="^tiff_bits_per_sample_invalid$"):
-        read_tiff_metadata(tiff(tags))
+def test_invalid_bits_per_sample_fails_closed(subtests) -> None:
+    for bits in [0, 65]:
+        with subtests.test(bits=bits):
+            tags = replaced(GRAY_TAGS, {TAG_BITS_PER_SAMPLE: (SHORT, (bits,))})
+            with pytest.raises(
+                TiffMetadataError, match="^tiff_bits_per_sample_invalid$"
+            ):
+                read_tiff_metadata(tiff(tags))
 
 
 def test_seekable_streams_are_restored_and_never_closed() -> None:

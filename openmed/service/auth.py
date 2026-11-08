@@ -59,6 +59,9 @@ class RoutePolicy:
 
 
 ROUTE_POLICIES = {
+    ("POST", "/experimental/multimodal/preflight"): RoutePolicy(
+        ("pii:read",), "control"
+    ),
     ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
     ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
     ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),
@@ -73,6 +76,7 @@ ROUTE_POLICIES = {
     ("POST", "/cohort/resolve"): RoutePolicy(("cohort:read",), "heavy"),
     ("GET", "/v1/journey/resources"): RoutePolicy(("journey:read",), "heavy"),
     ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
+    ("POST", "/v1/systemone"): RoutePolicy(("decisions:write", "pii:write"), "model"),
     ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
     ("POST", "/ground"): RoutePolicy(("ground:write",), "model"),
     ("POST", "/v1/workflows/preflight"): RoutePolicy(("workflow:read",), "control"),

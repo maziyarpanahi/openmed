@@ -195,63 +195,67 @@ def test_worker_killed_at_each_checkpoint_resumes_without_duplicate_facts(
     store.close()
 
 
-@pytest.mark.parametrize(
-    ("classification", "reason_code"),
-    (("partial", "partial_parse"), ("malformed", "malformed_source")),
-)
 def test_untrusted_parse_stays_quarantined_until_explicit_promotion(
-    tmp_path: Path,
-    classification: str,
-    reason_code: str,
+    subtests, tmp_path
 ) -> None:
-    store, job_id = _prepare_store(tmp_path / f"quarantine-{classification}.sqlite3")
-    coordinator = IngestionCoordinator(store)
+    case_root = tmp_path
+    for classification, reason_code in (
+        ("partial", "partial_parse"),
+        ("malformed", "malformed_source"),
+    ):
+        with subtests.test(classification=classification, reason_code=reason_code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            store, job_id = _prepare_store(
+                tmp_path / f"quarantine-{classification}.sqlite3"
+            )
+            coordinator = IngestionCoordinator(store)
 
-    result = coordinator.execute_step(
-        job_id=job_id,
-        worker_id="worker_aaaaaaaaaaaaaaaa",
-        step="parse",
-        input_digest=canonical_digest({"input": "partial"}),
-        acquired_at=T1,
-        lease_seconds=3600,
-        attempt=1,
-        operation=lambda: QuarantineRequest(
-            classification=classification,
-            reason_code=reason_code,
-            candidate_count=2,
-            failure_count=1,
-            output_digest=canonical_digest({"candidates": 2}),
-        ),
-    )
+            result = coordinator.execute_step(
+                job_id=job_id,
+                worker_id="worker_aaaaaaaaaaaaaaaa",
+                step="parse",
+                input_digest=canonical_digest({"input": "partial"}),
+                acquired_at=T1,
+                lease_seconds=3600,
+                attempt=1,
+                operation=lambda: QuarantineRequest(
+                    classification=classification,
+                    reason_code=reason_code,
+                    candidate_count=2,
+                    failure_count=1,
+                    output_digest=canonical_digest({"candidates": 2}),
+                ),
+            )
 
-    assert result.state is StoreState.PARTIAL
-    assert result.value is not None and result.value.quarantine is not None
-    assert store.get_job(job_id).value.state == "quarantined"
-    assert store.list_facts("subject_ffffffffffffffff").value == ()
-    blocked = coordinator.execute_step(
-        job_id=job_id,
-        worker_id="worker_bbbbbbbbbbbbbbbb",
-        step="normalize",
-        input_digest=canonical_digest({"input": "blocked"}),
-        acquired_at=T2,
-        lease_seconds=3600,
-        attempt=1,
-        operation=lambda: StepOutput(canonical_digest({"should": "not-run"})),
-    )
-    assert blocked.state is StoreState.DENIED
-    assert blocked.code == "quarantine_promotion_required"
+            assert result.state is StoreState.PARTIAL
+            assert result.value is not None and result.value.quarantine is not None
+            assert store.get_job(job_id).value.state == "quarantined"
+            assert store.list_facts("subject_ffffffffffffffff").value == ()
+            blocked = coordinator.execute_step(
+                job_id=job_id,
+                worker_id="worker_bbbbbbbbbbbbbbbb",
+                step="normalize",
+                input_digest=canonical_digest({"input": "blocked"}),
+                acquired_at=T2,
+                lease_seconds=3600,
+                attempt=1,
+                operation=lambda: StepOutput(canonical_digest({"should": "not-run"})),
+            )
+            assert blocked.state is StoreState.DENIED
+            assert blocked.code == "quarantine_promotion_required"
 
-    quarantine = result.value.quarantine
-    promotion = QuarantinePromotion(
-        promotion_id="promotion_ffffffffffffffff",
-        quarantine_id=quarantine.quarantine_id,
-        reviewer_digest=canonical_digest({"reviewer": "synthetic"}),
-        evidence_digest=canonical_digest({"evidence": "synthetic"}),
-        promoted_at=T2,
-    )
-    assert coordinator.promote(promotion).ok
-    assert store.get_job(job_id).value.state == "queued"
-    store.close()
+            quarantine = result.value.quarantine
+            promotion = QuarantinePromotion(
+                promotion_id="promotion_ffffffffffffffff",
+                quarantine_id=quarantine.quarantine_id,
+                reviewer_digest=canonical_digest({"reviewer": "synthetic"}),
+                evidence_digest=canonical_digest({"evidence": "synthetic"}),
+                promoted_at=T2,
+            )
+            assert coordinator.promote(promotion).ok
+            assert store.get_job(job_id).value.state == "queued"
+            store.close()
 
 
 def test_failure_diagnostic_never_echoes_exception_text(tmp_path: Path) -> None:

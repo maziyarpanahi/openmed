@@ -18,9 +18,17 @@ DEFAULT_OUTPUT_PATH = REPO_ROOT / "docs" / "api" / "openapi.json"
 
 
 def build_openapi_spec() -> dict[str, Any]:
-    """Build the REST service OpenAPI document."""
-    app = create_app()
+    """Build the default REST schema with an opt-in experimental path catalog."""
+    app = create_app(experimental_multimodal_preflight=False)
     spec = app.openapi()
+    experimental = create_app(experimental_multimodal_preflight=True).openapi()
+    # Default clients consume paths. Opt-in binary operations have their own
+    # catalog so their presence does not claim support in production SDKs.
+    spec["x-openmed-experimental-paths"] = {
+        path: item
+        for path, item in experimental["paths"].items()
+        if path not in spec["paths"]
+    }
     spec.setdefault("info", {})["version"] = openmed.__version__
     return spec
 

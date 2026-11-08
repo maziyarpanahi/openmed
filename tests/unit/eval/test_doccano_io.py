@@ -265,9 +265,8 @@ def test_import_rejects_a_changed_document() -> None:
         _import(_canonical_document(), text_digest=sha256_digest("some other text"))
 
 
-@pytest.mark.parametrize(
-    ("line", "message"),
-    [
+def test_import_rejects_invalid_annotations(subtests) -> None:
+    for line, message in [
         (
             _document(entities=[_entity(0, "Ada Lovelace", "NOT_A_LABEL")]),
             "unknown label",
@@ -323,13 +322,12 @@ def test_import_rejects_a_changed_document() -> None:
             ),
             "is missing type",
         ),
-    ],
-)
-def test_import_rejects_invalid_annotations(line: str, message: str) -> None:
-    with pytest.raises(AnnotationValidationError, match=message) as excinfo:
-        _import(line)
+    ]:
+        with subtests.test(line=line, message=message):
+            with pytest.raises(AnnotationValidationError, match=message) as excinfo:
+                _import(line)
 
-    assert excinfo.value.format_name == "Doccano JSONL"
+            assert excinfo.value.format_name == "Doccano JSONL"
 
 
 def test_import_declares_unsupported_entity_and_relation_fields() -> None:
@@ -370,9 +368,8 @@ def test_import_rejects_unrepresentable_relation_types() -> None:
         _import(line)
 
 
-@pytest.mark.parametrize(
-    ("line", "message"),
-    [
+def test_import_rejects_malformed_annotation_shapes(subtests) -> None:
+    for line, message in [
         (_document(), "must carry Doccano entities or label spans"),
         (
             _document(
@@ -385,11 +382,10 @@ def test_import_rejects_unrepresentable_relation_types() -> None:
         (_document(label_spans={"a": 1}), "label spans must be a JSON array"),
         (_document(label_spans=[[0, 12]]), "triple"),
         (_document(label_spans=[["a", "b", "PERSON"]]), "must be integers"),
-    ],
-)
-def test_import_rejects_malformed_annotation_shapes(line: str, message: str) -> None:
-    with pytest.raises(AnnotationValidationError, match=message):
-        _import(line)
+    ]:
+        with subtests.test(line=line, message=message):
+            with pytest.raises(AnnotationValidationError, match=message):
+                _import(line)
 
 
 @pytest.mark.parametrize(
@@ -651,9 +647,9 @@ def test_cli_annotation_commands_default_to_canonical_tsv() -> None:
     assert exported.format == "tsv"
 
 
-@pytest.mark.parametrize(
-    ("argv", "code", "message", "with_key"),
-    [
+def test_cli_doccano_import_requires_the_binding_inputs(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for argv, code, message, with_key in [
         (
             ["annotation", "import", "--format", "doccano", "--doc-id", _DOC_ID],
             "annotation_import_failed",
@@ -688,32 +684,33 @@ def test_cli_annotation_commands_default_to_canonical_tsv() -> None:
             "non-empty HMAC key",
             False,
         ),
-    ],
-)
-def test_cli_doccano_import_requires_the_binding_inputs(
-    argv: list[str],
-    code: str,
-    message: str,
-    with_key: bool,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = tmp_path / "synthetic.jsonl"
-    source.write_text(_canonical_document() + "\n", encoding="utf-8")
-    if with_key:
-        monkeypatch.setenv(_KEY_ENV, _SECRET)
-    else:
-        monkeypatch.delenv(_KEY_ENV, raising=False)
+    ]:
+        with subtests.test(argv=argv, code=code, message=message, with_key=with_key):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                source = tmp_path / "synthetic.jsonl"
+                source.write_text(_canonical_document() + "\n", encoding="utf-8")
+                if with_key:
+                    monkeypatch.setenv(_KEY_ENV, _SECRET)
+                else:
+                    monkeypatch.delenv(_KEY_ENV, raising=False)
 
-    parsed = _cli_parser().parse_args(
-        [*argv, "--input", str(source), "--output", str(tmp_path / "out.json")]
-    )
+                parsed = _cli_parser().parse_args(
+                    [
+                        *argv,
+                        "--input",
+                        str(source),
+                        "--output",
+                        str(tmp_path / "out.json"),
+                    ]
+                )
 
-    with pytest.raises(CliError, match=message) as excinfo:
-        parsed.handler(parsed)
+                with pytest.raises(CliError, match=message) as excinfo:
+                    parsed.handler(parsed)
 
-    assert excinfo.value.code == code
-    assert excinfo.value.exit_code == EXIT_ERROR
+                assert excinfo.value.code == code
+                assert excinfo.value.exit_code == EXIT_ERROR
 
 
 def test_cli_doccano_export_requires_the_de_identified_text(

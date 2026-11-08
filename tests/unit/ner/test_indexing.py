@@ -8,6 +8,7 @@ import pytest
 
 from openmed.ner.indexing import (
     GLIFORMER_DISEASE_MODEL_ID,
+    GLINER2_DISEASE_MODEL_ID,
     ModelIndex,
     ModelRecord,
     build_index,
@@ -86,48 +87,58 @@ def test_load_index_rejects_malformed_json(tmp_path: Path) -> None:
     assert str(path) in str(exc_info.value)
 
 
-def test_registered_gliformer_disease_defaults():
-    record = resolve_model_record(GLIFORMER_DISEASE_MODEL_ID)
-    assert record.family == "gliformer"
-    assert record.default_labels == ("disease",)
-    assert record.license == "Apache-2.0"
+def test_registered_disease_defaults(subtests):
+    for model_id, family in [
+        (GLIFORMER_DISEASE_MODEL_ID, "gliformer"),
+        (GLINER2_DISEASE_MODEL_ID, "gliner2"),
+    ]:
+        with subtests.test(model_id=model_id):
+            record = resolve_model_record(model_id)
+            assert record.family == family
+            assert record.default_labels == ("disease",)
+            assert record.license == "Apache-2.0"
 
 
-@pytest.mark.parametrize(
-    "model_id,family",
-    [
+def test_unindexed_hub_models_resolve_without_network(subtests):
+    for model_id, family in [
         ("OpenMed/GLiFormer-BioNER-Disease-Large-v2", "gliformer"),
         ("knowledgator/gliformer-base-v1", "gliformer"),
         ("fastino/gliner2-base-v1", "gliner2"),
         ("fastino/gliner2.5-base-v1", "gliner2"),
         ("Ihor/gliner-biomed-large-v1.0", "gliner"),
-    ],
-)
-def test_unindexed_hub_models_resolve_without_network(model_id, family):
-    record = resolve_model_record(model_id)
-    assert record.family == family
-    assert record.path == ""
+    ]:
+        with subtests.test(model_id=model_id, family=family):
+            record = resolve_model_record(model_id)
+            assert record.family == family
+            assert record.path == ""
 
 
-@pytest.mark.parametrize(
-    "config,family",
-    [
+def test_local_config_resolves_arbitrary_directory_name(subtests, tmp_path):
+    case_root = tmp_path
+    for config, family in [
         ({"model_type": "gliformer-layout"}, "gliformer"),
         ({"model_type": "gliner2", "architecture": "boundary"}, "gliner2"),
         ({"architectures": ["Gliner2ForSchemaExtraction"]}, "gliner2"),
-    ],
-)
-@pytest.mark.parametrize("filename", ["config.json", "gliner_config.json"])
-def test_local_config_resolves_arbitrary_directory_name(
-    tmp_path, config, family, filename
-):
-    directory = tmp_path / "arbitrary-export"
-    directory.mkdir()
-    (directory / filename).write_text(json.dumps(config))
-    record = resolve_model_record(str(directory))
-    assert record.family == family
-    assert record.path == str(directory)
-    assert build_index(tmp_path).models[0].family == family
+        (
+            {
+                "model_type": "extractor",
+                "architecture": "boundary",
+                "architectures": ["BoundaryExtractor"],
+            },
+            "gliner2",
+        ),
+    ]:
+        for filename in ["config.json", "gliner_config.json"]:
+            with subtests.test(config=config, family=family, filename=filename):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                directory = tmp_path / "arbitrary-export"
+                directory.mkdir()
+                (directory / filename).write_text(json.dumps(config))
+                record = resolve_model_record(str(directory))
+                assert record.family == family
+                assert record.path == str(directory)
+                assert build_index(tmp_path).models[0].family == family
 
 
 def test_explicit_family_accepts_ambiguous_identifier():
@@ -148,8 +159,11 @@ def test_family_detection_does_not_match_repository_owner():
     assert resolve_model_record("gliformer/synthetic-bert") is None
 
 
-def test_default_labels_survive_index_roundtrip(tmp_path):
-    record = resolve_model_record(GLIFORMER_DISEASE_MODEL_ID)
+@pytest.mark.parametrize(
+    "model_id", [GLIFORMER_DISEASE_MODEL_ID, GLINER2_DISEASE_MODEL_ID]
+)
+def test_default_labels_survive_index_roundtrip(tmp_path, model_id):
+    record = resolve_model_record(model_id)
     index = ModelIndex(
         models=(record,), generated_at=datetime.now(timezone.utc), source_dir=tmp_path
     )
@@ -157,9 +171,34 @@ def test_default_labels_survive_index_roundtrip(tmp_path):
     write_index(index, path)
     assert load_index(path).models == (record,)
 
-
-def test_local_token_classifier_with_null_architectures_stays_on_legacy_path(tmp_path):
-    (tmp_path / "config.json").write_text(
-        '{"model_type": "bert", "architectures": null}'
+    snapshot = (
+        tmp_path
+        / ("models--" + model_id.replace("/", "--"))
+        / "snapshots"
+        / "synthetic-revision"
     )
-    assert resolve_model_record(str(tmp_path)) is None
+    snapshot.mkdir(parents=True)
+    (snapshot / "config.json").write_text(json.dumps({"model_type": record.family}))
+    local = resolve_model_record(str(snapshot))
+    assert local.family == record.family
+    assert local.default_labels == ("disease",)
+
+
+def test_unrelated_local_configs_stay_on_legacy_path(tmp_path, subtests):
+    for config in [
+        {"model_type": "bert", "architectures": None},
+        {"model_type": "extractor", "architecture": "boundary", "architectures": None},
+        {
+            "model_type": "extractor",
+            "architecture": "boundary",
+            "architectures": ["OtherExtractor"],
+        },
+        {
+            "model_type": "extractor",
+            "architecture": [],
+            "architectures": ["BoundaryExtractor"],
+        },
+    ]:
+        with subtests.test(config=config):
+            (tmp_path / "config.json").write_text(json.dumps(config))
+            assert resolve_model_record(str(tmp_path)) is None

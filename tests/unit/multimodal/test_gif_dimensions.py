@@ -27,18 +27,21 @@ def valid_payload():
     return payload, len(payload)
 
 
-@pytest.mark.parametrize("version", [b"GIF87a", b"GIF89a"])
-@pytest.mark.parametrize("table_bits", [None, *range(8)])
-def test_versions_and_all_global_table_sizes(version, table_bits) -> None:
-    result = read_gif_dimensions(gif(version=version, table_bits=table_bits))
-    entries = 0 if table_bits is None else 2 ** (table_bits + 1)
-    assert asdict(result) == {
-        "width": 7,
-        "height": 5,
-        "version": version[3:].decode("ascii"),
-        "global_color_table_entries": entries,
-    }
-    assert result.global_color_table_bytes == entries * 3
+def test_versions_and_all_global_table_sizes(subtests) -> None:
+    for version in [b"GIF87a", b"GIF89a"]:
+        for table_bits in [None, *range(8)]:
+            with subtests.test(version=version, table_bits=table_bits):
+                result = read_gif_dimensions(
+                    gif(version=version, table_bits=table_bits)
+                )
+                entries = 0 if table_bits is None else 2 ** (table_bits + 1)
+                assert asdict(result) == {
+                    "width": 7,
+                    "height": 5,
+                    "version": version[3:].decode("ascii"),
+                    "global_color_table_entries": entries,
+                }
+                assert result.global_color_table_bytes == entries * 3
 
 
 def test_hand_encoded_little_endian_dimensions() -> None:
@@ -47,22 +50,25 @@ def test_hand_encoded_little_endian_dimensions() -> None:
     assert (result.width, result.height) == (258, 772)
 
 
-@pytest.mark.parametrize("cut", range(13))
-def test_every_truncated_fixed_header(cut) -> None:
-    with pytest.raises(GifDimensionsError, match="^gif_header_truncated$"):
-        read_gif_dimensions(gif()[:cut])
+def test_every_truncated_fixed_header(subtests) -> None:
+    for cut in range(13):
+        with subtests.test(cut=cut):
+            with pytest.raises(GifDimensionsError, match="^gif_header_truncated$"):
+                read_gif_dimensions(gif()[:cut])
 
 
-@pytest.mark.parametrize("table_bits", range(8))
-def test_each_truncated_global_table(table_bits) -> None:
-    with pytest.raises(GifDimensionsError, match="^gif_header_truncated$"):
-        read_gif_dimensions(gif(table_bits=table_bits)[:-1])
+def test_each_truncated_global_table(subtests) -> None:
+    for table_bits in range(8):
+        with subtests.test(table_bits=table_bits):
+            with pytest.raises(GifDimensionsError, match="^gif_header_truncated$"):
+                read_gif_dimensions(gif(table_bits=table_bits)[:-1])
 
 
-@pytest.mark.parametrize("dimensions", [(0, 1), (1, 0), (0, 0)])
-def test_zero_dimensions(dimensions) -> None:
-    with pytest.raises(GifDimensionsError, match="^gif_dimensions_invalid$"):
-        read_gif_dimensions(gif(*dimensions))
+def test_zero_dimensions(subtests) -> None:
+    for dimensions in [(0, 1), (1, 0), (0, 0)]:
+        with subtests.test(dimensions=dimensions):
+            with pytest.raises(GifDimensionsError, match="^gif_dimensions_invalid$"):
+                read_gif_dimensions(gif(*dimensions))
 
 
 def test_maximum_dimensions_have_checked_area() -> None:
@@ -73,10 +79,11 @@ def test_maximum_dimensions_have_checked_area() -> None:
     assert (result.width, result.height) == (65535, 65535)
 
 
-@pytest.mark.parametrize("signature", [b"GIF88a", b"gif89a", b"notgif"])
-def test_signature_is_validated(signature) -> None:
-    with pytest.raises(GifDimensionsError, match="^gif_signature_invalid$"):
-        read_gif_dimensions(gif(version=signature))
+def test_signature_is_validated(subtests) -> None:
+    for signature in [b"GIF88a", b"gif89a", b"notgif"]:
+        with subtests.test(signature=signature):
+            with pytest.raises(GifDimensionsError, match="^gif_signature_invalid$"):
+                read_gif_dimensions(gif(version=signature))
 
 
 def test_background_index_must_fit_a_present_table() -> None:
@@ -160,21 +167,26 @@ def test_failure_restores_caller_owned_stream() -> None:
     assert not stream.closed
 
 
-@pytest.mark.parametrize("option", ["max_header_bytes", "max_pixels"])
-@pytest.mark.parametrize("value", [0, -1, True, False, 2.0, "2", None])
-def test_invalid_limits_do_not_read(option, value) -> None:
-    class Unreadable:
-        def read(self, size):
-            pytest.fail("invalid options must be checked before I/O")
+def test_invalid_limits_do_not_read(subtests) -> None:
+    for option in ["max_header_bytes", "max_pixels"]:
+        for value in [0, -1, True, False, 2.0, "2", None]:
+            with subtests.test(option=option, value=value):
 
-    with pytest.raises(ValueError, match=option):
-        read_gif_dimensions(Unreadable(), **{option: value})
+                class Unreadable:
+                    def read(self, size):
+                        pytest.fail("invalid options must be checked before I/O")
+
+                with pytest.raises(ValueError, match=option):
+                    read_gif_dimensions(Unreadable(), **{option: value})
 
 
-@pytest.mark.parametrize("source", [None, "not-bytes", bytearray(b"data"), 12])
-def test_invalid_source_type(source) -> None:
-    with pytest.raises(TypeError, match="source must be bytes or a binary stream"):
-        read_gif_dimensions(source)
+def test_invalid_source_type(subtests) -> None:
+    for source in [None, "not-bytes", bytearray(b"data"), 12]:
+        with subtests.test(source=source):
+            with pytest.raises(
+                TypeError, match="source must be bytes or a binary stream"
+            ):
+                read_gif_dimensions(source)
 
 
 @pytest.mark.parametrize("returned", [None, "text", bytearray(b"x"), b"x" * 1000])

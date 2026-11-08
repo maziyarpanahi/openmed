@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 
 import PackageDescription
 
@@ -11,6 +11,7 @@ let package = Package(
         .visionOS(.v1),
     ],
     products: [
+        .library(name: "OpenMedSpeech", targets: ["OpenMedSpeech"]),
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
@@ -29,9 +30,10 @@ let package = Package(
         ),
     ],
     dependencies: [
+        .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         .package(
             url: "https://github.com/huggingface/swift-transformers.git",
-            exact: "0.1.24"
+            exact: "1.0.0"
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
@@ -43,6 +45,16 @@ let package = Package(
         ),
     ],
     targets: [
+        .target(
+            name: "OpenMedSpeech",
+            dependencies: ["OpenMedKit", .product(name: "WhisperKit", package: "argmax-oss-swift")],
+            path: "swift/OpenMedKit/Sources/OpenMedSpeech"
+        ),
+        .testTarget(
+            name: "OpenMedSpeechTests",
+            dependencies: ["OpenMedSpeech", "OpenMedKit"],
+            path: "swift/OpenMedKit/Tests/OpenMedSpeechTests"
+        ),
         .target(
             name: "OpenMedKit",
             dependencies: [
