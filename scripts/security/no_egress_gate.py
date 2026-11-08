@@ -1612,27 +1612,44 @@ def run_workflow(
         shutil.rmtree(state_dir, ignore_errors=True)
 
 
-def inside_main(args: argparse.Namespace) -> int:
-    """Run inside the boundary and print one value-free result line."""
+def collect_boundary_evidence(boundary_kind: str) -> dict[str, Any]:
+    """Inspect the boundary and run every positive and negative control.
 
-    fixture_path = Path(args.fixture)
-    fixture = load_fixture(fixture_path)
-    if args.boundary_kind == "netns":
+    Call this inside the boundary before ``openmed`` is imported, so no
+    in-process guard can mask a hole. Other in-boundary workloads (for example
+    the air-gap lifecycle rehearsal) reuse it instead of probing on their own.
+
+    Args:
+        boundary_kind: ``netns`` brings loopback up first; ``container`` does not.
+
+    Returns:
+        Value-free ``kernel``, ``interfaces``, ``routes``, ``negative_controls``,
+        and ``positive_controls`` evidence.
+    """
+
+    if boundary_kind == "netns":
         bring_loopback_up()
     interfaces, routes = inspect_boundary()
     with contextlib.closing(LoopbackResponders()) as responders:
         positives = run_probe_set(positive_probes(responders), classify_positive)
-    # Negative controls run before openmed is imported in this process.
     negatives = run_probe_set(negative_probes(), classify_negative)
-    workflow = run_workflow(fixture, fixture_path, verbose=args.verbose)
-    result = {
+    return {
         "kernel": "linux" if sys.platform.startswith("linux") else "unknown",
         "interfaces": interfaces,
         "routes": routes,
         "negative_controls": negatives,
         "positive_controls": positives,
-        "workflow": workflow,
     }
+
+
+def inside_main(args: argparse.Namespace) -> int:
+    """Run inside the boundary and print one value-free result line."""
+
+    fixture_path = Path(args.fixture)
+    fixture = load_fixture(fixture_path)
+    # Negative controls run before openmed is imported in this process.
+    result = collect_boundary_evidence(args.boundary_kind)
+    result["workflow"] = run_workflow(fixture, fixture_path, verbose=args.verbose)
     sys.stdout.write(RESULT_MARKER + json.dumps(result, sort_keys=True) + "\n")
     sys.stdout.flush()
     return 0
@@ -1744,12 +1761,44 @@ def select_boundary(
     return BoundaryPlan("none", skip_reason=reason)
 
 
-def inner_command(
-    plan: BoundaryPlan, fixture: Path, *, verbose: bool, container_name: str
+def boundary_command(
+    plan: BoundaryPlan,
+    script: Path,
+    script_args: Sequence[str],
+    *,
+    container_name: str,
+    mounts: Sequence[tuple[Path, str]] = (),
+    tmpfs_size: str = "256m",
 ) -> list[str]:
-    """Return the command that runs the inner workload inside the boundary."""
+    """Wrap a workspace script so it runs inside the selected boundary.
 
-    extra = ["--verbose"] if verbose else []
+    The same hardened wrapper serves the service workflow and any other
+    in-boundary workload: a user + network namespace, or a container with
+    ``--network none`` that never pulls, drops every capability, runs
+    read-only as ``nobody``, and sees the workspace and each extra mount
+    read-only.
+
+    Args:
+        plan: A plan from :func:`select_boundary` that selected a boundary.
+        script: A Python script inside this checkout.
+        script_args: Arguments for the script, already mapped to container
+            paths when ``plan.kind`` is ``container``.
+        container_name: Name for the container, so a timeout can remove it.
+        mounts: Extra ``(host_path, container_path)`` read-only bind mounts.
+        tmpfs_size: Size cap of the container's writable ``/tmp``.
+
+    Returns:
+        The argv to execute on the host.
+
+    Raises:
+        ValueError: ``boundary_plan_invalid`` without a selected boundary, or
+            ``boundary_script_invalid`` for a script outside the workspace.
+    """
+
+    try:
+        relative = script.resolve().relative_to(ROOT)
+    except ValueError as exc:
+        raise ValueError("boundary_script_invalid") from exc
     if plan.kind == "netns" and plan.executable:
         return [
             plan.executable,
@@ -1758,15 +1807,15 @@ def inner_command(
             "--net",
             "--",
             sys.executable,
-            str(SCRIPT),
-            "--inside",
-            "--boundary-kind",
-            "netns",
-            "--fixture",
-            str(fixture),
-            *extra,
+            str(script),
+            *script_args,
         ]
     if plan.kind == "container" and plan.executable and plan.image:
+        extra_mounts: list[str] = []
+        for source, destination in mounts:
+            extra_mounts.extend(
+                ["--mount", f"type=bind,src={source},dst={destination},readonly"]
+            )
         return [
             plan.executable,
             "run",
@@ -1783,13 +1832,12 @@ def inner_command(
             "no-new-privileges",
             "--read-only",
             "--tmpfs",
-            "/tmp:rw,nosuid,nodev,size=256m",
+            f"/tmp:rw,nosuid,nodev,size={tmpfs_size}",
             "--user",
             "65534:65534",
             "--mount",
             f"type=bind,src={ROOT},dst={CONTAINER_WORKSPACE},readonly",
-            "--mount",
-            f"type=bind,src={fixture},dst={CONTAINER_FIXTURE},readonly",
+            *extra_mounts,
             "--workdir",
             "/tmp",
             "--env",
@@ -1802,15 +1850,33 @@ def inner_command(
             "PYTHONUNBUFFERED=1",
             plan.image,
             "python",
-            f"{CONTAINER_WORKSPACE}/scripts/security/{SCRIPT.name}",
-            "--inside",
-            "--boundary-kind",
-            "container",
-            "--fixture",
-            CONTAINER_FIXTURE,
-            *extra,
+            f"{CONTAINER_WORKSPACE}/{relative.as_posix()}",
+            *script_args,
         ]
     raise ValueError("boundary_plan_invalid")
+
+
+def inner_command(
+    plan: BoundaryPlan, fixture: Path, *, verbose: bool, container_name: str
+) -> list[str]:
+    """Return the command that runs the inner workload inside the boundary."""
+
+    extra = ["--verbose"] if verbose else []
+    in_container = plan.kind == "container"
+    return boundary_command(
+        plan,
+        SCRIPT,
+        [
+            "--inside",
+            "--boundary-kind",
+            plan.kind,
+            "--fixture",
+            CONTAINER_FIXTURE if in_container else str(fixture),
+            *extra,
+        ],
+        container_name=container_name,
+        mounts=[(fixture, CONTAINER_FIXTURE)],
+    )
 
 
 @dataclass(frozen=True)
@@ -1821,8 +1887,34 @@ class InnerOutcome:
     failure: str | None
 
 
-def parse_inner_output(stdout: str, returncode: int) -> InnerOutcome:
-    """Extract the single marked result line printed by the inner runner."""
+SERVICE_RESULT_KEYS = frozenset(
+    {
+        "kernel",
+        "interfaces",
+        "routes",
+        "negative_controls",
+        "positive_controls",
+        "workflow",
+    }
+)
+
+
+def parse_inner_output(
+    stdout: str,
+    returncode: int,
+    *,
+    required: frozenset[str] = SERVICE_RESULT_KEYS,
+) -> InnerOutcome:
+    """Extract the single marked result line printed by the inner runner.
+
+    Args:
+        stdout: Everything the inner runner printed.
+        returncode: The inner runner's exit code; anything but ``0`` fails.
+        required: The exact top-level keys the result must carry.
+
+    Returns:
+        The parsed result, or a controlled runner failure.
+    """
 
     lines = [line for line in stdout.splitlines() if line.startswith(RESULT_MARKER)]
     if not lines:
@@ -1831,17 +1923,63 @@ def parse_inner_output(stdout: str, returncode: int) -> InnerOutcome:
         payload = json.loads(lines[-1][len(RESULT_MARKER) :])
     except json.JSONDecodeError:
         return InnerOutcome(None, "runner_result_invalid")
-    required = {
-        "kernel",
-        "interfaces",
-        "routes",
-        "negative_controls",
-        "positive_controls",
-        "workflow",
-    }
     if not isinstance(payload, dict) or set(payload) != required or returncode != 0:
         return InnerOutcome(None, "runner_result_invalid")
     return InnerOutcome(payload, None)
+
+
+@dataclass(frozen=True)
+class BoundaryRun:
+    """Raw output of one in-boundary command, or a controlled failure."""
+
+    stdout: str
+    returncode: int
+    failure: str | None = None
+
+
+def run_in_boundary(
+    plan: BoundaryPlan,
+    command: Sequence[str],
+    *,
+    container_name: str,
+    verbose: bool,
+    timeout: float,
+) -> BoundaryRun:
+    """Run a :func:`boundary_command` argv with a scrubbed, proxy-free env.
+
+    Args:
+        plan: The plan the command was built from.
+        command: The argv from :func:`boundary_command`.
+        container_name: The container name used in the argv.
+        verbose: Pass the inner runner's stderr through to this process.
+        timeout: Seconds before the run is abandoned (and its container removed).
+
+    Returns:
+        The captured stdout and exit code, or ``runner_timeout`` /
+        ``runner_failed``.
+    """
+
+    env = {
+        key: value for key, value in os.environ.items() if key not in _PROXY_ENV_VARS
+    }
+    try:
+        completed = subprocess.run(
+            list(command),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=None if verbose else subprocess.DEVNULL,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        if plan.kind == "container" and plan.executable:
+            run_quiet([plan.executable, "rm", "--force", container_name], 60.0)
+        return BoundaryRun("", -1, "runner_timeout")
+    except OSError:
+        return BoundaryRun("", -1, "runner_failed")
+    return BoundaryRun(completed.stdout or "", completed.returncode)
 
 
 def run_inner(
@@ -1857,27 +1995,16 @@ def run_inner(
     command = inner_command(
         plan, fixture, verbose=verbose, container_name=container_name
     )
-    env = {
-        key: value for key, value in os.environ.items() if key not in _PROXY_ENV_VARS
-    }
-    try:
-        completed = subprocess.run(
-            command,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=None if verbose else subprocess.DEVNULL,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        if plan.kind == "container" and plan.executable:
-            run_quiet([plan.executable, "rm", "--force", container_name], 60.0)
-        return InnerOutcome(None, "runner_timeout")
-    except OSError:
-        return InnerOutcome(None, "runner_failed")
-    return parse_inner_output(completed.stdout or "", completed.returncode)
+    run = run_in_boundary(
+        plan,
+        command,
+        container_name=container_name,
+        verbose=verbose,
+        timeout=timeout,
+    )
+    if run.failure is not None:
+        return InnerOutcome(None, run.failure)
+    return parse_inner_output(run.stdout, run.returncode)
 
 
 def file_digest(path: Path) -> str:
