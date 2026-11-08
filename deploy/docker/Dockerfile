@@ -57,6 +57,18 @@ RUN python -m pip install --no-cache-dir --upgrade \
     && python -m pip check \
     && python -m pip uninstall --yes pip
 
+# Run as the fixed non-root UID/GID 65532 shared with the distroless image,
+# the Compose profile and the Helm chart. Its cache directory is where the
+# Helm chart and Compose mount the persistent model cache.
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-log-init --create-home \
+        --home-dir /home/nonroot --shell /usr/sbin/nologin nonroot \
+    && install -d -o 65532 -g 65532 -m 0755 /home/nonroot/.cache
+
+ENV HOME=/home/nonroot
+
+USER 65532:65532
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

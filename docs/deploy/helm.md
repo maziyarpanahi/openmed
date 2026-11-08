@@ -2,7 +2,8 @@
 
 The `deploy/helm/openmed-service` chart deploys the OpenMed de-identification
 REST service on Kubernetes with separate liveness and readiness probes, a
-persistent model cache volume, and configurable service runtime settings.
+persistent model cache volume, non-root read-only security contexts, and
+configurable service runtime settings.
 Its optional production Journey profile adds a pre-install/pre-upgrade
 migration gate, a worker Deployment, durable artifact storage, dependency-aware
 readiness, and a default-deny NetworkPolicy.
@@ -25,11 +26,78 @@ The default chart creates:
 - a `Deployment` running the REST service on port `8080`
 - a `Service` exposing the HTTP port inside the cluster
 - a `ConfigMap` for non-secret OpenMed service settings
-- a `PersistentVolumeClaim` mounted at `/root/.cache/huggingface`
+- a `PersistentVolumeClaim` mounted at `/home/nonroot/.cache`
 
-The service stores OpenMed model cache files under
-`/root/.cache/huggingface/openmed`, so downloads survive pod restarts when the
-PVC is retained.
+The service runs as the non-root image user, so its cache directory is
+`/home/nonroot/.cache`. That directory holds the OpenMed model cache
+(`~/.cache/openmed`), the service job store, and the Hugging Face cache
+(`HF_HOME=/home/nonroot/.cache/huggingface`), so downloads survive pod restarts
+when the PVC is retained.
+
+## Security context
+
+Every API pod runs hardened by default, with or without the Journey profile:
+
+| Setting | Default |
+| --- | --- |
+| `podSecurityContext.runAsNonRoot` / `securityContext.runAsNonRoot` | `true` |
+| `runAsUser` / `runAsGroup` (pod and container) | `65532` |
+| `podSecurityContext.fsGroup` | `65532`, with `fsGroupChangePolicy: OnRootMismatch` |
+| `securityContext.readOnlyRootFilesystem` | `true` |
+| `securityContext.allowPrivilegeEscalation` | `false` |
+| `securityContext.privileged` | `false` |
+| `securityContext.capabilities.drop` | `[ALL]` |
+| `seccompProfile.type` (pod and container) | `RuntimeDefault` |
+
+UID/GID `65532` is the `nonroot` user baked into the published service image
+(`deploy/docker/Dockerfile`), the distroless image, and the Compose profile.
+Because the root filesystem is read-only, the API container writes only to
+mounted volumes:
+
+| Path | Volume | Purpose |
+| --- | --- | --- |
+| `/home/nonroot` | `home` emptyDir (`writableVolumes.home.sizeLimit`, `128Mi`) | `HOME` for small library config files. |
+| `/tmp` | `tmp` emptyDir (`writableVolumes.tmp.sizeLimit`, `512Mi`) | Scratch space exported as `TMPDIR`. |
+| `/home/nonroot/.cache` | `model-cache` PVC, or an emptyDir (`writableVolumes.modelCache.sizeLimit`, `20Gi`) when `persistence.enabled=false` | OpenMed and Hugging Face caches. |
+| `journey.artifacts.mountPath` | `journey-artifacts` PVC | Journey artifact store, only with `journey.enabled=true`. |
+
+`fsGroup` makes the mounted volumes group-writable for the non-root user.
+The rendered manifests contain no Secrets, `hostPath` volumes, host ports, or
+host namespaces.
+
+Helm merges your values with the defaults key by key, so `securityContext: {}`
+or `podSecurityContext: {}` keeps every hardened default. Weakening a setting
+needs an explicit value for that key, for example:
+
+```yaml
+securityContext:
+  # Only for an image that must write to its root filesystem.
+  readOnlyRootFilesystem: false
+```
+
+Set a key to `null` to remove it from the rendered manifest. The chart tests in
+`tests/unit/deploy/test_helm_chart.py` assert the hardened posture for the
+default, `ci-values.yaml`, Journey, and emptyDir-cache renders, and flag each
+weakening override by the rule it breaks. If you build your own image, give it
+the same numeric non-root user or override `runAsUser`, `runAsGroup`, and
+`fsGroup` together.
+
+### Upgrading from the root-based layout
+
+Earlier chart versions ran the API container as root, left both security
+contexts empty unless Journey was enabled, and mounted the model cache at
+`/root/.cache/huggingface`. When you upgrade an existing release:
+
+- Remove `extraVolumes` or `extraVolumeMounts` entries named `home` or `tmp`,
+  or mounted at `/tmp`; the chart now provides those volumes itself.
+- An existing model-cache PVC keeps its files, but they were written for the
+  old `/root/.cache/huggingface` mount, so the new layout does not find them
+  and models download again on first use. To reuse them, move the volume's
+  old top-level entries into a `huggingface/` directory on the volume before
+  upgrading. `fsGroup` makes the old root-owned files writable on volume
+  types that support ownership management.
+- Images that need a writable root filesystem or a root user must set those
+  keys explicitly as shown above.
 
 ## Production Journey profile
 
@@ -132,11 +200,28 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `fullnameOverride` | `""` | Full resource name override. |
 | `podLabels` | `{}` | Additional pod labels. |
 | `podAnnotations` | `{}` | Additional pod annotations. |
-| `podSecurityContext` | `{}` | Pod security context. |
-| `securityContext` | `{}` | Container security context. |
+| `podSecurityContext.runAsNonRoot` | `true` | Reject a root UID for every container in the API pod. |
+| `podSecurityContext.runAsUser` | `65532` | Fixed non-root pod UID. |
+| `podSecurityContext.runAsGroup` | `65532` | Fixed non-root pod GID. |
+| `podSecurityContext.fsGroup` | `65532` | Group that owns mounted volumes. |
+| `podSecurityContext.fsGroupChangePolicy` | `OnRootMismatch` | Re-own volumes only when their root does not match. |
+| `podSecurityContext.seccompProfile.type` | `RuntimeDefault` | Pod seccomp profile. |
+| `securityContext.runAsNonRoot` | `true` | Reject a root UID for the API container. |
+| `securityContext.runAsUser` | `65532` | Fixed non-root container UID. |
+| `securityContext.runAsGroup` | `65532` | Fixed non-root container GID. |
+| `securityContext.privileged` | `false` | Never run the API container privileged. |
+| `securityContext.allowPrivilegeEscalation` | `false` | Block setuid and similar privilege gains. |
+| `securityContext.readOnlyRootFilesystem` | `true` | Mount the image root filesystem read-only. |
+| `securityContext.capabilities.drop` | `[ALL]` | Drop every Linux capability. |
+| `securityContext.seccompProfile.type` | `RuntimeDefault` | Container seccomp profile. |
+| `writableVolumes.home.mountPath` | `/home/nonroot` | emptyDir mounted as `HOME`. |
+| `writableVolumes.home.sizeLimit` | `128Mi` | `HOME` emptyDir size limit. |
+| `writableVolumes.tmp.sizeLimit` | `512Mi` | `/tmp` emptyDir size limit; `/tmp` is exported as `TMPDIR`. |
+| `writableVolumes.modelCache.sizeLimit` | `20Gi` | Model-cache emptyDir size limit when `persistence.enabled=false`; empty means unbounded. |
 | `terminationGracePeriodSeconds` | `45` | Pod shutdown grace period. |
 | `config.profile` | `prod` | `OPENMED_PROFILE`. |
-| `config.cacheDir` | `/root/.cache/huggingface/openmed` | `OPENMED_CACHE_DIR`. |
+| `config.cacheDir` | `/home/nonroot/.cache/openmed` | `OPENMED_CACHE_DIR`. |
+| `config.hfHome` | `/home/nonroot/.cache/huggingface` | `HF_HOME`. |
 | `config.preloadModels` | `[]` | Models joined into `OPENMED_SERVICE_PRELOAD_MODELS`. |
 | `config.maxResidentModels` | `""` | `OPENMED_SERVICE_MAX_RESIDENT_MODELS`; empty means unbounded. |
 | `config.keepAlive` | `10m` | `OPENMED_SERVICE_KEEP_ALIVE`. |
@@ -177,12 +262,12 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `resources.requests.memory` | `1Gi` | Requested memory. |
 | `resources.limits.cpu` | `2` | CPU limit. |
 | `resources.limits.memory` | `4Gi` | Memory limit. |
-| `persistence.enabled` | `true` | Mount a model-cache PVC. |
+| `persistence.enabled` | `true` | Mount a model-cache PVC; `false` uses a bounded emptyDir. |
 | `persistence.existingClaim` | `""` | Existing PVC to mount instead of creating one. |
 | `persistence.storageClassName` | `""` | StorageClass for generated PVC. Empty uses the cluster default. |
 | `persistence.accessModes` | `[ReadWriteOnce]` | PVC access modes. |
 | `persistence.size` | `20Gi` | PVC size. |
-| `persistence.mountPath` | `/root/.cache/huggingface` | Model cache mount path. |
+| `persistence.mountPath` | `/home/nonroot/.cache` | Model cache mount path. |
 | `persistence.subPath` | `""` | Optional PVC subPath. |
 | `persistence.annotations` | `{}` | PVC annotations. |
 | `nodeSelector` | `{}` | Node selector. |
