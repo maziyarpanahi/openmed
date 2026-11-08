@@ -178,6 +178,47 @@ def _terminator_pattern(
     return re.compile(rf"(?:{punctuation}|{cue_pattern})", re.IGNORECASE)
 
 
+# Commas separate list members unless they sit inside a number ("12,000").
+_LIST_COMMA_PATTERN = r"(?<!\d)[,，、]|[,，、](?!\d)"
+_NEVER_MATCH_RE = re.compile(r"(?!x)x")
+
+
+def _separator_pattern(
+    coordinators: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str] | None:
+    alternation = _cue_alternation(coordinators)
+    if not alternation:
+        return None
+    if token_boundaries:
+        coordinator = rf"(?<!\w)(?:{alternation})(?!\w)"
+    else:
+        coordinator = rf"(?:{alternation})"
+    return re.compile(rf"(?:{_LIST_COMMA_PATTERN}|{coordinator})", re.IGNORECASE)
+
+
+def _leading_cue_pattern(
+    cues: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str]:
+    alternation = _cue_alternation(cues)
+    if not alternation:
+        return _NEVER_MATCH_RE
+    boundary = r"(?!\w)" if token_boundaries else ""
+    return re.compile(rf"\s*(?:{alternation}){boundary}", re.IGNORECASE)
+
+
+def _hard_terminator_cues(lexicon: ClinicalCueLexicon) -> tuple[str, ...]:
+    coordinators = {_normalize_cue_text(cue) for cue in lexicon.coordinators}
+    return tuple(
+        cue
+        for cue in (*lexicon.scope_terminators, *lexicon.conjunction_terminators)
+        if _normalize_cue_text(cue) not in coordinators
+    )
+
+
 @dataclass(frozen=True)
 class _CompiledContextLexicon:
     language: str
@@ -193,6 +234,12 @@ class _CompiledContextLexicon:
     context_cue_re: re.Pattern[str]
     category_by_text: Mapping[str, ContextCueCategory]
     backward_context_cues: frozenset[str]
+    # Coordinated scope rules. ``separator_re`` is ``None`` when the pack
+    # declares no coordinators, which keeps the original terminator behavior.
+    hard_terminator_re: re.Pattern[str]
+    separator_re: re.Pattern[str] | None
+    clause_opener_re: re.Pattern[str]
+    leading_clause_opener_re: re.Pattern[str]
 
 
 def _compiled_context_lexicon(language: str | None = None) -> _CompiledContextLexicon:
@@ -239,6 +286,22 @@ def _compiled_context_lexicon(language: str | None = None) -> _CompiledContextLe
         category_by_text=_cue_category_lookup(lexicon),
         backward_context_cues=frozenset(
             _normalize_cue_text(cue) for cue in lexicon.backward
+        ),
+        hard_terminator_re=_terminator_pattern(
+            _hard_terminator_cues(lexicon),
+            token_boundaries=token_boundaries,
+        ),
+        separator_re=_separator_pattern(
+            lexicon.coordinators,
+            token_boundaries=token_boundaries,
+        ),
+        clause_opener_re=_cue_pattern(
+            lexicon.clause_openers,
+            token_boundaries=token_boundaries,
+        ),
+        leading_clause_opener_re=_leading_cue_pattern(
+            lexicon.clause_openers,
+            token_boundaries=token_boundaries,
         ),
     )
 
@@ -753,24 +816,176 @@ def _target_offsets_in_context(span: Any, context: str) -> tuple[int, int] | Non
     return _text_offsets_in_context(context, _text_of(span), _occurrence_of(span))
 
 
+_TEMPORALITY_AXIS = "temporality"
+_CERTAINTY_AXIS = "certainty"
+_NEGATION_AXIS = "negation"
+
+
+def _terminated_bounds(
+    context: str,
+    target_start: int,
+    target_end: int,
+    terminator_re: re.Pattern[str],
+) -> tuple[int, int]:
+    scope_start = 0
+    for match in terminator_re.finditer(context, 0, target_start):
+        scope_start = match.end()
+
+    scope_end = len(context)
+    for match in terminator_re.finditer(context, target_end):
+        scope_end = match.start()
+        break
+
+    return scope_start, scope_end
+
+
+def _has_scope_cue(
+    segment: str,
+    compiled: _CompiledContextLexicon,
+    axis: str | None = None,
+) -> bool:
+    """Return whether ``segment`` carries a ConText cue of its own.
+
+    Recent-temporality cues ("new", "acute") only count for the temporality
+    axis, so "no pneumothorax or new consolidation" stays one negated list.
+    """
+
+    return bool(
+        compiled.context_cue_re.search(segment)
+        or compiled.pseudo_negation_re.search(segment)
+        or (axis == _TEMPORALITY_AXIS and compiled.recent_re.search(segment))
+    )
+
+
+def _has_directional_cue(
+    segment: str,
+    compiled: _CompiledContextLexicon,
+    *,
+    backward: bool,
+) -> bool:
+    for match in compiled.context_cue_re.finditer(segment):
+        is_backward = (
+            _normalize_cue_text(match.group(0)) in compiled.backward_context_cues
+        )
+        if is_backward == backward:
+            return True
+    return False
+
+
+def _opens_clause(segment: str, compiled: _CompiledContextLexicon) -> bool:
+    """Return whether ``segment`` starts with a clause opener."""
+
+    return compiled.leading_clause_opener_re.match(segment) is not None
+
+
+def _contains_clause_opener(segment: str, compiled: _CompiledContextLexicon) -> bool:
+    return compiled.clause_opener_re.search(segment) is not None
+
+
+def _coordinated_bounds(
+    context: str,
+    target_start: int,
+    target_end: int,
+    compiled: _CompiledContextLexicon,
+    separator_re: re.Pattern[str],
+    axis: str | None,
+) -> tuple[int, int]:
+    """Bound a target's scope window across coordinated list members.
+
+    The clause ends at sentence punctuation and hard terminators ("but",
+    "however", "although"). Inside it, commas and coordinators split the text
+    into conjuncts. The window grows left from the target's conjunct to pick
+    up a forward cue that heads the list ("denies fever and cough"), and right
+    to pick up a backward cue that closes it ("fever or cough ruled out"). It
+    stops at a conjunct that opens a new clause ("and reports cough") or
+    carries its own cue ("and no cough"), so each list member still sees
+    exactly the cue that governs it.
+    """
+
+    clause_start, clause_end = _terminated_bounds(
+        context,
+        target_start,
+        target_end,
+        compiled.hard_terminator_re,
+    )
+    separators = [
+        match.span()
+        for match in separator_re.finditer(context, clause_start, clause_end)
+        if match.end() <= target_start or match.start() >= target_end
+    ]
+    before = [span for span in separators if span[1] <= target_start]
+    after = [span for span in separators if span[0] >= target_end]
+
+    conjunct_start = before[-1][1] if before else clause_start
+    conjunct_end = after[0][0] if after else clause_end
+    lead = context[conjunct_start:target_start]
+    trail = context[target_end:conjunct_end]
+    # A subject, verb, or cue before the target means its conjunct is a clause
+    # of its own rather than a bare list member.
+    lead_breaks = _contains_clause_opener(lead, compiled) or _has_scope_cue(
+        lead, compiled, axis
+    )
+
+    window_start = conjunct_start
+    if before and not lead_breaks and not _has_scope_cue(trail, compiled, axis):
+        for index in range(len(before) - 1, -1, -1):
+            previous_start = before[index - 1][1] if index else clause_start
+            previous = context[previous_start : before[index][0]]
+            if _has_directional_cue(previous, compiled, backward=True):
+                break
+            window_start = previous_start
+            if _opens_clause(previous, compiled) or _has_scope_cue(
+                previous, compiled, axis
+            ):
+                break
+
+    window_end = conjunct_end
+    if (
+        after
+        and not lead_breaks
+        and not _opens_clause(trail, compiled)
+        and not _has_scope_cue(trail, compiled, axis)
+    ):
+        for index, (_separator_start, separator_end) in enumerate(after):
+            following_end = (
+                after[index + 1][0] if index + 1 < len(after) else clause_end
+            )
+            following = context[separator_end:following_end]
+            if _opens_clause(following, compiled) or _has_directional_cue(
+                following, compiled, backward=False
+            ):
+                break
+            window_end = following_end
+            if _has_scope_cue(following, compiled, axis):
+                break
+
+    return window_start, window_end
+
+
 def _scope_bounds(
     context: str,
     target_start: int,
     target_end: int,
     *,
     language: str | None = None,
+    axis: str | None = None,
 ) -> tuple[int, int]:
     compiled = _compiled_context_lexicon(language)
-    scope_start = 0
-    for match in compiled.scope_terminator_re.finditer(context, 0, target_start):
-        scope_start = match.end()
-
-    scope_end = len(context)
-    for match in compiled.scope_terminator_re.finditer(context, target_end):
-        scope_end = match.start()
-        break
-
-    return scope_start, scope_end
+    if compiled.separator_re is None:
+        return _terminated_bounds(
+            context,
+            target_start,
+            target_end,
+            compiled.scope_terminator_re,
+        )
+    return _coordinated_bounds(
+        context,
+        target_start,
+        target_end,
+        compiled,
+        compiled.separator_re,
+        axis,
+    )
 
 
 def _cue_reaches_target(
@@ -781,8 +996,19 @@ def _cue_reaches_target(
     target_end: int,
     *,
     language: str | None = None,
+    axis: str | None = None,
 ) -> bool:
     compiled = _compiled_context_lexicon(language)
+    if compiled.separator_re is not None:
+        scope_start, scope_end = _scope_bounds(
+            context,
+            target_start,
+            target_end,
+            language=language,
+            axis=axis,
+        )
+        return scope_start <= cue_start and cue_end <= scope_end
+
     if cue_end <= target_start:
         between = context[cue_end:target_start]
     elif target_end <= cue_start:
@@ -792,13 +1018,23 @@ def _cue_reaches_target(
     return compiled.scope_terminator_re.search(between) is None
 
 
-def _scoped_span_text(span: Any, *, language: str | None = None) -> str:
+def _scoped_span_text(
+    span: Any,
+    *,
+    language: str | None = None,
+    axis: str | None = None,
+) -> str:
     context = _context_text_of(span)
     target_offsets = _target_offsets_in_context(span, context)
     if target_offsets is None:
         return _text_of(span)
 
-    scope_start, scope_end = _scope_bounds(context, *target_offsets, language=language)
+    scope_start, scope_end = _scope_bounds(
+        context,
+        *target_offsets,
+        language=language,
+        axis=axis,
+    )
     return context[scope_start:scope_end]
 
 
@@ -824,6 +1060,7 @@ def _scoped_modifier_texts(
     modifier_hits: Any,
     *,
     language: str | None = None,
+    axis: str | None = None,
 ) -> tuple[str, ...]:
     context = _context_text_of(span)
     target_offsets = _target_offsets_in_context(span, context)
@@ -842,6 +1079,7 @@ def _scoped_modifier_texts(
                 *hit_offsets,
                 *target_offsets,
                 language=language,
+                axis=axis,
             ):
                 continue
         parts.append(text)
@@ -854,14 +1092,16 @@ def _text_parts(
     modifier_hits: Any,
     *,
     language: str | None = None,
+    axis: str | None = None,
 ) -> tuple[str, ...]:
-    span_text = _scoped_span_text(span, language=language)
+    span_text = _scoped_span_text(span, language=language, axis=axis)
     parts = [span_text]
     span_text_casefold = span_text.casefold()
     for modifier_text in _scoped_modifier_texts(
         span,
         modifier_hits,
         language=language,
+        axis=axis,
     ):
         if span_text_casefold and modifier_text.casefold() in span_text_casefold:
             continue
@@ -936,7 +1176,12 @@ def _has_explicit_temporality_cue(
         compiled.hypothetical_re.search(part)
         or compiled.historical_re.search(part)
         or compiled.recent_re.search(part)
-        for part in _text_parts(span, modifier_hits, language=language)
+        for part in _text_parts(
+            span,
+            modifier_hits,
+            language=language,
+            axis=_TEMPORALITY_AXIS,
+        )
     )
 
 
@@ -949,7 +1194,12 @@ def _has_explicit_uncertainty_cue(
     compiled = _compiled_context_lexicon(language)
     return any(
         compiled.uncertainty_re.search(part)
-        for part in _text_parts(span, modifier_hits, language=language)
+        for part in _text_parts(
+            span,
+            modifier_hits,
+            language=language,
+            axis=_CERTAINTY_AXIS,
+        )
     )
 
 
@@ -962,7 +1212,12 @@ def _has_explicit_negation_cue(
     compiled = _compiled_context_lexicon(language)
     return any(
         compiled.negation_re.search(_mask_pseudo_negation(part, language=language))
-        for part in _text_parts(span, modifier_hits, language=language)
+        for part in _text_parts(
+            span,
+            modifier_hits,
+            language=language,
+            axis=_NEGATION_AXIS,
+        )
     )
 
 
@@ -1505,7 +1760,12 @@ def resolve_temporality(
     """
 
     compiled = _compiled_context_lexicon(language)
-    parts = _text_parts(span, modifier_hits, language=language)
+    parts = _text_parts(
+        span,
+        modifier_hits,
+        language=language,
+        axis=_TEMPORALITY_AXIS,
+    )
 
     if any(compiled.hypothetical_re.search(part) for part in parts):
         return HYPOTHETICAL
@@ -1566,7 +1826,12 @@ def resolve_uncertainty(
     """
 
     compiled = _compiled_context_lexicon(language)
-    parts = _text_parts(span, modifier_hits, language=language)
+    parts = _text_parts(
+        span,
+        modifier_hits,
+        language=language,
+        axis=_CERTAINTY_AXIS,
+    )
     if any(compiled.uncertainty_re.search(part) for part in parts):
         return UNCERTAIN
     return CERTAIN
@@ -1606,7 +1871,12 @@ def resolve_negation(
 
     negation_cue_count = 0
     compiled = _compiled_context_lexicon(language)
-    for part in _text_parts(span, modifier_hits, language=language):
+    for part in _text_parts(
+        span,
+        modifier_hits,
+        language=language,
+        axis=_NEGATION_AXIS,
+    ):
         masked = _mask_pseudo_negation(part, language=language)
         negation_cue_count += sum(1 for _ in compiled.negation_re.finditer(masked))
     return NEGATED if negation_cue_count % 2 else AFFIRMED

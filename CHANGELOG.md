@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep English ConText negation, uncertainty and temporality scopes across
+  coordinated findings, so "denies fever and cough" negates both. A scope now
+  ends at a contrastive terminator, a sentence end, or a conjunct that opens a
+  new clause or carries its own cue, and the negation-scope detector follows
+  the same rule. Other language packs keep their previous terminators until
+  they declare `coordinators` and `clause_openers`.
+
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
   packages. Private packages and unavailable optional shims are skipped
