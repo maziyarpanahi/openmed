@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a runnable TypeScript REST client example that de-identifies a note
+  with an injected `fetch` and handles `OpenMedApiError` by its code, with
+  offline stubbed-fetch tests (#5429).
+
 - Document multimodal dependency licenses through the existing offline inventory,
   with separate guidance for the Tesseract binary and TCIA collection terms (#257).
 
