@@ -33,7 +33,9 @@ matrix update, and when this page drifts from the JSON.
 At freeze, every evidence record is a repository CI lane. No cell has
 real-device qualification or signed release evidence yet:
 
-- The real-device harness (#3716) adds `device-run` records.
+- The [real-device qualification harness](openmedkit-device-qualification.md)
+  (#3716) adds `device-run` records. Only physical-device runs can promote a
+  cell; simulator and emulator runs are reported separately.
 - The portable-kit release gate (#3932) adds `release-packet` records and
   decides which supported cells a release may claim.
 
@@ -107,8 +109,9 @@ python -m pytest tests/unit/eval/test_kit_support_matrix.py -q
 
 Downstream work reads the JSON through `openmed.eval.kit_support_matrix`:
 
-- The real-device harness (#3716) measures every supported and experimental
-  cell.
+- The [real-device qualification harness](openmedkit-device-qualification.md)
+  (#3716) enumerates every supported and experimental inference cell and
+  proposes `device-run` evidence for the cells it qualifies.
 - The release gate (#3932) binds evidence to the supported cells.
 - Runtime selection (#3641) turns unsupported entries into explicit
   unsupported results.
@@ -475,6 +478,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 
 ## See also
 
+- [OpenMedKit Device Qualification](openmedkit-device-qualification.md)
 - [Export Format Support Matrix](export-matrix.md)
 - [Device Tiers and SLOs](tiers.md)
 - [OpenMedKit Apple Platforms](runtimes/apple-platforms.md)
