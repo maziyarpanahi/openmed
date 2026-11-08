@@ -17,6 +17,14 @@ pytestmark = [
 ]
 
 
+def _cli_env(*extra_paths: Path) -> dict[str, str]:
+    # Nix supplies Python dependencies through the inherited search path.
+    python_paths = [str(REPO_ROOT), *(str(path) for path in extra_paths)]
+    if inherited_path := os.environ.get("PYTHONPATH"):
+        python_paths.append(inherited_path)
+    return {**os.environ, "PYTHONPATH": os.pathsep.join(python_paths)}
+
+
 @pytest.mark.parametrize("task", ["process-document", "transcribe", "draft"])
 def test_explicit_synthetic_factory(tmp_path, task):
     media = tmp_path / "media.txt"
@@ -49,7 +57,7 @@ def test_explicit_synthetic_factory(tmp_path, task):
         capture_output=True,
         text=True,
         timeout=30,
-        env={**os.environ, "PYTHONPATH": str(REPO_ROOT), "OPENMED_OFFLINE": "1"},
+        env={**_cli_env(), "OPENMED_OFFLINE": "1"},
     )
     assert result.returncode == 0, result.stderr
     evidence = json.loads(result.stdout)["data"]
@@ -107,10 +115,7 @@ def test_process_interruption_never_finalizes(tmp_path, signum):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        env={
-            **os.environ,
-            "PYTHONPATH": os.pathsep.join((str(REPO_ROOT), str(tmp_path))),
-        },
+        env=_cli_env(tmp_path),
     )
     try:
         import time

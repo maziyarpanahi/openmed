@@ -107,14 +107,23 @@ def test_missing_dependency_prevents_pytest(monkeypatch, capsys):
 )
 def test_guard_real_pytest_reports(tmp_path, source, code, message):
     test_file = tmp_path / "test_synthetic.py"
-    test_file.write_text(source + "\n")
+    test_file.write_text(source + "\n", encoding="utf-8")
     script = (
-        "import pytest; from scripts.testing.multimodal_ci import ZeroSkipGuard; "
-        f"raise SystemExit(pytest.main([{str(test_file)!r}, '-q', "
-        f"'--confcutdir={tmp_path}', '--tb=short'], plugins=[ZeroSkipGuard()]))"
+        "import sys\n"
+        "import pytest\n"
+        "from scripts.testing.multimodal_ci import ZeroSkipGuard\n"
+        "raise SystemExit(pytest.main(sys.argv[1:], plugins=[ZeroSkipGuard()]))\n"
     )
     result = subprocess.run(
-        [sys.executable, "-c", script],
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(test_file),
+            "-q",
+            f"--confcutdir={tmp_path}",
+            "--tb=short",
+        ],
         cwd=lane.ROOT,
         env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
         capture_output=True,
