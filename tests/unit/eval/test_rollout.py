@@ -764,6 +764,9 @@ def test_state_and_audit_saves_are_atomic_on_write_failure(
         "rollout_audit.json",
         "rollout_state.json",
     ]
+    # Preserve a valid serialization distinct from the new canonical output.
+    for path in (state_path, audit_path):
+        path.write_bytes(path.read_bytes().rstrip(b"\n"))
     committed_state = state_path.read_bytes()
     committed_audit = audit_path.read_bytes()
 
