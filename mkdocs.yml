@@ -467,6 +467,7 @@ nav:
       - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - OpenMedKit Evidence Contracts: multimodal/openmedkit-contracts.md
       - Native Document Intake Coordinates: multimodal/native-document-intake.md
+      - Native Redaction Export: multimodal/native-redaction-export.md
       - Local Multimodal Review: multimodal/local-review.md
       - Cross-modal Clock Alignment: multimodal/cross-modal-clock-alignment.md
       - Local Core ML Speech: multimodal/apple-speech.md
