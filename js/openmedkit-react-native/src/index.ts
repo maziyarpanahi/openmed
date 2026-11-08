@@ -135,12 +135,108 @@ interface ReactNativeRuntime {
 
 declare const require: undefined | ((moduleName: string) => unknown);
 
+/** Stable, value-free error codes raised by the JavaScript bridge layer. */
+export type OpenMedKitBridgeErrorCode =
+  | "openmedkit_test_double_forbidden"
+  | "openmedkit_deidentify_output_missing"
+  | "openmedkit_deidentify_output_unredacted";
+
+/**
+ * Error raised by the JavaScript bridge layer itself.
+ *
+ * Messages are fixed strings: they never include input text, spans, file paths
+ * or option values.
+ */
+export class OpenMedKitBridgeError extends Error {
+  readonly code: OpenMedKitBridgeErrorCode;
+
+  constructor(code: OpenMedKitBridgeErrorCode, message: string) {
+    super(message);
+    this.name = "OpenMedKitBridgeError";
+    this.code = code;
+  }
+}
+
+/** Where the bridge currently resolves its native module from. */
+export type OpenMedKitNativeModuleSource =
+  | "test-double"
+  | "turbo-module"
+  | "bridge-module"
+  | "unavailable";
+
 let injectedNativeModule: OpenMedKitNativeModule | null = null;
 
+/**
+ * Install a JavaScript native-module double for unit tests.
+ *
+ * Doubles are accepted only in test runners and development builds. A React
+ * Native release bundle (`__DEV__ === false`), `NODE_ENV=production`, or an
+ * unrecognised runtime rejects them, so fixture modules cannot stand in for
+ * native inference in release evidence. Passing `null` always clears a double.
+ */
 export function setOpenMedKitNativeModuleForTests(
   module: OpenMedKitNativeModule | null,
 ): void {
+  if (module !== null) {
+    assertTestDoublesAllowed();
+  }
   injectedNativeModule = module;
+}
+
+/**
+ * Report which native module the bridge would call right now.
+ *
+ * Parity harnesses use this to prove that results came from the linked native
+ * module rather than a JavaScript double.
+ */
+export function getOpenMedKitNativeModuleSource(): OpenMedKitNativeModuleSource {
+  if (injectedNativeModule) {
+    return "test-double";
+  }
+  const runtime = loadReactNative();
+  if (
+    isNativeModule(
+      runtime?.TurboModuleRegistry?.get<OpenMedKitNativeModule>(
+        OPENMED_REACT_NATIVE_MODULE_NAME,
+      ),
+    )
+  ) {
+    return "turbo-module";
+  }
+  if (isNativeModule(runtime?.NativeModules?.[OPENMED_REACT_NATIVE_MODULE_NAME])) {
+    return "bridge-module";
+  }
+  return "unavailable";
+}
+
+function assertTestDoublesAllowed(): void {
+  if (!testDoublesAllowed()) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_test_double_forbidden",
+      "OpenMedKit native-module test doubles are only allowed in tests and development builds",
+    );
+  }
+}
+
+function testDoublesAllowed(): boolean {
+  const scope = globalThis as {
+    __DEV__?: unknown;
+    process?: { env?: Record<string, string | undefined> };
+  };
+  const env = scope.process?.env ?? {};
+  if (scope.__DEV__ === false || env.NODE_ENV === "production") {
+    return false;
+  }
+  if (scope.__DEV__ === true) {
+    return true;
+  }
+  return (
+    env.NODE_ENV === "test" ||
+    env.NODE_ENV === "development" ||
+    env.NODE_TEST_CONTEXT !== undefined ||
+    env.JEST_WORKER_ID !== undefined ||
+    env.VITEST !== undefined
+  );
 }
 
 export async function loadModel(
@@ -190,18 +286,37 @@ export async function deidentify(
       : [],
     options,
   );
+  // Fail closed: never substitute the caller's original text for missing
+  // native output, and never hand back unchanged text when native reported
+  // that it rewrote at least one span.
+  const deidentifiedText =
+    stringValue(responseRecord.deidentifiedText) ??
+    stringValue(responseRecord.redactedText);
+  if (deidentifiedText === undefined) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_deidentify_output_missing",
+      "OpenMedKit native deidentify returned no de-identified text",
+    );
+  }
+  if (
+    deidentifiedText === text &&
+    spans.some((span) => span.action !== "keep")
+  ) {
+    throw new OpenMedKitBridgeError(
+      "openmedkit_deidentify_output_unredacted",
+      "OpenMedKit native deidentify returned unchanged text for rewritten spans",
+    );
+  }
   return {
     text: readString(responseRecord, "text", text),
-    deidentifiedText:
-      stringValue(responseRecord.deidentifiedText) ??
-      stringValue(responseRecord.redactedText) ??
-      text,
+    deidentifiedText,
     spans,
   };
 }
 
 function nativeModule(): OpenMedKitNativeModule {
   if (injectedNativeModule) {
+    assertTestDoublesAllowed();
     return injectedNativeModule;
   }
 

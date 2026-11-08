@@ -1,0 +1,66 @@
+{
+  "schema": "openmed.rn.parity.model_sources",
+  "version": 1,
+  "description": "Pinned, Apache-2.0 model artifacts that CI stages into the example app before it is built. The app itself never downloads: it loads the staged bundle from local storage after the probe verifies every file digest. CI only downloads already-published artifacts by immutable revision and checks every file against the sha256 and byte size below. It never converts or publishes models (docs/security/hf-token-policy.md).",
+  "android": {
+    "backend": "onnx",
+    "repo": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android",
+    "revision": "79f7db205869b1be4be23ac4f42aa95bdedc5aee",
+    "license": "apache-2.0",
+    "files": [
+      {
+        "path": "model.onnx",
+        "sha256": "23a3f394cf6be627947be54240c670b292464a80eeb71e54ad6b61962fe27ae6",
+        "bytes": 133259347
+      },
+      {
+        "path": "tokenizer.json",
+        "sha256": "cb374d6bc042c22455946f4e09a89d29882a199fdaf8fb25be00dc8b8857a448",
+        "bytes": 711661
+      },
+      {
+        "path": "tokenizer_config.json",
+        "sha256": "d1bfdca71108b71a09e907d7d2f021fd92eb9005db31df8f1ca41cd2f3ca1f4c",
+        "bytes": 499
+      },
+      {
+        "path": "id2label.json",
+        "sha256": "40f57c6fa3d84775c7d3cd58d6ef3c4736250261f08572cbbaef1290b577c898",
+        "bytes": 2598
+      }
+    ]
+  },
+  "ios": {
+    "backend": "coreml",
+    "tokenizer_name": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+    "tokenizer": {
+      "repo": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+      "revision": "2ea947130eb28d610ceb96472af0b694fce9c344",
+      "license": "apache-2.0",
+      "files": [
+        {
+          "path": "tokenizer.json",
+          "sha256": "435667fab0c06c165b1283ecb422497c37124f2d6a35b2ac73dc876332fc9518",
+          "bytes": 711494
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "bf9431564f2867411d0c5ec40cfaa1d73275a9847dbf34f23c8961b1f2981cc4",
+          "bytes": 1220
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a",
+          "bytes": 695
+        },
+        {
+          "path": "vocab.txt",
+          "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+          "bytes": 231508
+        }
+      ]
+    },
+    "coreml": null,
+    "coreml_pending": "No Core ML export of this checkpoint is published yet, and GitHub Actions must not convert models. A maintainer converts the tokenizer revision above locally (float32, cpuOnly compute units, max sequence length 512), publishes it manually under docs/security/hf-token-policy.md, and pins it here as {repo, revision, license, package_dir, id2label, files: [{path, sha256, bytes}]}. Until then the iOS staging step fails closed."
+  }
+}

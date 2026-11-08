@@ -8,8 +8,11 @@ import {
   analyzeText,
   deidentify,
   extractPii,
+  getOpenMedKitNativeModuleSource,
   loadModel,
+  OpenMedKitBridgeError,
   setOpenMedKitNativeModuleForTests,
+  type OpenMedKitBridgeErrorCode,
   type OpenMedKitNativeModule,
   type OpenMedSpan,
 } from "../../js/openmedkit-react-native/src/index";
@@ -161,6 +164,242 @@ test("deidentify returns redacted text and never logs raw PHI", async () => {
     console.warn = originalConsole.warn;
   }
 });
+
+test("deidentify fails closed when native omits de-identified text", async () => {
+  const native = createNativeFixture("ios");
+  const malformedResponses: unknown[] = [
+    { text: fixtureText, spans: sharedRedactedSpans },
+    { text: fixtureText, deidentifiedText: null, spans: sharedRedactedSpans },
+    { text: fixtureText, deidentifiedText: 42, spans: sharedRedactedSpans },
+    { originalText: fixtureText },
+    {},
+    null,
+  ];
+
+  for (const response of malformedResponses) {
+    setOpenMedKitNativeModuleForTests({
+      ...native,
+      deidentify: async () => response as never,
+    });
+    await assertBridgeError(
+      deidentify(fixtureText, fixtureOptions),
+      "openmedkit_deidentify_output_missing",
+    );
+  }
+});
+
+test("deidentify rejects unchanged text when native rewrote spans", async () => {
+  const native = createNativeFixture("ios");
+  setOpenMedKitNativeModuleForTests({
+    ...native,
+    deidentify: async () => ({
+      text: fixtureText,
+      deidentifiedText: fixtureText,
+      spans: sharedRedactedSpans,
+    }),
+  });
+
+  await assertBridgeError(
+    deidentify(fixtureText, fixtureOptions),
+    "openmedkit_deidentify_output_unredacted",
+  );
+});
+
+test("deidentify accepts the redactedText alias and keep-only results", async () => {
+  const native = createNativeFixture("android");
+  setOpenMedKitNativeModuleForTests({
+    ...native,
+    deidentify: async () => ({
+      redactedText: "Patient [PERSON] was born on [DATE_OF_BIRTH]. Email [EMAIL].",
+      spans: sharedRedactedSpans,
+    }),
+  });
+  const aliased = await deidentify(fixtureText, fixtureOptions);
+  assert.equal(
+    aliased.deidentifiedText,
+    "Patient [PERSON] was born on [DATE_OF_BIRTH]. Email [EMAIL].",
+  );
+  assert.equal(aliased.text, fixtureText);
+
+  setOpenMedKitNativeModuleForTests({
+    ...native,
+    deidentify: async () => ({
+      text: fixtureText,
+      deidentifiedText: fixtureText,
+      spans: sharedKeepSpans,
+    }),
+  });
+  const keepOnly = await deidentify(fixtureText, fixtureOptions);
+  assert.equal(keepOnly.deidentifiedText, fixtureText);
+  assert.deepEqual(keepOnly.spans, sharedKeepSpans);
+});
+
+test("test doubles are rejected in release and unrecognised runtimes", async () => {
+  const native = createNativeFixture("ios");
+  const releaseRuntimes: RuntimeFlags[] = [
+    { dev: false, nodeEnv: undefined, testContext: "child-v8" },
+    { dev: undefined, nodeEnv: "production", testContext: "child-v8" },
+    { dev: true, nodeEnv: "production", testContext: undefined },
+    { dev: undefined, nodeEnv: undefined, testContext: undefined },
+  ];
+
+  for (const flags of releaseRuntimes) {
+    withRuntimeFlags(flags, () => {
+      assert.throws(
+        () => setOpenMedKitNativeModuleForTests(native),
+        (error: unknown) =>
+          isBridgeError(error, "openmedkit_test_double_forbidden"),
+      );
+      // Clearing a double must always work, including in release bundles.
+      setOpenMedKitNativeModuleForTests(null);
+    });
+    assert.equal(getOpenMedKitNativeModuleSource(), "unavailable");
+  }
+});
+
+test("test doubles are accepted in development and test runtimes", () => {
+  const native = createNativeFixture("ios");
+  const allowedRuntimes: RuntimeFlags[] = [
+    { dev: true, nodeEnv: undefined, testContext: undefined },
+    { dev: undefined, nodeEnv: "test", testContext: undefined },
+    { dev: undefined, nodeEnv: "development", testContext: undefined },
+    { dev: undefined, nodeEnv: undefined, testContext: "child-v8" },
+  ];
+
+  for (const flags of allowedRuntimes) {
+    withRuntimeFlags(flags, () => {
+      setOpenMedKitNativeModuleForTests(native);
+      assert.equal(getOpenMedKitNativeModuleSource(), "test-double");
+      setOpenMedKitNativeModuleForTests(null);
+    });
+  }
+});
+
+test("an installed double stops answering once the runtime is release", async () => {
+  const native = createNativeFixture("ios");
+  let nativeCalls = 0;
+  setOpenMedKitNativeModuleForTests({
+    ...native,
+    async loadModel(source) {
+      nativeCalls += 1;
+      return native.loadModel(source);
+    },
+    async analyzeText() {
+      nativeCalls += 1;
+      return sharedKeepSpans;
+    },
+  });
+
+  await withRuntimeFlagsAsync(
+    { dev: false, nodeEnv: "production", testContext: undefined },
+    async () => {
+      await assertBridgeError(
+        loadModel({ modelPath: "/app/models/openmed-ios", backend: "mlx" }),
+        "openmedkit_test_double_forbidden",
+      );
+      await assertBridgeError(
+        analyzeText(fixtureText, fixtureOptions),
+        "openmedkit_test_double_forbidden",
+      );
+    },
+  );
+  assert.equal(nativeCalls, 0);
+});
+
+test("the bridge reports when no native module is linked", async () => {
+  assert.equal(getOpenMedKitNativeModuleSource(), "unavailable");
+  await assert.rejects(
+    loadModel({ modelPath: "/app/models/openmed-ios", backend: "mlx" }),
+    /OpenMedKitRN is not installed in the React Native runtime/,
+  );
+});
+
+interface RuntimeFlags {
+  dev: boolean | undefined;
+  nodeEnv: string | undefined;
+  testContext: string | undefined;
+}
+
+function withRuntimeFlags(flags: RuntimeFlags, body: () => void): void {
+  const restore = applyRuntimeFlags(flags);
+  try {
+    body();
+  } finally {
+    restore();
+  }
+}
+
+async function withRuntimeFlagsAsync(
+  flags: RuntimeFlags,
+  body: () => Promise<void>,
+): Promise<void> {
+  const restore = applyRuntimeFlags(flags);
+  try {
+    await body();
+  } finally {
+    restore();
+  }
+}
+
+function applyRuntimeFlags(flags: RuntimeFlags): () => void {
+  const scope = globalThis as { __DEV__?: boolean };
+  const previous = {
+    dev: Object.prototype.hasOwnProperty.call(scope, "__DEV__")
+      ? scope.__DEV__
+      : undefined,
+    hadDev: Object.prototype.hasOwnProperty.call(scope, "__DEV__"),
+    nodeEnv: process.env.NODE_ENV,
+    testContext: process.env.NODE_TEST_CONTEXT,
+  };
+  setOrDelete(scope, "__DEV__", flags.dev);
+  setEnv("NODE_ENV", flags.nodeEnv);
+  setEnv("NODE_TEST_CONTEXT", flags.testContext);
+  return () => {
+    if (previous.hadDev) {
+      scope.__DEV__ = previous.dev;
+    } else {
+      delete scope.__DEV__;
+    }
+    setEnv("NODE_ENV", previous.nodeEnv);
+    setEnv("NODE_TEST_CONTEXT", previous.testContext);
+  };
+}
+
+function setOrDelete(
+  scope: { __DEV__?: boolean },
+  key: "__DEV__",
+  value: boolean | undefined,
+): void {
+  if (value === undefined) {
+    delete scope[key];
+  } else {
+    scope[key] = value;
+  }
+}
+
+function setEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+}
+
+function isBridgeError(error: unknown, code: OpenMedKitBridgeErrorCode): boolean {
+  assert.ok(error instanceof OpenMedKitBridgeError);
+  assert.equal(error.code, code);
+  for (const fragment of piiFragments) {
+    assert.equal(error.message.includes(fragment), false);
+  }
+  return true;
+}
+
+async function assertBridgeError(
+  promise: Promise<unknown>,
+  code: OpenMedKitBridgeErrorCode,
+): Promise<void> {
+  await assert.rejects(promise, (error: unknown) => isBridgeError(error, code));
+}
 
 const fixtureOptions = {
   docId: "rn-fixture",
