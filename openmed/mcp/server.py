@@ -2402,7 +2402,55 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the OpenMed package version and exit.",
     )
+    parser.add_argument(
+        "--list-tools",
+        action="store_true",
+        help="Print the registered tools and their behavior hints, then exit.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="With --list-tools, print machine-readable JSON.",
+    )
     return parser
+
+
+def _tool_listing() -> list[dict[str, Any]]:
+    """Return name, title, version and behavior hints for each latest tool."""
+
+    listing: list[dict[str, Any]] = []
+    for spec in TOOL_REGISTRY.latest_specs():
+        hints = spec.annotations()
+        listing.append(
+            {
+                "name": spec.name,
+                "title": spec.title,
+                "version": spec.version,
+                "readOnlyHint": hints["readOnlyHint"],
+                "destructiveHint": hints["destructiveHint"],
+                "idempotentHint": hints["idempotentHint"],
+                "openWorldHint": hints["openWorldHint"],
+            }
+        )
+    return listing
+
+
+def _print_tool_listing(as_json: bool) -> None:
+    listing = _tool_listing()
+    if as_json:
+        print(json.dumps(listing, indent=2))
+        return
+    for entry in listing:
+        hints = ", ".join(
+            f"{key}={str(entry[key]).lower()}"
+            for key in (
+                "readOnlyHint",
+                "destructiveHint",
+                "idempotentHint",
+                "openWorldHint",
+            )
+        )
+        print(f"{entry['name']}  {entry['title']}  v{entry['version']}  [{hints}]")
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -2411,6 +2459,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.version:
         print(openmed.__version__)
+        return 0
+
+    if args.json and not args.list_tools:
+        parser.error("--json can only be used with --list-tools")
+
+    if args.list_tools:
+        _print_tool_listing(args.json)
         return 0
 
     transport = args.transport
