@@ -211,6 +211,7 @@ target states a policy version, it must fall in the `policy` range.
 | Swift (OpenMedKit) | `PortableBundle.verify(manifest:envelope:trustPolicy:context:files:)`, `PortableBundle.verifyDirectory(at:trustPolicy:context:)`, using CryptoKit |
 | Kotlin (OpenMedKit Android) | `com.openmed.openmedkit.bundle.PortableBundle.verify(...)` |
 | TypeScript (`openmed` npm) | `verifyPortableBundle(...)`, using WebCrypto Ed25519 |
+| Dart (`openmedkit_flutter`) | `PortableBundle.verify(...)`, `PortableBundle.verifyDirectory(...)`, and `OpenMedVerifiedBundle.open(...)`, which gates every model load |
 
 Android API 26 and JDK 11 ship no Ed25519 provider. The Kotlin reader
 therefore includes a verify-only RFC 8032 implementation built on
@@ -218,7 +219,10 @@ therefore includes a verify-only RFC 8032 implementation built on
 signs. Apps can pass their own `Ed25519SignatureVerifier`, for example one
 backed by Tink, BouncyCastle, or the JDK 15+ provider. Browsers without
 WebCrypto Ed25519 fail with `signature_verifier_unavailable`. So does Python
-without the optional `cryptography` package (`openmed[integrity]`).
+without the optional `cryptography` package (`openmed[integrity]`). The Dart
+reader ships the same verify-only construction on `BigInt` with its own
+SHA-256 and SHA-512, so it adds no dependency. Its web
+build returns `signature_verifier_unavailable` for every bundle.
 
 ```python
 from openmed.core.portable_bundle import (
@@ -308,8 +312,8 @@ write_portable_bundle("exports/my-model-onnx", manifest, envelope)
 `tests/fixtures/portable_bundle/vectors.json` holds the shared conformance
 corpus: the canonical golden manifest, canonicalization vectors, RFC 8032
 signature vectors, trust policies, synthetic file trees, and 75 accepted and
-rejected cases with the exact expected result. Python, Swift, Kotlin, and
-TypeScript tests all consume it.
+rejected cases with the exact expected result. Python, Swift, Kotlin,
+TypeScript, and Dart tests all consume it.
 
 The vectors are signed with TEST-ONLY keys derived from public labels in
 `tests/fixtures/portable_bundle/generate_vectors.py`. Never add them to a

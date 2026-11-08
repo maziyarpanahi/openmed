@@ -6,17 +6,54 @@ on:
     paths:
       - '.github/workflows/flutter-ci.yml'
       - 'js/openmedkit-flutter/**'
-      - 'tests/mobile/test_flutter_ffi.*'
-      - 'tests/mobile/fixtures/flutter_ffi_golden.json'
+      - 'tests/mobile/test_flutter_*'
+      - 'tests/mobile/flutter_ffi_support.dart'
+      - 'tests/mobile/fixtures/flutter_ffi_*'
+      - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/parity/offset_contract.json'
       - 'examples/flutter/**'
   pull_request:
     paths:
       - '.github/workflows/flutter-ci.yml'
       - 'js/openmedkit-flutter/**'
-      - 'tests/mobile/test_flutter_ffi.*'
-      - 'tests/mobile/fixtures/flutter_ffi_golden.json'
+      - 'tests/mobile/test_flutter_*'
+      - 'tests/mobile/flutter_ffi_support.dart'
+      - 'tests/mobile/fixtures/flutter_ffi_*'
+      - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/parity/offset_contract.json'
       - 'examples/flutter/**'
   workflow_dispatch:
+    inputs:
+      real_artifact:
+        description: >-
+          Run the opt-in real-artifact lane. It needs a runner that already
+          holds an extracted ONNX Runtime package and a signed local bundle.
+        type: boolean
+        default: false
+      real_artifact_runner:
+        description: Runner label for the real-artifact lane.
+        type: string
+        default: self-hosted
+      onnxruntime_root:
+        description: Path on that runner to an extracted ONNX Runtime package.
+        type: string
+        default: ''
+      bundle_dir:
+        description: Path on that runner to a signed portable bundle directory.
+        type: string
+        default: ''
+      trust_policy:
+        description: Path on that runner to the bundle's trust-policy JSON.
+        type: string
+        default: ''
+      vectors:
+        description: Path on that runner to pre-tokenized synthetic vectors.
+        type: string
+        default: ''
+      os_version:
+        description: Optional dotted OS version for runtime eligibility.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -27,6 +64,7 @@ concurrency:
 
 jobs:
   ffi-test:
+    name: FFI fixture session (synthetic, not a runtime claim)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -34,6 +72,16 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Run native checks under AddressSanitizer
+        env:
+          OPENMED_FFI_TEST_TMPDIR: ${{ runner.temp }}
+        run: |
+          cmake -S js/openmedkit-flutter/native -B build/flutter-ffi-checks \
+            -DOPENMED_FFI_BUILD_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror"
+          cmake --build build/flutter-ffi-checks
+          ctest --test-dir build/flutter-ffi-checks --output-on-failure
       - name: Build native fixture session
         run: |
           cmake -S js/openmedkit-flutter/native -B build/flutter-ffi \
@@ -47,7 +95,37 @@ jobs:
           OPENMED_FFI_TEST_SESSION: '1'
         run: |
           flutter pub get
-          flutter test test/openmedkit_ffi_test.dart
+          flutter test test/
+
+  web-unsupported:
+    name: Web build reports platform_unsupported
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build web consumer
+        run: |
+          flutter create --platforms=web --project-name=openmed_flutter_web \
+            "$RUNNER_TEMP/openmed_flutter_web"
+          cd "$RUNNER_TEMP/openmed_flutter_web"
+          flutter pub add openmedkit_flutter \
+            --path "$GITHUB_WORKSPACE/js/openmedkit-flutter"
+          cat > lib/main.dart <<'DART'
+          import 'package:flutter/widgets.dart';
+          import 'package:openmedkit_flutter/openmedkit.dart';
+
+          void main() {
+            final OpenMedPlatformSupport support = OpenMedKit.platformSupport;
+            if (support.supported || support.reason != 'platform_unsupported') {
+              throw StateError('web must report platform_unsupported');
+            }
+            runApp(Text(support.reason!, textDirection: TextDirection.ltr));
+          }
+          DART
+          flutter build web --release
 
   mobile-build:
     runs-on: ubuntu-latest
@@ -93,3 +171,62 @@ jobs:
           flutter pub add openmedkit_flutter \
             --path "$GITHUB_WORKSPACE/js/openmedkit-flutter"
           flutter build linux --debug
+
+  # Opt-in only. This is the only lane whose results can support a real
+  # runtime claim: it links ONNX Runtime, never enables the fixture session,
+  # and fails unless the loaded session reports onnx_runtime.
+  real-artifact:
+    name: Real ONNX Runtime artifact (opt-in, not a fixture run)
+    if: github.event_name == 'workflow_dispatch' && inputs.real_artifact
+    runs-on: ${{ inputs.real_artifact_runner }}
+    env:
+      ORT_ROOT: ${{ inputs.onnxruntime_root }}
+      OPENMED_FLUTTER_REAL_BUNDLE_DIR: ${{ inputs.bundle_dir }}
+      OPENMED_FLUTTER_REAL_TRUST_POLICY: ${{ inputs.trust_policy }}
+      OPENMED_FLUTTER_REAL_VECTORS: ${{ inputs.vectors }}
+      OPENMED_FLUTTER_REAL_OS_VERSION: ${{ inputs.os_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          cache: true
+      - name: Check local artifacts
+        run: |
+          for name in ORT_ROOT OPENMED_FLUTTER_REAL_BUNDLE_DIR \
+              OPENMED_FLUTTER_REAL_TRUST_POLICY OPENMED_FLUTTER_REAL_VECTORS; do
+            if [ -z "${!name}" ] || [ ! -e "${!name}" ]; then
+              echo "::error::$name must name a local path on this runner"
+              exit 1
+            fi
+          done
+      - name: Build native library against ONNX Runtime
+        run: |
+          cmake -S js/openmedkit-flutter/native -B build/flutter-ffi-real \
+            -DOPENMED_FFI_ENABLE_TEST_SESSION=OFF \
+            "-DOPENMED_ONNXRUNTIME_ROOT=$ORT_ROOT" \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/flutter-ffi-real --config Release
+      - name: Run real-artifact Dart lane
+        working-directory: js/openmedkit-flutter
+        run: |
+          unset OPENMED_FFI_TEST_SESSION
+          library="$(find "$GITHUB_WORKSPACE/build/flutter-ffi-real" -maxdepth 1 \
+            \( -name 'libopenmed_ffi.so' -o -name 'libopenmed_ffi.dylib' \) | head -n 1)"
+          if [ -z "$library" ]; then
+            echo "::error::libopenmed_ffi was not built"
+            exit 1
+          fi
+          export OPENMED_FFI_LIBRARY="$library"
+          export OPENMED_FLUTTER_REAL_EVIDENCE="$RUNNER_TEMP/flutter-real-artifact-evidence.json"
+          export LD_LIBRARY_PATH="$ORT_ROOT/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export DYLD_LIBRARY_PATH="$ORT_ROOT/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+          flutter pub get
+          flutter test test/ffi_real_artifact_test.dart
+          test -s "$OPENMED_FLUTTER_REAL_EVIDENCE"
+      - name: Upload value-free evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: flutter-real-artifact-evidence
+          path: ${{ runner.temp }}/flutter-real-artifact-evidence.json
+          if-no-files-found: error
