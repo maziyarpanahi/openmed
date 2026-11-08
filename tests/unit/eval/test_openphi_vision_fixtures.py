@@ -157,6 +157,18 @@ def test_loaded_pixels_are_detached_and_case_is_immutable(cases):
         page.text = "changed"
 
 
+def test_catalog_digest_is_stable_in_crlf_checkouts(tmp_path, monkeypatch, cases):
+    root = tmp_path / "fixtures" / "openphi_vision_v1"
+    root.mkdir(parents=True)
+    catalog = ROOT.joinpath("catalog.json").read_bytes().replace(b"\r\n", b"\n")
+    (root / "catalog.json").write_bytes(catalog.replace(b"\n", b"\r\n"))
+    font = "IBMPlexMono-Regular.ttf"
+    (root / font).write_bytes(ROOT.joinpath(font).read_bytes())
+    monkeypatch.setattr(fixtures, "files", lambda _: tmp_path)
+
+    assert tuple(fixtures.load_openphi_vision_fixtures()) == cases
+
+
 @pytest.mark.parametrize("target", ["font", "catalog"])
 def test_resource_digest_drift_fails_closed(monkeypatch, target):
     actual_files = fixtures.files

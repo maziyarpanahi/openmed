@@ -21,7 +21,7 @@ SECRET = "SyntheticTranscriptOnlyIdentifier-7395"
 
 @pytest.fixture
 def draft():
-    return json.loads(FIXTURE.read_text())["draft"]
+    return json.loads(FIXTURE.read_text(encoding="utf-8"))["draft"]
 
 
 def export(draft, **kwargs):
@@ -34,7 +34,7 @@ def export(draft, **kwargs):
 
 
 def test_golden_reviewed_roundtrip(draft):
-    fixture = json.loads(FIXTURE.read_text())
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     digest = ambient_draft_digest(draft)
     assert digest == fixture["digest"]
     result = export(draft, confirmed_digest=digest)
