@@ -57,7 +57,13 @@ variant is appropriate.
 A runnable end-to-end script lives at
 [`examples/web/node_deidentify.mjs`](../../examples/web/node_deidentify.mjs).
 It de-identifies a synthetic note and prints the redacted text and span
-labels. From the repository root, after `npm run build` in this directory:
+labels. From the repository root, install the optional Transformers.js peer
+in the web workspace and build the package before running the example:
+
+```bash
+npm --prefix js/openmedkit-web install --no-save --package-lock=false @huggingface/transformers
+npm --prefix js/openmedkit-web run build
+```
 
 ```bash
 node examples/web/node_deidentify.mjs
