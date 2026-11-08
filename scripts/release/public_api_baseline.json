@@ -18740,6 +18740,622 @@
         "signature": "(source_path, output_path, replacements, kw:encoding=..., kw:preserve_columns=...)"
       }
     },
+    "openmed.multimodal.evidence": {
+      "ClaimAssessment": {
+        "kind": "class",
+        "signature": "(claim_id, state, source_node_ids, finding_codes)"
+      },
+      "ClaimState": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "DerivationEdge": {
+        "kind": "class",
+        "signature": "(kw:source, kw:target, kw:kind)"
+      },
+      "EdgeKind": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "EvidenceNode": {
+        "kind": "class",
+        "signature": "(kw:node_id, kw:kind, kw:source_digest=..., kw:geometry=..., kw:region=..., kw:span=..., kw:field_index=...)"
+      },
+      "Finding": {
+        "kind": "class",
+        "signature": "(code, node_ids)"
+      },
+      "FindingCode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "FusedEvidenceError": {
+        "kind": "class",
+        "signature": null
+      },
+      "FusedEvidenceGraph": {
+        "kind": "class",
+        "signature": "(kw:nodes, kw:edges=...)"
+      },
+      "NodeKind": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "PageGeometry": {
+        "kind": "class",
+        "signature": "(kw:page, kw:width, kw:height, kw:unit=...)"
+      },
+      "SpatialUnit": {
+        "kind": "class",
+        "signature": "(value)"
+      }
+    },
+    "openmed.multimodal.privacy": {
+      "Affine": {
+        "kind": "class",
+        "signature": "(a=..., b=..., c=..., d=..., e=..., f=...)"
+      },
+      "CoordinateSpace": {
+        "kind": "class",
+        "signature": "(kw:space_ref, kw:source_digest, kw:geometry)"
+      },
+      "LocalPixelDetector": {
+        "kind": "class",
+        "signature": "(kw:digest, kw:inspect, kw:local_only)"
+      },
+      "MASK_LINEAGE_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MaskFailure": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "MaskLineageError": {
+        "kind": "class",
+        "signature": null
+      },
+      "MaskLineageResult": {
+        "kind": "class",
+        "signature": "(source, target, source_nodes, steps, masks, composed, failure, failed_step)"
+      },
+      "MaskProjection": {
+        "kind": "class",
+        "signature": "(node_id, polygon, raster_box)"
+      },
+      "PixelCoverageError": {
+        "kind": "class",
+        "signature": null
+      },
+      "PixelCoverageLimits": {
+        "kind": "class",
+        "signature": "(kw:max_source_bytes=..., kw:max_frames=..., kw:max_frame_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:max_output_bytes=...)"
+      },
+      "PixelCoverageResult": {
+        "kind": "class",
+        "signature": "(accepted, failure, report_json, outputs=...)"
+      },
+      "PixelFrame": {
+        "kind": "class",
+        "signature": "(kw:reference, kw:source_digest, kw:carrier, kw:carrier_index, kw:frame_index, kw:width, kw:height)"
+      },
+      "PixelFramePlan": {
+        "kind": "class",
+        "signature": "(kw:reference, kw:inspected_regions=..., kw:ignored_regions=..., kw:masks=..., kw:critical_regions=..., kw:crop=..., kw:rotation=..., kw:output_size=...)"
+      },
+      "PixelInspection": {
+        "kind": "class",
+        "signature": "(critical_regions=..., complete=...)"
+      },
+      "Rectangle": {
+        "kind": "class",
+        "signature": "(left, top, right, bottom)"
+      },
+      "TransformStep": {
+        "kind": "class",
+        "signature": "(kw:source, kw:target, kw:affine, kw:resampling_margin, kw:coverage=..., kw:rasterize=...)"
+      },
+      "audit_pixel_redaction": {
+        "kind": "function",
+        "signature": "(source, plans, kw:detector, kw:residual_detector, kw:source_kind=..., kw:window=..., kw:sampling_plan=..., kw:limits=..., kw:cancel_check=...)"
+      },
+      "inventory_pixel_frames": {
+        "kind": "function",
+        "signature": "(source, kw:source_kind=..., kw:window=..., kw:limits=...)"
+      },
+      "propagate_masks": {
+        "kind": "function",
+        "signature": "(source, masks, steps, kw:max_clip_tests=...)"
+      }
+    },
+    "openmed.multimodal.streaming": {
+      "speech": {
+        "kind": "module",
+        "signature": null
+      },
+      "transcript": {
+        "kind": "module",
+        "signature": null
+      }
+    },
+    "openmed.multimodal.streaming.privacy": {
+      "ArtifactKind": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "AudioRetentionAudit": {
+        "kind": "class",
+        "signature": "(session_ref, binding_digest, session_end, passed, blockers, receipts)"
+      },
+      "AudioRetentionError": {
+        "kind": "class",
+        "signature": null
+      },
+      "AudioRetentionPolicy": {
+        "kind": "class",
+        "signature": "(kw:max_artifacts=..., kw:max_bytes=..., kw:max_lifetime_ms=..., kw:max_operations=...)"
+      },
+      "AudioRetentionSession": {
+        "kind": "class",
+        "signature": "(session_ref, expected, kw:policy=..., kw:artifact_directory=..., kw:clock=..., kw:automatic_expiry=...)"
+      },
+      "AudioStage": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "BufferState": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "DestructionAction": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "DestructionReceipt": {
+        "kind": "class",
+        "signature": "(sequence, artifact_ref, action, stage_history, session_end, binding_digest)"
+      },
+      "ExpectedAudioArtifact": {
+        "kind": "class",
+        "signature": "(artifact_ref, kind, stage=...)"
+      },
+      "HoldReason": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "LocalPhiScreener": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "PhiRedactionSpan": {
+        "kind": "class",
+        "signature": "(start, end)"
+      },
+      "PhiResolution": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "PhiScreenDeclaration": {
+        "kind": "class",
+        "signature": "(kw:artifact_digest, kw:requires_network=...)"
+      },
+      "PhiScreenRequest": {
+        "kind": "class",
+        "signature": "(request_digest, segments)"
+      },
+      "PhiScreenResult": {
+        "kind": "class",
+        "signature": "(kw:request_digest, kw:decisions)"
+      },
+      "ProtectedSpeechSegment": {
+        "kind": "class",
+        "signature": "(segment_ref, revision, finalized, text)"
+      },
+      "RedactionMapping": {
+        "kind": "class",
+        "signature": "(source_start, source_end, output_start, output_end, redacted)"
+      },
+      "ReleasedSpeechSegment": {
+        "kind": "class",
+        "signature": "(segment_ref, revision, request_digest, output_digest, mappings, lineage_json, text)"
+      },
+      "SegmentPhiDecision": {
+        "kind": "class",
+        "signature": "(kw:segment_ref, kw:revision, kw:resolution, kw:redactions=...)"
+      },
+      "SessionEnd": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "WITHHOLDING_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "WithholdingBuffer": {
+        "kind": "class",
+        "signature": "(session_ref, screener, kw:policy=..., kw:clock=...)"
+      },
+      "WithholdingError": {
+        "kind": "class",
+        "signature": null
+      },
+      "WithholdingPolicy": {
+        "kind": "class",
+        "signature": "(kw:max_segments=..., kw:max_chars=..., kw:max_latency_ms=..., kw:trailing_segments=..., kw:max_operations=...)"
+      }
+    },
+    "openmed.multimodal.streaming.speech": {
+      "ALIAS_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "AudioChunk": {
+        "kind": "class",
+        "signature": "(sequence, payload, sample_rate_hz, channel_count, duration_ms)"
+      },
+      "ClinicalRole": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "FinalizedSegment": {
+        "kind": "class",
+        "signature": "(segment_index, text, start_ms=..., end_ms=..., token_times=..., language=...)"
+      },
+      "LanguageConfidence": {
+        "kind": "class",
+        "signature": "(language, confidence_ppm)"
+      },
+      "LineageEvent": {
+        "kind": "class",
+        "signature": "(kw:kind, kw:parents, kw:children)"
+      },
+      "LineageKind": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "MAX_BUFFERED_BYTE_COUNT": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_BUFFERED_CHUNKS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_BUFFERED_DURATION_MS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_CHANNEL_COUNT": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_CHUNK_BYTE_COUNT": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_CHUNK_DURATION_MS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_CHUNK_SEQUENCE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_ENTRYPOINT_CHARS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_HYPOTHESIS_CHARS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_PARTIAL_HYPOTHESES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_PROVIDER_LANGUAGES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_PROVIDER_REVISION_CHARS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_SAMPLE_RATE_HZ": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_SEGMENTS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_STREAM_DURATION_MS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_TOKEN_TIMES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "PartialHypothesis": {
+        "kind": "class",
+        "signature": "(revision, text, is_final=..., token_times=..., language=...)"
+      },
+      "ProviderProvenance": {
+        "kind": "class",
+        "signature": "(provider_id, provider_revision, model_fingerprint, requires_network=...)"
+      },
+      "RegisteredSpeechProvider": {
+        "kind": "class",
+        "signature": "(declaration, entrypoint)"
+      },
+      "RoleReview": {
+        "kind": "class",
+        "signature": "(kw:session_ref, kw:alias, kw:role, kw:revision, kw:review_ref)"
+      },
+      "SPEECH_PROVIDER_CONTRACT_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "SPEECH_PROVIDER_REASON_CODES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "SpeakerAliasError": {
+        "kind": "class",
+        "signature": null
+      },
+      "SpeakerAliases": {
+        "kind": "class",
+        "signature": "(session_ref)"
+      },
+      "SpeechProviderDeclaration": {
+        "kind": "class",
+        "signature": "(provenance, languages, sample_rates_hz, limits=...)"
+      },
+      "SpeechProviderError": {
+        "kind": "class",
+        "signature": "(category)"
+      },
+      "SpeechStreamLimits": {
+        "kind": "class",
+        "signature": "(max_buffered_chunks=..., max_buffered_byte_count=..., max_buffered_duration_ms=..., max_stream_duration_ms=..., max_partial_hypotheses=..., max_segments=...)"
+      },
+      "StreamState": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "StreamingAsrSession": {
+        "kind": "class",
+        "signature": "(declaration, limits=...)"
+      },
+      "StreamingAsrSessionReport": {
+        "kind": "class",
+        "signature": "(provider_id, provider_revision, model_fingerprint, state, buffered_chunks, buffered_byte_count, buffered_duration_ms, stream_duration_ms, partial_hypotheses, finalized_segments, reason_code=..., requires_network=..., schema_version=...)"
+      },
+      "TokenTime": {
+        "kind": "class",
+        "signature": "(token_index, start_ms, end_ms, confidence_ppm, token=...)"
+      },
+      "register_speech_providers": {
+        "kind": "function",
+        "signature": "(providers)"
+      }
+    },
+    "openmed.multimodal.streaming.transcript": {
+      "MappedSpan": {
+        "kind": "class",
+        "signature": "(reference, revision, start, end, start_ms, end_ms, invalidation, finalized)"
+      },
+      "RevisionKind": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "RevisionLedger": {
+        "kind": "class",
+        "signature": "(session_ref, segment_ref, length, tokens=...)"
+      },
+      "RevisionLedgerError": {
+        "kind": "class",
+        "signature": null
+      },
+      "SpanInvalidation": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SpanReference": {
+        "kind": "class",
+        "signature": "(kw:span_ref, kw:session_ref, kw:segment_ref, kw:revision, kw:start, kw:end, kw:token_refs)"
+      },
+      "TranscriptToken": {
+        "kind": "class",
+        "signature": "(kw:token_ref, kw:start, kw:end, kw:start_ms, kw:end_ms)"
+      }
+    },
+    "openmed.multimodal.vision": {
+      "pathology": {
+        "kind": "module",
+        "signature": null
+      },
+      "runtime": {
+        "kind": "module",
+        "signature": null
+      },
+      "safety": {
+        "kind": "module",
+        "signature": null
+      }
+    },
+    "openmed.multimodal.vision.pathology": {
+      "PyramidLevel": {
+        "kind": "class",
+        "signature": "(kw:index, kw:width, kw:height, kw:scale_numerator, kw:scale_denominator=...)"
+      },
+      "SlideTile": {
+        "kind": "class",
+        "signature": "(tile_ref, level, bounds, source_bounds, working_bytes, sampled_cells, tissue_cells, unknown_cells, decision)"
+      },
+      "SlideTileError": {
+        "kind": "class",
+        "signature": null
+      },
+      "SlideTilePlan": {
+        "kind": "class",
+        "signature": "(source_digest, source_width, source_height, levels, policy, mask_digest, tiles, peak_working_bytes)"
+      },
+      "TileDecision": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "TilePolicy": {
+        "kind": "class",
+        "signature": "(kw:width, kw:height, kw:overlap_x, kw:overlap_y, kw:working_bytes_per_pixel, kw:max_inflight_tiles, kw:budget_bytes, kw:reserved_bytes, kw:min_tissue_percent)"
+      },
+      "TissueMask": {
+        "kind": "class",
+        "signature": "(kw:source_digest, kw:width, kw:height, kw:cells)"
+      },
+      "mask_from_rgb": {
+        "kind": "function",
+        "signature": "(source_digest, width, height, data, kw:white_floor, kw:min_chroma)"
+      },
+      "plan_slide_tiles": {
+        "kind": "function",
+        "signature": "(source_digest, source_width, source_height, levels, policy, kw:tissue_mask=...)"
+      }
+    },
+    "openmed.multimodal.vision.runtime": {
+      "CLOUD_FALLBACK_ALLOWED": {
+        "kind": "constant",
+        "signature": null
+      },
+      "DeviceTier": {
+        "kind": "class",
+        "signature": "(name, memory_budget_bytes, reserved_bytes=...)"
+      },
+      "MAX_ACTIVATION_BYTES_PER_PIXEL": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_CACHE_BYTES_PER_TILE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_DEVICE_TIERS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_FRAMES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_MEMORY_BYTES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_MODEL_PARAMETERS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_OUTPUT_BYTES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_PIXEL_SIDE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_TILE_SIZE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_WEIGHT_BYTES_PER_PARAMETER": {
+        "kind": "constant",
+        "signature": null
+      },
+      "PreprocessingPlan": {
+        "kind": "class",
+        "signature": "(width, height, tile_size, tile_overlap=..., frames=...)"
+      },
+      "RESOURCE_PLAN_REASON_CODES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "RESOURCE_PLAN_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "ResourcePlanOutcome": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "TierCandidate": {
+        "kind": "class",
+        "signature": "(name, available_bytes, fits)"
+      },
+      "VLMExecutionPlan": {
+        "kind": "class",
+        "signature": "(outcome, tier_name, tier_available_bytes, estimate, candidates, preprocessing, cloud_fallback_allowed=..., version=...)"
+      },
+      "VLMExecutionPolicy": {
+        "kind": "class",
+        "signature": "(tiers, parameter_count=..., weight_bytes_per_parameter=..., activation_bytes_per_pixel=..., cache_bytes_per_tile=..., output_bytes=..., runtime_overhead_bytes=...)"
+      },
+      "VLMResourceEstimate": {
+        "kind": "class",
+        "signature": "(model_bytes, peak_activation_bytes, cache_bytes, output_bytes, runtime_overhead_bytes, total_bytes, reason_code=..., field_name=...)"
+      },
+      "VLMResourcePlannerError": {
+        "kind": "class",
+        "signature": null
+      },
+      "VLM_TIER_DESKTOP_V1": {
+        "kind": "constant",
+        "signature": null
+      },
+      "VLM_TIER_MOBILE_V1": {
+        "kind": "constant",
+        "signature": null
+      },
+      "plan_vlm_execution": {
+        "kind": "function",
+        "signature": "(policy, preprocessing)"
+      }
+    },
+    "openmed.multimodal.vision.safety": {
+      "ImageQualityError": {
+        "kind": "class",
+        "signature": null
+      },
+      "QualityAction": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "QualityMetrics": {
+        "kind": "class",
+        "signature": "(width, height, sample_width, sample_height, luminance, contrast, sharpness, dark_fraction, bright_fraction, boundary_fraction)"
+      },
+      "QualityPolicy": {
+        "kind": "class",
+        "signature": "(kw:min_short_side, kw:min_long_side, kw:min_luminance, kw:max_luminance, kw:min_contrast, kw:min_sharpness, kw:max_dark_fraction, kw:max_bright_fraction, kw:max_boundary_fraction=..., kw:background_luminance=...)"
+      },
+      "QualityReason": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "QualityReport": {
+        "kind": "class",
+        "signature": "(image_digest, policy, reasons, action, metrics=...)"
+      },
+      "assess_image_quality": {
+        "kind": "function",
+        "signature": "(image, policy)"
+      },
+      "run_quality_gated_vlm": {
+        "kind": "function",
+        "signature": "(provider, request, policy)"
+      }
+    },
     "openmed.ner": {
       "BUILTIN_MODEL_RECORDS": {
         "kind": "constant",

@@ -263,6 +263,7 @@ def test_dataset_integrity_license_and_cap_fail_closed_with_typed_states() -> No
     )
 
 
+@pytest.mark.slow
 @given(seed=st.integers(min_value=0, max_value=2**31 - 1))
 def test_seeded_split_is_reproducible_and_stratified(seed: int) -> None:
     plan = load_journey_specialist_pack()

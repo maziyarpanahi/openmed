@@ -9,8 +9,8 @@ inference.
 ## Overview
 
 `evaluate_asset_limits(profile, manifest, modality)` accepts a `LimitProfile`,
-a canonical `AssetManifest` instance or a metadata mapping, and one of the four
-manifest modalities (`image`, `pdf`, `dicom`, `audio`). It returns a list of
+a canonical `AssetManifest` instance or a metadata mapping, and a manifest
+modality (`image`, `pdf`, `dicom`, `audio`, `waveform`, `dicom_non_pixel`). It returns a list of
 `LimitFinding` values; an empty list means every rule the modality can express
 was evaluated and passed.
 
@@ -54,6 +54,31 @@ defaults (`render_pdf.py`) so the tree carries one policy; the other values are
 unbenchmarked starting points. Existing renderer behaviour is unchanged by this
 module.
 
+## Waveform limit profiles (v1.1)
+
+`MOBILE_V1_1` and `DESKTOP_V1_1` preserve the original ceilings above and add:
+
+| Limit | `MOBILE_V1_1` | `DESKTOP_V1_1` |
+| --- | ---: | ---: |
+| `max_channel_count` | 32 | 256 |
+| `max_sample_rate_hz` | 10,000 | 100,000 |
+| `max_samples_per_channel` | 3,000,000 | 180,000,000 |
+| `max_total_samples` | 16,000,000 | 64,000,000 |
+
+These are unbenchmarked admission-policy choices, not measured device limits or
+clinical qualification. The waveform modality checks bytes, duration, channels,
+rate, per-channel samples and total samples. Total samples charge
+`channel_count * max(samples_per_channel, ceil(duration_seconds * sample_rate_hz))`.
+Missing any factor yields `insufficient_metadata`. Products saturate at
+`2**63 - 1`; overflow produces `arithmetic_saturated` and rejects even when the
+configured ceiling equals the saturation bound. Count consistency is a separate
+metadata check and must also pass. Non-pixel DICOM checks bytes only.
+
+A waveform evaluation requires a v1.1 limit profile; passing a v1.0 profile
+raises the content-free `AssetLimitError`. Original v1.0 profiles and their
+serialized output are unchanged. Use a v1.1 profile's `with_limits()` to change
+waveform ceilings. All four waveform ceilings are required and revalidated.
+
 ## Rules by modality
 
 | Rule | `image` | `pdf` | `dicom` | `audio` |
@@ -74,12 +99,14 @@ product is bounded by `MAX_PIXEL_PRODUCT` (the cube of that bound).
 ## Findings
 
 Findings are returned in a fixed, documented order: `byte_size`, `pages`,
-`pixels`, `total_pixels`, `frames`, `duration_seconds`. Each carries:
+`pixels`, `total_pixels`, `frames`, `duration_seconds`, `channel_count`,
+`sample_rate_hz`, `samples_per_channel`, `total_samples`. Each carries:
 
-- `field_name`: one of the six limit fields above.
+- `field_name`: one of the limit fields above.
 - `reason_code`: `limit_exceeded` (the observed value is above the ceiling) or
   `insufficient_metadata` (the rule could not be evaluated; `observed` is
-  `null`).
+  `null`), or `arithmetic_saturated` (a waveform product overflowed; observed
+  is the signed 64-bit saturation ceiling).
 - `limit`: the inclusive ceiling that applied.
 - `observed`: the number the manifest yielded, or `null`.
 
@@ -88,3 +115,136 @@ they are separate from the manifest-profile `ValidationFinding` and from the
 coarse abstention reason codes. The preflight report carries the coarse
 `RESOURCE_LIMIT` abstention alongside these detailed findings for exceeded or
 unevaluable limits.
+
+
+## ZIP document admission
+
+The Python DOCX, PPTX, XLSX, EPUB and ODT adapters now admit the complete ZIP
+container before reading selected content or handing it to an optional library.
+This is separate from manifest preflight: it checks the actual local archive,
+including unused parts. Existing text, character offsets and XLSX cell-coordinate
+reports are preserved for admitted packages. OpenMedKit currently has no matching
+ZIP document ingesters; this change adds no Swift format capability.
+
+Default ceilings come from `openmed.interop.archive_safety.ArchiveSafetyPolicy`:
+10,000 entries, 128 MiB per uncompressed member, 512 MiB total uncompressed bytes,
+100x expansion per member and 4,096 characters per member path. The directory
+scan also limits central-directory metadata to 16 MiB before `ZipFile` allocates
+it. Multi-disk and ZIP64 central directories are unsupported (ordinary ZIP64
+local headers within these limits are accepted). Only stored and raw-DEFLATE
+members are admitted. Encrypted entries, links, duplicate/unsafe paths and any
+quarantine or rejection from the existing policy fail closed.
+
+Metadata is checked before any member decompression. Actual member output is
+then streamed and discarded in chunks of at most 64 KiB, stopping at the declared
+size plus one byte, with CRC and DEFLATE termination verification. This detects
+forged sizes even when both headers and a prefix CRC agree. EPUB/ODT selected
+members use this same bounded reader. OOXML libraries receive the same open file
+only after every member passes admission; DOCX/PPTX write-back reloads are also
+admitted. Callers must not modify a source during processing. This bounds ZIP
+expansion, not XML parsing or optional-library memory, and is not decoder sandboxing.
+
+Callers can tighten limits with the keyword `archive_policy` on `extract_docx`,
+`extract_pptx`, `extract_epub`, `extract_odt` and `redact_xlsx`. The existing policy
+rejects attempts to raise its safety ceilings. Dispatcher calls use the defaults.
+
+```python
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+from openmed.multimodal import extract_odt
+from openmed.multimodal.exceptions import ArchiveDocumentError
+
+limits = ArchiveSafetyPolicy(max_member_uncompressed_bytes=8 * 1024**2)
+try:
+    document = extract_odt(source_path, archive_policy=limits)
+except ArchiveDocumentError as error:
+    # Controlled code and finding count only; no paths, member names or content.
+    diagnostic = {"reason_code": error.reason_code, "count": error.count}
+```
+
+`ArchiveDocumentError` subclasses `UnsupportedDocumentError`. Archive-policy
+reason codes are preserved (`entry_limit`, `member_size_limit`, `total_size_limit`,
+`expansion_ratio`, `path_traversal`, and other structural codes). Additional codes
+are `archive_invalid`, `archive_metadata_limit`, `archive_zip64_directory`,
+`archive_encrypted`, `archive_compression`, `archive_size_mismatch`, `archive_crc`,
+`archive_member_missing` and `archive_mimetype`. If several findings exist, the
+first code in sorted policy order and its count are reported. Exception messages
+contain only that code and count, and suppress upstream ZIP exception messages.
+XML entity handling remains a separate format-specific boundary.
+
+Offline synthetic allocation tests in
+`tests/unit/multimodal/test_archive_admission.py` assert a **4 MiB peak Python
+allocation ceiling** using `tracemalloc` around admission of high-ratio,
+oversized-member, excess-entry and forged-size fixtures for all five formats.
+Fixture construction occurs outside the measurement. A streamed 100 MiB
+high-ratio ODT is also rejected under this ceiling with default limits. These
+are fixture-specific Python allocation gates, not process RSS or a universal
+memory guarantee for every archive or downstream decoder. Integration tests
+compare actual optional parsers with an unchecked negative control, preserving
+text/spans and XLSX values/coordinate reports. No external media or model assets
+are used.
+
+## Admission in Python redaction handlers
+
+`redact_image`, the image and PDF `redact_document` handlers, the PDF rasterizer,
+and `redact_dicom_pixels` now enforce resource admission before pixel decoding.
+They use `MOBILE_V1` by default. Set `asset_limit_profile` on the existing policy
+mapping or object to select `DESKTOP_V1` or a validated `LimitProfile.with_limits`
+override. There is no disable switch:
+
+```python
+from openmed.multimodal import MOBILE_V1, RedactionAdmissionError, redact_image
+
+policy = {"asset_limit_profile": MOBILE_V1.with_limits(max_frames=32)}
+try:
+    result = redact_image(source, policy=policy, models=local_models)
+except RedactionAdmissionError as error:
+    # These fields contain controlled codes and numbers, never source details.
+    finding = (error.reason_code, error.field_name, error.limit, error.observed)
+```
+
+Admission checks the byte ceiling and a bounded media signature first. PNG/JPEG
+geometry uses the existing header readers. PNG animation declarations, JPEG
+multi-picture indexes and classic TIFF directories are counted without decoding
+pixels; secondary JPEG frame geometry is checked too. TIFF strip/tile payloads
+are not read, and identifying tags are never interpreted or returned. Metadata
+reads are capped at 64 KiB,
+and PNG traversal at 4,096 chunk headers. Sparse TIFF directory offsets may
+span the admitted file but remain subject to the cumulative read budget.
+BigTIFF and unknown image signatures fail closed.
+
+PDF admission uses the bounded page-tree reader and its existing object and
+object-stream expansion bounds. Review/rejected geometry (including count
+mismatches) is refused. Raster budgets use the full media boxes and the actual
+rendering resolution, rounding each pixel dimension up; a small crop cannot
+hide the renderer's initial full-page allocation. This is a
+separate handler admission calculation; the manifest-only evaluator still
+does not infer PDF raster geometry. Page count and raster budgets are checked
+again before each rendering call, and page iteration is bounded during both
+text and table extraction in the redaction handler.
+
+DICOM admission uses pydicom in metadata-only mode over a transport that caps
+cumulative reads at 64 KiB, bounds offsets by file size, and refuses unbounded
+reads. Admission uses only numeric rows, columns and frame count. Deflated
+datasets requiring an unbounded read, malformed headers, unknown signatures,
+and missing pixel geometry fail closed. Metadata-only DICOM without pixels
+retains the existing header-only behavior. The actual decoded array shape is
+checked before copying or iterating, and excess frames are refused rather than
+silently truncated. This does not sandbox the decoder or bound its internal
+allocation when a malicious header under-declares the payload; decoder
+isolation remains a separate workstream.
+
+`RedactionAdmissionError` is a `ValueError` with `reason_code`, `field_name`,
+`limit`, and `observed` attributes. Limit refusals reuse `limit_exceeded` and
+`insufficient_metadata`; structural refusals retain bounded-reader categories
+such as `pdf_page_limit`, `page_count_mismatch` or
+`image_pixel_limit_exceeded`. Transport and profile failures use controlled
+categories such as `header_byte_limit`, `header_offset_invalid`,
+`preflight_source_read_error` and `limit_profile_invalid`. Exception messages
+contain only these codes, numbers and nulls. Seekable caller streams are
+restored after admission and are never closed. Refused admission creates no
+output file. Accepted media retains its existing redaction and OCR behavior.
+
+This change is scoped to the existing Python entry points named above; it does
+not introduce a Swift session API, batch orchestration, cloud provider, model
+qualification or clinical action. Resource admission is neither PHI-absence
+verification nor a guarantee that decoding fits a device's memory budget.

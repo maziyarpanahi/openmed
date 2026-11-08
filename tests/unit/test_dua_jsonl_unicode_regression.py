@@ -5,17 +5,25 @@ import pytest
 from openmed.eval.datasets._dua import load_json_rows
 
 
-@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
-@pytest.mark.parametrize("suffix", [".jsonl", ".ndjson"])
-def test_literal_unicode_separators_remain_inside_json_strings(
-    tmp_path, separator, suffix
-):
-    rows = [{"text": "synthetic" + separator + "note"}, {"text": "second note"}]
-    path = tmp_path / ("synthetic" + suffix)
-    path.write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in rows), encoding="utf-8"
-    )
-    assert load_json_rows(path, dataset="synthetic", authority="test") == rows
+def test_literal_unicode_separators_remain_inside_json_strings(subtests, tmp_path):
+    case_root = tmp_path
+    for separator in ["\u0085", "\u2028", "\u2029"]:
+        for suffix in [".jsonl", ".ndjson"]:
+            with subtests.test(separator=separator, suffix=suffix):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                rows = [
+                    {"text": "synthetic" + separator + "note"},
+                    {"text": "second note"},
+                ]
+                path = tmp_path / ("synthetic" + suffix)
+                path.write_text(
+                    "\n".join(json.dumps(row, ensure_ascii=False) for row in rows),
+                    encoding="utf-8",
+                )
+                assert (
+                    load_json_rows(path, dataset="synthetic", authority="test") == rows
+                )
 
 
 def test_crlf_blank_lines_and_final_record_without_newline(tmp_path):

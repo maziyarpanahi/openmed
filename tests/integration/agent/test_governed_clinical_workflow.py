@@ -44,21 +44,25 @@ from tests.fixtures.agent.governed_workflow import (
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("interrupt_after", [0, 1, 2, 3])
 def test_interrupted_and_uninterrupted_runs_have_identical_evidence(
-    tmp_path, interrupt_after: int
+    subtests, tmp_path
 ) -> None:
-    baseline = run_synthetic_workflow(tmp_path / "baseline", interrupt_after=0)
-    recovered = run_synthetic_workflow(
-        tmp_path / "recovered", interrupt_after=interrupt_after
-    )
-    assert recovered == baseline
-    assert recovered["effect_count"] == 3
-    assert recovered["replay_matched"]
-    serialized = json.dumps(recovered, sort_keys=True)
-    assert PRIVATE_MARKER not in serialized
-    for path in (tmp_path / "recovered").rglob("*.json"):
-        assert PRIVATE_MARKER not in path.read_text()
+    case_root = tmp_path
+    for interrupt_after in [0, 1, 2, 3]:
+        with subtests.test(interrupt_after=interrupt_after):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            baseline = run_synthetic_workflow(tmp_path / "baseline", interrupt_after=0)
+            recovered = run_synthetic_workflow(
+                tmp_path / "recovered", interrupt_after=interrupt_after
+            )
+            assert recovered == baseline
+            assert recovered["effect_count"] == 3
+            assert recovered["replay_matched"]
+            serialized = json.dumps(recovered, sort_keys=True)
+            assert PRIVATE_MARKER not in serialized
+            for path in (tmp_path / "recovered").rglob("*.json"):
+                assert PRIVATE_MARKER not in path.read_text()
 
 
 @pytest.mark.integration

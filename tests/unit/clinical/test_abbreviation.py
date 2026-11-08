@@ -32,20 +32,21 @@ STARTER = (
 )
 
 
-@pytest.mark.parametrize("case", json.loads(FIXTURE.read_text(encoding="utf-8")))
-def test_golden_contexts_resolve_ambiguous_senses(case: dict) -> None:
-    sense = disambiguate_abbreviation(
-        case["short_form"],
-        case["text"],
-        section=case["section"],
-        entity_types=case["entity_types"],
-    )
+def test_golden_contexts_resolve_ambiguous_senses(subtests) -> None:
+    for case in json.loads(FIXTURE.read_text(encoding="utf-8")):
+        with subtests.test(case=case):
+            sense = disambiguate_abbreviation(
+                case["short_form"],
+                case["text"],
+                section=case["section"],
+                entity_types=case["entity_types"],
+            )
 
-    assert sense is not None, case["id"]
-    assert sense.long_form == case["expected_long_form"], case["id"]
-    assert 0.0 < sense.score <= 1.0
-    assert sense.alternatives
-    assert sense.matched_features
+            assert sense is not None, case["id"]
+            assert sense.long_form == case["expected_long_form"], case["id"]
+            assert 0.0 < sense.score <= 1.0
+            assert sense.alternatives
+            assert sense.matched_features
 
 
 def test_scores_and_alternatives_are_deterministic_and_normalized() -> None:

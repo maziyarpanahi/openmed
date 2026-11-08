@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import {
   BrowserContext,
   ConsoleMessage,
+  Locator,
   Page,
   TestInfo,
   expect,
@@ -566,6 +567,22 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
       }),
   );
   expect(running, "reduced motion left active animations").toEqual([]);
+}
+
+async function waitForSearchReady(page: Page): Promise<void> {
+  // The search worker loads the page's lunr language packs after network idle.
+  // Wait for its localized ready placeholder so a test never ends, or audits
+  // the console, while that request is still in flight.
+  const placeholder = await page.evaluate(
+    () =>
+      JSON.parse(document.getElementById("__config")?.textContent ?? "{}")
+        .translations?.["search.result.placeholder"] as string | undefined,
+  );
+  expect(placeholder, "search ready placeholder").toBeTruthy();
+  await expect(page.locator(".md-search-result__meta")).toHaveText(
+    placeholder as string,
+    { timeout: 20_000 },
+  );
 }
 
 function expectCleanAudit(audit: Audit): void {
@@ -1172,13 +1189,15 @@ test("docs drawer traps focus and returns it on Escape", async ({
   expectCleanAudit(audit);
 });
 
+function docsSearchReadyState(page: Page): Locator {
+  return page
+    .locator('[data-md-component="search-result"] .md-search-result__meta')
+    .filter({ hasText: /^\s*Type to start searching\s*$/u });
+}
+
 async function expectDocsSearchReady(page: Page): Promise<void> {
-  // These flows audit search as well as navigation. Leaving a page before its
-  // worker initializes cancels importScripts in WebKit under route interception.
-  // Require the real ready state instead of filtering its console errors.
-  await expect(
-    page.locator('[data-md-component="search-result"] .md-search-result__meta'),
-  ).toHaveText("Type to start searching");
+  // Keep the page open until its worker is ready, within the test's deadline.
+  await docsSearchReadyState(page).waitFor({ state: "attached" });
 }
 
 test("docs navigation readiness refuses a missing search dependency", async ({
@@ -1196,7 +1215,8 @@ test("docs navigation readiness refuses a missing search dependency", async ({
   });
   await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
   await expect.poll(() => intercepted).toBeGreaterThan(0);
-  await expect(expectDocsSearchReady(page)).rejects.toThrow();
+  const readiness = expect(docsSearchReadyState(page)).toBeAttached();
+  await expect(readiness).rejects.toThrow();
 });
 
 const governedDocRoutes = [
@@ -1253,34 +1273,33 @@ for (const width of [390, 1440]) {
   }
 }
 
+const clinicalOverview = "/docs/clinical/clinical-brief/";
 const clinicalDocRoutes = [
-  ["Clinical NLI", "/docs/clinical/nli-label-contract/", "", ""],
-  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "Clinical NLI", "/docs/clinical/nli-label-contract/"],
-  ["Social Determinants", "/docs/clinical/sdoh-extraction/", "", ""],
-  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", "", ""],
-  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "Context, Grounding and Journey", "/docs/clinical/journey-contracts/"],
+  ["Clinical NLI", "/docs/clinical/nli-label-contract/", clinicalOverview],
+  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "/docs/clinical/nli-label-contract/"],
+  ["Social Determinants", "/docs/clinical/sdoh-extraction/", clinicalOverview],
+  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "/docs/clinical/sdoh-extraction/"],
+  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", clinicalOverview],
+  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "/docs/clinical/journey-contracts/"],
 ] as const;
 
-for (const [name, route, group, groupRoute] of clinicalDocRoutes) {
+for (const [name, route, parentRoute] of clinicalDocRoutes) {
   test(`docs clinical topics expose ${name}`, async ({ baseURL, page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await prepareTheme(page, "light");
     const audit = monitorPage(page, baseURL);
-    await page.goto("/docs/clinical/clinical-brief/", { waitUntil: "domcontentloaded" });
+    await page.goto(parentRoute, { waitUntil: "domcontentloaded" });
     await expectDocsSearchReady(page);
-    const navigation = page.locator(".md-sidebar--primary");
-    const follow = async (linkName: string, expectedRoute: string): Promise<void> => {
-      await navigation.getByRole("link", { name: linkName, exact: true }).click();
-      await expect(page).toHaveURL(new URL(expectedRoute, baseURL).href);
-      await expect(page.locator("h1")).toBeVisible();
-      await expectDocsSearchReady(page);
-      await expectNoPageOverflow(page);
-    };
-    if (group) await follow(group, groupRoute);
-    await follow(name, route);
+    await page
+      .locator(".md-sidebar--primary")
+      .getByRole("link", { name, exact: true })
+      .click();
+    await expect(page).toHaveURL(new URL(route, baseURL).href);
+    await expect(page.locator("h1")).toBeVisible();
+    await expectDocsSearchReady(page);
+    await expectNoPageOverflow(page);
     expectCleanAudit(audit);
   });
 }
@@ -1323,12 +1342,41 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await search.click();
   await expect(search).toBeFocused();
   await expect(page.locator("#__search")).toBeChecked();
-  await search.pressSequentially("OpenMedSpan");
+  // Material submits on keyup. Fill first, then submit one complete query so
+  // partial-query results cannot replace the overflow fixture attached below.
+  await search.fill("OpenMedSpan");
+  await search.press("End");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
   await expect(page.locator(".md-search-result__link").first()).toBeVisible();
+  // Wait for the complete query, then exercise a newly inserted long snippet.
+  // Its width is independent of platform fonts and search-index ranking.
+  const resultArticle = page.locator(".md-search-result__article")
+    .filter({ hasText: "OpenMedSpan" }).first();
+  await expect(resultArticle).toBeVisible();
+  await resultArticle.evaluate((article) => {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.id = "synthetic-search-overflow";
+    code.textContent = "synthetic_long_reference_".repeat(80);
+    pre.append(code);
+    article.append(pre);
+  });
+  const searchCode = page.locator("#synthetic-search-overflow");
+  await expect(searchCode).toBeVisible();
+  expect(await searchCode.evaluate((region) =>
+    region.scrollWidth > region.clientWidth + 1,
+  )).toBe(true);
+  await expect(searchCode).toHaveAttribute("tabindex", "0");
+  await searchCode.focus();
+  await expect(searchCode).toBeFocused();
+  await searchCode.press("ArrowRight");
+  await expect.poll(async () =>
+    searchCode.evaluate((region) => region.scrollLeft),
+  ).toBeGreaterThan(0);
+  await search.focus();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();
@@ -1346,6 +1394,9 @@ test("docs search, locale, theme, and code copy controls operate", async ({
     "data-md-color-scheme",
     "slate",
   );
+  // Worker language requests can outlive page network idle after a reload.
+  // Finish initialization before navigation tears down the worker.
+  await waitForSearchReady(page);
 
   await page.goto("/docs/getting-started/", { waitUntil: "networkidle" });
   const copy = page.getByRole("button", { name: "Copy to clipboard" }).first();
@@ -1356,11 +1407,14 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   );
   await copy.scrollIntoViewIfNeeded();
   await expectAccessible(page);
+  await waitForSearchReady(page);
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+  await waitForSearchReady(page);
   await page.goto("/docs/hi/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await waitForSearchReady(page);
   expectCleanAudit(audit);
 });
 
@@ -1377,7 +1431,9 @@ test("docs deep links, admonitions, tabs, and tables are explicit", async ({
   );
   expect(apiResponse?.status()).toBe(200);
   await expect(page.locator("#openmed\\.PIIEntity")).toBeAttached();
-  await expect(page).toHaveURL(/#openmed\.PIIEntity$/);
+  await expect(page.locator("#piientity")).toBeInViewport();
+  // Material's navigation.tracking may normalize the API alias to its heading.
+  await expect(page).toHaveURL(/#(?:openmed\.PIIEntity|piientity)$/);
 
   await page.goto("/docs/onboarding-india/", {
     waitUntil: "networkidle",

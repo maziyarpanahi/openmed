@@ -19,41 +19,37 @@ from openmed.clinical import (
 PRIVATE_SENTINEL = "SYNTHETIC_SOURCE_VALUE"
 
 
-@pytest.mark.parametrize(
-    "flags",
-    [
+def test_conflicting_approval_never_invokes_generator(subtests) -> None:
+    for flags in [
         {"approved": True, "is_approved": False},
         {"approved": True, "review_status": "rejected"},
         {"approved": True, "approval": {"approved": False}},
         {"approval": {"approved": True, "status": "pending"}},
-    ],
-)
-def test_conflicting_approval_never_invokes_generator(flags) -> None:
-    result = guard_summary_generation(
-        [{"text": PRIVATE_SENTINEL, **flags}],
-        lambda _: pytest.fail("unapproved evidence reached generator"),
-    )
-    assert isinstance(result, SummaryEmptyEvidenceRefusal)
+    ]:
+        with subtests.test(flags=flags):
+            result = guard_summary_generation(
+                [{"text": PRIVATE_SENTINEL, **flags}],
+                lambda _: pytest.fail("unapproved evidence reached generator"),
+            )
+            assert isinstance(result, SummaryEmptyEvidenceRefusal)
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
+def test_empty_or_unknown_payload_refuses(subtests) -> None:
+    for evidence in [
         {"evidence": []},
         {"evidence": {"records": []}},
         [{"text": ""}],
         [{"text": None}],
         [{"unexpected": PRIVATE_SENTINEL}],
         [{"approved": True, "evidence": []}],
-    ],
-)
-def test_empty_or_unknown_payload_refuses(evidence) -> None:
-    assert isinstance(
-        guard_summary_generation(
-            evidence, lambda _: pytest.fail("empty payload reached generator")
-        ),
-        SummaryEmptyEvidenceRefusal,
-    )
+    ]:
+        with subtests.test(evidence=evidence):
+            assert isinstance(
+                guard_summary_generation(
+                    evidence, lambda _: pytest.fail("empty payload reached generator")
+                ),
+                SummaryEmptyEvidenceRefusal,
+            )
 
 
 def test_refusal_exception_revalidates_typed_input() -> None:

@@ -26,13 +26,13 @@ Keep `.editorconfig`, Ruff, pre-commit, Swift format scripts, Make targets, docu
 
 ## Coding Style & Architecture Rules
 
-Use Python 3.10+, 4-space indentation, and 88-character lines. Prefer `snake_case` for functions and modules, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants. Public APIs need Google-style docstrings.
+Use Python 3.11+, 4-space indentation, and 88-character lines. Prefer `snake_case` for functions and modules, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants. Public APIs need Google-style docstrings.
 
 Preserve local-first defaults: no mandatory network calls after model download, no telemetry by default, no raw PHI in logs, caches, temp files, or audit artifacts. Audit reports should use offsets, hashes, provenance, and risk scores rather than plaintext identifiers. Core dependencies must remain permissive-license compatible; GPL, source-available, proprietary, DUA-gated data, UMLS, SNOMED CT, CPT, MIMIC, i2b2, and n2c2 assets must not be bundled. Put restricted integrations behind optional user-supplied keys or out-of-process bridges.
 
 ## Testing and Release Gates
 
-Pytest discovers `test_*.py` and `*_test.py`. Mark external or end-to-end cases with `@pytest.mark.integration`; mark expensive checks with `@pytest.mark.slow`. Keep bundled tests offline-friendly through mocks or synthetic fixtures.
+Pytest discovers `test_*.py` and `*_test.py`. Mark external or end-to-end cases with `@pytest.mark.integration`; mark expensive checks with `@pytest.mark.slow`. Pull requests run `-m "not slow and not fuzz"`; pushes to `master` and PRs labelled `full-ci` run everything. Keep bundled tests offline-friendly through mocks or synthetic fixtures. Do not add wall-clock thresholds, exact byte budgets or assertions on the versions currently in `uv.lock`; see `docs/testing.md`.
 
 For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identifier recall, critical leakage, span integrity, deterministic safety sweeps, date shifting, surrogate consistency, multilingual IDs, and quantized-model recall deltas when touching those paths. Committed golden data must be synthetic; DUA datasets are eval-only and never committed.
 
@@ -61,6 +61,17 @@ must still pass before a release is considered done.
 ## Commit & Pull Request Guidelines
 
 Recent history uses concise imperative commits, often with prefixes such as `fix:`. Keep commits and PRs focused on the requested change. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
+
+Before pushing or merging, run `python scripts/release/check_repo_policy.py
+--commits origin/master HEAD` (substitute the actual target branch when needed).
+This checks every incoming commit, including merge side parents, for forbidden
+author/committer identities and attribution footers. Checking only the PR opener,
+primary author, latest commit, or first-parent log is insufficient. Preserve
+human contributor identity when correcting metadata. Never bypass the required
+`Commit attribution policy` status. Its trusted base-branch validator runs in the
+Secret Scan workflow and posts the result on the exact PR head; it never executes
+PR code. Keep the repository ruleset active, with no bypass actors, for `master`
+and `release/**` branches. A missing or failed check must block the merge.
 
 Pull requests should follow `.github/PULL_REQUEST_TEMPLATE.md`: description, change type, tests run, docs or changelog updates when applicable, dependency justification, linked issue, and screenshots or example output for UI/docs changes.
 

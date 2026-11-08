@@ -73,6 +73,8 @@ GPL_BRIDGE_EXCEPTIONS = {
 }
 
 REVIEWED_LICENSES = {
+    "sherpa-onnx": "Apache-2.0",
+    "psutil": "BSD-3-Clause",
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
     "aiohttp": "Apache-2.0 AND MIT",
@@ -93,10 +95,15 @@ REVIEWED_LICENSES = {
     "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
+    # 3.20.3 uses Unlicense; the patched 4.x line uses MIT.
+    "filelock": "MIT OR Unlicense",
     "fsspec": "BSD-3-Clause",
     "gcsfs": "BSD-3-Clause",
     "gitpython": "BSD-3-Clause",
+    "gliclass": "Apache-2.0",
     "gliner": "Apache-2.0",
+    "gliformer": "Apache-2.0",
+    "gliner2": "Apache-2.0",
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
     "h2": "MIT",
@@ -127,6 +134,8 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "mlx-lm": "MIT",
+    "mlx-whisper": "MIT",
+    "mlx-vlm": "MIT",
     "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "multidict": "Apache-2.0",
@@ -154,6 +163,8 @@ REVIEWED_LICENSES = {
     "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
+    # Reviewed against pyasn1/pyasn1 v0.6.5 LICENSE.rst (two-clause BSD).
+    "pyasn1": "BSD-2-Clause",
     "pycld2": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pymongo": "Apache-2.0",
@@ -176,7 +187,9 @@ REVIEWED_LICENSES = {
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
     "scrubadub": "Apache-2.0",
+    "scikit-learn": "BSD-3-Clause",
     "scispacy": "Apache-2.0",
+    "setuptools": "MIT",
     "snowflake-snowpark-python": "Apache-2.0",
     "spacy": "MIT",
     "sqlalchemy": "MIT",

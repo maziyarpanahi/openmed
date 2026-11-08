@@ -137,18 +137,16 @@ def test_citations_keep_their_claim_attachment_and_word_boundaries() -> None:
     assert normalize_summary_text("one[1]two") == "one [1] two"
 
 
-@pytest.mark.parametrize(
-    "source",
-    [
+def test_code_and_markdown_reference_syntax_is_preserved(subtests) -> None:
+    for source in [
         "```text\n  + quoted   code [ 1 ]\n```",
         "Use `x[1]` exactly.",
         "[1]: synthetic-reference",
         "See [1][note] for detail.",
         "Measured [1】 units.",
-    ],
-)
-def test_code_and_markdown_reference_syntax_is_preserved(source) -> None:
-    assert normalize_summary_text(source) == source
+    ]:
+        with subtests.test(source=source):
+            assert normalize_summary_text(source) == source
 
 
 def test_broken_operation_iterator_drops_sensitive_exception_context() -> None:

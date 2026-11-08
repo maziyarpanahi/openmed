@@ -7,6 +7,8 @@ adapter, and the English default.
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
 
 import openmed.multimodal.base as base
@@ -20,6 +22,7 @@ from openmed.multimodal.ocr import (
     paddle_language,
     tesseract_language,
 )
+from tests.fixtures.multimodal.redaction_assets import png
 
 # The 12 wired OpenMed PII languages.
 PII_LANGUAGES = ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr")
@@ -85,7 +88,9 @@ class TestRedactDocumentLanguageWiring:
         monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
         monkeypatch.setattr(ocr_mod, "resolve_engine", lambda e=None: engine)
 
-        doc = redact_document("scan.png", lang="fr")
+        source = BytesIO(png())
+        source.name = "scan.png"
+        doc = redact_document(source, lang="fr")
 
         assert isinstance(doc, ExtractedDocument)
         assert engine.last_languages == ["fr"]
@@ -95,6 +100,8 @@ class TestRedactDocumentLanguageWiring:
         monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
         monkeypatch.setattr(ocr_mod, "resolve_engine", lambda e=None: engine)
 
-        redact_document("scan.png")
+        source = BytesIO(png())
+        source.name = "scan.png"
+        redact_document(source)
 
         assert engine.last_languages == ["en"]

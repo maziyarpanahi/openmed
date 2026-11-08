@@ -90,27 +90,27 @@ def test_abdm_recognizer_rejects_malformed_numbers() -> None:
     assert ABDMRecognizer().detect_entities(text) == []
 
 
-@pytest.mark.parametrize(
-    "alias",
-    ("in", "hi", "te", "en_IN", "hi_IN"),
-)
-def test_abdm_registry_surrogates_round_trip_for_all_india_aliases(alias: str) -> None:
-    faker = Faker("en_IN")
-    register_clinical_providers(faker)
-    faker.seed_instance(672)
+def test_abdm_registry_surrogates_round_trip_for_all_india_aliases(subtests) -> None:
+    for alias in ("in", "hi", "te", "en_IN", "hi_IN"):
+        with subtests.test(alias=alias):
+            faker = Faker("en_IN")
+            register_clinical_providers(faker)
+            faker.seed_instance(672)
 
-    for id_type in (
-        "abha_number",
-        "abha_address",
-        "aadhaar",
-        "pan",
-        "abdm_hpr_id",
-        "abdm_hfr_id",
-    ):
-        spec = get_national_id(alias, id_type)
-        assert spec is not None
-        surrogate = getattr(faker, spec.faker_method)()
-        assert spec.validate(surrogate), f"invalid {alias}/{id_type}: {surrogate}"
+            for id_type in (
+                "abha_number",
+                "abha_address",
+                "aadhaar",
+                "pan",
+                "abdm_hpr_id",
+                "abdm_hfr_id",
+            ):
+                spec = get_national_id(alias, id_type)
+                assert spec is not None
+                surrogate = getattr(faker, spec.faker_method)()
+                assert spec.validate(surrogate), (
+                    f"invalid {alias}/{id_type}: {surrogate}"
+                )
 
 
 def test_generated_abha_and_aadhaar_pass_registered_validators() -> None:
@@ -168,19 +168,15 @@ def test_india_locale_auto_enables_abdm_bundle(
     assert {entity.label for entity in result.pii_entities} == _EXPECTED_LABELS
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    (
+def test_abdm_mode_resolver_covers_policy_language_and_locale(subtests) -> None:
+    for kwargs in (
         {"lang": "hi", "locale": "en_US"},
         {"lang": "te", "locale": "en_US"},
         {"lang": "en", "locale": "hi_IN"},
         {"policy": "india_dpdp_act", "lang": "en", "locale": "en_US"},
-    ),
-)
-def test_abdm_mode_resolver_covers_policy_language_and_locale(
-    kwargs: dict[str, str],
-) -> None:
-    assert abdm_mode_enabled(None, **kwargs)
+    ):
+        with subtests.test(kwargs=kwargs):
+            assert abdm_mode_enabled(None, **kwargs)
 
 
 def test_explicit_abdm_false_overrides_india_auto_activation(

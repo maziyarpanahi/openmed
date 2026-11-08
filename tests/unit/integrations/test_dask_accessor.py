@@ -21,6 +21,7 @@ def _fake_batch_result(texts):
     return SimpleNamespace(items=items)
 
 
+@pytest.mark.slow
 def test_dataframe_accessor_redacts_once_per_partition_and_preserves_metadata():
     dd = pytest.importorskip("dask.dataframe", exc_type=ImportError)
     pd = pytest.importorskip("pandas", exc_type=ImportError)

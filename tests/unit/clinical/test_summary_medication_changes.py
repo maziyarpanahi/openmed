@@ -60,24 +60,25 @@ def test_renders_confirmed_structured_changes_with_evidence() -> None:
     assert result.advisory == SUMMARY_MEDICATION_CHANGES_ADVISORY
 
 
-@pytest.mark.parametrize("assertion_status", ["possible", "conditional", "refuted"])
-def test_non_confirmed_assertions_are_withheld_for_review(
-    assertion_status: str,
-) -> None:
-    result = render_medication_change_summary(
-        (
-            MedicationChangeRelation(
-                medication="Synthetic B",
-                change_type="started",
-                assertion_status=assertion_status,
-                evidence_ids=(_evidence("d"),),
-            ),
-        )
-    )
+def test_non_confirmed_assertions_are_withheld_for_review(subtests) -> None:
+    for assertion_status in ["possible", "conditional", "refuted"]:
+        with subtests.test(assertion_status=assertion_status):
+            result = render_medication_change_summary(
+                (
+                    MedicationChangeRelation(
+                        medication="Synthetic B",
+                        change_type="started",
+                        assertion_status=assertion_status,
+                        evidence_ids=(_evidence("d"),),
+                    ),
+                )
+            )
 
-    assert result.statements == ()
-    assert [issue.code for issue in result.issues] == ["assertion_not_confirmed"]
-    assert result.review_required is True
+            assert result.statements == ()
+            assert [issue.code for issue in result.issues] == [
+                "assertion_not_confirmed"
+            ]
+            assert result.review_required is True
 
 
 def test_incomplete_dose_change_emits_value_free_review_code() -> None:

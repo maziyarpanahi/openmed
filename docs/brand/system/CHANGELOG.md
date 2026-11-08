@@ -1,5 +1,19 @@
 # Brand system changelog
 
+## 2026-10-30 — Offline governance review
+
+- Rechecked repository-derived language routes, entity vocabulary, local/runtime
+  boundaries, SDK and product license distinctions, and qualified compliance
+  wording against current sources. Regenerated the offline claims snapshot.
+- Kept the six unsupported inventories/performance/comparison claims unverified,
+  without values or public wording; their next evidence follow-up is November 30.
+- Renewed the seven existing site-role reviews and system review through
+  November 30 after the existing source, accessibility and consumer checks.
+  Roles, guardrails, tokens, assets and public claim wording are unchanged.
+- Retained the original observation dates and review deadlines for external
+  GitHub/community evidence and the model-manifest snapshot. No network refresh,
+  social export, analytics installation change or external profile action.
+
 ## 2026.07.0 — 2026-07-29
 
 - Established the repository-owned July 2026 OpenMed design system.
