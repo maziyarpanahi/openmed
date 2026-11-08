@@ -231,6 +231,166 @@ def test_unconfigured_proxy_is_local_and_fails_closed_without_echoing_input():
     assert prompt not in response.text
 
 
+def _tool_call_chunk(
+    arguments: str,
+    *,
+    tool_index: int = 0,
+    choice_index: int = 0,
+    finish_reason: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "choices": [
+            {
+                "index": choice_index,
+                "delta": {
+                    "tool_calls": [
+                        {"index": tool_index, "function": {"arguments": arguments}}
+                    ]
+                },
+                "finish_reason": finish_reason,
+            }
+        ]
+    }
+
+
+def _stream_events(client: TestClient) -> tuple[str, list[dict[str, Any]]]:
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "local-fixture",
+            "stream": True,
+            "messages": [{"role": "user", "content": SYNTHETIC_NAME}],
+        },
+    )
+    assert response.status_code == 200
+    events = [
+        json.loads(line[6:])
+        for line in response.text.splitlines()
+        if line.startswith("data: {")
+    ]
+    return response.text, events
+
+
+def _tool_arguments(events: list[dict[str, Any]], tool_index: int = 0) -> str:
+    fragments: list[str] = []
+    for event in events:
+        for choice in event.get("choices", []):
+            for call in choice.get("delta", {}).get("tool_calls", []):
+                if call.get("index") == tool_index:
+                    fragments.append(call["function"]["arguments"])
+    return "".join(fragments)
+
+
+def _split(text: str, *cut_points: int) -> list[str]:
+    bounds = [0, *cut_points, len(text)]
+    return [text[start:end] for start, end in zip(bounds, bounds[1:])]
+
+
+def test_streaming_tool_call_arguments_restore_placeholder_split_in_two():
+    def transport(payload: dict[str, Any], **_: Any):
+        token = payload["messages"][0]["content"]
+        arguments = '{"patient": "' + token + '"}'
+        middle = arguments.index(token) + len(token) // 2
+        for fragment in _split(arguments, middle):
+            yield _tool_call_chunk(fragment)
+
+    with _client(transport) as client:
+        text, events = _stream_events(client)
+
+    assert json.loads(_tool_arguments(events)) == {"patient": SYNTHETIC_NAME}
+    assert "OPENMED_PHI" not in text
+
+
+def test_streaming_tool_call_arguments_restore_placeholder_split_in_three():
+    def transport(payload: dict[str, Any], **_: Any):
+        token = payload["messages"][0]["content"]
+        arguments = '{"patient": "' + token + '"}'
+        start = arguments.index(token)
+        cuts = (start + 3, start + len(token) - 4)
+        for fragment in _split(arguments, *cuts):
+            yield _tool_call_chunk(fragment)
+
+    with _client(transport) as client:
+        text, events = _stream_events(client)
+
+    assert json.loads(_tool_arguments(events)) == {"patient": SYNTHETIC_NAME}
+    assert "OPENMED_PHI" not in text
+
+
+def test_streaming_tool_call_arguments_never_emit_a_partial_placeholder():
+    def transport(payload: dict[str, Any], **_: Any):
+        token = payload["messages"][0]["content"]
+        arguments = '{"patient": "' + token + '"}'
+        start = arguments.index(token)
+        for fragment in _split(arguments, start + 5, start + 20):
+            yield _tool_call_chunk(fragment)
+
+    with _client(transport) as client:
+        _, events = _stream_events(client)
+
+    for event in events:
+        for choice in event["choices"]:
+            for call in choice["delta"].get("tool_calls", []):
+                assert "<<OPENMED_PHI_" not in call["function"]["arguments"]
+                assert "<<" not in call["function"]["arguments"]
+
+
+def test_streaming_tool_call_arguments_are_buffered_per_tool_call():
+    def transport(payload: dict[str, Any], **_: Any):
+        token = payload["messages"][0]["content"]
+        half = len(token) // 2
+        yield _tool_call_chunk('{"a": "' + token[:half], tool_index=0)
+        yield _tool_call_chunk('{"b": "plain"}', tool_index=1)
+        yield _tool_call_chunk(token[half:] + '"}', tool_index=0)
+
+    with _client(transport) as client:
+        _, events = _stream_events(client)
+
+    assert json.loads(_tool_arguments(events, tool_index=0)) == {"a": SYNTHETIC_NAME}
+    assert json.loads(_tool_arguments(events, tool_index=1)) == {"b": "plain"}
+
+
+def test_streaming_tool_call_arguments_flush_before_the_finish_chunk():
+    def transport(payload: dict[str, Any], **_: Any):
+        # The stream ends mid-prefix, so the held-back text must be released
+        # ahead of the chunk that carries finish_reason.
+        yield _tool_call_chunk('{"a": "x<<OPENMED_')
+        yield _tool_call_chunk("", finish_reason="tool_calls")
+
+    with _client(transport) as client:
+        text, events = _stream_events(client)
+
+    finish_at = next(
+        index
+        for index, event in enumerate(events)
+        if event["choices"][0].get("finish_reason") == "tool_calls"
+    )
+    before_finish = _tool_arguments(events[:finish_at])
+    assert before_finish.endswith("x<<OPENMED_")
+    assert text.rstrip().endswith("data: [DONE]")
+
+
+def test_streaming_tool_call_arguments_reject_unknown_placeholders():
+    def transport(payload: dict[str, Any], **_: Any):
+        yield _tool_call_chunk('{"patient": "<<OPENMED_PHI_NAME_DEADBEEF_')
+        yield _tool_call_chunk('000099>>"}')
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "stream": True,
+                "messages": [{"role": "user", "content": SYNTHETIC_NAME}],
+            },
+        )
+
+    assert response.status_code == 200
+    assert '"reason":"mangled_placeholder"' in response.text
+    assert "data: [DONE]" not in response.text
+    assert "<<OPENMED_PHI_NAME_DEADBEEF_000099>>" not in response.text
+
+
 @pytest.mark.parametrize(
     "content_type",
     ["application/json; charset=utf-8", "Application/JSON; Charset=UTF-8"],
