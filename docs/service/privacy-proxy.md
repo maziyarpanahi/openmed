@@ -6,7 +6,13 @@ listens locally, redacts text before calling an injected inference transport,
 and restores the placeholders only in the local response.
 
 The proxy exposes both `POST /v1/chat/completions` and
-`POST /chat/completions`. A request uses the familiar shape:
+`POST /chat/completions`. Both routes require a single
+`Content-Type: application/json` header and accept parameters such as
+`charset=utf-8`. A missing, repeated, or unsupported content type returns
+HTTP 415 with the reason `unsupported_content_type` before the proxy reads
+the request body.
+
+Send requests using this JSON shape.
 
 ```json
 {

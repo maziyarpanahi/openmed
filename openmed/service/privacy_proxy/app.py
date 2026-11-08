@@ -65,13 +65,10 @@ class PrivacyProxyError(RuntimeError):
         message: str = "Privacy proxy request failed",
         *,
         reason_code: Optional[str] = None,
-        status_code: Optional[int] = None,
     ) -> None:
         super().__init__(message)
         if reason_code is not None:
             self.reason_code = reason_code
-        if status_code is not None:
-            self.status_code = status_code
 
 
 class PrivacyProxyRequestError(PrivacyProxyError):
@@ -80,6 +77,13 @@ class PrivacyProxyRequestError(PrivacyProxyError):
     status_code = 400
     error_code = "privacy_proxy_invalid_request"
     reason_code = "invalid_request"
+
+
+class _UnsupportedRequestMediaTypeError(PrivacyProxyRequestError):
+    """Raised when the chat request lacks a single supported media type."""
+
+    status_code = 415
+    reason_code = "unsupported_content_type"
 
 
 class PrivacyProxyConfigurationError(PrivacyProxyError):
@@ -464,13 +468,13 @@ def create_app(
 
     async def chat_completions(request: Request) -> Any:
         try:
+            content_types = request.headers.getlist("content-type")
+            if len(content_types) != 1:
+                raise _UnsupportedRequestMediaTypeError()
             try:
-                _normalize_content_type(request.headers.get("content-type", ""))
+                _normalize_content_type(content_types[0])
             except UnsupportedContentTypeError:
-                raise PrivacyProxyRequestError(
-                    reason_code="unsupported_content_type",
-                    status_code=415,
-                ) from None
+                raise _UnsupportedRequestMediaTypeError() from None
             try:
                 payload = await request.json()
             except (TypeError, ValueError):

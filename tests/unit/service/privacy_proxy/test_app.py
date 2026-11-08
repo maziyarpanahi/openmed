@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from openmed.service.privacy_proxy.app import create_app
@@ -229,7 +231,11 @@ def test_unconfigured_proxy_is_local_and_fails_closed_without_echoing_input():
     assert prompt not in response.text
 
 
-def test_chat_completion_accepts_json_content_type_with_charset():
+@pytest.mark.parametrize(
+    "content_type",
+    ["application/json; charset=utf-8", "Application/JSON; Charset=UTF-8"],
+)
+def test_chat_completion_accepts_json_content_type_with_charset(content_type: str):
     seen_payloads: list[dict[str, Any]] = []
 
     def transport(payload: dict[str, Any], **_: Any) -> str:
@@ -248,7 +254,7 @@ def test_chat_completion_accepts_json_content_type_with_charset():
         response = client.post(
             "/v1/chat/completions",
             content=body,
-            headers={"Content-Type": "application/json; charset=utf-8"},
+            headers={"Content-Type": content_type},
         )
 
     assert response.status_code == 200
@@ -256,13 +262,26 @@ def test_chat_completion_accepts_json_content_type_with_charset():
     assert len(seen_payloads) == 1
 
 
-def test_chat_completion_rejects_non_json_and_missing_content_type():
-    seen_payloads: list[dict[str, Any]] = []
+@pytest.mark.parametrize("path", ["/v1/chat/completions", "/chat/completions"])
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [("Content-Type", "text/plain")],
+        [],
+        [("Content-Type", "application/json"), ("Content-Type", "text/plain")],
+    ],
+    ids=["non-json", "missing", "conflicting"],
+)
+def test_chat_completion_rejects_unsupported_media_type_without_reading_body(
+    path: str, headers: list[tuple[str, str]], monkeypatch: pytest.MonkeyPatch
+):
+    def read_body(_request: Request) -> None:
+        pytest.fail("Unsupported media type reached the request body reader")
 
-    def transport(payload: dict[str, Any], **_: Any) -> str:
-        seen_payloads.append(payload)
-        return payload["messages"][0]["content"]
+    def transport(*_args: Any, **_kwargs: Any) -> str:
+        pytest.fail("Unsupported media type reached the transport")
 
+    monkeypatch.setattr(Request, "stream", read_body)
     prompt = f"Contact {SYNTHETIC_NAME} at {SYNTHETIC_PHONE}."
     body = json.dumps(
         {
@@ -272,25 +291,29 @@ def test_chat_completion_rejects_non_json_and_missing_content_type():
     ).encode("utf-8")
 
     with _client(transport) as client:
-        plain_response = client.post(
-            "/v1/chat/completions",
-            content=body,
-            headers={"Content-Type": "text/plain"},
-        )
-        missing_request = client.build_request("POST", "/v1/chat/completions")
-        missing_request.headers.pop("content-type", None)
-        missing_response = client.send(missing_request)
+        response = client.post(path, content=body, headers=headers)
 
-    for response in (plain_response, missing_response):
-        assert response.status_code == 415
-        assert response.json() == {
-            "error": {
-                "code": "privacy_proxy_invalid_request",
-                "message": "Privacy proxy request failed",
-                "details": {"reason": "unsupported_content_type"},
-            }
+    assert response.status_code == 415
+    assert response.json() == {
+        "error": {
+            "code": "privacy_proxy_invalid_request",
+            "message": "Privacy proxy request failed",
+            "details": {"reason": "unsupported_content_type"},
         }
-        assert SYNTHETIC_NAME not in response.text
-        assert SYNTHETIC_PHONE not in response.text
-        assert prompt not in response.text
-    assert seen_payloads == []
+    }
+    assert SYNTHETIC_NAME not in response.text
+    assert SYNTHETIC_PHONE not in response.text
+    assert prompt not in response.text
+
+
+def test_chat_completion_returns_safe_400_for_malformed_json():
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            content=f'{{"messages": "{SYNTHETIC_NAME}',
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["details"]["reason"] == "invalid_json"
+    assert SYNTHETIC_NAME not in response.text
