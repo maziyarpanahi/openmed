@@ -439,3 +439,39 @@ function assertSpansClose(actual: OpenMedSpan[], expected: OpenMedSpan[]) {
     assert.ok(Math.abs(actualScore - expectedScore) <= 1e-6);
   }
 }
+
+
+test("duplicate graph shard paths never reach the runtime", async () => {
+  const runtime = createRuntime(["wasm"]);
+  const shard = externalDataShard(0, "/models/openmed/model.onnx.data.000");
+  await assert.rejects(
+    () => loadOrtWebSession({
+      modelPath: "/models/openmed/model.onnx",
+      assetPath: "/models/openmed/ort/",
+      runtime,
+      capabilities: basicWasmProfile,
+      externalData: { shards: [shard, { ...shard, location: "/models/openmed/other.data" }] },
+      cache: new Map(),
+    }),
+    /duplicate shard paths/,
+  );
+  assert.equal(runtime.createCalls.length, 0);
+});
+
+test("different declared shard sizes do not share cached sessions", async () => {
+  const runtime = createRuntime(["wasm"]);
+  const cache = new Map();
+  const shard = externalDataShard(0, "/models/openmed/model.onnx.data.000");
+  const load = (byteLength: number) => loadOrtWebSession({
+    modelPath: "/models/openmed/model.onnx",
+    assetPath: "/models/openmed/ort/",
+    runtime,
+    capabilities: basicWasmProfile,
+    externalData: { shards: [{ ...shard, byteLength }] },
+    cache,
+  });
+  await load(100);
+  await load(100);
+  await load(101);
+  assert.equal(runtime.createCalls.length, 2);
+});

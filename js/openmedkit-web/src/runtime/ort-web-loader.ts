@@ -180,7 +180,7 @@ export function normalizeOrtAssetPath(path: string): string {
 
 export function assertOfflineExternalData(
   options: Pick<OrtWebLoaderOptions, "externalData" | "sessionOptions">,
-): { path: string; data: string }[] | undefined {
+): { path: string; data: string; byteLength: number }[] | undefined {
   if (options.sessionOptions?.externalData !== undefined) {
     throw new Error(
       "ONNX Runtime Web external data must use the typed externalData option.",
@@ -201,6 +201,7 @@ export function assertOfflineExternalData(
           externalData.maxTotalBytes,
           "external data maxTotalBytes",
         );
+  const paths = new Set<string>();
   let totalBytes = 0;
   const files = externalData.shards.map((shard, index) => {
     const label = `external data shard ${index}`;
@@ -208,6 +209,10 @@ export function assertOfflineExternalData(
       path: assertOfflineShardLocation(shard.path, `${label} path`),
       data: assertOfflineShardLocation(shard.location, `${label} location`),
     };
+    if (paths.has(file.path)) {
+      throw new Error("ONNX Runtime Web external data contains duplicate shard paths.");
+    }
+    paths.add(file.path);
     const byteLength = positiveByteCount(shard.byteLength, `${label} byteLength`);
     if (byteLength > maxShardBytes) {
       throw new Error(
@@ -215,7 +220,7 @@ export function assertOfflineExternalData(
       );
     }
     totalBytes += byteLength;
-    return file;
+    return { ...file, byteLength };
   });
   if (totalBytes > maxTotalBytes) {
     throw new Error("ONNX Runtime Web external data exceeds the total byte limit.");
@@ -228,17 +233,21 @@ export async function loadOrtWebSession(
 ): Promise<OrtWebLoadedSession> {
   const modelPath = assertOfflineAssetPath(options.modelPath, "model path");
   const assetPath = normalizeOrtAssetPath(options.assetPath);
-  const externalData = assertOfflineExternalData(options);
+  const sessionOverrides = { ...options.sessionOptions };
+  const externalData = assertOfflineExternalData({
+    ...options,
+    sessionOptions: sessionOverrides,
+  });
   const capabilities = resolveCapabilities(options);
   const backend = selectOrtWebBackend(capabilities);
   const cache = options.cache ?? DEFAULT_ORT_WEB_SESSION_CACHE;
   const sessionOptions: OrtSessionCreateOptions = {
     graphOptimizationLevel: "all",
-    ...(options.sessionOptions ?? {}),
+    ...sessionOverrides,
     executionProviders: backend.executionProviders,
   };
   if (externalData !== undefined) {
-    sessionOptions.externalData = externalData;
+    sessionOptions.externalData = externalData.map(({ path, data }) => ({ path, data }));
   }
   const cacheKey = stableStringify({
     modelPath,
@@ -249,6 +258,7 @@ export async function loadOrtWebSession(
       wasm: backend.wasm,
     },
     sessionOptions,
+    externalDataByteLengths: externalData?.map(({ byteLength }) => byteLength) ?? [],
   });
   const cached = cache.get(cacheKey);
   if (cached !== undefined) {
