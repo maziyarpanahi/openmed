@@ -139,6 +139,82 @@ cd android
 ./gradlew :openmedkit:verifyReleaseConsumerRules
 ```
 
+### Minified consumer verification
+
+`consumer-r8-smoke` is a minimal host app, separate from the demos, that
+consumes the release AAR the way integrators ship it: R8 full mode,
+`isMinifyEnabled = true`, `isShrinkResources = true`, the default
+`proguard-android-optimize.txt`, ABI splits, and no OpenMedKit rules of its own.
+Its code loads the bundled catalog and policy profiles, then runs
+`OpenMedKit.fromDirectory` over a tiny synthetic ONNX lookup model and
+`tokenizer.json` (generated at build time by
+`scripts/android/generate_r8_smoke_model.py`), so tokenizer construction, ONNX
+Runtime session creation, `extractPii`, `extractPiiChunked` and `deidentify`
+are all reachable through R8. It has three flavors: `openmedkit` (the AAR under
+test), `baseline` (the same shell without OpenMedKit) and `missingKeepRule` (the
+AAR with `-keep class ai.onnxruntime.** { *; }` removed from a copy of its
+`proguard.txt`).
+
+```bash
+cd android
+./gradlew :consumer-r8-smoke:verifyR8Consumer
+# Check a published AAR instead of the one built from this checkout:
+./gradlew :consumer-r8-smoke:verifyR8Consumer -PopenmedkitAar=/path/to/openmedkit.aar
+```
+
+`scripts/android/check_r8_consumer.py` reads the split APKs and R8's
+`mapping.txt`, `usage.txt` and `configuration.txt`, and fails when:
+
+- a class that a bundled JNI library (`ai.onnxruntime`, `ai.djl`, `com.openmed`)
+  looks up by name is renamed or removed, or loses a field or method;
+- a `Java_*` JNI export no longer matches its class or native method name;
+- a `META-INF/services` provider is missing while its service survives;
+- the merged configuration contains `-ignorewarnings`, or a `-dontwarn` filter
+  that is not in `consumer-r8-smoke/r8-dontwarn-allowlist.txt` (R8 itself
+  fails the build on any missing class that no rule silences);
+- an OpenMedKit consumer rule did not reach R8;
+- desktop JNI binaries are packaged as Java resources, or an ABI split lacks
+  `libonnxruntime.so`, `libonnxruntime4j_jni.so` or `libdjl_tokenizer.so`;
+- the merged manifest requests `android.permission.INTERNET`.
+
+The `missingKeepRule` variant must fail that gate with `jni_class_not_kept` for
+ONNX Runtime classes, so the gate is shown to catch a missing keep rule. The
+aggregate task also runs 16 KB zip alignment on the release splits, JVM tests of
+the value-free smoke report, and the size budget: for every ABI, the
+`openmedkit` release APK minus the `baseline` APK must stay within
+`consumerApk.<abi>.maxDeltaBytes` in `gradle/budgets.properties`, separate from
+`aar.maxBytes`. Native libraries are stored uncompressed, so these APK bytes are
+the install footprint. Reports land in
+`consumer-r8-smoke/build/reports/r8-consumer/` and the CI job summary.
+
+The release APKs are debug-signed and launch `SmokeActivity`, which runs the
+smoke once and logs value-free lines under the `OpenMedR8Smoke` tag (check IDs,
+statuses, counts, labels and offsets, ending with `result=PASS` or
+`result=FAIL`). The app removes the `INTERNET` permission that ML Kit merges in.
+Running that smoke on a device belongs in the Android emulator lane; this build
+gate does not start an emulator.
+
+### Packaging desktop JNI resources
+
+DJL's tokenizers jar ships Linux, macOS and Windows `libtokenizers` builds, and
+JNA (pulled in by DJL's `api` module) ships desktop `libjnidispatch` builds, as
+Java resources. Android never loads them: DJL loads `libdjl_tokenizer.so` from
+`lib/<abi>/`. AGP drops the `.so` copies but packages the rest, which adds about
+9.6 MB (28 MB uncompressed) to every APK. Host apps should exclude them:
+
+```kotlin
+android {
+    packaging {
+        resources {
+            excludes += listOf(
+                "native/lib/**",
+                "com/sun/jna/*/*jnidispatch*",
+            )
+        }
+    }
+}
+```
+
 ## Optional Maven Central Publishing
 
 JitPack is the public installation path documented above. The separate, optional

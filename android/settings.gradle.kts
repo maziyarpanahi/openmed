@@ -35,5 +35,7 @@ include(":OpenMedScanDemo:app")
 include(":OpenMedMapleDemo:app")
 include(":openmedkit")
 include(":OpenMedDemo:app")
+// R8-minified consumer of the release AAR; not a demo (see android/README.md).
+include(":consumer-r8-smoke")
 // Reserved for a future app/demo module; enable once android/sample exists.
 // include(":sample")

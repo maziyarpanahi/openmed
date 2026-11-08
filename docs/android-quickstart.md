@@ -59,6 +59,35 @@ After tag publication, JitPack resolves the immutable `v3.2.0` tag and builds th
 Android release component as an AAR. Public consumers do not need GitHub
 credentials.
 
+## Release Builds (R8 and APK Size)
+
+The AAR packages the R8 keep rules OpenMedKit needs, so a release build with
+`isMinifyEnabled = true` (R8 full mode, the AGP 8 default) needs no
+OpenMedKit-specific rules. The repository verifies this with an R8-minified
+consumer app on every Android CI run; see the
+[Android build notes](https://github.com/maziyarpanahi/openmed/blob/master/android/README.md#minified-consumer-verification).
+
+DJL's tokenizers and JNA jars ship desktop JNI binaries as Java resources that
+Android never loads. Exclude them, or every APK grows by about 9.6 MB:
+
+```kotlin
+android {
+    packaging {
+        resources {
+            excludes += listOf(
+                "native/lib/**",
+                "com/sun/jna/*/*jnidispatch*",
+            )
+        }
+    }
+}
+```
+
+With those excludes, OpenMedKit adds about 49 MB to an arm64-v8a APK, 34 MB to
+armeabi-v7a and 56 MB to x86 or x86_64, almost all of it native libraries (ONNX
+Runtime, the DJL tokenizer and ML Kit text recognition). Ship ABI splits or an
+Android App Bundle so each device downloads one ABI.
+
 ## Quick Start: Kotlin
 
 The snippet below discovers a model in the on-device catalog, resolves its
