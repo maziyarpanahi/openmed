@@ -53,4 +53,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       ? `redacted ${outcome.redactedCount} entities`
       : `failed with ${outcome.code} (HTTP ${outcome.status}), retry: ${outcome.retry}`,
   );
+  if (!outcome.ok) process.exitCode = 1;
 }
