@@ -8,7 +8,7 @@ public struct EDFError: Error, CustomStringConvertible {
 }
 
 /// Resource budgets applied before decoding and retaining window samples.
-public struct EDFLimits {
+public struct EDFLimits: Sendable {
     public var maxBytes = 64 * 1024 * 1024
     public var maxSignals = 64
     public var maxRecords = 100_000
@@ -21,13 +21,13 @@ public struct EDFLimits {
 }
 
 /// Header presence and placeholder status, without an anonymization attestation.
-public struct EDFIdentityStatus {
+public struct EDFIdentityStatus: Sendable {
     public let present: Bool
     public let anonymizationStatus: String
 }
 
 /// Controlled technical labels, ADC ranges and sampling frequency.
-public struct EDFSignal {
+public struct EDFSignal: Sendable {
     public let index: Int
     public let label: String
     public let physicalDimension: String
@@ -40,7 +40,7 @@ public struct EDFSignal {
 }
 
 /// Samples in one record. No interpolation across gaps is performed.
-public struct EDFSignalWindow {
+public struct EDFSignalWindow: Sendable {
     public let signalIndex: Int
     public let firstSampleIndex: Int
     public let digitalSamples: [Int16]
@@ -48,7 +48,7 @@ public struct EDFSignalWindow {
 }
 
 /// A record's offset from the withheld header start second.
-public struct EDFRecordWindow {
+public struct EDFRecordWindow: Sendable {
     public let recordIndex: Int
     public let onsetSeconds: Double
     public let durationSeconds: Double
@@ -56,7 +56,7 @@ public struct EDFRecordWindow {
 }
 
 /// One annotation list's offsets and nonempty annotation count; text is withheld.
-public struct EDFAnnotation {
+public struct EDFAnnotation: Sendable {
     public let recordIndex: Int
     public let signalIndex: Int
     public let onsetSeconds: Double
@@ -65,14 +65,14 @@ public struct EDFAnnotation {
 }
 
 /// An explicit missing acquisition interval before a discontinuous record.
-public struct EDFGap {
+public struct EDFGap: Sendable {
     public let beforeRecordIndex: Int
     public let startSeconds: Double
     public let endSeconds: Double
 }
 
 /// Non-diagnostic window output carrying a notice and explicit review state.
-public struct EDFRecording {
+public struct EDFRecording: Sendable {
     public let format: String
     public let patient: EDFIdentityStatus
     public let recording: EDFIdentityStatus

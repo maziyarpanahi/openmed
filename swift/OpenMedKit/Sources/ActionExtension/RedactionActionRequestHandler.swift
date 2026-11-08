@@ -7,6 +7,10 @@
         public static let policyProfileUserInfoKey = "OpenMedPolicyProfile"
 
         public final func beginRequest(with context: NSExtensionContext) {
+            // The host hands this request's context to the extension, which owns it
+            // until it completes or cancels; nothing here touches it after the task
+            // starts, and NSExtensionContext completion may be called from any thread.
+            nonisolated(unsafe) let context = context
             Task {
                 do {
                     let texts = try await ExtensionItemCodec.plainText(from: context.inputItems)

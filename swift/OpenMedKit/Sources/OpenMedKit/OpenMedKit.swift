@@ -4,6 +4,7 @@
     import Foundation
     import MLX
     import Tokenizers
+    import os
 
     /// OpenMedKit — On-device clinical NLP for iOS and macOS.
     ///
@@ -717,25 +718,38 @@
             tokenizerFolderURL: URL?,
             allowNetworkAccess: Bool = true
         ) throws -> any Tokenizer {
+            try blockingResult {
+                try await loadTokenizerAsync(
+                    tokenizerName: tokenizerName,
+                    tokenizerFolderURL: tokenizerFolderURL,
+                    allowNetworkAccess: allowNetworkAccess
+                )
+            }
+        }
+
+        /// Run `operation` on a detached task and block until it finishes.
+        ///
+        /// The semaphore orders the task's write before the caller's read; the
+        /// lock makes that hand-off visible to the concurrency checker.
+        private static func blockingResult<T: Sendable>(
+            _ operation: @escaping @Sendable () async throws -> T
+        ) throws -> T {
             let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
+            let outcome = OSAllocatedUnfairLock<Result<T, any Error>?>(initialState: nil)
 
             Task.detached {
+                let result: Result<T, any Error>
                 do {
-                    let tokenizer = try await loadTokenizerAsync(
-                        tokenizerName: tokenizerName,
-                        tokenizerFolderURL: tokenizerFolderURL,
-                        allowNetworkAccess: allowNetworkAccess
-                    )
-                    result = .success(tokenizer)
+                    result = .success(try await operation())
                 } catch {
                     result = .failure(error)
                 }
+                outcome.withLock { $0 = result }
                 semaphore.signal()
             }
 
             semaphore.wait()
-            return try result!.get()
+            return try outcome.withLock { $0 }!.get()
         }
 
         private static func loadTokenizerAsync(
@@ -915,20 +929,7 @@
         }
 
         private static func blockingLocalTokenizer(from modelFolder: URL) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(modelFolder: modelFolder))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
+            try blockingResult { try await AutoTokenizer.from(modelFolder: modelFolder) }
         }
 
         private static func ensureTokenizerAssets(modelID: String) async throws -> URL {
@@ -1043,20 +1044,7 @@
         }
 
         private static func blockingPretrainedTokenizer(named name: String) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(pretrained: name))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
+            try blockingResult { try await AutoTokenizer.from(pretrained: name) }
         }
 
         private static func sanitizedCacheComponent(_ value: String) -> String {

@@ -17,26 +17,26 @@ public enum VoiceEmbeddingError: String, Error {
 }
 
 /// Only these lifecycle boundaries can appear in destruction evidence.
-public enum VoiceEmbeddingBoundary: String {
+public enum VoiceEmbeddingBoundary: String, Sendable {
     case pause, withdrawal, cancellation, finalization
 }
 
 /// Value-free evidence. Digests identify random handles, never vector content.
-public struct EmbeddingDestructionReceipt: Codable, Equatable {
+public struct EmbeddingDestructionReceipt: Codable, Equatable, Sendable {
     public let reasonCode: String
     public let destroyedCount: Int
     public let handleDigests: [String]
 }
 
 /// Non-diagnostic similarity; consequential use requires explicit human review.
-public struct VoiceSimilarity {
+public struct VoiceSimilarity: Sendable {
     public let score: Double
     public let notice = "non_diagnostic_voice_similarity"
     public let reviewerConfirmationRequired = true
 }
 
 /// Diagnostics contain counts and opaque handle digests only.
-public struct VoiceEmbeddingDiagnostics: Codable, Equatable {
+public struct VoiceEmbeddingDiagnostics: Codable, Equatable, Sendable {
     public let handleCount: Int
     public let handleDigests: [String]
 }
