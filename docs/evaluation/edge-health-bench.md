@@ -11,6 +11,12 @@ EdgeHealthBench measures an actually executed local workload against an immutabl
 | MLX | An installed, pinned native MLX workload | Separate allocator budget and readings are required |
 | Core ML | An installed, pinned native Core ML workload | Separate allocator budget and readings are required |
 | Optional accelerator | A caller-supplied local backend | Separate allocator budget and readings are required |
+| Android ORT CPU (`android_ort_cpu`) | A host bridge to ONNX Runtime CPU on Android | Process RSS only; the bridge declares device or emulator |
+| Android ORT NNAPI and QNN (`android_ort_nnapi`, `android_ort_qnn`) | A host bridge to ONNX Runtime with that provider | Separate allocator budget and readings are required |
+| iOS-family device CPU (`ios_device_cpu`) | A host bridge to CPU inference on iPhone, iPad, Apple Watch or Apple Vision | Process RSS only |
+| iOS-family device MLX and Core ML (`ios_device_mlx`, `ios_device_core_ml`) | A host bridge to that runtime on the device | Separate allocator budget and readings are required |
+
+The mobile device tiers name the runtime a host bridge drives on a phone, tablet, watch or headset. The harness cannot tell a physical device from a simulator or emulator; the [OpenMedKit device qualification harness](../openmedkit-device-qualification.md) keeps that distinction in its evidence records and maps each support-matrix cell to one of these tiers.
 
 The generic harness does not install providers, download weights or substitute CPU execution for an unavailable tier. `workload=None` returns `not_run`, never `passed`. A tier label and host-supplied readings are declarations, not remote attestation. No browser or accelerator qualification is implied by the included CPU example.
 

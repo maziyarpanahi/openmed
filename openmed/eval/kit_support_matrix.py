@@ -253,7 +253,7 @@ _IDENTIFIER_PATTERNS: Final = (
     re.compile(r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b"),
     re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}"),
     re.compile(r"(?:^|\s)(?:/Users/|/home/|/private/|/var/|~/|[A-Za-z]:\\)"),
-    re.compile(r"\b(?:SM-[A-Z]\d{3,}|GT-[A-Z]\d{3,})\b"),
+    re.compile(r"\b(?:SM|GT)-[A-Z]\d{3,}[A-Z0-9]*\b"),
     re.compile(r"(?i)\b(?:serial|udid|imei|android_id|advertising[_ -]id)\b"),
 )
 
@@ -301,6 +301,24 @@ def load_kit_support_matrix(
         if problems:
             raise KitSupportMatrixError(problems)
     return document
+
+
+def identifier_shaped(value: str) -> bool:
+    """Return whether text has the shape of a device, user or machine identifier.
+
+    The matrix, and the qualification evidence that cites it, may only carry
+    coarse classes. This is the check :func:`validate_kit_support_matrix`
+    applies to every matrix string.
+
+    Args:
+        value: Text to inspect.
+
+    Returns:
+        True when the text looks like a hardware model code, UUID, long hex or
+        digit run, MAC or e-mail address, home or temporary path, or names a
+        serial-style identifier.
+    """
+    return any(pattern.search(value) for pattern in _IDENTIFIER_PATTERNS)
 
 
 def tier_names(tiers: Mapping[str, Mapping[str, Any]] = TIERS) -> frozenset[str]:
@@ -846,15 +864,13 @@ def _check_fields(
 
 def _scan_identifiers(problems: set[str], value: Any, location: str) -> None:
     if isinstance(value, str):
-        if any(pattern.search(value) for pattern in _IDENTIFIER_PATTERNS):
+        if identifier_shaped(value):
             problems.add(f"matrix_identifier_value:{location}")
         return
     if isinstance(value, Mapping):
         for key, item in value.items():
             name = key if isinstance(key, str) and _ID.fullmatch(key) else "key"
-            if not isinstance(key, str) or any(
-                pattern.search(key) for pattern in _IDENTIFIER_PATTERNS
-            ):
+            if not isinstance(key, str) or identifier_shaped(key):
                 problems.add(f"matrix_identifier_value:{location}")
             _scan_identifiers(problems, item, f"{location}.{name}")
         return
@@ -1145,6 +1161,7 @@ __all__ = [
     "UNSUPPORTED",
     "UNSUPPORTED_REASONS",
     "entries_with_status",
+    "identifier_shaped",
     "iter_entries",
     "load_kit_support_matrix",
     "render_kit_support_matrix_markdown",

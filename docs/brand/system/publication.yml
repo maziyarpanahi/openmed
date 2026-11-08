@@ -748,6 +748,7 @@ classification:
     - icd11-grounding.md
     - export-matrix.md
     - openmedkit-support-matrix.md
+    - openmedkit-device-qualification.md
     - maple-on-device.md
     - mlx-backend.md
     - performance-mps.md
