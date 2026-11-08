@@ -14,9 +14,8 @@ from openmed.clinical.exporters.fhir.ambient import (
 
 @pytest.mark.integration
 def test_passive_export_roundtrip_with_network_and_files_disabled(monkeypatch):
-    fixture = json.loads(
-        (Path(__file__).parents[1] / "fixtures/clinical/ambient_fhir.json").read_text()
-    )
+    path = Path(__file__).parents[1] / "fixtures/clinical/ambient_fhir.json"
+    fixture = json.loads(path.read_text(encoding="utf-8"))
     draft = fixture["draft"]
 
     def forbidden(*args, **kwargs):
