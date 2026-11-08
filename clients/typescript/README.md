@@ -169,6 +169,22 @@ const client = new OpenMedClient({
 });
 ```
 
+## Example
+
+[`examples/deidentify.mjs`](examples/deidentify.mjs) exports `run({ fetch })`,
+which de-identifies one note and turns an `OpenMedApiError` into a result keyed
+by its `code` (for example `validation_error`, or `rate_limited`,
+`service_busy` and `timeout`, which are worth retrying). Pass any `fetch`, such
+as a stub in tests, or run it against a local service after building the
+client:
+
+```bash
+cd clients/typescript
+npm run build
+OPENMED_BASE_URL=http://localhost:8080 node examples/deidentify.mjs
+node --test tests/example.test.mjs  # offline, stubbed fetch
+```
+
 ## Error Handling
 
 Non-2xx responses throw `OpenMedApiError`. The error preserves the REST
