@@ -6,38 +6,6 @@
     import MLXLMCommon
     import Tokenizers
 
-    /// Generation result returned by ``OpenMedVisionLanguageModel``.
-    public struct OpenMedVisionLanguageGeneration: Sendable, CustomStringConvertible {
-        public var description: String {
-            "OpenMedVisionLanguageGeneration(\(releaseEnvelope?.guardReport.decision ?? "unavailable"))"
-        }
-        public let text: String
-        public let tokenIDs: [Int]
-        public let promptTokenCount: Int
-        public let generationTokenCount: Int
-        public let promptTime: TimeInterval
-        public let generationTime: TimeInterval
-        public let releaseEnvelope: GeneratedTextProviderEnvelope?
-
-        public init(
-            text: String,
-            tokenIDs: [Int] = [],
-            promptTokenCount: Int,
-            generationTokenCount: Int,
-            promptTime: TimeInterval,
-            generationTime: TimeInterval,
-            releaseEnvelope: GeneratedTextProviderEnvelope? = nil
-        ) {
-            self.text = text
-            self.tokenIDs = tokenIDs
-            self.promptTokenCount = promptTokenCount
-            self.generationTokenCount = generationTokenCount
-            self.promptTime = promptTime
-            self.generationTime = generationTime
-            self.releaseEnvelope = releaseEnvelope
-        }
-    }
-
     /// First-class OpenMedKit runtime for OpenMed MLX vision-language models.
     ///
     /// Model weights are downloaded once and all inference remains on-device.
@@ -239,13 +207,14 @@
                 assetDigest: assetDigest ?? String(repeating: "0", count: 64),
                 identifiers: identifiers
             )
-            return OpenMedVisionLanguageGeneration(
+            return try OpenMedVisionLanguageGeneration(
                 text: guarded.text ?? "",
                 tokenIDs: [],
                 promptTokenCount: completion?.promptTokenCount ?? 0,
                 generationTokenCount: completion?.generationTokenCount ?? 0,
                 promptTime: completion?.promptTime ?? 0,
                 generationTime: completion?.generateTime ?? 0,
+                notice: MultimodalNoticeKind.visualDescription.notice,
                 releaseEnvelope: guarded.envelope
             )
         }

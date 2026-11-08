@@ -640,6 +640,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    from .multimodal_notice import add_multimodal_notice_command
+
+    add_multimodal_notice_command(subparsers)
     add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
@@ -3302,13 +3305,19 @@ def main(
             command_position += 1
         else:
             break
+    multimodal_help = arguments in (["multimodal", "-h"], ["multimodal", "--help"])
     if arguments[command_position : command_position + 1] == ["multimodal"]:
+        from .multimodal_inference import LocalTask
         from .multimodal_preflight import run_multimodal_preflight_cli
 
-        # No ambient configuration, parser error text or input paths enter reports.
-        return run_multimodal_preflight_cli(
-            ["invalid"] if command_position else arguments[1:]
+        local_task = not command_position and arguments[1:2] in (
+            [task.value] for task in LocalTask
         )
+        if not local_task and not multimodal_help:
+            # Preserve the guarded preflight parser and reject ambient configuration.
+            return run_multimodal_preflight_cli(
+                ["invalid"] if command_position else arguments[1:]
+            )
     if command_position > 0 and arguments[command_position : command_position + 2] == [
         "agents",
         "workflow",
@@ -3324,8 +3333,15 @@ def main(
         return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
     from .clinical import parse_clinical_args
+    from .multimodal_inference import protect_multimodal_diagnostics
 
-    args = parse_clinical_args(parser, argv)
+    protect_multimodal_diagnostics(parser, arguments)
+    try:
+        args = parse_clinical_args(parser, arguments)
+    except SystemExit as exc:
+        if multimodal_help and exc.code == 0:
+            return 0
+        raise
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
