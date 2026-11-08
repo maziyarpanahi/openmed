@@ -1,0 +1,71 @@
+{
+  "schema": "openmed.service_release.p0_checklist.v1",
+  "release": "v4.0",
+  "retargeted_from": "v3.4",
+  "epic": "#3543",
+  "release_plan": "#4253",
+  "protected_invariants": [
+    "authenticated_transports",
+    "encrypted_journey_state",
+    "fail_closed_production_profile",
+    "no_mandatory_egress",
+    "no_raw_phi_in_evidence",
+    "principal_bound_journey_access",
+    "recoverable_durable_state",
+    "signed_release_evidence"
+  ],
+  "items": [
+    {
+      "issue": "#3544",
+      "control": "graphql_post_only_ide_hardening",
+      "required_evidence": ["fixture", "protocol_map", "security_profile_report"]
+    },
+    {
+      "issue": "#3546",
+      "control": "grpc_loopback_default_tls",
+      "required_evidence": ["protocol_map", "security_profile_report"]
+    },
+    {
+      "issue": "#3547",
+      "control": "grpc_authorization_budgets",
+      "required_evidence": ["failure_code_inventory", "protocol_map"]
+    },
+    {
+      "issue": "#3549",
+      "control": "journey_principal_binding",
+      "required_evidence": ["fixture", "protocol_map"]
+    },
+    {
+      "issue": "#3550",
+      "control": "journey_application_encryption",
+      "required_evidence": ["migration_rehearsal_matrix", "security_profile_report"]
+    },
+    {
+      "issue": "#3552",
+      "control": "production_security_profile",
+      "required_evidence": ["security_profile_report"]
+    },
+    {
+      "issue": "#3574",
+      "control": "durable_async_jobs",
+      "required_evidence": ["migration_rehearsal_matrix", "recovery_drill_report"]
+    },
+    {
+      "issue": "#3575",
+      "control": "transactional_model_activation",
+      "required_evidence": ["failure_code_inventory", "recovery_drill_report"]
+    },
+    {
+      "issue": "#3603",
+      "control": "signed_service_release_evidence",
+      "required_evidence": [
+        "failure_code_inventory",
+        "fixture",
+        "no_egress_attestation",
+        "p0_status",
+        "recovery_drill_report",
+        "threat_model"
+      ]
+    }
+  ]
+}

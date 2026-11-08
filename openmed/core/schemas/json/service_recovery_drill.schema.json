@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/service_recovery_drill.schema.json",
+  "title": "OpenMed v4.0 reference service recovery-drill report",
+  "description": "Value-free report of the reference recovery drill: one scenario per failure category, six phases each, data-integrity objectives and a canonical self-digest. It never records paths, record contents or exception text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "profile", "release", "candidate_commit", "generated_at",
+    "scenarios", "objectives", "summary", "state", "report_digest"
+  ],
+  "properties": {
+    "schema": {"const": "openmed.service_release.recovery_drill.v1"},
+    "profile": {"const": "reference-v4.0"},
+    "release": {"const": "v4.0"},
+    "candidate_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "generated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "scenarios": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "items": {"$ref": "#/$defs/scenario"}
+    },
+    "objectives": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {"$ref": "#/$defs/objective"}
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "objectives_met", "objectives_missed", "objectives_not_measured",
+        "scenario_count", "steps_failed", "steps_not_available", "steps_passed"
+      ],
+      "properties": {
+        "objectives_met": {"type": "integer", "minimum": 0},
+        "objectives_missed": {"type": "integer", "minimum": 0},
+        "objectives_not_measured": {"type": "integer", "minimum": 0},
+        "scenario_count": {"type": "integer", "minimum": 0},
+        "steps_failed": {"type": "integer", "minimum": 0},
+        "steps_not_available": {"type": "integer", "minimum": 0},
+        "steps_passed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "state": {"enum": ["complete", "incomplete", "failed"]},
+    "report_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "category": {"enum": ["storage", "process", "network", "corrupted_state"]},
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "objective_name": {
+      "enum": [
+        "admissions_during_open_circuit", "corrupted_bytes_served",
+        "lost_committed_records", "partial_writes_visible",
+        "unverified_restored_records"
+      ]
+    },
+    "scenario": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "category", "state", "steps"],
+      "properties": {
+        "id": {"$ref": "#/$defs/category"},
+        "category": {"$ref": "#/$defs/category"},
+        "state": {"enum": ["complete", "incomplete", "failed"]},
+        "steps": {
+          "type": "array", "minItems": 6, "maxItems": 6,
+          "items": {"$ref": "#/$defs/step"}
+        }
+      }
+    },
+    "step": {
+      "type": "object", "additionalProperties": false,
+      "required": ["phase", "state", "check", "observed", "owner"],
+      "properties": {
+        "phase": {"enum": ["inject", "detect", "contain", "recover", "verify", "resume"]},
+        "state": {"enum": ["passed", "failed", "not_available"]},
+        "check": {"$ref": "#/$defs/code"},
+        "observed": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/objective_name"},
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "owner": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^#[1-9][0-9]{0,6}$"}]}
+      }
+    },
+    "objective": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "target", "observed", "state"],
+      "properties": {
+        "id": {"$ref": "#/$defs/objective_name"},
+        "target": {"const": 0},
+        "observed": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0}]},
+        "state": {"enum": ["met", "missed", "not_measured"]}
+      }
+    }
+  }
+}

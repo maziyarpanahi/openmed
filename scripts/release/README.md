@@ -106,6 +106,33 @@ download, or mutate release inputs. See
 `docs/release/v3.0-journey-release-gate.md` for the complete manifest,
 performance, licensing, exception, signing, and verification contracts.
 
+## V4.0 secure-service release packet
+
+The service gate (planned as v3.4, folded into v4.0) binds one candidate
+commit to the security-profile report, no-egress attestation, recovery-drill
+report, migration rehearsal matrix, protocol map, synthetic fixtures, the
+controlled failure-code inventory, the P0 status and the service threat
+model. It fails while any P0 in `openmed/eval/data/service_release_p0.json`
+is open, moved or missing evidence. Set `OPENMED_SERVICE_RELEASE_KEY` from a
+secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/service_recovery_drill.py --output drill.json
+python scripts/release/service_release_gate.py \
+  --write-failure-codes failure-codes.json --candidate "$(git rev-parse HEAD)"
+python scripts/release/service_release_gate.py \
+  --manifest service-release-manifest.json \
+  --output service-release-packet.json
+python scripts/release/service_release_gate.py \
+  --verify service-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Nothing is tagged, published or deployed. See
+`docs/release/v4.0-service-release-gate.md` for evidence kinds and reason
+codes.
+
 ## Retraining recipe proposals
 
 `retrain_queue.py` consumes the committed aggregate-only input contract at
