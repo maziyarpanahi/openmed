@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check Apple privacy manifests against required-reason API use in Swift sources.
 
-Every OpenMedKit target and the scan demo ship a ``PrivacyInfo.xcprivacy`` that
+The core kit, its extensions and the scan demo ship a ``PrivacyInfo.xcprivacy`` that
 must declare no tracking, no tracking domains and no collected data types. Each
 required-reason API category referenced by the Swift sources a manifest covers
 must be declared in it with an approved reason.
@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 KIT_SOURCES = Path("swift/OpenMedKit/Sources")
 SCAN_DEMO = Path("swift/OpenMedScanDemo/OpenMedScanDemo")
 MANIFEST_NAME = "PrivacyInfo.xcprivacy"
+# The separately packaged speech target has no required-reason calls today.
+OPTIONAL_EMPTY_MANIFEST_TARGETS = {"OpenMedSpeech"}
 
 # Swift symbols and approved reasons from Apple's "Describing use of required
 # reason API" documentation.
@@ -240,20 +242,30 @@ def declared_categories(manifest: Path, root: Path) -> tuple[set[str], list[str]
     return declared, errors
 
 
-def check_target(source_dir: Path, manifest: Path, root: Path) -> list[str]:
+def check_target(
+    source_dir: Path,
+    manifest: Path,
+    root: Path,
+    *,
+    require_manifest: bool = True,
+) -> list[str]:
     """Check that a manifest declares the API categories its sources use.
 
     Args:
         source_dir: Swift source directory covered by the manifest.
         manifest: Path to the target's ``PrivacyInfo.xcprivacy``.
         root: Repository root used to report relative paths.
+        require_manifest: Require a manifest even when no API category is used.
 
     Returns:
         Policy errors; empty when the target is compliant.
     """
+    usage = find_required_reason_apis(source_dir, root)
+    if not require_manifest and not usage and not manifest.exists():
+        return []
     declared, errors = declared_categories(manifest, root)
     name = manifest.relative_to(root).as_posix()
-    for category, references in find_required_reason_apis(source_dir, root).items():
+    for category, references in usage.items():
         if category not in declared:
             errors.extend(
                 f"{reference}: {category} is not declared in {name}"
@@ -279,7 +291,14 @@ def check_repository(root: Path = ROOT) -> list[str]:
     targets.append((root / SCAN_DEMO, root / SCAN_DEMO / MANIFEST_NAME))
     errors: list[str] = []
     for source_dir, manifest in targets:
-        errors.extend(check_target(source_dir, manifest, root))
+        errors.extend(
+            check_target(
+                source_dir,
+                manifest,
+                root,
+                require_manifest=source_dir.name not in OPTIONAL_EMPTY_MANIFEST_TARGETS,
+            )
+        )
     return errors
 
 

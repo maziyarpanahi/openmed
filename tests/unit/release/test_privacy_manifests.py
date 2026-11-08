@@ -185,3 +185,26 @@ def test_kit_target_without_manifest_fails(tmp_path):
         "swift/OpenMedKit/Sources/NewTarget/Resources/PrivacyInfo.xcprivacy: "
         "missing or unreadable privacy manifest"
     ]
+
+
+def test_speech_target_needs_manifest_when_it_uses_required_reason_api(tmp_path):
+    speech = tmp_path / privacy_manifests.KIT_SOURCES / "OpenMedSpeech"
+    speech.mkdir(parents=True)
+    manifest = speech / "Resources" / MANIFEST_NAME
+    assert (
+        privacy_manifests.check_target(
+            speech, manifest, tmp_path, require_manifest=False
+        )
+        == []
+    )
+
+    (speech / "Clock.swift").write_text(
+        "let time = ProcessInfo.processInfo.systemUptime\n", encoding="utf-8"
+    )
+    errors = privacy_manifests.check_target(
+        speech, manifest, tmp_path, require_manifest=False
+    )
+    assert any("missing or unreadable privacy manifest" in error for error in errors)
+    assert any(
+        "NSPrivacyAccessedAPICategorySystemBootTime" in error for error in errors
+    )
