@@ -39,6 +39,9 @@ string passed to the scan.
   covering the remaining input so truncated key material is not left exposed;
 - parameterized AWS Signature Version 4, Digest, and Signature authorization
   values;
+- passwords embedded in URL userinfo such as `postgresql://user:password@host/db`
+  or `redis://:password@host` (category `url_credential`); only the password
+  segment is reported, and URLs without a password are ignored;
 - secret-looking values assigned to names such as `API_KEY`, `ACCESS_TOKEN`,
   `PASSWORD`, `DATABASE_URL`, `PRIVATE_KEY`, and `CLIENT_SECRET`.
 

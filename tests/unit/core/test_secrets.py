@@ -14,6 +14,7 @@ from openmed.core.secrets import (
     AUTHORIZATION_HEADER,
     ENVIRONMENT_SECRET,
     PRIVATE_KEY,
+    URL_CREDENTIAL,
     SecretDetector,
     SecretFinding,
     detect_secrets,
@@ -167,3 +168,50 @@ def test_safe_finding_constructor_rejects_untrusted_report_fields():
 
     with pytest.raises(ValueError, match="sha256 format"):
         SecretFinding(API_KEY, (0, 1), "sha256:synthetic-secret-value")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://svc:{pw}@db.example/app",
+        "redis://:{pw}@cache.example:6379/0",
+        "mongodb+srv://admin:{pw}@cluster.example/test?retryWrites=true",
+        "https://user:{pw}@example.org/path",
+    ],
+)
+def test_detects_url_credential_password_only(url):
+    password = "synthetic-pass-123"
+    text = "connect to " + url.format(pw=password) + " now"
+
+    (finding,) = detect_secrets(text)
+
+    start = text.index(password)
+    assert finding.category == URL_CREDENTIAL
+    assert finding.offset == (start, start + len(password))
+    assert finding.fingerprint == _fingerprint(password)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://user@example.org/",
+        "https://example.org:8443/path",
+        "see http://host:80/a@b for details",
+        "redis://:${REDIS_PASSWORD}@host",
+        "postgresql://svc:changeme@db.example/app",
+        "postgresql://svc:short@db.example/app",
+    ],
+)
+def test_url_credential_negative_controls(text):
+    assert detect_secrets(text) == []
+
+
+def test_url_credential_wins_over_enclosing_environment_assignment():
+    password = "synthetic-pass-123"
+    text = f"DATABASE_URL=postgresql://svc:{password}@db.example/app"
+
+    (finding,) = detect_secrets(text)
+
+    start = text.index(password)
+    assert finding.category == URL_CREDENTIAL
+    assert finding.offset == (start, start + len(password))

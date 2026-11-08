@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Detect passwords embedded in connection-string URLs as a `url_credential`
+  category in the local secret detector, reporting only the password segment
+  and skipping placeholders and runtime references (#5189).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
