@@ -18,8 +18,11 @@ def test_openmedkit_tauri_package_checks() -> None:
     if node is None or npm is None:
         pytest.skip("node and npm are required for OpenMedKit Tauri checks")
 
-    _run([npm, "ci"], cwd=TAURI_PACKAGE_DIR)
-    _run([npm, "test"], cwd=TAURI_PACKAGE_DIR)
+    if not (TAURI_PACKAGE_DIR / "node_modules" / ".bin" / "tsx").exists():
+        pytest.skip(
+            "install the locked Tauri npm dependencies before running the bridge"
+        )
+    _run([npm, "--offline", "test"], cwd=TAURI_PACKAGE_DIR)
 
 
 def _run(command: list[str], *, cwd: Path) -> None:
