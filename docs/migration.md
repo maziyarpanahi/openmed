@@ -1,8 +1,7 @@
 # Migration guides
 
-For the current release candidate, see
-[OpenMed 3.1 to 3.2](migration/3.1-to-3.2.md): Python 3.11, synthetic rendering,
-multilingual privacy and optional local decision backends.
+For the current release candidate, see [OpenMed 3.2 to 3.3](migration/3.2-to-3.3.md) for multimodal intake, local providers, wire versions and review controls.
+The [3.1 to 3.2 guide](migration/3.1-to-3.2.md) covers the Python 3.11 minimum, synthetic rendering, multilingual privacy and local decision backends.
 For the earlier governed-workflow migration, see
 [OpenMed 3.0 to 3.1](migration/3.0-to-3.1.md): direct FHIR/OpenMRS and OMOP
 writers, permission contracts, staged changes and reviewed execution.

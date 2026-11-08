@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-08
+
 ### Fixed
+
+- Validate browser ONNX external-data references before session loading (#4249).
+- Save evaluator rollout state and champion pointers atomically (#4949).
+- Probe the application readiness endpoint on loopback in the Docker Compose health check (#4662).
+- Keep synthetic federated example snapshots comparable across Windows and Unix checkouts.
 
 - Reject missing, repeated, or unsupported content types on the local privacy
   proxy's chat routes before reading the request body (#5185).
@@ -18,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without loading their runtimes during discovery (#3844).
 
 ### Added
+
+- Add value-free configuration provenance to the CLI (#5472), a reviewer disagreement schema (#5473), and an offline Node.js de-identification example (#5474).
+- Include OpenMedKit privacy manifests (#4248), share-extension localization and Dynamic Type (#4229).
+- Add a metadata-only federated round walkthrough (#4130) and enforce native Tauri checks when relevant (#4129).
 
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
