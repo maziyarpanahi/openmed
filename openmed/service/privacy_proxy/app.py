@@ -37,6 +37,7 @@ from .inbound import (
     InboundRestorationError,
     InboundRestorationState,
 )
+from .outbound import UnsupportedContentTypeError, _normalize_content_type
 
 DEFAULT_MODEL = "openmed-local"
 DEFAULT_REDACTION_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -76,6 +77,13 @@ class PrivacyProxyRequestError(PrivacyProxyError):
     status_code = 400
     error_code = "privacy_proxy_invalid_request"
     reason_code = "invalid_request"
+
+
+class _UnsupportedRequestMediaTypeError(PrivacyProxyRequestError):
+    """Raised when the chat request lacks a single supported media type."""
+
+    status_code = 415
+    reason_code = "unsupported_content_type"
 
 
 class PrivacyProxyConfigurationError(PrivacyProxyError):
@@ -460,6 +468,13 @@ def create_app(
 
     async def chat_completions(request: Request) -> Any:
         try:
+            content_types = request.headers.getlist("content-type")
+            if len(content_types) != 1:
+                raise _UnsupportedRequestMediaTypeError()
+            try:
+                _normalize_content_type(content_types[0])
+            except UnsupportedContentTypeError:
+                raise _UnsupportedRequestMediaTypeError() from None
             try:
                 payload = await request.json()
             except (TypeError, ValueError):

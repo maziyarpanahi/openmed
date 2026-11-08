@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject missing, repeated, or unsupported content types on the local privacy
+  proxy's chat routes before reading the request body (#5185).
+
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
   packages. Private packages and unavailable optional shims are skipped
