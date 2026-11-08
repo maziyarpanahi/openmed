@@ -1,0 +1,483 @@
+{
+  "cLanguageStandard": null,
+  "cxxLanguageStandard": null,
+  "defaultLocalization": null,
+  "dependencies": [
+    {
+      "sourceControl": [
+        {
+          "identity": "argmax-oss-swift",
+          "location": {
+            "remote": [
+              {
+                "urlString": "https://github.com/argmaxinc/argmax-oss-swift.git"
+              }
+            ]
+          },
+          "productFilter": null,
+          "requirement": {
+            "exact": [
+              "1.1.1"
+            ]
+          },
+          "traits": [
+            {
+              "name": "default"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceControl": [
+        {
+          "identity": "swift-transformers",
+          "location": {
+            "remote": [
+              {
+                "urlString": "https://github.com/huggingface/swift-transformers.git"
+              }
+            ]
+          },
+          "productFilter": null,
+          "requirement": {
+            "exact": [
+              "1.0.0"
+            ]
+          },
+          "traits": [
+            {
+              "name": "default"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceControl": [
+        {
+          "identity": "mlx-swift",
+          "location": {
+            "remote": [
+              {
+                "urlString": "https://github.com/ml-explore/mlx-swift.git"
+              }
+            ]
+          },
+          "productFilter": null,
+          "requirement": {
+            "exact": [
+              "0.31.6"
+            ]
+          },
+          "traits": [
+            {
+              "name": "default"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceControl": [
+        {
+          "identity": "mlx-swift-lm",
+          "location": {
+            "remote": [
+              {
+                "urlString": "https://github.com/ml-explore/mlx-swift-lm.git"
+              }
+            ]
+          },
+          "productFilter": null,
+          "requirement": {
+            "revision": [
+              "42f08a872075fd07f9f1f40ec1a5e191e6aad86e"
+            ]
+          },
+          "traits": [
+            {
+              "name": "default"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sourceControl": [
+        {
+          "identity": "zipfoundation",
+          "location": {
+            "remote": [
+              {
+                "urlString": "https://github.com/weichsel/ZIPFoundation.git"
+              }
+            ]
+          },
+          "productFilter": null,
+          "requirement": {
+            "range": [
+              {
+                "lowerBound": "0.9.19",
+                "upperBound": "1.0.0"
+              }
+            ]
+          },
+          "traits": [
+            {
+              "name": "default"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "name": "OpenMedKit",
+  "packageKind": {
+    "root": [
+      "/synthetic/openmed/swift/OpenMedKit"
+    ]
+  },
+  "pkgConfig": null,
+  "platforms": [
+    {
+      "options": [],
+      "platformName": "ios",
+      "version": "17.0"
+    },
+    {
+      "options": [],
+      "platformName": "macos",
+      "version": "14.0"
+    },
+    {
+      "options": [],
+      "platformName": "watchos",
+      "version": "10.0"
+    },
+    {
+      "options": [],
+      "platformName": "visionos",
+      "version": "1.0"
+    }
+  ],
+  "products": [
+    {
+      "name": "OpenMedSpeech",
+      "settings": [],
+      "targets": [
+        "OpenMedSpeech"
+      ],
+      "type": {
+        "library": [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name": "OpenMedKit",
+      "settings": [],
+      "targets": [
+        "OpenMedKit"
+      ],
+      "type": {
+        "library": [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name": "OpenMedExtensionSupport",
+      "settings": [],
+      "targets": [
+        "OpenMedExtensionSupport"
+      ],
+      "type": {
+        "library": [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name": "OpenMedShareExtension",
+      "settings": [],
+      "targets": [
+        "OpenMedShareExtension"
+      ],
+      "type": {
+        "library": [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name": "OpenMedActionExtension",
+      "settings": [],
+      "targets": [
+        "OpenMedActionExtension"
+      ],
+      "type": {
+        "library": [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "providers": null,
+  "swiftLanguageVersions": null,
+  "targets": [
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        },
+        {
+          "product": [
+            "WhisperKit",
+            "argmax-oss-swift",
+            null,
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedSpeech",
+      "packageAccess": true,
+      "path": "Sources/OpenMedSpeech",
+      "resources": [],
+      "settings": [],
+      "type": "regular"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedSpeech",
+            null
+          ]
+        },
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedSpeechTests",
+      "packageAccess": true,
+      "path": "Tests/OpenMedSpeechTests",
+      "resources": [],
+      "settings": [],
+      "type": "test"
+    },
+    {
+      "dependencies": [
+        {
+          "product": [
+            "Transformers",
+            "swift-transformers",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        },
+        {
+          "product": [
+            "MLX",
+            "mlx-swift",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        },
+        {
+          "product": [
+            "MLXNN",
+            "mlx-swift",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        },
+        {
+          "product": [
+            "MLXLMCommon",
+            "mlx-swift-lm",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        },
+        {
+          "product": [
+            "MLXLLM",
+            "mlx-swift-lm",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        },
+        {
+          "product": [
+            "ZIPFoundation",
+            "ZIPFoundation",
+            null,
+            {
+              "platformNames": [
+                "ios",
+                "macos"
+              ]
+            }
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedKit",
+      "packageAccess": true,
+      "resources": [
+        {
+          "path": "Resources",
+          "rule": {
+            "process": {}
+          }
+        }
+      ],
+      "settings": [],
+      "type": "regular"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedExtensionSupport",
+      "packageAccess": true,
+      "resources": [],
+      "settings": [],
+      "type": "regular"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedExtensionSupport",
+            null
+          ]
+        },
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedShareExtension",
+      "packageAccess": true,
+      "path": "Sources/ShareExtension",
+      "resources": [],
+      "settings": [],
+      "type": "regular"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedExtensionSupport",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedActionExtension",
+      "packageAccess": true,
+      "path": "Sources/ActionExtension",
+      "resources": [],
+      "settings": [],
+      "type": "regular"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "OpenMedKitTests",
+      "packageAccess": true,
+      "resources": [],
+      "settings": [],
+      "type": "test"
+    },
+    {
+      "dependencies": [
+        {
+          "byName": [
+            "OpenMedKit",
+            null
+          ]
+        },
+        {
+          "byName": [
+            "OpenMedExtensionSupport",
+            null
+          ]
+        },
+        {
+          "byName": [
+            "OpenMedShareExtension",
+            null
+          ]
+        },
+        {
+          "byName": [
+            "OpenMedActionExtension",
+            null
+          ]
+        }
+      ],
+      "exclude": [],
+      "name": "ExtensionTests",
+      "packageAccess": true,
+      "resources": [],
+      "settings": [],
+      "type": "test"
+    }
+  ],
+  "toolsVersion": {
+    "_version": "5.10.0"
+  },
+  "traits": []
+}
