@@ -174,9 +174,12 @@
         }
 
         /// Generate from text and zero or more images.
+        ///
+        /// The images are handed to the model container's isolation domain, so
+        /// the caller must not keep using them concurrently (`sending`).
         public func generate(
             _ prompt: String,
-            images: [UserInput.Image],
+            images: sending [UserInput.Image],
             maxTokens: Int = 256,
             temperature: Float = 0,
             releaseGuard: GeneratedTextGuard? = nil,
@@ -340,7 +343,7 @@
         }
     }
 
-    struct OpenMedCompassProcessor: UserInputProcessor, @unchecked Sendable {
+    struct OpenMedCompassProcessor: UserInputProcessor, Sendable {
         private let configuration: OpenMedCompassProcessorConfiguration
         private let tokenizer: any MLXLMCommon.Tokenizer
 
@@ -698,7 +701,7 @@
         }
     }
 
-    private struct OpenMedHubDownloader: Downloader, @unchecked Sendable {
+    private struct OpenMedHubDownloader: Downloader, Sendable {
         private let hub = HubApi.shared
 
         func download(
@@ -727,7 +730,7 @@
         }
     }
 
-    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, @unchecked Sendable {
+    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, Sendable {
         private let tokenizer: any Tokenizers.Tokenizer
 
         init(_ tokenizer: any Tokenizers.Tokenizer) {

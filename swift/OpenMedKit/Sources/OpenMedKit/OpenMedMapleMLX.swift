@@ -572,7 +572,7 @@
         }
     }
 
-    private struct OpenMedMapleTokenizerAdapter: MLXLMCommon.Tokenizer, @unchecked Sendable {
+    private struct OpenMedMapleTokenizerAdapter: MLXLMCommon.Tokenizer, Sendable {
         let tokenizer: any Tokenizers.Tokenizer
 
         func encode(text: String, addSpecialTokens: Bool) -> [Int] {

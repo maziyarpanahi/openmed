@@ -9,7 +9,7 @@ import Foundation
 public enum PostProcessing {
 
     /// A single per-token prediction before grouping.
-    public struct TokenPrediction {
+    public struct TokenPrediction: Sendable {
         public let labelId: Int
         public let label: String
         public let score: Float
@@ -21,7 +21,7 @@ public enum PostProcessing {
     }
 
     /// Aggregation strategy for multi-token entity scores.
-    public enum AggregationStrategy {
+    public enum AggregationStrategy: Sendable {
         case first
         case average
         case max
@@ -178,7 +178,9 @@ public enum PostProcessing {
         return result
     }
 
-    struct SemanticUnitPattern {
+    // NSRegularExpression is immutable and documented as thread-safe, so the
+    // shared default pattern table can be read from any task.
+    struct SemanticUnitPattern: Sendable {
         let regex: NSRegularExpression
         let entityType: String
         let priority: Int
@@ -186,7 +188,7 @@ public enum PostProcessing {
         let baseScore: Float
         let contextBoost: Float
         let contextWords: [String]
-        let validator: ((String) -> Bool)?
+        let validator: (@Sendable (String) -> Bool)?
 
         init(
             _ pattern: String,
@@ -197,7 +199,7 @@ public enum PostProcessing {
             baseScore: Float = 0.5,
             contextBoost: Float = 0.35,
             contextWords: [String] = [],
-            validator: ((String) -> Bool)? = nil
+            validator: (@Sendable (String) -> Bool)? = nil
         ) {
             do {
                 self.regex = try NSRegularExpression(pattern: pattern, options: options)
@@ -214,7 +216,7 @@ public enum PostProcessing {
         }
     }
 
-    struct SemanticUnitMatch {
+    struct SemanticUnitMatch: Sendable {
         let start: Int
         let end: Int
         let entityType: String
@@ -1369,7 +1371,7 @@ public enum PostProcessing {
         return false
     }
 
-    private static func validateSSN(_ text: String) -> Bool {
+    @Sendable private static func validateSSN(_ text: String) -> Bool {
         let digits = digitsOnly(in: text)
         guard digits.count == 9 else {
             return false
@@ -1392,7 +1394,7 @@ public enum PostProcessing {
         return true
     }
 
-    private static func validateLuhn(_ text: String) -> Bool {
+    @Sendable private static func validateLuhn(_ text: String) -> Bool {
         let digits = digitsOnly(in: text)
         guard digits.count >= 13 else {
             return false
@@ -1400,7 +1402,7 @@ public enum PostProcessing {
         return luhnChecksum(of: digits) == 0
     }
 
-    private static func validateNPI(_ text: String) -> Bool {
+    @Sendable private static func validateNPI(_ text: String) -> Bool {
         let digits = digitsOnly(in: text)
         guard digits.count == 10 else {
             return false
@@ -1408,7 +1410,7 @@ public enum PostProcessing {
         return luhnChecksum(of: "80840" + digits) == 0
     }
 
-    private static func validatePhoneUS(_ text: String) -> Bool {
+    @Sendable private static func validatePhoneUS(_ text: String) -> Bool {
         let digits = digitsOnly(in: text)
 
         if digits.count == 10 {

@@ -574,6 +574,51 @@ The generation result includes decoded text, generated token IDs, prompt and
 generation token counts, and prefill/generation timing. Overloads accept
 text-only prompts, `CIImage`, or multiple `UserInput.Image` values.
 
+## Concurrency and Thread Safety
+
+OpenMedKit compiles in the Swift 5 language mode, so adding it does not change
+your app's language mode. CI builds every first-party target with complete
+concurrency checking, the Swift 6 data-race checks reported as warnings, and
+fails on any diagnostic in `swift/OpenMedKit/Sources` or
+`swift/OpenMedKit/Tests`. The lane builds the root package and its tests on
+macOS, and the library and extension targets for the iOS Simulator. To
+reproduce it locally:
+
+```bash
+python3 scripts/release/check_swift_strict_concurrency.py --platform macos
+python3 scripts/release/check_swift_strict_concurrency.py --platform ios
+swift test --sanitize=thread --filter 'ConcurrencySafetyTests|SpeechDecoderProgressConcurrencyTests'
+```
+
+Public value types are `Sendable`. That covers results, configurations,
+policies, limits, snapshots and evidence such as `EntityPrediction`,
+`DeidentificationResult`, `Policy`, `OpenMedBackend` and the EDF, WFDB, audio
+conversion and voice-embedding value types. You can pass them between tasks and
+actors freely.
+
+Runtime types follow one of these contracts:
+
+| Type | `Sendable` | Contract |
+|---|---|---|
+| `OpenMed`, `NERPipeline`, `PlatformModel`, `OpenMedZeroShotNER`, `OpenMedZeroShotClassifier`, `OpenMedRelationExtractor` | No | Inference is synchronous and has no internal lock. Use each instance from one isolation domain: create and call it from one task or actor, or keep it inside your own actor. Give concurrent workers separate instances. |
+| `ExtensionRedactionHandler`, `TranscriptLanguageRouter`, `SpeechEndpointAdapter`, `VoiceEmbeddingSession`, `VoiceEmbeddingBuffer`, `VoiceEmbeddingHandle`, `ConvertedAudioSamples`, `WFDBFileSource` | No | Same single-isolation-domain rule. |
+| `OpenMedMaple`, `CoreMLSpeechEngine` | Actor | Calls are serialized by the actor. |
+| `OpenMedVisionLanguageModel` | Yes | Share one instance. The MLX model container serializes model access. `generate(_:images:)` takes its images as `sending`, so do not keep using them concurrently after the call. |
+| `GeneratedTextGuard` | Yes, lock | Share one instance. It runs one detector call at a time. A concurrent caller that finds the detector busy gets `phi_uncertainty` with no text; unscreened text is never released. |
+| `StreamingSpeechSession` | Yes, lock | `snapshot()`, `requestCancellation()` and `cancel()` are safe from any task. Appends must still be awaited in sample order. An append made while another is decoding is refused as busy. Every submitted buffer is cleared on every path. |
+| `SpeechPCMBuffer`, `CapturePCMBuffer` | Yes, lock | Submission transfers ownership. `clear()` is atomic: a concurrent reader sees the whole buffer or a refusal, never a partially overwritten one. |
+| `AmbientSession`, `AmbientAudioCapture` | Yes, lock | One lock guards all state and content. The clock, reader and consumer callbacks run under that lock, so keep them short, synchronous and local. An audio callback that finds the gate busy is dropped and cleared, never queued. |
+| `AppleMicrophoneSource` | Yes, lock | Construction and `stop()` are safe from any thread and do not open the microphone. |
+| `MultimodalThermalSession` | Yes, lock | Admits one run at a time. Concurrent runs are withheld with reason `resources`. |
+| `AgentInMemoryReceiptReplayStore` | Yes, lock | Each digest is claimed at most once across threads. |
+| `RedactionShareViewController`, `MultimodalReviewView` | Main actor | Use from the main actor only. `ExtensionItemCodec.plainText(from:)` runs in the caller's isolation domain, so a view controller can pass its extension items directly. |
+
+Every type marked "Yes, lock" is `@unchecked Sendable` and backed by a lock.
+`ConcurrencySafetyTests` and `SpeechDecoderProgressConcurrencyTests` call each
+of them from many tasks or threads at once, and CI runs those tests under
+Thread Sanitizer. A unit test fails when a new `@unchecked Sendable` type
+appears in the sources without a matching concurrent-use test.
+
 ## Supported Swift MLX Families
 
 The current Swift MLX runtime is the BERT-family token-classification path shared across:

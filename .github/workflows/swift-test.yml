@@ -11,6 +11,7 @@ on:
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'scripts/release/check_swift_manifest_drift.py'
+      - 'scripts/release/check_swift_strict_concurrency.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -27,6 +28,7 @@ on:
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'scripts/release/check_swift_manifest_drift.py'
+      - 'scripts/release/check_swift_strict_concurrency.py'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
@@ -69,6 +71,29 @@ jobs:
 
     - name: Build versioned root-package consumer for macOS
       run: scripts/check_swift_root_consumer.sh macos
+
+  strict-concurrency:
+    name: Strict concurrency (macOS and iOS)
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    # The package keeps the Swift 5 language mode for consumers; this lane fails on
+    # any first-party diagnostic under the Swift 6 complete data-race checks.
+    - name: Build root package and tests with complete concurrency checking
+      run: python3 scripts/release/check_swift_strict_concurrency.py --platform macos
+
+    - name: Build library and extension targets for iOS with complete concurrency checking
+      run: python3 scripts/release/check_swift_strict_concurrency.py --platform ios
+
+    - name: Run concurrent-use tests under Thread Sanitizer
+      run: >-
+        swift test --sanitize=thread
+        --filter 'ConcurrencySafetyTests|SpeechDecoderProgressConcurrencyTests'
 
   build-ios:
     name: Build for iOS

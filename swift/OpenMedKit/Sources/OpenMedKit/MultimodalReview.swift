@@ -96,7 +96,7 @@ public struct MultimodalReviewCase: Sendable {
 }
 
 /// Protected display text. No values are copied into decisions or diagnostics.
-public struct LocalReviewAlternative: CustomStringConvertible, CustomDebugStringConvertible {
+public struct LocalReviewAlternative: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public let reference: String
     public let value: String
     public var description: String { "LocalReviewAlternative(value=<private>)" }
@@ -111,7 +111,7 @@ public struct LocalReviewAlternative: CustomStringConvertible, CustomDebugString
 
 /// Bounded in-memory display material. Images are copied into immutable owned pixels.
 /// The caller authenticates source custody and the crop; this component does not.
-public struct LocalMultimodalReviewContent: CustomStringConvertible, CustomDebugStringConvertible {
+public struct LocalMultimodalReviewContent: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public let revision: String
     public let sourceDigest: String
     public let text: String?

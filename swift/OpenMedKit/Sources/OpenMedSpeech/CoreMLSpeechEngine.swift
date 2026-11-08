@@ -53,10 +53,10 @@ public actor CoreMLSpeechEngine: LocalSpeechEngine {
     private var drainers = [CheckedContinuation<Void, Never>]()
     private var unloading: Task<Void, Never>?
 
-    private init(engine: StrictLocalWhisperKit, tokenizer: LocalEnglishTokenizer) throws {
+    private init(engine: StrictLocalWhisperKit, tokenizer: LocalEnglishTokenizer, provenance: SpeechEngineProvenance) {
         self.engine = engine
         self.tokenizer = tokenizer
-        provenance = try SpeechEngineProvenance(providerID: "apple-coreml-whisper", providerRevision: VerifiedSpeechArtifact.runtimeRevision, modelFingerprint: VerifiedSpeechArtifact.fingerprint, language: "en")
+        self.provenance = provenance
     }
 
     /// Load only the exact verified bundle. Revalidates before and after Core ML load.
@@ -82,7 +82,10 @@ public actor CoreMLSpeechEngine: LocalSpeechEngine {
             guard engine.textDecoder.logitsSize == 51864, engine.audioEncoder.embedSize == 384 else { throw StreamingSpeechError.artifactMismatch }
             try artifact.revalidate()
             try Task.checkCancellation()
-            return try CoreMLSpeechEngine(engine: engine, tokenizer: tokenizer)
+            let provenance = try SpeechEngineProvenance(providerID: "apple-coreml-whisper", providerRevision: VerifiedSpeechArtifact.runtimeRevision, modelFingerprint: VerifiedSpeechArtifact.fingerprint, language: "en")
+            // Nothing that can throw follows the hand-off, so the catch below never
+            // touches the engine after the actor owns it.
+            return CoreMLSpeechEngine(engine: engine, tokenizer: tokenizer, provenance: provenance)
         } catch {
             await loaded?.unloadModels()
             if error is CancellationError { throw StreamingSpeechError.cancelled }
@@ -116,8 +119,9 @@ public actor CoreMLSpeechEngine: LocalSpeechEngine {
         closed = true
         if decoding { await withCheckedContinuation { drainers.append($0) } }
         if unloading == nil {
-            let engine = engine
-            unloading = Task { await engine.unloadModels() }
+            // Capture the actor rather than a copy of its non-Sendable engine, so the
+            // task inherits this actor's isolation instead of racing it.
+            unloading = Task { await self.engine.unloadModels() }
         }
         await unloading?.value
     }
@@ -178,7 +182,7 @@ public actor CoreMLSpeechEngine: LocalSpeechEngine {
 
 /// The dependency can deliver progress on detached tasks. Fence those tasks here,
 /// including for direct engine users, and again at the session boundary.
-private final class SpeechDecoderProgress: @unchecked Sendable {
+final class SpeechDecoderProgress: @unchecked Sendable {
     private let lock = NSLock()
     private let progress: @Sendable (Int, SpeechRecognition) -> Bool
     private var active = true
