@@ -12,6 +12,7 @@ const MAX_SHORT_FIELD_CHARS = 128;
 const TEXT_HASH_PATTERN = /^hmac-sha256:[0-9a-f]{64}$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 const CANONICAL_LABEL_PATTERN = /^[A-Z0-9_]{1,128}$/;
+const REASON_PATTERN = /^[a-z0-9_]{1,64}$/;
 const POLICY_LABELS = new Set([
   "DIRECT_IDENTIFIER",
   "QUASI_IDENTIFIER",
@@ -93,9 +94,13 @@ export interface SidecarPingResult {
 export type SidecarErrorCode =
   | "INVALID_REQUEST"
   | "PROCESSING_FAILED"
+  | "SIDECAR_ARTIFACT_INCOMPATIBLE"
+  | "SIDECAR_ARTIFACT_MISMATCH"
+  | "SIDECAR_ARTIFACT_MISSING"
   | "SIDECAR_IO"
   | "SIDECAR_BUSY"
   | "SIDECAR_CONFIGURATION"
+  | "SIDECAR_MANIFEST_INVALID"
   | "SIDECAR_NOT_RUNNING"
   | "SIDECAR_PROTOCOL"
   | "SIDECAR_SPAWN_FAILED"
@@ -104,11 +109,14 @@ export type SidecarErrorCode =
 
 export class OpenMedSidecarError extends Error {
   readonly code: SidecarErrorCode;
+  /** Stable snake_case reason code from the host, when it sent one. */
+  readonly reason: string | undefined;
 
-  constructor(code: SidecarErrorCode, message: string) {
+  constructor(code: SidecarErrorCode, message: string, reason?: string) {
     super(message);
     this.name = "OpenMedSidecarError";
     this.code = code;
+    this.reason = reason;
   }
 }
 
@@ -170,7 +178,11 @@ export class OpenMedTauriClient {
     } catch (error: unknown) {
       const payload = asRecord(error);
       const code = readErrorCode(payload.code);
-      throw new OpenMedSidecarError(code, safeErrorMessage(code));
+      throw new OpenMedSidecarError(
+        code,
+        safeErrorMessage(code),
+        readReason(payload.reason),
+      );
     }
   }
 }
@@ -187,9 +199,13 @@ function readErrorCode(value: unknown): SidecarErrorCode {
   switch (value) {
     case "INVALID_REQUEST":
     case "PROCESSING_FAILED":
+    case "SIDECAR_ARTIFACT_INCOMPATIBLE":
+    case "SIDECAR_ARTIFACT_MISMATCH":
+    case "SIDECAR_ARTIFACT_MISSING":
     case "SIDECAR_BUSY":
     case "SIDECAR_CONFIGURATION":
     case "SIDECAR_IO":
+    case "SIDECAR_MANIFEST_INVALID":
     case "SIDECAR_NOT_RUNNING":
     case "SIDECAR_PROTOCOL":
     case "SIDECAR_SPAWN_FAILED":
@@ -201,17 +217,32 @@ function readErrorCode(value: unknown): SidecarErrorCode {
   }
 }
 
+function readReason(value: unknown): string | undefined {
+  return typeof value === "string" && REASON_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
 function safeErrorMessage(code: SidecarErrorCode): string {
   switch (code) {
     case "INVALID_REQUEST":
       return "The OpenMed sidecar request is invalid.";
     case "PROCESSING_FAILED":
       return "OpenMed de-identification failed; verify the local model bundle.";
+    case "SIDECAR_ARTIFACT_INCOMPATIBLE":
+      return "The OpenMed sidecar bundle is not compatible with this host.";
+    case "SIDECAR_ARTIFACT_MISMATCH":
+      return "An OpenMed sidecar artifact does not match its manifest.";
+    case "SIDECAR_ARTIFACT_MISSING":
+      return "A required OpenMed sidecar artifact is missing.";
+    case "SIDECAR_MANIFEST_INVALID":
+      return "The OpenMed sidecar manifest is missing or invalid.";
     case "SIDECAR_BUSY":
       return "The OpenMed sidecar is already processing a request.";
     case "SIDECAR_CONFIGURATION":
       return "The OpenMed sidecar configuration is invalid.";
     case "SIDECAR_NOT_RUNNING":
+      return "The OpenMed sidecar has been stopped by the host.";
     case "SIDECAR_TERMINATED":
       return "The OpenMed sidecar terminated before responding.";
     case "SIDECAR_PROTOCOL":

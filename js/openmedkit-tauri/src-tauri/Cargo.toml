@@ -7,9 +7,27 @@ publish = false
 [lib]
 path = "lib.rs"
 
+# Writes the versioned artifact manifest for a packaged sidecar and model.
+[[bin]]
+name = "openmed-sidecar-manifest"
+path = "bin/sidecar_manifest.rs"
+test = false
+bench = false
+
+# Synthetic stand-in for the PyInstaller sidecar. Only the qualification tests
+# run it; it is never bundled into an application.
+[[bin]]
+name = "openmed-fake-sidecar"
+path = "testing/fake_sidecar.rs"
+test = false
+bench = false
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 tauri = "2"
-tauri-plugin-shell = "2"
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = ["io-util", "process", "rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread"] }

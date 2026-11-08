@@ -1,0 +1,170 @@
+name: Tauri sidecar qualification
+
+# The default job runs the fake-process qualification on every declared
+# desktop platform. The packaged-sidecar job is the local-artifact lane: it is
+# NOT run by default and starts only from a manual dispatch with
+# `packaged_lane` enabled, because it builds a real PyInstaller sidecar and
+# provisions a real local model.
+
+on:
+  push:
+    branches: [main, master, 'release/v*']
+    paths:
+      - 'js/openmedkit-tauri/**'
+      - 'tests/desktop/**'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/unit/service/fixtures/sidecar_stdio_golden.json'
+      - 'examples/tauri/**'
+      - '.github/workflows/tauri-sidecar.yml'
+  pull_request:
+    branches: [main, master, 'release/v*']
+    paths:
+      - 'js/openmedkit-tauri/**'
+      - 'tests/desktop/**'
+      - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/unit/service/fixtures/sidecar_stdio_golden.json'
+      - 'examples/tauri/**'
+      - '.github/workflows/tauri-sidecar.yml'
+  workflow_dispatch:
+    inputs:
+      packaged_lane:
+        description: 'Also run the local-artifact lane (real PyInstaller sidecar and local model)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RUST_TOOLCHAIN: '1.87.0'
+
+jobs:
+  fake-process:
+    name: Fake-process qualification (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux WebKit build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Run the fake-process qualification
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: cargo test --locked
+
+      - name: Install Node
+        if: runner.os == 'Linux'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+
+      - name: Run the TypeScript client tests
+        if: runner.os == 'Linux'
+        working-directory: js/openmedkit-tauri
+        run: |
+          npm ci
+          npm test
+
+  packaged-sidecar:
+    name: Packaged sidecar lane (${{ matrix.os }}, opt-in)
+    if: github.event_name == 'workflow_dispatch' && inputs.packaged_lane
+    needs: fake-process
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    env:
+      LANE_MODEL_ID: OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux WebKit build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Build the PyInstaller sidecar
+        shell: bash
+        run: |
+          uv sync --extra hf
+          uv run --extra hf --with pyinstaller pyinstaller \
+            --clean --onefile --name openmed-sidecar \
+            --collect-all openmed --collect-all transformers \
+            scripts/openmed_sidecar_entry.py
+
+      # The only network access in the lane. It runs here, in an explicit
+      # setup step, never inside the sidecar, which is started offline.
+      - name: Provision the local model directory
+        shell: bash
+        run: |
+          uv run --extra hf python -c "from huggingface_hub import snapshot_download; snapshot_download('$LANE_MODEL_ID', local_dir='lane/model')"
+          rm -rf lane/model/.cache
+
+      - name: Write the sidecar manifest
+        shell: bash
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: |
+          suffix=""
+          if [ "$RUNNER_OS" = "Windows" ]; then suffix=".exe"; fi
+          sidecar="$GITHUB_WORKSPACE/dist/openmed-sidecar$suffix"
+          echo "OPENMED_TAURI_LANE_SIDECAR=$sidecar" >> "$GITHUB_ENV"
+          cargo run --locked --bin openmed-sidecar-manifest -- \
+            --sidecar "$sidecar" \
+            --model-root "$GITHUB_WORKSPACE/lane/model" \
+            --model-id "$LANE_MODEL_ID" \
+            --out "$GITHUB_WORKSPACE/lane/openmed-sidecar.json"
+
+      - name: Qualify the packaged sidecar
+        shell: bash
+        working-directory: js/openmedkit-tauri/src-tauri
+        env:
+          OPENMED_SIDECAR_HASH_SECRET: sidecar-golden-secret
+        run: |
+          OPENMED_TAURI_LANE_MANIFEST="$GITHUB_WORKSPACE/lane/openmed-sidecar.json" \
+          OPENMED_TAURI_LANE_MODEL_ROOT="$GITHUB_WORKSPACE/lane/model" \
+          OPENMED_TAURI_LANE_EVIDENCE="$GITHUB_WORKSPACE/lane/evidence.json" \
+          cargo test --locked --test packaged_sidecar_lane -- --ignored
+
+      - name: Upload value-free lane evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tauri-sidecar-lane-${{ matrix.os }}
+          path: lane/evidence.json
+          if-no-files-found: ignore
