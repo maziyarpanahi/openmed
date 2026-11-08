@@ -36,7 +36,14 @@ def _read_budgets() -> dict[str, int]:
 def test_android_budgets_are_committed_positive_ceiling_values() -> None:
     budgets = _read_budgets()
 
-    assert budgets.keys() == {"aar.maxBytes", "coldStart.maxMillis"}
+    assert budgets.keys() == {
+        "aar.maxBytes",
+        "coldStart.maxMillis",
+        *(
+            f"consumerApk.{abi}.maxDeltaBytes"
+            for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        ),
+    }
     assert all(value > 0 for value in budgets.values())
 
 
