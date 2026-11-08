@@ -782,6 +782,7 @@ classification:
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
+    - migration/openmedkit-installed-packages.md
     - faq.md
     - troubleshooting.md
     - onboarding.md
