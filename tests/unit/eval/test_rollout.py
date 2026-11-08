@@ -746,3 +746,42 @@ def test_model_rollout_workflow_is_fail_closed_and_tracks_rollbacks() -> None:
     assert "gh issue create" in workflow
     assert "rolled_back" in workflow
     assert "exit 1" in workflow
+
+
+def test_state_and_audit_saves_are_atomic_on_write_failure(
+    tmp_path, monkeypatch
+) -> None:
+    """A failed mid-write leaves the committed documents intact, no temp files."""
+
+    machine = _machine()
+    machine.seed("pii", "tiny", "mlx-fp", target="v3", now=_EPOCH)
+
+    state_path = tmp_path / "rollout_state.json"
+    audit_path = tmp_path / "rollout_audit.json"
+    machine.save(state_path)
+    machine.save_audit(audit_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "rollout_audit.json",
+        "rollout_state.json",
+    ]
+    # Preserve a valid serialization distinct from the new canonical output.
+    for path in (state_path, audit_path):
+        path.write_bytes(path.read_bytes().rstrip(b"\n"))
+    committed_state = state_path.read_bytes()
+    committed_audit = audit_path.read_bytes()
+
+    def explode(src: object, dst: object) -> None:
+        raise OSError("simulated full disk")
+
+    monkeypatch.setattr(os, "replace", explode)
+    with pytest.raises(OSError, match="simulated full disk"):
+        machine.save(state_path)
+    with pytest.raises(OSError, match="simulated full disk"):
+        machine.save_audit(audit_path)
+
+    assert state_path.read_bytes() == committed_state
+    assert audit_path.read_bytes() == committed_audit
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "rollout_audit.json",
+        "rollout_state.json",
+    ]

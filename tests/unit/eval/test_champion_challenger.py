@@ -438,3 +438,26 @@ def test_committed_champion_pointer_is_loadable() -> None:
 
     pointer = ChampionPointer.load()
     assert pointer.to_dict()["schema_version"] == 1
+
+
+def test_champion_pointer_save_is_atomic_on_write_failure(
+    tmp_path, monkeypatch
+) -> None:
+    """A failed mid-write leaves the committed pointer intact, no temp files."""
+
+    pointer_path = tmp_path / "champion.json"
+    ChampionPointer().save(pointer_path)
+    assert [p.name for p in tmp_path.iterdir()] == ["champion.json"]
+    # Use a different, valid serialization so an in-place overwrite is visible.
+    pointer_path.write_bytes(pointer_path.read_bytes().rstrip(b"\n"))
+    committed = pointer_path.read_bytes()
+
+    def explode(src: object, dst: object) -> None:
+        raise OSError("simulated full disk")
+
+    monkeypatch.setattr(os, "replace", explode)
+    with pytest.raises(OSError, match="simulated full disk"):
+        ChampionPointer().save(pointer_path)
+
+    assert pointer_path.read_bytes() == committed
+    assert [p.name for p in tmp_path.iterdir()] == ["champion.json"]
