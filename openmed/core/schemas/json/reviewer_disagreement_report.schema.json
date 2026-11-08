@@ -27,6 +27,20 @@
         "numerator": {"type": ["integer", "null"], "minimum": 0},
         "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
         "suppressed": {"type": "boolean"}
+      },
+      "if": {"properties": {"suppressed": {"const": true}}},
+      "then": {
+        "properties": {
+          "denominator": {"type": "null"},
+          "numerator": {"type": "null"},
+          "rate": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "denominator": {"type": "integer"},
+          "numerator": {"type": "integer"}
+        }
       }
     },
     "reason_adjudication_rate": {

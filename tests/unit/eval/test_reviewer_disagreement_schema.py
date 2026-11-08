@@ -112,3 +112,18 @@ def test_report_with_identifier_key_fails_validation(extra_key: str) -> None:
     report[extra_key] = "synthetic-identifier"
 
     assert list(validator.iter_errors(report))
+
+
+def test_suppressed_rate_rejects_disclosed_counts() -> None:
+    schema = _load_schema()
+    validator = validator_for(schema)(schema)
+    report = _synthetic_report()
+    report["agreement"].update(
+        suppressed=True, numerator=None, denominator=None, rate=None
+    )
+    report["has_suppressed_cells"] = True
+    assert validator.is_valid(report)
+
+    report["agreement"]["numerator"] = 1
+
+    assert not validator.is_valid(report)
