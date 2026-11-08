@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ from openmed.interop.archive_safety import ArchiveSafetyPolicy
 from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
+from .ooxml_residual import _check_source, _publish, _read_source, _run_coverage
 
 _PPTX_HINT = 'Install with: pip install "openmed[multimodal]".'
 _BLOCK_SEPARATOR = "\n"
@@ -259,9 +261,10 @@ def write_redacted_pptx(
     Returns:
         The output path.
     """
-    document = extract_pptx(source_path)
+    source_data = _read_source(source_path)
+    document = extract_pptx(io.BytesIO(source_data))
     redactions = map_text_spans_to_pptx_runs(document, spans, replacement=replacement)
-    _write_pptx_redactions(source_path, output_path, redactions)
+    _write_pptx_redactions(source_data, output_path, redactions)
     return Path(output_path)
 
 
@@ -439,15 +442,16 @@ def _source_span_to_run_range(
 
 
 def _write_pptx_redactions(
-    source_path: str | Path,
-    output_path: str | Path,
+    source_data: bytes,
+    output_path: str | Path | BinaryIO,
     redactions: Sequence[PptxRedaction],
 ) -> None:
-    with admitted_zip(source_path) as archive:
+    with admitted_zip(io.BytesIO(source_data)) as archive:
         pptx = _import_pptx()
         archive.fp.seek(0)
         presentation = pptx.Presentation(archive.fp)
     runs = _collect_runs(presentation)
+    _check_source(source_data, _pptx_coverage(presentation))
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 
     for redaction in _non_overlapping_redactions(redactions):
@@ -472,7 +476,19 @@ def _write_pptx_redactions(
             text = text[: edit.start] + edit.replacement + text[edit.end :]
         run.text = text
 
-    presentation.save(output_path)
+    buffer = io.BytesIO()
+    presentation.save(buffer)
+    _publish(buffer.getvalue(), output_path, _pptx_coverage(presentation))
+
+
+def _pptx_coverage(presentation: Any) -> dict[str, set[tuple[int, ...]]]:
+    parts: dict[str, list[Any]] = defaultdict(list)
+    for slide_index, slide in enumerate(presentation.slides):
+        for context in _iter_slide_text_frames(slide, slide_index):
+            part = slide.notes_slide.part if context.part == "notes" else slide.part
+            for paragraph in context.text_frame.paragraphs:
+                parts[str(part.partname)].extend(run._r for run in paragraph.runs)
+    return _run_coverage(parts)
 
 
 def _collect_runs(presentation: Any) -> dict[int, Any]:
@@ -662,22 +678,23 @@ def _pptx_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    _rewind(path)
-    document = extract_pptx(path)
+    output_path = _policy_value(
+        policy, "output_path", "redacted_path", "destination_path"
+    )
+    snapshot = _read_source(path) if output_path is not None else None
+    source = io.BytesIO(snapshot) if snapshot is not None else path
+    _rewind(source)
+    document = extract_pptx(source)
     entities = _iter_entity_inputs(_detect_entities(document, models, lang))
     replacement = _coerce_optional_str(_policy_value(policy, "replacement"))
     redactions = map_text_spans_to_pptx_runs(
         document, entities, replacement=replacement
     )
-    output_path = _policy_value(
-        policy, "output_path", "redacted_path", "destination_path"
-    )
     if not redactions and output_path is None:
         return document
 
-    if output_path is not None:
-        _rewind(path)
-        _write_pptx_redactions(path, output_path, redactions)
+    if snapshot is not None:
+        _write_pptx_redactions(snapshot, output_path, redactions)
 
     metadata = dict(document.metadata)
     metadata.update(

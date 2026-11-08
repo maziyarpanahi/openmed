@@ -175,6 +175,7 @@ class TextRemovalRegion:
     residual_word_count: int
     residual_sha256: tuple[str, ...]
     label: str | None = None
+    source_text_required: bool = True
 
     @property
     def source_text_found(self) -> bool:
@@ -183,8 +184,14 @@ class TextRemovalRegion:
 
     @property
     def passed(self) -> bool:
-        """True when source text was measurable and none remains anywhere."""
-        return self.source_text_found and self.residual_word_count == 0
+        """True when required source text was measured and no text remains.
+
+        Image-only code regions do not require selectable source text. Their
+        pixel coverage and residual-code checks are enforced by the renderer.
+        """
+        return (
+            self.source_text_found or not self.source_text_required
+        ) and self.residual_word_count == 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return offsets, counts, and hashes without plaintext identifiers."""
@@ -193,6 +200,7 @@ class TextRemovalRegion:
             "bbox": list(self.bbox),
             "passed": self.passed,
             "source_text_found": self.source_text_found,
+            "source_text_required": self.source_text_required,
             "source_word_count": self.source_word_count,
             "source_sha256": list(self.source_sha256),
             "residual_word_count": self.residual_word_count,
