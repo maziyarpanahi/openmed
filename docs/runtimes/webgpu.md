@@ -108,6 +108,15 @@ Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
+## Content-Security-Policy
+
+A synthetic WebAssembly fixture exercises a strict CSP (`script-src 'self'
+'wasm-unsafe-eval'`, `connect-src 'self' blob:`, `worker-src 'self' blob:`) plus
+COOP/COEP. See [Content-Security-Policy profile](../../js/openmedkit-web/README.md#content-security-policy-profile)
+for the full header set and what each directive is for. Removing
+`'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
+rather than falling back silently.
+
 ## Direct WGSL classification head
 
 ONNX Runtime Web's WebGPU provider already uses shader-backed matrix
