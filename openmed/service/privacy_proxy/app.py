@@ -349,10 +349,8 @@ class PrivacyProxy:
             tail = state.raw_restorer.finish()
             if tail:
                 yield _raw_stream_chunk(tail, state)
-            for restorer in state.mapping_restorers.values():
-                tail = restorer.finish()
-                if tail:
-                    yield _raw_stream_chunk(tail, state)
+            for event in _flush_stream_restorers(state):
+                yield event
             if not state.finish_sent:
                 state.finish_sent = True
                 yield _finish_stream_chunk(state)
@@ -799,7 +797,8 @@ def _stream_mapping_events(
     if not isinstance(choices, list):
         raise PrivacyProxyResponseError(reason_code="invalid_stream_chunk")
     normalized_choices: list[dict[str, Any]] = []
-    for choice in choices:
+    flushed: list[dict[str, Any] | object] = []
+    for position, choice in enumerate(choices):
         if not isinstance(choice, Mapping):
             raise PrivacyProxyResponseError(reason_code="invalid_stream_chunk")
         normalized = dict(choice)
@@ -810,9 +809,13 @@ def _stream_mapping_events(
         normalized_choices.append(normalized)
         if normalized.get("finish_reason") is not None:
             state.finish_sent = True
+            # Release held-back tool-call argument text before the finish chunk.
+            flushed.extend(
+                _flush_stream_restorers(state, str(position), tool_arguments_only=True)
+            )
     result["choices"] = normalized_choices
     state.role_sent = True
-    return [result]
+    return [*flushed, result]
 
 
 def _restore_stream_value(
@@ -821,7 +824,7 @@ def _restore_stream_value(
     path: tuple[str, ...] = (),
 ) -> Any:
     if isinstance(value, str):
-        if path and path[-1] == "content":
+        if path and (path[-1] == "content" or _is_tool_argument_path(path)):
             restorer = state.mapping_restorers.setdefault(
                 path,
                 _IncrementalRestorer(
@@ -842,10 +845,90 @@ def _restore_stream_value(
         }
     if isinstance(value, list):
         return [
-            _restore_stream_value(child, state, (*path, str(index)))
+            _restore_stream_value(
+                child, state, (*path, _stream_child_key(path, index, child))
+            )
             for index, child in enumerate(value)
         ]
     return value
+
+
+def _stream_child_key(path: tuple[str, ...], position: int, child: Any) -> str:
+    """Key a streamed list item; tool calls are identified by their ``index``."""
+    if path and path[-1] == "tool_calls" and isinstance(child, Mapping):
+        tool_index = child.get("index")
+        if isinstance(tool_index, int) and not isinstance(tool_index, bool):
+            return str(tool_index)
+    return str(position)
+
+
+def _is_tool_argument_path(path: tuple[str, ...]) -> bool:
+    """Return whether ``path`` is a streamed tool-call ``function.arguments``."""
+    return (
+        len(path) >= 3
+        and path[-1] == "arguments"
+        and path[-2] == "function"
+        and "tool_calls" in path
+    )
+
+
+def _tool_argument_chunk(
+    path: tuple[str, ...], text: str, state: _StreamState
+) -> dict[str, Any] | None:
+    """Return a chunk carrying flushed tool-call argument text for ``path``."""
+    # path: ("choices", <choice>, "delta", "tool_calls", <tool call>, "function",
+    # "arguments")
+    try:
+        tools_at = path.index("tool_calls")
+        choice_index = int(path[path.index("choices") + 1])
+        tool_index = int(path[tools_at + 1])
+    except (ValueError, IndexError):
+        return None
+    return {
+        "id": state.prepared.completion_id,
+        "object": "chat.completion.chunk",
+        "created": state.prepared.created,
+        "model": state.prepared.model,
+        "choices": [
+            {
+                "index": choice_index,
+                "delta": {
+                    "tool_calls": [
+                        {"index": tool_index, "function": {"arguments": text}}
+                    ]
+                },
+                "finish_reason": None,
+            }
+        ],
+    }
+
+
+def _flush_stream_restorers(
+    state: _StreamState,
+    choice_key: Optional[str] = None,
+    *,
+    tool_arguments_only: bool = False,
+) -> list[dict[str, Any] | object]:
+    """Flush buffered text, optionally only for one choice, as stream chunks."""
+    events: list[dict[str, Any] | object] = []
+    for path, restorer in state.mapping_restorers.items():
+        if choice_key is not None and path[:2] != ("choices", choice_key):
+            continue
+        if tool_arguments_only and not _is_tool_argument_path(path):
+            continue
+        try:
+            tail = restorer.finish()
+        except PrivacyGatewayError:
+            raise PrivacyProxyResponseError(reason_code="mangled_placeholder") from None
+        if not tail:
+            continue
+        if _is_tool_argument_path(path):
+            chunk = _tool_argument_chunk(path, tail, state)
+            if chunk is not None:
+                events.append(chunk)
+        else:
+            events.append(_raw_stream_chunk(tail, state))
+    return events
 
 
 def _raw_stream_chunk(text: str, state: _StreamState) -> dict[str, Any]:
