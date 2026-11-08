@@ -103,37 +103,40 @@ def test_actual_reviewed_local_brief_matches_bundled_audit_and_response_schemas(
     validate_clinical_record("brief_response", brief.to_response())
 
 
-@pytest.mark.parametrize("change", ["text", "offset", "identity", "receipt", "version"])
-def test_bundled_brief_schemas_refuse_invalid_reviewed_local_metadata(change):
-    import copy
+def test_bundled_brief_schemas_refuse_invalid_reviewed_local_metadata(subtests):
+    for change in ["text", "offset", "identity", "receipt", "version"]:
+        with subtests.test(change=change):
+            import copy
 
-    from openmed.clinical.record_schemas import (
-        ClinicalRecordSchemaError,
-        validate_clinical_record,
-    )
+            from openmed.clinical.record_schemas import (
+                ClinicalRecordSchemaError,
+                validate_clinical_record,
+            )
 
-    value, context = reviewed_fixture()
-    audit = copy.deepcopy(
-        build_clinical_brief(value, context=context, model="extractive").to_dict()
-    )
-    metadata = audit["metrics"]["reviewed_evidence"]
-    if change == "text":
-        metadata["text"] = "SYNTHETIC_PRIVATE_IDENTIFIER"
-    elif change == "offset":
-        metadata["source_length"] = 0
-    elif change == "identity":
-        metadata["references"][1]["reference_id"] = metadata["references"][0][
-            "reference_id"
-        ]
-    elif change == "receipt":
-        metadata["review_receipt"]["expires_at"] = metadata["review_receipt"][
-            "issued_at"
-        ]
-    else:
-        metadata["schema_version"] = True
-    with pytest.raises(ClinicalRecordSchemaError) as caught:
-        validate_clinical_record("brief_audit", audit)
-    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
+            value, context = reviewed_fixture()
+            audit = copy.deepcopy(
+                build_clinical_brief(
+                    value, context=context, model="extractive"
+                ).to_dict()
+            )
+            metadata = audit["metrics"]["reviewed_evidence"]
+            if change == "text":
+                metadata["text"] = "SYNTHETIC_PRIVATE_IDENTIFIER"
+            elif change == "offset":
+                metadata["source_length"] = 0
+            elif change == "identity":
+                metadata["references"][1]["reference_id"] = metadata["references"][0][
+                    "reference_id"
+                ]
+            elif change == "receipt":
+                metadata["review_receipt"]["expires_at"] = metadata["review_receipt"][
+                    "issued_at"
+                ]
+            else:
+                metadata["schema_version"] = True
+            with pytest.raises(ClinicalRecordSchemaError) as caught:
+                validate_clinical_record("brief_audit", audit)
+            assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
 
 
 def admit(context):
@@ -290,9 +293,8 @@ def test_synthetic_context_cannot_be_relabelled_or_receive_local_packet():
     )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_wire_rejects_private_values_unknown_fields_and_wrong_coordinates(subtests):
+    for field, value in [
         ("source_id", "/private/patient.txt"),
         ("source_id", "PatientName"),
         ("offset_convention", "utf8_bytes"),
@@ -301,32 +303,31 @@ def test_synthetic_context_cannot_be_relabelled_or_receive_local_packet():
         ("source_length", True),
         ("source_digest", "private content"),
         ("text", "SYNTHETIC_PRIVATE_TEXT"),
-    ],
-)
-def test_wire_rejects_private_values_unknown_fields_and_wrong_coordinates(field, value):
-    _, context = reviewed_fixture()
-    with pytest.raises(ReviewAdmissionError) as error:
-        ReviewedLocalEvidence.from_dict(context.packet.to_dict() | {field: value})
-    assert error.value.reason is ReviewAdmissionRefusal.INVALID
-    assert str(value) not in str(error.value)
+    ]:
+        with subtests.test(field=field, value=value):
+            _, context = reviewed_fixture()
+            with pytest.raises(ReviewAdmissionError) as error:
+                ReviewedLocalEvidence.from_dict(
+                    context.packet.to_dict() | {field: value}
+                )
+            assert error.value.reason is ReviewAdmissionRefusal.INVALID
+            assert str(value) not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
+def test_nested_span_integrity_and_value_free_shape(subtests):
+    for mutate in [
         lambda p: p["references"][0].update(start=True),
         lambda p: p["references"][0].update(end=p["source_length"] + 1),
         lambda p: p["references"][0].update(text="SYNTHETIC_PRIVATE_TEXT"),
         lambda p: p["references"].append(p["references"][0]),
         lambda p: p["review_receipt"].update(token="SYNTHETIC_SECRET"),
-    ],
-)
-def test_nested_span_integrity_and_value_free_shape(mutate):
-    _, context = reviewed_fixture()
-    packet = context.packet.to_dict()
-    mutate(packet)
-    with pytest.raises(ReviewAdmissionError):
-        ReviewedLocalEvidence.from_dict(packet)
+    ]:
+        with subtests.test(mutate=mutate):
+            _, context = reviewed_fixture()
+            packet = context.packet.to_dict()
+            mutate(packet)
+            with pytest.raises(ReviewAdmissionError):
+                ReviewedLocalEvidence.from_dict(packet)
 
 
 def test_tampered_frozen_record_is_revalidated():
@@ -338,14 +339,13 @@ def test_tampered_frozen_record_is_revalidated():
         admit(context)
 
 
-@pytest.mark.parametrize(
-    "clock", [lambda: float("inf"), lambda: float("nan"), lambda: True, lambda: -1]
-)
-def test_invalid_clock_fails_closed(clock):
-    _, context = reviewed_fixture()
-    with pytest.raises(ReviewAdmissionError) as error:
-        admit(replace(context, clock=clock))
-    assert error.value.reason is ReviewAdmissionRefusal.AUTHORITY_UNAVAILABLE
+def test_invalid_clock_fails_closed(subtests):
+    for clock in [lambda: float("inf"), lambda: float("nan"), lambda: True, lambda: -1]:
+        with subtests.test(clock=clock):
+            _, context = reviewed_fixture()
+            with pytest.raises(ReviewAdmissionError) as error:
+                admit(replace(context, clock=clock))
+            assert error.value.reason is ReviewAdmissionRefusal.AUTHORITY_UNAVAILABLE
 
 
 def test_malformed_json_errors_are_value_free_without_chains():

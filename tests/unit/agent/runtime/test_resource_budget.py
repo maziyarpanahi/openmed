@@ -29,9 +29,8 @@ def _meter() -> RunResourceBudget:
     return RunResourceBudget(_limits(), started_ns=1_000)
 
 
-@pytest.mark.parametrize(
-    ("reservation", "reason"),
-    [
+def test_each_limit_stops_before_scheduling_work(subtests) -> None:
+    for reservation, reason in [
         ({"now_ns": 1_101}, BudgetStopReason.WALL_TIME),
         ({"now_ns": 1_000, "steps": 3}, BudgetStopReason.STEPS),
         ({"now_ns": 1_000, "tool_calls": 2}, BudgetStopReason.TOOL_CALLS),
@@ -40,21 +39,18 @@ def _meter() -> RunResourceBudget:
             BudgetStopReason.MEMORY_ESTIMATE,
         ),
         ({"now_ns": 1_000, "artifact_bytes": 11}, BudgetStopReason.ARTIFACT_STORAGE),
-    ],
-)
-def test_each_limit_stops_before_scheduling_work(
-    reservation: dict[str, int], reason: BudgetStopReason
-) -> None:
-    meter = _meter()
-    report = meter.reserve(**reservation)
+    ]:
+        with subtests.test(reservation=reservation, reason=reason):
+            meter = _meter()
+            report = meter.reserve(**reservation)
 
-    assert report.stopped is True
-    assert report.stop_reason is reason
-    assert report.steps == report.tool_calls == report.artifact_bytes == 0
-    assert report.peak_memory_estimate_bytes == 0
-    assert meter.report() == report
-    with pytest.raises(ResourceBudgetError, match="run_stopped"):
-        meter.reserve(now_ns=1_000)
+            assert report.stopped is True
+            assert report.stop_reason is reason
+            assert report.steps == report.tool_calls == report.artifact_bytes == 0
+            assert report.peak_memory_estimate_bytes == 0
+            assert meter.report() == report
+            with pytest.raises(ResourceBudgetError, match="run_stopped"):
+                meter.reserve(now_ns=1_000)
 
 
 def test_exact_limits_and_cumulative_usage_are_deterministic() -> None:
@@ -113,19 +109,20 @@ def test_parallel_reservations_cannot_oversubscribe_one_run() -> None:
     assert meter.report().stop_reason is BudgetStopReason.STEPS
 
 
-@pytest.mark.parametrize("invalid", [-1, True, 1.5, "synthetic patient identifier"])
-def test_invalid_limits_and_reservations_do_not_echo_values(invalid: object) -> None:
-    sentinel = "synthetic patient identifier"
-    with pytest.raises(ResourceBudgetError) as caught:
-        ResourceBudgetLimits(invalid, 1, 1, 1, 1)  # type: ignore[arg-type]
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
+def test_invalid_limits_and_reservations_do_not_echo_values(subtests) -> None:
+    for invalid in [-1, True, 1.5, "synthetic patient identifier"]:
+        with subtests.test(invalid=invalid):
+            sentinel = "synthetic patient identifier"
+            with pytest.raises(ResourceBudgetError) as caught:
+                ResourceBudgetLimits(invalid, 1, 1, 1, 1)  # type: ignore[arg-type]
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
 
-    meter = _meter()
-    with pytest.raises(ResourceBudgetError) as caught:
-        meter.reserve(now_ns=1_000, artifact_bytes=invalid)  # type: ignore[arg-type]
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
-    assert meter.report().steps == meter.report().artifact_bytes == 0
-    assert meter.stopped is False
+            meter = _meter()
+            with pytest.raises(ResourceBudgetError) as caught:
+                meter.reserve(now_ns=1_000, artifact_bytes=invalid)  # type: ignore[arg-type]
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
+            assert meter.report().steps == meter.report().artifact_bytes == 0
+            assert meter.stopped is False
 
 
 def test_report_has_only_numeric_usage_and_closed_reason() -> None:

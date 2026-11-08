@@ -250,9 +250,8 @@ def test_manifest_omits_sql_connection_strings_and_rollback_values() -> None:
         assert private_value not in repr(manifest)
 
 
-@pytest.mark.parametrize(
-    ("factory", "code"),
-    [
+def test_instruction_metadata_is_strict_and_errors_are_value_free(subtests) -> None:
+    for factory, code in [
         (
             lambda: OmopRollbackInstruction(
                 -1,
@@ -273,14 +272,10 @@ def test_manifest_omits_sql_connection_strings_and_rollback_values() -> None:
             lambda: OmopRollbackInstruction(0, "delete_inserted_row", _digest("a")),
             "unknown_strategy",
         ),
-    ],
-)
-def test_instruction_metadata_is_strict_and_errors_are_value_free(
-    factory: Any,
-    code: str,
-) -> None:
-    with pytest.raises(OmopRollbackManifestError) as captured:
-        factory()
+    ]:
+        with subtests.test(factory=factory, code=code):
+            with pytest.raises(OmopRollbackManifestError) as captured:
+                factory()
 
-    assert captured.value.code == code
-    assert "synthetic-not-a-digest" not in str(captured.value)
+            assert captured.value.code == code
+            assert "synthetic-not-a-digest" not in str(captured.value)

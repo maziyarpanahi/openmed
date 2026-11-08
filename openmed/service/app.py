@@ -80,6 +80,7 @@ from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
+    request_scope_path,
     service_log_config_from_env,
     set_access_log_brief,
     set_access_log_grounding,
@@ -136,6 +137,7 @@ from .schemas import (
     PrivacyGatewayRequest,
     ProfileRequest,
     SMARTBackendIngestionRequest,
+    SystemOneRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -168,6 +170,11 @@ _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
+_MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
+_MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
+_MANIFEST_HEADER = "X-OpenMed-Manifest"
+_MAX_MANIFEST_HEADER_BYTES = 8192
+_SYSTEM_ONE_PATH = "/v1/systemone"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -225,7 +232,7 @@ class _BoundedRequestBodyMiddleware:
         if (
             scope["type"] != "http"
             or scope.get("method") not in {"POST", "PUT", "PATCH"}
-            or scope.get("path") not in self.limited_paths
+            or request_scope_path(scope).rstrip("/") not in self.limited_paths
         ):
             await self.app(scope, receive, send)
             return
@@ -235,6 +242,7 @@ class _BoundedRequestBodyMiddleware:
             try:
                 declared_length = int(content_length)
             except ValueError:
+                scope["openmed.preflight_reason_codes"] = ("bad_request",)
                 await _error_response(
                     400,
                     "bad_request",
@@ -242,6 +250,7 @@ class _BoundedRequestBodyMiddleware:
                 )(scope, receive, send)
                 return
             if declared_length < 0:
+                scope["openmed.preflight_reason_codes"] = ("bad_request",)
                 await _error_response(
                     400,
                     "bad_request",
@@ -249,6 +258,7 @@ class _BoundedRequestBodyMiddleware:
                 )(scope, receive, send)
                 return
             if declared_length > self.max_bytes:
+                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
                 await _error_response(
                     413,
                     "payload_too_large",
@@ -267,6 +277,7 @@ class _BoundedRequestBodyMiddleware:
                 continue
             received_bytes += len(message.get("body", b""))
             if received_bytes > self.max_bytes:
+                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
                 await _error_response(
                     413,
                     "payload_too_large",
@@ -820,14 +831,18 @@ def _metrics_route_label(request: Request) -> str:
 def create_app(
     *,
     max_request_body_bytes: Optional[int] = None,
+    experimental_multimodal_preflight: Optional[bool] = None,
     workflow_service: Optional[WorkflowGovernanceService] = None,
     workflow_policy: Optional[WorkflowHTTPPolicy] = None,
     workflow_clock: Optional[Callable[[], int]] = None,
 ) -> FastAPI:
-    """Create and configure the OpenMed REST FastAPI app.
+    """Create the REST app, optionally enabling single-asset preflight.
 
     Args:
-        max_request_body_bytes: Optional model-route body limit.
+        max_request_body_bytes: Override the route-specific body ceiling.
+        experimental_multimodal_preflight: Explicit experimental opt-in. When
+            omitted, read OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT;
+            unset or false keeps the route absent.
         workflow_service: Trusted local custody service for workflow routes.
         workflow_policy: Server-owned workflow opt-ins; disabled by default.
         workflow_clock: Integer Unix-seconds source for receipt validity checks.
@@ -835,6 +850,12 @@ def create_app(
     Returns:
         Configured application, without starting its lifespan or an effect executor.
     """
+
+    if experimental_multimodal_preflight is None:
+        flag = os.getenv(_MULTIMODAL_PREFLIGHT_ENV, "0").strip().lower()
+        if flag not in {"", "0", "false", "1", "true"}:
+            raise ValueError("Experimental multimodal preflight flag is invalid")
+        experimental_multimodal_preflight = flag in {"1", "true"}
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
 
@@ -935,9 +956,95 @@ def create_app(
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
     app.state.operational_limits = request_limits_from_env()
+    app.state.system_one_enabled = os.getenv(
+        "OPENMED_SERVICE_SYSTEM_ONE", ""
+    ).strip().lower() in {"true", "1", "yes"}
+    app.state.system_one_audit_key = os.urandom(32)
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
+
+    if experimental_multimodal_preflight:
+
+        @app.post(
+            _MULTIMODAL_PREFLIGHT_PATH,
+            tags=["Experimental"],
+            summary="Experimental single-asset multimodal preflight",
+            description=(
+                "Disabled by default. Supply a strict AssetManifest JSON object "
+                "in X-OpenMed-Manifest (at most 8192 bytes) and raw asset bytes "
+                "as application/octet-stream. Returns the unchanged core "
+                "PreflightReport JSON using desktop-v1 limits. No decoding, "
+                "inference or clinical action is performed."
+            ),
+            openapi_extra={
+                "x-experimental": True,
+                "x-enabled-by-default": False,
+                "parameters": [
+                    {
+                        "name": _MANIFEST_HEADER,
+                        "in": "header",
+                        "required": True,
+                        "schema": {"type": "string", "maxLength": 8192},
+                        "description": "Strict AssetManifest JSON; opaque references only",
+                    }
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {"type": "string", "format": "binary"}
+                        }
+                    },
+                },
+            },
+            responses={
+                200: {"description": "Byte-stable core PreflightReport JSON"},
+                413: {"description": "Request body exceeds the configured ceiling"},
+                415: {"description": "unsupported_media_type error envelope"},
+                422: {"description": "malformed_manifest or digest mismatch envelope"},
+            },
+        )
+        async def multimodal_preflight(request: Request) -> Response:
+            """Validate one in-memory asset using the existing preflight contract."""
+            from openmed.multimodal.asset_manifest import (
+                AssetManifest,
+                AssetManifestError,
+            )
+            from openmed.multimodal.preflight import preflight_asset
+
+            def reject(status: int, code: str) -> JSONResponse:
+                request.scope["openmed.preflight_outcome"] = "rejected"
+                request.scope["openmed.preflight_reason_codes"] = (code,)
+                return _error_response(status, code, "Multimodal preflight rejected")
+
+            if (
+                request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                != "application/octet-stream"
+            ):
+                return reject(415, "unsupported_media_type")
+            headers = request.headers.getlist(_MANIFEST_HEADER)
+            if (
+                len(headers) != 1
+                or len(headers[0].encode("utf-8")) > _MAX_MANIFEST_HEADER_BYTES
+            ):
+                return reject(422, "malformed_manifest")
+            try:
+                manifest = AssetManifest.from_json(headers[0])
+            except (AssetManifestError, RecursionError):
+                return reject(422, "malformed_manifest")
+            report = await run_in_threadpool(
+                preflight_asset, manifest, await request.body()
+            )
+            reasons = tuple(finding.reason_code for finding in report.findings)
+            # Do not echo even a syntactically valid caller reference when
+            # source integrity fails. Other abstentions preserve core parity.
+            for code in ("byte_count_mismatch", "sha256_mismatch"):
+                if code in reasons:
+                    return reject(422, code)
+            request.scope["openmed.preflight_outcome"] = report.status.value
+            request.scope["openmed.preflight_reason_codes"] = reasons
+            return Response(content=report.to_json(), media_type="application/json")
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -1024,14 +1131,19 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Question IDs and unknown JSON keys may themselves contain PHI. Use the
+        # matched route so mounted services receive the same content-free error.
+        protected_route = (
+            getattr(request.scope.get("route"), "path", None) == _SYSTEM_ONE_PATH
+        )
         return _error_response(
             422,
             "validation_error",
             "Request validation failed",
-            details=_format_validation_details(exc),
+            details=None if protected_route else _format_validation_details(exc),
         )
 
     @app.exception_handler(ServiceTimeoutError)
@@ -1271,11 +1383,19 @@ def create_app(
     ) -> Dict[str, Any]:
         """Evaluate a bounded local decision and return a typed review result."""
 
+        # Only caller-set fields reach the core contract, so a request without
+        # 1.1.0 fields still resolves to schema 1.0.0.
         body = (
-            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload.dict(exclude_unset=True)
         )
         try:
-            decision_request = CoreDecisionRequest.from_dict(body)
+            # Optional video preflight and metadata scrubbing must not block
+            # the event loop serving unrelated requests.
+            decision_request = await run_in_threadpool(
+                CoreDecisionRequest.from_dict, body
+            )
         except (DecisionError, TypeError, ValueError) as exc:
             raise InputError(
                 "Invalid fixed-option decision request.",
@@ -1301,6 +1421,101 @@ def create_app(
             ),
         )
         return result.to_dict()
+
+    @app.post(
+        _SYSTEM_ONE_PATH,
+        tags=["decision"],
+        response_model=None,
+        responses={
+            200: {
+                "description": "System One answers plus an OpenMed decision ID.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["decision_id", "model", "answers"],
+                            "properties": {
+                                "decision_id": {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$",
+                                },
+                                "model": {"type": "string"},
+                                "answers": {"type": "object"},
+                            },
+                        }
+                    }
+                },
+            },
+            404: {"description": "Route disabled (default)."},
+            422: {"description": "De-identification refused; nothing forwarded."},
+        },
+    )
+    async def private_system_one(payload: SystemOneRequest, request: Request):
+        """De-identify state and every question before scoring with the configured local backend."""
+        from openmed.core.offline import is_local_only
+
+        from .system_one import (
+            SystemOneInputError,
+            SystemOnePrivacyError,
+            protect_and_decide,
+        )
+
+        app_state = request.app.state
+        if not app_state.system_one_enabled:
+            raise HTTPException(status_code=404, detail="System One route is disabled.")
+        runtime = _get_service_runtime(request)
+        if not (
+            app_state.auth.config.enabled
+            and runtime.throttle.rate_limit_enabled
+            and is_local_only(runtime.config)
+        ):
+            return _error_response(
+                503,
+                "privacy_gateway_not_configured",
+                "Local-only mode, service authentication and rate limits are required.",
+            )
+
+        def clean(text: str):
+            model = (
+                runtime.config.pii_model
+                or "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+            )
+            return runtime.run_model_request(
+                model,
+                None,
+                lambda: openmed.deidentify(
+                    text,
+                    method="mask",
+                    model_name=model,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    keep_mapping=False,
+                    use_safety_sweep=True,
+                ),
+            )
+
+        try:
+            return await run_in_threadpool(
+                protect_and_decide,
+                {"state": payload.state, "questions": payload.questions},
+                cleaner=clean,
+                backend=app_state.decision_backend,
+                policy=app_state.decision_access_policy,
+                profiles=app_state.decision_calibration_profiles,
+                audit_key=app_state.system_one_audit_key,
+            )
+        except SystemOneInputError:
+            return _error_response(400, "bad_request", "Invalid System One request.")
+        except SystemOnePrivacyError:
+            return _error_response(
+                422, "outbound_redaction_failed", "Unable to de-identify the request."
+            )
+        except Exception:
+            return _error_response(
+                503,
+                "not_ready",
+                "The local decision backend is unavailable.",
+            )
 
     if openhim_settings.enabled:
 
@@ -1950,15 +2165,19 @@ def create_app(
     app.add_middleware(
         _BoundedRequestBodyMiddleware,
         max_bytes=body_limit,
-        limited_paths=_MODEL_BACKED_PATHS,
-    )
-    app.add_middleware(
-        CorrelationIdMiddleware,
-        log_config=service_log_config_from_env(),
+        limited_paths=_MODEL_BACKED_PATHS
+        | (
+            {_MULTIMODAL_PREFLIGHT_PATH} if experimental_multimodal_preflight else set()
+        ),
     )
     app.add_middleware(
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
+    )
+    app.add_middleware(
+        CorrelationIdMiddleware,
+        log_config=service_log_config_from_env(),
+        minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
     app.add_middleware(WorkflowBoundaryMiddleware)
     validate_route_policies(app)

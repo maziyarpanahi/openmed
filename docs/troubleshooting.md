@@ -144,6 +144,7 @@ published OpenMed installation.
 | Outlook MSG ingestion through the isolated GPL-3.0 parser bridge | `email-msg-gpl` | `pip install "openmed[email-msg-gpl]"` |
 | Heavier PaddleOCR backend | `ocr-paddle` | `pip install "openmed[ocr-paddle]"` |
 | Zero-shot GLiNER NER | `gliner` | `pip install "openmed[gliner]"` |
+| GLiNER2.5 entities, classification, relations and decisions | `gliner2` | `pip install "openmed[gliner2]"` |
 | REST service | `service` | `pip install "openmed[service]"` |
 | MCP server | `mcp` | `pip install "openmed[mcp]"` |
 | Optional Typer/Rich CLI | `cli` | `pip install "openmed[cli]"` |

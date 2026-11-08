@@ -1,4 +1,4 @@
-"""Integration helpers for GLiNER-based zero-shot NER models."""
+"""Native GLiNER and GLiFormer zero-shot NER integrations."""
 
 from __future__ import annotations
 
@@ -87,11 +87,20 @@ def load_gliner_handle(
     cache_dir: Optional[str] = None,
     token: Optional[str] = None,
     device: Optional[str] = None,
+    local_files_only: bool = False,
+    revision: Optional[str] = None,
 ) -> GLiNERHandle:
     """Load a GLiNER model and wrap it in ``GLiNERHandle``."""
 
     ensure_gliner_available()
-    model = _load_model(model_id, cache_dir or None, token or None, device or None)
+    model = _load_model(
+        model_id,
+        cache_dir or None,
+        token or None,
+        device or None,
+        local_files_only,
+        revision,
+    )
 
     return GLiNERHandle(model_id=model_id, model=model)
 
@@ -108,6 +117,8 @@ def _load_model(
     cache_dir: Optional[str],
     token: Optional[str],
     device: Optional[str] = None,
+    local_files_only: bool = False,
+    revision: Optional[str] = None,
 ) -> Any:
     ensure_gliner_available()
     module = importlib.import_module(_PRIMARY_IMPORT)
@@ -117,6 +128,10 @@ def _load_model(
         kwargs["cache_dir"] = cache_dir
     if token:
         kwargs["token"] = token
+    if local_files_only:
+        kwargs["local_files_only"] = True
+    if revision:
+        kwargs["revision"] = revision
     model = loader.from_pretrained(model_id, **kwargs)
     # Place each cached instance once; another device must not move live handles.
     if device and hasattr(model, "to"):
@@ -127,10 +142,128 @@ def _load_model(
     return model
 
 
+def is_gliformer_available(force_refresh: bool = False) -> bool:
+    """Return whether the optional local GLiFormer stack is installed."""
+
+    return is_backend_available("gliformer")
+
+
+def ensure_gliformer_available() -> None:
+    """Raise an actionable installation error for a missing GLiFormer stack."""
+
+    if not is_gliformer_available():
+        raise MissingDependencyError(
+            dependency="gliformer>=0.1.3",
+            instruction="Install with `pip install openmed[gliformer]`.",
+        )
+
+
+@dataclass
+class GLiFormerHandle:
+    """Wrap a native GLiFormer model without a Transformers NER pipeline."""
+
+    model_id: str
+    model: Any
+
+    def predict_entities(
+        self,
+        text: str,
+        labels: Optional[list[str]] = None,
+        *,
+        flat_ner: bool = True,
+        threshold: float = 0.5,
+        **kwargs: Any,
+    ) -> Any:
+        """Predict native half-open character spans using the requested labels."""
+
+        return self.model.predict_entities(
+            text, labels or [], threshold=threshold, flat_ner=flat_ner, **kwargs
+        )
+
+
+def load_gliformer_handle(
+    model_id: str,
+    *,
+    cache_dir: Optional[str] = None,
+    token: Optional[str] = None,
+    device: Optional[str] = None,
+    local_files_only: bool = False,
+    revision: Optional[str] = None,
+) -> GLiFormerHandle:
+    """Load a GLiFormer checkpoint, caching independently for each device.
+
+    Args:
+        model_id: Hugging Face identifier or local checkpoint directory.
+        cache_dir: Optional Hugging Face cache directory.
+        token: Optional Hugging Face authentication token.
+        device: Optional PyTorch device; invalid devices fail visibly.
+        local_files_only: Restrict loading to local files and cached artifacts.
+        revision: Optional checkpoint revision.
+
+    Returns:
+        A handle to an evaluation-mode native GLiFormer model.
+    """
+
+    ensure_gliformer_available()
+    model = _load_gliformer_model(
+        model_id,
+        cache_dir or None,
+        token or None,
+        _resolve_native_device(device),
+        local_files_only,
+        revision,
+    )
+    return GLiFormerHandle(model_id=model_id, model=model)
+
+
+def clear_gliformer_cache() -> None:
+    """Release cached GLiFormer model instances."""
+
+    _load_gliformer_model.cache_clear()
+
+
+def _resolve_native_device(device: Optional[str]) -> str:
+    from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+    resolved = resolve_torch_device(device)
+    if resolved.startswith("mps"):
+        apply_mps_tuning()
+    return resolved
+
+
+@lru_cache(maxsize=4)
+def _load_gliformer_model(
+    model_id: str,
+    cache_dir: Optional[str],
+    token: Optional[str],
+    device: Optional[str],
+    local_files_only: bool,
+    revision: Optional[str],
+) -> Any:
+    module = importlib.import_module("gliformer")
+    model = module.GLiFormer.from_pretrained(
+        model_id,
+        load_tokenizer=True,
+        cache_dir=cache_dir,
+        token=token,
+        local_files_only=local_files_only,
+        revision=revision,
+    )
+    if device:
+        model = model.to(device)
+    model.eval()
+    return model
+
+
 __all__ = [
     "ensure_gliner_available",
     "is_gliner_available",
     "GLiNERHandle",
     "load_gliner_handle",
     "clear_gliner_cache",
+    "GLiFormerHandle",
+    "is_gliformer_available",
+    "ensure_gliformer_available",
+    "load_gliformer_handle",
+    "clear_gliformer_cache",
 ]
