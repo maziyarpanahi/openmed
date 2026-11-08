@@ -430,6 +430,22 @@ class BundleGenerationCache(
         return BundleRecoveryReport(actions)
     }
 
+    /**
+     * Quarantines [generation] with reason `rolled_back` and falls the pointer
+     * back to last green, then rollback, then none. The managed importer calls
+     * it when the activation check of a probation generation fails.
+     */
+    internal fun withdraw(bundleId: String, generation: String) {
+        locked(bundleKey(bundleId)) { key -> quarantineAndRepair(key, generation, QUARANTINE_ROLLED_BACK) }
+    }
+
+    /** Signed anti-rollback sequence of a ready generation. */
+    internal fun sequence(bundleId: String, generation: String): Long? = try {
+        locked(bundleKey(bundleId)) { key -> readGenerationRecord(key, generation)?.sequence }
+    } catch (error: BundleCacheException) {
+        null
+    }
+
     /** Value-free snapshot of one bundle. */
     fun snapshot(bundleId: String): BundleCacheSnapshot =
         locked(bundleKey(bundleId)) { key -> snapshotLocked(key) }
@@ -979,9 +995,9 @@ class BundleGenerationCache(
 
     private class LeaseRecord(val id: String, val owner: String, val expiresAt: Long)
 
-    private class DeclaredFile(val path: String, val size: Long, val sha256: String)
+    internal class DeclaredFile(val path: String, val size: Long, val sha256: String)
 
-    private class ManifestHeader(val bundleId: String, val sequence: Long, val files: List<DeclaredFile>) {
+    internal class ManifestHeader(val bundleId: String, val sequence: Long, val files: List<DeclaredFile>) {
         companion object {
             fun parse(manifest: ByteArray): ManifestHeader? = try {
                 val root = Json.parse(manifest) as Json.Obj
