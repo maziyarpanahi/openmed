@@ -5,6 +5,7 @@ fallback_policy: disabled
 expected_routes:
   - index.html
   - docs/index.html
+  - docs/multimodal/index.html
   - docs/release/v3.2.0/index.html
   - docs/migration/3.1-to-3.2/index.html
   - docs/migration/3.0-to-3.1/index.html
@@ -451,109 +452,10 @@ classification:
     - training/synthetic/code-switched-dialogues.md
     - training/synthetic-release-controls.md
     - reference/preference-schema.md
-    - multimodal/bmp-header-preflight.md
-    - multimodal/gif-header-preflight.md
-    - multimodal/image-header-preflight.md
-    - multimodal/webp-header-preflight.md
-    - multimodal/image-orientation-preflight.md
-    - multimodal/tiff-preflight.md
-    - multimodal/audio-format-summaries.md
-    - multimodal/frame-sampling-manifests.md
-    - multimodal/audio-resampling-plans.md
-    - multimodal/image-geometry.md
     - i18n/locale-tags.md
     - i18n/language-readiness-matrix.md
     - i18n/language-coverage-diffs.md
-    - multimodal/media-type-detection.md
     - i18n/locale-pack-conformance.md
-    - multimodal/pdf-reading-order.md
-    - multimodal/pdf-geometry-preflight.md
-    - multimodal/synthetic-malformed-fixtures.md
-    - multimodal/ocr-streaming.md
-    - multimodal/asset-digests.md
-    - multimodal/asset-manifests.md
-    - multimodal/json-schemas.md
-    - multimodal/manifest-profiles.md
-    - multimodal/asset-limits.md
-    - multimodal/batch-memory-estimates.md
-    - multimodal/vision/vlm-resource-planning.md
-    - multimodal/preflight.md
-    - multimodal/batch-preflight.md
-    - multimodal/preflight-fixtures.md
-    - multimodal/preflight-cli.md
-    - multimodal/inference-cli.md
-    - multimodal/page-batches.md
-    - multimodal/asset-batches.md
-    - multimodal/cache-keys.md
-    - multimodal/processing-summaries.md
-    - multimodal/processing-diffs.md
-    - multimodal/preprocessing-conformance.md
-    - multimodal/edge-vlm-provider.md
-    - multimodal/provider-results.md
-    - multimodal/notices.md
-    - multimodal/runtime-session.md
-    - multimodal/vision/edge-vlm-provider-contract.md
-    - multimodal/provider-capability-matrix.md
-    - multimodal/thermal-latency-gates.md
-    - multimodal/provider-capability-schema.md
-    - multimodal/vision/whole-slide-tiling.md
-    - multimodal/vision/whole-slide-provenance.md
-    - multimodal/vision/quality-abstention.md
-    - multimodal/fused-evidence-graphs.md
-    - multimodal/vision/handwriting-uncertainty.md
-    - multimodal/vision/visual-form-grounding.md
-    - multimodal/ocr-vlm-disagreements.md
-    - multimodal/vision/visual-instruction-injection.md
-    - multimodal/redaction-mask-lineage.md
-    - multimodal/vision/multipage-consistency.md
-    - multimodal/pixel-phi-coverage.md
-    - multimodal/generated-text-guard.md
-    - multimodal/audio-windows.md
-    - multimodal/streaming/offline-asr-contract.md
-    - multimodal/asr-hallucination-check.md
-    - multimodal/transcript-language-routing.md
-    - multimodal/speech-endpoints.md
-    - multimodal/offline-asr-provider.md
-    - multimodal/streaming/phi-withholding-buffer.md
-    - multimodal/streaming/audio-retention.md
-    - multimodal/ambient-session-policy.md
-    - multimodal/ambient-fhir.md
-    - multimodal/apple-audio-capture.md
-    - multimodal/reference-workflow.md
-    - multimodal/wav-preflight.md
-    - multimodal/wav-metadata.md
-    - multimodal/iso-bmff-preflight.md
-    - multimodal/asr-audio-profiles.md
-    - multimodal/ecg-waveform-contract.md
-    - multimodal/edf-reader.md
-    - multimodal/streaming/transcript-revisions.md
-    - multimodal/transcript-holds.md
-    - multimodal/streaming/asr-window-stitching.md
-    - multimodal/ecg-lead-layout.md
-    - multimodal/physiological-waveforms.md
-    - multimodal/ecg-annotation-privacy.md
-    - multimodal/ecg-signal-quality.md
-    - multimodal/ecg-interval-candidates.md
-    - multimodal/ecg-evidence-windows.md
-    - multimodal/openmedkit-contracts.md
-    - multimodal/local-review.md
-    - multimodal/cross-modal-clock-alignment.md
-    - multimodal/apple-speech.md
-    - multimodal/streaming/local-diarization.md
-    - multimodal/streaming/speaker-aliases.md
-    - multimodal/streaming/ambient-speaker-roles.md
-    - multimodal/streaming/ambient-note-evidence.md
-    - multimodal/ambient-corrections.md
-    - multimodal/pdf-redaction-fidelity.md
-    - multimodal/abstention-reasons.md
-    - multimodal/email-ingestion.md
-    - multimodal/epub-extraction.md
-    - multimodal/xlsx-cell-redaction.md
-    - multimodal/aecg-reader.md
-    - multimodal/wfdb-reader.md
-    - multimodal/odt-extraction.md
-    - multimodal/pptx-redaction.md
-    - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
     - evaluation/openphi-vision.md
@@ -604,17 +506,117 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - evaluation/clinical-fixtures.md
-    - multimodal/box-normalization.md
-    - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
-    - multimodal/dicom-sr-provenance.md
-    - multimodal/dicom-transfer-syntax-preflight.md
-    - multimodal/dicom-ecg-waveforms.md
-    - multimodal/vision/dicom-series-sampling.md
-    - multimodal/vision/dicom-pixel-provenance.md
     - evaluation/model-provenance-diff.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
+    - multimodal/index.md
+    - multimodal/preflight.md
+    - multimodal/asset-manifests.md
+    - multimodal/manifest-profiles.md
+    - multimodal/media-type-detection.md
+    - multimodal/asset-limits.md
+    - multimodal/asset-digests.md
+    - multimodal/abstention-reasons.md
+    - multimodal/batch-preflight.md
+    - multimodal/preflight-cli.md
+    - multimodal/preflight-fixtures.md
+    - multimodal/synthetic-malformed-fixtures.md
+    - multimodal/iso-bmff-preflight.md
+    - multimodal/json-schemas.md
+    - multimodal/pdf-geometry-preflight.md
+    - multimodal/pdf-reading-order.md
+    - multimodal/pdf-redaction-fidelity.md
+    - multimodal/email-ingestion.md
+    - multimodal/epub-extraction.md
+    - multimodal/odt-extraction.md
+    - multimodal/rtf-extraction.md
+    - multimodal/pptx-redaction.md
+    - multimodal/xlsx-cell-redaction.md
+    - multimodal/redaction-mask-lineage.md
+    - multimodal/image-header-preflight.md
+    - multimodal/bmp-header-preflight.md
+    - multimodal/gif-header-preflight.md
+    - multimodal/webp-header-preflight.md
+    - multimodal/tiff-preflight.md
+    - multimodal/image-orientation-preflight.md
+    - multimodal/image-geometry.md
+    - multimodal/ocr-streaming.md
+    - multimodal/box-normalization.md
+    - multimodal/page-rotation.md
+    - multimodal/pixel-phi-coverage.md
+    - multimodal/ocr-vlm-disagreements.md
+    - multimodal/vision/quality-abstention.md
+    - multimodal/vision/whole-slide-tiling.md
+    - multimodal/vision/whole-slide-provenance.md
+    - multimodal/vision/handwriting-uncertainty.md
+    - multimodal/vision/visual-form-grounding.md
+    - multimodal/vision/multipage-consistency.md
+    - multimodal/vision/visual-instruction-injection.md
+    - multimodal/dicom-sr-provenance.md
+    - multimodal/dicom-transfer-syntax-preflight.md
+    - multimodal/vision/dicom-series-sampling.md
+    - multimodal/vision/dicom-pixel-provenance.md
+    - multimodal/dicom-ecg-waveforms.md
+    - multimodal/ecg-waveform-contract.md
+    - multimodal/ecg-lead-layout.md
+    - multimodal/ecg-annotation-privacy.md
+    - multimodal/ecg-signal-quality.md
+    - multimodal/ecg-interval-candidates.md
+    - multimodal/ecg-evidence-windows.md
+    - multimodal/aecg-reader.md
+    - multimodal/edf-reader.md
+    - multimodal/wfdb-reader.md
+    - multimodal/physiological-waveforms.md
+    - multimodal/wav-preflight.md
+    - multimodal/wav-metadata.md
+    - multimodal/asr-audio-profiles.md
+    - multimodal/audio-format-summaries.md
+    - multimodal/audio-resampling-plans.md
+    - multimodal/audio-windows.md
+    - multimodal/frame-sampling-manifests.md
+    - multimodal/speech-endpoints.md
+    - multimodal/ambient-session-policy.md
+    - multimodal/apple-audio-capture.md
+    - multimodal/apple-speech.md
+    - multimodal/offline-asr-provider.md
+    - multimodal/asr-hallucination-check.md
+    - multimodal/transcript-language-routing.md
+    - multimodal/transcript-holds.md
+    - multimodal/ambient-corrections.md
+    - multimodal/ambient-fhir.md
+    - multimodal/streaming/offline-asr-contract.md
+    - multimodal/streaming/phi-withholding-buffer.md
+    - multimodal/streaming/audio-retention.md
+    - multimodal/streaming/transcript-revisions.md
+    - multimodal/streaming/asr-window-stitching.md
+    - multimodal/streaming/local-diarization.md
+    - multimodal/streaming/speaker-aliases.md
+    - multimodal/streaming/ambient-speaker-roles.md
+    - multimodal/streaming/ambient-note-evidence.md
+    - multimodal/page-batches.md
+    - multimodal/asset-batches.md
+    - multimodal/batch-memory-estimates.md
+    - multimodal/cache-keys.md
+    - multimodal/provider-results.md
+    - multimodal/processing-summaries.md
+    - multimodal/processing-diffs.md
+    - multimodal/edge-vlm-provider.md
+    - multimodal/vision/edge-vlm-provider-contract.md
+    - multimodal/vision/vlm-resource-planning.md
+    - multimodal/preprocessing-conformance.md
+    - multimodal/provider-capability-matrix.md
+    - multimodal/provider-capability-schema.md
+    - multimodal/thermal-latency-gates.md
+    - multimodal/runtime-session.md
+    - multimodal/generated-text-guard.md
+    - multimodal/fused-evidence-graphs.md
+    - multimodal/cross-modal-clock-alignment.md
+    - multimodal/local-review.md
+    - multimodal/openmedkit-contracts.md
+    - multimodal/reference-workflow.md
+    - multimodal/notices.md
+    - multimodal/inference-cli.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
