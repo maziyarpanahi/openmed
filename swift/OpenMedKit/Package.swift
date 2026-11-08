@@ -5,6 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "OpenMedKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
