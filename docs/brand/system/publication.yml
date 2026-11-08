@@ -356,6 +356,7 @@ classification:
     - models/cache-quotas.md
     - models/rollback-compatibility.md
     - models/portable-bundle.md
+    - models/portable-bundle-calibration.md
     - models/journey-specialist-pack.md
     - model-registry.md
     - ner-families.md

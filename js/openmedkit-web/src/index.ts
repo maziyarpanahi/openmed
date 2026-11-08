@@ -155,6 +155,28 @@ export type {
   VerifyPortableBundleInput,
 } from "./portable-bundle";
 
+export {
+  DECISION_CALIBRATION_EXTENSION,
+  DECISION_CALIBRATION_EXTENSION_VERSION,
+  DECISION_CALIBRATION_PPM_SCALE,
+  DECISION_CALIBRATION_REASONS,
+  DecisionCalibrationError,
+  bundleCalibrationProfileJson,
+  decisionCalibrationRuntimeDigest,
+  readDecisionCalibration,
+  resolveDecisionCalibration,
+  validateDecisionCalibrationRequest,
+} from "./portable-bundle-calibration";
+export type {
+  BundleCalibrationProfile,
+  DecisionCalibrationMethod,
+  DecisionCalibrationRead,
+  DecisionCalibrationReason,
+  DecisionCalibrationRequest,
+  DecisionCalibrationRuntimeBinding,
+  DecisionCalibrationSelection,
+} from "./portable-bundle-calibration";
+
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
 const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;

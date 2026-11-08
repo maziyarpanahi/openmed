@@ -20,6 +20,7 @@ on:
       - "scripts/status/**"
       - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
+      - "tests/fixtures/portable_bundle_calibration/**"
       - "tests/browser/privacy-playground.spec.ts"
       - "tests/web/**"
       - "tests/unit/test_brand_system.py"
