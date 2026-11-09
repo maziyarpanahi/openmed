@@ -669,9 +669,11 @@
 
         func predict(
             _ text: String,
-            confidenceThreshold: Float = 0.0
+            confidenceThreshold: Float = 0.0,
+            checkpoint: OpenMedInferenceCheckpoint = OpenMedInferenceCheckpoint()
         ) throws -> [EntityPrediction] {
             let encoded = try tokenizer.encode(text, maxTokens: maxSeqLength)
+            try checkpoint.check(.windowing)
             guard !encoded.tokenIDs.isEmpty else {
                 return []
             }
@@ -683,6 +685,7 @@
             let logProbabilities = (logits - logSumExp(logits, axis: -1, keepDims: true))[0]
             let probabilities = exp(logProbabilities)
             eval(logProbabilities, probabilities)
+            try checkpoint.check(.modelPrediction)
 
             let flatLogProbabilities = logProbabilities.asArray(Float.self)
             let flatProbabilities = probabilities.asArray(Float.self)
@@ -697,6 +700,7 @@
                 labelInfo: labelInfo,
                 biases: artifact.configuration.viterbiBiases
             )
+            try checkpoint.check(.modelPrediction)
 
             let sourceText = encoded.decodedText == text ? text : encoded.decodedText
             return decodeGroupedEntities(

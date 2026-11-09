@@ -1,5 +1,4 @@
 #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
-    import CryptoKit
     import Dispatch
     import Foundation
     import MLX
@@ -121,38 +120,27 @@
 
         /// Run NER on the given text and return detected entities.
         ///
+        /// Synchronous calls share `OpenMedRuntime`'s staged pipeline and its
+        /// cooperative checkpoints, but observe only the calling task's
+        /// cancellation: they cannot be admitted, drained, or stopped by memory
+        /// pressure or background expiration. Use `OpenMedRuntime` for
+        /// lifecycle-managed inference.
+        ///
         /// - Parameters:
         ///   - text: Input clinical text.
         ///   - confidenceThreshold: Minimum confidence to include an entity (default: 0.5).
         /// - Returns: Array of detected entities above the confidence threshold.
+        /// - Throws: `OpenMedRuntimeError.cancelled` when the calling task is
+        ///   cancelled; output from cancelled work is never returned.
         public func analyzeText(
             _ text: String,
             confidenceThreshold: Float = 0.5
         ) throws -> [EntityPrediction] {
-            let entities: [EntityPrediction]
-            switch runtime {
-            case .coreML(let pipeline):
-                let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
-                entities = try pipeline.predict(
-                    inputIds: inputIDs,
-                    attentionMask: attentionMask,
-                    offsets: offsets,
-                    text: text
-                )
-            case .mlx(let pipeline):
-                let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
-                entities = try pipeline.predict(
-                    inputIDs: inputIDs,
-                    attentionMask: attentionMask,
-                    tokenTypeIDs: tokenTypeIDs,
-                    offsets: offsets,
-                    text: text
-                )
-            case .privacyFilter(let pipeline):
-                entities = try pipeline.predict(text)
-            }
-
-            return entities.filter { $0.confidence >= confidenceThreshold }
+            try analyzeText(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                checkpoint: OpenMedInferenceCheckpoint()
+            )
         }
 
         /// Run PII detection on the given text with OpenMed's smart post-processing.
@@ -165,31 +153,12 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> [EntityPrediction] {
-            let entities = try analyzeText(text, confidenceThreshold: confidenceThreshold)
-            let repairedEntities = PostProcessing.repairEntitySpans(entities, text: text)
-
-            guard useSmartMerging else {
-                return repairedEntities
-            }
-
-            switch runtime {
-            case .privacyFilter:
-                return PostProcessing.mergePIIEntities(
-                    repairedEntities,
-                    text: text,
-                    useSemanticPatterns: true,
-                    preferModelLabels: true,
-                    allowSemanticOnlyMatches: false,
-                    allowSemanticLabelExpansion: false
-                )
-            case .coreML, .mlx:
-                return PostProcessing.mergePIIEntities(
-                    repairedEntities,
-                    text: text,
-                    useSemanticPatterns: true,
-                    preferModelLabels: true
-                )
-            }
+            try extractPII(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                useSmartMerging: useSmartMerging,
+                checkpoint: OpenMedInferenceCheckpoint()
+            )
         }
 
         /// De-identify text under a bundled policy profile.
@@ -225,12 +194,19 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> PolicyDeidentificationResult {
+            let checkpoint = OpenMedInferenceCheckpoint()
             let entities = try extractPII(
                 text,
                 confidenceThreshold: confidenceThreshold,
-                useSmartMerging: useSmartMerging
+                useSmartMerging: useSmartMerging,
+                checkpoint: checkpoint
             )
-            return Self.deidentify(text, entities: entities, policy: policy)
+            return try OpenMedInferenceCore.policyResult(
+                text,
+                entities: entities,
+                policy: policy,
+                checkpoint: checkpoint
+            )
         }
 
         /// Detect and de-identify PII, returning a Python-schema-compatible result.
@@ -240,21 +216,18 @@
             confidenceThreshold: Float = 0.5,
             useSmartMerging: Bool = true
         ) throws -> DeidentificationResult {
+            let checkpoint = OpenMedInferenceCheckpoint()
             let entities = try extractPII(
                 text,
                 confidenceThreshold: confidenceThreshold,
-                useSmartMerging: useSmartMerging
+                useSmartMerging: useSmartMerging,
+                checkpoint: checkpoint
             )
-            let deidentifiedText = Self.deidentifiedText(
+            return try OpenMedInferenceCore.methodResult(
                 text,
                 entities: entities,
-                method: method
-            )
-            return DeidentificationResult(
-                originalText: text,
-                deidentifiedText: deidentifiedText,
-                entities: entities,
-                method: method.rawValue
+                method: method,
+                checkpoint: checkpoint
             )
         }
 
@@ -270,6 +243,8 @@
             tokenOverlap: Int = 32,
             useSmartMerging: Bool = true
         ) throws -> [EntityPrediction] {
+            let checkpoint = OpenMedInferenceCheckpoint()
+            try checkpoint.check(.tokenization)
             let chunks = try makeTokenChunks(
                 for: text,
                 chunkTokenLimit: chunkTokenLimit,
@@ -279,17 +254,20 @@
                 return try extractPII(
                     text,
                     confidenceThreshold: confidenceThreshold,
-                    useSmartMerging: useSmartMerging
+                    useSmartMerging: useSmartMerging,
+                    checkpoint: checkpoint
                 )
             }
 
             var chunkEntities: [EntityPrediction] = []
             for chunk in chunks {
+                try checkpoint.check(.windowing)
                 let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
                 let entities = try extractPII(
                     chunkText,
                     confidenceThreshold: confidenceThreshold,
-                    useSmartMerging: useSmartMerging
+                    useSmartMerging: useSmartMerging,
+                    checkpoint: checkpoint
                 )
                 chunkEntities.append(
                     contentsOf: entities.compactMap { entity in
@@ -297,10 +275,95 @@
                     })
             }
 
-            return mergeChunkedPIIEntities(
+            try checkpoint.check(.merging)
+            let merged = mergeChunkedPIIEntities(
                 chunkEntities,
                 text: text,
                 useSmartMerging: useSmartMerging
+            )
+            try checkpoint.check(.serialization)
+            return merged
+        }
+
+        // MARK: - Staged core
+
+        /// Merge behaviour for this model's detections.
+        var mergeProfile: OpenMedPIIMergeProfile {
+            switch runtime {
+            case .privacyFilter: return .modelSpansOnly
+            case .coreML, .mlx: return .tokenClassification
+            }
+        }
+
+        /// Tokenize, window and run the model behind cooperative checkpoints,
+        /// returning raw detections before confidence filtering.
+        func predictEntities(
+            in text: String,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            switch runtime {
+            case .coreML(let pipeline):
+                try checkpoint.check(.tokenization)
+                let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
+                try checkpoint.check(.windowing)
+                try checkpoint.check(.modelPrediction)
+                let entities = try pipeline.predict(
+                    inputIds: inputIDs,
+                    attentionMask: attentionMask,
+                    offsets: offsets,
+                    text: text
+                )
+                try checkpoint.check(.modelPrediction)
+                return entities
+            case .mlx(let pipeline):
+                try checkpoint.check(.tokenization)
+                let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
+                try checkpoint.check(.windowing)
+                try checkpoint.check(.modelPrediction)
+                let entities = try pipeline.predict(
+                    inputIDs: inputIDs,
+                    attentionMask: attentionMask,
+                    tokenTypeIDs: tokenTypeIDs,
+                    offsets: offsets,
+                    text: text,
+                    checkpoint: checkpoint
+                )
+                try checkpoint.check(.modelPrediction)
+                return entities
+            case .privacyFilter(let pipeline):
+                try checkpoint.check(.tokenization)
+                let entities = try pipeline.predict(text, checkpoint: checkpoint)
+                try checkpoint.check(.modelPrediction)
+                return entities
+            }
+        }
+
+        func analyzeText(
+            _ text: String,
+            confidenceThreshold: Float,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            let entities = try predictEntities(in: text, checkpoint: checkpoint)
+            return OpenMedInferenceCore.applyConfidenceThreshold(entities, confidenceThreshold)
+        }
+
+        func extractPII(
+            _ text: String,
+            confidenceThreshold: Float,
+            useSmartMerging: Bool,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) throws -> [EntityPrediction] {
+            let entities = try analyzeText(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                checkpoint: checkpoint
+            )
+            return try OpenMedInferenceCore.mergePII(
+                entities,
+                text: text,
+                useSmartMerging: useSmartMerging,
+                profile: mergeProfile,
+                checkpoint: checkpoint
             )
         }
 
@@ -437,119 +500,7 @@
             entities: [EntityPrediction],
             policy: Policy
         ) -> PolicyDeidentificationResult {
-            let candidates = deidentificationCandidates(entities, in: text)
-            var redactedText = text
-            var actionRecords: [DeidentifiedSpanAction] = []
-
-            for entity in candidates {
-                let canonicalLabel = Policy.canonicalLabel(for: entity.label)
-                let action = policy.action(for: entity.label)
-                let original = substring(text, start: entity.start, end: entity.end)
-                let replacement = replacementText(
-                    for: action,
-                    canonicalLabel: canonicalLabel,
-                    original: original
-                )
-
-                actionRecords.append(
-                    DeidentifiedSpanAction(
-                        label: entity.label,
-                        canonicalLabel: canonicalLabel,
-                        action: action,
-                        start: entity.start,
-                        end: entity.end,
-                        confidence: entity.confidence,
-                        replacement: replacement
-                    )
-                )
-            }
-
-            for record in actionRecords.reversed() {
-                guard let replacement = record.replacement else {
-                    continue
-                }
-                guard
-                    let range = PostProcessing.scalarRange(
-                        in: redactedText,
-                        start: record.start,
-                        end: record.end
-                    )
-                else {
-                    continue
-                }
-                redactedText.replaceSubrange(range, with: replacement)
-            }
-
-            return PolicyDeidentificationResult(
-                redactedText: redactedText,
-                policyName: policy.name,
-                actions: actionRecords
-            )
-        }
-
-        private static func deidentificationCandidates(
-            _ entities: [EntityPrediction],
-            in text: String
-        ) -> [EntityPrediction] {
-            let textLength = PostProcessing.unicodeScalarCount(in: text)
-            let sorted =
-                entities
-                .compactMap { $0.snappedToGraphemeBoundaries(in: text) }
-                .filter { $0.start >= 0 && $0.end > $0.start && $0.end <= textLength }
-                .sorted {
-                    if $0.start == $1.start {
-                        let lhsLength = entityLength($0)
-                        let rhsLength = entityLength($1)
-                        if lhsLength == rhsLength {
-                            return $0.confidence > $1.confidence
-                        }
-                        return lhsLength > rhsLength
-                    }
-                    return $0.start < $1.start
-                }
-
-            var selected: [EntityPrediction] = []
-            for entity in sorted {
-                let overlapsSelected = selected.contains { existing in
-                    entity.start < existing.end && entity.end > existing.start
-                }
-                if !overlapsSelected {
-                    selected.append(entity)
-                }
-            }
-
-            return selected.sorted {
-                if $0.start == $1.start {
-                    return $0.end < $1.end
-                }
-                return $0.start < $1.start
-            }
-        }
-
-        private static func replacementText(
-            for action: PolicyAction,
-            canonicalLabel: String,
-            original: String
-        ) -> String? {
-            switch action.redactionEquivalent {
-            case .keep:
-                return nil
-            case .mask:
-                return "[\(canonicalLabel)]"
-            case .replace:
-                return "[\(canonicalLabel)_REPLACED]"
-            case .remove:
-                return ""
-            case .hash:
-                return "\(canonicalLabel)_\(stableHash(original))"
-            case .redact:
-                return "[\(canonicalLabel)]"
-            }
-        }
-
-        private static func stableHash(_ text: String) -> String {
-            let digest = SHA256.hash(data: Data(text.utf8))
-            return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
+            OpenMedRedaction.deidentify(text, entities: entities, policy: policy)
         }
 
         static func deduplicateOverlappingEntities(
@@ -672,44 +623,6 @@
 
         private static func substring(_ text: String, start: Int, end: Int) -> String {
             PostProcessing.scalarSubstring(text, start: start, end: end)
-        }
-
-        private static func deidentifiedText(
-            _ text: String,
-            entities: [EntityPrediction],
-            method: DeidentificationMethod
-        ) -> String {
-            var redacted = text
-            for entity in entities.sorted(by: { $0.start > $1.start }) {
-                guard let range = characterRange(in: redacted, start: entity.start, end: entity.end) else {
-                    continue
-                }
-                redacted.replaceSubrange(
-                    range,
-                    with: replacementText(for: entity, method: method)
-                )
-            }
-            return redacted
-        }
-
-        private static func replacementText(
-            for entity: EntityPrediction,
-            method: DeidentificationMethod
-        ) -> String {
-            switch method {
-            case .mask:
-                return "[\(entity.entityType.uppercased())]"
-            case .remove:
-                return ""
-            }
-        }
-
-        private static func characterRange(
-            in text: String,
-            start: Int,
-            end: Int
-        ) -> Range<String.Index>? {
-            PostProcessing.scalarRange(in: text, start: start, end: end)
         }
 
         static func loadTokenizer(
@@ -1183,6 +1096,94 @@
             default:
                 return false
             }
+        }
+    }
+
+    /// Adapts a loaded `OpenMed` session to the runtime's model seam. The
+    /// runtime serializes calls by default and is the session's only owner.
+    final class OpenMedTextModelSession: OpenMedRuntimeModel, @unchecked Sendable {
+        private static let loadQueue = DispatchQueue(
+            label: "OpenMedKit.runtime.load",
+            qos: .userInitiated
+        )
+        private let openMed: OpenMed
+
+        init(_ openMed: OpenMed) {
+            self.openMed = openMed
+        }
+
+        var mergeProfile: OpenMedPIIMergeProfile { openMed.mergeProfile }
+
+        func predictEntities(
+            in text: String,
+            checkpoint: OpenMedInferenceCheckpoint
+        ) async throws -> [EntityPrediction] {
+            try openMed.predictEntities(in: text, checkpoint: checkpoint)
+        }
+
+        static func releaseUnreferencedCaches() {
+            OpenMed.clearRuntimeMemoryCache()
+        }
+
+        /// Load on a dedicated queue: `OpenMed.init` blocks while it prepares
+        /// tokenizer assets and must not occupy a Swift concurrency thread.
+        static func load(
+            backend: OpenMedBackend,
+            maxSeqLength: Int
+        ) async throws -> OpenMedTextModelSession {
+            try await withCheckedThrowingContinuation { continuation in
+                loadQueue.async {
+                    continuation.resume(
+                        with: Result {
+                            OpenMedTextModelSession(
+                                try OpenMed(
+                                    backend: backend,
+                                    maxSeqLength: maxSeqLength,
+                                    allowNetworkAccess: false
+                                )
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    extension OpenMedRuntime {
+        /// Create a lifecycle-managed runtime for an OpenMed text model.
+        ///
+        /// The model session is loaded lazily from local assets with network
+        /// access disabled, both on first use and on every reacquisition after
+        /// an idle, memory-pressure or background release. MLX artifacts carry
+        /// their tokenizer; Core ML bundles need `tokenizerFolderURL`.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX model location.
+        ///   - maxSeqLength: Maximum token sequence length.
+        ///   - configuration: Admission, idle-release and pressure policy.
+        ///   - memoryPressure: Memory-pressure signal source.
+        ///   - backgroundExecution: Background-time provider.
+        ///   - clock: Monotonic clock for timers and latency evidence.
+        public init(
+            backend: OpenMedBackend,
+            maxSeqLength: Int = 512,
+            configuration: OpenMedRuntimeConfiguration = OpenMedRuntimeConfiguration(),
+            memoryPressure: any OpenMedMemoryPressureSource = OpenMedDispatchMemoryPressureSource(),
+            backgroundExecution: any OpenMedBackgroundExecutionProvider = OpenMedNoBackgroundExecution(),
+            clock: any OpenMedRuntimeClock = OpenMedSystemClock()
+        ) {
+            self.init(
+                configuration: configuration,
+                memoryPressure: memoryPressure,
+                backgroundExecution: backgroundExecution,
+                clock: clock,
+                loader: {
+                    try await OpenMedTextModelSession.load(
+                        backend: backend,
+                        maxSeqLength: maxSeqLength
+                    )
+                }
+            )
         }
     }
 #endif
