@@ -64,6 +64,24 @@ The JSON size report records the wheel size plus total site-packages bytes for
 its byte delta from the core installation. CI uploads this report beside the
 wheel and source distribution in the `dist-packages` artifact.
 
+## Distribution metadata
+
+After building, check that the wheel's `METADATA` and the sdist's `PKG-INFO`
+match `pyproject.toml`, then run twine's strict check:
+
+```bash
+python scripts/release/check_dist_metadata.py --dist-dir dist
+uvx --from 'twine==7.0.0' twine check --strict dist/*
+```
+
+The script compares `Requires-Python`, the `Programming Language :: Python`
+classifiers, the PEP 639 `License-Expression` and the `License-File` entries
+with `[project]`, and confirms every listed license file ships in each
+artifact. `license` must be an SPDX expression string and `license-files` a
+list of literal paths. Failures print one issue code per line (for example
+`wheel: license_expression_mismatch`) and exit 1. The CI build job runs both
+commands right after `uv build`.
+
 ## Bumping a budget
 
 Budget changes require a reviewed edit to `gates/release_budgets.json`; CI does
