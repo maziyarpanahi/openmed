@@ -1,0 +1,7 @@
+# Host projects are generated from the pinned React Native template by
+# scripts/prepare-native-app.sh; only the parity sources are committed.
+/ios/
+/android/
+/vendor/
+/build/
+/.bundle/

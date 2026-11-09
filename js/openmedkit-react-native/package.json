@@ -14,9 +14,9 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p example/tsconfig.parity.json",
     "test": "npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/mobile/test_rn_bridge_parity.ts"
+    "test:node": "tsx --test ../../tests/mobile/test_rn_bridge_parity.ts ../../tests/mobile/test_rn_parity_harness.ts"
   },
   "peerDependencies": {
     "react": ">=18",
