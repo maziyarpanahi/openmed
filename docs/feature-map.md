@@ -127,6 +127,20 @@ model-quality or clinical readiness claim.
 | Risk metrics | Re-identification risk, membership/linkage probes, k-anonymity, l-diversity, t-closeness, risk budgets, dashboards, and audit diffs. | `openmed/risk/`, `openmed/eval/attacks/`, `examples/v16_policy_audit_release_gates.py` |
 | Release gates and status | Fail-closed gates, evidence bundles, last-green baseline, device tiers, nano certification, status pages, and leaderboard pages. | `openmed/eval/release_gates.py`, `openmed/eval/evidence_bundle.py`, `openmed/eval/tiers.py`, `openmed/eval/nano_cert.py`, `docs/status/`, `docs/leaderboard/`, [Release Streams & Channels](./release/semver-and-channels.md) |
 
+## Private Learning (experimental)
+
+This experimental area provides metadata contracts, not a training runtime.
+
+| Area | Source module | Guide |
+| --- | --- | --- |
+| Round lifecycle and transitions | `openmed/training/federated_round.py` | [Federated round lifecycle](training/federated-round-lifecycle.md) |
+| Scheduling windows | `openmed/training/federated_schedule.py` | [Federated scheduling](training/federated-scheduling.md) |
+| Round status and reason codes | `openmed/training/federated_status.py` | [Federated round status](training/federated-round-status.md) |
+| Model update metadata | `openmed/training/federated_update_metadata.py` | [Federated update metadata](training/federated-update-metadata.md) |
+| Aggregate metric envelopes | `openmed/training/federated_metrics.py` | [Federated metrics](training/federated-metrics.md) |
+| Schema fingerprints | `openmed/training/federated_schema_fingerprint.py` | [Federated schema fingerprints](training/federated-schema-fingerprints.md) |
+| Offline JSON Schema validation | `openmed/training/private_training_schemas.py` | [Private-training schemas](training/private-training-schemas.md) |
+
 ## Security And Supply Chain
 
 | Area | What it covers | Where to look |
