@@ -43,6 +43,9 @@ PRIVATE_KEY: Final = "private_key"
 ENVIRONMENT_SECRET: Final = "environment_secret"
 """Category for secret-looking values assigned to configuration names."""
 
+URL_CREDENTIAL: Final = "url_credential"
+"""Category for passwords embedded in URL userinfo."""
+
 _SECRET_CATEGORIES = frozenset(
     {
         ACCESS_KEY,
@@ -51,6 +54,7 @@ _SECRET_CATEGORIES = frozenset(
         AUTHORIZATION_HEADER,
         ENVIRONMENT_SECRET,
         PRIVATE_KEY,
+        URL_CREDENTIAL,
     }
 )
 _FINGERPRINT_PREFIX = "sha256:"
@@ -237,6 +241,12 @@ _PARAMETERIZED_AUTHORIZATION_HEADER_PATTERN = re.compile(
     r"(?:authorization|proxy-authorization)"
     r"\s*:\s*"
     r"(?P<value>(?:aws4-hmac-sha256|digest|signature)\s+[^\r\n]+)"
+)
+
+_URL_CREDENTIAL_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*://"
+    r"[^\s:/?#@]*:"
+    r"(?P<password>[^\s/?#@]+)@"
 )
 
 _ENVIRONMENT_ASSIGNMENT_PATTERN = re.compile(
@@ -507,6 +517,12 @@ def _parameterized_header_candidate(
     )
 
 
+def _url_credential_candidate(text: str, match: re.Match[str]) -> _Candidate | None:
+    """Extract only the password segment of URL userinfo."""
+    start, end = match.span("password")
+    return _candidate(text, start, end, URL_CREDENTIAL, 70)
+
+
 def _private_key_candidates(text: str) -> list[_Candidate]:
     """Find private-key blocks and fail closed on unmatched begin markers."""
     candidates: list[_Candidate] = []
@@ -559,6 +575,11 @@ def _collect_candidates(text: str) -> list[_Candidate]:
 
     for match in _PARAMETERIZED_AUTHORIZATION_HEADER_PATTERN.finditer(text):
         candidate = _parameterized_header_candidate(text, match)
+        if candidate is not None:
+            candidates.append(candidate)
+
+    for match in _URL_CREDENTIAL_PATTERN.finditer(text):
+        candidate = _url_credential_candidate(text, match)
         if candidate is not None:
             candidates.append(candidate)
 
@@ -663,6 +684,7 @@ __all__ = [
     "AUTHORIZATION_HEADER",
     "ENVIRONMENT_SECRET",
     "PRIVATE_KEY",
+    "URL_CREDENTIAL",
     "SecretDetector",
     "SecretFinding",
     "SecretMatch",
