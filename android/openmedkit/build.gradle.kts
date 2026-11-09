@@ -113,9 +113,15 @@ android {
             resources.srcDir("src/main/assets")
         }
         getByName("test") {
+            // PHI sentinel sweep test support, shared with instrumented tests and
+            // never compiled into the release AAR.
+            java.srcDir("src/sharedTest/kotlin")
             resources.srcDir(repoRoot.resolve("fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/processing"))
+        }
+        getByName("androidTest") {
+            java.srcDir("src/sharedTest/kotlin")
         }
     }
 

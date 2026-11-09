@@ -116,9 +116,14 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        // Test support only: no product exposes this target, so apps never link it.
+        .target(
+            name: "OpenMedPrivacySweep",
+            path: "Sources/OpenMedPrivacySweep"
+        ),
         .testTarget(
             name: "OpenMedKitTests",
-            dependencies: ["OpenMedKit"]
+            dependencies: ["OpenMedKit", "OpenMedPrivacySweep"]
         ),
         .testTarget(
             name: "ExtensionTests",
@@ -127,6 +132,7 @@ let package = Package(
                 "OpenMedExtensionSupport",
                 "OpenMedShareExtension",
                 "OpenMedActionExtension",
+                "OpenMedPrivacySweep",
             ]
         ),
     ]
