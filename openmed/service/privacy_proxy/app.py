@@ -204,6 +204,13 @@ class _StreamState:
         self.emitted = False
 
 
+# Request fields that carry the tool/response contract the model must follow
+# (JSON Schema descriptions, enums, consts), not conversation content. They
+# must never be rewritten by the detector (that silently changes the schema),
+# and an identifier found inside them fails the request closed (#5124).
+_TOOL_CONFIG_FIELDS = ("tools", "tool_choice", "functions", "response_format")
+
+
 class PrivacyProxy:
     """Redact chat requests before an injected transport and restore locally."""
 
@@ -229,6 +236,38 @@ class PrivacyProxy:
         """Return whether a transport other than the fail-closed default exists."""
         return not isinstance(self.transport, _MissingTransport)
 
+    def _config_contains_identifier(self, value: Any) -> bool:
+        """Run the detector in check-only mode over ``value``.
+
+        Returns True if any string leaf holds an identifier, without
+        rewriting anything. Used to fail tool/response-format config closed
+        instead of redacting (and thereby corrupting) its JSON Schema.
+
+        Note: this runs the detector on every string leaf of the config, so a
+        very large tool schema adds proportional per-request detection cost;
+        it short-circuits as soon as the first identifier is found.
+        """
+        found = False
+
+        def _check(text: str, path: tuple[str, ...]) -> str:
+            nonlocal found
+            if text and not found:
+                detected = _call_detector(
+                    self.extractor,
+                    text,
+                    model_name=self.redaction_model,
+                    confidence_threshold=self.policy.detector_confidence_floor,
+                    use_smart_merging=True,
+                    lang="en",
+                    normalize_accents=None,
+                )
+                if coerce_gateway_entities(detected, text):
+                    found = True
+            return text
+
+        _walk_json_strings(value, _check)
+        return found
+
     def prepare(
         self,
         payload: Mapping[str, Any],
@@ -238,6 +277,15 @@ class PrivacyProxy:
         """Validate and redact one JSON chat-completion request."""
         normalized = _validate_request_payload(payload)
         request_id = _stable_request_id(normalized, request_id_header)
+        # Tool/response-format config is contract, not content: scan it in
+        # check-only mode and fail closed rather than rewrite it (#5124).
+        for _field in _TOOL_CONFIG_FIELDS:
+            if _field in normalized and self._config_contains_identifier(
+                normalized[_field]
+            ):
+                raise PrivacyProxyRequestError(
+                    reason_code="tool_definition_contains_identifier"
+                )
         placeholder_map: dict[str, str] = {}
 
         def _redact(value: str, path: tuple[str, ...]) -> str:
@@ -248,7 +296,15 @@ class PrivacyProxy:
                 placeholder_map=placeholder_map,
             )
 
-        redacted_payload = _walk_json_strings(normalized, _redact)
+        # Redact conversation content only; tool/response-format config is
+        # left byte-identical so the model still sees the exact schema (#5124).
+        redacted_payload = _walk_json_strings(
+            {k: v for k, v in normalized.items() if k not in _TOOL_CONFIG_FIELDS},
+            _redact,
+        )
+        for _field in _TOOL_CONFIG_FIELDS:
+            if _field in normalized:
+                redacted_payload[_field] = normalized[_field]
         model = str(normalized.get("model", DEFAULT_MODEL))
         completion_digest = sha256_text(f"{request_id}:{model}")
         return RedactedChatRequest(

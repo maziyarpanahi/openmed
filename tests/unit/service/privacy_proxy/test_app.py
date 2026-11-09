@@ -317,3 +317,107 @@ def test_chat_completion_returns_safe_400_for_malformed_json():
     assert response.status_code == 400
     assert response.json()["error"]["details"]["reason"] == "invalid_json"
     assert SYNTHETIC_NAME not in response.text
+
+
+def test_tool_config_passes_through_byte_identical_while_content_is_redacted():
+    """Tool/response-format config is never rewritten; message content still is (#5124)."""
+    seen_payloads: list[dict[str, Any]] = []
+
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        seen_payloads.append(payload)
+        return {
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": payload["messages"][0]["content"],
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_record",
+                "description": "Look up a record",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["active", "inactive"],
+                            "description": "Record status",
+                        }
+                    },
+                },
+            },
+        }
+    ]
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "out",
+            "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+        },
+    }
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "messages": [{"role": "user", "content": f"hello {SYNTHETIC_NAME}"}],
+                "tools": tools,
+                "tool_choice": "auto",
+                "response_format": response_format,
+            },
+        )
+
+    assert response.status_code == 200
+    assert seen_payloads
+    forwarded = seen_payloads[0]
+    assert forwarded["tools"] == tools
+    assert forwarded["response_format"] == response_format
+    assert forwarded["tool_choice"] == "auto"
+    assert SYNTHETIC_NAME not in json.dumps(forwarded["messages"], sort_keys=True)
+
+
+def test_identifier_in_tool_definition_is_rejected_closed():
+    """An identifier inside a tool schema fails the request closed (#5124)."""
+    seen_payloads: list[dict[str, Any]] = []
+
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        seen_payloads.append(payload)
+        return {"choices": []}
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "notify",
+                "description": f"Notify {SYNTHETIC_NAME} of the result",
+            },
+        }
+    ]
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "messages": [{"role": "user", "content": "hello"}],
+                "tools": tools,
+            },
+        )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["error"]["details"]["reason"]
+        == "tool_definition_contains_identifier"
+    )
+    assert seen_payloads == []
+    assert SYNTHETIC_NAME not in response.text
