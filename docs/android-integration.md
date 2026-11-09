@@ -210,6 +210,92 @@ map de-identification spans back to source pages. Test the full flow with
 synthetic fixtures before introducing real clinical documents, and keep human
 review in the downstream workflow.
 
+## Lifecycle, cancellation, and memory pressure
+
+Long-lived hosts should own one `OpenMedRuntime` at application scope instead
+of a bare `OpenMedKit`. The runtime opens sessions lazily through an
+`OpenMedSessionFactory`, holds a lease for every operation, and closes a native
+session only after its final lease is released. It moves through `IDLE`,
+`LOADING`, `READY`, `BUSY`, `DRAINING`, and `RELEASED`, and publishes a
+value-free `status` flow.
+
+```kotlin
+import com.openmed.openmedkit.OpenMedRuntime
+import com.openmed.openmedkit.OpenMedSessionFactory
+import com.openmed.openmedkit.OpenMedTrimMemorySource
+
+val runtime = OpenMedRuntime(
+    OpenMedSessionFactory.fromCache(cache, entry),
+)
+runtime.bindLifecycle(OpenMedTrimMemorySource(applicationContext))
+
+// In a coroutine; cancelling it cancels the operation.
+val result = runtime.deidentify(syntheticNote)
+
+// When the owner is torn down.
+runtime.close()
+```
+
+Cancellation follows normal coroutine rules. OpenMedKit checks for cancellation
+before tokenization, after native inference, and after decoding, merging, and
+policy application, so a cancelled caller resolves after at most one in-flight
+native window run and never receives a late result. Outcomes stay
+distinguishable: a completed call returns its result, a cancelled caller gets
+`CancellationException`, and refusals raise `OpenMedRuntimeException` with a
+stable, value-free `reason.code` and `retryGuidance`:
+
+| Reason | When | Retry guidance |
+| --- | --- | --- |
+| `runtime_closed` | `close()` ran before or during the call | `RECREATE_RUNTIME` |
+| `stale_generation` | `replaceModel` ran during the call; its result was discarded | `RETRY_NOW` |
+| `admission_paused_background` | the host is in the background | `RETRY_AFTER_FOREGROUND` |
+| `admission_paused_memory_pressure` | critical memory pressure | `RETRY_AFTER_BACKOFF` |
+| `session_load_failed` | the factory failed to open or verify the model | `RETRY_AFTER_BACKOFF` |
+| `session_reload_limit` | consecutive load failures reached the policy bound | `RECREATE_RUNTIME` |
+
+`close()` is idempotent: it stops admission, cancels running work, and releases
+each native session once its run returns. `drainAndClose()` instead lets running
+work finish with its results. Load failures never carry the underlying message,
+which may contain artifact paths; `causeKind` holds only the failing type name.
+
+The default `OpenMedRuntimePolicy` maps trim-memory signals as follows. Active
+work is never cancelled by memory pressure or backgrounding, and every
+reacquisition re-runs the factory, which re-verifies the cached bundle.
+
+| Signal | Pressure | Default action |
+| --- | --- | --- |
+| `TRIM_MEMORY_RUNNING_MODERATE`, `TRIM_MEMORY_UI_HIDDEN` | `MODERATE` | none |
+| `TRIM_MEMORY_RUNNING_LOW`, `TRIM_MEMORY_BACKGROUND`, `TRIM_MEMORY_MODERATE` | `LOW` | release idle sessions; busy ones close when idle |
+| `TRIM_MEMORY_RUNNING_CRITICAL`, `TRIM_MEMORY_COMPLETE`, `onLowMemory` | `CRITICAL` | also refuse new work until 30 s pass, the host returns to the foreground, or a `NONE` signal arrives |
+
+OpenMedKit does not depend on `androidx.lifecycle`. To refuse new work while
+the process is in the background and release idle sessions, adapt
+`ProcessLifecycleOwner` in the app:
+
+```kotlin
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.openmed.openmedkit.OpenMedLifecycleSource
+import java.io.Closeable
+
+val processLifecycle = OpenMedLifecycleSource { observer ->
+    val lifecycle = ProcessLifecycleOwner.get().lifecycle
+    val bridge = object : DefaultLifecycleObserver {
+        override fun onStart(owner: LifecycleOwner) = observer.onHostForeground()
+        override fun onStop(owner: LifecycleOwner) = observer.onHostBackground()
+    }
+    lifecycle.addObserver(bridge)
+    Closeable { lifecycle.removeObserver(bridge) }
+}
+runtime.bindLifecycle(processLifecycle)
+```
+
+Set `OpenMedRuntimePolicy(admitInBackground = true)` for hosts that must keep
+working in the background, for example from a foreground service. Bridges such
+as the React Native module use `OpenMedHostScope`, which owns the bridge's
+coroutine scope and runtime and cancels both when the host is invalidated.
+
 ## Storage, eviction, and logging
 
 `ModelCache` defaults to a 2 GiB budget. When a completed download would exceed
@@ -226,6 +312,11 @@ val cache = ModelCache(
 val usedBytes = cache.totalSizeBytes()
 val removed = cache.evict(entry.repoId)
 ```
+
+A model opened through `OpenMedSessionFactory.fromCache` holds a
+`ModelCacheLease` while its session is open. Budget trimming skips leased
+models, and `evict` returns `false` for them instead of deleting files under a
+running session.
 
 The default directory is excluded from Android Auto Backup. Uninstalling the
 app or clearing its storage removes the models; otherwise use `evict` when the
