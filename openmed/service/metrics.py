@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import threading
 from typing import Mapping
 
@@ -49,6 +50,10 @@ SPECULATIVE_ACCEPTANCE_RATE_NAME = "openmed_mlx_speculative_acceptance_rate"
 SPECULATIVE_AVERAGE_DEPTH_NAME = "openmed_mlx_speculative_average_depth"
 OPERATIONAL_TOTAL_NAME = "openmed_service_operational_total"
 OPERATIONAL_DURATION_NAME = "openmed_service_operational_duration_seconds"
+DRAINING_NAME = "openmed_service_draining"
+DRAIN_PARTICIPANT_TOTAL_NAME = "openmed_service_drain_participant_total"
+DRAIN_UNFINISHED_NAME = "openmed_service_drain_unfinished"
+_DRAIN_LABEL_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -147,6 +152,9 @@ class PrometheusMetricsRegistry:
         self._operational_total: dict[tuple[str, str, str], int] = {}
         self._operational_duration_count: dict[tuple[str, str, str], int] = {}
         self._operational_duration_sum: dict[tuple[str, str, str], float] = {}
+        self._draining = 0
+        self._drain_participant_total: dict[tuple[str, str, str], int] = {}
+        self._drain_unfinished: dict[str, int] = {}
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
@@ -393,6 +401,30 @@ class PrometheusMetricsRegistry:
                 self._operational_duration_sum.get(key, 0.0) + event.duration_seconds
             )
 
+    def set_draining(self, draining: bool) -> None:
+        """Set the gauge reporting whether a service drain is running."""
+        with self._lock:
+            self._draining = 1 if draining else 0
+
+    def record_drain_event(self, event: object) -> None:
+        """Record one value-free drain progress event.
+
+        Only the controlled phase, participant category, outcome, and the
+        unfinished count are kept; anything outside that vocabulary is dropped.
+        """
+        phase = _drain_label(getattr(event, "phase", None))
+        participant = _drain_label(getattr(event, "participant", None))
+        outcome = _drain_label(getattr(event, "outcome", None))
+        if phase is None or participant is None or outcome is None:
+            return
+        unfinished = _non_negative_int(getattr(event, "unfinished", 0))
+        key = (phase, participant, outcome)
+        with self._lock:
+            self._drain_participant_total[key] = (
+                self._drain_participant_total.get(key, 0) + 1
+            )
+            self._drain_unfinished[participant] = unfinished
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -439,6 +471,9 @@ class PrometheusMetricsRegistry:
             operational_total = dict(self._operational_total)
             operational_duration_count = dict(self._operational_duration_count)
             operational_duration_sum = dict(self._operational_duration_sum)
+            draining = self._draining
+            drain_participant_total = dict(self._drain_participant_total)
+            drain_unfinished = dict(self._drain_unfinished)
 
         lines: list[str] = []
         _append_family_header(
@@ -831,6 +866,38 @@ class PrometheusMetricsRegistry:
                 f"{_format_sample_value(operational_duration_sum[key])}"
             )
 
+        _append_family_header(
+            lines,
+            DRAINING_NAME,
+            "Whether a bounded service drain is running (1) or not (0).",
+            "gauge",
+        )
+        lines.append(f"{DRAINING_NAME} {draining}")
+
+        _append_family_header(
+            lines,
+            DRAIN_PARTICIPANT_TOTAL_NAME,
+            "Drain phase results by controlled phase, participant, and outcome.",
+            "counter",
+        )
+        for (phase, participant, outcome), value in sorted(
+            drain_participant_total.items()
+        ):
+            labels = _label_suffix(
+                {"phase": phase, "participant": participant, "outcome": outcome}
+            )
+            lines.append(f"{DRAIN_PARTICIPANT_TOTAL_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            DRAIN_UNFINISHED_NAME,
+            "Work units still outstanding after a participant's last drain phase.",
+            "gauge",
+        )
+        for participant, value in sorted(drain_unfinished.items()):
+            labels = _label_suffix({"participant": participant})
+            lines.append(f"{DRAIN_UNFINISHED_NAME}{labels} {value}")
+
         return "\n".join(lines) + "\n"
 
 
@@ -855,6 +922,13 @@ def _label_suffix(labels: Mapping[str, str]) -> str:
 
 def _escape_label_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _drain_label(value: object) -> str | None:
+    label = getattr(value, "value", value)
+    if isinstance(label, str) and _DRAIN_LABEL_PATTERN.fullmatch(label):
+        return label
+    return None
 
 
 def _admission_queue_label(value: object) -> str:

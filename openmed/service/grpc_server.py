@@ -12,43 +12,73 @@ from google.protobuf import struct_pb2
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
+from .drain import (
+    SHUTTING_DOWN,
+    CallAdmission,
+    DrainContext,
+    DrainParticipant,
+    PhaseResult,
+    ServiceShuttingDownError,
+    resolve_drain_coordinator,
+)
 from .proto.generated import openmed_pb2, openmed_pb2_grpc
 from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
 
 DEFAULT_GRPC_ADDRESS = "[::]:50051"
 DEFAULT_GRPC_MAX_WORKERS = 10
+GRPC_RETRY_PUSHBACK_METADATA_KEY = "grpc-retry-pushback-ms"
+GRPC_RETRYABLE_METADATA_KEY = "openmed-retryable"
 
 
 class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
-    """Synchronous grpcio servicer backed by the shared service runtime."""
+    """Synchronous grpcio servicer backed by the shared service runtime.
 
-    def __init__(self, runtime: ServiceRuntime | None = None) -> None:
+    Args:
+        runtime: Shared service runtime; created from the environment if absent.
+        admission: Admission gate shared with the drain coordinator. Once it
+            closes, new calls end with ``UNAVAILABLE`` and a retry hint.
+    """
+
+    def __init__(
+        self,
+        runtime: ServiceRuntime | None = None,
+        *,
+        admission: CallAdmission | None = None,
+    ) -> None:
         self.runtime = runtime or ServiceRuntime.from_env()
+        self.admission = admission or CallAdmission()
 
     def Analyze(self, request, context):
         """Run the OpenMed analyze endpoint over gRPC."""
-        return _run_unary(
-            context,
-            lambda: self._analyze(request),
-        )
+        return self._unary(context, lambda: self._analyze(request))
 
     def Extract(self, request, context):
         """Run the OpenMed PII extraction endpoint over gRPC."""
-        return _run_unary(
-            context,
-            lambda: self._extract(request),
-        )
+        return self._unary(context, lambda: self._extract(request))
 
     def Deidentify(self, request, context):
         """Run the OpenMed de-identification endpoint over gRPC."""
-        return _run_unary(
-            context,
-            lambda: self._deidentify(request),
-        )
+        return self._unary(context, lambda: self._deidentify(request))
 
     def StreamDeidentify(self, request, context):
         """Stream redacted text fragments for chunked de-identification."""
+        if not self.admission.try_enter(streaming=True):
+            _abort_shutting_down(context, self.admission.retry_after_seconds)
+        try:
+            yield from self._stream_deidentify(request, context)
+        finally:
+            self.admission.leave(streaming=True)
+
+    def _unary(self, context: grpc.ServicerContext, operation: Callable[[], Any]):
+        if not self.admission.try_enter():
+            _abort_shutting_down(context, self.admission.retry_after_seconds)
+        try:
+            return _run_unary(context, operation)
+        finally:
+            self.admission.leave()
+
+    def _stream_deidentify(self, request, context):
         chunks = _stream_chunks(request)
         fallback_text = "".join(chunks) if chunks else request.request.text
         try:
@@ -69,8 +99,12 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
             model_key = self.runtime.begin_model_request(payload.model_name)
         except ModelNotServedError:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
+        except ServiceShuttingDownError as exc:
+            _abort_shutting_down(context, exc.retry_after_seconds)
+        terminated = False
+        events = None
         try:
-            for event in deidentify_stream(
+            events = deidentify_stream(
                 chunks,
                 max_buffer=max_buffer,
                 method=payload.method,
@@ -87,14 +121,26 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
                 use_safety_sweep=payload.use_safety_sweep,
                 loader=self.runtime.get_loader(),
                 policy=payload.policy,
-            ):
+            )
+            for event in events:
+                if self.admission.streams_terminating:
+                    # Drain boundary: drop the unsent event and never flush the
+                    # core buffer, so no unsafe partial tail reaches the client.
+                    terminated = True
+                    break
                 yield _stream_response(event)
         except ValueError:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid request")
         except Exception:
             context.abort(grpc.StatusCode.INTERNAL, "Internal server error")
         finally:
+            close = getattr(events, "close", None)
+            if callable(close):
+                close()
             self.runtime.finish_model_request(model_key, payload.keep_alive)
+        if terminated:
+            self.admission.record_terminated_stream()
+            _abort_shutting_down(context, self.admission.retry_after_seconds)
 
     def _analyze(self, request) -> openmed_pb2.AnalyzeResponse:
         payload = _parse_request(_analyze_request_from_proto, request)
@@ -127,17 +173,99 @@ class OpenMedGrpcServicer(openmed_pb2_grpc.OpenMedServiceServicer):
         )
 
 
+class GrpcDrainParticipant(DrainParticipant):
+    """Drain gRPC unary calls and server streams within the drain budget.
+
+    Admission closes first, so new calls get ``UNAVAILABLE`` with a
+    ``grpc-retry-pushback-ms`` hint while the port stays open. In-flight calls
+    may finish until the settle deadline; open streams then stop at their next
+    event boundary with the same typed status. The flush phase finally calls
+    ``server.stop(grace)`` with the remaining budget.
+
+    Args:
+        admission: Admission gate shared with the servicer.
+        server: Optional server to stop during the flush phase.
+    """
+
+    category = "grpc"
+    priority = 30
+
+    def __init__(
+        self, admission: CallAdmission, server: grpc.Server | None = None
+    ) -> None:
+        super().__init__()
+        self.admission = admission
+        self.server = server
+        self._initial = 0
+
+    def stop_admission(self, ctx: DrainContext) -> PhaseResult:
+        """Refuse new unary and streaming calls."""
+        self._initial = self.admission.active
+        self.admission.close()
+        return PhaseResult()
+
+    async def finish_in_flight(self, ctx: DrainContext) -> PhaseResult:
+        """Wait for calls, then end streams that outlive the settle deadline."""
+        admission = self.admission
+        await ctx.wait_until(
+            lambda: admission.active == 0, deadline=ctx.settle_deadline
+        )
+        if admission.active_streams:
+            admission.terminate_streams()
+        await ctx.wait_until(lambda: admission.active == 0)
+        terminated = admission.terminated_streams
+        unfinished = admission.active
+        return PhaseResult.from_counts(
+            completed=max(self._initial - terminated - unfinished, 0),
+            cancelled=terminated,
+            unfinished=unfinished,
+        )
+
+    async def flush(self, ctx: DrainContext) -> PhaseResult | None:
+        """Stop the server, giving stragglers the remaining flush budget."""
+        if self.server is None:
+            return None
+        stopped = self.server.stop(grace=ctx.remaining())
+        try:
+            await ctx.run_blocking(stopped.wait)
+        except TimeoutError:
+            return PhaseResult.from_counts(unfinished=max(self.admission.active, 1))
+        return PhaseResult.from_counts(completed=1)
+
+    def outstanding(self) -> int:
+        """Return in-flight calls and open streams."""
+        return self.admission.active
+
+
 def create_grpc_server(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
+    admission: CallAdmission | None = None,
 ) -> grpc.Server:
-    """Create a grpcio server with the OpenMed service registered."""
+    """Create a grpcio server with the OpenMed service registered.
+
+    The server joins the runtime's drain coordinator, so draining the runtime
+    (for example from the REST lifespan) closes gRPC admission at the same time
+    as REST and GraphQL.
+
+    Args:
+        runtime: Shared service runtime; created from the environment if absent.
+        max_workers: Worker threads for the synchronous server.
+        admission: Optional admission gate to share with other surfaces.
+
+    Returns:
+        The configured, not yet started server.
+    """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
-    openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(
-        OpenMedGrpcServicer(runtime),
-        server,
-    )
+    servicer = OpenMedGrpcServicer(runtime, admission=admission)
+    openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(servicer, server)
+    try:
+        coordinator = resolve_drain_coordinator(servicer.runtime)
+    except TypeError:
+        coordinator = None
+    if coordinator is not None:
+        coordinator.register(GrpcDrainParticipant(servicer.admission, server))
     return server
 
 
@@ -154,9 +282,29 @@ def serve(
     return server
 
 
+def _abort_shutting_down(
+    context: grpc.ServicerContext, retry_after_seconds: float
+) -> None:
+    """End a call with ``UNAVAILABLE`` plus a standard retry pushback hint."""
+    setter = getattr(context, "set_trailing_metadata", None)
+    if callable(setter):
+        setter(
+            (
+                (
+                    GRPC_RETRY_PUSHBACK_METADATA_KEY,
+                    str(max(int(round(retry_after_seconds * 1000)), 0)),
+                ),
+                (GRPC_RETRYABLE_METADATA_KEY, "true"),
+            )
+        )
+    context.abort(grpc.StatusCode.UNAVAILABLE, SHUTTING_DOWN)
+
+
 def _run_unary(context: grpc.ServicerContext, operation: Callable[[], Any]) -> Any:
     try:
         return operation()
+    except ServiceShuttingDownError as exc:
+        _abort_shutting_down(context, exc.retry_after_seconds)
     except ModelNotServedError:
         context.abort(grpc.StatusCode.INVALID_ARGUMENT, "model_not_served")
     except ValueError:
@@ -452,6 +600,9 @@ def _chunk_text(text: str, chunk_size: int) -> Iterable[str]:
 __all__ = [
     "DEFAULT_GRPC_ADDRESS",
     "DEFAULT_GRPC_MAX_WORKERS",
+    "GRPC_RETRYABLE_METADATA_KEY",
+    "GRPC_RETRY_PUSHBACK_METADATA_KEY",
+    "GrpcDrainParticipant",
     "OpenMedGrpcServicer",
     "create_grpc_server",
     "serve",

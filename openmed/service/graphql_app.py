@@ -10,6 +10,7 @@ from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
 
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE
 from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
 from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
@@ -84,6 +85,11 @@ def _safe_formatted_error(error: Any) -> dict[str, Any]:
         return {
             "message": "Requested model is not served",
             "extensions": {"code": "model_not_served"},
+        }
+    if error.extensions.get("code") == SHUTTING_DOWN:
+        return {
+            "message": SHUTTING_DOWN_MESSAGE,
+            "extensions": {"code": SHUTTING_DOWN, "retryable": True},
         }
     if error.original_error is None:
         return formatted

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import os
 import tempfile
@@ -12,11 +13,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Collection, Optional
 
 import openmed
 from openmed.core.audit import hash_text
 
+from .drain import SHUTTING_DOWN, ServiceShuttingDownError
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
 from .webhooks import WebhookDeliveryResult, deliver_webhook
@@ -26,10 +28,18 @@ SERVICE_JOBS_TTL_ENV_VAR = "OPENMED_SERVICE_JOBS_TTL_SECONDS"
 SERVICE_JOBS_WORKERS_ENV_VAR = "OPENMED_SERVICE_JOBS_WORKERS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
-TERMINAL_STATUSES = frozenset({"done", "failed"})
+TERMINAL_STATUSES = frozenset({"done", "failed", "cancelled"})
+ACTIVE_STATUSES = frozenset({"queued", "running"})
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
+
+
+class JobQueueClosedError(ServiceShuttingDownError):
+    """Raised when a job is submitted after the queue stopped admitting work."""
+
+    def __init__(self) -> None:
+        super().__init__("Job queue is shutting down")
 
 
 @dataclass(frozen=True)
@@ -144,6 +154,36 @@ class LocalJobStore:
             self._publish_locked(previous)
             return _copy_record(record)
 
+    def update_if(
+        self,
+        job_id: str,
+        *,
+        expected_statuses: Collection[str],
+        **changes: Any,
+    ) -> Optional[dict[str, Any]]:
+        """Apply changes only while the record is in an expected status.
+
+        This is the commit fence for job lifecycle transitions: once a drain
+        marks a job ``cancelled``, a stale worker's later update is refused.
+
+        Args:
+            job_id: Record identifier.
+            expected_statuses: Statuses the record must currently have.
+            **changes: Fields to update.
+
+        Returns:
+            The updated record, or ``None`` when the fence refused the change.
+        """
+        with self._lock:
+            record = self._records.get(job_id)
+            if record is None or record.get("status") not in expected_statuses:
+                return None
+            previous = _copy_record(self._records)
+            record.update(_copy_record(changes))
+            record["updated_at"] = _isoformat(self.clock())
+            self._publish_locked(previous)
+            return _copy_record(record)
+
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
@@ -245,6 +285,12 @@ class DeidentifyJobQueue:
         )
         self._shutdown = False
         self._lock = threading.Lock()
+        self._admission_closed = False
+        self._cancel_requested = threading.Event()
+        self._callback_timeout_seconds: Optional[float] = None
+        self._active: dict[str, str] = {}
+        self._drain_completed = 0
+        self._drain_cancelled = 0
 
     @classmethod
     def from_env(cls, runtime: ServiceRuntime) -> "DeidentifyJobQueue":
@@ -263,10 +309,11 @@ class DeidentifyJobQueue:
         """Submit one de-identification job and return its initial metadata."""
         self.runtime.validate_served_model(payload.model_name)
         with self._lock:
-            if self._shutdown:
-                raise RuntimeError("Job queue is shutting down")
+            if self._shutdown or self._admission_closed:
+                raise JobQueueClosedError()
             record = self._new_record(payload)
             self.store.create(record)
+            self._active[record["id"]] = "queued"
             self._executor.submit(self._run_job, _JobWorkItem(record["id"], payload))
             return _copy_record(record)
 
@@ -275,10 +322,90 @@ class DeidentifyJobQueue:
         return self.store.get(job_id)
 
     def shutdown(self) -> None:
-        """Stop accepting work and request worker shutdown."""
+        """Stop accepting work and request worker shutdown.
+
+        Jobs whose worker never started are marked ``cancelled`` with a
+        retryable ``shutting_down`` code instead of being left ``queued``.
+        """
         with self._lock:
             self._shutdown = True
         self._executor.shutdown(wait=False, cancel_futures=True)
+        self._cancel_jobs(phases=("queued",))
+
+    def close_admission(
+        self, *, callback_timeout_seconds: Optional[float] = None
+    ) -> None:
+        """Refuse new jobs and bound terminal callbacks sent while draining.
+
+        Args:
+            callback_timeout_seconds: Per-attempt timeout for callbacks; while
+                draining each terminal callback makes a single attempt.
+        """
+        with self._lock:
+            self._admission_closed = True
+            self._callback_timeout_seconds = callback_timeout_seconds
+
+    def request_cancel(self) -> None:
+        """Ask workers to stop at their next document (checkpoint) boundary."""
+        self._cancel_requested.set()
+
+    def cancel_outstanding(self) -> int:
+        """Fence every queued or running job as cancelled.
+
+        A worker that is still inside a model call can no longer commit its
+        result: every later status-bearing update is refused by the store.
+
+        Returns:
+            Jobs moved to ``cancelled`` by this call.
+        """
+        return self._cancel_jobs(phases=("queued", "running"))
+
+    def outstanding_count(self) -> int:
+        """Return jobs that are queued, running, or sending their callback."""
+        with self._lock:
+            return len(self._active)
+
+    def drain_stats(self) -> dict[str, int]:
+        """Return value-free terminal counts recorded since admission closed."""
+        with self._lock:
+            return {
+                "completed": self._drain_completed,
+                "cancelled": self._drain_cancelled,
+            }
+
+    def _cancel_jobs(self, *, phases: tuple[str, ...]) -> int:
+        with self._lock:
+            targets = [
+                (job_id, phase)
+                for job_id, phase in self._active.items()
+                if phase in phases
+            ]
+        cancelled = 0
+        for job_id, phase in targets:
+            if self._mark_cancelled(job_id, expected=ACTIVE_STATUSES):
+                cancelled += 1
+            if phase == "queued":
+                with self._lock:
+                    if self._active.get(job_id) == "queued":
+                        self._active.pop(job_id, None)
+        return cancelled
+
+    def _mark_cancelled(self, job_id: str, *, expected: Collection[str]) -> bool:
+        now = self.clock()
+        updated = self.store.update_if(
+            job_id,
+            expected_statuses=expected,
+            status="cancelled",
+            error=_shutdown_error(),
+            completed_at=_isoformat(now),
+            expires_at=self._expiry_timestamp(now),
+        )
+        if updated is None:
+            return False
+        with self._lock:
+            if self._admission_closed or self._shutdown:
+                self._drain_cancelled += 1
+        return True
 
     def _expiry_timestamp(self, moment: datetime) -> str:
         """Return the metadata expiry for a record that reached *moment*."""
@@ -315,17 +442,35 @@ class DeidentifyJobQueue:
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
+        try:
+            self._run_job_fenced(item)
+        finally:
+            with self._lock:
+                self._active.pop(item.job_id, None)
+
+    def _run_job_fenced(self, item: _JobWorkItem) -> None:
+        if self._cancel_requested.is_set():
+            self._mark_cancelled(item.job_id, expected=("queued",))
+            return
         started_at = self.clock()
-        self.store.update(
+        started = self.store.update_if(
             item.job_id,
+            expected_statuses=("queued",),
             status="running",
             started_at=_isoformat(started_at),
             progress_percent=0.0,
         )
+        if started is None:
+            return
+        self._set_phase(item.job_id, "running")
         summary = _JobSummary(total=len(item.payload.documents))
         error: Optional[dict[str, str]] = None
 
         for index, document in enumerate(item.payload.documents):
+            if self._cancel_requested.is_set():
+                # Document boundary: the last progress update is the checkpoint.
+                self._mark_cancelled(item.job_id, expected=("running",))
+                return
             document_id = _document_id(index, document)
             try:
                 result = self._deidentify_document(item.payload, document)
@@ -334,19 +479,38 @@ class DeidentifyJobQueue:
                 summary.failed_count += 1
                 error = _safe_error(exc)
 
-            self.store.update(item.job_id, **summary.to_progress_record())
+            progress = self.store.update_if(
+                item.job_id,
+                expected_statuses=("running",),
+                **summary.to_progress_record(),
+            )
+            if progress is None:
+                return
 
         completed_at = self.clock()
         status = "failed" if summary.failed_count else "done"
-        final_record = self.store.update(
+        final_record = self.store.update_if(
             item.job_id,
+            expected_statuses=("running",),
             status=status,
             progress_percent=100.0,
             error=error,
             completed_at=_isoformat(completed_at),
             expires_at=self._expiry_timestamp(completed_at),
         )
+        if final_record is None:
+            # A drain fenced this job while its last document ran.
+            return
+        with self._lock:
+            if self._admission_closed or self._shutdown:
+                self._drain_completed += 1
+        self._set_phase(item.job_id, "callback")
         self._send_terminal_webhook(item.payload.webhook, final_record)
+
+    def _set_phase(self, job_id: str, phase: str) -> None:
+        with self._lock:
+            if job_id in self._active or phase == "running":
+                self._active[job_id] = phase
 
     def _deidentify_document(
         self,
@@ -386,14 +550,24 @@ class DeidentifyJobQueue:
         if webhook is None:
             return
         payload = webhook_payload(record)
+        options: dict[str, Any] = {
+            "secret": webhook.secret,
+            "max_attempts": webhook.max_attempts,
+            "backoff_seconds": webhook.backoff_seconds,
+        }
+        with self._lock:
+            draining = self._admission_closed or self._shutdown
+            callback_timeout = self._callback_timeout_seconds
+        if draining:
+            # One bounded attempt: a drain never waits on retry backoff.
+            options["max_attempts"] = 1
+            options["backoff_seconds"] = 0.0
+            if callback_timeout is not None and _accepts_keyword(
+                self.webhook_sender, "timeout_seconds"
+            ):
+                options["timeout_seconds"] = callback_timeout
         try:
-            result = self.webhook_sender(
-                webhook.url,
-                payload,
-                secret=webhook.secret,
-                max_attempts=webhook.max_attempts,
-                backoff_seconds=webhook.backoff_seconds,
-            )
+            result = self.webhook_sender(webhook.url, payload, **options)
         except Exception as exc:
             result = WebhookDeliveryResult(
                 success=False,
@@ -493,6 +667,26 @@ def _safe_error(exc: Exception) -> dict[str, str]:
         "type": exc.__class__.__name__,
         "message": "Document failed during de-identification",
     }
+
+
+def _shutdown_error() -> dict[str, Any]:
+    return {
+        "type": "ServiceShuttingDown",
+        "code": SHUTTING_DOWN,
+        "message": "Job was cancelled because the service shut down; resubmit it",
+        "retryable": True,
+    }
+
+
+def _accepts_keyword(function: Callable[..., Any], name: str) -> bool:
+    try:
+        parameters = inspect.signature(function).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD or parameter.name == name
+        for parameter in parameters
+    )
 
 
 def webhook_payload(record: dict[str, Any]) -> dict[str, Any]:
