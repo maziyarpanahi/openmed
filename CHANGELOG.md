@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reject missing, repeated, or unsupported content types on the local privacy
   proxy's chat routes before reading the request body (#5185).
+- Buffer privacy-proxy placeholders split across streamed OpenAI tool-call
+  `function.arguments` fragments per choice and tool call, so a partial
+  `<<OPENMED_PHI_` token never reaches the client; buffers flush before the
+  choice's finish chunk and at end of stream, and unknown placeholders are
+  rejected after reassembly (#5120).
 
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
