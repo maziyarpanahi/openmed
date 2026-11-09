@@ -292,6 +292,12 @@ go test ./...
 gofmt -l .   # must print nothing
 ```
 
+Runnable examples for `New`, `Client.Deidentify`, `Client.DeidentifyStream`
+and `AsAPIError` live in `example_test.go`. They call an in-process
+`httptest` server that returns synthetic JSON, so they need no running service.
+They appear in the rendered package documentation (pkg.go.dev or `pkgsite`) and
+are checked by `go test` against their `// Output:` blocks.
+
 The module is pure Go with no cgo. On toolchains where the host linker rejects
 the default external link (for example a Homebrew Go build paired with a newer
 Xcode linker), build and test with the internal linker: `CGO_ENABLED=0 go test ./...`.
