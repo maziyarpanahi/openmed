@@ -24,6 +24,17 @@ uv sync --extra mcp
 uv run openmed-mcp --version
 ```
 
+To see which tools the server exposes without starting it or connecting a
+client, list them from the registry:
+
+```bash
+openmed-mcp --list-tools          # name, title, version and behavior hints
+openmed-mcp --list-tools --json   # the same data as JSON
+```
+
+The listing does not create the MCP server, so it also works when the `mcp`
+package is not installed.
+
 ## Run in a container
 
 Build the dedicated MCP image from a checkout:

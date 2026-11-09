@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `openmed-mcp --list-tools` (and `--json`) to print each registered tool's
+  name, title, version and behavior hints without starting a server or needing
+  the `mcp` package (#5186).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
