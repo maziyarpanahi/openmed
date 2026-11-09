@@ -18,12 +18,14 @@ import pytest
 from openmed.core.offline import OFFLINE_ENV_VAR
 from openmed.eval.drift_monitor import (
     DEFAULT_DRIFT_THRESHOLD,
+    DEFAULT_SCORE_BINS,
     DRIFT_FAMILIES,
     DRIFT_TRIGGER_SCHEMA_VERSION,
     LABEL_RATE_FAMILY,
     VERDICT_DRIFT,
     VERDICT_STABLE,
     DriftAggregateWindow,
+    DriftInputError,
     DriftPrivacyError,
     assert_no_raw_text,
     build_drift_window,
@@ -142,6 +144,92 @@ def test_divergence_is_reproducible_offline():
 def test_all_families_are_scored():
     report = compute_drift_report(_baseline_window(), _label_drifted_window())
     assert tuple(family.family for family in report.families) == DRIFT_FAMILIES
+
+
+def test_matching_custom_score_histogram_bin_counts_are_accepted():
+    scores_20 = [index * 10 + 5 for index in range(20)]
+    reference = build_drift_window(
+        "ref-20-bins",
+        label_counts=dict(_BASE_LABELS),
+        score_histogram=scores_20,
+        length_histogram=dict(_BASE_LENGTHS),
+        script_histogram=dict(_BASE_SCRIPTS),
+    )
+    observation = build_drift_window(
+        "obs-20-bins",
+        label_counts=dict(_BASE_LABELS),
+        score_histogram=[value * 2 for value in scores_20],
+        length_histogram=dict(_BASE_LENGTHS),
+        script_histogram=dict(_BASE_SCRIPTS),
+    )
+
+    report = compute_drift_report(reference, observation)
+    assert report.verdict == VERDICT_STABLE
+    assert not report.drift_detected
+
+
+def test_mismatched_score_histogram_bin_counts_rejected_without_bucket_values():
+    reference = _baseline_window()  # 10 bins
+    distinctive_counts = [9101 + index for index in range(20)]
+    observation = build_drift_window(
+        "obs-20-bins",
+        label_counts=dict(_BASE_LABELS),
+        score_histogram=distinctive_counts,
+        length_histogram=dict(_BASE_LENGTHS),
+        script_histogram=dict(_BASE_SCRIPTS),
+    )
+
+    with pytest.raises(DriftInputError) as exc_info:
+        compute_drift_report(reference, observation)
+
+    message = str(exc_info.value)
+    assert "10" in message
+    assert "20" in message
+    for count in (*_BASE_SCORES, *distinctive_counts):
+        assert str(count) not in message
+
+
+def test_default_score_histogram_enforces_bin_count_match():
+    default_window_payload = {
+        "window_id": "default-scores",
+        "label_counts": dict(_BASE_LABELS),
+        "length_histogram": dict(_BASE_LENGTHS),
+        "script_histogram": dict(_BASE_SCRIPTS),
+    }
+    default_window = DriftAggregateWindow.from_mapping(default_window_payload)
+    assert len(default_window.score_histogram) == DEFAULT_SCORE_BINS
+    assert set(default_window.score_histogram) == {0.0}
+
+    # Matching default 10-bin histograms succeed.
+    report = compute_drift_report(default_window, _baseline_window())
+    assert report.reference_window_id == "default-scores"
+
+    # Mismatched 20-bin window against the all-zero 10-bin default is rejected
+    # in both directions and names both lengths without leaking bucket values.
+    distinctive_counts = [8201 + index for index in range(20)]
+    twenty_bin_window = build_drift_window(
+        "twenty-bins",
+        label_counts=dict(_BASE_LABELS),
+        score_histogram=distinctive_counts,
+        length_histogram=dict(_BASE_LENGTHS),
+        script_histogram=dict(_BASE_SCRIPTS),
+    )
+
+    with pytest.raises(DriftInputError) as ref_default_exc:
+        compute_drift_report(default_window_payload, twenty_bin_window)
+    ref_msg = str(ref_default_exc.value)
+    assert "10" in ref_msg
+    assert "20" in ref_msg
+    for count in distinctive_counts:
+        assert str(count) not in ref_msg
+
+    with pytest.raises(DriftInputError) as obs_default_exc:
+        compute_drift_report(twenty_bin_window, default_window_payload)
+    obs_msg = str(obs_default_exc.value)
+    assert "20" in obs_msg
+    assert "10" in obs_msg
+    for count in distinctive_counts:
+        assert str(count) not in obs_msg
 
 
 def test_trigger_signal_is_directly_consumable():
