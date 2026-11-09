@@ -1,0 +1,4 @@
+{
+  "note": "Synthetic rule bundle for the installable-playground browser spec.",
+  "patterns": [{ "label": "ID", "pattern": "SYNOFF-[0-9]{5}" }]
+}

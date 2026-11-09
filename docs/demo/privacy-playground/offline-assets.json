@@ -1,0 +1,124 @@
+{
+  "schema": "openmed.offline-assets.v1",
+  "profile": "openmed-privacy-playground",
+  "start_url": "./",
+  "service_worker": "offline-sw.js",
+  "service_worker_sha256": "33dfc834bf7246df66565832c3583548417a8d984ec128d0036c03c14fb6fc0b",
+  "generation": "daf11ad7a73878034a34cca1349776db22c64c733f4e5ab8bafb6f6a5730b46f",
+  "asset_count": 16,
+  "total_bytes": 401360,
+  "assets": [
+    {
+      "url": "./",
+      "kind": "shell",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 11170,
+      "sha256": "7918ba79ee6388107d73653ada4b053ea1552b8bbf6099fda893026ee63c0cd6"
+    },
+    {
+      "url": "app.js",
+      "kind": "shell",
+      "content_type": "text/javascript; charset=utf-8",
+      "bytes": 16179,
+      "sha256": "9867b7fe16a39ca8a38073fd60ee63a5b4e507bab9a1a4f905567fd7e2bdd9c7"
+    },
+    {
+      "url": "offline.js",
+      "kind": "shell",
+      "content_type": "text/javascript; charset=utf-8",
+      "bytes": 14999,
+      "sha256": "03fff7b9b37af24bbb2330a011f509adb530d06b16ecc4e6f70556fd9e7d0b9a"
+    },
+    {
+      "url": "manifest.webmanifest",
+      "kind": "shell",
+      "content_type": "application/manifest+json",
+      "bytes": 453,
+      "sha256": "8e5178832e8eb95dd1fbd82220a48d117d317b1ccc3bd72cda49e604839b4ccb"
+    },
+    {
+      "url": "../../assets/openmed-favicon.svg",
+      "kind": "shell",
+      "content_type": "image/svg+xml",
+      "bytes": 568,
+      "sha256": "f9c09e9ae482539a628dd4c239f99cfb7aa4b85606945cf1634daf206b4bc56a"
+    },
+    {
+      "url": "../../assets/openmed-mark.svg",
+      "kind": "shell",
+      "content_type": "image/svg+xml",
+      "bytes": 568,
+      "sha256": "f9c09e9ae482539a628dd4c239f99cfb7aa4b85606945cf1634daf206b4bc56a"
+    },
+    {
+      "url": "../../stylesheets/openmed-system.css",
+      "kind": "shell",
+      "content_type": "text/css; charset=utf-8",
+      "bytes": 11502,
+      "sha256": "62f1a98e9a06a23af47b98b8735597b5898c6db1235ccce293dd9abfc8d8f581"
+    },
+    {
+      "url": "../../stylesheets/openmed-standalone.css",
+      "kind": "shell",
+      "content_type": "text/css; charset=utf-8",
+      "bytes": 10006,
+      "sha256": "65fd835707333a605d307782dfeceedee03de439c3174365cbb9f2664b7e6510"
+    },
+    {
+      "url": "../../javascripts/openmed-standalone.js",
+      "kind": "shell",
+      "content_type": "text/javascript; charset=utf-8",
+      "bytes": 1199,
+      "sha256": "119ac9f4bc2206c739e2397d23c5f7f897e7168c14f19285792047cbb26f0003"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexSans-Regular.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 54904,
+      "sha256": "a40989b89e2c80751ad436b61f8ad07a3a3130fb0bb1400c85df1068524ed4ab"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexSans-Medium.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 58440,
+      "sha256": "8616ac647815fe069afa64ea256669cabcba80b780c13e02b5c6a6e6bccdcb41"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexSans-SemiBold.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 58920,
+      "sha256": "ee711b15202d9f05d8b51eab4f73b2f1832d9d0504082d5aeaeca55108c5ec52"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexSans-Bold.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 54920,
+      "sha256": "36b74f1eb2da82595b5037e8d67389a0ab6bdcab7358bfb8b7aca148cdcf27b3"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexMono-Regular.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 34868,
+      "sha256": "7dc604a2ed157d42ca477198c9cde29cfe96476065af30294f887534dd51c257"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexMono-Medium.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 35868,
+      "sha256": "403c826c3b9ef757e9d657c704f279e87f06824dfd5e18e9a86beb1b40d1dbf7"
+    },
+    {
+      "url": "../../assets/fonts/IBMPlexMono-SemiBold.woff2",
+      "kind": "shell",
+      "content_type": "font/woff2",
+      "bytes": 36796,
+      "sha256": "f9646f0df18f79398785b3859eae690f731aa0815a015f8efe6fafd3115b7a99"
+    }
+  ]
+}
