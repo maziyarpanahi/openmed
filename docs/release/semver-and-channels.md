@@ -28,7 +28,12 @@ break every downstream install, so it follows SemVer and moves more slowly.
 |---|---|---|---|---|
 | Nightly / edge | `pip install openmed --pre` | Latest green code and gated model pins | every green merge or daily | early adopters and internal evaluation |
 | Stable | `pip install openmed` | Full golden-suite pass and canary-ready pins | patch daily-to-weekly, minor monthly | default users |
-| LTS | `pip install "openmed==1.8.*"` | Security and recall-backstop fixes only | as needed for 12 months | regulated deployments |
+| LTS | `pip install "openmed==4.3.*"` | Security and recall-backstop fixes only | as needed for 12 months | regulated deployments |
+
+The planned LTS lines are 4.3 and 6.2, each supported for 12 months with
+security and recall-backstop fixes only. See the
+[security policy](https://github.com/maziyarpanahi/openmed/blob/master/SECURITY.md)
+for security reporting and supported-version guidance.
 
 Nightly builds use PEP 440 development releases such as `1.9.0.devN`.
 Release candidates such as `1.9.0rc1` are reserved for pre-stable cuts.
