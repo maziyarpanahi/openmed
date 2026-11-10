@@ -110,6 +110,9 @@ class GateLedgerEntry:
     delta: float
     outcome: str
     tolerance: float = 0.0
+    # Set only when an axis the champion reported is absent from the challenger's
+    # report: the axis did not go away, the challenger failed to measure it.
+    reason: str | None = None
 
     @property
     def blocking(self) -> bool:
@@ -140,7 +143,7 @@ class GateLedgerEntry:
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-ready payload."""
 
-        return {
+        payload = {
             "axis": self.axis,
             "blocking": self.blocking,
             "category": self.category,
@@ -151,6 +154,11 @@ class GateLedgerEntry:
             "outcome": self.outcome,
             "tolerance": self.tolerance,
         }
+        # Only a missing-axis entry carries a reason, so records written before
+        # this field existed stay byte-identical.
+        if self.reason is not None:
+            payload["reason"] = self.reason
+        return payload
 
 
 @dataclass(frozen=True)
@@ -623,11 +631,23 @@ def _build_ledger(
 ) -> tuple[GateLedgerEntry, ...]:
     entries: list[GateLedgerEntry] = []
 
-    # Critical-label recall, gated on the shared G7 tolerance.
+    # Critical-label recall, gated on the shared G7 tolerance. A label the champion
+    # reports and the challenger does not is a missing safety axis, not a tie: the
+    # challenger cannot be shown to hold the champion's recall, so it blocks.
     champion_recall = _float_map(champion.per_label_recall)
     challenger_recall = _float_map(challenger.per_label_recall)
     for label in sorted(CRITICAL_RECALL_LABELS):
-        if label not in champion_recall or label not in challenger_recall:
+        if label not in champion_recall:
+            continue
+        if label not in challenger_recall:
+            entries.append(
+                _missing_entry(
+                    axis=f"per_label_recall.{label}",
+                    category=CATEGORY_RECALL,
+                    direction=HIGHER_IS_BETTER,
+                    champion=champion_recall[label],
+                )
+            )
             continue
         entries.append(
             _numeric_entry(
@@ -688,12 +708,25 @@ def _build_ledger(
             entries.append(latency_entry)
 
     # Named gate pass/fail transitions. A gate the champion passed that the
-    # challenger now fails is a blocking regression; the reverse is a win.
+    # challenger now fails is a blocking regression; the reverse is a win. A gate
+    # the champion passed that the challenger no longer reports is the same
+    # regression with a missing measurement, not a gate that went away.
     champion_gates = {check.gate: bool(check.passed) for check in champion.gate_results}
     challenger_gates = {
         check.gate: bool(check.passed) for check in challenger.gate_results
     }
-    for gate in sorted(set(champion_gates) & set(challenger_gates)):
+    for gate in sorted(champion_gates):
+        if gate not in challenger_gates:
+            if champion_gates[gate]:
+                entries.append(
+                    _missing_entry(
+                        axis=f"gate.{gate}",
+                        category=CATEGORY_GATE,
+                        direction=HIGHER_IS_BETTER,
+                        champion=1.0,
+                    )
+                )
+            continue
         entries.append(
             _numeric_entry(
                 axis=f"gate.{gate}",
@@ -723,8 +756,9 @@ def _decide(
             f"expected {RELEASABLE!r} (fails a G1a-G8 floor)"
         )
     for entry in blocking:
+        missing = f" ({entry.reason})" if entry.reason else ""
         reasons.append(
-            f"blocking safety regression on {entry.axis}: "
+            f"blocking safety regression on {entry.axis}{missing}: "
             f"champion={entry.champion} challenger={entry.challenger}"
         )
 
@@ -752,6 +786,34 @@ def _decide(
             f"champion={entry.champion} challenger={entry.challenger}"
         )
     return PROMOTE, tuple(sorted(reasons))
+
+
+def _missing_entry(
+    *,
+    axis: str,
+    category: str,
+    direction: str,
+    champion: float,
+) -> GateLedgerEntry:
+    """Ledger entry for an axis the champion reports and the challenger does not.
+
+    The axis is not a tie and not a win: the challenger never measured it, so it
+    cannot be shown to hold the champion's value. The entry is a blocking
+    regression regardless of the champion's own value, and ``reason`` says why
+    the two numbers are not comparable (``missing_in_challenger``).
+    """
+
+    return GateLedgerEntry(
+        axis=axis,
+        category=category,
+        direction=direction,
+        champion=champion,
+        challenger=0.0,
+        delta=-champion if direction == HIGHER_IS_BETTER else champion,
+        outcome=REGRESSION,
+        tolerance=0.0,
+        reason="missing_in_challenger",
+    )
 
 
 def _numeric_entry(

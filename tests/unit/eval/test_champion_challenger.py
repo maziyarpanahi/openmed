@@ -461,3 +461,63 @@ def test_champion_pointer_save_is_atomic_on_write_failure(
 
     assert pointer_path.read_bytes() == committed
     assert [p.name for p in tmp_path.iterdir()] == ["champion.json"]
+
+
+# -- missing axes: a challenger that does not measure what the champion did ----
+
+
+def test_challenger_missing_a_critical_label_recall_blocks() -> None:
+    """A critical label the champion reports and the challenger omits is REJECT."""
+
+    champion = _report(per_label_recall={"SSN": 0.9999, "API_KEY": 0.9995})
+    # The challenger never measured API_KEY, so it cannot be shown to hold the
+    # champion's recall there. That is a blocking regression, not a skipped axis.
+    challenger = _report(per_label_recall={"SSN": 0.9999})
+
+    verdict = compare_champion_challenger(champion, challenger)
+
+    assert verdict.verdict == REJECT
+    entry = next(e for e in verdict.ledger if e.axis == "per_label_recall.API_KEY")
+    assert entry.reason == "missing_in_challenger"
+    assert entry.blocking is True
+    assert any("per_label_recall.API_KEY" in reason for reason in verdict.reasons)
+
+
+def test_challenger_missing_a_gate_the_champion_passed_blocks() -> None:
+    """A gate the champion passed that the challenger omits is REJECT."""
+
+    champion = _report(
+        gate_results=(GateCheck("G3", True), GateCheck("G4", True)),
+    )
+    challenger = _report(gate_results=(GateCheck("G4", True),))
+
+    verdict = compare_champion_challenger(champion, challenger)
+
+    assert verdict.verdict == REJECT
+    entry = next(e for e in verdict.ledger if e.axis == "gate.G3")
+    assert entry.reason == "missing_in_challenger"
+    assert entry.blocking is True
+    assert any("gate.G3" in reason for reason in verdict.reasons)
+
+
+def test_champion_missing_the_axis_stays_unaligned() -> None:
+    """An axis the champion never reported keeps today's behaviour: no entry."""
+
+    champion = _report(per_label_recall={"SSN": 0.9999})
+    challenger = _report(per_label_recall={"SSN": 0.9999, "API_KEY": 0.9995})
+
+    verdict = compare_champion_challenger(champion, challenger)
+
+    assert not any(e.axis == "per_label_recall.API_KEY" for e in verdict.ledger)
+    assert all("missing_in_challenger" != e.reason for e in verdict.ledger)
+
+
+def test_challenger_missing_a_gate_the_champion_failed_does_not_block() -> None:
+    """Dropping a gate the champion already failed is not a regression."""
+
+    champion = _report(gate_results=(GateCheck("G3", False, reason="miss"),))
+    challenger = _report(gate_results=())
+
+    verdict = compare_champion_challenger(champion, challenger)
+
+    assert not any(e.axis == "gate.G3" for e in verdict.ledger)
