@@ -161,6 +161,80 @@ def test_file_redaction_errors_do_not_echo_raw_input(
     assert captured.err == ""
 
 
+def test_check_mode_reports_spans_and_writes_no_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    input_path = tmp_path / "support-export.txt"
+    input_path.write_text(f"Caller {SYNTHETIC_NAME} used {SYNTHETIC_PHONE}.\n")
+    monkeypatch.setattr("openmed.core.pii.deidentify", _fake_deidentify)
+
+    exit_code = main_module.main(["redact-files", str(input_path), "--check", "--json"])
+
+    captured = capsys.readouterr()
+    envelope = json.loads(captured.out)
+    assert exit_code == 1
+    assert envelope["ok"] is True
+    assert envelope["outcome"] == "check_failed"
+    assert envelope["data"]["total_spans"] == 2
+    assert envelope["data"]["per_label_counts"] == {"NAME": 1, "PHONE": 1}
+    assert SYNTHETIC_NAME not in captured.out
+    assert SYNTHETIC_PHONE not in captured.out
+    assert [path.name for path in tmp_path.iterdir()] == ["support-export.txt"]
+
+
+def test_check_mode_exits_zero_for_clean_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    input_path = tmp_path / "clean-note.txt"
+    input_path.write_text("No identifiers in this synthetic note.\n")
+    monkeypatch.setattr("openmed.core.pii.deidentify", _fake_deidentify)
+
+    exit_code = main_module.main(["redact-files", str(input_path), "--check", "--json"])
+
+    captured = capsys.readouterr()
+    envelope = json.loads(captured.out)
+    assert exit_code == 0
+    assert envelope["outcome"] == "completed"
+    assert envelope["data"]["total_spans"] == 0
+    assert [path.name for path in tmp_path.iterdir()] == ["clean-note.txt"]
+
+
+def test_check_mode_rejects_an_output_path(
+    tmp_path: Path,
+    capsys,
+    subtests,
+) -> None:
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.txt"
+    input_path.write_text(SYNTHETIC_NAME, encoding="utf-8")
+    invocations = [
+        ["redact-files", str(input_path), str(output_path), "--check"],
+        [
+            "redact-files",
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--check",
+        ],
+    ]
+
+    for argv in invocations:
+        with subtests.test(argv=argv):
+            exit_code = main_module.main([*argv, "--json"])
+
+            captured = capsys.readouterr()
+            payload = json.loads(captured.out)
+            assert exit_code == 2
+            assert payload["ok"] is False
+            assert payload["error"]["code"] == "check_output_conflict"
+            assert not output_path.exists()
+
+
 def _fake_deidentify(text: str, **kwargs: object) -> DeidentificationResult:
     replacements = {
         SYNTHETIC_NAME: ("[NAME]", "NAME"),
