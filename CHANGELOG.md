@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add `scripts/docs/check_regulatory_claims.py`, a docs lint that fails on unnegated regulatory or certification claims in `README.md` and `docs/**/*.md` (#5299).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
