@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "description": "Synthetic golden vectors for openmed.core.date_shift. Every patient key, secret and seed here is invented test material; none identifies a person or protects anything.",
+  "patient_key_cases": [
+    {
+      "id": "keyed-01",
+      "patient_key": "synth-001",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 1,
+      "offset": -1
+    },
+    {
+      "id": "keyed-02",
+      "patient_key": "synth-001",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "offset": 5
+    },
+    {
+      "id": "keyed-03",
+      "patient_key": "synth-001",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 365,
+      "offset": -361
+    },
+    {
+      "id": "keyed-04",
+      "patient_key": "synth-002",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 1,
+      "offset": 1
+    },
+    {
+      "id": "keyed-05",
+      "patient_key": "synth-002",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "offset": -23
+    },
+    {
+      "id": "keyed-06",
+      "patient_key": "synth-002",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 365,
+      "offset": -188
+    },
+    {
+      "id": "keyed-07",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 1,
+      "offset": 1
+    },
+    {
+      "id": "keyed-08",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "offset": -19
+    },
+    {
+      "id": "keyed-09",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 365,
+      "offset": -134
+    },
+    {
+      "id": "keyed-10",
+      "patient_key": "synth-001",
+      "secret_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "max_days": 1,
+      "offset": -1
+    },
+    {
+      "id": "keyed-11",
+      "patient_key": "synth-001",
+      "secret_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "max_days": 30,
+      "offset": 13
+    },
+    {
+      "id": "keyed-12",
+      "patient_key": "synth-001",
+      "secret_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+      "max_days": 365,
+      "offset": 348
+    },
+    {
+      "id": "keyed-13",
+      "patient_key": "synth-001",
+      "secret_hex": "5a5a5a5a",
+      "max_days": 1,
+      "offset": 1
+    },
+    {
+      "id": "keyed-14",
+      "patient_key": "synth-001",
+      "secret_hex": "5a5a5a5a",
+      "max_days": 30,
+      "offset": -13
+    },
+    {
+      "id": "keyed-15",
+      "patient_key": "synth-001",
+      "secret_hex": "5a5a5a5a",
+      "max_days": 365,
+      "offset": -268
+    }
+  ],
+  "seed_cases": [
+    {
+      "id": "seed-01",
+      "seed": 0,
+      "max_days": 1,
+      "offset": -1
+    },
+    {
+      "id": "seed-02",
+      "seed": 0,
+      "max_days": 30,
+      "offset": 21
+    },
+    {
+      "id": "seed-03",
+      "seed": 0,
+      "max_days": 365,
+      "offset": -105
+    },
+    {
+      "id": "seed-04",
+      "seed": 1,
+      "max_days": 1,
+      "offset": 1
+    },
+    {
+      "id": "seed-05",
+      "seed": 1,
+      "max_days": 30,
+      "offset": -27
+    },
+    {
+      "id": "seed-06",
+      "seed": 1,
+      "max_days": 365,
+      "offset": 199
+    },
+    {
+      "id": "seed-07",
+      "seed": 822,
+      "max_days": 1,
+      "offset": -1
+    },
+    {
+      "id": "seed-08",
+      "seed": 822,
+      "max_days": 30,
+      "offset": 29
+    },
+    {
+      "id": "seed-09",
+      "seed": 822,
+      "max_days": 365,
+      "offset": 244
+    },
+    {
+      "id": "seed-10",
+      "seed": -7,
+      "max_days": 1,
+      "offset": 1
+    },
+    {
+      "id": "seed-11",
+      "seed": -7,
+      "max_days": 30,
+      "offset": -27
+    },
+    {
+      "id": "seed-12",
+      "seed": -7,
+      "max_days": 365,
+      "offset": -322
+    },
+    {
+      "id": "seed-13",
+      "seed": 9223372036854775808,
+      "max_days": 1,
+      "offset": -1
+    },
+    {
+      "id": "seed-14",
+      "seed": 9223372036854775808,
+      "max_days": 30,
+      "offset": -2
+    },
+    {
+      "id": "seed-15",
+      "seed": 9223372036854775808,
+      "max_days": 365,
+      "offset": 294
+    }
+  ],
+  "gregorian_cases": [
+    {
+      "id": "gregorian-month-end",
+      "patient_key": "synth-001",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "date": "2023-04-30",
+      "shifted": "2023-05-05"
+    },
+    {
+      "id": "gregorian-year-end",
+      "patient_key": "synth-002",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "date": "2024-01-01",
+      "shifted": "2023-12-09"
+    },
+    {
+      "id": "gregorian-leap-day-landing",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "date": "2024-03-19",
+      "shifted": "2024-02-29"
+    },
+    {
+      "id": "gregorian-leap-february-crossing",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "date": "2024-03-10",
+      "shifted": "2024-02-20"
+    },
+    {
+      "id": "gregorian-non-leap-february-crossing",
+      "patient_key": "合成-患者-003",
+      "secret_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "max_days": 30,
+      "date": "2023-03-10",
+      "shifted": "2023-02-19"
+    }
+  ]
+}
