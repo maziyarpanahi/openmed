@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an optional PodDisruptionBudget for the service chart's API pods
+  (`podDisruptionBudget.enabled`, `minAvailable` or `maxUnavailable`),
+  disabled by default (#4555).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).

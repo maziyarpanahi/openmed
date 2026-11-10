@@ -100,6 +100,23 @@ graceful shutdown. Probe requests set `Host: localhost` so the service trusted
 host middleware accepts kubelet checks without weakening the application host
 allowlist.
 
+## Disruption budget
+
+Node drains and other voluntary evictions can remove every API pod at once.
+Set `podDisruptionBudget.enabled=true` to render a PodDisruptionBudget that
+selects the API pods (the Journey worker is not covered). It keeps one pod
+available by default. Set `minAvailable` or `maxUnavailable` (a number or a
+percentage) to change that; setting both fails the render. Use it with two or
+more replicas, because with one replica and `minAvailable: 1` a node drain
+cannot evict the pod:
+
+```bash
+helm upgrade --install openmed-service deploy/helm/openmed-service \
+  --namespace openmed \
+  --set replicaCount=2 \
+  --set podDisruptionBudget.enabled=true
+```
+
 ## Secrets
 
 Do not put tokens or other secrets in `values.yaml`. Reference an existing
@@ -135,6 +152,9 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `podSecurityContext` | `{}` | Pod security context. |
 | `securityContext` | `{}` | Container security context. |
 | `terminationGracePeriodSeconds` | `45` | Pod shutdown grace period. |
+| `podDisruptionBudget.enabled` | `false` | Render a PodDisruptionBudget for the API pods. |
+| `podDisruptionBudget.minAvailable` | `null` | Minimum available API pods; `1` when neither bound is set. |
+| `podDisruptionBudget.maxUnavailable` | `null` | Maximum unavailable API pods; mutually exclusive with `minAvailable`. |
 | `config.profile` | `prod` | `OPENMED_PROFILE`. |
 | `config.cacheDir` | `/root/.cache/huggingface/openmed` | `OPENMED_CACHE_DIR`. |
 | `config.preloadModels` | `[]` | Models joined into `OPENMED_SERVICE_PRELOAD_MODELS`. |
