@@ -180,3 +180,47 @@ def test_journey_profile_renders_migration_worker_storage_and_default_deny():
     ]
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
     assert all(set(rule) <= {"to", "ports"} for rule in policy["spec"]["egress"])
+
+
+def _render_chart_unchecked(*args: str) -> subprocess.CompletedProcess[str]:
+    command = [
+        HELM or "helm",
+        "template",
+        "openmed-service",
+        str(CHART_DIR),
+        "--namespace",
+        "openmed",
+        *args,
+    ]
+    return subprocess.run(
+        command,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def test_default_and_ci_values_satisfy_schema():
+    assert _render_chart_unchecked().returncode == 0
+    assert _render_chart_unchecked("--values", str(CI_VALUES)).returncode == 0
+
+
+def test_schema_rejects_negative_replica_count():
+    result = _render_chart_unchecked("--set", "replicaCount=-1")
+    assert result.returncode != 0
+    combined = f"{result.stderr}\n{result.stdout}".lower()
+    assert "replicacount" in combined or "replica" in combined
+    assert (
+        "schema" in combined or "values don't meet" in combined or "invalid" in combined
+    )
+
+
+def test_schema_rejects_zero_readiness_period():
+    result = _render_chart_unchecked("--set", "probes.readiness.periodSeconds=0")
+    assert result.returncode != 0
+    combined = f"{result.stderr}\n{result.stdout}".lower()
+    assert "periodseconds" in combined or "period" in combined
+    assert (
+        "schema" in combined or "values don't meet" in combined or "invalid" in combined
+    )
