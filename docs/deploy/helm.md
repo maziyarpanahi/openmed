@@ -106,7 +106,10 @@ On SIGTERM the service stops accepting work and drains in-flight requests for
 up to `config.shutdownDrainSeconds`. Kubernetes kills the pod once
 `terminationGracePeriodSeconds` has passed, so the chart refuses to render
 unless the grace period is greater than the drain timeout plus 5 seconds. With
-the defaults (45 and 30) the check passes. If you raise the drain timeout,
+the defaults (45 and 30) the check passes. A value for
+`OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` in `extraEnv` overrides the ConfigMap,
+so the check uses it instead; setting that variable through `valueFrom` is
+refused because the chart cannot read it. If you raise the drain timeout,
 raise the grace period with it:
 
 ```bash

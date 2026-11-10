@@ -148,6 +148,41 @@ def test_grace_period_above_drain_plus_margin_renders():
     assert deployment["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 66
 
 
+def test_extra_env_drain_override_is_checked_against_the_grace_period(tmp_path):
+    values = tmp_path / "values.yaml"
+    values.write_text(
+        'extraEnv:\n  - name: OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS\n    value: "60"\n'
+    )
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        _render_chart("-f", str(values))
+
+    message = excinfo.value.stderr
+    assert "terminationGracePeriodSeconds (45)" in message
+    assert "extraEnv OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS (60)" in message
+
+    manifests = _render_chart(
+        "-f", str(values), "--set", "terminationGracePeriodSeconds=66"
+    )
+    deployment = _by_kind(manifests, "Deployment")
+    assert deployment["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 66
+
+
+def test_extra_env_drain_from_value_from_fails_the_render(tmp_path):
+    values = tmp_path / "values.yaml"
+    values.write_text(
+        "extraEnv:\n"
+        "  - name: OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS\n"
+        "    valueFrom:\n"
+        "      secretKeyRef:\n"
+        "        name: drain\n"
+        "        key: seconds\n"
+    )
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        _render_chart("-f", str(values))
+
+    assert "valueFrom" in excinfo.value.stderr
+
+
 def test_synthetic_values_exercise_image_resources_and_secret_env():
     manifests = _render_chart("--values", str(CI_VALUES))
     deployment = _by_kind(manifests, "Deployment")
