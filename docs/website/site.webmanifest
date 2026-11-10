@@ -1,0 +1,30 @@
+{
+  "name": "OpenMed",
+  "short_name": "openmed",
+  "description": "On-device clinical NLP and PHI de-identification.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "browser",
+  "background_color": "#F4F7F8",
+  "theme_color": "#B0413E",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "favicon-64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

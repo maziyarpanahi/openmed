@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Synthetic OpenMedKit Swift/Kotlin parity fixture. All values are invented and non-PHI.",
+  "spans": [
+    {
+      "label": "patient_name",
+      "start": 9,
+      "end": 20
+    },
+    {
+      "label": "date_of_birth",
+      "start": 26,
+      "end": 36
+    },
+    {
+      "label": "medical_record_number",
+      "start": 42,
+      "end": 52
+    },
+    {
+      "label": "phone_number",
+      "start": 60,
+      "end": 72
+    },
+    {
+      "label": "email",
+      "start": 80,
+      "end": 104
+    },
+    {
+      "label": "date",
+      "start": 141,
+      "end": 151
+    }
+  ]
+}

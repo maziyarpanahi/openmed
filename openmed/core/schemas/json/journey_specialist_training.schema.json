@@ -1,0 +1,504 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/training/journey-specialist-training.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "controlled": {
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+      "type": "string"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "version": {
+      "const": "1.0.0"
+    },
+    "compatibility": {
+      "const": "same_major"
+    },
+    "dataset": {
+      "additionalProperties": false,
+      "properties": {
+        "bundled": {"type": "boolean"},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "content_digest": {"$ref": "#/$defs/digest"},
+        "license": {"$ref": "#/$defs/controlled"},
+        "record_count": {"minimum": 1, "type": "integer"},
+        "resource": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$",
+          "type": "string"
+        },
+        "schema_version": {"$ref": "#/$defs/version"},
+        "source_id": {"$ref": "#/$defs/controlled"},
+        "synthetic": {"type": "boolean"},
+        "usage_lane": {"enum": ["distributable", "user_supplied_eval"]}
+      },
+      "required": [
+        "bundled",
+        "compatibility_policy",
+        "content_digest",
+        "license",
+        "record_count",
+        "resource",
+        "revision",
+        "schema_version",
+        "source_id",
+        "synthetic",
+        "usage_lane"
+      ],
+      "type": "object"
+    },
+    "backbone": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "enum": ["sequence_classifier", "span_pair_classifier"]
+        },
+        "license": {"$ref": "#/$defs/controlled"},
+        "model_id": {"$ref": "#/$defs/controlled"},
+        "revision": {
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        }
+      },
+      "required": ["architecture", "license", "model_id", "revision"],
+      "type": "object"
+    },
+    "adapter": {
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {"minimum": 1, "type": "integer"},
+        "dropout": {"maximum": 1, "minimum": 0, "type": "number"},
+        "method": {"enum": ["head_only", "ia3", "lora"]},
+        "rank": {"minimum": 1, "type": "integer"},
+        "target_modules": {
+          "items": {"$ref": "#/$defs/controlled"},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "trainable_ratio_ceiling": {
+          "exclusiveMinimum": 0,
+          "maximum": 0.05,
+          "type": "number"
+        }
+      },
+      "required": [
+        "alpha",
+        "dropout",
+        "method",
+        "rank",
+        "target_modules",
+        "trainable_ratio_ceiling"
+      ],
+      "type": "object"
+    },
+    "stop_rule": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_gpu_hours": {"exclusiveMinimum": 0, "type": "number"},
+        "maximum_steps": {"minimum": 1, "type": "integer"},
+        "metric": {"$ref": "#/$defs/controlled"},
+        "minimum_delta": {"minimum": 0, "type": "number"},
+        "mode": {"enum": ["max", "min"]},
+        "patience": {"minimum": 1, "type": "integer"}
+      },
+      "required": [
+        "maximum_gpu_hours",
+        "maximum_steps",
+        "metric",
+        "minimum_delta",
+        "mode",
+        "patience"
+      ],
+      "type": "object"
+    },
+    "recipe": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {"$ref": "#/$defs/adapter"},
+        "backbone": {"$ref": "#/$defs/backbone"},
+        "baseline_id": {"$ref": "#/$defs/controlled"},
+        "calibration_method": {"enum": ["isotonic", "temperature"]},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "estimated_cost_usd": {"exclusiveMinimum": 0, "type": "number"},
+        "estimated_gpu_hours": {"exclusiveMinimum": 0, "type": "number"},
+        "export_formats": {
+          "items": {"enum": ["coreml", "onnx", "safetensors", "torchscript"]},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "hourly_cost_usd": {"exclusiveMinimum": 0, "type": "number"},
+        "labels": {
+          "items": {"$ref": "#/$defs/controlled"},
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "maximum_ece": {"maximum": 1, "minimum": 0, "type": "number"},
+        "maximum_quantized_macro_f1_delta": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "minimum_candidate_improvement": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "minimum_coverage": {"maximum": 1, "minimum": 0, "type": "number"},
+        "minimum_macro_f1": {"maximum": 1, "minimum": 0, "type": "number"},
+        "minimum_per_class_recall": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "minimum_subgroup_recall": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "mixed_precision": {"enum": ["bf16", "fp16"]},
+        "output_schema": {"$ref": "#/$defs/controlled"},
+        "quantization_targets": {
+          "items": {"enum": ["int4", "int8"]},
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {"$ref": "#/$defs/version"},
+        "seed": {"minimum": 0, "type": "integer"},
+        "stop_rule": {"$ref": "#/$defs/stop_rule"},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "adapter",
+        "backbone",
+        "baseline_id",
+        "calibration_method",
+        "compatibility_policy",
+        "estimated_cost_usd",
+        "estimated_gpu_hours",
+        "export_formats",
+        "hourly_cost_usd",
+        "labels",
+        "maximum_ece",
+        "maximum_quantized_macro_f1_delta",
+        "minimum_candidate_improvement",
+        "minimum_coverage",
+        "minimum_macro_f1",
+        "minimum_per_class_recall",
+        "minimum_subgroup_recall",
+        "mixed_precision",
+        "output_schema",
+        "quantization_targets",
+        "schema_version",
+        "seed",
+        "stop_rule",
+        "task"
+      ],
+      "type": "object"
+    },
+    "split_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "holdout": {"minimum": 0, "type": "integer"},
+        "train": {"minimum": 0, "type": "integer"},
+        "validation": {"minimum": 0, "type": "integer"}
+      },
+      "required": ["holdout", "train", "validation"],
+      "type": "object"
+    },
+    "split": {
+      "additionalProperties": false,
+      "properties": {
+        "assignment_digest": {"$ref": "#/$defs/digest"},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "dataset_digest": {"$ref": "#/$defs/digest"},
+        "label_counts": {
+          "additionalProperties": {"$ref": "#/$defs/split_counts"},
+          "type": "object"
+        },
+        "schema_version": {"$ref": "#/$defs/version"},
+        "seed": {"minimum": 0, "type": "integer"},
+        "split_counts": {"$ref": "#/$defs/split_counts"},
+        "strategy": {"const": "seeded_stratified_hash_v1"},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "assignment_digest",
+        "compatibility_policy",
+        "dataset_digest",
+        "label_counts",
+        "schema_version",
+        "seed",
+        "split_counts",
+        "strategy",
+        "task"
+      ],
+      "type": "object"
+    },
+    "spend_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_cost_usd": {"minimum": 0, "type": ["number", "null"]},
+        "actual_gpu_hours": {"minimum": 0, "type": ["number", "null"]},
+        "estimated_cost_usd": {"exclusiveMinimum": 0, "type": "number"},
+        "estimated_gpu_hours": {"exclusiveMinimum": 0, "type": "number"},
+        "hourly_cost_usd": {"exclusiveMinimum": 0, "type": "number"},
+        "run_id": {"$ref": "#/$defs/controlled"},
+        "state": {"enum": ["cancelled", "completed", "reserved"]},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "actual_cost_usd",
+        "actual_gpu_hours",
+        "estimated_cost_usd",
+        "estimated_gpu_hours",
+        "hourly_cost_usd",
+        "run_id",
+        "state",
+        "task"
+      ],
+      "type": "object"
+    },
+    "ledger": {
+      "additionalProperties": false,
+      "properties": {
+        "cap_usd": {"exclusiveMinimum": 0, "maximum": 1000, "type": "number"},
+        "committed_cost_usd": {"minimum": 0, "maximum": 1000, "type": "number"},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "entries": {
+          "items": {"$ref": "#/$defs/spend_entry"},
+          "type": "array",
+          "uniqueItems": true
+        },
+        "remaining_cost_usd": {"minimum": 0, "maximum": 1000, "type": "number"},
+        "schema_version": {"$ref": "#/$defs/version"}
+      },
+      "required": [
+        "cap_usd",
+        "committed_cost_usd",
+        "compatibility_policy",
+        "entries",
+        "remaining_cost_usd",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "plan": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregate_gpu_budget_usd": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "type": "number"
+        },
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "dataset": {"$ref": "#/$defs/dataset"},
+        "pack_id": {"$ref": "#/$defs/controlled"},
+        "recipes": {
+          "items": {"$ref": "#/$defs/recipe"},
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {"$ref": "#/$defs/version"}
+      },
+      "required": [
+        "aggregate_gpu_budget_usd",
+        "compatibility_policy",
+        "dataset",
+        "pack_id",
+        "recipes",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "run_manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "actual_cost_usd": {"minimum": 0, "type": ["number", "null"]},
+        "artifact_digests": {
+          "additionalProperties": {"$ref": "#/$defs/digest"},
+          "type": "object"
+        },
+        "code_revision": {
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "dataset": {"$ref": "#/$defs/dataset"},
+        "dry_run": {"type": "boolean"},
+        "estimated_cost_usd": {"exclusiveMinimum": 0, "type": "number"},
+        "failure_slices_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "hardware": {"$ref": "#/$defs/controlled"},
+        "ledger_digest": {"$ref": "#/$defs/digest"},
+        "metrics_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "model_card_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "pack_id": {"$ref": "#/$defs/controlled"},
+        "promotion_decision": {"enum": ["hold", "not_evaluated", "promote"]},
+        "promotion_reason": {"$ref": "#/$defs/controlled"},
+        "recipe": {"$ref": "#/$defs/recipe"},
+        "run_id": {"$ref": "#/$defs/controlled"},
+        "schema_version": {"$ref": "#/$defs/version"},
+        "split": {"$ref": "#/$defs/split"},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "actual_cost_usd",
+        "artifact_digests",
+        "code_revision",
+        "compatibility_policy",
+        "dataset",
+        "dry_run",
+        "estimated_cost_usd",
+        "failure_slices_digest",
+        "hardware",
+        "ledger_digest",
+        "metrics_digest",
+        "model_card_digest",
+        "pack_id",
+        "promotion_decision",
+        "promotion_reason",
+        "recipe",
+        "run_id",
+        "schema_version",
+        "split",
+        "task"
+      ],
+      "type": "object"
+    },
+    "dry_run": {
+      "additionalProperties": false,
+      "properties": {
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "dataset_digest": {"$ref": "#/$defs/digest"},
+        "ledger": {"$ref": "#/$defs/ledger"},
+        "manifests": {
+          "items": {"$ref": "#/$defs/run_manifest"},
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "pack_id": {"$ref": "#/$defs/controlled"},
+        "plan_digest": {"$ref": "#/$defs/digest"},
+        "schema_version": {"$ref": "#/$defs/version"}
+      },
+      "required": [
+        "compatibility_policy",
+        "dataset_digest",
+        "ledger",
+        "manifests",
+        "pack_id",
+        "plan_digest",
+        "schema_version"
+      ],
+      "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "abstention_threshold": {"maximum": 1, "minimum": 0, "type": "number"},
+        "baseline_id": {"$ref": "#/$defs/controlled"},
+        "baseline_macro_f1": {"maximum": 1, "minimum": 0, "type": "number"},
+        "candidate_alias": {"$ref": "#/$defs/controlled"},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "fallback_alias": {"$ref": "#/$defs/controlled"},
+        "schema_version": {"$ref": "#/$defs/version"},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "abstention_threshold",
+        "baseline_id",
+        "baseline_macro_f1",
+        "candidate_alias",
+        "compatibility_policy",
+        "fallback_alias",
+        "schema_version",
+        "task"
+      ],
+      "type": "object"
+    },
+    "holdout_report": {
+      "additionalProperties": false,
+      "properties": {
+        "abstention": {"type": "object"},
+        "calibration": {"type": "object"},
+        "calibration_digest": {"$ref": "#/$defs/digest"},
+        "compatibility_policy": {"$ref": "#/$defs/compatibility"},
+        "dataset_digest": {"$ref": "#/$defs/digest"},
+        "failure_slices": {
+          "additionalProperties": {"minimum": 0, "type": "integer"},
+          "type": "object"
+        },
+        "holdout_digest": {"$ref": "#/$defs/digest"},
+        "metrics": {"type": "object"},
+        "per_class": {"type": "object"},
+        "policy": {"$ref": "#/$defs/policy"},
+        "promotion_decision": {"enum": ["hold", "promote"]},
+        "promotion_reasons": {
+          "items": {"$ref": "#/$defs/controlled"},
+          "type": "array",
+          "uniqueItems": true
+        },
+        "quantized_delta": {"type": "object"},
+        "recipe_digest": {"$ref": "#/$defs/digest"},
+        "sample_count": {"minimum": 1, "type": "integer"},
+        "schema_version": {"$ref": "#/$defs/version"},
+        "selected_alias": {"$ref": "#/$defs/controlled"},
+        "subgroup_slices": {"type": "object"},
+        "task": {
+          "enum": ["assertion", "classification", "pair_scoring", "temporality"]
+        }
+      },
+      "required": [
+        "abstention",
+        "calibration",
+        "calibration_digest",
+        "compatibility_policy",
+        "dataset_digest",
+        "failure_slices",
+        "holdout_digest",
+        "metrics",
+        "per_class",
+        "policy",
+        "promotion_decision",
+        "promotion_reasons",
+        "quantized_delta",
+        "recipe_digest",
+        "sample_count",
+        "schema_version",
+        "selected_alias",
+        "subgroup_slices",
+        "task"
+      ],
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/plan"},
+    {"$ref": "#/$defs/run_manifest"},
+    {"$ref": "#/$defs/dry_run"},
+    {"$ref": "#/$defs/holdout_report"}
+  ],
+  "schema_version": 1,
+  "title": "OpenMedJourneySpecialistTraining"
+}

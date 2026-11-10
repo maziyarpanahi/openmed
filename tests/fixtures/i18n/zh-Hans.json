@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "locale": "zh-Hans",
+  "language": "zh",
+  "synthetic": true,
+  "contains_real_phi": false,
+  "provenance": "Invented name and fabricated example phone created for deterministic fixture testing.",
+  "text": "患者林星河，手机号13800138000。",
+  "expected_script": "Han",
+  "expected_variant": "simplified",
+  "expected_segments": [
+    {"start": 0, "end": 21, "script": "Han"}
+  ],
+  "expected_entities": [
+    {"label": "person", "start": 2, "end": 5, "text": "林星河"},
+    {"label": "phone_number", "start": 9, "end": 20, "text": "13800138000"}
+  ],
+  "expected_tokens": [
+    {"start": 0, "end": 2, "text": "患者"},
+    {"start": 2, "end": 3, "text": "林"},
+    {"start": 3, "end": 5, "text": "星河"},
+    {"start": 5, "end": 6, "text": "，"},
+    {"start": 6, "end": 9, "text": "手机号"},
+    {"start": 9, "end": 20, "text": "13800138000"},
+    {"start": 20, "end": 21, "text": "。"}
+  ]
+}

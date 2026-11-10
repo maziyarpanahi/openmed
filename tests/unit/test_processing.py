@@ -1,0 +1,773 @@
+"""Unit tests for processing functionality."""
+
+from unittest.mock import Mock, patch
+
+import pytest
+
+from openmed.processing.advanced_ner import AdvancedNERProcessor
+from openmed.processing.outputs import (
+    EntityPrediction,
+    OutputFormatter,
+    PredictionResult,
+    format_predictions,
+)
+from openmed.processing.text import TextProcessor, postprocess_text, preprocess_text
+from openmed.processing.tokenization import TokenizationHelper
+
+
+class TestTextProcessor:
+    """Test cases for TextProcessor."""
+
+    def test_init_default(self):
+        """Test TextProcessor initialization with defaults."""
+        processor = TextProcessor()
+        assert not processor.lowercase
+        assert not processor.remove_punctuation
+        assert not processor.remove_numbers
+        assert processor.normalize_whitespace
+
+    def test_init_custom(self):
+        """Test TextProcessor initialization with custom settings."""
+        processor = TextProcessor(
+            lowercase=True,
+            remove_punctuation=True,
+            remove_numbers=True,
+            normalize_whitespace=False,
+        )
+        assert processor.lowercase
+        assert processor.remove_punctuation
+        assert processor.remove_numbers
+        assert not processor.normalize_whitespace
+
+    def test_clean_text_basic(self):
+        """Test basic text cleaning."""
+        processor = TextProcessor(normalize_whitespace=True)
+        text = "  Patient   has    diabetes.  "
+        result = processor.clean_text(text)
+        assert result == "Patient has diabetes."
+
+    def test_clean_text_lowercase(self):
+        """Test text cleaning with lowercase."""
+        processor = TextProcessor(lowercase=True)
+        text = "Patient Has Diabetes"
+        result = processor.clean_text(text)
+        assert result == "patient has diabetes"
+
+    def test_clean_text_remove_punctuation(self):
+        """Test text cleaning with punctuation removal."""
+        processor = TextProcessor(remove_punctuation=True)
+        text = "Patient has diabetes, hypertension!"
+        result = processor.clean_text(text)
+        assert "," not in result
+        assert "!" not in result
+
+    def test_clean_text_preserve_medical_abbreviations(self):
+        """Test that medical abbreviations are preserved."""
+        processor = TextProcessor()
+        text = "Patient's BP is 120/80 mmHg and HR is 85 bpm."
+        result = processor.clean_text(text)
+        assert "BP" in result or "bp" in result
+        assert "HR" in result or "hr" in result
+
+    def test_segment_sentences(self):
+        """Test sentence segmentation."""
+        processor = TextProcessor()
+        text = "Patient has diabetes. BP is normal. Follow up needed."
+        sentences = processor.segment_sentences(text)
+        assert len(sentences) == 3
+        assert "diabetes" in sentences[0]
+        assert "BP" in sentences[1]
+        assert "Follow up" in sentences[2]
+
+    def test_extract_medical_entities(self):
+        """Test basic medical entity extraction."""
+        processor = TextProcessor()
+        text = "Patient takes metformin 500mg daily. BP: 120/80."
+        entities = processor.extract_medical_entities(text)
+
+        assert "dosages" in entities
+        assert "vital_signs" in entities
+        assert len(entities["dosages"]) > 0
+        assert len(entities["vital_signs"]) > 0
+
+
+class TestTokenizationHelper:
+    """Test cases for TokenizationHelper."""
+
+    def test_init_without_tokenizer(self):
+        """Test initialization without tokenizer."""
+        helper = TokenizationHelper()
+        assert helper.tokenizer is None
+
+    def test_init_with_tokenizer(self, mock_tokenizer):
+        """Test initialization with tokenizer."""
+        helper = TokenizationHelper(mock_tokenizer)
+        assert helper.tokenizer == mock_tokenizer
+
+    def test_tokenize_with_alignment(self, mock_tokenizer):
+        """Test tokenization with alignment."""
+        helper = TokenizationHelper(mock_tokenizer)
+        result = helper.tokenize_with_alignment("test text")
+
+        assert "input_ids" in result
+        assert "attention_mask" in result
+        assert "tokens" in result
+
+    def test_align_predictions_to_words(self):
+        """Test aligning predictions to words."""
+        helper = TokenizationHelper()
+        predictions = [0.9, 0.8, 0.7]
+        word_ids = [0, 1, 2]
+        text = "patient has diabetes"
+
+        result = helper.align_predictions_to_words(predictions, word_ids, text)
+        assert len(result) == 3
+        assert result[0][0] == "patient"
+        assert result[0][1] == 0.9
+
+    def test_create_attention_masks(self):
+        """Test attention mask creation."""
+        helper = TokenizationHelper()
+        input_ids = [[1, 2, 3, 0, 0], [1, 2, 0, 0, 0]]
+        masks = helper.create_attention_masks(input_ids, pad_token_id=0)
+
+        assert len(masks) == 2
+        assert masks[0] == [1, 1, 1, 0, 0]
+        assert masks[1] == [1, 1, 0, 0, 0]
+
+
+class TestEntityPrediction:
+    """Test cases for EntityPrediction."""
+
+    def test_creation(self):
+        """Test EntityPrediction creation."""
+        entity = EntityPrediction(
+            text="diabetes", label="CONDITION", confidence=0.95, start=10, end=18
+        )
+        assert entity.text == "diabetes"
+        assert entity.label == "CONDITION"
+        assert entity.confidence == 0.95
+        assert entity.start == 10
+        assert entity.end == 18
+
+    def test_to_dict(self):
+        """Test EntityPrediction to_dict method."""
+        entity = EntityPrediction("diabetes", "CONDITION", 0.95)
+        result = entity.to_dict()
+
+        assert isinstance(result, dict)
+        assert result["text"] == "diabetes"
+        assert result["label"] == "CONDITION"
+        assert result["confidence"] == 0.95
+
+    def test_to_dict_handles_non_native_numbers(self):
+        """Ensure numpy-like numbers are converted to native types."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 0.42
+
+        class FakeInt:
+            def __int__(self):
+                return 7
+
+        entity = EntityPrediction(
+            text="entity",
+            label="LABEL",
+            confidence=FakeFloat(),
+            start=FakeInt(),
+            end=FakeInt(),
+        )
+        result = entity.to_dict()
+
+        assert result["confidence"] == pytest.approx(0.42)
+        assert result["start"] == 7
+        assert result["end"] == 7
+
+
+class TestOutputFormatter:
+    """Test cases for OutputFormatter."""
+
+    def test_init_default(self):
+        """Test OutputFormatter initialization with defaults."""
+        formatter = OutputFormatter()
+        assert formatter.include_confidence
+        assert formatter.confidence_threshold == 0.0
+        assert not formatter.group_entities
+
+    def test_init_custom(self):
+        """Test OutputFormatter initialization with custom settings."""
+        formatter = OutputFormatter(
+            include_confidence=False, confidence_threshold=0.5, group_entities=True
+        )
+        assert not formatter.include_confidence
+        assert formatter.confidence_threshold == 0.5
+        assert formatter.group_entities
+
+    def test_format_predictions(self, sample_predictions, sample_text):
+        """Test prediction formatting."""
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(
+            sample_predictions, sample_text, model_name="test-model"
+        )
+
+        assert isinstance(result, PredictionResult)
+        assert result.text == sample_text
+        assert result.model_name == "test-model"
+        assert len(result.entities) == len(sample_predictions)
+
+    def test_format_predictions_casts_numeric_types(self):
+        """Predictions with non-native numbers should serialize cleanly."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 0.88
+
+        class FakeInt:
+            def __int__(self):
+                return 12
+
+        predictions = [
+            {
+                "entity": "LABEL",
+                "score": FakeFloat(),
+                "start": FakeInt(),
+                "end": FakeInt(),
+                "word": "entity",
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "entity text", "model")
+        entity = result.entities[0]
+
+        assert isinstance(entity.confidence, float)
+        assert entity.confidence == pytest.approx(0.88)
+        assert entity.start == 12
+        assert entity.end == 12
+
+        serialized = result.to_dict()
+        assert serialized["entities"][0]["confidence"] == pytest.approx(0.88)
+
+    def test_prediction_result_to_dict_casts_processing_time(self):
+        """Processing time uses built-in floats for JSON."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 1.23
+
+        result = PredictionResult(
+            text="demo",
+            entities=[],
+            model_name="model",
+            timestamp="2025-10-17T00:00:00",
+            processing_time=FakeFloat(),
+        )
+
+        data = result.to_dict()
+        assert data["processing_time"] == pytest.approx(1.23)
+
+    def test_format_predictions_with_threshold(self, sample_predictions, sample_text):
+        """Test prediction formatting with confidence threshold."""
+        formatter = OutputFormatter(confidence_threshold=0.9)
+        result = formatter.format_predictions(
+            sample_predictions, sample_text, model_name="test-model"
+        )
+
+        # Only predictions with confidence >= 0.9 should be included
+        assert len(result.entities) == 1  # Only diabetes with 0.95 confidence
+        assert result.entities[0].text == "diabetes"
+
+    def test_to_json(self, test_helpers, sample_predictions, sample_text):
+        """Test JSON output generation."""
+        formatter = OutputFormatter()
+        result = test_helpers.create_prediction_result(sample_text, sample_predictions)
+        json_output = formatter.to_json(result)
+
+        assert isinstance(json_output, str)
+        assert "diabetes" in json_output
+        assert "test-model" in json_output
+
+    def test_to_html(self, test_helpers, sample_predictions, sample_text):
+        """Test HTML output generation."""
+        formatter = OutputFormatter()
+        result = test_helpers.create_prediction_result(sample_text, sample_predictions)
+        html_output = formatter.to_html(result)
+
+        assert isinstance(html_output, str)
+        assert "<div" in html_output
+        assert "diabetes" in html_output
+        assert "test-model" in html_output
+
+    def test_html_highlights_preserve_source_boundaries_and_escaping(self, subtests):
+        from html.parser import HTMLParser
+
+        class ParsedOutput(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.content_depth = 0
+                self.in_source_paragraph = False
+                self.visible_source = []
+                self.highlights = []
+                self.highlight_titles = []
+                self.active = []
+                self.elements = []
+
+            def handle_starttag(self, tag, attrs):
+                attributes = dict(attrs)
+                self.elements.append((tag, attributes))
+                if tag == "div":
+                    if self.content_depth or attributes.get("class") == "text-content":
+                        self.content_depth += 1
+                if tag == "p" and self.content_depth:
+                    self.in_source_paragraph = True
+                if tag == "span" and "entity" in attributes.get("class", "").split():
+                    self.active.append(len(self.highlights))
+                    self.highlights.append("")
+                    self.highlight_titles.append(attributes["title"])
+
+            def handle_endtag(self, tag):
+                if tag == "p":
+                    self.in_source_paragraph = False
+                if tag == "div" and self.content_depth:
+                    self.content_depth -= 1
+                if tag == "span" and self.active:
+                    self.active.pop()
+
+            def handle_data(self, data):
+                if self.in_source_paragraph:
+                    self.visible_source.append(data)
+                for index in self.active:
+                    self.highlights[index] += data
+
+        cases = [
+            ("A & B: Alice", [(7, 12)], ["Alice"]),
+            ("A & B", [(0, 5)], ["A & B"]),
+            ('<x> "Ada" & O\'Neil', [(5, 8), (12, 18)], ["Ada", "O'Neil"]),
+            ("🙂 & 李雷", [(4, 6)], ["李雷"]),
+            ("AliceBob", [(0, 5), (5, 8)], ["Alice", "Bob"]),
+            ("A & B", [(0, 5), (2, 3)], ["A & B", "&"]),
+            ("ABCDE", [(0, 3), (2, 5)], ["ABC", "C", "DE"]),
+            ("A&B<C>D", [(0, 5), (2, 7)], ["A&B<C", "B<C", ">D"]),
+            ("ABCDEFG", [(0, 4), (2, 6), (3, 7)], ["ABCD", "CD", "D", "EF", "EF", "G"]),
+            ("ABCDE", [(0, 5), (0, 3), (2, 5)], ["ABCDE", "ABC", "C", "DE"]),
+            ("ABCDE", [(0, 5), (0, 5)], ["ABCDE", "ABCDE"]),
+            ("Prefix: Alice", [(8, 13)], ["Alice"]),
+            ('A < B > "C"', [(2, 11)], ['< B > "C"']),
+            ("\nAlice\n", [(1, 6)], ["Alice"]),
+            ("", [], []),
+            ("Alice", [(-1, 3), (0, 99), (0, 0)], []),
+            ("<script>& no entities", [], []),
+        ]
+        hostile = '"><img src=x onerror="synthetic()"><script>synthetic()</script>'
+        for text, ranges, expected in cases:
+            with subtests.test(text=text):
+                entities = [
+                    EntityPrediction(
+                        text=text[start:end] + hostile,
+                        label=f"PERSON{index}" + hostile,
+                        confidence=0.9,
+                        start=start,
+                        end=end,
+                    )
+                    for index, (start, end) in enumerate(ranges)
+                ]
+                result = PredictionResult(text, entities, hostile, hostile)
+                parsed = ParsedOutput()
+                parsed.feed(OutputFormatter().to_html(result))
+                assert "".join(parsed.visible_source) == text
+                assert parsed.highlights == expected
+                for index, (start, end) in enumerate(ranges):
+                    if 0 <= start < end <= len(text):
+                        title = f"Label: PERSON{index}{hostile}, Confidence: 0.900"
+                        rendered = "".join(
+                            value
+                            for value, actual_title in zip(
+                                parsed.highlights, parsed.highlight_titles
+                            )
+                            if actual_title == title
+                        )
+                        assert rendered == text[start:end]
+                assert [(e.start, e.end) for e in entities] == ranges
+                assert all(
+                    tag not in {"script", "img", "svg"} for tag, _ in parsed.elements
+                )
+                assert all(
+                    not name.startswith("on")
+                    for _, attributes in parsed.elements
+                    for name in attributes
+                )
+
+    def test_to_csv_rows(self, test_helpers, sample_predictions, sample_text):
+        """Test CSV rows generation."""
+        formatter = OutputFormatter()
+        result = test_helpers.create_prediction_result(sample_text, sample_predictions)
+        csv_rows = formatter.to_csv_rows(result)
+
+        assert isinstance(csv_rows, list)
+        assert len(csv_rows) == len(sample_predictions)
+        assert all(isinstance(row, dict) for row in csv_rows)
+        assert "text" in csv_rows[0]
+        assert "label" in csv_rows[0]
+
+    def test_sentencepiece_offsets_are_trimmed(self):
+        """Leading whitespace from SentencePiece offsets should be removed."""
+        text = "Patient diagnosed with acute lymphoblastic leukemia and started on imatinib."
+        predictions = [
+            {
+                "entity_group": "DISEASE",
+                "score": 0.95,
+                "word": "acute lymphoblastic leukemia",
+                "start": 22,
+                "end": 51,
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(
+            predictions, text, model_name="test-model"
+        )
+        entity = result.entities[0]
+
+        assert entity.text == "acute lymphoblastic leukemia"
+        assert entity.start == 23  # Skip the leading space in the original text
+        assert entity.end == 51
+
+    def test_fallback_word_normalization_handles_sentencepiece_marker(self):
+        """Fallback to raw word should strip SentencePiece marker."""
+        predictions = [
+            {
+                "entity": "B-DISEASE",
+                "score": 0.91,
+                "word": "▁leukemia",
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "", model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "leukemia"
+        assert entity.start is None
+        assert entity.end is None
+
+    def test_fallback_word_normalization_handles_byte_level_prefix(self):
+        """Fallback text should strip byte-level BPE whitespace prefix."""
+        predictions = [
+            {
+                "entity": "B-MEDICATION",
+                "score": 0.88,
+                "word": "Ġimatinib",
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "", model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "imatinib"
+
+    def test_whitespace_trim_updates_offsets(self):
+        """Whitespace around offsets should be trimmed and offsets updated."""
+        text = "Note:  fever  reported."
+        predictions = [
+            {
+                "entity_group": "SYMPTOM",
+                "score": 0.93,
+                "word": "fever",
+                "start": 6,
+                "end": 14,
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(
+            predictions, text, model_name="test-model"
+        )
+        entity = result.entities[0]
+
+        assert entity.text == "fever"
+        assert entity.start == 7
+        assert entity.end == 12
+
+    def test_group_entities_does_not_merge_across_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        predictions = [
+            {
+                "entity_group": "CHEM",
+                "score": 0.95,
+                "start": 0,
+                "end": 9,
+            },
+            {
+                "entity_group": "CHEM",
+                "score": 0.94,
+                "start": 10,
+                "end": 15,
+            },
+        ]
+
+        result = OutputFormatter(group_entities=True).format_predictions(
+            predictions,
+            text,
+            model_name="test-model",
+        )
+
+        assert [entity.text for entity in result.entities] == ["Cyclopalm", "Ondam"]
+
+    def test_group_entities_still_merges_same_line_name(self):
+        text = "John Doe"
+        predictions = [
+            {"entity": "B-NAME", "score": 0.95, "start": 0, "end": 4},
+            {"entity": "I-NAME", "score": 0.93, "start": 5, "end": 8},
+        ]
+
+        result = OutputFormatter(group_entities=True).format_predictions(
+            predictions,
+            text,
+            model_name="test-model",
+        )
+
+        assert [
+            (entity.text, entity.start, entity.end) for entity in result.entities
+        ] == [("John Doe", 0, 8)]
+
+
+class TestAdvancedNERBoundaries:
+    def test_smart_grouping_does_not_cross_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        tokens = [
+            {"entity": "B-CHEM", "score": 0.95, "start": 0, "end": 9},
+            {"entity": "I-CHEM", "score": 0.94, "start": 10, "end": 15},
+        ]
+
+        entities = AdvancedNERProcessor().smart_group_entities(tokens, text)
+
+        assert [entity.text for entity in entities] == ["Cyclopalm", "Ondam"]
+
+    def test_smart_grouping_still_merges_same_line_bio_tokens(self):
+        text = "John Doe"
+        tokens = [
+            {"entity": "B-NAME", "score": 0.95, "start": 0, "end": 4},
+            {"entity": "I-NAME", "score": 0.94, "start": 5, "end": 8},
+        ]
+
+        entities = AdvancedNERProcessor().smart_group_entities(tokens, text)
+
+        assert [(entity.text, entity.start, entity.end) for entity in entities] == [
+            ("John Doe", 0, 8)
+        ]
+
+    def test_adjacent_merge_does_not_cross_hard_line(self):
+        text = "Cyclopalm\nOndam"
+        entities = [
+            AdvancedNERProcessor().smart_group_entities(
+                [{"entity": "B-CHEM", "score": 0.95, "start": 0, "end": 9}],
+                text,
+            )[0],
+            AdvancedNERProcessor().smart_group_entities(
+                [{"entity": "B-CHEM", "score": 0.94, "start": 10, "end": 15}],
+                text,
+            )[0],
+        ]
+
+        merged = AdvancedNERProcessor(max_merge_gap=2).merge_adjacent_entities(
+            entities,
+            text,
+        )
+
+        assert [entity.text for entity in merged] == ["Cyclopalm", "Ondam"]
+
+
+class TestFixEntitySpans:
+    """Test cases for OutputFormatter._fix_entity_spans."""
+
+    def test_extends_truncated_end(self):
+        """Entity with end 1 short should be extended."""
+        text = "Patient María García"
+        entities = [
+            EntityPrediction(
+                text="Marí", label="NAME", confidence=0.9, start=8, end=12
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "María"
+        assert fixed[0].start == 8
+        assert fixed[0].end == 13
+
+    def test_extends_truncated_city(self):
+        """Entity with end 1 short for a city."""
+        text = "Ciudad: Barcelon"
+        entities = [
+            EntityPrediction(
+                text="Barcelon", label="CITY", confidence=0.9, start=8, end=15
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text + "a")
+        assert fixed[0].text == "Barcelona"
+        assert fixed[0].end == 17
+
+    def test_correct_span_unchanged(self):
+        """Entity with correct span should not change."""
+        text = "Patient John Doe"
+        entities = [
+            EntityPrediction(
+                text="John", label="NAME", confidence=0.9, start=8, end=12
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].start == 8
+        assert fixed[0].end == 12
+
+    def test_span_at_end_of_text(self):
+        """Entity at end of text should not crash."""
+        text = "Hello María"
+        entities = [
+            EntityPrediction(
+                text="Marí", label="NAME", confidence=0.9, start=6, end=10
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "María"
+        assert fixed[0].end == 11
+
+    def test_span_followed_by_space(self):
+        """Entity followed by space should not extend into space."""
+        text = "Hello John is here"
+        entities = [
+            EntityPrediction(
+                text="John", label="NAME", confidence=0.9, start=6, end=10
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].end == 10
+
+    def test_none_offsets_preserved(self):
+        """Entity with None start/end should pass through."""
+        entities = [
+            EntityPrediction(
+                text="test", label="X", confidence=0.5, start=None, end=None
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, "some text")
+        assert fixed[0].start is None
+        assert fixed[0].end is None
+
+    def test_strips_leading_whitespace(self):
+        """Entity span starting with whitespace should be trimmed."""
+        text = "Hello  John"
+        entities = [
+            EntityPrediction(
+                text=" John", label="NAME", confidence=0.9, start=6, end=11
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].start == 7
+
+
+class TestFormatPredictionsFunction:
+    """Test cases for the format_predictions function."""
+
+    def test_format_predictions_dict(self, sample_predictions, sample_text):
+        """Test format_predictions function with dict output."""
+        result = format_predictions(
+            sample_predictions,
+            sample_text,
+            model_name="test-model",
+            output_format="dict",
+        )
+        assert isinstance(result, PredictionResult)
+
+    def test_format_predictions_json(self, sample_predictions, sample_text):
+        """Test format_predictions function with JSON output."""
+        result = format_predictions(
+            sample_predictions,
+            sample_text,
+            model_name="test-model",
+            output_format="json",
+        )
+        assert isinstance(result, str)
+        assert "diabetes" in result
+
+    def test_format_predictions_html(self, sample_predictions, sample_text):
+        """Test format_predictions function with HTML output."""
+        result = format_predictions(
+            sample_predictions,
+            sample_text,
+            model_name="test-model",
+            output_format="html",
+        )
+        assert isinstance(result, str)
+        assert "<div" in result
+
+    def test_format_predictions_pass_through_metadata(
+        self, sample_predictions, sample_text
+    ):
+        """Additional kwargs like processing_time should end up in the result metadata."""
+        result = format_predictions(
+            sample_predictions,
+            sample_text,
+            model_name="test-model",
+            output_format="dict",
+            processing_time=0.123,
+        )
+
+        assert isinstance(result, PredictionResult)
+        assert result.processing_time == 0.123
+
+    def test_format_predictions_invalid_format(self, sample_predictions, sample_text):
+        """Test format_predictions function with invalid format."""
+        with pytest.raises(ValueError, match="Unsupported output format"):
+            format_predictions(
+                sample_predictions,
+                sample_text,
+                model_name="test-model",
+                output_format="invalid",
+            )
+
+
+class TestPreprocessFunction:
+    """Test cases for the preprocess_text function."""
+
+    def test_preprocess_text_defaults(self):
+        """Test preprocess_text with default settings."""
+        text = "  Patient   has    diabetes.  "
+        result = preprocess_text(text)
+        assert result == "Patient has diabetes."
+
+    def test_preprocess_text_lowercase(self):
+        """Test preprocess_text with lowercase."""
+        text = "Patient Has Diabetes"
+        result = preprocess_text(text, lowercase=True)
+        assert result == "patient has diabetes"
+
+    def test_preprocess_text_remove_punctuation(self):
+        """Test preprocess_text with punctuation removal."""
+        text = "Patient has diabetes, hypertension!"
+        result = preprocess_text(text, remove_punctuation=True)
+        assert "," not in result
+        assert "!" not in result
+
+
+class TestPostprocessFunction:
+    """Test cases for the postprocess_text function."""
+
+    def test_postprocess_text_default(self):
+        """Test postprocess_text with default settings."""
+        text = "patient has diabetes"
+        result = postprocess_text(text)
+        assert result == "Patient has diabetes"
+
+    def test_postprocess_text_no_capitalize(self):
+        """Test postprocess_text without capitalization."""
+        text = "patient has diabetes"
+        result = postprocess_text(text, capitalize_first=False)
+        assert result == "patient has diabetes"
+
+    def test_postprocess_text_empty(self):
+        """Test postprocess_text with empty string."""
+        result = postprocess_text("")
+        assert result == ""

@@ -1,0 +1,2077 @@
+"""ConText rules and decision axes for clinical spans (roadmap 5.2).
+
+The shared :func:`apply_context_rules` primitive is a deterministic,
+zero-training trigger and scope scanner. Its English starter cues live in the
+packaged ``data/context_rules.yaml`` resource rather than in this module. It
+returns modifier evidence without collapsing that evidence into axis labels;
+learned heads belong in later layers only where deterministic rules
+under-perform.
+
+This module holds narrow, deterministic ConText layers that classify clinical
+spans from a target span plus optional modifier hits produced by the shared
+context engine.
+
+Negation classifies whether a clinical span is affirmed or negated. Downstream
+grounding layers map ``"negated"`` spans to FHIR
+``verificationStatus=refuted``; this module only exposes the per-span context
+axis and does not build grounded records.
+
+Temporality classifies the temporal status of a clinical span onto the original
+ConText three-value temporality scale:
+
+* ``"recent"``       -- the finding is current / active (the default).
+* ``"historical"``   -- the finding belongs to the patient's past history.
+* ``"hypothetical"`` -- the finding is conditional and not asserted as present.
+
+The historical-versus-current distinction is what separates a resolved past
+problem from an active one (``"history of MI"`` versus ``"acute MI"``).
+Downstream FHIR/OMOP records consume this axis to drive
+``clinicalStatus`` / ``onset``: a ``"historical"`` span maps to an inactive or
+resolved ``clinicalStatus`` and a past ``onset``, whereas a ``"recent"`` span
+maps to an active ``clinicalStatus``.  A ``"hypothetical"`` span is not asserted
+to be present at all and should not be recorded as an active condition.
+
+Uncertainty resolves whether a span is asserted as certain or remains hedged,
+hypothetical, or conditional. Uncertain spans are flagged, not dropped, so
+grounding layers can downweight or annotate unconfirmed conditions while still
+receiving the original span.
+
+Sibling axes such as experiencer and absolute-date timeline normalization
+(TIMEX3) are handled by separate layers and are out of scope here.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date
+from functools import lru_cache
+from importlib import resources
+from pathlib import Path
+from typing import Any, Literal, cast
+
+import yaml  # type: ignore[import-untyped]
+
+from openmed.clinical.lexicons import (
+    ClinicalCueLexicon,
+    clinical_context_lexicon_stats,
+    get_clinical_cue_lexicon,
+    normalize_section_header,
+    normalized_section_header_aliases,
+)
+from openmed.clinical.sections.detect import section_label_from_loinc
+
+Negation = Literal["affirmed", "negated"]
+
+AFFIRMED: Negation = "affirmed"
+NEGATED: Negation = "negated"
+
+#: The negation values, ordered from default asserted polarity to refuted.
+NEGATION_VALUES = (AFFIRMED, NEGATED)
+
+RECENT = "recent"
+HISTORICAL = "historical"
+HYPOTHETICAL = "hypothetical"
+
+#: The temporality values, ordered from default to most specific.
+TEMPORALITY_VALUES = (RECENT, HISTORICAL, HYPOTHETICAL)
+
+Certainty = Literal["certain", "uncertain"]
+
+CERTAIN: Certainty = "certain"
+UNCERTAIN: Certainty = "uncertain"
+
+#: The certainty values, ordered from asserted to less certain.
+CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
+
+ContextRuleCategory = Literal[
+    "negation",
+    "uncertainty",
+    "experiencer",
+    "temporality",
+]
+ContextCueCategory = Literal[
+    "historical",
+    "hypothetical",
+    "uncertainty",
+    "negation",
+    "experiencer",
+    "temporality",
+]
+ContextCueDirection = Literal["forward", "backward", "bidirectional"]
+ContextRuleScope = Literal["sentence", "clause"]
+
+DEFAULT_CONTEXT_RULES_RESOURCE = "data/context_rules.yaml"
+_CONTEXT_RULES_PACKAGE = "openmed.clinical"
+_CONTEXT_RULE_CATEGORIES = frozenset(
+    {"negation", "uncertainty", "experiencer", "temporality"}
+)
+_CONTEXT_RULE_DIRECTIONS = frozenset({"forward", "backward", "bidirectional"})
+_CONTEXT_RULE_SCOPES = frozenset({"sentence", "clause"})
+ContextSource = Literal["local", "section", "default"]
+
+INDIA_CLINICAL_NER_DISCLAIMER = (
+    "India clinical NER output assists review and does not make clinical or "
+    "disclosure decisions."
+)
+
+_ENGLISH_CONTEXT_LEXICON = get_clinical_cue_lexicon("en")
+
+# Ported ConText temporal lexicon. Cues are matched case-insensitively and on
+# token boundaries so abbreviations such as ``h/o`` and ``s/p`` match cleanly
+# without firing inside unrelated words.
+HISTORICAL_CUES = _ENGLISH_CONTEXT_LEXICON.historical
+HYPOTHETICAL_CUES = _ENGLISH_CONTEXT_LEXICON.hypothetical
+RECENT_TEMPORALITY_CUES = _ENGLISH_CONTEXT_LEXICON.recent
+
+# ConText hypothetical/uncertainty trigger lexicon. It intentionally overlaps
+# with HYPOTHETICAL_CUES because a conditional span is both temporally
+# hypothetical and not clinically asserted as certain.
+UNCERTAINTY_CUES = _ENGLISH_CONTEXT_LEXICON.uncertainty
+
+# ConText/NegEx-style negation cues. Phrases are matched before shorter cues,
+# so "no evidence of" is counted as one negation cue rather than "no" plus a
+# second incidental phrase.
+NEGATION_CUES = _ENGLISH_CONTEXT_LEXICON.negation
+
+# Pseudo-negation cues contain negation words but do not refute the target
+# concept. They are masked before true negation cues are counted.
+PSEUDO_NEGATION_CUES = _ENGLISH_CONTEXT_LEXICON.pseudo_negation
+
+
+def _cue_pattern(
+    cues: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str]:
+    alternation = _cue_alternation(cues)
+    if not alternation:
+        return re.compile(r"(?!x)x")
+    if token_boundaries:
+        pattern = rf"(?<!\w)(?:{alternation})(?!\w)"
+    else:
+        pattern = rf"(?:{alternation})"
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _cue_alternation(cues: Iterable[str]) -> str:
+    return "|".join(
+        r"\s+".join(re.escape(part) for part in cue.split())
+        for cue in sorted(set(cues), key=len, reverse=True)
+    )
+
+
+def _terminator_pattern(
+    cues: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str]:
+    alternation = _cue_alternation(cues)
+    punctuation = r"[.!?;。！？；]"
+    if not alternation:
+        return re.compile(punctuation, re.IGNORECASE)
+    if token_boundaries:
+        cue_pattern = rf"(?<!\w)(?:{alternation})(?!\w)"
+    else:
+        cue_pattern = rf"(?:{alternation})"
+    return re.compile(rf"(?:{punctuation}|{cue_pattern})", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class _CompiledContextLexicon:
+    language: str
+    lexicon: ClinicalCueLexicon
+    historical_re: re.Pattern[str]
+    hypothetical_re: re.Pattern[str]
+    recent_re: re.Pattern[str]
+    uncertainty_re: re.Pattern[str]
+    negation_re: re.Pattern[str]
+    pseudo_negation_re: re.Pattern[str]
+    scope_terminator_re: re.Pattern[str]
+    conjunction_terminator_re: re.Pattern[str]
+    context_cue_re: re.Pattern[str]
+    category_by_text: Mapping[str, ContextCueCategory]
+    backward_context_cues: frozenset[str]
+
+
+def _compiled_context_lexicon(language: str | None = None) -> _CompiledContextLexicon:
+    lexicon = get_clinical_cue_lexicon(language)
+    token_boundaries = lexicon.token_boundaries
+    return _CompiledContextLexicon(
+        language=lexicon.language,
+        lexicon=lexicon,
+        historical_re=_cue_pattern(
+            lexicon.historical,
+            token_boundaries=token_boundaries,
+        ),
+        hypothetical_re=_cue_pattern(
+            lexicon.hypothetical,
+            token_boundaries=token_boundaries,
+        ),
+        recent_re=_cue_pattern(lexicon.recent, token_boundaries=token_boundaries),
+        uncertainty_re=_cue_pattern(
+            lexicon.uncertainty,
+            token_boundaries=token_boundaries,
+        ),
+        negation_re=_cue_pattern(lexicon.negation, token_boundaries=token_boundaries),
+        pseudo_negation_re=_cue_pattern(
+            lexicon.pseudo_negation,
+            token_boundaries=token_boundaries,
+        ),
+        scope_terminator_re=_terminator_pattern(
+            lexicon.scope_terminators,
+            token_boundaries=token_boundaries,
+        ),
+        conjunction_terminator_re=_cue_pattern(
+            lexicon.conjunction_terminators,
+            token_boundaries=token_boundaries,
+        ),
+        context_cue_re=_cue_pattern(
+            (
+                *lexicon.historical,
+                *lexicon.hypothetical,
+                *lexicon.uncertainty,
+                *lexicon.negation,
+            ),
+            token_boundaries=token_boundaries,
+        ),
+        category_by_text=_cue_category_lookup(lexicon),
+        backward_context_cues=frozenset(
+            _normalize_cue_text(cue) for cue in lexicon.backward
+        ),
+    )
+
+
+_HISTORICAL_RE = _cue_pattern(HISTORICAL_CUES)
+_HYPOTHETICAL_RE = _cue_pattern(HYPOTHETICAL_CUES)
+_RECENT_TEMPORALITY_RE = _cue_pattern(RECENT_TEMPORALITY_CUES)
+_UNCERTAINTY_RE = _cue_pattern(UNCERTAINTY_CUES)
+_NEGATION_RE = _cue_pattern(NEGATION_CUES)
+_PSEUDO_NEGATION_RE = _cue_pattern(PSEUDO_NEGATION_CUES)
+_SCOPE_TERMINATOR_RE = re.compile(
+    r"(?:[.!?;]|\b(?:and|but|however|or)\b)",
+    re.IGNORECASE,
+)
+_CONTEXT_CUE_RE = _cue_pattern(
+    (*HISTORICAL_CUES, *HYPOTHETICAL_CUES, *UNCERTAINTY_CUES, *NEGATION_CUES)
+)
+_CONJUNCTION_TERMINATOR_RE = re.compile(
+    r"(?<!\w)(?:but|however|although)(?!\w)",
+    re.IGNORECASE,
+)
+_CONTEXT_TEXT_KEYS = (
+    "document_text",
+    "context_text",
+    "source_text",
+    "full_text",
+    "note_text",
+    "context",
+    "document",
+)
+_START_KEYS = ("start", "start_char", "start_offset", "begin", "offset")
+_END_KEYS = ("end", "end_char", "end_offset", "stop")
+_OCCURRENCE_KEYS = ("occurrence", "text_occurrence", "occurrence_index")
+_BACKWARD_CONTEXT_CUES = {
+    *_ENGLISH_CONTEXT_LEXICON.backward,
+}
+
+
+def _normalize_section_label(section: str) -> str:
+    return normalize_section_header(section)
+
+
+def _normalize_cue_text(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def _cue_category_lookup(
+    lexicon: ClinicalCueLexicon | None = None,
+) -> dict[str, ContextCueCategory]:
+    active_lexicon = lexicon or _ENGLISH_CONTEXT_LEXICON
+    category_by_cue: dict[str, ContextCueCategory] = {}
+    categorized_cues: tuple[tuple[ContextCueCategory, Sequence[str]], ...] = (
+        ("historical", active_lexicon.historical),
+        ("hypothetical", active_lexicon.hypothetical),
+        ("uncertainty", active_lexicon.uncertainty),
+        ("negation", active_lexicon.negation),
+    )
+    for category, cues in categorized_cues:
+        for cue in cues:
+            category_by_cue.setdefault(_normalize_cue_text(cue), category)
+    return category_by_cue
+
+
+_CONTEXT_CUE_CATEGORY_BY_TEXT = _cue_category_lookup()
+
+PATIENT_EXPERIENCER = "patient"
+FAMILY_EXPERIENCER = "family"
+
+# Experiencer labels shared by downstream grouping layers. Patient/family
+# disagreement is a hard safety boundary for coreference-style aggregation.
+EXPERIENCER_VALUES = (PATIENT_EXPERIENCER, FAMILY_EXPERIENCER)
+
+# Canonical names are lower_snake_case keys expected to compose with the
+# user-facing labels OM-086's detect_sections will emit. Aliases are normalized
+# with _normalize_section_label before lookup.
+CANONICAL_SECTION_LABELS = {
+    "past_medical_history": (
+        "Past Medical History",
+        "PMH",
+        "Medical History",
+    ),
+    "history": ("History",),
+    "family_history": (
+        "Family History",
+        "Family Medical History",
+        "FH",
+    ),
+    "social_history": (
+        "Social History",
+        "Social Hx",
+        "SH",
+    ),
+    "history_of_present_illness": (
+        "History of Present Illness",
+        "HPI",
+    ),
+    "assessment": ("Assessment",),
+    "plan": ("Plan",),
+}
+
+_BASE_SECTION_LABEL_ALIASES = {
+    "past medical history": "past_medical_history",
+    "pmh": "past_medical_history",
+    "medical history": "past_medical_history",
+    "history": "history",
+    "family history": "family_history",
+    "family medical history": "family_history",
+    "fh": "family_history",
+    "social history": "social_history",
+    "social hx": "social_history",
+    "sh": "social_history",
+    "history of present illness": "history_of_present_illness",
+    "hpi": "history_of_present_illness",
+    "assessment": "assessment",
+    "plan": "plan",
+}
+
+SECTION_LABEL_ALIASES = {
+    **_BASE_SECTION_LABEL_ALIASES,
+    **normalized_section_header_aliases(),
+}
+
+SECTION_CONTEXT_PRIORS = {
+    "past_medical_history": {"temporality": HISTORICAL},
+    "history": {"temporality": HISTORICAL},
+    "family_history": {"experiencer": FAMILY_EXPERIENCER},
+    "social_history": {"experiencer": PATIENT_EXPERIENCER},
+}
+
+
+@dataclass(frozen=True)
+class ClinicalContextResult:
+    """Per-span ConText decision result.
+
+    ``negation="negated"`` is the downstream signal for
+    ``verificationStatus=refuted`` when a grounding/FHIR layer materializes the
+    clinical span as a Condition. ``experiencer="family"`` is the downstream
+    signal to exclude the finding from patient-level resources. This object
+    deliberately stays at the context axis layer and does not construct that
+    grounded record.
+    """
+
+    temporality: str
+    certainty: Certainty
+    negation: Negation
+    experiencer: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a compact dictionary, omitting an unset experiencer."""
+
+        values = {
+            "temporality": self.temporality,
+            "certainty": self.certainty,
+            "negation": self.negation,
+            "experiencer": self.experiencer,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+    def to_assertion(self) -> ClinicalAssertion:
+        """Return the assertion record consumed by grounding exporters."""
+
+        return ClinicalAssertion(
+            temporality=self.temporality,
+            certainty=self.certainty,
+            negation=self.negation,
+            experiencer=self.experiencer,
+        )
+
+
+@dataclass(frozen=True)
+class ClinicalAssertion:
+    """Advisory per-span clinical assertion axes for downstream grounding.
+
+    This record composes the ConText axis decisions currently needed by
+    downstream FHIR/OMOP grounding without building FHIR, OMOP, or other
+    clinical records here. A ``"historical"`` temporality maps downstream to an
+    inactive or resolved FHIR ``clinicalStatus``. A ``"hypothetical"`` span is
+    not asserted as present. An ``"uncertain"`` certainty maps downstream to
+    ``verificationStatus=provisional``.
+
+    ``negation`` and ``experiencer`` are optional extension points for sibling
+    axes and remain unset when those axes are not part of this composition.
+    Outputs are advisory annotations for review and downstream processing, not
+    clinical decisions and not medical-device instructions.
+    """
+
+    temporality: str
+    certainty: Certainty
+    negation: Negation | None = None
+    experiencer: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a compact dictionary, omitting axes that are not set."""
+
+        values = {
+            "temporality": self.temporality,
+            "certainty": self.certainty,
+            "negation": self.negation,
+            "experiencer": self.experiencer,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+
+@dataclass(frozen=True)
+class RerankContext:
+    """Section and assertion context consumed by grounding candidate reranking.
+
+    This payload carries the surrounding-note signals a sparse+dense reranker
+    folds into a fused score without re-running retrieval. ``section`` is the
+    raw section header the mention was found under; :attr:`canonical_section`
+    normalizes it through the same OM-086 section vocabulary as
+    ``apply_section_context``. ``assertion`` is the advisory
+    :class:`ClinicalAssertion` for the span. ``preferred_concepts`` is the set
+    of ``(system, code)`` concept keys the section makes salient (e.g. the
+    section's active problem list); a candidate whose key is in that set earns
+    a section-match adjustment, which is how a same-surface collision resolves
+    to the section-appropriate sense.
+
+    The object is deliberately advisory: it records provenance-friendly context
+    features and never constructs a FHIR, OMOP, or other grounded record.
+    """
+
+    section: str | None = None
+    assertion: ClinicalAssertion | None = None
+    preferred_concepts: frozenset[tuple[str, str]] = frozenset()
+
+    @property
+    def canonical_section(self) -> str | None:
+        """Return the canonical section key for :attr:`section`, or ``None``."""
+
+        return canonical_section_label(self.section)
+
+    def section_match(self, system: str, code: str) -> float:
+        """Return ``1.0`` when ``(system, code)`` is preferred in this section."""
+
+        if not self.preferred_concepts:
+            return 0.0
+        return 1.0 if (system, code) in self.preferred_concepts else 0.0
+
+    def assertion_present(self) -> float:
+        """Return ``1.0`` unless the span is negated or hypothetical.
+
+        A missing assertion is treated as present so the feature never penalizes
+        spans that were not assertion-analyzed.
+        """
+
+        assertion = self.assertion
+        if assertion is None:
+            return 1.0
+        if assertion.negation == NEGATED:
+            return 0.0
+        if assertion.temporality == HYPOTHETICAL:
+            return 0.0
+        return 1.0
+
+
+@dataclass(frozen=True)
+class ContextRule:
+    """One lexical ConText trigger and its propagation policy.
+
+    Rules are loaded from :data:`DEFAULT_CONTEXT_RULES_RESOURCE`. ``scope``
+    determines whether configured clause terminators are enforced, while
+    ``max_scope_tokens`` provides a deterministic upper bound within the
+    target sentence.
+    """
+
+    cue: str
+    category: ContextRuleCategory
+    direction: ContextCueDirection
+    scope: ContextRuleScope
+    terminators: tuple[str, ...]
+    max_scope_tokens: int
+
+
+@dataclass(frozen=True)
+class ModifierHit:
+    """Scoped ConText cue matched around a target clinical span.
+
+    ``cue`` preserves the matched document text and ``start``/``end`` are
+    document offsets. ``direction`` records whether the cue was allowed to
+    scope forward to a following target or backward to a preceding target. The
+    ``text`` property makes the object directly consumable by the existing
+    resolver helpers without changing their signatures.
+    """
+
+    cue: str
+    category: ContextCueCategory
+    start: int
+    end: int
+    direction: ContextCueDirection
+
+    @property
+    def text(self) -> str:
+        """Return the matched cue text for resolver compatibility."""
+
+        return self.cue
+
+    @property
+    def matched_cue(self) -> str:
+        """Return the exact source text matched by the rule."""
+
+        return self.cue
+
+    @property
+    def offset(self) -> tuple[int, int]:
+        """Return the half-open document offset of the matched cue."""
+
+        return self.start, self.end
+
+
+@dataclass(frozen=True)
+class _ContextRuleMatch:
+    rule: ContextRule
+    hit: ModifierHit
+
+
+@dataclass(frozen=True)
+class _SentenceWindow:
+    start: int
+    end: int
+
+
+class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
+    """Dictionary-like result that can be looked up with unhashable spans."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._unhashable_entries: list[tuple[Any, tuple[ModifierHit, ...]]] = []
+
+    def add(self, span: Any, hits: tuple[ModifierHit, ...]) -> None:
+        try:
+            super().__setitem__(span, hits)
+        except TypeError:
+            self._unhashable_entries.append((span, hits))
+
+    def __getitem__(self, span: Any) -> tuple[ModifierHit, ...]:
+        try:
+            return super().__getitem__(span)
+        except TypeError:
+            result = self._unhashable_lookup(span)
+            if result is not None:
+                return result
+            raise KeyError(span) from None
+        except KeyError:
+            result = self._unhashable_lookup(span)
+            if result is not None:
+                return result
+            raise
+
+    def __contains__(self, span: object) -> bool:
+        try:
+            if super().__contains__(span):
+                return True
+        except TypeError:
+            pass
+        return self._unhashable_lookup(span) is not None
+
+    def __iter__(self) -> Iterator[Any]:
+        yield from super().__iter__()
+        for span, _ in self._unhashable_entries:
+            yield span
+
+    def __len__(self) -> int:
+        return super().__len__() + len(self._unhashable_entries)
+
+    # ``get``/``items``/``keys``/``values`` intentionally broaden the ``dict``
+    # signatures: they must also surface the unhashable span entries kept in a
+    # side list, so they return simple iterables rather than the invariant
+    # ``dict`` view/overload types. The override incompatibility is deliberate
+    # and safe for this read-mostly result container.
+    def get(  # type: ignore[override]
+        self,
+        span: Any,
+        default: tuple[ModifierHit, ...] | None = None,
+    ) -> tuple[ModifierHit, ...] | None:
+        try:
+            return self[span]
+        except KeyError:
+            return default
+
+    def items(self) -> Iterator[tuple[Any, tuple[ModifierHit, ...]]]:  # type: ignore[override]
+        yield from super().items()
+        yield from self._unhashable_entries
+
+    def keys(self) -> Iterator[Any]:  # type: ignore[override]
+        for span, _ in self.items():
+            yield span
+
+    def values(self) -> Iterator[tuple[ModifierHit, ...]]:  # type: ignore[override]
+        for _, hits in self.items():
+            yield hits
+
+    def _unhashable_lookup(self, span: object) -> tuple[ModifierHit, ...] | None:
+        for candidate, hits in self._unhashable_entries:
+            if _same_span_key(candidate, span):
+                return hits
+        return None
+
+
+def _same_span_key(left: Any, right: object) -> bool:
+    if left is right:
+        return True
+    try:
+        return bool(left == right)
+    except Exception:
+        return False
+
+
+def _text_of(obj: Any) -> str:
+    """Best-effort extraction of cue/span text from heterogeneous inputs."""
+
+    if obj is None:
+        return ""
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, Mapping):
+        for key in ("text", "phrase", "cue", "literal", "word", "value", "surface"):
+            value = obj.get(key)
+            if isinstance(value, str):
+                return value
+        return ""
+    for attr in ("text", "phrase", "cue", "literal", "word", "value", "surface"):
+        value = getattr(obj, attr, None)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _field_value(obj: Any, keys: Iterable[str]) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, Mapping):
+        for key in keys:
+            value = obj.get(key)
+            if value is not None:
+                return value
+        return None
+    for key in keys:
+        value = getattr(obj, key, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _int_field(obj: Any, keys: Iterable[str]) -> int | None:
+    value = _field_value(obj, keys)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def _offsets_of(obj: Any) -> tuple[int, int] | None:
+    start = _int_field(obj, _START_KEYS)
+    end = _int_field(obj, _END_KEYS)
+    if start is None or end is None or start < 0 or end < start:
+        return None
+    return start, end
+
+
+def _context_text_of(span: Any) -> str:
+    context = _field_value(span, _CONTEXT_TEXT_KEYS)
+    if isinstance(context, str):
+        return context
+
+    text = _text_of(span)
+    offsets = _offsets_of(span)
+    if offsets is not None and offsets[1] <= len(text):
+        return text
+    return ""
+
+
+def _occurrence_of(obj: Any) -> int | None:
+    occurrence = _int_field(obj, _OCCURRENCE_KEYS)
+    if occurrence is None or occurrence < 0:
+        return None
+    return occurrence
+
+
+def _text_offsets_in_context(
+    context: str, text: str, occurrence: int | None
+) -> tuple[int, int] | None:
+    if not context or not text:
+        return None
+
+    haystack = context.casefold()
+    needle = text.casefold()
+    matches: list[tuple[int, int]] = []
+    start = haystack.find(needle)
+    while start != -1:
+        matches.append((start, start + len(text)))
+        start = haystack.find(needle, start + 1)
+
+    if occurrence is not None:
+        if occurrence < len(matches):
+            return matches[occurrence]
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _text_appears_in_context(context: str, text: str) -> bool:
+    return bool(context and text and text.casefold() in context.casefold())
+
+
+def _target_offsets_in_context(span: Any, context: str) -> tuple[int, int] | None:
+    offsets = _offsets_of(span)
+    if offsets is not None and offsets[1] <= len(context):
+        return offsets
+    return _text_offsets_in_context(context, _text_of(span), _occurrence_of(span))
+
+
+def _scope_bounds(
+    context: str,
+    target_start: int,
+    target_end: int,
+    *,
+    language: str | None = None,
+) -> tuple[int, int]:
+    compiled = _compiled_context_lexicon(language)
+    scope_start = 0
+    for match in compiled.scope_terminator_re.finditer(context, 0, target_start):
+        scope_start = match.end()
+
+    scope_end = len(context)
+    for match in compiled.scope_terminator_re.finditer(context, target_end):
+        scope_end = match.start()
+        break
+
+    return scope_start, scope_end
+
+
+def _cue_reaches_target(
+    context: str,
+    cue_start: int,
+    cue_end: int,
+    target_start: int,
+    target_end: int,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    if cue_end <= target_start:
+        between = context[cue_end:target_start]
+    elif target_end <= cue_start:
+        between = context[target_end:cue_start]
+    else:
+        between = ""
+    return compiled.scope_terminator_re.search(between) is None
+
+
+def _scoped_span_text(span: Any, *, language: str | None = None) -> str:
+    context = _context_text_of(span)
+    target_offsets = _target_offsets_in_context(span, context)
+    if target_offsets is None:
+        return _text_of(span)
+
+    scope_start, scope_end = _scope_bounds(context, *target_offsets, language=language)
+    return context[scope_start:scope_end]
+
+
+def _modifier_hit_offsets(hit: Any, context: str) -> tuple[int, int] | None:
+    offsets = _offsets_of(hit)
+    if offsets is not None and offsets[1] <= len(context):
+        return offsets
+    return _text_offsets_in_context(context, _text_of(hit), _occurrence_of(hit))
+
+
+def _iter_modifier_hits(modifier_hits: Any) -> Iterable[Any]:
+    if modifier_hits is None:
+        return ()
+    if isinstance(modifier_hits, (str, Mapping)):
+        return (modifier_hits,)
+    if isinstance(modifier_hits, Iterable):
+        return modifier_hits
+    return (modifier_hits,)
+
+
+def _scoped_modifier_texts(
+    span: Any,
+    modifier_hits: Any,
+    *,
+    language: str | None = None,
+) -> tuple[str, ...]:
+    context = _context_text_of(span)
+    target_offsets = _target_offsets_in_context(span, context)
+    parts: list[str] = []
+
+    for hit in _iter_modifier_hits(modifier_hits):
+        text = _text_of(hit)
+        if not text:
+            continue
+        if target_offsets is not None:
+            hit_offsets = _modifier_hit_offsets(hit, context)
+            if hit_offsets is None and _text_appears_in_context(context, text):
+                continue
+            if hit_offsets is not None and not _cue_reaches_target(
+                context,
+                *hit_offsets,
+                *target_offsets,
+                language=language,
+            ):
+                continue
+        parts.append(text)
+
+    return tuple(parts)
+
+
+def _text_parts(
+    span: Any,
+    modifier_hits: Any,
+    *,
+    language: str | None = None,
+) -> tuple[str, ...]:
+    span_text = _scoped_span_text(span, language=language)
+    parts = [span_text]
+    span_text_casefold = span_text.casefold()
+    for modifier_text in _scoped_modifier_texts(
+        span,
+        modifier_hits,
+        language=language,
+    ):
+        if span_text_casefold and modifier_text.casefold() in span_text_casefold:
+            continue
+        parts.append(modifier_text)
+    return tuple(part for part in parts if part)
+
+
+def _section_text_of(obj: Any) -> str:
+    """Best-effort extraction of a section label from heterogeneous inputs."""
+
+    if obj is None:
+        return ""
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, Mapping):
+        for key in ("section", "label", "name", "section_label", "section_name"):
+            value = obj.get(key)
+            if isinstance(value, str):
+                return value
+        return ""
+    for attr in ("section", "label", "name", "section_label", "section_name"):
+        value = getattr(obj, attr, None)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _canonical_section_name(section: Any) -> str | None:
+    section_text = _section_text_of(section)
+    if section_text:
+        normalized = _normalize_section_label(section_text)
+        canonical = SECTION_LABEL_ALIASES.get(normalized)
+        if canonical is not None:
+            return canonical
+    if isinstance(section, (str, Mapping)):
+        return section_label_from_loinc(section)
+    return None
+
+
+def canonical_section_name(section: Any) -> str | None:
+    """Return the canonical section key used by clinical context priors.
+
+    The returned value is the lower_snake_case key from
+    ``SECTION_CONTEXT_PRIORS``/``SECTION_LABEL_ALIASES``. Unknown or missing
+    section labels return ``None``. This keeps section compatibility checks in
+    downstream deterministic grouping code aligned with the same OM-086 section
+    vocabulary used by ``apply_section_context``.
+    """
+
+    return _canonical_section_name(section)
+
+
+def canonical_section_label(section: Any) -> str | None:
+    """Return the canonical section key for a user-facing section label.
+
+    The returned key is one of ``SECTION_LABEL_ALIASES`` values such as
+    ``"assessment"`` or ``"past_medical_history"``. Unknown, empty, or missing
+    section labels return ``None`` rather than inventing a category.
+    """
+
+    return _canonical_section_name(section)
+
+
+def _has_explicit_temporality_cue(
+    span: Any,
+    modifier_hits: Any = None,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    return any(
+        compiled.hypothetical_re.search(part)
+        or compiled.historical_re.search(part)
+        or compiled.recent_re.search(part)
+        for part in _text_parts(span, modifier_hits, language=language)
+    )
+
+
+def _has_explicit_uncertainty_cue(
+    span: Any,
+    modifier_hits: Any = None,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    return any(
+        compiled.uncertainty_re.search(part)
+        for part in _text_parts(span, modifier_hits, language=language)
+    )
+
+
+def _has_explicit_negation_cue(
+    span: Any,
+    modifier_hits: Any = None,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
+    return any(
+        compiled.negation_re.search(_mask_pseudo_negation(part, language=language))
+        for part in _text_parts(span, modifier_hits, language=language)
+    )
+
+
+def load_context_rules(path: str | Path | None = None) -> tuple[ContextRule, ...]:
+    """Load and validate ConText rules from YAML.
+
+    Args:
+        path: Optional replacement rule-set path. When omitted, the packaged
+            English starter rules are loaded.
+
+    Returns:
+        Validated immutable context rules covering all four modifier axes.
+
+    Raises:
+        ValueError: If the rule set is malformed or lacks required provenance.
+    """
+
+    if path is None:
+        return _load_default_context_rules()
+    payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    return _validate_context_rules_payload(payload)
+
+
+@lru_cache(maxsize=1)
+def _load_default_context_rules() -> tuple[ContextRule, ...]:
+    resource = resources.files(_CONTEXT_RULES_PACKAGE).joinpath(
+        DEFAULT_CONTEXT_RULES_RESOURCE
+    )
+    payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    return _validate_context_rules_payload(payload)
+
+
+def _validate_context_rules_payload(payload: Any) -> tuple[ContextRule, ...]:
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != 1:
+        raise ValueError("context rule set requires schema_version 1")
+
+    provenance = payload.get("provenance")
+    if not isinstance(provenance, Mapping):
+        raise ValueError("context rule set requires provenance metadata")
+    if provenance.get("license") != "Apache-2.0":
+        raise ValueError("context rule set provenance requires Apache-2.0")
+    sources = provenance.get("sources")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(not isinstance(source, str) or not source.strip() for source in sources)
+    ):
+        raise ValueError("context rule set provenance requires named sources")
+
+    raw_rules = payload.get("rules")
+    if not isinstance(raw_rules, list) or not raw_rules:
+        raise ValueError("context rule set requires a non-empty rules list")
+
+    rules: list[ContextRule] = []
+    identities: set[tuple[str, str, str]] = set()
+    for index, raw_rule in enumerate(raw_rules):
+        if not isinstance(raw_rule, Mapping):
+            raise ValueError(f"context rule {index} must be a mapping")
+
+        cue = raw_rule.get("cue")
+        category = raw_rule.get("category")
+        direction = raw_rule.get("direction")
+        scope = raw_rule.get("scope")
+        raw_terminators = raw_rule.get("terminators")
+        max_scope_tokens = raw_rule.get("max_scope_tokens")
+
+        if not isinstance(cue, str) or not cue.strip():
+            raise ValueError(f"context rule {index} requires a cue")
+        cue = " ".join(cue.split())
+        if category not in _CONTEXT_RULE_CATEGORIES:
+            raise ValueError(f"context rule {index} has an invalid category")
+        if direction not in _CONTEXT_RULE_DIRECTIONS:
+            raise ValueError(f"context rule {index} has an invalid direction")
+        if scope not in _CONTEXT_RULE_SCOPES:
+            raise ValueError(f"context rule {index} has an invalid scope")
+        if not isinstance(raw_terminators, list) or any(
+            not isinstance(value, str) or not value.strip() for value in raw_terminators
+        ):
+            raise ValueError(f"context rule {index} requires terminator strings")
+        if (
+            not isinstance(max_scope_tokens, int)
+            or isinstance(max_scope_tokens, bool)
+            or max_scope_tokens < 1
+        ):
+            raise ValueError(
+                f"context rule {index} requires a positive max_scope_tokens"
+            )
+
+        terminators = tuple(" ".join(value.split()) for value in raw_terminators)
+        if len(terminators) != len(set(terminators)):
+            raise ValueError(f"context rule {index} terminators must be unique")
+
+        identity = (cue.casefold(), str(category), str(direction))
+        if identity in identities:
+            raise ValueError(f"context rule {index} duplicates an earlier rule")
+        identities.add(identity)
+        rules.append(
+            ContextRule(
+                cue=cue,
+                category=cast(ContextRuleCategory, category),
+                direction=cast(ContextCueDirection, direction),
+                scope=cast(ContextRuleScope, scope),
+                terminators=terminators,
+                max_scope_tokens=max_scope_tokens,
+            )
+        )
+
+    categories = {rule.category for rule in rules}
+    missing = _CONTEXT_RULE_CATEGORIES.difference(categories)
+    if missing:
+        raise ValueError(
+            "context rule set is missing categories: " + ", ".join(sorted(missing))
+        )
+    return tuple(rules)
+
+
+def apply_context_rules(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+) -> list[tuple[Any, list[ModifierHit]]]:
+    """Apply packaged ConText rules and return modifier evidence per span.
+
+    Scope is always bounded to the target sentence. Clause-scoped rules also
+    stop at their configured termination cues, and every rule has a maximum
+    token propagation distance. The function deliberately returns raw modifier
+    hits; per-axis decision layers decide how to interpret them.
+
+    Args:
+        text: Source document text.
+        spans: Concept spans exposing supported offset aliases, span-like
+            two-integer sequences, or unique or occurrence-indexed text-like
+            values found in ``text``.
+        sentences: Optional sentence spans or sentence strings. When omitted,
+            the shared pySBD-backed sentence segmenter is used.
+
+    Returns:
+        A list preserving input order. Each item contains the original span and
+        its list of in-scope :class:`ModifierHit` values.
+    """
+
+    sentence_windows = _sentence_windows(text, sentences)
+    rule_matches = tuple(_iter_context_rule_matches(text, load_context_rules()))
+    results: list[tuple[Any, list[ModifierHit]]] = []
+
+    for span in spans:
+        target_start, target_end = _target_offsets(text, span)
+        target_sentence = _window_index(sentence_windows, target_start, target_end)
+        if target_sentence is None:
+            results.append((span, []))
+            continue
+
+        hits = [
+            match.hit
+            for match in rule_matches
+            if _context_rule_reaches_span(
+                text=text,
+                sentence_windows=sentence_windows,
+                target_sentence=target_sentence,
+                target_start=target_start,
+                target_end=target_end,
+                match=match,
+            )
+        ]
+        hits.sort(key=lambda hit: (hit.start, hit.end, hit.category, hit.direction))
+        results.append((span, hits))
+
+    return results
+
+
+def _iter_context_rule_matches(
+    text: str,
+    rules: Sequence[ContextRule],
+) -> Iterable[_ContextRuleMatch]:
+    accepted_by_category: dict[str, list[tuple[int, int]]] = {}
+    for rule in sorted(rules, key=lambda item: len(item.cue), reverse=True):
+        accepted = accepted_by_category.setdefault(rule.category, [])
+        for match in _context_literal_pattern(rule.cue).finditer(text):
+            offsets = (match.start(), match.end())
+            if any(_offsets_overlap(offsets, existing) for existing in accepted):
+                continue
+            accepted.append(offsets)
+            yield _ContextRuleMatch(
+                rule=rule,
+                hit=ModifierHit(
+                    cue=match.group(0),
+                    category=rule.category,
+                    start=match.start(),
+                    end=match.end(),
+                    direction=rule.direction,
+                ),
+            )
+
+
+@lru_cache(maxsize=None)
+def _context_literal_pattern(literal: str) -> re.Pattern[str]:
+    normalized = " ".join(literal.split())
+    escaped = r"\s+".join(re.escape(part) for part in normalized.split())
+    prefix = r"(?<!\w)" if normalized[0].isalnum() else ""
+    suffix = r"(?!\w)" if normalized[-1].isalnum() else ""
+    return re.compile(f"{prefix}(?:{escaped}){suffix}", re.IGNORECASE)
+
+
+def _offsets_overlap(
+    left: tuple[int, int],
+    right: tuple[int, int],
+) -> bool:
+    return left[0] < right[1] and right[0] < left[1]
+
+
+def _context_rule_reaches_span(
+    *,
+    text: str,
+    sentence_windows: tuple[_SentenceWindow, ...],
+    target_sentence: int,
+    target_start: int,
+    target_end: int,
+    match: _ContextRuleMatch,
+) -> bool:
+    hit = match.hit
+    if _window_index(sentence_windows, hit.start, hit.end) != target_sentence:
+        return False
+
+    if hit.end <= target_start and match.rule.direction in (
+        "forward",
+        "bidirectional",
+    ):
+        between = text[hit.end : target_start]
+    elif target_end <= hit.start and match.rule.direction in (
+        "backward",
+        "bidirectional",
+    ):
+        between = text[target_end : hit.start]
+    else:
+        return False
+
+    if len(re.findall(r"(?<!\w)\w+(?!\w)", between)) > match.rule.max_scope_tokens:
+        return False
+    if match.rule.scope == "clause" and any(
+        _context_literal_pattern(terminator).search(between)
+        for terminator in match.rule.terminators
+    ):
+        return False
+    return True
+
+
+def scan_context_cues(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+    language: str | None = None,
+) -> dict[Any, tuple[ModifierHit, ...]]:
+    """Return scoped ConText cue hits for each target span.
+
+    This compatibility scanner is consumed by the deterministic multilingual
+    axis resolvers in this module. New callers that need the committed English
+    rule definitions and list-based shared primitive should use
+    :func:`apply_context_rules`.
+
+    Args:
+        text: Source document text.
+        spans: Target spans. Each span may expose ``start``/``end`` offsets via
+            mapping keys or object attributes. When offsets are absent, a
+            text-like value is located in ``text``.
+        sentences: Optional sentence spans. Items may expose ``start`` and
+            ``end`` like the target spans, or may be sentence strings located
+            sequentially in ``text``. When omitted, pySBD sentence segmentation
+            is used if available, with a regex fallback.
+        language: Optional BCP-47-ish language code for the cue lexicon. Unknown
+            codes fall back to English so existing callers retain behavior.
+
+    Returns:
+        A dictionary keyed by the original span objects. Values are tuples of
+        ``ModifierHit`` objects whose cue scope reaches that span.
+    """
+
+    sentence_windows = _sentence_windows(text, sentences)
+    compiled = _compiled_context_lexicon(language)
+    cue_hits = tuple(_iter_context_cue_hits(text, language=language))
+    scoped_hits = _ContextCueResults()
+
+    for span in spans:
+        target_start, target_end = _target_offsets(text, span)
+        target_sentence = _window_index(sentence_windows, target_start, target_end)
+        if target_sentence is None:
+            scoped_hits.add(span, ())
+            continue
+
+        span_hits = [
+            hit
+            for hit in cue_hits
+            if _cue_reaches_span(
+                text=text,
+                cue_sentence=_window_index(sentence_windows, hit.start, hit.end),
+                target_sentence=target_sentence,
+                cue=hit,
+                target_start=target_start,
+                target_end=target_end,
+                compiled=compiled,
+            )
+        ]
+        scoped_hits.add(
+            span,
+            tuple(
+                sorted(span_hits, key=lambda hit: (hit.start, hit.end, hit.category))
+            ),
+        )
+
+    return scoped_hits
+
+
+def _iter_context_cue_hits(
+    text: str,
+    *,
+    language: str | None = None,
+) -> Iterable[ModifierHit]:
+    compiled = _compiled_context_lexicon(language)
+    for match in compiled.context_cue_re.finditer(text):
+        cue = match.group(0)
+        normalized_cue = _normalize_cue_text(cue)
+        category = compiled.category_by_text[normalized_cue]
+        direction: ContextCueDirection = (
+            "backward"
+            if normalized_cue in compiled.backward_context_cues
+            else "forward"
+        )
+        yield ModifierHit(
+            cue=cue,
+            category=category,
+            start=match.start(),
+            end=match.end(),
+            direction=direction,
+        )
+
+
+def _sentence_windows(
+    text: str,
+    sentences: Iterable[Any] | None,
+) -> tuple[_SentenceWindow, ...]:
+    windows: tuple[_SentenceWindow, ...] | None
+    if sentences is not None:
+        windows = tuple(_coerce_sentence_windows(text, sentences))
+    else:
+        windows = _pysbd_sentence_windows(text)
+        if windows is None:
+            windows = _regex_sentence_windows(text)
+
+    if not windows and text:
+        return (_SentenceWindow(0, len(text)),)
+    return windows
+
+
+def _pysbd_sentence_windows(text: str) -> tuple[_SentenceWindow, ...] | None:
+    try:
+        from openmed.processing.sentences import segment_text
+    except ImportError:  # pragma: no cover - import layout depends on install mode
+        return None
+
+    try:
+        return tuple(
+            _SentenceWindow(segment.start, segment.end)
+            for segment in segment_text(text)
+            if segment.start < segment.end
+        )
+    except ImportError:
+        return None
+
+
+def _regex_sentence_windows(text: str) -> tuple[_SentenceWindow, ...]:
+    if not text:
+        return ()
+
+    windows: list[_SentenceWindow] = []
+    start = 0
+    for match in re.finditer(r"[.!?]+(?:\s+|$)|\n+", text):
+        end = match.end()
+        _append_trimmed_window(windows, text, start, end)
+        start = end
+    _append_trimmed_window(windows, text, start, len(text))
+    return tuple(windows)
+
+
+def _append_trimmed_window(
+    windows: list[_SentenceWindow],
+    text: str,
+    start: int,
+    end: int,
+) -> None:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if start < end:
+        windows.append(_SentenceWindow(start, end))
+
+
+def _coerce_sentence_windows(
+    text: str,
+    sentences: Iterable[Any],
+) -> Iterable[_SentenceWindow]:
+    cursor = 0
+    for sentence in sentences:
+        if isinstance(sentence, str):
+            start = text.find(sentence, cursor)
+            if start == -1:
+                stripped = sentence.strip()
+                start = text.find(stripped, cursor) if stripped else -1
+                length = len(stripped)
+            else:
+                length = len(sentence)
+            if start == -1:
+                raise ValueError("sentence text is not present in source text")
+            end = start + length
+            cursor = end
+        else:
+            start, end = _offsets_from_obj(sentence)
+        window_start, window_end = _validate_offsets(text, start, end, name="sentence")
+        yield _SentenceWindow(window_start, window_end)
+
+
+def _target_offsets(text: str, span: Any) -> tuple[int, int]:
+    offsets = _try_offsets_from_obj(span)
+    if offsets is not None:
+        return _validate_offsets(text, *offsets, name="span")
+
+    span_text = _text_of(span)
+    if not span_text:
+        raise ValueError("span must expose start/end offsets or a text-like value")
+
+    offsets = _text_offsets_in_context(text, span_text, _occurrence_of(span))
+    if offsets is not None:
+        return offsets
+    if not _text_appears_in_context(text, span_text):
+        raise ValueError("span text is not present in source text")
+    raise ValueError(
+        "span text must be unique or provide an occurrence index or offsets"
+    )
+
+
+def _try_offsets_from_obj(obj: Any) -> tuple[int, int] | None:
+    offsets = _offsets_of(obj)
+    if offsets is not None:
+        return offsets
+
+    start = _int_field(obj, ("span_start", "sentence_start"))
+    end = _int_field(obj, ("span_end", "sentence_end"))
+    if start is not None and end is not None:
+        return start, end
+
+    if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+        if len(obj) >= 2 and all(type(value) is int for value in obj[:2]):
+            return int(obj[0]), int(obj[1])
+    return None
+
+
+def _offsets_from_obj(obj: Any) -> tuple[int, int]:
+    offsets = _try_offsets_from_obj(obj)
+    if offsets is None:
+        raise ValueError("sentence must expose start/end offsets or be text")
+    return offsets
+
+
+def _validate_offsets(
+    text: str,
+    start: int,
+    end: int,
+    *,
+    name: str,
+) -> tuple[int, int]:
+    if start < 0 or end < start or end > len(text):
+        raise ValueError(f"{name} offsets must satisfy 0 <= start <= end <= len(text)")
+    return start, end
+
+
+def _window_index(
+    sentence_windows: tuple[_SentenceWindow, ...],
+    start: int,
+    end: int,
+) -> int | None:
+    for index, sentence in enumerate(sentence_windows):
+        if start >= sentence.start and end <= sentence.end:
+            return index
+    return None
+
+
+def _cue_reaches_span(
+    *,
+    text: str,
+    cue_sentence: int | None,
+    target_sentence: int,
+    cue: ModifierHit,
+    target_start: int,
+    target_end: int,
+    compiled: _CompiledContextLexicon | None = None,
+) -> bool:
+    if cue_sentence is None or cue_sentence != target_sentence:
+        return False
+
+    if cue.direction == "forward":
+        if cue.end > target_start:
+            return False
+        between = text[cue.end : target_start]
+    else:
+        if target_end > cue.start:
+            return False
+        between = text[target_end : cue.start]
+
+    terminator_re = (
+        compiled.conjunction_terminator_re
+        if compiled is not None
+        else _CONJUNCTION_TERMINATOR_RE
+    )
+    return terminator_re.search(between) is None
+
+
+def resolve_temporality(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> str:
+    """Classify the ConText temporality of ``span``.
+
+    ``span`` is the target clinical span -- a string, a span mapping with a
+    ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
+    ``modifier_hits`` is the optional collection of ConText modifier cues the
+    shared engine matched in the span's window (cue strings, or mappings/objects
+    exposing a ``text``-like field).  The span surface itself is also scanned so
+    the layer is usable standalone when no separate modifier hits are supplied.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
+
+    Returns one of ``"recent"``, ``"historical"`` or ``"hypothetical"``.
+    ``"recent"`` is the default when no temporal cue is found.  When both a
+    hypothetical and a historical cue are present the span is treated as
+    ``"hypothetical"``: a conditional statement is not asserted to have
+    occurred, which takes precedence over where in time it would sit.
+    """
+
+    compiled = _compiled_context_lexicon(language)
+    parts = _text_parts(span, modifier_hits, language=language)
+
+    if any(compiled.hypothetical_re.search(part) for part in parts):
+        return HYPOTHETICAL
+    if any(compiled.historical_re.search(part) for part in parts):
+        return HISTORICAL
+    return RECENT
+
+
+def reconcile_temporality_with_interval(
+    *,
+    temporality: str,
+    interval_start: date | None,
+    interval_end: date | None,
+    reference_date: date | None,
+) -> str:
+    """Reconcile ConText temporality with a resolved timeline interval.
+
+    This helper keeps the ConText axis advisory while preventing impossible
+    combinations after absolute timeline resolution.  In particular, a span
+    resolved after the document reference date cannot remain historical.
+    """
+
+    if (
+        temporality == HYPOTHETICAL
+        or interval_start is None
+        or interval_end is None
+        or reference_date is None
+    ):
+        return temporality
+    if temporality == HISTORICAL and interval_start > reference_date:
+        return RECENT
+    if temporality == RECENT and interval_end < reference_date:
+        return HISTORICAL
+    return temporality
+
+
+def resolve_uncertainty(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> Certainty:
+    """Classify a clinical span as certain or uncertain/hypothetical.
+
+    ``span`` is the target clinical span -- a string, a span mapping with a
+    ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
+    ``modifier_hits`` is the optional collection of ConText uncertainty cues
+    matched in the span's window. Each part is scanned independently so cues
+    are never created by concatenating unrelated fragments.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
+
+    Returns ``"uncertain"`` for hedged, hypothetical, or conditional concepts
+    and ``"certain"`` otherwise. Uncertain spans are flagged for grounding
+    consumers; this helper does not filter or drop spans.
+    """
+
+    compiled = _compiled_context_lexicon(language)
+    parts = _text_parts(span, modifier_hits, language=language)
+    if any(compiled.uncertainty_re.search(part) for part in parts):
+        return UNCERTAIN
+    return CERTAIN
+
+
+def _mask_pseudo_negation(text: str, *, language: str | None = None) -> str:
+    compiled = _compiled_context_lexicon(language)
+    return compiled.pseudo_negation_re.sub(
+        lambda match: " " * len(match.group(0)),
+        text,
+    )
+
+
+def resolve_negation(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> Negation:
+    """Classify a clinical span as affirmed or negated.
+
+    ``span`` is the target clinical span -- a string, a span mapping with a
+    ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
+    ``modifier_hits`` is the optional collection of ConText negation cues
+    matched in the span's window. Each part is scanned independently so cues
+    are never created by concatenating unrelated fragments.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
+
+    Pseudo-negation cues such as ``"no increase"``, ``"not ruled out"``, and
+    ``"cannot be excluded"`` are masked before true negation cues are counted.
+    An odd number of true cues returns ``"negated"``; an even number returns
+    ``"affirmed"``, which makes double-negation deterministic.
+    """
+
+    negation_cue_count = 0
+    compiled = _compiled_context_lexicon(language)
+    for part in _text_parts(span, modifier_hits, language=language):
+        masked = _mask_pseudo_negation(part, language=language)
+        negation_cue_count += sum(1 for _ in compiled.negation_re.finditer(masked))
+    return NEGATED if negation_cue_count % 2 else AFFIRMED
+
+
+def resolve_span_context(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> ClinicalContextResult:
+    """Return all currently implemented ConText decision axes for ``span``.
+
+    Registered non-English languages use only their own cue pack. When that
+    pack has no matching cue, the axes degrade to recent, certain, and
+    affirmed; absent English cues never flip a Chinese or Hindi assertion.
+    """
+
+    return ClinicalContextResult(
+        temporality=resolve_temporality(span, modifier_hits, language=language),
+        certainty=resolve_uncertainty(span, modifier_hits, language=language),
+        negation=resolve_negation(span, modifier_hits, language=language),
+    )
+
+
+def assert_context_axes(
+    span: Any,
+    modifier_hits: Any = None,
+    section: Any = None,
+    language: str | None = None,
+) -> ClinicalAssertion:
+    """Return the composed clinical assertion axes for ``span``."""
+
+    assertion = ClinicalAssertion(
+        temporality=resolve_temporality(span, modifier_hits, language=language),
+        certainty=resolve_uncertainty(span, modifier_hits, language=language),
+        negation=resolve_negation(span, modifier_hits, language=language),
+    )
+    return apply_section_context(
+        span,
+        section,
+        assertion,
+        language=language,
+        modifier_hits=modifier_hits,
+    )
+
+
+def assert_context(
+    text: str,
+    spans: Iterable[Any],
+    sentences: Iterable[Any] | None = None,
+    language: str | None = None,
+    section_experiencer: str | None = None,
+    sections: Iterable[Any] | Mapping[str, Any] | str | None = None,
+) -> list[dict[str, Any]]:
+    """Attach all four clinical context axes to extracted spans.
+
+    The returned span mappings carry ``negation``, ``uncertainty``,
+    ``experiencer``, and ``temporality`` at the top level. The same compact
+    mapping is placed under ``metadata["clinical_context"]`` so formatted NER
+    results can preserve it without changing their public entity schema.
+    Input spans are never mutated. When ``sections`` is supplied, each span is
+    matched to its containing section and a ``context_sources`` mapping records
+    the winning ``local|section|default`` source for every axis. The same source
+    mapping is copied to ``metadata["clinical_context_sources"]``. Omitting
+    ``sections`` preserves the historical output shape exactly.
+
+    Args:
+        text: Source document text indexed by the span offsets.
+        spans: Span mappings, span-like objects, or strings. Offset-bearing
+            spans are preferred; a text-only span is located in ``text``.
+        sentences: Optional sentence spans used to bound cue propagation.
+        language: Optional cue-lexicon language code.
+        section_experiencer: Optional patient/family/other section prior used
+            only when no explicit experiencer cue governs a span.
+        sections: Optional iterable of offset-bearing section mappings such as
+            :class:`~openmed.clinical.sections.SectionSpan`. A single mapping
+            or label is also accepted. Labels and supported LOINC section codes
+            are canonicalized before priors are applied.
+
+    Returns:
+        Copied span mappings enriched with the four context axes, in input
+        order.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+
+    if isinstance(spans, (str, Mapping)):
+        span_list = [spans]
+    else:
+        span_list = list(spans)
+
+    section_list = _coerce_sections(sections)
+    record_context_sources = sections is not None
+
+    scoped_hits = scan_context_cues(
+        text,
+        span_list,
+        sentences=sentences,
+        language=language,
+    )
+
+    # Imported lazily because experiencer.py reuses constants and data classes
+    # from this module.
+    from openmed.clinical.experiencer import resolve_experiencer
+
+    enriched_spans: list[dict[str, Any]] = []
+    for span in span_list:
+        start, end = _target_offsets(text, span)
+        matched_section = _section_for_span(section_list, start=start, end=end)
+        section_signal = matched_section or _span_section(span)
+        section_text = _mask_section_header(text, matched_section)
+        modifier_hits = _modifier_hits_outside_section_header(
+            scoped_hits[span],
+            matched_section,
+        )
+        scoped_span = {
+            "text": section_text[start:end],
+            "document_text": section_text,
+            "start": start,
+            "end": end,
+        }
+        assertion = assert_context_axes(
+            scoped_span,
+            modifier_hits,
+            section=section_signal,
+            language=language,
+        )
+        assignment = resolve_experiencer(
+            section_text,
+            {"start": start, "end": end},
+            section_experiencer=section_experiencer or assertion.experiencer,
+            language=language,
+        )
+        context_fields = {
+            "negation": assertion.negation or AFFIRMED,
+            "uncertainty": assertion.certainty,
+            "experiencer": assignment.experiencer,
+            "temporality": assertion.temporality,
+        }
+
+        enriched = _span_mapping_copy(span, text=text, start=start, end=end)
+        enriched.update(context_fields)
+        context_sources = None
+        if record_context_sources:
+            context_sources = _context_axis_sources(
+                scoped_span,
+                modifier_hits,
+                section_signal,
+                assignment_source=assignment.source,
+                language=language,
+            )
+            enriched["context_sources"] = dict(context_sources)
+        raw_metadata = enriched.get("metadata")
+        if isinstance(raw_metadata, Mapping):
+            metadata = dict(raw_metadata)
+        elif raw_metadata is None:
+            metadata = {}
+        else:
+            metadata = {"value": raw_metadata}
+        metadata["clinical_context"] = dict(context_fields)
+        if context_sources is not None:
+            metadata["clinical_context_sources"] = dict(context_sources)
+        enriched["metadata"] = metadata
+        enriched_spans.append(enriched)
+
+    return enriched_spans
+
+
+def _coerce_sections(
+    sections: Iterable[Any] | Mapping[str, Any] | str | None,
+) -> tuple[Any, ...] | None:
+    if sections is None:
+        return None
+    if isinstance(sections, (str, Mapping)):
+        return (sections,)
+    try:
+        return tuple(sections)
+    except TypeError as exc:
+        raise TypeError("sections must be a section mapping or iterable") from exc
+
+
+def _section_for_span(
+    sections: tuple[Any, ...] | None,
+    *,
+    start: int,
+    end: int,
+) -> Any:
+    if not sections:
+        return None
+
+    containing: list[tuple[int, int, Any]] = []
+    unscoped: list[Any] = []
+    for index, section in enumerate(sections):
+        offsets = _offsets_of(section)
+        if offsets is None:
+            if isinstance(section, str) or _canonical_section_name(section) is not None:
+                unscoped.append(section)
+            continue
+        section_start, section_end = offsets
+        if section_start <= start and end <= section_end:
+            containing.append((section_end - section_start, index, section))
+
+    if containing:
+        return min(containing, key=lambda candidate: candidate[:2])[2]
+    if len(unscoped) == 1:
+        return unscoped[0]
+    return None
+
+
+def _section_header_offsets(section: Any) -> tuple[int, int] | None:
+    if not isinstance(section, Mapping):
+        return None
+
+    header_start = _int_field(section, ("header_start",))
+    header_end = _int_field(section, ("header_end",))
+    if (
+        header_start is not None
+        and header_end is not None
+        and header_start < header_end
+    ):
+        return header_start, header_end
+
+    section_start = _int_field(section, _START_KEYS)
+    content_start = _int_field(section, ("content_start",))
+    if (
+        section_start is not None
+        and content_start is not None
+        and section_start < content_start
+    ):
+        return section_start, content_start
+    return None
+
+
+def _mask_section_header(text: str, section: Any) -> str:
+    header_offsets = _section_header_offsets(section)
+    if header_offsets is None:
+        return text
+    start, end = header_offsets
+    if start < 0 or end > len(text):
+        return text
+    return f"{text[:start]}{' ' * (end - start)}{text[end:]}"
+
+
+def _modifier_hits_outside_section_header(
+    modifier_hits: Any,
+    section: Any,
+) -> tuple[Any, ...]:
+    header_offsets = _section_header_offsets(section)
+    hits = tuple(_iter_modifier_hits(modifier_hits))
+    if header_offsets is None:
+        return hits
+    header_start, header_end = header_offsets
+    return tuple(
+        hit
+        for hit in hits
+        if (offsets := _offsets_of(hit)) is None
+        or offsets[1] <= header_start
+        or header_end <= offsets[0]
+    )
+
+
+def _context_axis_sources(
+    span: Any,
+    modifier_hits: Any,
+    section: Any,
+    *,
+    assignment_source: str,
+    language: str | None,
+) -> dict[str, ContextSource]:
+    canonical_section = _canonical_section_name(section)
+    section_prior = SECTION_CONTEXT_PRIORS.get(canonical_section or "", {})
+    temporality_source: ContextSource
+    if _has_explicit_temporality_cue(
+        span,
+        modifier_hits,
+        language=language,
+    ):
+        temporality_source = "local"
+    elif "temporality" in section_prior:
+        temporality_source = "section"
+    else:
+        temporality_source = "default"
+
+    if assignment_source == "cue":
+        experiencer_source: ContextSource = "local"
+    elif assignment_source == "section":
+        experiencer_source = "section"
+    else:
+        experiencer_source = "default"
+
+    return {
+        "negation": (
+            "local"
+            if _has_explicit_negation_cue(
+                span,
+                modifier_hits,
+                language=language,
+            )
+            else "default"
+        ),
+        "uncertainty": (
+            "local"
+            if _has_explicit_uncertainty_cue(
+                span,
+                modifier_hits,
+                language=language,
+            )
+            else "default"
+        ),
+        "experiencer": experiencer_source,
+        "temporality": temporality_source,
+    }
+
+
+def _span_mapping_copy(
+    span: Any,
+    *,
+    text: str,
+    start: int,
+    end: int,
+) -> dict[str, Any]:
+    """Return a detached mapping representation of a span-like value."""
+
+    if isinstance(span, Mapping):
+        return dict(span)
+
+    to_dict = getattr(span, "to_dict", None)
+    if callable(to_dict):
+        serialized = to_dict()
+        if isinstance(serialized, Mapping):
+            return dict(serialized)
+
+    fallback: dict[str, Any] = {
+        "text": text[start:end],
+        "start": start,
+        "end": end,
+    }
+    for name in ("label", "confidence"):
+        value = getattr(span, name, None)
+        if value is not None:
+            fallback[name] = value
+    return fallback
+
+
+def _span_section(span: Any) -> str | None:
+    """Return only an explicit section field from a clinical span."""
+
+    if isinstance(span, Mapping):
+        for key in ("section", "section_label", "section_name"):
+            value = span.get(key)
+            if isinstance(value, str):
+                return value
+        return None
+
+    for name in ("section", "section_label", "section_name"):
+        value = getattr(span, name, None)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def apply_section_context(
+    span: Any,
+    section: Any = None,
+    assertion: ClinicalAssertion | None = None,
+    language: str | None = None,
+    *,
+    modifier_hits: Any = None,
+) -> ClinicalAssertion:
+    """Apply conservative section priors to a span assertion.
+
+    ``section`` may be an explicit section label or mapping from OM-086's
+    future ``detect_sections`` output. When it is omitted, the helper falls
+    back to ``span.section`` or mapping-style ``span["section"]``. Section
+    priors only fill unset/default axes for the current span and never override
+    explicit in-sentence temporal cues such as ``"acute"``, ``"history of"``,
+    or ``"if"``. ``language`` selects the registered cue lexicon used to
+    recognize those explicit cues; unknown codes retain the English fallback.
+    """
+
+    resolved_assertion = assertion or ClinicalAssertion(
+        temporality=resolve_temporality(span, language=language),
+        certainty=resolve_uncertainty(span, language=language),
+    )
+    canonical_section = _canonical_section_name(section) or _canonical_section_name(
+        span
+    )
+    if canonical_section is None:
+        return resolved_assertion
+
+    prior = SECTION_CONTEXT_PRIORS.get(canonical_section)
+    if not prior:
+        return resolved_assertion
+
+    changes: dict[str, Any] = {}
+    temporality_prior = prior.get("temporality")
+    if (
+        temporality_prior
+        and resolved_assertion.temporality == RECENT
+        and not _has_explicit_temporality_cue(
+            span,
+            modifier_hits,
+            language=language,
+        )
+    ):
+        changes["temporality"] = temporality_prior
+
+    experiencer_prior = prior.get("experiencer")
+    if experiencer_prior and resolved_assertion.experiencer is None:
+        changes["experiencer"] = experiencer_prior
+
+    if not changes:
+        return resolved_assertion
+    return replace(resolved_assertion, **changes)
+
+
+__all__ = [
+    "AFFIRMED",
+    "NEGATED",
+    "Negation",
+    "NEGATION_VALUES",
+    "NEGATION_CUES",
+    "PSEUDO_NEGATION_CUES",
+    "ClinicalContextResult",
+    "ClinicalAssertion",
+    "RerankContext",
+    "ContextCueCategory",
+    "ContextCueDirection",
+    "ContextRule",
+    "ContextRuleCategory",
+    "ContextRuleScope",
+    "DEFAULT_CONTEXT_RULES_RESOURCE",
+    "ContextSource",
+    "INDIA_CLINICAL_NER_DISCLAIMER",
+    "ModifierHit",
+    "apply_context_rules",
+    "clinical_context_lexicon_stats",
+    "load_context_rules",
+    "scan_context_cues",
+    "RECENT",
+    "HISTORICAL",
+    "HYPOTHETICAL",
+    "TEMPORALITY_VALUES",
+    "HISTORICAL_CUES",
+    "HYPOTHETICAL_CUES",
+    "RECENT_TEMPORALITY_CUES",
+    "resolve_temporality",
+    "reconcile_temporality_with_interval",
+    "Certainty",
+    "CERTAIN",
+    "UNCERTAIN",
+    "CERTAINTY_VALUES",
+    "UNCERTAINTY_CUES",
+    "resolve_uncertainty",
+    "resolve_negation",
+    "PATIENT_EXPERIENCER",
+    "FAMILY_EXPERIENCER",
+    "CANONICAL_SECTION_LABELS",
+    "SECTION_LABEL_ALIASES",
+    "SECTION_CONTEXT_PRIORS",
+    "canonical_section_name",
+    "canonical_section_label",
+    "apply_section_context",
+    "assert_context",
+    "resolve_span_context",
+    "assert_context_axes",
+]

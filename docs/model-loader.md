@@ -1,0 +1,144 @@
+# ModelLoader & Pipelines
+
+`openmed.core.models.ModelLoader` is the backbone for all runtime integration. It centralizes Hugging Face discovery,
+credential management, caching, and pipeline instantiation so you can move between quick experiments and production
+runners without rewriting glue code.
+
+## When to use it
+
+- You want to reuse a single tokenizer/pipeline across many documents.
+- You need to load multiple models (e.g., disease + pharma) side-by-side.
+- You are deploying a service and prefer to hydrate everything at startup.
+- You require maximum control over device placement, dtype, batch size, or tokenizer configuration.
+
+## Essentials
+
+```python
+from openmed.core import ModelLoader, OpenMedConfig
+
+config = OpenMedConfig(
+    device="cuda",
+    cache_dir="~/.cache/openmed",
+    hf_token="hf_api_token_if_needed",
+)
+loader = ModelLoader(config=config)
+
+pipeline = loader.create_pipeline(
+    "disease_detection_superclinical",
+    task="token-classification",
+    aggregation_strategy="simple",
+    use_fast_tokenizer=True,
+)
+
+raw = pipeline("Administered paclitaxel alongside trastuzumab.")
+```
+
+- `create_pipeline` accepts any kwargs supported by `transformers.pipeline`.
+- Tokens are cached per model/config combination; repeated calls reuse the same HF objects.
+- `ModelLoader.get_max_sequence_length(model_name)` infers tokenizer limits when you need manual truncation logic.
+
+## Local model directories
+
+If a model has already been downloaded or vendored into your runtime image, pass the directory path directly:
+
+```python
+from pathlib import Path
+from openmed.core import ModelLoader, OpenMedConfig
+
+model_dir = Path("./models/OpenMed-NER-DiseaseDetect-SuperClinical-434M").resolve()
+loader = ModelLoader(OpenMedConfig(device="cpu"))
+
+pipeline = loader.create_pipeline(
+    str(model_dir),
+    task="token-classification",
+    aggregation_strategy="simple",
+)
+
+raw = pipeline("Patient has chronic myeloid leukemia.")
+```
+
+Existing filesystem paths are preserved as local paths rather than expanded to the default OpenMed organization. For
+Hugging Face / PyTorch loading, OpenMed also sets `local_files_only=True` by default for those paths so the loader does
+not contact the Hub in air-gapped or firewalled environments.
+
+## Discovery helpers
+
+```python
+from openmed.core import ModelLoader
+
+loader = ModelLoader()
+print(loader.list_available_models(include_registry=True, include_remote=False))
+print(loader.list_available_models(include_registry=True, include_remote=True)[:5])
+```
+
+These functions power `openmed.list_models()`. Use them to present dropdowns in UIs or to
+pre-flight deployments before running inference.
+
+## Device & caching strategy
+
+- **CPU-only** deployments: leave `device="cpu"` and skip installing GPU runtimes. Transformers will use `torch` CPU wheels.
+- **GPU** deployments: set `device="cuda"` or `cuda:1`, and optionally configure `torch_dtype="auto"` via
+  `OpenMedConfig.pipeline`.
+- **Air-gapped** or repeated builds: pass an existing local model directory, or point `cache_dir` at a persistent volume
+  after prefetching the model. Local directories are loaded with `local_files_only=True` by default.
+- Provide `hf_token` when you consume gated models, or rely on `HfFolder` credentials.
+
+## Token helpers
+
+If you need raw token alignment, use the tokenization utilities that ship alongside the loader:
+
+```python
+from openmed.processing import TokenizationHelper
+
+model_data = loader.load_model("anatomy_detection_electramed")
+token_helper = TokenizationHelper(model_data["tokenizer"])
+encoding = token_helper.tokenize_with_alignment("BP 120/80. Start metformin 500mg bid.")
+print(encoding["tokens"][:10])
+```
+
+`load_model` lets you access the underlying HF `AutoModel` + `AutoTokenizer` for workflows that outgrow pipelines.
+
+## User-operated KServe and Triton backends
+
+Set `OpenMedConfig.backend="remote"` to preserve the normal
+`ModelLoader.create_pipeline` call while running the ONNX graph through a
+user-operated KServe V2 or Triton endpoint. OpenMed still tokenizes and decodes
+locally, and the remote backend is never part of automatic backend selection.
+See [KServe and Triton model repositories](serving/kserve-triton.md) for the
+repository generator, complete config, and privacy boundary.
+
+## Releasing cached models
+
+Long-running services can release cached model references when VRAM or RAM should be reclaimed:
+
+```python
+loader.unload_model("disease_detection_superclinical")
+loader.unload_all_models()
+```
+
+`unload_model` resolves registry aliases before dropping matching cached pipelines, models, and tokenizers. After cached
+references are removed, OpenMed triggers Python garbage collection and clears available torch CUDA/MPS caches.
+
+## Sentence detection reuse
+
+`ModelLoader` does not run pySBD itself, but it exposes hooks so `analyze_text` can pass in the tokenizer/pipeline it
+creates. If you batch many texts with custom segmentation, build the segmenter once and reuse it:
+
+```python
+from openmed.processing import sentences
+
+segmenter = sentences.create_segmenter(language="en", clean=True)
+for doc in docs:
+    segments = sentences.segment_text(doc, segmenter=segmenter)
+```
+
+## Troubleshooting checklist
+
+- **“Tokenizer length mismatch”**: call `loader.get_max_sequence_length(model_name)` and set `max_length` explicitly.
+- **“Model not found”**: confirm it exists in `openmed.core.model_registry.OPENMED_MODELS` or pass a full HF path and set
+  `include_remote=True` if you rely on discovery.
+- **“scaled_dot_product_attention is unsupported”**: upgrade to OpenMed 1.8.1
+  or later. For an environment pinned to 1.7.0 or 1.8.0, set
+  `OPENMED_TORCH_ATTENTION_BACKEND=eager`; see the
+  [FAQ](faq.md#why-does-a-deberta-model-say-that-scaled-dot-product-attention-is-unsupported).
+- **Slow cold-starts**: prefetch pipelines at startup and mount the cache dir on SSD/NVMe storage.

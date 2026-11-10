@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locale": "zh_CN",
+  "license": "Apache-2.0",
+  "provenance": "OpenMed-maintained compilation of factual administrative-division names.",
+  "privacy": "Administrative names only; no patient, street, building, room, or postal-code data.",
+  "divisions": [
+    {
+      "province": "广东省",
+      "cities": [
+        {"city": "深圳市", "districts": ["南山区", "福田区"]},
+        {"city": "广州市", "districts": ["天河区", "越秀区"]}
+      ]
+    },
+    {
+      "province": "浙江省",
+      "cities": [
+        {"city": "杭州市", "districts": ["西湖区", "滨江区"]},
+        {"city": "宁波市", "districts": ["鄞州区", "海曙区"]}
+      ]
+    },
+    {
+      "province": "江苏省",
+      "cities": [
+        {"city": "南京市", "districts": ["鼓楼区", "建邺区"]},
+        {"city": "苏州市", "districts": ["姑苏区", "吴中区"]}
+      ]
+    },
+    {
+      "province": "四川省",
+      "cities": [
+        {"city": "成都市", "districts": ["锦江区", "武侯区"]},
+        {"city": "绵阳市", "districts": ["涪城区", "游仙区"]}
+      ]
+    },
+    {
+      "province": "湖北省",
+      "cities": [
+        {"city": "武汉市", "districts": ["江汉区", "洪山区"]},
+        {"city": "宜昌市", "districts": ["西陵区", "伍家岗区"]}
+      ]
+    },
+    {
+      "province": "福建省",
+      "cities": [
+        {"city": "福州市", "districts": ["鼓楼区", "仓山区"]},
+        {"city": "厦门市", "districts": ["思明区", "湖里区"]}
+      ]
+    },
+    {
+      "province": "山东省",
+      "cities": [
+        {"city": "济南市", "districts": ["历下区", "槐荫区"]},
+        {"city": "青岛市", "districts": ["市南区", "崂山区"]}
+      ]
+    },
+    {
+      "province": "河南省",
+      "cities": [
+        {"city": "郑州市", "districts": ["金水区", "中原区"]},
+        {"city": "洛阳市", "districts": ["洛龙区", "涧西区"]}
+      ]
+    },
+    {
+      "province": "湖南省",
+      "cities": [
+        {"city": "长沙市", "districts": ["岳麓区", "雨花区"]},
+        {"city": "株洲市", "districts": ["天元区", "荷塘区"]}
+      ]
+    },
+    {
+      "province": "陕西省",
+      "cities": [
+        {"city": "西安市", "districts": ["雁塔区", "莲湖区"]},
+        {"city": "宝鸡市", "districts": ["渭滨区", "金台区"]}
+      ]
+    },
+    {
+      "province": "辽宁省",
+      "cities": [
+        {"city": "沈阳市", "districts": ["和平区", "沈河区"]},
+        {"city": "大连市", "districts": ["中山区", "甘井子区"]}
+      ]
+    },
+    {
+      "province": "河北省",
+      "cities": [
+        {"city": "石家庄市", "districts": ["长安区", "裕华区"]},
+        {"city": "唐山市", "districts": ["路北区", "丰南区"]}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "action": {
+    "fingerprint": "sha256:77743f37088ea6fbbad3f9ebf8121243a27c4bd7a71507f9208f189715aa7796",
+    "properties": [
+      "action",
+      "metadata",
+      "policy_label",
+      "replacement",
+      "reversible_id",
+      "schema_version"
+    ],
+    "required": [
+      "action",
+      "metadata",
+      "policy_label",
+      "replacement",
+      "reversible_id",
+      "schema_version"
+    ],
+    "schema_version": 1
+  },
+  "audit": {
+    "fingerprint": "sha256:cc3ef86ebf54062843880c889524e49c7b0a506f714c1666a193596ab04aba6b",
+    "properties": [
+      "actor",
+      "doc_id",
+      "event_id",
+      "metadata",
+      "provenance_id",
+      "schema_version",
+      "span_id",
+      "timestamp"
+    ],
+    "required": [
+      "actor",
+      "doc_id",
+      "event_id",
+      "metadata",
+      "provenance_id",
+      "schema_version",
+      "span_id",
+      "timestamp"
+    ],
+    "schema_version": 1
+  },
+  "attestation": {
+    "fingerprint": "sha256:c15d894ac1b2e1096dffd14efbac45912b1d5c498cbdd9ed130681cec00e4689",
+    "properties": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "required": [
+      "disclaimer",
+      "execution",
+      "generated_at",
+      "integrity_hash",
+      "jurisdiction",
+      "models",
+      "policy",
+      "profile_id",
+      "repro_hash",
+      "run",
+      "schema_version",
+      "template"
+    ],
+    "schema_version": 1
+  },
+  "code": {
+    "fingerprint": "sha256:ad4e56848f6cbf9cf3d3935af4ab264c318479ad81a16fb5f3de4db6ee1af48f",
+    "properties": [
+      "code",
+      "confidence",
+      "display",
+      "metadata",
+      "provenance_id",
+      "schema_version",
+      "system"
+    ],
+    "required": [
+      "code",
+      "confidence",
+      "display",
+      "metadata",
+      "provenance_id",
+      "schema_version",
+      "system"
+    ],
+    "schema_version": 1
+  },
+  "entity": {
+    "fingerprint": "sha256:b47ea001d3e341205a30e6c5e8818c9182b78ca27d8083c5048a828b9d8d0581",
+    "properties": [
+      "canonical_label",
+      "entity_type",
+      "policy_label",
+      "regulatory_tags",
+      "schema_version"
+    ],
+    "required": [
+      "canonical_label",
+      "entity_type",
+      "policy_label",
+      "regulatory_tags",
+      "schema_version"
+    ],
+    "schema_version": 1
+  },
+  "provenance": {
+    "fingerprint": "sha256:56bd3334a6f3d8263e1c7f4e20d81746c931bef11aba9d10a4c2add92062b4fe",
+    "properties": [
+      "artifact_hash",
+      "detector",
+      "metadata",
+      "model",
+      "parameters",
+      "provenance_id",
+      "schema_version",
+      "version"
+    ],
+    "required": [
+      "artifact_hash",
+      "detector",
+      "metadata",
+      "model",
+      "parameters",
+      "provenance_id",
+      "schema_version",
+      "version"
+    ],
+    "schema_version": 1
+  },
+  "relation": {
+    "fingerprint": "sha256:e60356134bd24aba6382b7d4267147e5bd0d6fc9873ca26f8b629d1cef91c3bb",
+    "properties": [
+      "evidence",
+      "metadata",
+      "relation_type",
+      "schema_version",
+      "score",
+      "source_span_id",
+      "target_span_id"
+    ],
+    "required": [
+      "evidence",
+      "metadata",
+      "relation_type",
+      "schema_version",
+      "score",
+      "source_span_id",
+      "target_span_id"
+    ],
+    "schema_version": 1
+  },
+  "span": {
+    "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",
+    "properties": [
+      "action",
+      "canonical_label",
+      "detector",
+      "doc_id",
+      "end",
+      "entity_type",
+      "evidence",
+      "metadata",
+      "policy_label",
+      "regulatory_tags",
+      "replacement",
+      "reversible_id",
+      "schema_version",
+      "score",
+      "section",
+      "start",
+      "text_hash"
+    ],
+    "required": [
+      "action",
+      "canonical_label",
+      "detector",
+      "doc_id",
+      "end",
+      "entity_type",
+      "evidence",
+      "metadata",
+      "policy_label",
+      "regulatory_tags",
+      "replacement",
+      "reversible_id",
+      "schema_version",
+      "score",
+      "section",
+      "start",
+      "text_hash"
+    ],
+    "schema_version": 1
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_model_pack.schema.json",
+  "title": "OpenMed clinical model pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["compatibility_policy", "entries", "pack_id", "schema_version"],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/entry"}
+    },
+    "pack_id": {"$ref": "#/$defs/controlled"},
+    "schema_version": {"const": "1.0.0"}
+  },
+  "$defs": {
+    "alias": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "controlled": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration_dataset_digest",
+        "holdout_dataset_digest",
+        "method",
+        "seed",
+        "threshold"
+      ],
+      "properties": {
+        "calibration_dataset_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "holdout_dataset_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "method": {"enum": ["none", "isotonic", "platt", "temperature", "threshold"]},
+        "seed": {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+        "threshold": {"oneOf": [{"type": "number", "minimum": 0, "maximum": 1}, {"type": "null"}]}
+      }
+    },
+    "quantization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluation_digest", "maximum_delta", "metric", "mode", "observed_delta"],
+      "properties": {
+        "evaluation_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "maximum_delta": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]},
+        "metric": {"oneOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]},
+        "mode": {"enum": ["none", "fp32", "fp16", "bf16", "int8", "int4"]},
+        "observed_delta": {"oneOf": [{"type": "number", "minimum": 0}, {"type": "null"}]}
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alias", "mode"],
+      "properties": {
+        "alias": {"oneOf": [{"$ref": "#/$defs/alias"}, {"type": "null"}]},
+        "mode": {"enum": ["none", "alias"]}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias",
+        "artifact_digest",
+        "artifact_id",
+        "artifact_kind",
+        "calibration",
+        "compatibility_policy",
+        "domains",
+        "experimental",
+        "fallback",
+        "family",
+        "languages",
+        "license",
+        "model_kind",
+        "output_schema",
+        "output_schema_version",
+        "priority",
+        "quantization",
+        "revision",
+        "runtime",
+        "schema_version",
+        "task"
+      ],
+      "properties": {
+        "alias": {"$ref": "#/$defs/alias"},
+        "artifact_digest": {"$ref": "#/$defs/digest"},
+        "artifact_id": {"$ref": "#/$defs/controlled"},
+        "artifact_kind": {"enum": ["builtin", "model"]},
+        "calibration": {"$ref": "#/$defs/calibration"},
+        "compatibility_policy": {"const": "same_major"},
+        "domains": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/controlled"}},
+        "experimental": {"type": "boolean"},
+        "fallback": {"$ref": "#/$defs/fallback"},
+        "family": {"$ref": "#/$defs/controlled"},
+        "languages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^(?:[a-z]{2,3}(?:-[a-z0-9]{2,8})*|mul)$"}},
+        "license": {"type": "string", "minLength": 1},
+        "model_kind": {"enum": ["bounded", "deterministic", "generative"]},
+        "output_schema": {"$ref": "#/$defs/controlled"},
+        "output_schema_version": {"$ref": "#/$defs/version"},
+        "priority": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "quantization": {"$ref": "#/$defs/quantization"},
+        "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|builtin-v[1-9][0-9]*|local-v[1-9][0-9]*)$"},
+        "runtime": {"$ref": "#/$defs/controlled"},
+        "schema_version": {"const": "1.0.0"},
+        "task": {"enum": ["assertion", "classification", "pair_scoring", "relation_extraction", "span_extraction", "temporality", "token_classification"]}
+      }
+    }
+  }
+}

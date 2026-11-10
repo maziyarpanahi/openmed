@@ -1,0 +1,38 @@
+{
+  "schema_version": "openmed.drift_monitor.window.v1",
+  "window_id": "reference-v2-2026-07-24",
+  "sample_count": 13300,
+  "label_counts": {
+    "ADDRESS": 1300,
+    "AGE": 900,
+    "DATE": 2600,
+    "EMAIL": 700,
+    "ID_NUM": 600,
+    "MRN": 1500,
+    "NAME": 3200,
+    "ORGANIZATION": 1000,
+    "PHONE": 1100,
+    "SSN": 400
+  },
+  "score_histogram": [40, 55, 70, 110, 180, 320, 680, 1600, 4000, 6245],
+  "length_histogram": {
+    "len_0000_0064": 1800,
+    "len_0064_0128": 3400,
+    "len_0128_0256": 4200,
+    "len_0256_0512": 2400,
+    "len_0512_1024": 1000,
+    "len_1024_plus": 500
+  },
+  "script_histogram": {
+    "Arabic": 900,
+    "Cyrillic": 300,
+    "Devanagari": 700,
+    "Han": 1600,
+    "Latin": 9800
+  },
+  "feature_hashes": {
+    "corpus_length_profile": "sha256:3f1c9a7d4b2e608c5a1d7e93b46f0a28c9d5e7f1a2b3c4d5e6f708192a3b4c5d",
+    "tokenizer_vocab": "sha256:7a2b1c0d9e8f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b"
+  },
+  "generated_at": "2026-07-24T00:00:00+00:00"
+}

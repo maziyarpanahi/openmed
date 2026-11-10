@@ -1,0 +1,48 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/audit.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actor": {
+      "type": ["string", "null"]
+    },
+    "doc_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "event_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "provenance_id": {
+      "type": ["string", "null"]
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "span_id": {
+      "type": ["string", "null"]
+    },
+    "timestamp": {
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "doc_id",
+    "timestamp",
+    "actor",
+    "span_id",
+    "provenance_id",
+    "metadata"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedAuditEvent",
+  "type": "object"
+}

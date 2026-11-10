@@ -1,0 +1,50 @@
+[
+  {
+    "text": "Hello Ada.", "provider_tag": "en", "confidence": 0.99,
+    "labels": {"Hello": "en", "Ada": "en"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "supported", "reason_code": "language_routed", "provider_tag": "en", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 10, "tag": "en", "confidence_bucket": "high"}], "phi_span_count": 1},
+    "output": "Hello ███."
+  },
+  {
+    "text": "Hola Lucía.", "provider_tag": "es", "confidence": 0.99,
+    "labels": {"Hola": "es", "Lucía": "es"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "supported", "reason_code": "language_routed", "provider_tag": "es", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 11, "tag": "es", "confidence_bucket": "high"}], "phi_span_count": 1},
+    "output": "Hola █████."
+  },
+  {
+    "text": "🙂 Hello Ada. Hola Lucía.", "provider_tag": "en-US", "confidence": 0.99,
+    "labels": {"Hello": "en", "Ada": "en", "Hola": "es", "Lucía": "es"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "mixed", "reason_code": "language_routed", "provider_tag": "en-US", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 13, "tag": "en", "confidence_bucket": "high"}, {"start": 13, "end": 24, "tag": "es", "confidence_bucket": "high"}], "phi_span_count": 2},
+    "output": "🙂 Hello ███. Hola █████."
+  },
+  {
+    "text": "Bonjour Ada.", "provider_tag": "fr", "confidence": 0.99,
+    "labels": {"Bonjour": "fr", "Ada": "fr"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "unsupported", "reason_code": "phi_pack_unavailable", "provider_tag": "fr", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 12, "tag": "fr", "confidence_bucket": "high"}], "phi_span_count": 0},
+    "output": null
+  },
+  {
+    "text": "Hola Lucía.", "provider_tag": "en", "confidence": 0.99,
+    "labels": {"Hola": "es", "Lucía": "es"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "uncertain", "reason_code": "language_disagreement", "provider_tag": "en", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 11, "tag": "es", "confidence_bucket": "high"}], "phi_span_count": 0},
+    "output": null
+  },
+  {
+    "text": "Hello Ada.", "provider_tag": "en", "confidence": 0.79,
+    "labels": {"Hello": "en", "Ada": "en"}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "uncertain", "reason_code": "provider_confidence_low", "provider_tag": "en", "provider_confidence_bucket": "low", "runs": [], "phi_span_count": 0},
+    "output": null
+  },
+  {
+    "text": "Hello Ada.", "provider_tag": "en", "confidence": 0.99,
+    "labels": {"Hello": "en", "Ada": "en"}, "text_confidence": 0.79,
+    "expected": {"segment_index": 5, "status": "uncertain", "reason_code": "text_confidence_low", "provider_tag": "en", "provider_confidence_bucket": "high", "runs": [{"start": 0, "end": 10, "tag": "en", "confidence_bucket": "low"}], "phi_span_count": 0},
+    "output": null
+  },
+  {
+    "text": "123", "provider_tag": null, "confidence": 0.99,
+    "labels": {}, "text_confidence": 0.99,
+    "expected": {"segment_index": 5, "status": "uncertain", "reason_code": "provider_language_missing", "provider_tag": null, "provider_confidence_bucket": "missing", "runs": [], "phi_span_count": 0},
+    "output": null
+  }
+]

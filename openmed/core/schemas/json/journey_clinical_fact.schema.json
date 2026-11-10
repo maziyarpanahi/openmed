@@ -1,0 +1,25 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/clinical-fact.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "attributes": {"type": "object"},
+    "confidence": {"anyOf": [{"maximum": 1, "minimum": 0, "type": "number"}, {"type": "null"}]},
+    "derivation_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "effective_time": {"type": "object"},
+    "encounter_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, {"type": "null"}]},
+    "evidence_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "minItems": 1, "type": "array", "uniqueItems": true},
+    "fact_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "fact_type": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "parent_fact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "status": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "subject_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "unit": {"anyOf": [{"maxLength": 128, "minLength": 1, "type": "string"}, {"type": "null"}]},
+    "value": {}
+  },
+  "required": ["attributes", "confidence", "derivation_hash", "effective_time", "encounter_id", "evidence_ids", "fact_id", "fact_type", "parent_fact_ids", "schema_version", "status", "subject_id", "unit", "value"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyClinicalFact",
+  "type": "object"
+}

@@ -1,0 +1,316 @@
+"""Domain default label management for zero-shot NER."""
+
+from __future__ import annotations
+
+import json
+from functools import lru_cache
+from importlib import resources
+from pathlib import Path
+from typing import Dict, Iterable, List, Mapping, Optional
+
+from openmed.core.labels import (
+    normalize_label,
+    policy_label_for,
+    risk_level_for,
+    system_hints_for,
+)
+
+_RESOURCE_PACKAGE = "openmed.zero_shot.data.label_maps"
+_DEFAULT_RESOURCE = "defaults.json"
+_GENERIC_DOMAIN = "generic"
+_CLINICAL_DOMAINS_DOC = Path("docs/clinical-domains.md")
+_NO_FIXTURE = "Not shipped"
+_CLINICAL_DOMAINS_DISCLAIMER = (
+    "This catalog is generated from the packaged zero-shot domain label map "
+    "and canonical label metadata. Labels, policy classes, risk levels, coding "
+    "system hints, and fixture pointers are for offline evaluation and review "
+    "workflow planning only; they are not clinical guidance and must not be "
+    "used to infer diagnosis, treatment, coding, or coverage decisions."
+)
+_DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
+    "anesthesia": "tests/fixtures/clinical/anesthesia.jsonl",
+    "allergy_intolerance": "tests/fixtures/clinical/allergy_intolerance.jsonl",
+    "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
+    "functional_status": "tests/fixtures/clinical/functional_status.jsonl",
+    "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
+    "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
+    "immunization": "tests/fixtures/clinical/immunization.jsonl",
+    "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
+    "nursing_observation": "tests/fixtures/clinical/nursing_observation.jsonl",
+    "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
+    "oncology_staging": "tests/fixtures/clinical/oncology_staging.jsonl",
+    "pediatrics_growth": "tests/fixtures/clinical/pediatrics_growth.jsonl",
+    "pathology_histology": "tests/fixtures/clinical/pathology_histology.jsonl",
+    "pulmonology": "tests/fixtures/clinical/pulmonology.jsonl",
+    "radiology": "tests/fixtures/clinical/radiology_finding.jsonl",
+    "wound_assessment": "tests/fixtures/clinical/wound_assessment.jsonl",
+    "medical_device": "tests/fixtures/clinical/medical_device.jsonl",
+    "obstetrics_gynecology": "tests/fixtures/clinical/obstetrics_gynecology.jsonl",
+    "substance_use_history": ("tests/fixtures/clinical/substance_use_history.jsonl"),
+}
+_DOMAIN_ALIGNMENT_NOTES: Mapping[str, str] = {
+    "allergy_intolerance": (
+        "The display labels are shaped for the planned OM-138 FHIR "
+        "AllergyIntolerance exporter: Allergen maps to code, "
+        "ReactionManifestation to reaction.manifestation, ReactionSeverity to "
+        "reaction.severity, Criticality to criticality, AllergyType to type, "
+        "and OnsetContext to onset. This is descriptive extraction metadata "
+        "only; it is not a contraindication check, drug-allergy cross-check, "
+        "recommendation, or clinical decision logic."
+    ),
+    "immunization": (
+        "The display labels are shaped for the planned OM-138 FHIR Immunization "
+        "exporter: VaccineName maps to vaccineCode, DoseNumber to "
+        "protocolApplied.doseNumber[x], AdministrationRoute to route, "
+        "AdministrationSite to site, VaccineLot to lotNumber, "
+        "AdministrationDate to occurrence[x], and VaccineSeries to "
+        "protocolApplied.series. This is extraction metadata only; it does not "
+        "create exporter, recommendation, dosing, or scheduling logic."
+    ),
+    "wound_assessment": (
+        "This map is intentionally distinct from the dermatology lesion map: it "
+        "captures wound-care descriptors as written for nursing and surgical "
+        "review. It does not infer wound staging, predict healing, recommend "
+        "treatment, or make clinical decisions."
+    ),
+    "medical_device": (
+        "The display labels are descriptive extraction metadata for a planned "
+        "FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, "
+        "ModelNumber, ImplantSite, and DeviceStatus describe device mentions "
+        "without UDI lookup or decoding or contacting GUDID or any other network "
+        "service. DeviceIdentifier remains a HIPAA device identifier and "
+        "requires human review; this catalog is not clinical guidance and does "
+        "not make device, treatment, or safety decisions."
+    ),
+    "mental_health": (
+        "Substance-use and SDOH (social-determinants-of-health) entities are "
+        "out of scope for this domain and remain owned by OM-056. Mental-health "
+        "spans are high-sensitivity content for redaction review; this catalog "
+        "is extraction metadata only and does not make clinical decisions."
+    ),
+    "functional_status": (
+        "This map captures documented activities of daily living, assistance, "
+        "mobility, assistive-device mentions, functional-scale references, and "
+        "cognitive status for offline extraction review. It does not score "
+        "Barthel or Katz scales, infer care needs, recommend a disposition, or "
+        "make clinical decisions."
+    ),
+    "substance_use_history": (
+        "This map captures explicit substance, use-status, quantity, frequency, "
+        "duration, quit-date, and pack-year spans for offline extraction and "
+        "human review. It is complementary to, not a replacement for, the "
+        "existing SDOH determinant extractor and does not classify risk, compute "
+        "pack-years, recommend care, or make clinical decisions."
+    ),
+    "obstetrics_gynecology": (
+        "The display labels cover pregnancy and reproductive-health concepts for "
+        "structured extraction only. This metadata does not compute gestational "
+        "age, score risk, infer diagnosis, recommend care, or bundle restricted "
+        "terminology; human review remains required."
+    ),
+    "pathology_histology": (
+        "The display labels describe pathology-report content for offline "
+        "extraction and human review only. They do not grade or stage a tumor, "
+        "apply diagnostic rules, recommend treatment, or make clinical decisions."
+    ),
+    "oncology_staging": (
+        "TNM and tumor-descriptor labels capture descriptors explicitly written "
+        "in an oncology note for descriptive extraction and human review only. "
+        "OpenMed does not compute a stage group, apply AJCC/UICC staging rules, "
+        "infer prognosis, recommend treatment, or make a medical decision, and "
+        "does not bundle staging manuals or proprietary tables."
+    ),
+}
+
+
+def load_default_label_map(
+    overrides_path: Optional[Path] = None,
+) -> Dict[str, List[str]]:
+    """Load the curated default label map.
+
+    Args:
+        overrides_path: Optional filesystem path that, when provided, overrides
+            the packaged defaults. Primarily intended for testing.
+
+    Returns:
+        Mapping of normalised domain identifiers to label lists.
+    """
+
+    if overrides_path is not None:
+        data = _load_from_path(overrides_path)
+    else:
+        data = _load_from_resource()
+    return _normalise_label_map(data)
+
+
+@lru_cache()
+def _load_from_resource() -> Mapping[str, Iterable[str]]:
+    with (
+        resources.files(_RESOURCE_PACKAGE)
+        .joinpath(_DEFAULT_RESOURCE)
+        .open("r", encoding="utf-8") as handle
+    ):
+        return json.load(handle)
+
+
+def _load_from_path(path: Path) -> Mapping[str, Iterable[str]]:
+    text = Path(path).read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in label file {path}: {exc}") from exc
+
+
+def _normalise_label_map(raw: Mapping[str, Iterable[str]]) -> Dict[str, List[str]]:
+    normalised: Dict[str, List[str]] = {}
+    for domain, labels in raw.items():
+        norm_domain = _normalise_domain(domain)
+        if not norm_domain:
+            continue
+        norm_labels = _deduplicate_labels(labels)
+        normalised[norm_domain] = norm_labels
+    return normalised
+
+
+def _normalise_domain(domain: str) -> str:
+    return domain.strip().lower().replace(" ", "_")
+
+
+def _deduplicate_labels(labels: Iterable[str]) -> List[str]:
+    seen: Dict[str, None] = {}
+    cleaned: List[str] = []
+    for label in labels:
+        label_str = str(label).strip()
+        if not label_str:
+            continue
+        if label_str.lower() in seen:
+            continue
+        seen[label_str.lower()] = None
+        cleaned.append(label_str)
+    return cleaned
+
+
+def available_domains(
+    label_map: Optional[Mapping[str, Iterable[str]]] = None,
+) -> List[str]:
+    mapping = label_map or load_default_label_map()
+    return sorted(mapping.keys())
+
+
+def get_default_labels(
+    domain: Optional[str],
+    *,
+    label_map: Optional[Mapping[str, Iterable[str]]] = None,
+    inherit_generic: bool = True,
+) -> List[str]:
+    mapping = label_map or load_default_label_map()
+
+    key = _normalise_domain(domain) if domain else None
+    if key and key in mapping:
+        labels = mapping[key]
+    elif inherit_generic and _GENERIC_DOMAIN in mapping:
+        labels = mapping[_GENERIC_DOMAIN]
+    else:
+        labels = []
+    return list(labels)
+
+
+def reload_default_label_map() -> Dict[str, List[str]]:
+    """Clear caches and return freshly loaded defaults."""
+
+    _load_from_resource.cache_clear()  # type: ignore[attr-defined]
+    return load_default_label_map()
+
+
+def generate_clinical_domains_markdown() -> str:
+    """Generate the clinical domain catalog markdown fully offline."""
+
+    sections = [
+        "# Clinical Domain Label Catalog",
+        "",
+        f"**Disclaimer:** {_CLINICAL_DOMAINS_DISCLAIMER}",
+        "",
+    ]
+    for domain, labels in load_default_label_map().items():
+        sections.extend([f"## {_format_domain_name(domain)}", ""])
+        alignment_note = _DOMAIN_ALIGNMENT_NOTES.get(domain)
+        if alignment_note:
+            sections.extend([f"**Alignment:** {alignment_note}", ""])
+        sections.extend(
+            [
+                (
+                    "| Label | Canonical Label | Category | Risk Level | "
+                    "System Hints | Fixture Path |"
+                ),
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        fixture_path = _DOMAIN_FIXTURE_PATHS.get(domain, _NO_FIXTURE)
+        for label in labels:
+            canonical_label = normalize_label(label)
+            system_hints = system_hints_for(canonical_label)
+            sections.append(
+                "| "
+                f"{_markdown_cell(label)} | "
+                f"{_markdown_cell(canonical_label)} | "
+                f"{policy_label_for(canonical_label)} | "
+                f"{risk_level_for(canonical_label)} | "
+                f"{_markdown_cell(', '.join(system_hints) if system_hints else 'None')} | "
+                f"{_markdown_cell(fixture_path)} |"
+            )
+        sections.append("")
+    sections.extend(
+        [
+            "## Offline Coverage Evaluation",
+            "",
+            (
+                "The fixture-backed clinical domains are checked by the "
+                "aggregate-only `clinical_domain_coverage` suite. Run "
+                "`openmed benchmark domain-coverage --json --output "
+                "domain-coverage.json` from the repository root to verify "
+                "that every shipped display label has a non-empty synthetic "
+                "span and that fixture labels resolve to the canonical label "
+                "catalog."
+            ),
+            "",
+            (
+                "The gate fails on a missing fixture, an orphan label, an "
+                "invalid offset, or a label with no span. Reports contain "
+                "domain names, labels, offsets, and counts only; fixture text "
+                "is never emitted."
+            ),
+            "",
+        ]
+    )
+    return "\n".join(sections)
+
+
+def write_clinical_domains_markdown(
+    output_path: Path | str = _CLINICAL_DOMAINS_DOC,
+) -> Path:
+    """Write the generated clinical domain catalog and return its path."""
+
+    path = Path(output_path)
+    path.write_text(generate_clinical_domains_markdown(), encoding="utf-8")
+    return path
+
+
+def _format_domain_name(domain: str) -> str:
+    return domain.replace("_", " ").title()
+
+
+def _markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|")
+
+
+__all__ = [
+    "load_default_label_map",
+    "reload_default_label_map",
+    "get_default_labels",
+    "available_domains",
+    "generate_clinical_domains_markdown",
+    "write_clinical_domains_markdown",
+]
+
+if __name__ == "__main__":
+    write_clinical_domains_markdown()

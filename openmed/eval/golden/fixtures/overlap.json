@@ -1,0 +1,64 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 28,
+          "label": "PERSON",
+          "metadata": {
+            "role": "parent_span"
+          },
+          "start": 18,
+          "text": "Alex River"
+        },
+        {
+          "end": 22,
+          "label": "FIRST_NAME",
+          "metadata": {
+            "role": "nested_child"
+          },
+          "start": 18,
+          "text": "Alex"
+        },
+        {
+          "end": 57,
+          "label": "EMAIL",
+          "start": 34,
+          "text": "alex.river@example.test"
+        }
+      ],
+      "id": "golden-overlap-full-name-email",
+      "language": "en",
+      "metadata": {
+        "category": "nested_overlapping",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetic patient [PERSON] uses [EMAIL] in Clinic Alpha."
+        },
+        "resolution": {
+          "expected_spans": [
+            {
+              "end": 28,
+              "label": "PERSON",
+              "start": 18,
+              "text": "Alex River"
+            },
+            {
+              "end": 57,
+              "label": "EMAIL",
+              "start": 34,
+              "text": "alex.river@example.test"
+            }
+          ],
+          "policy": "full_redaction_span_wins_over_nested_child"
+        },
+        "synthetic": true
+      },
+      "text": "Synthetic patient Alex River uses alex.river@example.test in Clinic Alpha."
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

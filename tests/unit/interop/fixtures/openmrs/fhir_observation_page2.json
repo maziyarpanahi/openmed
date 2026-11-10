@@ -1,0 +1,36 @@
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://facility.test/openmrs/ws/fhir2/R4/Observation/observation-2",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-2",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "25836-8",
+              "display": "HIV 1 RNA"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/patient-1"
+        },
+        "encounter": {
+          "reference": "Encounter/encounter-1"
+        },
+        "valueQuantity": {
+          "value": 42,
+          "unit": "copies/mL",
+          "system": "http://unitsofmeasure.org",
+          "code": "{copies}/mL"
+        }
+      }
+    }
+  ],
+  "link": []
+}

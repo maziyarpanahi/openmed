@@ -1,0 +1,47 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/provenance.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_hash": {
+      "type": ["string", "null"]
+    },
+    "detector": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "model": {
+      "type": ["string", "null"]
+    },
+    "parameters": {
+      "type": "object"
+    },
+    "provenance_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "version": {
+      "type": ["string", "null"]
+    }
+  },
+  "required": [
+    "schema_version",
+    "provenance_id",
+    "detector",
+    "version",
+    "model",
+    "artifact_hash",
+    "parameters",
+    "metadata"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedProvenance",
+  "type": "object"
+}

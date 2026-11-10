@@ -1,0 +1,121 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingest/multimodal-coordinate.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "dimensions": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number", "exclusiveMinimum": 0},
+        {"type": "number", "exclusiveMinimum": 0}
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "input_dimensions",
+        "operation",
+        "output_dimensions",
+        "parameters",
+        "schema_version"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "input_dimensions": {"$ref": "#/$defs/dimensions"},
+        "operation": {
+          "enum": ["identity", "rotate_clockwise", "crop", "scale", "ocr_scale"]
+        },
+        "output_dimensions": {"$ref": "#/$defs/dimensions"},
+        "parameters": {"type": "object"},
+        "schema_version": {"const": "1.0.0"}
+      }
+    },
+    "chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "observed_dimensions",
+        "schema_version",
+        "source_dimensions",
+        "steps"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "observed_dimensions": {"$ref": "#/$defs/dimensions"},
+        "schema_version": {"const": "1.0.0"},
+        "source_dimensions": {"$ref": "#/$defs/dimensions"},
+        "steps": {"type": "array", "items": {"$ref": "#/$defs/step"}}
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "coordinate_convention",
+        "frame_id",
+        "page",
+        "schema_version",
+        "source_coordinate_space",
+        "tolerance",
+        "transform_chain"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "coordinate_convention": {
+          "enum": ["pdf_top_left_v1", "ocr_top_left_v1", "image_top_left_v1"]
+        },
+        "frame_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+        "page": {"type": "integer", "minimum": 1},
+        "schema_version": {"const": "1.0.0"},
+        "source_coordinate_space": {"enum": ["pixels", "points"]},
+        "tolerance": {"type": "number", "minimum": 0, "maximum": 10},
+        "transform_chain": {"$ref": "#/$defs/chain"}
+      }
+    },
+    "dicom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility_policy",
+        "coordinate_convention",
+        "node_path",
+        "normalized_span",
+        "schema_version"
+      ],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "coordinate_convention": {"const": "dicom_element_v1"},
+        "node_path": {
+          "type": ["string", "null"],
+          "pattern": "^[1-9][0-9]*(\\.[1-9][0-9]*)*$"
+        },
+        "normalized_span": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "array",
+              "prefixItems": [
+                {"type": "integer", "minimum": 0},
+                {"type": "integer", "minimum": 1}
+              ],
+              "minItems": 2,
+              "maxItems": 2
+            }
+          ]
+        },
+        "schema_version": {"const": "1.0.0"}
+      }
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/visual"},
+    {"$ref": "#/$defs/dicom"}
+  ],
+  "schema_version": 1,
+  "title": "OpenMedMultimodalCoordinateRecord"
+}

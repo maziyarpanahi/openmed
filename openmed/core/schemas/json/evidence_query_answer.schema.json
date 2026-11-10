@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/agent/evidence-query-answer.schema.json",
+  "title": "OpenMed cited evidence query answer",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "access_decisions",
+    "advisory",
+    "answer_digest",
+    "answer_id",
+    "citations",
+    "compatibility_policy",
+    "plan_digest",
+    "plan_id",
+    "reason_code",
+    "result_digests",
+    "schema_version",
+    "state",
+    "statements",
+    "uncertainty"
+  ],
+  "properties": {
+    "access_decisions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/access_decision"}
+    },
+    "advisory": {
+      "const": "This read-only answer reports cited evidence returned by authorized tools. It is not clinical advice and cannot authorize diagnosis, treatment, prescribing, enrollment, outreach, or a state change."
+    },
+    "answer_digest": {"$ref": "#/$defs/digest"},
+    "answer_id": {"$ref": "#/$defs/opaque_id"},
+    "citations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/citation"}
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "plan_digest": {"$ref": "#/$defs/digest"},
+    "plan_id": {"$ref": "#/$defs/opaque_id"},
+    "reason_code": {
+      "oneOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]
+    },
+    "result_digests": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "schema_version": {"const": "1.0.0"},
+    "state": {
+      "enum": [
+        "access_denied",
+        "answered",
+        "conflict",
+        "failure",
+        "insufficient_data",
+        "refused"
+      ]
+    },
+    "statements": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/statement"}
+    },
+    "uncertainty": {"enum": ["certain", "conflict", "qualified", "unknown"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "answered"}}},
+      "then": {
+        "properties": {
+          "access_decisions": {"minItems": 1},
+          "citations": {"minItems": 1},
+          "reason_code": {"type": "null"},
+          "statements": {"minItems": 1}
+        }
+      },
+      "else": {
+        "properties": {
+          "citations": {"maxItems": 0},
+          "reason_code": {"$ref": "#/$defs/controlled"},
+          "statements": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "access_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_digest",
+        "decision_id",
+        "namespace",
+        "outcome",
+        "policy_id",
+        "policy_version",
+        "purpose",
+        "reason_code"
+      ],
+      "properties": {
+        "decision_digest": {"$ref": "#/$defs/digest"},
+        "decision_id": {"$ref": "#/$defs/opaque_id"},
+        "namespace": {"$ref": "#/$defs/controlled"},
+        "outcome": {"enum": ["allow", "deny"]},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "policy_version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+        },
+        "purpose": {"$ref": "#/$defs/controlled"},
+        "reason_code": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_id",
+        "evidence_ids",
+        "resource_id",
+        "resource_kind",
+        "resource_version",
+        "snapshot_digest",
+        "snapshot_id"
+      ],
+      "properties": {
+        "citation_id": {"$ref": "#/$defs/opaque_id"},
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "resource_id": {"$ref": "#/$defs/resource_id"},
+        "resource_kind": {"$ref": "#/$defs/controlled"},
+        "resource_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "snapshot_digest": {
+          "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+        },
+        "snapshot_id": {
+          "oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]
+        }
+      }
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_ids",
+        "data_boundary",
+        "fact_id",
+        "patient_level",
+        "statement_id",
+        "text",
+        "uncertainty"
+      ],
+      "properties": {
+        "citation_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/opaque_id"}
+        },
+        "data_boundary": {"const": "quoted_tool_value"},
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "patient_level": {"type": "boolean"},
+        "statement_id": {"$ref": "#/$defs/opaque_id"},
+        "text": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "uncertainty": {"enum": ["certain", "conflict", "qualified", "unknown"]}
+      }
+    }
+  }
+}

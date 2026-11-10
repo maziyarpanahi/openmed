@@ -1,0 +1,189 @@
+# Public API Deprecation Policy
+
+OpenMed treats its public Python API as a contract. Downstream clinical
+integrations pin the package and expect imports and call signatures to keep
+working across patch and minor releases. This policy defines what "public"
+means, how the surface is protected in CI, and the process for making a
+backwards-incompatible change when one is genuinely required.
+
+## What counts as public
+
+The supported public surface is exactly what the checker captures:
+
+- Every name exported from `openmed.__all__`.
+- Every name exported from the `__all__` of the public subpackages listed in
+  `scripts/release/check_public_api.py` (`PUBLIC_SUBPACKAGES`): `openmed.core`,
+  `openmed.processing`, `openmed.utils`, `openmed.clinical`, `openmed.eval`,
+  `openmed.risk`, `openmed.interop`, `openmed.structured`, `openmed.mlx`,
+  `openmed.multimodal`, `openmed.ner`, `openmed.zero_shot`, and
+  `openmed.compliance`.
+- Every name exported from a nested `openmed.multimodal.*` package declaring
+  `__all__` in its `__init__.py`. Discovery walks the checkout in sorted order
+  without importing candidates. Any underscore-prefixed package component
+  excludes the entire private subtree. Plain `.py` modules and packages without
+  `__all__` are excluded; public children of an export-free namespace are still
+  discovered. Optional-dependency shims that cannot import are skipped during
+  capture, using the same partial-install behavior as the fixed package list.
+- Governance and write-back namespaces are checked on every PR too:
+  `openmed.agent` and its `permissions`, `approvals`, `workflows`, `security`,
+  and `tools` subpackages; `openmed.interop.fhir`, `openmed.interop.omop`,
+  `openmed.interop.lineage`; and `openmed.mcp`.
+- For every public callable (function or class), its parameter names, order,
+  and which parameters are optional.
+
+Anything not reachable through one of those `__all__` lists -- private modules,
+underscore-prefixed names, backend shims, and internal helpers -- is not
+covered and may change without a deprecation cycle. If you want a symbol to be
+supported, add it to the relevant `__all__`.
+
+## Compatible vs. breaking changes
+
+The checker (`scripts/release/check_public_api.py`) classifies every diff
+against the committed baseline (`scripts/release/public_api_baseline.json`).
+
+**Backwards compatible (never fails CI):**
+
+- Adding a new exported name.
+- Adding a whole new public module.
+- Appending a new positional parameter that has a default value, or adding an
+  optional keyword-only parameter.
+- Widening a callable with `*args` / `**kwargs`.
+- Changing a parameter's default *value* (the baseline records only whether a
+  default exists, not what it is).
+
+**Breaking (fails CI unless announced):**
+
+- Removing an exported name.
+- Changing a member's kind (for example a function becoming a class).
+- Removing or renaming a parameter.
+- Reordering positional parameters.
+- Making a positional-or-keyword parameter positional-only or keyword-only, or
+  inserting an optional positional parameter before an existing one.
+- Making a previously optional parameter required, or adding a new required
+  parameter.
+
+## Deprecation cycle
+
+The v3.1 governance types, approval and permission contracts, workflow
+operations, and FHIR/OMOP write-back APIs follow this same deprecation window.
+Their inclusion in the per-PR baseline does not grant a pre-release exception
+to the compatibility policy. New exports and optional parameters remain
+compatible additions. Declared exports remain checked when optional backends
+are unavailable; an unavailable callable's signature is not inferred from a
+missing extra.
+
+Backwards-incompatible changes are allowed, but only deliberately and with
+warning. The required cycle is:
+
+1. **Announce.** In the release that first deprecates a symbol, keep it working
+   but emit a `DeprecationWarning` and document the replacement in the
+   changelog and the affected docstring.
+2. **Wait at least one full minor release and respect SemVer.** Give downstream
+   users a complete minor-version warning window. A breaking removal or
+   signature change may ship only in the next major release; the warning window
+   is not permission to break a later minor release. See
+   [Release Streams, SemVer, and Channels](../release/semver-and-channels.md).
+3. **Record the intentional break.** When you finally remove or change the
+   symbol, add an entry to `scripts/release/public_api_allowlist.json` under
+   `announced_breaks`, keyed by the `module.name` location the checker reports,
+   with a short justification (for example the deprecation version and the
+   replacement). This is how you tell CI the break is sanctioned.
+4. **Regenerate the baseline.** Run the update command below so the baseline
+   reflects the new surface. Once the removed name is gone from the baseline,
+   delete its now-stale allowlist entry in the same or a follow-up PR.
+
+## Working with the checker
+
+Run the check locally exactly as CI does:
+
+```bash
+python scripts/release/check_public_api.py
+```
+
+It exits non-zero and prints the offending symbols when it finds an unannounced
+breaking change. Additions are reported for visibility but never fail.
+
+When you have legitimately added public surface, or completed an announced
+deprecation, regenerate the baseline and commit it:
+
+```bash
+python scripts/release/check_public_api.py --update
+```
+
+Review the resulting diff to `scripts/release/public_api_baseline.json` in your
+PR: additions should look intentional, and any removals or signature changes
+must correspond to an `announced_breaks` allowlist entry.
+
+### Adding public multimodal subpackages
+
+When a streaming, vision, or other nested multimodal package lands, declare its
+supported exports in `__init__.py` (prefer a literal list or tuple). No addition
+to `PUBLIC_SUBPACKAGES` or top-level re-export is required. Keep optional runtime
+imports lazy so discovery and signature capture do not load models or require
+network access. A dynamic top-level `__all__` assignment is also supported via
+the imported package, while discovery itself remains import-free.
+
+Run `python scripts/release/check_public_api.py --update` from that updated
+checkout, review and commit the baseline diff with the package implementation,
+then run:
+
+```bash
+python scripts/release/check_public_api.py
+python -m pytest tests/unit/release/test_public_api_compat.py \
+  tests/integration/test_public_api_multimodal.py -q
+```
+
+The coverage test requires every captured nested public package, including one
+with an empty `__all__`, to appear in the committed baseline. Compatible
+additions still pass the checker itself; this test prevents a new package from
+remaining unprotected by an older baseline. Packages skipped for unavailable
+optional dependencies do not create false coverage failures. Use an environment
+with the relevant extra installed when intentionally baselining such a package;
+review partial-install updates to avoid dropping existing optional surfaces.
+Specific pending packages are added to the baseline when their implementations
+land, rather than recording speculative APIs.
+
+The checker is stdlib-only (`ast` / `inspect`). It reads each namespace's
+literal `__all__` from source, then imports available objects to inspect their
+callable signatures. Modules that cannot be imported in a given environment
+(because an optional extra is missing) are skipped rather than reported as
+removed. A declared export that is temporarily unavailable remains in the
+snapshot but is not treated as a kind or signature change, so partial installs
+never produce false breaks.
+
+## v3.1 security-remediation exception
+
+The maintainer explicitly approved a narrow security exception on 2026-10-20
+for v3.1.0, superseding the proposed v4.0 boundary. This release deliberately
+removes privacy-sensitive fields present in v3.0.0. Preserving their original
+behavior would preserve the exposure being fixed. These are breaking changes,
+not backward-compatible aliases; consumers must follow the
+[3.0-to-3.1 migration guide](../migration/3.0-to-3.1.md).
+
+The exception covers only the two remediations below, including their
+constructor and serialized-record changes. It waives the normal warning window
+and major-version requirement only for this release. The release gate permits
+exactly their ten field removals, including re-exports, against v3.0.0; it
+retains the breaking count, migration hash and named exception in signed
+evidence. A missing migration entry, additional break, different baseline or
+different minor/patch target fails closed. v3.2 and all other APIs retain the
+normal compatibility policy.
+
+- `openmed.agent.approvals.ApprovalReceipt` removes `reviewer_role`,
+  `consumed_at` and `expires_at` from its public constructor and receipt. These
+  protected attributes belong to `ApprovalAuthorization`, returned through
+  `consume_authorization`; use its approved value-free receipt projection for
+  audit output. The public receipt is not a reusable authorization credential.
+- `openmed.risk.AggregateDPRelease` removes `noise` and `seed_digest` from its
+  constructor and public release record. The exact noise draw permits reversal
+  of the release's differential privacy. Use the released `value` and its
+  privacy accounting; obtain releases through the reviewed aggregation factory
+  rather than reconstructing a public record with the hidden draw.
+
+These contracts are also reachable through `openmed.agent.approvals.tokens`
+and `openmed.risk.aggregate_dp`; their field removals must be named in the
+release migration guide. The per-PR checker reports the two exported
+constructor locations above. Its reviewed baseline already contains the safe
+constructors, and the production allowlist is empty.
+The release-level static diff still compares against the immutable v3.0.0 tag;
+refreshing a per-PR snapshot does not erase release migration requirements.

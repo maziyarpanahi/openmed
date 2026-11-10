@@ -1,0 +1,520 @@
+"""MLX model implementations for token classification and zero-shot tasks."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Any
+
+from openmed.mlx.artifact import load_artifact_config, resolve_weight_candidates
+
+_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = {
+    "bert": "bert",
+    "distilbert": "bert",
+    "electra": "bert",
+    "modernbert": "modernbert",
+    "modern-bert": "modernbert",
+    "longformer": "longformer",
+    "openai-privacy-filter": "openai-privacy-filter",
+    "privacy-filter": "openai-privacy-filter",
+    # ``OpenMed/privacy-filter-nemotron*`` is the OpenAI Privacy Filter
+    # architecture fine-tuned on the Nemotron PII dataset — same model
+    # class, different weights — so the family stays ``openai-privacy-filter``.
+    "privacy-filter-nemotron": "openai-privacy-filter",
+    "nemotron-privacy-filter": "openai-privacy-filter",
+    # Multilingual Privacy Filter uses the same model class and BIOES decoder
+    # as the upstream OpenAI Privacy Filter, with a 16-language label space.
+    "privacy-filter-multilingual": "openai-privacy-filter",
+    "multilingual-privacy-filter": "openai-privacy-filter",
+    "roberta": "bert",
+    "xlm-roberta": "bert",
+    "xlm_roberta": "bert",
+    "deberta": "deberta-v2",
+    "deberta-v2": "deberta-v2",
+}
+
+_CUSTOM_FAMILIES = {
+    "gliner-uni-encoder-span",
+    "gliclass-uni-encoder",
+    "gliner-uni-encoder-token-relex",
+}
+
+_ARCHITECTURE_TYPE_HINTS = [
+    ("ModernBert", "modernbert"),
+    ("Longformer", "longformer"),
+    ("EuroBert", "eurobert"),
+    ("Qwen3", "qwen3"),
+    ("DebertaV2", "deberta-v2"),
+    ("Deberta", "deberta"),
+    ("XLMRoberta", "xlm-roberta"),
+    ("Roberta", "roberta"),
+    ("DistilBert", "distilbert"),
+    ("Electra", "electra"),
+    ("Bert", "bert"),
+]
+
+
+def normalize_model_type(model_type: str | None) -> str | None:
+    """Normalize Hugging Face model-type strings for internal dispatch."""
+    if model_type is None:
+        return None
+    return model_type.replace("_", "-").lower()
+
+
+def resolve_artifact_task(
+    config: dict[str, Any] | None,
+    manifest: dict[str, Any] | None = None,
+) -> str:
+    """Resolve an MLX artifact task name with backward-compatible defaults."""
+    if manifest is not None:
+        task = manifest.get("task")
+        if task:
+            return str(task)
+    if config is not None:
+        task = config.get("_mlx_task")
+        if task:
+            return str(task)
+    return "token-classification"
+
+
+def resolve_artifact_family(
+    config: dict[str, Any] | str | None,
+    manifest: dict[str, Any] | None = None,
+) -> str:
+    """Resolve a config dict, manifest, or family string to an MLX family."""
+    if manifest is not None:
+        family = normalize_model_type(manifest.get("family"))
+        if family in _CUSTOM_FAMILIES:
+            return family
+        resolved_family = (
+            _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+            if family is not None
+            else None
+        )
+        if resolved_family is not None:
+            return resolved_family
+
+    model_type: str | None = None
+    if isinstance(config, dict):
+        family = normalize_model_type(config.get("_mlx_family"))
+        if family in _CUSTOM_FAMILIES:
+            return family
+        resolved_family = (
+            _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+            if family is not None
+            else None
+        )
+        if resolved_family is not None:
+            return resolved_family
+
+        model_type = config.get("_mlx_model_type") or config.get("model_type")
+        if model_type is None:
+            architectures = config.get("architectures", [])
+            for needle, inferred_type in _ARCHITECTURE_TYPE_HINTS:
+                if any(needle in architecture for architecture in architectures):
+                    model_type = inferred_type
+                    break
+    else:
+        model_type = config
+
+    normalized = normalize_model_type(model_type)
+    resolved = (
+        _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(normalized)
+        if normalized is not None
+        else None
+    )
+    if resolved is None:
+        supported = ", ".join(
+            sorted(_CUSTOM_FAMILIES | set(_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES))
+        )
+        raise ValueError(
+            f"Unsupported MLX model family/type: {normalized!r}. Supported: {supported}."
+        )
+    return resolved
+
+
+def resolve_model_type(
+    config: dict[str, Any] | str | None,
+    manifest: dict[str, Any] | None = None,
+) -> str:
+    """Backward-compatible alias for architecture-family resolution."""
+    return resolve_artifact_family(config, manifest=manifest)
+
+
+def normalize_model_config(
+    config: dict[str, Any],
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fill architecture-specific config aliases needed by the MLX backends."""
+    normalized = dict(config)
+    task = resolve_artifact_task(normalized, manifest=manifest)
+    family = resolve_artifact_family(normalized, manifest=manifest)
+
+    normalized.setdefault("_mlx_task", task)
+    normalized.setdefault("_mlx_family", family)
+
+    if family in _CUSTOM_FAMILIES:
+        normalized.setdefault(
+            "encoder_hidden_size",
+            normalized.get("encoder_hidden_size", normalized.get("hidden_size", 768)),
+        )
+        normalized.setdefault("dropout", normalized.get("hidden_dropout_prob", 0.1))
+        normalized.setdefault(
+            "embed_ent_token", normalized.get("embed_ent_token", True)
+        )
+        normalized.setdefault(
+            "embed_class_token", normalized.get("embed_class_token", True)
+        )
+        normalized.setdefault(
+            "num_rnn_layers", normalized.get("num_rnn_layers", 0) or 0
+        )
+        normalized.setdefault("class_token_index", normalized.get("class_token_index"))
+        normalized.setdefault("rel_token_index", normalized.get("rel_token_index"))
+        normalized.setdefault("text_token_index", normalized.get("text_token_index"))
+        normalized.setdefault(
+            "example_token_index", normalized.get("example_token_index")
+        )
+        normalized.setdefault("max_width", normalized.get("max_width", 12))
+        normalized.setdefault(
+            "pooling_strategy", normalized.get("pooling_strategy", "first")
+        )
+        normalized.setdefault(
+            "class_token_pooling",
+            normalized.get("class_token_pooling", "first"),
+        )
+        normalized.setdefault(
+            "logit_scale_init_value",
+            normalized.get("logit_scale_init_value", 1.0),
+        )
+
+    source_model_type = normalize_model_type(
+        normalized.get("model_type") or normalized.get("_mlx_model_type")
+    )
+
+    normalized.setdefault("hidden_size", normalized.get("dim"))
+    normalized.setdefault("num_attention_heads", normalized.get("n_heads"))
+    normalized.setdefault("num_hidden_layers", normalized.get("n_layers"))
+    normalized.setdefault("intermediate_size", normalized.get("hidden_dim"))
+    normalized.setdefault(
+        "hidden_dropout_prob",
+        normalized.get("dropout", normalized.get("hidden_dropout_prob", 0.1)),
+    )
+    normalized.setdefault(
+        "attention_probs_dropout_prob",
+        normalized.get(
+            "attention_dropout",
+            normalized.get("attention_probs_dropout_prob", 0.1),
+        ),
+    )
+    normalized.setdefault("layer_norm_eps", normalized.get("layer_norm_eps", 1e-12))
+
+    if source_model_type == "distilbert":
+        normalized.setdefault("type_vocab_size", 0)
+        normalized.setdefault("_mlx_position_offset", 0)
+    elif source_model_type in {"roberta", "xlm-roberta"}:
+        normalized.setdefault("type_vocab_size", 1)
+        normalized.setdefault(
+            "_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1
+        )
+    elif family == "openai-privacy-filter":
+        normalized.setdefault("num_experts", normalized.get("num_local_experts", 128))
+        normalized.setdefault(
+            "experts_per_token", normalized.get("num_experts_per_tok", 4)
+        )
+        normalized.setdefault("swiglu_limit", normalized.get("swiglu_limit", 7.0))
+        normalized.setdefault("rms_norm_eps", normalized.get("rms_norm_eps", 1e-5))
+        rope_parameters = normalized.get("rope_parameters") or {}
+        normalized.setdefault("rope_theta", rope_parameters.get("rope_theta", 150000.0))
+        normalized.setdefault("rope_scaling_factor", rope_parameters.get("factor", 1.0))
+        normalized.setdefault("rope_ntk_alpha", rope_parameters.get("beta_slow", 1.0))
+        normalized.setdefault("rope_ntk_beta", rope_parameters.get("beta_fast", 32.0))
+        normalized.setdefault(
+            "initial_context_length",
+            rope_parameters.get(
+                "original_max_position_embeddings",
+                normalized.get("initial_context_length", 4096),
+            ),
+        )
+        sliding_window = normalized.get("sliding_window")
+        default_context = (
+            max(0, (int(sliding_window) - 1) // 2)
+            if sliding_window is not None
+            else 128
+        )
+        normalized.setdefault(
+            "bidirectional_left_context",
+            normalized.get("bidirectional_left_context", default_context),
+        )
+        normalized.setdefault(
+            "bidirectional_right_context",
+            normalized.get("bidirectional_right_context", default_context),
+        )
+    elif family == "modernbert":
+        normalized.setdefault("type_vocab_size", 0)
+        normalized.setdefault("_mlx_position_offset", 0)
+        normalized.setdefault(
+            "norm_eps",
+            normalized.get("norm_eps", normalized.get("layer_norm_eps", 1e-5)),
+        )
+        normalized.setdefault("norm_bias", normalized.get("norm_bias", False))
+        normalized.setdefault(
+            "hidden_activation",
+            normalized.get("hidden_activation", normalized.get("hidden_act", "gelu")),
+        )
+        normalized.setdefault(
+            "embedding_dropout",
+            normalized.get("embedding_dropout", normalized.get("dropout", 0.0)),
+        )
+        normalized.setdefault(
+            "attention_dropout",
+            normalized.get("attention_dropout", 0.0),
+        )
+        normalized.setdefault("mlp_dropout", normalized.get("mlp_dropout", 0.0))
+        normalized.setdefault(
+            "classifier_dropout",
+            normalized.get("classifier_dropout", 0.0),
+        )
+        normalized.setdefault("attention_bias", normalized.get("attention_bias", False))
+        normalized.setdefault("mlp_bias", normalized.get("mlp_bias", False))
+        normalized.setdefault(
+            "classifier_bias", normalized.get("classifier_bias", False)
+        )
+        normalized.setdefault(
+            "classifier_activation",
+            normalized.get("classifier_activation", "gelu"),
+        )
+        normalized.setdefault("local_attention", normalized.get("local_attention", 128))
+        normalized.setdefault("sliding_window", int(normalized["local_attention"]) // 2)
+        if not normalized.get("layer_types"):
+            every_n_layers = int(normalized.get("global_attn_every_n_layers", 3))
+            every_n_layers = max(1, every_n_layers)
+            normalized["layer_types"] = [
+                "full_attention" if index % every_n_layers == 0 else "sliding_attention"
+                for index in range(int(normalized["num_hidden_layers"]))
+            ]
+        rope_parameters = normalized.get("rope_parameters")
+        if not isinstance(rope_parameters, dict) or not any(
+            key in rope_parameters
+            for key in ("full_attention", "sliding_attention", "global", "local")
+        ):
+            shared_theta = (
+                rope_parameters.get("rope_theta")
+                if isinstance(rope_parameters, dict)
+                else None
+            )
+            global_rope_theta = normalized.get(
+                "global_rope_theta", shared_theta or 160000.0
+            )
+            if global_rope_theta is None:
+                global_rope_theta = shared_theta or 160000.0
+            local_rope_theta = normalized.get(
+                "local_rope_theta", shared_theta or 10000.0
+            )
+            if local_rope_theta is None:
+                local_rope_theta = shared_theta or 10000.0
+            normalized["rope_parameters"] = {
+                "full_attention": {"rope_theta": float(global_rope_theta)},
+                "sliding_attention": {"rope_theta": float(local_rope_theta)},
+            }
+    elif family == "longformer":
+        normalized.setdefault("type_vocab_size", 2)
+        normalized.setdefault("_mlx_position_offset", 0)
+        attention_window = normalized.get("attention_window", 512)
+        if isinstance(attention_window, (list, tuple)):
+            normalized["attention_window"] = [int(value) for value in attention_window]
+        else:
+            normalized["attention_window"] = int(attention_window)
+    else:
+        normalized.setdefault("type_vocab_size", normalized.get("type_vocab_size", 2))
+        normalized.setdefault("_mlx_position_offset", 0)
+
+    return normalized
+
+
+def build_model(
+    config: dict[str, Any],
+    manifest: dict[str, Any] | None = None,
+):
+    """Instantiate the appropriate MLX model for *config* and *manifest*."""
+    config = normalize_model_config(config, manifest=manifest)
+    family = resolve_artifact_family(config, manifest=manifest)
+
+    if family == "bert":
+        from openmed.mlx.models.bert_tc import BertForTokenClassification
+
+        return BertForTokenClassification(config)
+
+    if (
+        family == "deberta-v2"
+        and resolve_artifact_task(config, manifest=manifest) == "token-classification"
+    ):
+        from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
+
+        return DebertaV2ForTokenClassification(config)
+
+    if family == "modernbert":
+        from openmed.mlx.models.modernbert_tc import ModernBertForTokenClassification
+
+        return ModernBertForTokenClassification(config)
+
+    if family == "longformer":
+        from openmed.mlx.models.longformer_tc import LongformerForTokenClassification
+
+        return LongformerForTokenClassification(config)
+
+    if family == "openai-privacy-filter":
+        from openmed.mlx.models.privacy_filter import (
+            OpenAIPrivacyFilterForTokenClassification,
+        )
+
+        return OpenAIPrivacyFilterForTokenClassification(config)
+
+    if family == "gliner-uni-encoder-span":
+        from openmed.mlx.models.gliner_span import GLiNERSpanModel
+
+        return GLiNERSpanModel(config)
+
+    if family == "gliclass-uni-encoder":
+        from openmed.mlx.models.gliclass_uni import GLiClassUniEncoderModel
+
+        return GLiClassUniEncoderModel(config)
+
+    if family == "gliner-uni-encoder-token-relex":
+        from openmed.mlx.models.gliner_relex import GLiNERRelexModel
+
+        return GLiNERRelexModel(config)
+
+    raise AssertionError(f"Unhandled MLX model family: {family}")
+
+
+def _is_quantized_checkpoint(weights: dict[str, Any]) -> bool:
+    """Detect MLX quantized checkpoints by their auxiliary scale tensors."""
+    return any(key.endswith(".scales") for key in weights)
+
+
+def _quantize_model_for_weights(
+    config: dict[str, Any],
+    weights: dict[str, Any],
+    manifest: dict[str, Any] | None = None,
+):
+    """Instantiate a model matching the quantized checkpoint layout."""
+    import mlx.nn as nn
+
+    quantization = config.get("_mlx_quantization") or {}
+    candidate_bits = []
+
+    bits = quantization.get("bits")
+    group_size = int(quantization.get("group_size", 64))
+    mode = str(quantization.get("mode", "affine"))
+    if bits is not None:
+        candidate_bits.append(bits)
+
+    for fallback_bits in (8, 4):
+        if fallback_bits not in candidate_bits:
+            candidate_bits.append(fallback_bits)
+
+    last_error: Exception | None = None
+    for bits in candidate_bits:
+        model = build_model(config, manifest=manifest)
+        nn.quantize(
+            model,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+            class_predicate=lambda path, module: (
+                hasattr(module, "to_quantized") and f"{path}.scales" in weights
+            ),
+        )
+        try:
+            model.load_weights(list(weights.items()))
+            return model
+        except ValueError as exc:
+            last_error = exc
+
+    if last_error is not None:
+        raise last_error
+
+    return build_model(config, manifest=manifest)
+
+
+_MLX_MMAP_ENV = "OPENMED_MLX_MMAP"
+
+
+def _mlx_mmap_enabled() -> bool:
+    """Whether MLX weights use the memory-mapped (lazy) read path.
+
+    Controlled by the ``OPENMED_MLX_MMAP`` environment variable. Memory-mapped
+    loading is the default; set ``OPENMED_MLX_MMAP=0`` (or ``false``/``no``/
+    ``off``) to force the eager path, which materializes every tensor up front
+    — useful for debugging or deterministic memory profiling.
+    """
+    value = os.environ.get(_MLX_MMAP_ENV)
+    if value is None or not value.strip():
+        return True
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _load_mlx_weights(mx: Any, weights_path: Path) -> dict[str, Any]:
+    """Read MLX weights from *weights_path*, honoring the mmap toggle.
+
+    MLX reads ``.safetensors`` lazily and memory-mapped: tensors stay backed by
+    the file and are not resident until evaluated, which keeps cold-start peak
+    RSS low on the phone/laptop tiers. This is the default path. When mmap is
+    disabled via :func:`_mlx_mmap_enabled`, every tensor is eagerly evaluated
+    up front, reproducing the fully-materialized behavior as a documented
+    fallback.
+
+    Args:
+        mx: The imported ``mlx.core`` module.
+        weights_path: Path to a ``.safetensors`` or ``.npz`` weight file.
+
+    Returns:
+        Mapping of parameter name to MLX array.
+    """
+    weights = dict(mx.load(str(weights_path)))
+    if not _mlx_mmap_enabled() and weights:
+        mx.eval(*weights.values())
+    return weights
+
+
+def load_model(model_path: str | Path):
+    """Load a converted MLX model from *model_path*."""
+    try:
+        import mlx.core as mx
+    except ImportError:
+        raise ImportError(
+            "MLX is required for this module. Install with: pip install openmed[mlx]"
+        )
+
+    model_path = Path(model_path)
+
+    manifest, config = load_artifact_config(model_path)
+    config = normalize_model_config(config, manifest=manifest)
+
+    candidate_paths = resolve_weight_candidates(
+        model_path, config=config, manifest=manifest
+    )
+    weights_path = next((path for path in candidate_paths if path.exists()), None)
+    if weights_path is None:
+        raise FileNotFoundError(
+            f"No weights found in {model_path}. "
+            "Expected weights.safetensors or weights.npz."
+        )
+
+    if weights_path.suffix in {".safetensors", ".npz"}:
+        weights = _load_mlx_weights(mx, weights_path)
+    else:
+        raise FileNotFoundError(
+            f"Unsupported MLX weight file: {weights_path}. "
+            "Expected weights.safetensors or weights.npz."
+        )
+
+    if _is_quantized_checkpoint(weights):
+        model = _quantize_model_for_weights(config, weights, manifest=manifest)
+    else:
+        model = build_model(config, manifest=manifest)
+        model.load_weights(list(weights.items()))
+
+    model.eval()
+    mx.eval(model.parameters())
+    return model

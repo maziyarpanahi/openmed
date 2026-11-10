@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "imported_at": "2026-07-29",
+  "authority": "OpenMed Branding and Websites July 2026 handoff",
+  "reviewed_sources": [
+    {
+      "path": "SKILL.md",
+      "sha256": "a0916f07025494456f0c83d51af70560c967233a081c91d30519d1b7099c7f58",
+      "purpose": "shared design rules"
+    },
+    {
+      "path": "readme.md",
+      "sha256": "253a2e9dfcbc2dc435f3c7c821117811b2bf10bb3626e55956c8c1ede896c4d4",
+      "purpose": "shared implementation notes"
+    },
+    {
+      "path": "tokens/colors.css",
+      "sha256": "fc010d24c177cbeeeb95d6847c292814323cbc9aa2f2dba8a7322243e8bf4789",
+      "purpose": "shared accent engine and themes"
+    },
+    {
+      "path": "tokens/typography.css",
+      "sha256": "e06a501ae0a754683b29348dab6b5a46e5c139dd994d884fb16479497a8a0778",
+      "purpose": "shared type scale"
+    },
+    {
+      "path": "tokens/surfaces.css",
+      "sha256": "acce3d9551fa4cd045bf77e515c2bfcd714f4e3f8000ad96d4200544e15856a2",
+      "purpose": "shared layout, radii, rules, and motion"
+    },
+    {
+      "path": "assets/logo.svg",
+      "sha256": "43d553efb499c37f97e0752b0a9bed61b585edde983e4a8b35119442f8cbcf80",
+      "purpose": "Open Cross geometry"
+    },
+    {
+      "path": "openmed.life/design_handoff_landing_redesign/OpenMed.life Landing v2.dc.html",
+      "sha256": "a2a1a321a25ef9154a8a6a275ba6d1c80037459501baf5b4c1dbcd4534df8a4b",
+      "purpose": "final OpenMed.life composition"
+    },
+    {
+      "path": "openmed.life/design_handoff_landing_redesign/README.md",
+      "sha256": "be6d328d5a8c02de453b7203ae9bf88a45f12d56cbc6f01fb2bc68ee8e4e3716",
+      "purpose": "site exceptions and implementation handoff"
+    },
+    {
+      "path": "openmed.life/docs/docs.css",
+      "sha256": "15ccf320178ec4febdfc399a3e404cead97cbfcffc8114c8b17ae8459e194944",
+      "purpose": "documentation visual reference"
+    },
+    {
+      "path": "openmed.life/docs/docs.js",
+      "sha256": "048620241fa3f3b5032b0c929bfb51464584fa2efcd6504a96508f2168b748dc",
+      "purpose": "documentation interaction reference"
+    },
+    {
+      "path": "OpenMed Social Cards.dc.html",
+      "sha256": "a4d597baa83e71d8601d02d4ae9b2441b50cb69871887045d554c146384fe3d9",
+      "purpose": "social artboards"
+    },
+    {
+      "path": "social/README.md",
+      "sha256": "e28ac10689d4ae392509bad8a7102fba63d3895ab1c6d862ff2e13bb5d5178a0",
+      "purpose": "social dimensions and assignments"
+    }
+  ],
+  "approved_exports": {
+    "avatar-cat-2x.png": "5d0dc4afccfd96293a1afd854941d4a52b23c10b248e5a4e62081e04ec18e8d5",
+    "avatar-linkedin-2x.png": "7466b7a6ca4be686e6e5a939f2b9473d30cba207e764a6d1d5ee427e4cea288b",
+    "avatar-x-circle-2x.png": "c38a8d76009e1103a04d802392d3927fc26f16b6d9543e9ecc50a6223332563d",
+    "favicon-2x.png": "0db970f592da0f134c015674dd8f6a2aa2d280dcb767b74ff48ac3101554ce87",
+    "github-social-2x.png": "c0f6b3103ea1c39779105cd7332e2e3c6a6a99cf627082b8f7630335530a9f00",
+    "hf-org-2x.png": "1aac842e38a25ade76f72e24a014974908081f428b1de18737402f7a571be70b",
+    "linkedin-banner-2x.png": "495f5b2891673b0a5cc49e2ddb0f4227c312e694fd9ebb3ecb7b86a7893cb4a4",
+    "og-website-2x.png": "9a3372bdd3385432e5208b5251bdd1296f2c880fd04ed67afebac3116bdf7d58",
+    "readme-banner-2x.png": "22ecd9d5d51521f79d3face84b873ac637d28ce5562252f726b669a25e041621",
+    "x-header-2x.png": "a476f6e2a1bd5d6e140b139f36c50dea6e5c0499b3e953d8e142dbcdd576d226"
+  },
+  "social_source_exception": {
+    "approved_at": "2026-07-29",
+    "handoff_path": "social/exports",
+    "repository_path": "docs/brand/social/exports",
+    "authority": "Owner direction: use only the supplied social export visuals",
+    "scope": "Exact visual bytes, including baked image copy",
+    "claim_status": "Source-approved but not independently verified by the repository claims registry",
+    "change_rule": "Edit OpenMed Social Cards.dc.html, re-export, obtain owner review, and update canonical files and hashes; never edit PNG pixels"
+  },
+  "approved_deviations": [
+    "Set the OpenMed.life, docs, and social accent base to #B0413E.",
+    "Generated red-dot Open Cross variants preserve the shared geometry.",
+    "Added static color fallbacks before relative-OKLCH declarations.",
+    "Added Material slate as an equivalent dark-theme selector.",
+    "Self-hosted fonts replace remote Google Fonts imports.",
+    "Newsreader is limited to documented OpenMed.life editorial and social roles.",
+    "The ten supplied social/exports PNGs are the sole canonical social visuals; repository tooling may only exact-copy them or produce declared derivatives.",
+    "og-2x.png and hf-card-2x.png are distribution aliases of og-website-2x.png and hf-org-2x.png respectively.",
+    "Baked handoff copy is preserved as an owner-approved source exception; any change must originate in the source DC and be re-exported and reviewed."
+  ],
+  "excluded": [
+    "_ds/** (older April system)",
+    "**/support.js (generated runtime)",
+    "uploads/** (snapshots and alternate variants)",
+    "agent.openmed.life/** (separate product)",
+    "stale prototype claims and mock documentation copy",
+    "repository-authored social redraws, alternate compositions, and silent PNG edits"
+  ],
+  "repository_inputs": {
+    "cat_crest": {
+      "path": "docs/brand/assets/cat-crest.png",
+      "sha256": "601c1a652d315f72235746ca8addff1da1228578160e2484713740f9269363fc"
+    },
+    "root_logo_geometry": {
+      "path": "docs/brand/assets/open-cross-handoff.svg",
+      "sha256": "ceb7a1ed4f34c040191bb8c04b512a03f3f37dd0b839f6e43756988b1c209f96"
+    }
+  }
+}

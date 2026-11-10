@@ -1,0 +1,6 @@
+Patient: Alex Rivera
+DOB: 1984-03-12
+MRN: MRN-204812
+Phone: 555-013-4472
+Email: alex.rivera@example.test
+Follow-up at North Harbor Clinic on 2025-02-14.

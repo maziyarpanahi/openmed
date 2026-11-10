@@ -1,0 +1,23 @@
+{
+  "dataValueSets": [
+    {
+      "dataSet": "dsMonthly01",
+      "period": "202607",
+      "orgUnit": "ouFacility1",
+      "completeDate": "2026-07-17",
+      "storedBy": "Nurse Amina Example",
+      "dataValues": [
+        {
+          "dataElement": "deVisits001",
+          "value": "12",
+          "comment": "Amina Example confirmed the monthly total"
+        },
+        {
+          "dataElement": "deReferrals1",
+          "value": "3",
+          "comment": "Call +254 712 345 678 for details"
+        }
+      ]
+    }
+  ]
+}

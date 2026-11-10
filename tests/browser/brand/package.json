@@ -1,0 +1,16 @@
+{
+  "name": "openmed-brand-browser-tests",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Pinned cross-browser checks for the staged OpenMed Pages artifact.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:update": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.62.0"
+  }
+}

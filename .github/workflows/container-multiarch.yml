@@ -1,0 +1,295 @@
+name: Container Multi-Arch
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/container-multiarch.yml"
+      - "deploy/docker/Dockerfile"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  smoke:
+    name: Build and smoke (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Pull requests smoke-test the native amd64 image; the emulated arm64
+      # build runs on pushes, tags and manual runs.
+      matrix: ${{ fromJSON(github.event_name == 'pull_request' && '{"include":[{"platform":"linux/amd64","arch":"amd64"}]}' || '{"include":[{"platform":"linux/amd64","arch":"amd64"},{"platform":"linux/arm64","arch":"arm64"}]}') }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build smoke image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          tags: openmed-smoke:${{ matrix.arch }}
+          cache-from: type=gha,scope=openmed-${{ matrix.arch }}
+          cache-to: type=gha,scope=openmed-${{ matrix.arch }},mode=max
+
+      - name: Run synthetic de-identification smoke
+        run: |
+          docker run --rm -i --platform "${{ matrix.platform }}" \
+            openmed-smoke:${{ matrix.arch }} python - <<'PY'
+          from datetime import datetime
+          from unittest.mock import patch
+
+          import openmed
+          from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+          text = "Patient Casey Example called 555-0100."
+          prediction = PredictionResult(
+              text=text,
+              entities=[
+                  EntityPrediction(
+                      text="Casey Example",
+                      label="NAME",
+                      confidence=0.99,
+                      start=8,
+                      end=21,
+                  ),
+                  EntityPrediction(
+                      text="555-0100",
+                      label="PHONE",
+                      confidence=0.99,
+                      start=29,
+                      end=37,
+                  ),
+              ],
+              model_name="synthetic-container-smoke",
+              timestamp=datetime(2026, 1, 1, 0, 0, 0).isoformat(),
+          )
+
+          with patch("openmed.core.pii.extract_pii", return_value=prediction):
+              result = openmed.deidentify(text, method="mask", keep_mapping=True)
+
+          assert result.deidentified_text == "Patient [NAME] called [PHONE]."
+          assert len(result.pii_entities) == 2
+          print(f"OpenMed {openmed.__version__} synthetic de-identification passed")
+          PY
+
+  arm-latency:
+    name: ARM64 SMS latency budget
+    runs-on: ubuntu-24.04-arm
+    env:
+      ARM_LATENCY_MODEL: OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android
+      ARM_LATENCY_REVISION: 79f7db205869b1be4be23ac4f42aa95bdedc5aee
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Verify native ARM64 runner
+        shell: bash
+        run: test "$(uname -m)" = "aarch64"
+
+      - name: Install benchmark dependencies
+        run: python -m pip install -e ".[dev,onnx-runtime]"
+
+      - name: Verify intentionally slowed fixture fails the gate
+        run: >-
+          python -m pytest
+          tests/unit/eval/test_arm_latency.py::test_intentionally_slowed_fixture_trips_gate
+          -q
+
+      - name: Prefetch pinned INT8 model
+        shell: bash
+        run: |
+          hf download "$ARM_LATENCY_MODEL" \
+            model_int8.onnx config.json id2label.json tokenizer.json tokenizer_config.json \
+            --revision "$ARM_LATENCY_REVISION" \
+            --local-dir "$RUNNER_TEMP/openmed-pii-int8"
+
+      - name: Enforce offline SMS latency budget
+        env:
+          OPENMED_OFFLINE: "1"
+        shell: bash
+        run: |
+          openmed benchmark latency \
+            --model "$RUNNER_TEMP/openmed-pii-int8" \
+            --revision "$ARM_LATENCY_REVISION" \
+            --output arm-latency-report.json
+
+      - name: Upload ARM latency report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: arm-latency-report
+          path: arm-latency-report.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish:
+    name: Publish manifest list
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    needs:
+      - smoke
+      - arm-latency
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the lowercase image name
+        id: image-name
+        shell: bash
+        run: |
+          # GHCR rejects references whose repository name carries uppercase
+          # characters, which any fork of a capitalised owner would produce.
+          owner_repo=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=ghcr.io/${owner_repo}" >> "$GITHUB_ENV"
+          echo "image_name=ghcr.io/${owner_repo}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE_NAME}:sha-${GITHUB_SHA::12}"
+            if [ "${GITHUB_REF_TYPE}" = "branch" ] && [ "${GITHUB_REF_NAME}" = "master" ]; then
+              echo "${IMAGE_NAME}:latest"
+            fi
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              echo "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            fi
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              echo "${IMAGE_NAME}:manual-${GITHUB_RUN_NUMBER}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push manifest list
+        id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: false
+          cache-from: |
+            type=gha,scope=openmed-amd64
+            type=gha,scope=openmed-arm64
+          cache-to: type=gha,scope=openmed-manifest,mode=max
+
+      - name: Verify manifest platforms
+        shell: bash
+        run: |
+          image="${IMAGE_NAME}:sha-${GITHUB_SHA::12}"
+          docker buildx imagetools inspect "$image" | tee manifest.txt
+          grep -Eq 'Platform:[[:space:]]+linux/amd64' manifest.txt
+          grep -Eq 'Platform:[[:space:]]+linux/arm64' manifest.txt
+
+      - name: Generate SLSA provenance for image
+        id: attest-image
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-name: ${{ steps.image-name.outputs.image_name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Preserve image attestation bundle
+        shell: bash
+        run: |
+          test -s "${{ steps.attest-image.outputs.bundle-path }}"
+          cp "${{ steps.attest-image.outputs.bundle-path }}" \
+            image-provenance.intoto.json
+
+      - name: Verify image provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          image_ref="${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
+          gh attestation verify "oci://${image_ref}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/container-multiarch.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --format json > image-provenance-verification.json
+          python3 - image-provenance-verification.json <<'PY'
+          import json
+          import os
+          import sys
+
+          payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+          blob = json.dumps(payload, sort_keys=True)
+          required = [
+              "https://slsa.dev/provenance/v1",
+              os.environ["GITHUB_SHA"],
+              ".github/workflows/container-multiarch.yml",
+          ]
+          missing = [value for value in required if value not in blob]
+          if missing:
+              raise SystemExit(f"image provenance verification output missing: {missing}")
+          PY
+
+      - name: Upload image provenance evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-provenance
+          path: |
+            image-provenance.intoto.json
+            image-provenance-verification.json
+          if-no-files-found: error
+          retention-days: 90

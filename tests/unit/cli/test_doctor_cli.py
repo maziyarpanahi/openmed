@@ -1,0 +1,620 @@
+from __future__ import annotations
+
+import argparse
+import json
+
+import pytest
+
+from openmed.cli import main_module
+from openmed.cli.main import _handle_doctor
+from openmed.core import doctor as doctor_module
+from openmed.core.doctor import run_diagnostics
+
+
+def _fake_brief_cache(root, model, revision, *, main=False):
+    repository = root / ("models--" + model.replace("/", "--"))
+    snapshot = repository / "snapshots" / revision
+    snapshot.mkdir(parents=True)
+    for filename in ("config.json", "tokenizer.json", "model.safetensors"):
+        (snapshot / filename).write_text("synthetic", encoding="utf-8")
+    if main:
+        (repository / "refs").mkdir()
+        (repository / "refs/main").write_text(revision, encoding="ascii")
+    return snapshot
+
+
+def test_brief_readiness_uses_only_local_cache_metadata(subtests, tmp_path):
+    case_root = tmp_path
+    for missing in [None, "runtime", "revision", "pii"]:
+        with subtests.test(missing=missing):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import socket
+
+                from openmed.core import model_registry
+
+                monkeypatch.setattr(
+                    doctor_module, "_hf_cache_location", lambda: (tmp_path, "test")
+                )
+                monkeypatch.setattr(doctor_module.platform, "system", lambda: "Darwin")
+                monkeypatch.setattr(doctor_module.platform, "machine", lambda: "arm64")
+                monkeypatch.setattr(
+                    doctor_module.importlib.util,
+                    "find_spec",
+                    lambda _: None if missing == "runtime" else object(),
+                )
+                monkeypatch.setattr(
+                    model_registry, "get_default_nli_model", lambda: None
+                )
+
+                def forbidden(*args, **kwargs):
+                    pytest.fail(
+                        "Readiness must not import runtimes, load models or use network"
+                    )
+
+                monkeypatch.setattr(socket, "create_connection", forbidden)
+                monkeypatch.setattr(socket.socket, "connect", forbidden)
+                monkeypatch.setattr(doctor_module.importlib, "import_module", forbidden)
+                model, revision = model_registry.resolve_summarizer_model()
+                if missing != "revision":
+                    _fake_brief_cache(tmp_path, model, revision)
+                if missing != "pii":
+                    _fake_brief_cache(
+                        tmp_path,
+                        model_registry.get_default_pii_model("en"),
+                        "a" * 40,
+                        main=True,
+                    )
+                before = sorted(
+                    str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+                )
+                checks = {
+                    item["name"]: item
+                    for item in doctor_module.clinical_brief_readiness()
+                }
+                assert checks["brief_extractive"]["status"] == "PASS"
+                assert checks["brief_mlx_platform"]["status"] == "PASS"
+                for case, key in (
+                    ("runtime", "brief_mlx_runtime"),
+                    ("revision", "brief_summarizer_cache"),
+                    ("pii", "brief_raw_note_pii_cache"),
+                ):
+                    assert checks[key]["status"] == (
+                        "WARN" if missing == case else "PASS"
+                    )
+                assert (
+                    checks["brief_nli_provider"]["code"]
+                    == "caller_nli_provider_required"
+                )
+                serialized = json.dumps(checks)
+                assert str(tmp_path) not in serialized
+                assert model not in serialized
+                assert "model.safetensors" not in serialized
+                assert before == sorted(
+                    str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+                )
+
+
+def test_brief_cache_requires_complete_safe_shards(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    index = snapshot / "model.safetensors.index.json"
+    for filename in (
+        "../outside.safetensors",
+        "missing.safetensors",
+        "/abs.safetensors",
+    ):
+        index.write_text(json.dumps({"weight_map": {"weight": filename}}))
+        assert not doctor_module._brief_cached_artifact(model, revision)
+    (snapshot / "shard-1.safetensors").write_text("synthetic")
+    index.write_text(json.dumps({"weight_map": {"weight": "shard-1.safetensors"}}))
+    assert doctor_module._brief_cached_artifact(model, revision)
+
+
+def test_readiness_extractives_do_not_require_apple_runtime(monkeypatch):
+    from openmed.core import model_registry
+
+    monkeypatch.setattr(doctor_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(doctor_module, "_brief_module_present", lambda _: False)
+    monkeypatch.setattr(doctor_module, "_brief_cached_artifact", lambda *_: False)
+    monkeypatch.setattr(
+        model_registry, "get_default_nli_model", lambda: "registered-local-nli"
+    )
+    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
+    assert checks["brief_extractive"]["status"] == "PASS"
+    assert checks["brief_mlx_platform"]["status"] == "WARN"
+    assert checks["brief_nli_provider"]["status"] == "PASS"
+
+
+def test_run_diagnostics_returns_list():
+    results = run_diagnostics()
+
+    assert isinstance(results, list)
+    assert len(results) > 0
+
+
+def test_required_checks_present():
+    results = run_diagnostics()
+
+    names = {item["name"] for item in results}
+
+    assert "python_version" in names
+    assert "python_arch" in names
+    assert "openmed_version" in names
+    assert "low_resource_memory" in names
+    assert "hf_token" in names
+    assert "hf_endpoint" in names
+    assert "hf_cache" in names
+    assert "http_proxy" in names
+    assert "https_proxy" in names
+    assert "all_proxy" in names
+    assert "no_proxy" in names
+    assert "openmed_offline" in names
+    assert "manifest_exists" in names
+    assert "manifest_rows" in names
+    assert "brief_extractive" in names
+    assert "brief_summarizer_cache" in names
+    assert "brief_nli_provider" in names
+
+
+def test_hf_token_not_exposed(monkeypatch):
+    monkeypatch.setenv(
+        "HF_TOKEN",
+        "SUPER_SECRET_TOKEN_VALUE",
+    )
+
+    results = run_diagnostics()
+
+    serialized = str(results)
+
+    assert "SUPER_SECRET_TOKEN_VALUE" not in serialized
+
+    token_check = next(item for item in results if item["name"] == "hf_token")
+
+    assert token_check["status"] == "PASS"
+    assert token_check["present"] is True
+
+
+def test_hf_token_absence_reports_boolean(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+
+    results = run_diagnostics()
+
+    token_check = next(item for item in results if item["name"] == "hf_token")
+
+    assert token_check["status"] == "WARN"
+    assert token_check["present"] is False
+
+
+def test_legacy_hf_token_presence_is_reported_without_exposure(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("HUGGING_FACE_HUB_TOKEN", "LEGACY_SECRET_TOKEN_VALUE")
+
+    results = run_diagnostics()
+    token_check = next(item for item in results if item["name"] == "hf_token")
+
+    assert token_check["present"] is True
+    assert "LEGACY_SECRET_TOKEN_VALUE" not in str(results)
+
+
+def test_network_environment_is_reported_without_proxy_credentials(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("HF_ENDPOINT", "https://mirror.example.org")
+    monkeypatch.setenv(
+        "HTTP_PROXY",
+        "http://network-user:SUPER_SECRET_PROXY_PASSWORD@proxy.example.org:8080",
+    )
+    monkeypatch.setenv(
+        "http_proxy",
+        "http://network-user:SUPER_SECRET_PROXY_PASSWORD@proxy.example.org:8080",
+    )
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.org:8443")
+    monkeypatch.setenv("https_proxy", "http://proxy.example.org:8443")
+    monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example.org:1080")
+    monkeypatch.setenv("all_proxy", "socks5://proxy.example.org:1080")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,.example.org")
+    monkeypatch.setenv("no_proxy", "localhost,127.0.0.1,.example.org")
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home"))
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+
+    assert checks["hf_endpoint"]["details"] == "https://mirror.example.org"
+    assert checks["hf_endpoint"]["source"] == "HF_ENDPOINT"
+    assert checks["http_proxy"]["details"] == ("http://***:***@proxy.example.org:8080")
+    assert checks["http_proxy"]["source"].lower() == "http_proxy"
+    assert checks["https_proxy"]["present"] is True
+    assert checks["all_proxy"]["details"] == "socks5://proxy.example.org:1080"
+    assert checks["no_proxy"]["details"] == "localhost,127.0.0.1,.example.org"
+    assert checks["hf_cache"]["details"] == str(tmp_path / "hf-home" / "hub")
+    assert checks["hf_cache"]["source"] == "HF_HOME"
+    assert checks["openmed_offline"]["enabled"] is True
+    assert "SUPER_SECRET_PROXY_PASSWORD" not in str(results)
+
+
+def test_network_environment_reports_defaults(monkeypatch):
+    for name in (
+        "HF_ENDPOINT",
+        "HF_HOME",
+        "HF_HUB_CACHE",
+        "XDG_CACHE_HOME",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "OPENMED_OFFLINE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+
+    assert checks["hf_endpoint"]["details"] == doctor_module.DEFAULT_HF_ENDPOINT
+    assert checks["hf_endpoint"]["source"] == "default"
+    assert checks["http_proxy"]["details"] == "not set"
+    assert checks["http_proxy"]["present"] is False
+    assert checks["hf_cache"]["details"] == str(
+        doctor_module.Path.home() / ".cache" / "huggingface" / "hub"
+    )
+    assert checks["openmed_offline"]["enabled"] is False
+
+
+def test_network_environment_redacts_schemeless_credentials_and_url_secrets(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "HF_ENDPOINT",
+        "https://mirror.example.org/models?access_token=endpoint-secret#private",
+    )
+    monkeypatch.setenv("HTTP_PROXY", "http://ignored.example.org:8080")
+    monkeypatch.setenv(
+        "http_proxy",
+        "network-user:proxy-secret@proxy.example.org:8080/path?token=hidden#private",
+    )
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+    serialized = str(results)
+
+    assert checks["hf_endpoint"]["details"] == "https://mirror.example.org/models"
+    assert checks["http_proxy"]["details"] == ("***:***@proxy.example.org:8080/path")
+    assert checks["http_proxy"]["source"] == "http_proxy"
+    assert "endpoint-secret" not in serialized
+    assert "proxy-secret" not in serialized
+    assert "token=hidden" not in serialized
+
+
+def test_network_environment_warns_for_plaintext_endpoint(monkeypatch):
+    monkeypatch.setenv("HF_ENDPOINT", "http://mirror.example.org")
+
+    results = run_diagnostics()
+    endpoint = next(item for item in results if item["name"] == "hf_endpoint")
+
+    assert endpoint["status"] == "WARN"
+    assert "HTTPS" in endpoint["hint"]
+
+
+def test_network_environment_escapes_control_characters(monkeypatch, tmp_path):
+    monkeypatch.setenv("HF_ENDPOINT", "https://mirror.example.org\nforged-output")
+    monkeypatch.setenv("https_proxy", "http://proxy.example.org\nforged-output")
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf-home\nforged-output"))
+
+    results = run_diagnostics()
+    checks = {item["name"]: item for item in results}
+
+    assert checks["hf_endpoint"]["status"] == "WARN"
+    assert "\n" not in checks["hf_endpoint"]["details"]
+    assert "\n" not in checks["https_proxy"]["details"]
+    assert "\\u000a" in checks["https_proxy"]["details"]
+    assert "\n" not in checks["hf_cache"]["details"]
+    assert "\\u000a" in checks["hf_cache"]["details"]
+
+
+def test_offline_mode_escapes_control_characters(monkeypatch):
+    monkeypatch.setenv("OPENMED_OFFLINE", "0\nPASS forged: enabled")
+
+    results = run_diagnostics()
+    offline = next(item for item in results if item["name"] == "openmed_offline")
+
+    assert "\n" not in offline["details"]
+    assert "\\u000a" in offline["details"]
+
+
+def test_unsupported_python_version_fails(monkeypatch):
+    monkeypatch.setattr(doctor_module.sys, "version_info", (3, 9, 18))
+    monkeypatch.setattr(doctor_module.platform, "python_version", lambda: "3.9.18")
+
+    results = run_diagnostics()
+
+    python_check = next(item for item in results if item["name"] == "python_version")
+
+    assert python_check["status"] == "FAIL"
+
+
+def test_unsupported_python_architecture_fails(monkeypatch):
+    monkeypatch.setattr(doctor_module.platform, "machine", lambda: "i386")
+
+    results = run_diagnostics()
+
+    arch_check = next(item for item in results if item["name"] == "python_arch")
+
+    assert arch_check["status"] == "FAIL"
+
+
+def test_manifest_check_uses_canonical_path(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    results = run_diagnostics()
+
+    manifest_check = next(item for item in results if item["name"] == "manifest_exists")
+
+    assert manifest_check["status"] == "PASS"
+    assert manifest_check["details"].endswith("models.jsonl")
+
+
+def test_missing_manifest_reports_row_check(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        doctor_module,
+        "MANIFEST_PATH",
+        tmp_path / "missing-models.jsonl",
+    )
+
+    results = run_diagnostics()
+
+    manifest_exists = next(
+        item for item in results if item["name"] == "manifest_exists"
+    )
+    manifest_rows = next(item for item in results if item["name"] == "manifest_rows")
+
+    assert manifest_exists["status"] == "WARN"
+    assert manifest_rows["status"] == "WARN"
+    assert "missing" in manifest_rows["details"]
+
+
+def test_optional_dependencies_are_warn_or_pass():
+    results = run_diagnostics()
+
+    optional_checks = [
+        item
+        for item in results
+        if item["name"]
+        in {
+            "mlx",
+            "coreml",
+            "onnx",
+            "hf",
+            "multimodal",
+        }
+    ]
+
+    for check in optional_checks:
+        assert check["status"] in {
+            "PASS",
+            "WARN",
+        }
+
+
+def test_doctor_suggests_low_resource_profile_below_8gb(monkeypatch):
+    monkeypatch.setattr(doctor_module, "_effective_memory_bytes", lambda: 6 * 1024**3)
+
+    results = run_diagnostics()
+
+    memory = next(item for item in results if item["name"] == "low_resource_memory")
+    assert memory["status"] == "PASS"
+    assert memory["fits_low_resource"] is True
+    assert memory["profile_suggested"] is True
+    assert "OPENMED_PROFILE=low_resource" in memory["hint"]
+
+
+def test_doctor_warns_when_below_4gb(monkeypatch):
+    monkeypatch.setattr(doctor_module, "_effective_memory_bytes", lambda: 3 * 1024**3)
+
+    results = run_diagnostics()
+
+    memory = next(item for item in results if item["name"] == "low_resource_memory")
+    assert memory["status"] == "WARN"
+    assert memory["fits_low_resource"] is False
+
+
+def test_doctor_warns_when_optional_dependencies_are_missing(monkeypatch, capsys):
+    def missing_dependency(module_name):
+        raise ImportError(f"{module_name} missing")
+
+    monkeypatch.setattr(
+        doctor_module.importlib,
+        "import_module",
+        missing_dependency,
+    )
+
+    exit_code = _handle_doctor(argparse.Namespace(json=False))
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    for name in doctor_module.OPTIONAL_EXTRAS:
+        assert f"WARN {name}:" in captured.out
+
+
+def test_doctor_returns_zero_when_no_fail():
+    args = argparse.Namespace(
+        json=False,
+    )
+
+    exit_code = _handle_doctor(args)
+
+    assert exit_code == 0
+
+
+def test_doctor_text_output_includes_network_environment(monkeypatch, capsys):
+    monkeypatch.setenv("HF_ENDPOINT", "https://mirror.example.org")
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.example.org:8080")
+    monkeypatch.setenv("http_proxy", "http://proxy.example.org:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.org:8443")
+    monkeypatch.setenv("https_proxy", "http://proxy.example.org:8443")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
+    monkeypatch.setenv("no_proxy", "localhost,127.0.0.1")
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+    exit_code = _handle_doctor(argparse.Namespace(json=False))
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "PASS hf_endpoint: https://mirror.example.org" in captured.out
+    assert "PASS http_proxy: http://proxy.example.org:8080" in captured.out
+    assert "PASS https_proxy: http://proxy.example.org:8443" in captured.out
+    assert "PASS no_proxy: localhost,127.0.0.1" in captured.out
+    assert "PASS hf_cache:" in captured.out
+    assert "PASS openmed_offline: enabled (OPENMED_OFFLINE=1)" in captured.out
+
+
+def test_fail_returns_nonzero(monkeypatch):
+    def fake_run_diagnostics():
+        return [
+            {
+                "name": "fake_fail",
+                "status": "FAIL",
+                "details": "testing",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "openmed.core.doctor.run_diagnostics",
+        fake_run_diagnostics,
+    )
+
+    args = argparse.Namespace(
+        json=False,
+    )
+
+    exit_code = _handle_doctor(args)
+
+    assert exit_code == 1
+
+
+def test_json_mode_returns_zero():
+    args = argparse.Namespace(
+        json=True,
+    )
+
+    exit_code = _handle_doctor(args)
+
+    assert exit_code == 0
+
+
+def test_doctor_json_command_is_registered(monkeypatch, capsys):
+    diagnostics = [
+        {
+            "name": "python_version",
+            "status": "PASS",
+            "details": "3.11.10",
+        }
+    ]
+
+    monkeypatch.setattr(
+        "openmed.core.doctor.run_diagnostics",
+        lambda: diagnostics,
+    )
+
+    exit_code = main_module.main(["doctor", "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert payload["data"]["checks"] == diagnostics
+
+
+def test_brief_cache_deep_json_is_missing_without_exception_context(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    (snapshot / "model.safetensors.index.json").write_text(
+        "[" * 2000 + "0" + "]" * 2000
+    )
+    assert doctor_module._brief_cached_artifact(model, revision) is False
+
+
+def test_brief_cache_bounds_read_even_when_stat_size_is_stale(monkeypatch, tmp_path):
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    (snapshot / "shard-1.safetensors").write_text("synthetic")
+    index = snapshot / "model.safetensors.index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "weight_map": {"weight": "shard-1.safetensors"},
+                "padding": "x" * 1_048_576,
+            }
+        )
+    )
+    original_stat = Path.stat
+    monkeypatch.setattr(
+        Path,
+        "stat",
+        lambda path, *a, **k: (
+            SimpleNamespace(st_size=100)
+            if path == index
+            else original_stat(path, *a, **k)
+        ),
+    )
+    assert doctor_module._brief_cached_artifact(model, revision) is False
+
+
+def test_readiness_reports_package_registration_separately_from_cache(
+    subtests, tmp_path
+):
+    case_root = tmp_path
+    for registered in [False, True]:
+        with subtests.test(registered=registered):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.core import model_registry
+
+                monkeypatch.setattr(
+                    doctor_module, "_hf_cache_location", lambda: (tmp_path, "test")
+                )
+                model, revision = model_registry.resolve_summarizer_model()
+                _fake_brief_cache(tmp_path, model, revision)
+                monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+                if registered:
+                    model_registry.register_summarizer_package(
+                        "mlx",
+                        package_root=tmp_path / "private-package",
+                        manifest_digest="0" * 64,
+                    )
+                checks = {
+                    item["name"]: item
+                    for item in doctor_module.clinical_brief_readiness()
+                }
+                assert checks["brief_summarizer_cache"]["status"] == "PASS"
+                package = checks["brief_summarizer_package"]
+                assert package["status"] == ("PASS" if registered else "WARN")
+                assert package["code"] == (
+                    "summarizer_pin_registered"
+                    if registered
+                    else "summarizer_package_unpinned"
+                )
+                assert str(tmp_path) not in json.dumps(checks)
+                assert "private-package" not in json.dumps(checks)

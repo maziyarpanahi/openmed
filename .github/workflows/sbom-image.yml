@@ -1,0 +1,158 @@
+name: Image SBOM
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ master, 'release/v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  IMAGE_LOCAL_REF: openmed-image-sbom:${{ github.sha }}
+  IMAGE_SBOM_FILE: image-sbom.cdx.json
+  IMAGE_SBOM_DIGEST_FILE: image-sbom.cdx.json.sha256
+  SYFT_VERSION: "1.42.3"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image-sbom:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build service image for SBOM
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: ${{ env.IMAGE_LOCAL_REF }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=OpenMed service image
+
+      - name: Install pinned Syft
+        env:
+          SYFT_LINUX_X64_ASSET_ID: "377338300"
+          SYFT_SHA256: "0d6be741479eddd2c8644a288990c04f3df0d609bbc1599a005532a9dff63509"
+        run: |
+          archive="$RUNNER_TEMP/syft-${SYFT_VERSION}.tar.gz"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            --header 'Accept: application/octet-stream' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --output "$archive" \
+            "https://api.github.com/repos/anchore/syft/releases/assets/${SYFT_LINUX_X64_ASSET_ID}"
+          echo "$SYFT_SHA256  $archive" | sha256sum --check --status
+          # The pinned SBOM action uses the runner tool cache for an exact version.
+          syft_dir="$RUNNER_TOOL_CACHE/syft/$SYFT_VERSION/x64"
+          mkdir -p "$syft_dir"
+          tar --extract --gzip --file "$archive" --directory "$syft_dir" syft
+          "$syft_dir/syft" version
+          touch "$syft_dir.complete"
+
+      - name: Generate CycloneDX image SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: ${{ env.IMAGE_LOCAL_REF }}
+          format: cyclonedx-json
+          output-file: ${{ env.IMAGE_SBOM_FILE }}
+          syft-version: ${{ env.SYFT_VERSION }}
+
+      - name: Validate image SBOM
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path("image-sbom.cdx.json")
+          if not path.exists():
+              raise SystemExit("image SBOM was not generated")
+          if path.stat().st_size == 0:
+              raise SystemExit("image SBOM is empty")
+
+          try:
+              bom = json.loads(path.read_text(encoding="utf-8"))
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"image SBOM is malformed JSON: {exc}") from exc
+
+          if bom.get("bomFormat") != "CycloneDX":
+              raise SystemExit("image SBOM is not a CycloneDX document")
+          if not bom.get("specVersion"):
+              raise SystemExit("image SBOM is missing specVersion")
+
+          components = bom.get("components")
+          if not isinstance(components, list) or not components:
+              raise SystemExit("image SBOM does not list any components")
+
+          purls = [
+              component.get("purl", "")
+              for component in components
+              if isinstance(component, dict)
+          ]
+          has_os_component = any(
+              purl.startswith(("pkg:deb/", "pkg:apk/", "pkg:rpm/"))
+              for purl in purls
+          ) or any(
+              component.get("type") == "operating-system"
+              for component in components
+              if isinstance(component, dict)
+          )
+          has_python_component = any(
+              purl.startswith("pkg:pypi/")
+              for purl in purls
+          )
+
+          if not has_os_component:
+              raise SystemExit("image SBOM does not include OS package components")
+          if not has_python_component:
+              raise SystemExit("image SBOM does not include Python package components")
+
+          print(
+              "validated image SBOM: "
+              f"{len(components)} components, CycloneDX {bom.get('specVersion')}"
+          )
+          PY
+
+      - name: Compute image SBOM digest
+        id: sbom_digest
+        run: |
+          sha256sum "$IMAGE_SBOM_FILE" > "$IMAGE_SBOM_DIGEST_FILE"
+          digest="sha256:$(cut -d' ' -f1 "$IMAGE_SBOM_DIGEST_FILE")"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "$digest"
+
+      - name: Upload image SBOM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-sbom
+          path: |
+            ${{ env.IMAGE_SBOM_FILE }}
+            ${{ env.IMAGE_SBOM_DIGEST_FILE }}
+          if-no-files-found: error
+
+      - name: Attach image SBOM to tagged GitHub release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "$IMAGE_SBOM_FILE" "$IMAGE_SBOM_DIGEST_FILE" \
+            --clobber \
+            || gh release create "$GITHUB_REF_NAME" \
+              "$IMAGE_SBOM_FILE" "$IMAGE_SBOM_DIGEST_FILE" \
+              --title "$GITHUB_REF_NAME" --generate-notes

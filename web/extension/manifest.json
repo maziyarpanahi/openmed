@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "OpenMed PHI Guard",
+  "version": "1.0.0",
+  "minimum_chrome_version": "121",
+  "description": "Flags and masks PHI in web pages using only on-device processing.",
+  "permissions": ["storage"],
+  "host_permissions": [],
+  "background": {
+    "scripts": ["worker.js"],
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "phi-guard@openmed.life",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  }
+}

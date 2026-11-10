@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/fact_reconciliation.schema.json",
+  "title": "OpenMed fact reconciliation result",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "canonical_records", "compatibility_policy", "conflicts", "current_fact_ids",
+    "equivalence_groups", "input_fact_ids", "occurred_at", "policy",
+    "queue_summary", "reconciliation_run_id", "resolutions", "review_packets",
+    "schema_version", "state", "subject_id"
+  ],
+  "properties": {
+    "canonical_records": {"type": "array", "items": {"$ref": "#/$defs/canonical_record"}},
+    "compatibility_policy": {"const": "same_major"},
+    "conflicts": {"type": "array", "items": {"$ref": "#/$defs/conflict"}},
+    "current_fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+    "equivalence_groups": {"type": "array", "items": {"$ref": "#/$defs/group"}},
+    "input_fact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "queue_summary": {"type": "object"},
+    "reconciliation_run_id": {"$ref": "#/$defs/opaque_id"},
+    "resolutions": {"type": "array", "items": {"$ref": "#/$defs/resolution"}},
+    "review_packets": {"type": "array", "items": {"type": "object"}},
+    "schema_version": {"const": "1.0.0"},
+    "state": {"enum": ["resolved", "review_required"]},
+    "subject_id": {"$ref": "#/$defs/opaque_id"}
+  },
+  "$defs": {
+    "controlled": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+    "canonical_record": {
+      "type": "object",
+      "required": ["canonical_id", "effective_at", "fact_id", "metadata", "reason_code", "record_type", "schema_version", "state", "subject_id"],
+      "properties": {
+        "canonical_id": {"$ref": "#/$defs/opaque_id"},
+        "effective_at": {"type": "string", "format": "date-time"},
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "metadata": {"type": "object"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "record_type": {"$ref": "#/$defs/controlled"},
+        "schema_version": {"const": "1.0.0"},
+        "state": {"$ref": "#/$defs/controlled"},
+        "subject_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "required": ["attributes", "conflict_id", "conflict_type", "derivation_hash", "detected_by", "evidence_ids", "fact_ids", "schema_version", "status", "subject_id"],
+      "properties": {
+        "attributes": {"type": "object"},
+        "conflict_id": {"$ref": "#/$defs/opaque_id"},
+        "conflict_type": {"enum": ["value", "unit", "time", "status", "source", "identity", "amendment"]},
+        "derivation_hash": {"$ref": "#/$defs/digest"},
+        "detected_by": {"$ref": "#/$defs/controlled"},
+        "evidence_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "fact_ids": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "schema_version": {"type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$"},
+        "status": {"enum": ["open", "resolved", "superseded"]},
+        "subject_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_ids", "fact_ids", "group_id", "kind", "policy_digest", "reconciliation_id", "representative_fact_id"],
+      "properties": {
+        "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "fact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "group_id": {"$ref": "#/$defs/opaque_id"},
+        "kind": {"enum": ["unique", "exact_duplicate", "policy_equivalent"]},
+        "policy_digest": {"$ref": "#/$defs/digest"},
+        "reconciliation_id": {"$ref": "#/$defs/opaque_id"},
+        "representative_fact_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auto_resolve_conflicts", "digest", "policy_id", "prefer_valid_amendment", "review_priority", "review_ttl_hours", "source_priority", "status_equivalence", "time_tolerance_seconds", "unit_equivalence", "version"],
+      "properties": {
+        "auto_resolve_conflicts": {"type": "array", "uniqueItems": true, "items": {"enum": ["value", "unit", "time", "status", "source", "identity", "amendment"]}},
+        "digest": {"$ref": "#/$defs/digest"},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "prefer_valid_amendment": {"type": "boolean"},
+        "review_priority": {"type": "object"},
+        "review_ttl_hours": {"type": "number", "exclusiveMinimum": 0},
+        "source_priority": {"type": "object"},
+        "status_equivalence": {"type": "object"},
+        "time_tolerance_seconds": {"type": "number", "minimum": 0},
+        "unit_equivalence": {"type": "object"},
+        "version": {"$ref": "#/$defs/version"}
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "required": ["action", "actor_type", "attributes", "conflict_id", "derivation_hash", "occurred_at", "policy_id", "policy_version", "rationale_code", "rejected_fact_ids", "resolution_id", "schema_version", "selected_fact_ids", "supersedes_resolution_id"],
+      "properties": {
+        "action": {"enum": ["select", "reject", "merge", "defer", "reopen", "supersede"]},
+        "actor_type": {"enum": ["human", "policy"]},
+        "attributes": {"type": "object"},
+        "conflict_id": {"$ref": "#/$defs/opaque_id"},
+        "derivation_hash": {"$ref": "#/$defs/digest"},
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "policy_version": {"type": "string", "minLength": 1},
+        "rationale_code": {"$ref": "#/$defs/controlled"},
+        "rejected_fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "resolution_id": {"$ref": "#/$defs/opaque_id"},
+        "schema_version": {"type": "string", "pattern": "^1(?:\\.[0-9]+){0,2}$"},
+        "selected_fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "supersedes_resolution_id": {"oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]}
+      }
+    }
+  }
+}

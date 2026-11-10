@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openmed-operator
+  namespace: openmed-system
+  labels:
+    app.kubernetes.io/name: openmed-operator
+    app.kubernetes.io/part-of: openmed
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openmed-operator
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes control-plane addresses vary by cluster. This port-only rule
+    # permits the API transport while denying non-HTTPS outbound traffic.
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443

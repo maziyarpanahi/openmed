@@ -1,0 +1,150 @@
+/* OpenMed shared typography tokens. Fonts are repository-owned and offline.
+   Newsreader is an allow-listed OpenMed.life editorial/social exception only. */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../../assets/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../../assets/fonts/IBMPlexSans-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../../assets/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../../assets/fonts/IBMPlexSans-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../../assets/fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../../assets/fonts/IBMPlexMono-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../../assets/fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+/* Metric-compatible local fallbacks reduce layout movement while repository
+   fonts load. Values are derived from checked-in OpenType metrics and the
+   named macOS/Windows fallback faces; tokens.json records the calculation. */
+@font-face {
+  font-family: "IBM Plex Sans Fallback";
+  src: local("Arial");
+  size-adjust: 99.51%;
+  ascent-override: 103.01%;
+  descent-override: 27.64%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono Fallback";
+  src: local("Courier New");
+  size-adjust: 100%;
+  ascent-override: 102.5%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+}
+
+/* openmed-editorial-exception:start */
+@font-face {
+  font-family: "Newsreader";
+  src: url("../../assets/fonts/Newsreader-Medium.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range:
+    U+0020-007E, U+00A0, U+00B7, U+00D7, U+2010, U+2013-2014,
+    U+2018-2019, U+201C-201D, U+2022, U+2026, U+2032, U+2212,
+    U+2264-2265;
+}
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("../../assets/fonts/Newsreader-MediumItalic.woff2") format("woff2");
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  unicode-range:
+    U+0020-007E, U+00A0, U+00B7, U+00D7, U+2010, U+2013-2014,
+    U+2018-2019, U+201C-201D, U+2022, U+2026, U+2032, U+2212,
+    U+2264-2265;
+}
+
+@font-face {
+  font-family: "Newsreader Fallback";
+  src: local("Georgia");
+  size-adjust: 88.48%;
+  ascent-override: 83.07%;
+  descent-override: 29.95%;
+  line-gap-override: 0%;
+}
+/* openmed-editorial-exception:end */
+
+:root {
+  --om-font-sans:
+    "IBM Plex Sans", "IBM Plex Sans Fallback", system-ui, sans-serif;
+  --om-font-mono:
+    "IBM Plex Mono", "IBM Plex Mono Fallback", ui-monospace, Menlo, monospace;
+  --om-font-editorial: "Newsreader", "Newsreader Fallback", Georgia, serif;
+
+  --om-h1-size: 54px;
+  --om-h1-lh: 1.07;
+  --om-h1-ls: -0.028em;
+  --om-h1-weight: 600;
+  --om-h2-size: 34px;
+  --om-h2-lh: 1.15;
+  --om-h2-ls: -0.02em;
+  --om-h2-weight: 600;
+  --om-h3-size: 19px;
+  --om-h3-lh: 1.3;
+  --om-h3-weight: 600;
+
+  --om-lede-size: 16.5px;
+  --om-lede-lh: 1.6;
+  --om-body-size: 14px;
+  --om-body-lh: 1.6;
+  --om-caption-size: 13px;
+  --om-caption-lh: 1.55;
+
+  --om-label-size: 12px;
+  --om-label-ls: 0.14em;
+  --om-microlabel-size: 11px;
+  --om-microlabel-ls: 0.12em;
+  --om-chip-size: 11.5px;
+  --om-tag-size: 10.5px;
+  --om-code-size: 12.5px;
+  --om-code-lh: 1.8;
+}

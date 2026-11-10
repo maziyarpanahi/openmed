@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 178 48" role="img" aria-labelledby="title">
+  <title id="title">openmed</title>
+  <style>
+    text { font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 35px; font-weight: 600; letter-spacing: -1.2px; }
+  </style>
+  <text x="1" y="36" fill="#0E1116">openmed</text>
+</svg>

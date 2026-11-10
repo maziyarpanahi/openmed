@@ -1,0 +1,3 @@
+_id,_uuid,_submission_time,household/name,household/phone,household/national_id,household/geolocation,household/symptoms,household/counselling_notes,children/name,children/status
+kobo-row-873-001,uuid:kobo-csv-873-001,2026-07-18T08:00:00Z,Mariam Diallo,+221771112233,SN-873-001,14.716677 -17.467686 25 3,fever malaria_test,Mariam Diallo received counselling,Awa Diallo,registered
+kobo-row-873-001,uuid:kobo-csv-873-001,2026-07-18T08:00:00Z,Mariam Diallo,+221771112233,SN-873-001,14.716677 -17.467686 25 3,fever malaria_test,Follow-up for Mariam Diallo,Ibrahima Diallo,follow_up

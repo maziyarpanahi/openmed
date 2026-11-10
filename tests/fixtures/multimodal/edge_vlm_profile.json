@@ -1,0 +1,31 @@
+{
+  "schema_version": "openmed.smolvlm.qualification.v1",
+  "registered_before_inference": "2026-11-04",
+  "model": "mlx-community/SmolVLM2-2.2B-Instruct-mlx",
+  "revision": "844516024a1c4400d34489b89ee067d794e432ed",
+  "weights_sha256": "ed6c59250704f09f921dce1a25e0d4eff611b6c9c53e382a7eb04ce9113f2773",
+  "upstream": "HuggingFaceTB/SmolVLM2-2.2B-Instruct",
+  "upstream_revision": "482adb537c021c86670beed01cd58990d01e72e4",
+  "license_metadata": "apache-2.0 in the pinned model cards; no weight bundle",
+  "quantization": "none",
+  "device_tier": "Apple M2 Max, 96 GiB unified memory, macOS 26.5.2",
+  "max_output_tokens": 64,
+  "seed": 0,
+  "repeats": 3,
+  "document_headings": ["LAB REPORT", "INTAKE FORM", "DISCHARGE NOTE", "CONSENT FORM", "PATIENT SUMMARY", "MEDICATION LIST", "APPOINTMENT CARD", "REFERRAL LETTER"],
+  "square_colors": ["red", "green", "blue", "yellow"],
+  "synthetic_identifiers": ["ALICE EXAMPLE", "BOB SAMPLE", "CAROL FIXTURE", "MRN 731829", "MRN 864251", "2031-04-17", "2032-08-26"],
+  "gates": {
+    "document_accuracy_min": 0.75,
+    "color_accuracy_min": 0.75,
+    "overall_accuracy_min": 0.80,
+    "critical_identifier_leaks_max": 0,
+    "invalid_input_abstention_fraction_min": 1.0,
+    "repeat_output_parity_fraction_min": 1.0,
+    "warm_p95_latency_seconds_max": 30.0,
+    "cold_first_request_seconds_max": 120.0,
+    "peak_mlx_memory_gib_max": 12.0,
+    "peak_process_rss_gib_max": 16.0
+  },
+  "scope": "Synthetic English headings and colored squares only. Same-device greedy repeatability, not cross-device/Swift parity. Privacy tests check specified synthetic identifiers with a fixture-only detector and same-asset commitments; they do not validate a production PHI detector or authorize clinical use. All thresholds are qualification measurements, excluded from default unit CI. Failed gates remain failures."
+}

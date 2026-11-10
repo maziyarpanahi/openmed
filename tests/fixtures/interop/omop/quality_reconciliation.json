@@ -1,0 +1,98 @@
+{
+  "expected_mapped_coverage_delta_ppm": 0,
+  "expected_table_deltas": {
+    "condition_occurrence": 0,
+    "drug_exposure": 0,
+    "measurement": 0,
+    "note": 1,
+    "observation": 0,
+    "person": 0,
+    "procedure_occurrence": 0,
+    "source_to_concept_map": 5,
+    "visit_occurrence": 0
+  },
+  "fixture_digest": "sha256:618478a56a4fb6fa8a27f4bc9f737742d9844551234f0498a9936182e0870250",
+  "openmed": {
+    "cdm_version": "5.4",
+    "cohort_digest": "sha256:cc5242888af3b98f757cf1eeb64cafd166755feb3c26345bce1c102569fe5aaf",
+    "cohort_split": "holdout",
+    "current_fact_count": 5,
+    "license": "apache-2.0",
+    "mapped_coverage_ppm": 1000000,
+    "mapping_counts": {
+      "ambiguous": 0,
+      "mapped": 5,
+      "rejected": 0,
+      "unmapped": 0
+    },
+    "row_counts": {
+      "condition_occurrence": 1,
+      "drug_exposure": 1,
+      "measurement": 1,
+      "note": 1,
+      "observation": 1,
+      "person": 1,
+      "procedure_occurrence": 1,
+      "source_to_concept_map": 5,
+      "visit_occurrence": 1
+    },
+    "snapshot_digest": "sha256:233fe11daa980c9f35b60ad0044eb69f9cfb926ea64ca74c5e279b43f0b37780",
+    "source": "openmed",
+    "version": "3.0.0"
+  },
+  "provenance": {
+    "cohort_fixture": "tests/fixtures/interop/omop/fact_projection.json",
+    "cohort_generator": "synthea",
+    "cohort_generator_license": "apache-2.0",
+    "cohort_generator_source": "https://github.com/synthetichealth/synthea",
+    "reference_etl_license": "apache-2.0",
+    "reference_etl_source": "https://github.com/OHDSI/ETL-Synthea",
+    "reference_summary": "tests/fixtures/interop/omop/synthea_reference_omop_54_summary.json"
+  },
+  "quality_input": {
+    "cdm_version": "5.4",
+    "cohort_digest": "sha256:cc5242888af3b98f757cf1eeb64cafd166755feb3c26345bce1c102569fe5aaf",
+    "cohort_id": "synthea.frozen.omop.v1",
+    "cohort_split": "holdout",
+    "compatibility_policy": "same_major",
+    "projection_digest": "sha256:233fe11daa980c9f35b60ad0044eb69f9cfb926ea64ca74c5e279b43f0b37780",
+    "reference_etl": "ohdsi.etl_synthea",
+    "reference_license": "apache-2.0",
+    "reference_snapshot_digest": "sha256:525c190815ad063e8ee59d880e09ce30971297da5857c19833c59567d6d3d17b",
+    "reference_version": "2.1.1",
+    "schema_version": "1.0.0",
+    "vocabulary_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "reference": {
+    "cdm_version": "5.4",
+    "cohort_digest": "sha256:cc5242888af3b98f757cf1eeb64cafd166755feb3c26345bce1c102569fe5aaf",
+    "cohort_split": "holdout",
+    "current_fact_count": 5,
+    "license": "apache-2.0",
+    "mapped_coverage_ppm": 1000000,
+    "mapping_counts": {
+      "ambiguous": 0,
+      "mapped": 5,
+      "rejected": 0,
+      "unmapped": 0
+    },
+    "row_counts": {
+      "condition_occurrence": 1,
+      "drug_exposure": 1,
+      "measurement": 1,
+      "note": 0,
+      "observation": 1,
+      "person": 1,
+      "procedure_occurrence": 1,
+      "source_to_concept_map": 0,
+      "visit_occurrence": 1
+    },
+    "snapshot_digest": "sha256:525c190815ad063e8ee59d880e09ce30971297da5857c19833c59567d6d3d17b",
+    "source": "ohdsi.etl_synthea",
+    "version": "2.1.1"
+  },
+  "semantic_difference_codes": [
+    "openmed_emits_provenance_note",
+    "openmed_emits_source_to_concept_rows"
+  ]
+}

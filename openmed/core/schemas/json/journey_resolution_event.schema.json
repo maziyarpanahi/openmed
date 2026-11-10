@@ -1,0 +1,25 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/resolution-event.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "action": {"enum": ["select", "reject", "merge", "defer", "reopen", "supersede"]},
+    "actor_type": {"enum": ["human", "policy"]},
+    "attributes": {"type": "object"},
+    "conflict_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "derivation_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "occurred_at": {"format": "date-time", "type": "string"},
+    "policy_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "policy_version": {"maxLength": 128, "minLength": 1, "type": "string"},
+    "rationale_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "rejected_fact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "resolution_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "selected_fact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "supersedes_resolution_id": {"anyOf": [{"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, {"type": "null"}]}
+  },
+  "required": ["action", "actor_type", "attributes", "conflict_id", "derivation_hash", "occurred_at", "policy_id", "policy_version", "rationale_code", "rejected_fact_ids", "resolution_id", "schema_version", "selected_fact_ids", "supersedes_resolution_id"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyResolutionEvent",
+  "type": "object"
+}

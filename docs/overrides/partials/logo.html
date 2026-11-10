@@ -1,0 +1,15 @@
+{% if config.theme.logo %}
+  <img
+    class="om-docs-mark om-docs-mark--default"
+    src="{{ config.theme.logo | url }}"
+    alt="logo"
+  >
+  <img
+    class="om-docs-mark om-docs-mark--inverse"
+    src="{{ 'assets/openmed-mark-inverse.svg' | url }}"
+    alt="logo"
+  >
+{% else %}
+  {% set icon = config.theme.icon.logo or "material/library" %}
+  {% include ".icons/" ~ icon ~ ".svg" %}
+{% endif %}

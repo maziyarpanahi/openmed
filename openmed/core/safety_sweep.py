@@ -1,0 +1,395 @@
+"""Deterministic post-detector safety sweep for structured PII."""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass, replace
+from typing import Any, Mapping, Sequence
+
+from ..processing.outputs import EntityPrediction
+from .anonymizer.providers.clinical_ids import id_subtype_for_entity_type
+from .pii_entity_merger import (
+    PII_PATTERNS,
+    PIIPattern,
+    find_context_words,
+    is_labelled_value,
+    iter_pattern_spans,
+    within_labelled_rejection,
+)
+from .quality_gates import resolve_overlapping_entities
+from .script_detect import normalize_for_pii_detection
+
+SAFETY_SWEEP_SOURCE = "safety_sweep"
+SAFETY_SWEEP_PATTERNS_VERSION = "safety-sweep-v1"
+
+# Bound separator tolerance to structured shapes. A visible mutation must be
+# present, and the existing validator or explicit MRN context must still pass.
+_SPLIT_IDENTIFIER_PATTERNS = (
+    ("ssn", re.compile(r"(?<!\w)\d(?:[-.,· ]{0,2}\d){8}(?!\w)")),
+    (
+        "credit_debit_card",
+        re.compile(r"(?<!\w)\d(?:[-.,· ]{0,2}\d){15}(?!\w)"),
+    ),
+    (
+        "medical_record_number",
+        re.compile(r"(?<!\w)MRN[: #]*\d(?:[-.,· ]{0,2}\d){5,9}(?!\w)", re.I),
+    ),
+    (
+        "iban",
+        re.compile(r"(?<!\w)[A-Z]{2}\d{2}(?:[-.,· ]{0,2}[A-Z0-9]){11,30}(?!\w)"),
+    ),
+)
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    start: int
+    end: int
+    label: str
+    text: str
+    confidence: float
+    priority: int
+    pattern: PIIPattern
+
+
+def _span_value(span: Any, key: str) -> Any:
+    if isinstance(span, Mapping):
+        return span.get(key)
+    return getattr(span, key, None)
+
+
+def _span_bounds(span: Any) -> tuple[int | None, int | None]:
+    start = _span_value(span, "start")
+    end = _span_value(span, "end")
+    return start, end
+
+
+def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
+    for span in spans:
+        span_start, span_end = _span_bounds(span)
+        if span_start is None or span_end is None:
+            continue
+        if start < span_end and end > span_start:
+            return True
+    return False
+
+
+def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
+    if lang == "en" and locale is None:
+        from .pii_i18n import AADHAAR_PII_PATTERNS, _numeric_date_pattern
+
+        return [*PII_PATTERNS, *AADHAAR_PII_PATTERNS, _numeric_date_pattern("en")]
+
+    from .pii_i18n import get_patterns_for_language
+
+    return list(get_patterns_for_language(lang, locale=locale))
+
+
+def _validated(pattern: PIIPattern, text: str) -> bool:
+    if pattern.validator is None:
+        return True
+    try:
+        return bool(pattern.validator(text))
+    except Exception:
+        return False
+
+
+def _has_context(
+    text: str,
+    start: int,
+    end: int,
+    pattern: PIIPattern,
+    *,
+    require_boundaries: bool = False,
+) -> bool:
+    return bool(
+        pattern.context_words
+        and find_context_words(
+            text,
+            start,
+            end,
+            pattern.context_words,
+            require_boundaries=require_boundaries,
+            normalizer=pattern.context_normalizer,
+        )
+    )
+
+
+def _confidence(text: str, start: int, end: int, pattern: PIIPattern) -> float:
+    score = pattern.base_score
+    if _has_context(text, start, end, pattern):
+        score = min(1.0, score + pattern.context_boost)
+    return score
+
+
+def _candidate_metadata(candidate: _Candidate) -> dict[str, Any]:
+    id_subtype = id_subtype_for_entity_type(candidate.label)
+    safety_sweep_metadata: dict[str, Any] = {
+        "entity_type": candidate.label,
+        "confidence": candidate.confidence,
+        "pattern": candidate.pattern.pattern,
+    }
+    if id_subtype is not None:
+        safety_sweep_metadata["id_subtype"] = id_subtype
+    # A value-free calendar code lets shifting and surrogate stages select a
+    # non-Gregorian calendar without re-reading the matched date.
+    calendar = getattr(candidate.pattern, "calendar", None)
+    if calendar is not None:
+        safety_sweep_metadata["calendar"] = calendar
+    return {
+        "source": SAFETY_SWEEP_SOURCE,
+        "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
+        "safety_sweep": safety_sweep_metadata,
+        **({"id_subtype": id_subtype} if id_subtype is not None else {}),
+        **({"calendar": calendar} if calendar is not None else {}),
+    }
+
+
+def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Candidate]:
+    candidates: list[_Candidate] = []
+    labelled_rejections: list[tuple[int, int, int]] = []
+    for pattern in patterns:
+        for start, end in iter_pattern_spans(text, pattern):
+            matched_text = text[start:end]
+            if not _validated(pattern, matched_text):
+                if is_labelled_value(
+                    text,
+                    start,
+                    pattern.context_words,
+                    normalizer=pattern.context_normalizer,
+                ):
+                    labelled_rejections.append((start, end, pattern.priority))
+                continue
+            if pattern.requires_context and not _has_context(
+                text,
+                start,
+                end,
+                pattern,
+                require_boundaries=True,
+            ):
+                continue
+            if (
+                pattern.context_required or pattern.safety_sweep_requires_context
+            ) and not _has_context(
+                text,
+                start,
+                end,
+                pattern,
+            ):
+                continue
+
+            candidates.append(
+                _Candidate(
+                    start=start,
+                    end=end,
+                    label=pattern.entity_type,
+                    text=matched_text,
+                    confidence=_confidence(text, start, end, pattern),
+                    priority=pattern.priority,
+                    pattern=pattern,
+                )
+            )
+
+    by_label = {pattern.entity_type: pattern for pattern in patterns}
+    for label, split_pattern in _SPLIT_IDENTIFIER_PATTERNS:
+        pattern = by_label.get(label)
+        if pattern is None:
+            continue
+        for match in split_pattern.finditer(text):
+            start, end = match.span()
+            surface = match.group()
+            if not any(char in surface for char in ".,·"):
+                continue
+            if label != "iban" and (
+                re.search(r"\d[-.,· ]{0,2}$", text[max(0, start - 3) : start])
+                or re.match(r"[-.,· ]{0,2}\d", text[end : end + 3])
+            ):
+                # Never reinterpret a fragment of a longer separated digit run.
+                continue
+            canonical = re.sub(r"[-.,·\s]", "", surface)
+            if label == "medical_record_number":
+                if not re.fullmatch(r"MRN[:#]*\d{6,10}", canonical, re.I):
+                    continue
+            elif not _validated(pattern, canonical):
+                continue
+            if label == "ssn" and not _has_context(text, start, end, pattern):
+                continue
+            if label == "credit_debit_card" and not _has_context(
+                text, start, end, pattern
+            ):
+                continue
+            candidates.append(
+                _Candidate(
+                    start=start,
+                    end=end,
+                    label=label,
+                    text=surface,
+                    confidence=_confidence(text, start, end, pattern),
+                    priority=pattern.priority,
+                    pattern=pattern,
+                )
+            )
+
+    if labelled_rejections:
+        # A value labelled as one identifier that fails its validator is not
+        # relabelled, whole or in part, by a lower-priority pattern.
+        candidates = [
+            candidate
+            for candidate in candidates
+            if not within_labelled_rejection(
+                candidate.start,
+                candidate.end,
+                candidate.priority,
+                labelled_rejections,
+            )
+        ]
+
+    candidates.sort(
+        key=lambda candidate: (
+            -candidate.confidence,
+            -candidate.priority,
+            candidate.start,
+            -(candidate.end - candidate.start),
+        )
+    )
+    return candidates
+
+
+def safety_sweep(
+    text: str,
+    spans: Sequence[Any],
+    *,
+    lang: str = "en",
+    locale: str | None = None,
+    patterns: Sequence[PIIPattern] | None = None,
+) -> list[Any]:
+    """Add deterministic structured identifier spans not covered by ML spans.
+
+    Existing spans always win. Sweep candidates that overlap any supplied span,
+    or any higher-ranked sweep candidate, are discarded. Existing overlapping
+    spans are resolved by the quality-gate policy so callers receive a
+    non-overlapping span set.
+    """
+    existing = list(spans)
+    selected: list[_Candidate] = []
+    active_spans: list[Any] = list(existing)
+    sweep_patterns = (
+        list(patterns)
+        if patterns is not None
+        else _patterns_for_language(lang, locale=locale)
+    )
+
+    normalized = normalize_for_pii_detection(
+        text, lang=lang, preserve_script_letters=True
+    )
+    candidates = [
+        (candidate, 0) for candidate in _collect_candidates(text, sweep_patterns)
+    ]
+    if normalized.text != text:
+        for candidate in _collect_candidates(normalized.text, sweep_patterns):
+            start, end = normalized.remap_span(candidate.start, candidate.end)
+            candidates.append(
+                (replace(candidate, start=start, end=end, text=text[start:end]), 1)
+            )
+    # Normalization is an additional view, never a replacement for native-script
+    # rules. Prefer a raw match on equal evidence so valid outer bidi isolates
+    # and joiner-bearing word boundaries keep their original span contract.
+    candidates.sort(
+        key=lambda item: (
+            -item[0].confidence,
+            -item[0].priority,
+            item[1],
+            item[0].start,
+            -(item[0].end - item[0].start),
+        )
+    )
+    for candidate, _view in candidates:
+        if _overlaps(candidate.start, candidate.end, active_spans):
+            continue
+
+        entity = EntityPrediction(
+            text=candidate.text,
+            label=candidate.label,
+            start=candidate.start,
+            end=candidate.end,
+            confidence=candidate.confidence,
+            metadata={
+                **_candidate_metadata(candidate),
+                "detection_normalization": normalized.to_metadata(),
+            },
+        )
+        selected.append(candidate)
+        active_spans.append(entity)
+        existing.append(entity)
+
+    ordered = sorted(
+        existing,
+        key=lambda span: (
+            _span_value(span, "start") is None,
+            _span_value(span, "start") or 0,
+            _span_value(span, "end") or 0,
+        ),
+    )
+    return resolve_overlapping_entities(ordered)
+
+
+def safety_sweep_code_mixed(
+    text: str,
+    spans: Sequence[Any],
+    *,
+    token_language_tags: Sequence[Any],
+    base_lang: str = "en",
+    locale: str | None = None,
+) -> list[Any]:
+    """Sweep merged model/rule spans with explicitly gated Hinglish patterns."""
+    from .pii_i18n import get_patterns_for_code_mixed_tags
+
+    patterns = get_patterns_for_code_mixed_tags(
+        text,
+        token_language_tags,
+        base_lang=base_lang,
+        locale=locale,
+    )
+    return safety_sweep(
+        text,
+        spans,
+        lang=base_lang,
+        locale=locale,
+        patterns=patterns,
+    )
+
+
+def hashed_span_surface(
+    text: str,
+    start: int,
+    end: int,
+    *,
+    label: str | None = None,
+) -> dict[str, Any]:
+    """Return offset-keyed, raw-text-free evidence for a sensitive span."""
+    bounded_start = max(0, min(int(start), len(text)))
+    bounded_end = max(bounded_start, min(int(end), len(text)))
+    surface = text[bounded_start:bounded_end]
+    payload: dict[str, Any] = {
+        "start": bounded_start,
+        "end": bounded_end,
+        "length": len(surface),
+        "text_hash": _hash_surface(surface),
+    }
+    if label is not None:
+        payload["label"] = str(label)
+    return payload
+
+
+def _hash_surface(surface: str) -> str:
+    return f"sha256:{hashlib.sha256(surface.encode('utf-8')).hexdigest()}"
+
+
+__all__ = [
+    "SAFETY_SWEEP_PATTERNS_VERSION",
+    "SAFETY_SWEEP_SOURCE",
+    "hashed_span_surface",
+    "safety_sweep",
+    "safety_sweep_code_mixed",
+]

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_review_packet.schema.json",
+  "title": "OpenMed clinical review packet",
+  "schema_version": "1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy", "conflict_id", "created_at", "expires_at",
+    "extensions", "fact_ids", "packet_id", "policy_id", "policy_version",
+    "priority", "provenance_fingerprint", "schema_version", "state",
+    "transition_ids", "transitions"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "conflict_id": {"$ref": "#/$defs/opaque_id"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": ["string", "null"], "format": "date-time"},
+    "extensions": {"type": "object"},
+    "fact_ids": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+    "packet_id": {"$ref": "#/$defs/opaque_id"},
+    "policy_id": {"$ref": "#/$defs/controlled"},
+    "policy_version": {"$ref": "#/$defs/version"},
+    "priority": {"enum": ["low", "normal", "high", "critical"]},
+    "provenance_fingerprint": {"$ref": "#/$defs/digest"},
+    "schema_version": {"const": "1.1.0"},
+    "state": {"$ref": "#/$defs/state"},
+    "transition_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+    "transitions": {"type": "array", "items": {"$ref": "#/$defs/transition"}}
+  },
+  "$defs": {
+    "controlled": {"type": "string", "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"},
+    "state": {"enum": ["queued", "in_review", "approved", "rejected", "expired", "reopened"]},
+    "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compatibility_policy", "event_id", "from_state", "occurred_at", "packet_id", "policy_id", "policy_version", "provenance_fingerprint", "reason_code", "schema_version", "to_state"],
+      "properties": {
+        "compatibility_policy": {"const": "same_major"},
+        "event_id": {"$ref": "#/$defs/opaque_id"},
+        "from_state": {"$ref": "#/$defs/state"},
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "packet_id": {"$ref": "#/$defs/opaque_id"},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "policy_version": {"$ref": "#/$defs/version"},
+        "provenance_fingerprint": {"$ref": "#/$defs/digest"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "schema_version": {"const": "1.1.0"},
+        "to_state": {"$ref": "#/$defs/state"}
+      }
+    }
+  }
+}

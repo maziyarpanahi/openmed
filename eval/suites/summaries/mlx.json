@@ -1,0 +1,131 @@
+{
+  "device": "mlx",
+  "fixture_count": 3,
+  "generated_at": null,
+  "metadata": {
+    "adjudication_available": false,
+    "aggregate_only": true,
+    "clinical_validation": false,
+    "fixture_digest": "sha256:bf9bd5efbd645e3b977e5b358b362f3b0b7e809b6ca8282fcef75666c933f786",
+    "model_revision": "361db5da5e74ff6fcdd852d478e1f266ce11013a",
+    "output_digest": "sha256:a5fce48b7686320f9d47c8b75b499061d2ff6ac4f8edd9577fb57cc0e0cf081a",
+    "protocol": "gold-masked-literal-assertion-sentence-v1",
+    "report_digest": "sha256:eb215bc018dea43dcc63161c54ae5a864dad636b7cceb6395546149883509e04",
+    "synthetic_only": true,
+    "threshold_digest": "sha256:c64fd184ac79fe335674ef1f28b03e7ff2bed3d02431f9187aec410c7deebf6f"
+  },
+  "metrics": {
+    "checks": [
+      [
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.25
+          },
+          "gate": "summary_clinical_fact_recall",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.25
+          },
+          "gate": "summary_fact_coverage",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.0,
+            "value": 0.6666666666666666
+          },
+          "gate": "summary_unsupported_claim_rate",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 1.0,
+            "value": null
+          },
+          "gate": "summary_citation_support",
+          "passed": false,
+          "reason": "missing_adjudication"
+        },
+        {
+          "details": {
+            "checked_token_count": 2,
+            "leaked_token_count": 0,
+            "leaked_token_hashes": [],
+            "passed": true
+          },
+          "gate": "summary_leakage",
+          "passed": true,
+          "reason": "measured"
+        }
+      ],
+      [
+        {
+          "details": {},
+          "gate": "summary_generation",
+          "passed": false,
+          "reason": "local_generation_unavailable"
+        }
+      ],
+      [
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.0
+          },
+          "gate": "summary_clinical_fact_recall",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.0
+          },
+          "gate": "summary_fact_coverage",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.0,
+            "value": 1.0
+          },
+          "gate": "summary_unsupported_claim_rate",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 1.0,
+            "value": null
+          },
+          "gate": "summary_citation_support",
+          "passed": false,
+          "reason": "missing_adjudication"
+        },
+        {
+          "details": {
+            "checked_token_count": 2,
+            "leaked_token_count": 0,
+            "leaked_token_hashes": [],
+            "passed": true
+          },
+          "gate": "summary_leakage",
+          "passed": true,
+          "reason": "measured"
+        }
+      ]
+    ],
+    "failed_fixture_count": 3,
+    "generated_count": 2
+  },
+  "model_name": "mlx",
+  "suite": "summaries"
+}

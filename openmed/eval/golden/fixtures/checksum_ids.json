@@ -1,0 +1,70 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 47,
+          "label": "CREDIT_CARD",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "credit_card"
+          },
+          "start": 28,
+          "text": "4111 1111 1111 1111"
+        },
+        {
+          "end": 107,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "cpf"
+          },
+          "start": 93,
+          "text": "456.378.921-64"
+        },
+        {
+          "end": 163,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          },
+          "start": 151,
+          "text": "681937567577"
+        }
+      ],
+      "id": "golden-checksum-valid-invalid-identifiers",
+      "language": "en",
+      "metadata": {
+        "category": "checksum_ids",
+        "expected_output": {
+          "method": "mask",
+          "text": "Checksum fixture valid card [CREDIT_CARD], invalid card 4111 1111 1111 1112, valid CPF [ID_NUM], invalid CPF 456.378.921-65, valid Aadhaar [ID_NUM], invalid Aadhaar 681937567570."
+        },
+        "hard_negatives": [
+          {
+            "identifier_type": "credit_card",
+            "reason": "fails_luhn",
+            "text": "4111 1111 1111 1112"
+          },
+          {
+            "identifier_type": "cpf",
+            "reason": "fails_checksum",
+            "text": "456.378.921-65"
+          },
+          {
+            "identifier_type": "aadhaar",
+            "reason": "fails_verhoeff",
+            "text": "681937567570"
+          }
+        ],
+        "synthetic": true
+      },
+      "text": "Checksum fixture valid card 4111 1111 1111 1111, invalid card 4111 1111 1111 1112, valid CPF 456.378.921-64, invalid CPF 456.378.921-65, valid Aadhaar 681937567577, invalid Aadhaar 681937567570."
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

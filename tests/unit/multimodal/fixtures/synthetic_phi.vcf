@@ -1,0 +1,12 @@
+BEGIN:VCARD
+VERSION:3.0
+UID:contact-safe-001
+FN:John Doe
+N:Doe;John;;Dr.;
+TEL;TYPE=CELL:555-0101
+EMAIL;TYPE=HOME:john.doe@example.com
+ADR;TYPE=HOME:;;123 Main St;Boston;MA;02108;USA
+ORG:Open Clinic
+NOTE:Patient John Doe can be reached at 555-
+ 0101 for lab follow-up. The reminder includes john.doe@example.com and a safe phrase that should remain after redaction.
+END:VCARD

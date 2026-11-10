@@ -1,0 +1,42 @@
+{"example_id":"assertion_present_001","task":"assertion","label":"present","subgroups":{"context":"direct"},"text":"Synthetic finding is present."}
+{"example_id":"assertion_present_002","task":"assertion","label":"present","subgroups":{"context":"list"},"text":"Synthetic active problem: finding alpha."}
+{"example_id":"assertion_present_003","task":"assertion","label":"present","subgroups":{"context":"narrative"},"text":"The synthetic subject has finding alpha."}
+{"example_id":"assertion_absent_001","task":"assertion","label":"absent","subgroups":{"context":"direct"},"text":"Synthetic finding is absent."}
+{"example_id":"assertion_absent_002","task":"assertion","label":"absent","subgroups":{"context":"list"},"text":"No synthetic finding alpha."}
+{"example_id":"assertion_absent_003","task":"assertion","label":"absent","subgroups":{"context":"narrative"},"text":"The synthetic subject denies finding alpha."}
+{"example_id":"assertion_possible_001","task":"assertion","label":"possible","subgroups":{"context":"direct"},"text":"Synthetic finding may be present."}
+{"example_id":"assertion_possible_002","task":"assertion","label":"possible","subgroups":{"context":"list"},"text":"Possible synthetic finding alpha."}
+{"example_id":"assertion_possible_003","task":"assertion","label":"possible","subgroups":{"context":"narrative"},"text":"Finding alpha remains a synthetic possibility."}
+{"example_id":"assertion_family_001","task":"assertion","label":"family","subgroups":{"context":"direct"},"text":"Synthetic family member has finding alpha."}
+{"example_id":"assertion_family_002","task":"assertion","label":"family","subgroups":{"context":"list"},"text":"Synthetic family history: finding alpha."}
+{"example_id":"assertion_family_003","task":"assertion","label":"family","subgroups":{"context":"narrative"},"text":"Finding alpha applies to a synthetic relative."}
+{"example_id":"temporality_current_001","task":"temporality","label":"current","subgroups":{"context":"direct"},"text":"Synthetic finding is active now."}
+{"example_id":"temporality_current_002","task":"temporality","label":"current","subgroups":{"context":"list"},"text":"Current synthetic problem: finding beta."}
+{"example_id":"temporality_current_003","task":"temporality","label":"current","subgroups":{"context":"narrative"},"text":"Finding beta continues in the synthetic record."}
+{"example_id":"temporality_historical_001","task":"temporality","label":"historical","subgroups":{"context":"direct"},"text":"Synthetic finding occurred previously."}
+{"example_id":"temporality_historical_002","task":"temporality","label":"historical","subgroups":{"context":"list"},"text":"Past synthetic problem: finding beta."}
+{"example_id":"temporality_historical_003","task":"temporality","label":"historical","subgroups":{"context":"narrative"},"text":"Finding beta resolved in the synthetic past."}
+{"example_id":"temporality_planned_001","task":"temporality","label":"planned","subgroups":{"context":"direct"},"text":"Synthetic procedure is planned."}
+{"example_id":"temporality_planned_002","task":"temporality","label":"planned","subgroups":{"context":"list"},"text":"Plan: synthetic procedure beta."}
+{"example_id":"temporality_planned_003","task":"temporality","label":"planned","subgroups":{"context":"narrative"},"text":"The synthetic procedure will occur later."}
+{"example_id":"temporality_unknown_001","task":"temporality","label":"unknown","subgroups":{"context":"direct"},"text":"Synthetic timing is not documented."}
+{"example_id":"temporality_unknown_002","task":"temporality","label":"unknown","subgroups":{"context":"list"},"text":"Timing unknown for synthetic finding beta."}
+{"example_id":"temporality_unknown_003","task":"temporality","label":"unknown","subgroups":{"context":"narrative"},"text":"The synthetic record does not establish when beta occurred."}
+{"example_id":"pair_scoring_relation_001","task":"pair_scoring","label":"relation","subgroups":{"pair_type":"finding_medication"},"text":"Synthetic medication gamma treats finding gamma."}
+{"example_id":"pair_scoring_relation_002","task":"pair_scoring","label":"relation","subgroups":{"pair_type":"finding_procedure"},"text":"Synthetic procedure gamma evaluates finding gamma."}
+{"example_id":"pair_scoring_relation_003","task":"pair_scoring","label":"relation","subgroups":{"pair_type":"finding_test"},"text":"Synthetic test gamma supports finding gamma."}
+{"example_id":"pair_scoring_no_relation_001","task":"pair_scoring","label":"no_relation","subgroups":{"pair_type":"finding_medication"},"text":"Synthetic medication delta and finding gamma are unrelated."}
+{"example_id":"pair_scoring_no_relation_002","task":"pair_scoring","label":"no_relation","subgroups":{"pair_type":"finding_procedure"},"text":"Synthetic procedure delta does not concern finding gamma."}
+{"example_id":"pair_scoring_no_relation_003","task":"pair_scoring","label":"no_relation","subgroups":{"pair_type":"finding_test"},"text":"Synthetic test delta is separate from finding gamma."}
+{"example_id":"pair_scoring_adverse_event_001","task":"pair_scoring","label":"adverse_event","subgroups":{"pair_type":"medication_event"},"text":"Synthetic medication gamma caused synthetic event gamma."}
+{"example_id":"pair_scoring_adverse_event_002","task":"pair_scoring","label":"adverse_event","subgroups":{"pair_type":"medication_event"},"text":"Synthetic event gamma followed medication gamma."}
+{"example_id":"pair_scoring_adverse_event_003","task":"pair_scoring","label":"adverse_event","subgroups":{"pair_type":"medication_event"},"text":"Medication gamma is linked to synthetic event gamma."}
+{"example_id":"classification_yes_001","task":"classification","label":"yes","subgroups":{"option_count":"three"},"text":"Synthetic evidence supports option yes."}
+{"example_id":"classification_yes_002","task":"classification","label":"yes","subgroups":{"option_count":"four"},"text":"The bounded synthetic answer is yes."}
+{"example_id":"classification_yes_003","task":"classification","label":"yes","subgroups":{"option_count":"five"},"text":"Synthetic fixed choices resolve to yes."}
+{"example_id":"classification_no_001","task":"classification","label":"no","subgroups":{"option_count":"three"},"text":"Synthetic evidence supports option no."}
+{"example_id":"classification_no_002","task":"classification","label":"no","subgroups":{"option_count":"four"},"text":"The bounded synthetic answer is no."}
+{"example_id":"classification_no_003","task":"classification","label":"no","subgroups":{"option_count":"five"},"text":"Synthetic fixed choices resolve to no."}
+{"example_id":"classification_insufficient_001","task":"classification","label":"insufficient_evidence","subgroups":{"option_count":"three"},"text":"Synthetic evidence is insufficient for either option."}
+{"example_id":"classification_insufficient_002","task":"classification","label":"insufficient_evidence","subgroups":{"option_count":"four"},"text":"The bounded synthetic answer must abstain."}
+{"example_id":"classification_insufficient_003","task":"classification","label":"insufficient_evidence","subgroups":{"option_count":"five"},"text":"Synthetic fixed choices lack enough evidence."}

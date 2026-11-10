@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/clinical/drug-safety-signal.schema.json",
+  "title": "OpenMed descriptive drug-safety signal",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "adapter_version",
+    "advisory",
+    "caveats",
+    "compatibility_policy",
+    "dataset_digest",
+    "dataset_id",
+    "dataset_version",
+    "drug",
+    "duplicate_row_count",
+    "event",
+    "filter",
+    "filter_digest",
+    "license_id",
+    "method_id",
+    "method_version",
+    "policy",
+    "policy_digest",
+    "proportional_reporting_ratio",
+    "reason_codes",
+    "reporting_odds_ratio",
+    "schema_version",
+    "signal_digest",
+    "signal_id",
+    "source_digest",
+    "state",
+    "table"
+  ],
+  "properties": {
+    "adapter_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "advisory": {
+      "const": "This descriptive signal is hypothesis-generating only. It does not establish causality and must not direct diagnosis, treatment, prescribing, or outreach."
+    },
+    "caveats": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/controlled"}
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "dataset_digest": {"$ref": "#/$defs/digest"},
+    "dataset_id": {"$ref": "#/$defs/controlled"},
+    "dataset_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "drug": {"$ref": "#/$defs/drug_term"},
+    "duplicate_row_count": {"type": "integer", "minimum": 0},
+    "event": {"$ref": "#/$defs/event_term"},
+    "filter": {"$ref": "#/$defs/filter"},
+    "filter_digest": {"$ref": "#/$defs/digest"},
+    "license_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "method_id": {"const": "report_level_prr_ror"},
+    "method_version": {"const": "1.0.0"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "policy_digest": {"$ref": "#/$defs/digest"},
+    "proportional_reporting_ratio": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/controlled"}
+    },
+    "reporting_odds_ratio": {"type": ["number", "null"], "minimum": 0},
+    "schema_version": {"const": "1.0.0"},
+    "signal_digest": {"$ref": "#/$defs/digest"},
+    "signal_id": {"$ref": "#/$defs/opaque_id"},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "state": {"enum": ["computed", "insufficient_data", "suppressed"]},
+    "table": {"$ref": "#/$defs/table"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "computed"}}},
+      "then": {
+        "properties": {
+          "proportional_reporting_ratio": {"type": "number"},
+          "reason_codes": {"maxItems": 0},
+          "reporting_odds_ratio": {"type": "number"}
+        }
+      },
+      "else": {
+        "properties": {
+          "proportional_reporting_ratio": {"type": "null"},
+          "reason_codes": {"minItems": 1},
+          "reporting_odds_ratio": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "drug_term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "kind", "system"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "kind": {"const": "drug"},
+        "system": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "event_term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "kind", "system"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "kind": {"const": "event"},
+        "system": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_exposure_end_day",
+        "minimum_exposure_start_day",
+        "seriousness",
+        "version"
+      ],
+      "properties": {
+        "maximum_exposure_end_day": {
+          "type": ["integer", "null"],
+          "minimum": -36500,
+          "maximum": 36500
+        },
+        "minimum_exposure_start_day": {
+          "type": ["integer", "null"],
+          "minimum": -36500,
+          "maximum": 36500
+        },
+        "seriousness": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["non_serious", "serious", "unknown"]}
+        },
+        "version": {"const": "1.0.0"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_cell_count",
+        "minimum_pair_count",
+        "policy_id",
+        "version"
+      ],
+      "properties": {
+        "minimum_cell_count": {"type": "integer", "minimum": 1},
+        "minimum_pair_count": {"type": "integer", "minimum": 1},
+        "policy_id": {"$ref": "#/$defs/controlled"},
+        "version": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "drug_event",
+        "drug_other_event",
+        "other_drug_event",
+        "other_drug_other_event"
+      ],
+      "properties": {
+        "drug_event": {"type": "integer", "minimum": 0},
+        "drug_other_event": {"type": "integer", "minimum": 0},
+        "other_drug_event": {"type": "integer", "minimum": 0},
+        "other_drug_other_event": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

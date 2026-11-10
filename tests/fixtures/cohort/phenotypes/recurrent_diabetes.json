@@ -1,0 +1,26 @@
+{
+  "schema_version": "openmed.cohort.phenotype.v1",
+  "id": "recurrent-diabetes",
+  "name": "Recurrent diabetes evidence",
+  "description": "Example occurrence threshold over a public OMOP concept id.",
+  "concept_sets": [
+    {
+      "id": "diabetes",
+      "vocabulary": "OMOP",
+      "concept_ids": [201826],
+      "include_descendants": true
+    }
+  ],
+  "expression": {
+    "operator": "criterion",
+    "criterion": {
+      "id": "two-diabetes-mentions",
+      "concept_set": "diabetes",
+      "occurrence": {"minimum": 2},
+      "assertion": {
+        "negation": ["affirmed"],
+        "temporality": ["recent", "historical"]
+      }
+    }
+  }
+}

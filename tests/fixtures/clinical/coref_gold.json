@@ -1,0 +1,154 @@
+{
+  "documents": [
+    {
+      "doc_id": "doc-coref-1",
+      "text": "Assessment: The patient has diabetes mellitus. Her sugars remain elevated. Continue DM education. Family History: mother with diabetes.",
+      "mentions": [
+        {
+          "text": "diabetes mellitus",
+          "start": 28,
+          "end": 45,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc1-patient-diabetes"
+        },
+        {
+          "text": "sugars",
+          "start": 51,
+          "end": 57,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc1-patient-diabetes"
+        },
+        {
+          "text": "DM",
+          "start": 84,
+          "end": 86,
+          "semantic_type": "condition",
+          "section": "Plan",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc1-patient-diabetes"
+        },
+        {
+          "text": "diabetes",
+          "start": 126,
+          "end": 134,
+          "semantic_type": "condition",
+          "section": "Family History",
+          "temporality": "recent",
+          "experiencer": "family",
+          "gold_entity": "doc1-family-diabetes"
+        }
+      ]
+    },
+    {
+      "doc_id": "doc-coref-2",
+      "text": "Past Medical History: HTN and chronic kidney disease. Assessment: Hypertension is controlled. CKD stage 3 is stable. No pneumonia.",
+      "mentions": [
+        {
+          "text": "HTN",
+          "start": 22,
+          "end": 25,
+          "semantic_type": "condition",
+          "section": "Past Medical History",
+          "temporality": "historical",
+          "experiencer": "patient",
+          "gold_entity": "doc2-hypertension"
+        },
+        {
+          "text": "chronic kidney disease",
+          "start": 30,
+          "end": 52,
+          "semantic_type": "condition",
+          "section": "Past Medical History",
+          "temporality": "historical",
+          "experiencer": "patient",
+          "gold_entity": "doc2-ckd"
+        },
+        {
+          "text": "Hypertension",
+          "start": 66,
+          "end": 78,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc2-hypertension"
+        },
+        {
+          "text": "CKD",
+          "start": 94,
+          "end": 97,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc2-ckd"
+        },
+        {
+          "text": "pneumonia",
+          "start": 120,
+          "end": 129,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "negation": "negated",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc2-pneumonia"
+        }
+      ]
+    },
+    {
+      "doc_id": "doc-coref-3",
+      "text": "HPI: The patient denies chest pain. Prior myocardial infarction in 2019. MI is listed in the chart. Father had a heart attack.",
+      "mentions": [
+        {
+          "text": "chest pain",
+          "start": 24,
+          "end": 34,
+          "semantic_type": "condition",
+          "section": "History of Present Illness",
+          "negation": "negated",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc3-chest-pain"
+        },
+        {
+          "text": "myocardial infarction",
+          "start": 42,
+          "end": 63,
+          "semantic_type": "condition",
+          "section": "Past Medical History",
+          "temporality": "historical",
+          "experiencer": "patient",
+          "gold_entity": "doc3-patient-mi"
+        },
+        {
+          "text": "MI",
+          "start": 73,
+          "end": 75,
+          "semantic_type": "condition",
+          "section": "Assessment",
+          "temporality": "recent",
+          "experiencer": "patient",
+          "gold_entity": "doc3-patient-mi"
+        },
+        {
+          "text": "heart attack",
+          "start": 113,
+          "end": 125,
+          "semantic_type": "condition",
+          "section": "Family History",
+          "temporality": "historical",
+          "experiencer": "family",
+          "gold_entity": "doc3-family-mi"
+        }
+      ]
+    }
+  ]
+}

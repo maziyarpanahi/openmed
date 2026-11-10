@@ -1,0 +1,1081 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
+import {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
+export {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
+export type JsonObject = Record<string, unknown>;
+
+export type FetchLike = (
+  input: string,
+  init?: RequestInit,
+) => Promise<Response>;
+
+export type KeepAliveValue = number | string;
+
+export type AggregationStrategy = "simple" | "first" | "average" | "max";
+
+export type PIILanguage =
+  | "am"
+  | "as"
+  | "bn"
+  | "en"
+  | "fr"
+  | "de"
+  | "it"
+  | "es"
+  | "nl"
+  | "hi"
+  | "gu"
+  | "kn"
+  | "ml"
+  | "mr"
+  | "ne"
+  | "or"
+  | "pl"
+  | "pa"
+  | "si"
+  | "ta"
+  | "te"
+  | "ur"
+  | "pt"
+  | "ar"
+  | "fa"
+  | "he"
+  | "ja"
+  | "tr"
+  | "id"
+  | "th"
+  | "ko"
+  | "ro"
+  | "ru"
+  | "sv"
+  | "da"
+  | "no"
+  | "sw"
+  | "zu"
+  | "xh"
+  | "zh"
+  | "uk"
+  | "ur"
+  | "cs"
+  | "el"
+  | "vi";
+
+export type DeidentificationMethod =
+  | "mask"
+  | "remove"
+  | "replace"
+  | "hash"
+  | "shift_dates";
+
+export interface OpenMedClientOptions {
+  baseUrl: string;
+  fetch?: FetchLike;
+}
+
+export interface AnalyzeRequest {
+  text: string;
+  model_name?: string;
+  confidence_threshold?: number | null;
+  group_entities?: boolean;
+  aggregation_strategy?: AggregationStrategy | null;
+  sentence_detection?: boolean;
+  sentence_language?: string;
+  sentence_clean?: boolean;
+  use_fast_tokenizer?: boolean;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface GroundRequest {
+  entities?: JsonObject[] | null;
+  offline?: boolean;
+  source_language?: string;
+  systems?: string[];
+  text?: string | null;
+  top_k?: number;
+}
+
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
+}
+
+export interface PIIExtractRequest {
+  text: string;
+  model_name?: string;
+  confidence_threshold?: number;
+  use_smart_merging?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface PIIExtractStreamRequest extends PIIExtractRequest {
+  chunk_size?: number;
+  window_chars?: number;
+  tokenizer_context_chars?: number;
+  max_entity_chars?: number;
+  include_text?: boolean;
+}
+
+export interface PIIDeidentifyRequest {
+  text: string;
+  method?: DeidentificationMethod;
+  model_name?: string;
+  confidence_threshold?: number;
+  keep_year?: boolean;
+  shift_dates?: boolean | null;
+  date_shift_days?: number | null;
+  keep_mapping?: boolean;
+  policy?: string | null;
+  use_smart_merging?: boolean;
+  use_safety_sweep?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface PIIDeidentifyStreamRequest extends PIIDeidentifyRequest {
+  chunk_size?: number;
+}
+
+export interface PrivacyGatewayRequest {
+  text: string;
+  model_name?: string;
+  confidence_threshold?: number;
+  detector_confidence_floor?: number;
+  policy?: string;
+  disallowed_entity_categories?: string[];
+  use_smart_merging?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export type DecisionMode =
+  | "fixed_choice"
+  | "boolean_choice"
+  | "ordered_preference"
+  | "scalar_score"
+  | "multi_label"
+  | "question_set";
+
+export type DecisionState =
+  | "success"
+  | "abstained"
+  | "partial"
+  | "unknown"
+  | "conflict"
+  | "unsupported"
+  | "denied"
+  | "failure";
+
+export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
+
+export interface DecisionQuestion {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  options?: string[];
+  option_descriptions?: (string | null)[];
+  instructions?: string | null;
+  levels?: string[];
+}
+
+/** Protected inline media. Never log the encoded payload. */
+export interface DecisionMedia {
+  media_type: "image/png" | "image/jpeg" | "video/mp4" | "audio/wav";
+  byte_size: number;
+  sha256: string;
+  data: string;
+}
+
+export interface SystemOneRequest {
+  state: string | Record<string, unknown> | unknown[];
+  questions: Record<string, Record<string, unknown>>;
+}
+
+export interface FixedOptionDecisionRequest {
+  mode: DecisionMode;
+  input_text: string;
+  options?: string[];
+  namespace?: string;
+  purpose?: string;
+  calibration_id?: string;
+  timeout_ms?: number;
+  schema_version?: "1.0.0" | "1.1.0";
+  compatibility_policy?: "same_major";
+  question_id?: string;
+  instructions?: string | null;
+  option_descriptions?: (string | null)[];
+  levels?: string[];
+  questions?: DecisionQuestion[];
+  media?: DecisionMedia[];
+  input_format?: "text" | "json";
+  max_input_chars?: number;
+}
+
+export interface DecisionOptionScore {
+  index: number;
+  option: string;
+  score: number;
+}
+
+export interface DecisionLevelScore {
+  index: number;
+  level: string;
+  score: number;
+}
+
+export interface DecisionQuestionResult {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores: DecisionLevelScore[];
+  expected_level: number | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+}
+
+export interface FixedOptionDecisionResult {
+  mode: DecisionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores?: DecisionLevelScore[];
+  expected_level?: number | null;
+  questions?: DecisionQuestionResult[];
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  schema_version: "1.0.0" | "1.1.0";
+  compatibility_policy: "same_major";
+  extensions: JsonObject;
+}
+
+export interface DeidentifyJobDocument {
+  text: string;
+  id?: string | null;
+}
+
+export interface JobWebhookRequest {
+  url: string;
+  secret: string;
+  max_attempts?: number;
+  backoff_seconds?: number;
+}
+
+export interface DeidentifyJobRequest {
+  documents: DeidentifyJobDocument[];
+  webhook?: JobWebhookRequest | null;
+  method?: DeidentificationMethod;
+  model_name?: string;
+  confidence_threshold?: number;
+  keep_year?: boolean;
+  shift_dates?: boolean | null;
+  date_shift_days?: number | null;
+  keep_mapping?: boolean;
+  policy?: string | null;
+  use_smart_merging?: boolean;
+  use_safety_sweep?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface ModelUnloadRequest {
+  model_name?: string | null;
+  all?: boolean;
+}
+
+export interface SMARTBackendIngestionRequest {
+  fhir_base_url: string;
+  token_url: string;
+  client_id: string;
+  private_key_pem: string;
+  output_dir: string;
+  checkpoint_path?: string | null;
+  key_id?: string | null;
+  scope?: string;
+  export_path?: string;
+  max_inflight_downloads?: number;
+  poll_interval_seconds?: number;
+  request_timeout_seconds?: number;
+  policy?: string | null;
+  method?: DeidentificationMethod;
+  model_name?: string;
+  confidence_threshold?: number;
+  use_smart_merging?: boolean;
+  use_safety_sweep?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface OMOPLoadRequest {
+  records_jsonl: string;
+  vocabulary_version?: string | null;
+  validate_constraints?: boolean;
+  completeness_floor?: number | null;
+  required_fields?: string[];
+}
+
+export interface OMOPRejectedSpan {
+  reason: string;
+  source_note_hash: string;
+  start: number | null;
+  end: number | null;
+  domain: string | null;
+}
+
+export interface OMOPConstraintViolations {
+  count: number;
+  by_reason: Record<string, number>;
+}
+
+export interface OMOPLoadResponse {
+  row_counts: Record<string, number>;
+  rejection_counts: Record<string, number>;
+  rejected_spans: OMOPRejectedSpan[];
+  source_note_hashes: string[];
+  constraint_violations?: OMOPConstraintViolations;
+}
+
+export interface ConceptAncestorRequest {
+  ancestor_concept_id: number;
+  descendant_concept_id: number;
+}
+
+export interface CohortResolveRequest {
+  phenotype: JsonObject;
+  records_jsonl: string;
+  concept_ancestors?: ConceptAncestorRequest[];
+  completeness_floor?: number | null;
+  required_fields?: string[];
+}
+
+export interface ProfileRequest {
+  records_jsonl: string;
+  completeness_floor?: number;
+  required_fields?: string[];
+  athena_index?: JsonObject | null;
+}
+
+export type ProfileResponse = JsonObject;
+
+export interface CohortEvidencePointer {
+  criterion_id: string;
+  concept_set_id: string;
+  concept_id: number;
+  vocabulary: string;
+  domain_table: string;
+  event_id: number;
+  note_id: number;
+  note_nlp_id: number;
+  source_note_hash: string;
+  start: number;
+  end: number;
+}
+
+export interface CohortResolveResponse {
+  schema_version: string;
+  advisory: string;
+  patient_ids: number[];
+  evidence: Array<{
+    patient_id: number;
+    matches: CohortEvidencePointer[];
+  }>;
+  provenance: JsonObject;
+}
+
+export interface EntityPrediction {
+  text: string;
+  label: string;
+  confidence: number;
+  start: number | null;
+  end: number | null;
+  metadata: JsonObject;
+}
+
+export interface PredictionResult {
+  text: string;
+  entities: EntityPrediction[];
+  model_name: string;
+  timestamp: string;
+  processing_time: number | null;
+  metadata?: JsonObject | null;
+}
+
+export interface PIIDeidentifiedEntity extends EntityPrediction {
+  entity_type: string;
+  redacted_text: string | null;
+  canonical_label: string | null;
+  sources: string[];
+  evidence: JsonObject;
+  threshold: number | null;
+  action: string | null;
+  surrogate: string | null;
+  reversible_id?: string;
+}
+
+export interface PIIDeidentifyResponse {
+  original_text: string;
+  deidentified_text: string;
+  pii_entities: PIIDeidentifiedEntity[];
+  method: string;
+  timestamp: string;
+  num_entities_redacted: number;
+  metadata: JsonObject;
+  audit_report: JsonObject | null;
+  mapping?: Record<string, string>;
+}
+
+export interface PrivacyGatewayResponse {
+  request_id: string;
+  redacted_prompt: string;
+  external_response: string;
+  reidentified_text: string;
+  entity_counts: Record<string, number>;
+  placeholder_hashes: string[];
+  audit: {
+    record_hash: string;
+    verified: boolean;
+  };
+}
+
+export type AnalyzeResponse = PredictionResult;
+
+export type GroundResponse = JsonObject;
+
+export type PIIExtractResponse = PredictionResult;
+
+export type PIIExtractStreamResponse = string;
+
+export type PIIDeidentifyStreamResponse = string;
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+  profile: string;
+  [key: string]: unknown;
+}
+
+export interface ProbeResponse {
+  status: string;
+  service: string;
+  [key: string]: unknown;
+}
+
+export type ReadyzResponse = ProbeResponse;
+
+export interface LoadedModelStats {
+  models?: number;
+  tokenizers?: number;
+  pipelines?: number;
+  active_requests?: number;
+  keep_alive_seconds_remaining?: number | null;
+  resident?: boolean;
+  [key: string]: unknown;
+}
+
+export interface LoadedModelsResponse {
+  default_keep_alive_seconds?: number;
+  max_resident_models?: number | null;
+  warm_models?: string[];
+  models?: Record<string, LoadedModelStats>;
+  [key: string]: unknown;
+}
+
+export interface ModelUnloadResponse {
+  unloaded?: boolean;
+  model_name?: string;
+  released?: Record<string, number>;
+  active_requests?: number;
+  [key: string]: unknown;
+}
+
+export interface SMARTBackendFileResult {
+  index: number;
+  resource_type: string;
+  output_file: string;
+  expected_count?: number | null;
+  lines_processed: number;
+  resources_deidentified: number;
+  blank_lines: number;
+  error_count: number;
+  output_sha256: string;
+  resumed: boolean;
+}
+
+export interface SMARTBackendIngestionSummary {
+  job_id: string;
+  status: string;
+  files_total: number;
+  files_completed: number;
+  resources_deidentified: number;
+  lines_processed: number;
+  error_count: number;
+  output_sha256: string;
+  max_inflight_downloads_observed: number;
+  started_at: number;
+  finished_at: number;
+  files: SMARTBackendFileResult[];
+}
+
+export interface SMARTBackendJobStatus {
+  job_id: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  summary: SMARTBackendIngestionSummary | null;
+  error: string | null;
+}
+
+export type JobStatus = "queued" | "running" | "done" | "failed";
+
+export interface JobDocumentMetadata {
+  id: string;
+  length: number;
+  text_hash: string;
+}
+
+export interface JobSpan {
+  document_id: string;
+  start: number;
+  end: number;
+  label: string;
+  text_hash: string;
+  confidence: number | null;
+}
+
+export interface JobWebhookMetadata {
+  configured: boolean;
+  url_hash: string;
+  max_attempts: number;
+  backoff_seconds: number;
+}
+
+export interface JobWebhookDelivery {
+  success: boolean;
+  attempts: number;
+  status_code: number | null;
+  error: string | null;
+}
+
+export interface JobErrorSummary {
+  type: string;
+  message: string;
+}
+
+export interface JobResponse {
+  id: string;
+  status: JobStatus;
+  progress_percent: number;
+  document_count: number;
+  processed_count: number;
+  failed_count: number;
+  label_histogram: Record<string, number>;
+  spans: JobSpan[];
+  documents: JobDocumentMetadata[];
+  error: JobErrorSummary | null;
+  webhook: JobWebhookMetadata | null;
+  webhook_delivery: JobWebhookDelivery | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string;
+  status_url?: string;
+}
+
+export interface OpenMedValidationDetail {
+  field: string;
+  message: string;
+  type: string;
+}
+
+export interface OpenMedErrorEnvelope {
+  error: {
+    code: string;
+    message: string;
+    details: unknown;
+  };
+}
+
+export class OpenMedApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly details: unknown;
+  readonly envelope: OpenMedErrorEnvelope;
+  readonly error: OpenMedErrorEnvelope["error"];
+
+  constructor(status: number, envelope: OpenMedErrorEnvelope) {
+    super(envelope.error.message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "OpenMedApiError";
+    this.status = status;
+    this.code = envelope.error.code;
+    this.details = envelope.error.details;
+    this.envelope = envelope;
+    this.error = envelope.error;
+  }
+}
+
+export class OpenMedClient {
+  private readonly baseUrl: string;
+  private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
+
+  constructor(options: OpenMedClientOptions) {
+    const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
+    if (!baseUrl) {
+      throw new Error("OpenMedClient requires a non-empty baseUrl.");
+    }
+
+    const fetchImpl = options.fetch ?? globalThis.fetch;
+    if (typeof fetchImpl !== "function") {
+      throw new Error("OpenMedClient requires a fetch implementation.");
+    }
+
+    this.baseUrl = baseUrl;
+    this.fetchImpl =
+      options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
+  }
+
+  async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+    return this.post("/analyze", request);
+  }
+
+  async ground(request: GroundRequest): Promise<GroundResponse> {
+    return this.post("/ground", request);
+  }
+
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
+  }
+
+  async brief(request: BriefRequest): Promise<BriefResponse> {
+    return this.post("/brief", request);
+  }
+
+  async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
+    return this.post("/pii/extract", request);
+  }
+
+  async extractPiiStream(
+    request: PIIExtractStreamRequest,
+  ): Promise<PIIExtractStreamResponse> {
+    return this.postNDJSON("/pii/extract/stream", request);
+  }
+
+  async deidentify(
+    request: PIIDeidentifyRequest,
+  ): Promise<PIIDeidentifyResponse> {
+    return this.post("/pii/deidentify", request);
+  }
+
+  async deidentifyStream(
+    request: PIIDeidentifyStreamRequest,
+  ): Promise<PIIDeidentifyStreamResponse> {
+    return this.postNDJSON("/pii/deidentify/stream", request);
+  }
+
+  async privacyGateway(
+    request: PrivacyGatewayRequest,
+  ): Promise<PrivacyGatewayResponse> {
+    return this.post("/privacy-gateway/complete", request);
+  }
+
+  async systemOne(request: SystemOneRequest): Promise<{decision_id: string; model: string; answers: Record<string, unknown>}> {
+    return this.post("/v1/systemone", request);
+  }
+
+  async decision(
+    request: FixedOptionDecisionRequest,
+  ): Promise<FixedOptionDecisionResult> {
+    return this.post("/v1/decisions", request);
+  }
+
+  async health(): Promise<HealthResponse> {
+    return this.get("/health");
+  }
+
+  async livez(): Promise<ProbeResponse> {
+    return this.get("/livez");
+  }
+
+  async readyz(): Promise<ReadyzResponse> {
+    return this.get("/readyz");
+  }
+
+  async loadedModels(): Promise<LoadedModelsResponse> {
+    return this.get("/models/loaded");
+  }
+
+  async journeyResources(
+    query: JourneyResourceQuery,
+  ): Promise<JourneyResourcePage> {
+    const path = "/v1/journey/resources";
+    const parameters = new URLSearchParams({
+      resource_type: query.resource_type,
+      namespace: query.namespace ?? "default",
+      purpose: query.purpose ?? "care_review",
+      role: query.role ?? "clinician",
+      consent_state: query.consent_state ?? "active",
+      export_policy: query.export_policy ?? "metadata_only",
+      first: String(query.first ?? 20),
+    });
+    if (query.attributes?.length) {
+      parameters.set("attributes", query.attributes.join(","));
+    }
+    if (query.after) {
+      parameters.set("after", query.after);
+    }
+    if (query.fields?.length) {
+      parameters.set("fields", query.fields.join(","));
+    }
+    return this.get(`${path}?${parameters.toString()}`);
+  }
+
+  async journeyWorkflow(
+    workflow: JourneyWorkflowName,
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyResources({
+      ...query,
+      resource_type: JOURNEY_WORKFLOW_RESOURCE_TYPES[workflow],
+    });
+  }
+
+  async journey(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("journey", query);
+  }
+
+  async cohort(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("cohort", query);
+  }
+
+  async dataset(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("dataset", query);
+  }
+
+  async registry(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("registry", query);
+  }
+
+  async measure(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("measure", query);
+  }
+
+  async trialReview(
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("trial_review", query);
+  }
+
+  async unloadModels(
+    request: ModelUnloadRequest,
+  ): Promise<ModelUnloadResponse> {
+    return this.post("/models/unload", request);
+  }
+
+  async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
+    return this.post("/omop/load", request);
+  }
+
+  async profile(request: ProfileRequest): Promise<ProfileResponse> {
+    return this.post("/profile", request);
+  }
+
+  async resolveCohort(
+    request: CohortResolveRequest,
+  ): Promise<CohortResolveResponse> {
+    return this.post("/cohort/resolve", request);
+  }
+
+  async startSmartBackendIngestion(
+    request: SMARTBackendIngestionRequest,
+  ): Promise<SMARTBackendJobStatus> {
+    return this.post("/fhir/smart-backend/ingestions", request);
+  }
+
+  async smartBackendIngestionStatus(
+    jobId: string,
+  ): Promise<SMARTBackendJobStatus> {
+    return this.get(
+      smartBackendJobPath("/fhir/smart-backend/ingestions/{job_id}", jobId),
+    );
+  }
+
+  async smartBackendIngestionSummary(
+    jobId: string,
+  ): Promise<SMARTBackendIngestionSummary> {
+    return this.get(
+      smartBackendJobPath(
+        "/fhir/smart-backend/ingestions/{job_id}/summary",
+        jobId,
+      ),
+    );
+  }
+
+  async createJob(request: DeidentifyJobRequest): Promise<JobResponse> {
+    return this.post("/jobs", request);
+  }
+
+  async getJob(jobId: string): Promise<JobResponse> {
+    const pathTemplate = "/jobs/{job_id}";
+    return this.get(pathTemplate.replace("{job_id}", encodeURIComponent(jobId)));
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: "GET" });
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  private async postNDJSON(path: string, body: unknown): Promise<string> {
+    const response = await this.fetchImpl(this.url(path), {
+      method: "POST",
+      headers: {
+        accept: "application/x-ndjson",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new OpenMedApiError(
+        response.status,
+        toOpenMedErrorEnvelope(parsePayloadText(text), response.status),
+      );
+    }
+    if (!isNDJSONContentType(response.headers.get("content-type"))) {
+      throw new Error(`OpenMed stream ${path} returned a non-NDJSON response.`);
+    }
+    return text;
+  }
+
+  private async request<T>(path: string, init: RequestInit): Promise<T> {
+    const response = await this.fetchImpl(this.url(path), {
+      ...init,
+      headers: {
+        accept: "application/json",
+        ...headersToRecord(init.headers),
+      },
+    });
+    const payload = await readPayload(response);
+
+    if (!response.ok) {
+      throw new OpenMedApiError(
+        response.status,
+        toOpenMedErrorEnvelope(payload, response.status),
+      );
+    }
+
+    return payload as T;
+  }
+
+  private url(path: string): string {
+    return `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  }
+}
+
+function headersToRecord(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    const result: Record<string, string> = {};
+    headers.forEach((value, key) => {
+      result[key] = value;
+    });
+    return result;
+  }
+
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers);
+  }
+
+  return { ...(headers as Record<string, string>) };
+}
+
+function smartBackendJobPath(template: string, jobId: string): string {
+  return template.replace("{job_id}", encodeURIComponent(jobId));
+}
+
+async function readPayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+  return parsePayloadText(text);
+}
+
+function parsePayloadText(text: string): unknown {
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function isNDJSONContentType(contentType: string | null): boolean {
+  if (!contentType) {
+    return false;
+  }
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    mediaType === "application/x-ndjson" ||
+    mediaType === "application/ndjson"
+  );
+}
+
+function toOpenMedErrorEnvelope(
+  payload: unknown,
+  status: number,
+): OpenMedErrorEnvelope {
+  if (isRecord(payload) && isRecord(payload.error)) {
+    const code = payload.error.code;
+    const message = payload.error.message;
+
+    if (typeof code === "string" && typeof message === "string") {
+      return {
+        error: {
+          code,
+          message,
+          details:
+            "details" in payload.error ? payload.error.details : null,
+        },
+      };
+    }
+  }
+
+  return {
+    error: {
+      code: "http_error",
+      message: `Request failed with status ${status}`,
+      details: payload ?? null,
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export interface BriefRequest {
+  text: string;
+  model?: "mlx" | "extractive" | "maple" | "maple-preview";
+  profile?: "bhc" | "brief_hospital_course" | "clinical_handoff" | "discharge_summary" | "problem_oriented";
+  review_id?: string | null;
+}
+
+/** Protected application response; do not log summary text. */
+export interface BriefResponse {
+  schema_version: 1;
+  status: "needs_review" | "refused";
+  summary: string;
+  refusal_reason: string | null;
+  summary_digest: string;
+  summary_characters: number;
+  digest: string;
+  stages: string[];
+  citations: Record<string, unknown>[];
+  verdicts: Record<string, unknown>[];
+  metrics: Record<string, unknown>;
+  envelope: Record<string, unknown>;
+  review_packet: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  profile_digest: string | null;
+  backend_id: string | null;
+}

@@ -1,0 +1,296 @@
+# Golden De-Identification Fixtures
+
+This directory contains synthetic-only golden fixtures for the eval suites. The
+fixtures contain no DUA data, no production data, and no real PHI.
+
+Each JSON file has a top-level `fixtures` list; JSONL files use one fixture
+object per line. Each fixture uses this shape:
+
+```json
+{
+  "id": "golden-multilingual-en-ssn",
+  "language": "en",
+  "text": "Synthetic chart lists SSN 123-45-6789 for test patient.",
+  "gold_spans": [
+    {
+      "start": 26,
+      "end": 37,
+      "label": "SSN",
+      "text": "123-45-6789"
+    }
+  ],
+  "metadata": {
+    "category": "multilingual",
+    "synthetic": true,
+    "expected_output": {
+      "method": "mask",
+      "text": "Synthetic chart lists SSN [SSN] for test patient."
+    }
+  }
+}
+```
+
+Required fields:
+
+- `text`: source fixture text.
+- `gold_spans`: canonical-label spans with character offsets into `text`.
+  Synthetic hard-negative fixtures use an empty list because the confusable
+  tokens are non-PHI and must remain unredacted.
+- `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
+  `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
+  `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
+  Specialized suites may register an additional category while keeping the
+  same row shape.
+  The standalone `indic_name_variants` fixture uses its dedicated consistency
+  suite schema because it groups multiple spellings under one synthetic
+  identity rather than representing detector spans.
+- `metadata.expected_output`: expected post-action output, including `method`
+  and resulting `text`.
+- `metadata.synthetic`: must be `true`.
+- `metadata.hard_negative_candidates`: required only for `hard_negatives`;
+  each candidate records canonical label, offsets, synthetic marker, and
+  aggregate difficulty scores.
+- `metadata.medical_device_disclaimer`: required only for `critical_findings`;
+  it must note that the synthetic set is an assistive safety probe, not
+  clinical ground truth.
+
+The package loader validates unique fixture IDs, offsets, canonical labels,
+synthetic markers, expected output, hard-negative candidate metadata,
+critical-finding disclaimers, and language coverage. The JSON and JSONL files
+are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
+expected output remains available through each fixture's metadata.
+
+## Per-Language Date and ID Traps
+
+`fixtures/per_language_date_traps.json` and `fixtures/per_language_id_traps.json`
+hold one date trap and one ID trap per covered pack: the twelve baseline
+languages from #285 (`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`,
+`pt`, `te`, `tr`) plus the low-resource packs `am`, `bn`, `fa`, `ha`, `he`,
+`ig`, `rw`, `sw`, `ta`, `th`, `ur`, `xh`, `yo` and `zu`.
+
+Each date trap chains three day-first dates written with slash, dot and
+native-digit (or dash) separators. The low-resource traps also place dates in
+harder contexts, such as bidi isolates, Hebrew prefixes, Ethiopic punctuation
+and unspaced Thai text, and record one date-like hard negative (a blood
+pressure reading, dose schedule or follow-up interval) that must stay unmasked.
+
+Each ID trap pairs a valid identifier with one hard negative that fails the
+pack's validator. Packs with a checksum (Ethiopian Fayda, Iranian, Israeli and
+Thai national IDs, South African ID, Aadhaar) record `checksum_status: valid`
+gold and a `fails_checksum` hard negative. Packs whose validator checks only
+structure (Kenya ID, Tanzania NIDA, Nigeria NIN, Rwanda ID, Bangladesh NID)
+mark gold `validation: format_only` and use a `fails_format` hard negative.
+Hard negatives are never gold spans and stay unchanged in the expected output.
+
+A future detection gap that a trap exposes stays in the gold and may be marked
+on the span or hard negative instead of being skipped. The following is a schema
+example; the committed traps currently have no unresolved gap markers:
+
+```json
+"known_gap": {
+  "detectors": ["language_patterns", "safety_sweep"],
+  "issue": 3866,
+  "reason": "non_gregorian_month_name_date_not_detected"
+}
+```
+
+`detectors` names the deterministic engines that currently get the value wrong:
+`language_patterns` is `find_semantic_units` over the pack's patterns and
+`safety_sweep` is the sweep run without model spans. `issue` names the tracked
+fix, when one exists. The tests assert that every marked gap still fails, so
+the change that closes it must also remove the marker. Everything else must
+match exactly: both engines recover each gold span at its recorded offsets and
+label, and the sweep alone reproduces the expected mask output.
+
+`tests/unit/eval/test_golden_fixtures.py` lists the registered packs that have
+no traps yet. The coverage test fails when a trapped pack loses its traps and
+when a newly registered pack is neither trapped nor listed.
+
+## Multi-annotator annotation imports
+
+The golden loader also provides local-only adapters for multi-annotator
+extraction exports. Use load_brat_multi_annotator_document with a BRAT text file
+and a mapping of annotator ids to their standoff files. Use
+load_label_studio_multi_annotator_export for a Label Studio JSON export; both
+current annotations and legacy completions task keys are accepted.
+
+Each adapter returns a MultiAnnotatorGoldDocument. Its spans are normalized
+EvalSpan values carrying annotator_id, document_id, source_format, and
+source_annotation_id metadata. Its directed AnnotationRelation values preserve
+the source and target annotation ids, relation id, endpoint spans, and
+source-format metadata. Offsets must match the supplied source text, and
+relations with missing endpoints raise ValueError before a document is
+returned. The adapters do not compute agreement, adjudicate disagreements, or
+emit evidence reports.
+
+Committed examples for these tests live under
+tests/fixtures/eval/golden_annotations. They are explicitly synthetic-only and
+contain no real clinical notes or restricted corpora.
+
+## Temporal TLINK Fixtures
+
+`fixtures/temporal_tlinks.jsonl` contains hand-authored, synthetic-only
+discharge-summary-style notes for temporal graph evaluation. Each row declares
+EVENT/TIMEX offsets, normalized time values, strict TLINK gold, its reduced
+graph reference, scored decoder candidates, and contradiction-trap candidate
+ids. DCT anchoring, EVENT-TIMEX links, EVENT-EVENT ordering, transitive
+reduction, and weaker reverse-order traps are all represented.
+
+Load and validate this specialized schema with
+`openmed.eval.suites.temporal_tlinks.load_temporal_tlink_fixtures`. The loader
+requires `metadata.synthetic=true` and `metadata.contains_real_phi=false`,
+checks all offsets and references, and rejects inconsistent reduced gold. The
+suite reports aggregate relation counts and PHI-safe reason codes only; no note
+text or graph node ids appear in its gate artifacts.
+
+## Temporal Consistency Fixtures
+
+`fixtures/temporal_consistency.jsonl` uses the same `GoldenFixture` row shape as
+the de-identification gold while adding `metadata.consistency_group`,
+`metadata.variant`, and `metadata.expected_output.axes`. Its synthetic rows
+cover current, historical, hypothetical, and uncertain variants of one finding,
+including a negation variant and a trap that forbids scoring a hypothetical
+finding as recent. The dedicated
+`openmed.eval.suites.temporal_consistency.load_temporal_consistency_fixtures`
+loader validates the shared golden fields, target offsets, axis values, and
+group membership; the fixture is intentionally excluded from the generic
+de-identification fixture set.
+
+## India Clinical De-Identification Corpus
+
+`fixtures/i18n/india_clinical_manifest.json` and
+`fixtures/i18n/india_clinical.jsonl` form a specialized synthetic-only corpus
+for India clinical de-identification evaluation. The three code-mixed notes
+cover Latin-script Hinglish, Devanagari, and Tamil; generated ABHA, Aadhaar,
+PAN, Indian phone, address, and PIN values; AYUSH terminology; and one
+fictional person represented by script-specific aliases across documents.
+
+Load the corpus with
+`openmed.eval.datasets.load_india_clinical_phi_corpus`. Its dedicated loader
+validates the safety manifest, exact span offsets, canonical labels, generated
+identifier shapes, address/PIN pairing, script coverage, and cross-document
+identity metadata. The JSONL file is intentionally excluded from the generic
+golden loader because its richer corpus schema is validated separately.
+
+The `india_clinical_phi_leakage` and `india_surrogate_consistency` suites are
+registered in `openmed.eval.suites.DEFAULT_SUITES`, so `load_suite_fixtures`
+and `suite_metadata` discover them without caller-specific wiring. The
+consistency suite verifies that every declared alias of one synthetic person
+resolves to a single surrogate identity across documents and across Latin,
+Devanagari, and Tamil; that each rendered surrogate stays in its source script;
+that no alias surface survives replacement; and that an identifier repeated
+across documents keeps one surrogate that still satisfies its own shape or
+checksum validator.
+
+`openmed.eval.run_india_clinical_suite_report` combines DPDP per-label policy
+coverage, the residual zero-leak verdict, and the surrogate-consistency verdict
+into one report of counts, canonical labels, offsets, and HMAC hashes; no raw
+identifier or alias surface appears in it.
+
+The consistency gate covers the default name-matching path. Two behaviours are
+recorded in every result as un-gated `known_divergences` entries, so a passing
+verdict is never read as broader assurance than it is:
+
+1. The opt-in `transliteration_aware_name_matching` path does not collapse
+   these aliases into one identity, because the Devanagari inherent vowel and
+   the Tamil surname rendering fold to different Latin keys.
+2. The vault normalizes the key language for personal names to `india` but
+   keeps the document language for structured identifiers, so the same Aadhaar
+   in the Hindi and Tamil notes yields two surrogates. Names link across
+   languages; identifiers do not. The gated linkage check is therefore scoped
+   to `(value, language)`, the granularity the vault actually guarantees.
+
+The corpus contains no real PHI, production data, restricted corpus material,
+or DUA data. It is an assist-only, non-decisional evaluation fixture, not
+clinical ground truth, and must not be used to make patient-care decisions.
+
+## Joint Entity and Relation Fixtures
+
+`fixtures/joint_entity_relation.jsonl` contains synthetic encoder states,
+token-to-character offsets, entity spans, typed relations, and explicit
+boundary, over-generation, and distractor traps for the backend-neutral joint
+span-pair head. Every row sets `metadata.synthetic=true` and
+`metadata.contains_real_phi=false`.
+
+The specialized fixture is intentionally excluded from the generic
+de-identification loader. Its states are small deterministic vectors used to
+measure combined entity-and-relation micro-F1, endpoint-confidence suppression,
+span-graph schema integrity, and false-positive relations on negative pairs.
+
+## Relation Gold Fixtures
+
+`fixtures/relation_gold.jsonl` contains synthetic-only relation extraction
+fixtures for `openmed.eval.suites.relations`. Each JSONL row uses schema
+version `1` and this shape:
+
+```json
+{
+  "id": "relation-sentence-treatment",
+  "schema_version": 1,
+  "language": "en",
+  "text": "Aspirin treats fever in note one.",
+  "entities": [
+    {
+      "id": "e-medication",
+      "start": 0,
+      "end": 7,
+      "label": "MEDICATION",
+      "text": "Aspirin"
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel-aspirin-fever",
+      "type": "treats",
+      "head": "e-medication",
+      "tail": "e-fever",
+      "scope": "sentence"
+    }
+  ],
+  "traps": [
+    {
+      "id": "trap-assertion-negation",
+      "kind": "assertion",
+      "relation_ids": ["rel-pneumonia-denied"],
+      "zero_tolerance": true
+    }
+  ],
+  "metadata": {
+    "synthetic": true,
+    "category": "relation_gold",
+    "schema_version": 1
+  }
+}
+```
+
+Required fields:
+
+- `entities`: canonical-label spans with unique ids and character offsets into
+  `text`. Relation arguments reference these ids.
+- `relations`: directed relation records with unique ids, `type`, `head`,
+  `tail`, and a `scope` of `sentence` or `document`.
+- `traps`: optional zero-tolerance assertion or temporal traps that reference
+  relation ids and are carried into the score payload for release-gate wiring.
+- `metadata.synthetic`: must be `true`; relation gold must not contain DUA,
+  production, or real patient data.
+
+The relation loader validates schema version, unique fixture/entity/relation
+ids, argument references, offsets, canonical entity labels, relation scopes,
+and trap metadata.
+
+`fixtures/i18n/relations_zh.jsonl` and
+`fixtures/i18n/relations_indic.jsonl` extend that schema with synthetic Chinese
+and Hindi relation examples. They reuse canonical NER labels, carry registry
+version `1`, and are scored separately through the relation metric's
+`by_language`/`per_language` payloads. No CMeIE or other external corpus text is
+bundled.
+
+## Radiology Entity-and-Relation Fixtures
+
+`fixtures/radiology_entity_relations.jsonl` contains hand-authored synthetic
+radiology reports with `OBSERVATION` and `ANATOMY` spans, present/absent/uncertain
+finding labels, and `LOCATED_AT`, `MODIFY`, and `SUGGESTIVE_OF` relations. The
+dedicated loader rejects any committed row that is not explicitly marked
+synthetic or lacks the required not-a-medical-device disclaimer. These rows are
+offline evaluation probes for clinician-reviewed systems, not clinical ground
+truth, patient-care guidance, RadGraph/MIMIC-CXR content, or other DUA data.

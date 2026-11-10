@@ -1,0 +1,304 @@
+# Examples & Copy/Paste Recipes
+
+This page curates the most useful samples already in the repository so you can
+jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
+examples use synthetic data and are safe to run during release review.
+
+If you already know the outcome you want, use the
+**[Task-oriented Cookbook](./cookbook.md)** to jump directly from that goal to
+the matching script, notebook, or REST recipe.
+
+## Curated Notebook Gallery
+
+For a guided, end-to-end walkthrough from quickstart redaction to FHIR export and offline evaluation, visit the **[Example Notebooks Gallery](./examples/notebook-gallery.md)**. All gallery notebooks run 100% offline on synthetic fixtures and are verified by continuous integration.
+
+For an install-free demonstration, open the
+**[browser privacy playground](/docs/demo/privacy-playground/)**. Its bundled rules
+redact bounded synthetic text in the current tab and expose aggregate counts
+plus the active browser network boundary.
+
+## Notebooks (`examples/notebooks/`)
+
+| Notebook | Highlights |
+| --- | --- |
+| [`01_quickstart_redaction.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/01_quickstart_redaction.ipynb) | Quickstart redaction: masking, reversible replacement, and cryptographic hashing. |
+| [`02_batch_dataset.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/02_batch_dataset.ipynb) | Batch dataset de-identification with `BatchProcessor` and directory processing. |
+| [`03_fhir_export.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/03_fhir_export.ipynb) | Redacting clinical text, extracting medical entities, and assembling a deterministic FHIR R4 Bundle. |
+| [`04_eval_walkthrough.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/04_eval_walkthrough.ipynb) | Offline evaluation across bundled synthetic multilingual golden fixtures. |
+| `getting_started.ipynb` | Mirrors the Quick Start guide with step-by-step installation, registry exploration, and a first call to `analyze_text`. |
+| `Sentence_Detection_Batching.ipynb` | Demonstrates pySBD-based segmentation, batching, and how to align predictions back to the original paragraphs. |
+| `ZeroShot_NER_Tour.ipynb` | Walks through GLiNER indexing, domain defaults, inference API usage, and the adapter that converts spans into BIO/BILOU schemes. |
+| [`Chinese_Hindi_Deid_Tour.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb) | Runs fabricated Simplified Chinese, Hindi, and Hinglish notes through deterministic de-identification, structured entity review, UTF-8 output files, and zero-leak assertions. |
+
+Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pip install ".[hf]"` baseline.
+
+### Rich highlight widget in notebooks
+
+`openmed.processing.show()` renders a displaCy-style colored highlight of every
+detected span — with a per-label legend and confidence scores — directly in an
+active Jupyter/IPython shell. Typed results render themselves automatically
+(they expose `_repr_html_`), so evaluating an `AnalyzeResult` or
+`DeidentificationResult` as the last line of a cell shows the widget:
+
+```python
+from openmed import deidentify
+
+# Synthetic text only. The result renders inline in Jupyter via _repr_html_.
+deidentify("Patient John Doe called from 555-123-4567.", method="mask")
+```
+
+For explicit control, call `show()` (renders inline and returns `None` in an
+active IPython shell, or returns the HTML string elsewhere) or
+`render_spans_html()` (always returns the HTML string):
+
+```python
+from openmed.processing import render_spans_html, show
+
+text = "Contact Jane Roe at jane.roe@example.com."
+spans = [
+    {"start": 8, "end": 16, "label": "PERSON", "score": 0.98},
+    {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
+]
+
+show(text, spans)  # active IPython: displays and returns None; otherwise HTML
+html = render_spans_html(text, spans)  # raw HTML is also available
+```
+
+`show()` accepts an `AnalyzeResult`, a `DeidentificationResult`, or an explicit
+`(text, spans)` pair, where spans may be dicts, `EntityPrediction`/`PIIEntity`
+objects, or `OpenMedSpan` records. IPython is an optional, lazily imported
+dependency: rendering the HTML string never requires it, and merely having
+IPython installed does not trigger display outside an active shell. Overlapping
+annotations are placed on deterministic layers so every input span remains a
+complete highlight. The source text is always HTML-escaped, so brackets and
+ampersands in clinical notes cannot break the view. Recipe 5 in
+`Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
+
+The widget intentionally renders its source text, and notebook outputs can be
+stored inside the `.ipynb` file. Use only authorized or synthetic text, clear
+outputs before sharing a notebook, and pass `show_confidence=False` when scores
+should not be persisted. Automatic rich representations suppress confidence
+scores by default. The generated fragment is script-free and makes no network
+requests; semantic `pre`/`mark` elements preserve readable text when a strict
+content-security policy blocks the optional inline styling.
+
+## Scripts & tools
+
+| Path | What it does |
+| --- | --- |
+| [`examples/deid_chinese_clinical_note.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_chinese_clinical_note.py) | De-identifies a fabricated Simplified Chinese clinical note, prints structured entities, asserts that every embedded synthetic identifier was removed, and saves the redacted note. |
+| [`examples/deid_hindi_hinglish_note.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_hindi_hinglish_note.py) | Runs the same fail-closed flow on fabricated Hindi and code-mixed Hinglish notes with the shipped compact Hindi checkpoint. |
+| `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
+| `examples/pii_batch_processing.py` | Runs batch PII extraction and de-identification with `BatchProcessor(operation=...)`. |
+| `examples/sms_deid_helpdesk_logs.py` | Redacts RapidPro-style JSON or generic CSV helpdesk exports with the `short_text` preset, contact pseudonymization, timestamp coarsening, and bounded batches. |
+| `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
+| `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
+| `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
+| `examples/structured_release_risk.py` | Runs a synthetic structured release through advisory quasi-identifier discovery, explicit patient-level k/l/t policy review, anonymization, materialized-output validation, and aggregate expert-review evidence. |
+| `examples/structured_population_risk.py` | Measures exact offline k-map, exact-linkage risk, and delta-presence for a fabricated sample against a fabricated reference population using patient-level joint QI profiles. |
+| `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
+| `examples/chw_form_deid.py` | De-identifies local ODK, CommCare, or KoBoToolbox JSON/CSV form exports and emits a value-free field-policy manifest. |
+| `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
+| `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
+| `examples/warehouse-remote-function/` | Deploys a BigQuery remote-function batch handler with no-raw-PHI logging, a container entrypoint, and registration DDL. |
+| `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
+| `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
+| `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
+| `examples/v3_golden_journey.py` | Executes the offline five-source v3 conformance Journey and prints a compact receipt derived from real library contracts. |
+| `examples/federated_round_walkthrough.py` | Walks through an offline synthetic metadata-only round: update validation, schema grouping, metric suppression, and JSON or Markdown status; see the [federated round walkthrough](./training/federated-round-lifecycle.md#offline-round-walkthrough). |
+| [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) | Runs section-scoped SDOH extraction, explicitly anchored temporal normalization and a timeline on embedded synthetic data; prints controlled labels, offsets and states only. |
+| [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) | Runs explicit development NLI and a synthetic calibration double, then binds diagnosis/treatment and procedure/indication candidates to evidence and human-review queue bands. |
+| `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
+| `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
+| `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
+
+Run the v1.6 and v1.7 release examples:
+
+```bash
+uv run python examples/v16_policy_audit_release_gates.py
+uv run python examples/v17_multimodal_browser_interop.py
+```
+
+Run the structured release-risk and reference-population examples with
+synthetic data:
+
+```bash
+uv run python examples/structured_release_risk.py
+uv run python examples/structured_population_risk.py
+```
+
+See [Structured Release Risk and Expert-Review Evidence](./reidentification-risk.md)
+for the corresponding CLI and Python workflows, exact longitudinal-profile
+semantics, signed expert handoff, artifact handling, and limitations.
+
+Run the Chinese and Hindi/Hinglish de-identification walkthroughs:
+
+```bash
+uv run python examples/deid_chinese_clinical_note.py
+uv run python examples/deid_hindi_hinglish_note.py
+```
+
+Both examples use fabricated notes, print JSON-serializable entity details,
+write UTF-8 redacted text, and stop with an assertion failure if any known
+synthetic identifier remains. The companion
+[`Chinese_Hindi_Deid_Tour.ipynb`](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/Chinese_Hindi_Deid_Tour.ipynb)
+provides a rendered no-download tour of both flows.
+
+For the full coverage map, see
+[OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
+
+## Synthetic SDOH and timeline contracts
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_sdoh_timeline
+```
+
+The script accepts no external note input or arguments and uses no model,
+download or wall clock. It detects sections, excludes the assessment's SDOH cue,
+normalizes fixed temporal spans against an explicit synthetic reference date,
+and passes `TimeExpr` records with authored synthetic event/assertion tags to
+`build_timeline()`. An ambiguous date remains unanchored and a hypothetical
+event stays in its own lane.
+
+Printed JSONL projects only controlled labels, half-open source offsets and
+states. It omits source surfaces, SDOH values/scores, normalized dates and
+reference dates. General SDOH/temporal serializers can contain protected values;
+this projection is specific to the demonstration. The example requires human
+review and demonstrates contracts, not clinical validation or automatic event
+extraction. See the [SDOH evidence contract](clinical/sdoh-evidence.md),
+[temporal normalization](clinical/temporal-normalization.md) and
+[timeline buckets](clinical/timeline-buckets.md).
+
+All records require closed labels and exact built-in scalar types. The complete
+output is validated and serialized before printing, so malformed metadata causes
+a fixed failure without partial JSONL or provider diagnostic values.
+
+## Synthetic NLI and guarded relations
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_nli_relations
+```
+
+The script accepts no external input or arguments and loads no model. It calls
+`verify()` with the explicit **development-only heuristic** and an injected
+**synthetic calibration double** using authored probabilities and the public
+selective NLI gate. Neither is a qualified clinical model or empirical
+calibration result. The standalone `review_required` flag denotes abstention;
+a false flag or heuristic neutral label does not authorize clinical action.
+The fixed verdict metadata is checked and every record is serialized before
+printing, so malformed scalar values or serialization drift produce one fixed
+error without source values or partial JSONL output.
+
+It generates diagnosis/treatment and procedure/indication candidates from
+explicit local cue language, binds endpoint/linking evidence with an uncertain
+assertion state, and assigns human-review queue bands. Candidate rule scores
+are not calibrated clinical probabilities. Review bands do not infer clinical
+urgency, treatment appropriateness or confirmation.
+
+Printed JSONL contains only controlled labels, scores, flags, offsets, evidence
+digests and priorities. It omits premise, claim, note and raw document identifiers.
+Hashes support correlation, not anonymization or authorization. The fixed
+demonstration requires human review and makes no clinical-validation claim.
+See [NLI verification](clinical/nli-verification.md),
+[relation evidence binding](clinical/relation-evidence-binding.md) and
+[review priority](clinical/relation-review-priority.md).
+
+
+## v1.7 multimodal, interop, and browser recipes
+
+The v1.7 examples are grouped around the main new public surfaces:
+
+- Multimodal text contracts: `ExtractedDocument`, `SourceSpan`, OCR result
+  projection, Markdown/AsciiDoc extraction, and metadata-safe source mapping.
+- Structured health data: FHIR `$de-identify`, FHIR Bulk NDJSON, deterministic
+  FHIR Bundles, `OperationOutcome`, HL7 v2 field redaction, and CSV/TSV
+  PHI-column manifests.
+- Browser deployment: ONNX/WebGPU artifacts packaged for Transformers.js, with
+  the expected `transformersjs/` file layout checked before publishing.
+
+## v1.8 runtime, deployment, and warehouse recipes
+
+The v1.8 examples and guides focus on cross-platform runtime and production
+deployment paths:
+
+- Android/Kotlin and Swift-Kotlin parity: [Android Span Parity](./android-parity.md), [Android ONNX Export](./export-onnx-android.md), and [Swift-Kotlin API Parity](./swift-kotlin-parity.md).
+- Browser and mobile JavaScript: [Browser Network-Egress Proof](./demo/browser-egress.md), [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
+- Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
+- Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
+
+The datasets walkthrough uses only bundled, synthetic, redistributable fixtures. The records do not require a data-use agreement (DUA), and the example does not download data. To try another fixture, update `FIXTURE_ID` in the script to an ID from `openmed/eval/golden/fixtures/multilingual.json`. Model downloads remain disabled by default; set `OPENMED_EXAMPLE_ALLOW_DOWNLOAD=1` only when you explicitly want to load a model.
+
+```bash
+python examples/datasets_walkthrough.py
+```
+
+## Apple Silicon & Swift recipes
+
+The OpenMed `3.2.0` candidate retains release-critical Apple, Android, browser,
+and service entry points. Native feature coverage differs by platform:
+
+- [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
+- [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps
+- [Android ONNX Export](./export-onnx-android.md) and [Android Span Parity](./android-parity.md) for the Kotlin OpenMedKit surface
+- [Transformers.js Export](./export-transformersjs.md) for browser token classification through ONNX/WebGPU artifacts
+
+Python MLX quick check:
+
+```bash
+uv pip install ".[mlx]"
+uv run python -c "from openmed.core.backends import get_backend; print(type(get_backend()).__name__)"
+```
+
+Swift MLX quick check:
+
+```swift
+import OpenMedKit
+
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
+)
+
+let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
+let entities = try openmed.extractPII("Patient John Doe, DOB 1990-05-15")
+```
+
+Browser bundle smoke check:
+
+```bash
+uv run python -m openmed.onnx.transformersjs \
+  --onnx-export-dir dist/example-onnx
+```
+
+## Copy-ready snippets
+
+You can find these directly in the docs:
+
+- [Analyze Text Helper](./analyze-text.md) — dict/JSON/HTML/CSV outputs with metadata.
+- [REST Service (MVP)](./rest-service.md) — FastAPI endpoints and Docker runbook.
+- [LangChain Redaction Wrapper](./integrations-langchain.md) — RAG context redaction before model calls.
+- [MLX Backend](./mlx-backend.md) — Apple Silicon Python runtime and artifact packaging.
+- [OpenMedKit (Swift)](./swift-openmedkit.md) — native app runtime for macOS, iOS, and iPadOS.
+- [Transformers.js Export](./export-transformersjs.md) — browser/WebGPU packaging for token classification.
+- [ModelLoader & Pipelines](./model-loader.md) — caching, token helpers, multi-model setups.
+- [Advanced NER & Output Formatting](./output-formatting.md) — span filtering and conversions.
+- [Zero-shot Toolkit](./zero-shot-ner.md) — indexing, label defaults, and inference APIs.
+
+## Sample automation pipeline
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+uv pip install ".[hf,docs]"
+python examples/pii_model_comparison.py > artifacts/result.txt
+uv run python examples/v16_policy_audit_release_gates.py > artifacts/v16.json
+uv run python examples/v17_multimodal_browser_interop.py > artifacts/v17.json
+uv run mkdocs build --strict
+python scripts/smoke_gliner.py --limit 1 --threshold 0.5
+```
+
+Use this pattern in CI to guarantee models, docs, and zero-shot flows stay healthy before publishing.

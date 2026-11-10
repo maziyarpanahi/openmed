@@ -1,0 +1,21 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/conflict-set.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "attributes": {"type": "object"},
+    "conflict_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "conflict_type": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "derivation_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "detected_by": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "evidence_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "fact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "minItems": 2, "type": "array", "uniqueItems": true},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "status": {"enum": ["open", "resolved", "superseded"]},
+    "subject_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+  },
+  "required": ["attributes", "conflict_id", "conflict_type", "derivation_hash", "detected_by", "evidence_ids", "fact_ids", "schema_version", "status", "subject_id"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyConflictSet",
+  "type": "object"
+}

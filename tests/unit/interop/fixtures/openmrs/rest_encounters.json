@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "uuid": "22222222-2222-4222-8222-222222222222",
+      "display": "Outpatient encounter",
+      "patient": {
+        "uuid": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      },
+      "encounterType": {
+        "uuid": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "display": "Adult return visit"
+      },
+      "encounterDatetime": "2026-07-01T09:30:00.000+0300",
+      "encounterNotes": [
+        "Amina Wanjiku confirmed phone +254 712 345 678.",
+        "Kenya ID 12345678 verified locally."
+      ],
+      "obs": [
+        {
+          "uuid": "11111111-1111-4111-8111-111111111111",
+          "comment": "Discussed with Amina Wanjiku."
+        }
+      ]
+    }
+  ],
+  "links": []
+}

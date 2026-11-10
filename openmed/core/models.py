@@ -1,0 +1,1061 @@
+"""Model loading functionality for OpenMed."""
+
+import gc
+import logging
+from collections.abc import Mapping
+from importlib.util import find_spec
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+from .capabilities import raise_missing_backend
+
+logger = logging.getLogger(__name__)
+
+HF_AVAILABLE = find_spec("transformers") is not None
+AutoTokenizer: Any = None
+AutoModelForTokenClassification: Any = None
+AutoConfig: Any = None
+pipeline: Any = None
+
+
+def _require_transformers() -> None:
+    """Raise actionable guidance when Transformers is unavailable."""
+    if not HF_AVAILABLE:
+        raise_missing_backend("hf", feature="HuggingFace Transformers inference")
+
+
+def _ensure_hf_auto_config() -> None:
+    """Import the Transformers configuration factory only when needed."""
+    global AutoConfig
+
+    if AutoConfig is None:
+        _require_transformers()
+        from transformers import AutoConfig as TransformersAutoConfig
+
+        AutoConfig = TransformersAutoConfig
+
+
+def _ensure_hf_auto_model() -> None:
+    """Import the Torch-backed Transformers model factory only when needed."""
+    global AutoModelForTokenClassification
+
+    if AutoModelForTokenClassification is None:
+        _require_transformers()
+        from transformers import (
+            AutoModelForTokenClassification as TransformersAutoModel,
+        )
+
+        AutoModelForTokenClassification = TransformersAutoModel
+
+
+def _ensure_hf_auto_tokenizer() -> None:
+    """Import the Transformers tokenizer factory only when needed."""
+    global AutoTokenizer
+
+    if AutoTokenizer is None:
+        _require_transformers()
+        from transformers import AutoTokenizer as TransformersAutoTokenizer
+
+        AutoTokenizer = TransformersAutoTokenizer
+
+
+def _ensure_hf_pipeline() -> None:
+    """Import the Transformers pipeline factory only for the HF backend."""
+    global pipeline
+
+    if not HF_AVAILABLE:
+        _require_transformers()
+    if pipeline is None:
+        from transformers import pipeline as transformers_pipeline
+
+        pipeline = transformers_pipeline
+
+
+if TYPE_CHECKING:
+    from .config import OpenMedConfig
+
+from ..processing.tokenizer_cache import get_tokenizer_with_loader
+from .config import get_config
+from .errors import MissingExtraError, ModelLoadError
+from .model_integrity import prepare_model_reference
+from .model_registry import (
+    ModelInfo as RegistryModelInfo,
+)
+from .model_registry import (
+    get_all_models,
+    get_model_info,
+    get_model_suggestions,
+    get_models_by_category,
+)
+from .offline import (
+    configure_offline_mode,
+    is_local_only,
+    network_blocked_if_offline,
+)
+
+
+def is_hf_available() -> bool:
+    """Return True when HuggingFace Transformers is importable.
+
+    Mirrors the module-level ``HF_AVAILABLE`` flag so callers can branch on the
+    ``hf`` backend using the same convention as the other optional seams.
+    """
+
+    return bool(HF_AVAILABLE)
+
+
+def ensure_hf_available() -> None:
+    """Raise an actionable error when the ``hf`` extra is not installed."""
+
+    _require_transformers()
+
+
+class ModelLoader:
+    """Handles loading and managing OpenMed models from HuggingFace Hub."""
+
+    def __init__(self, config: Optional["OpenMedConfig"] = None):
+        """Initialize the model loader.
+
+        Args:
+            config: OpenMed configuration. If None, uses global config.
+        """
+        self.config = config or get_config()
+        backend = getattr(self.config, "backend", None)
+        if not HF_AVAILABLE and backend not in {"onnx", "remote"}:
+            raise MissingExtraError(
+                "HuggingFace transformers is required. Install it with "
+                "`pip install openmed[hf]` or `pip install transformers`.",
+                package="transformers",
+                feature="HuggingFace Transformers inference",
+                extra="hf",
+            )
+
+        configure_offline_mode(self.config)
+        self._models: Dict[str, Any] = {}  # Cache for loaded models
+        self._tokenizers: Dict[str, Any] = {}  # Cache for loaded tokenizers
+        self._pipelines: Dict[Tuple[Any, ...], Any] = {}  # Cached pipelines
+
+    def list_available_models(
+        self,
+        include_registry: bool = True,
+        include_remote: bool = True,
+    ) -> List[str]:
+        """List all available TokenClassification models from OpenMed org.
+
+        Args:
+            include_registry: Whether to include models from local registry
+            include_remote: Whether to query Hugging Face Hub for additional models
+
+        Returns:
+            List of model names available for loading.
+        """
+        models = []
+        if is_local_only(self.config):
+            include_remote = False
+
+        if include_registry:
+            registry_models = [info.model_id for info in get_all_models().values()]
+            models.extend(registry_models)
+
+        if include_remote:
+            logger.debug(
+                "include_remote is retained for compatibility; model discovery "
+                "uses the committed manifest snapshot."
+            )
+
+        return sorted(set(models))
+
+    def load_local_sequence_classifier(
+        self,
+        model_name: str,
+        *,
+        revision: str | None = None,
+        runtime: str = "torch",
+    ) -> Dict[str, Any]:
+        """Load a cached sequence classifier without contacting a model hub.
+
+        A repository reference requires an immutable commit revision. Local
+        directory references are useful for predownloaded and test artifacts.
+        The returned objects stay in memory; no input text is logged or cached.
+        """
+
+        import re
+
+        if runtime not in {"torch", "onnx"}:
+            raise ValueError("unsupported local sequence-classifier runtime")
+        local_path = self._as_existing_local_path(model_name)
+        if local_path is None and (
+            not isinstance(revision, str)
+            or re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None
+        ):
+            raise ValueError("local sequence classifier requires a pinned revision")
+
+        with network_blocked_if_offline(self.config, local_only=True):
+            resolved = self._resolve_model_name(model_name)
+            reference = self._prepare_model_reference(
+                model_name,
+                resolved,
+                local_only=True,
+                revision=revision,
+            )
+            directory = Path(reference)
+            if not directory.is_dir():
+                raise ModelLoadError(
+                    "local sequence classifier is not cached",
+                    model_name="local-sequence-classifier",
+                )
+
+            _ensure_hf_auto_config()
+            _ensure_hf_auto_tokenizer()
+            config = AutoConfig.from_pretrained(
+                directory, local_files_only=True, trust_remote_code=False
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                directory, local_files_only=True, trust_remote_code=False
+            )
+            if runtime == "torch":
+                from transformers import AutoModelForSequenceClassification
+
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    directory, local_files_only=True, trust_remote_code=False
+                )
+                model.eval()
+                return {"model": model, "tokenizer": tokenizer, "config": config}
+
+            import onnxruntime as ort
+
+            model_path = directory / "model_int8.onnx"
+            if not model_path.is_file():
+                model_path = directory / "model.onnx"
+            if not model_path.is_file():
+                raise ModelLoadError(
+                    "local ONNX sequence classifier is missing",
+                    model_name="local-sequence-classifier",
+                )
+            session = ort.InferenceSession(
+                str(model_path), providers=["CPUExecutionProvider"]
+            )
+            return {"model": session, "tokenizer": tokenizer, "config": config}
+
+    def load_model(
+        self,
+        model_name: str,
+        force_reload: bool = False,
+        require_integrity: bool = False,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Load a TokenClassification model and tokenizer.
+
+        Missing architecture metadata does not prevent loading; it only limits
+        the advisory model-type check before the auto-model factory is called.
+
+        Args:
+            model_name: Name of the model to load. Can be just the model name
+                       (will prepend org) or full model path.
+            force_reload: Whether to force reload even if cached.
+            require_integrity: Fail when the exact cached artifact integrity
+                proof is absent, skipped, or invalid.
+            **kwargs: Additional arguments to pass to model loading.
+
+        Returns:
+            Dictionary containing 'model', 'tokenizer', and 'config'.
+
+        Raises:
+            ValueError: If model is not found or not a TokenClassification model.
+        """
+        full_model_name = self._resolve_model_name(model_name)
+
+        requested_local_loading: Dict[str, Any] | None = None
+        pretrained_reference: str | None = None
+        if require_integrity:
+            requested_local_loading = self._local_loading_kwargs(
+                full_model_name,
+                kwargs,
+            )
+            pretrained_reference = self._prepare_model_reference(
+                model_name,
+                full_model_name,
+                local_only=bool(requested_local_loading.get("local_files_only")),
+                require_integrity=True,
+                revision=kwargs.get("revision"),
+            )
+
+        # A model loaded earlier under the permissive policy must not silently
+        # satisfy a strict bundled-model request. Integrity-required loads are
+        # rebuilt from the just-verified local reference so the in-memory
+        # objects are bound to the verified artifact set.
+        if (
+            not force_reload
+            and not require_integrity
+            and full_model_name in self._models
+        ):
+            logger.info("Using cached model: %s", full_model_name)
+            return {
+                "model": self._models[full_model_name],
+                "tokenizer": self._tokenizers[full_model_name],
+                "config": self._models[full_model_name].config,
+            }
+
+        if requested_local_loading is None:
+            requested_local_loading = self._local_loading_kwargs(
+                full_model_name,
+                kwargs,
+            )
+        if pretrained_reference is None:
+            pretrained_reference = self._prepare_model_reference(
+                model_name,
+                full_model_name,
+                local_only=bool(requested_local_loading.get("local_files_only")),
+                revision=kwargs.get("revision"),
+            )
+
+        try:
+            logger.info("Loading model: %s", full_model_name)
+
+            auth_kwargs = self._hub_auth_kwargs()
+            local_loading_kwargs = self._local_loading_kwargs(
+                pretrained_reference,
+                kwargs,
+            )
+            load_kwargs = dict(kwargs)
+            load_kwargs.pop("local_files_only", None)
+            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
+            device_preference = load_kwargs.pop("device", None)
+            attention_preference = load_kwargs.pop("attn_implementation", None)
+            resolved_device = self._resolve_torch_device(device_preference)
+            attn_implementation = self._resolve_attn_implementation(
+                attention_preference
+            )
+            quantization_config = self._build_load_quantization_config(
+                load_kwargs,
+                device=resolved_device,
+            )
+
+            # Load config first to verify it's a token classification model
+            _ensure_hf_auto_config()
+            config = AutoConfig.from_pretrained(
+                pretrained_reference,
+                cache_dir=self.config.cache_dir,
+                **pretrained_kwargs,
+            )
+
+            # Verify model type
+            if (
+                not hasattr(config, "num_labels")
+                or config.problem_type != "token_classification"
+            ):
+                # Architecture metadata is optional and only informs a warning;
+                # the auto-model factory remains responsible for loading support.
+                architectures = getattr(config, "architectures", None) or ()
+                if not any(
+                    isinstance(architecture, str)
+                    and any(
+                        marker in architecture.lower()
+                        for marker in ("tokenclassification", "ner", "pos")
+                    )
+                    for architecture in architectures
+                ):
+                    logger.warning(
+                        "Model %s may not be a TokenClassification model",
+                        full_model_name,
+                    )
+
+            # Load tokenizer
+            _ensure_hf_auto_tokenizer()
+            tokenizer = get_tokenizer_with_loader(
+                pretrained_reference,
+                AutoTokenizer.from_pretrained,
+                refresh_cache=force_reload or require_integrity,
+                cache_dir=self.config.cache_dir,
+                **pretrained_kwargs,
+            )
+
+            # Note: medical tokenization (if enabled) is applied at the output remapping layer,
+            # not by modifying the model tokenizer/vocabulary.
+
+            # Load model
+            model_kwargs = {**load_kwargs, **pretrained_kwargs}
+            if attn_implementation is not None:
+                model_kwargs["attn_implementation"] = attn_implementation
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            model_uses_quantization = (
+                model_kwargs.get("quantization_config") is not None
+            )
+            _ensure_hf_auto_model()
+            model = AutoModelForTokenClassification.from_pretrained(
+                pretrained_reference,
+                cache_dir=self.config.cache_dir,
+                **model_kwargs,
+            )
+            if not model_uses_quantization and hasattr(model, "to"):
+                model.to(resolved_device)
+
+            # Cache the loaded model and tokenizer
+            self._models[full_model_name] = model
+            self._tokenizers[full_model_name] = tokenizer
+
+            logger.info("Successfully loaded model: %s", full_model_name)
+
+            return {
+                "model": model,
+                "tokenizer": tokenizer,
+                "config": config,
+            }
+
+        except Exception as exc:
+            logger.error(
+                "Failed to load model %s: error_type=%s",
+                full_model_name,
+                type(exc).__name__,
+            )
+            raise ModelLoadError(
+                f"Could not load model {full_model_name}. Verify the model ID or "
+                "local path, ensure required files are available, and retry.",
+                model_name=full_model_name,
+                details={"error_type": type(exc).__name__},
+            ) from exc
+
+    def create_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        use_fast_tokenizer: bool = True,
+        **kwargs,
+    ):
+        """Create an inference pipeline for the configured backend."""
+        from openmed.ner.indexing import (
+            SPAN_MODEL_FAMILIES,
+            resolve_model_record,
+        )
+
+        family = kwargs.pop("family", None)
+        record = resolve_model_record(
+            self._resolve_model_name(model_name), family=family
+        )
+        if record is not None and record.family in SPAN_MODEL_FAMILIES:
+            from openmed.ner.infer import SpanPipeline
+
+            if task != "token-classification":
+                raise ValueError("Native span models support token-classification only")
+            if getattr(self.config, "backend", None) not in {None, "hf"}:
+                raise ValueError("Native span models require the local default backend")
+            return SpanPipeline(record, self.config, **kwargs)
+
+        from openmed.core.backends import HuggingFaceBackend, get_backend
+
+        backend = get_backend(getattr(self.config, "backend", None), config=self.config)
+        if isinstance(backend, HuggingFaceBackend):
+            return self._create_hf_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+
+        full_model_name = self._resolve_model_name(model_name)
+        cache_key = (
+            "backend",
+            type(backend).__name__,
+            full_model_name,
+            task,
+            aggregation_strategy,
+            use_fast_tokenizer,
+            self._freeze_cache_value(kwargs),
+        )
+        if cache_key in self._pipelines:
+            logger.info("Using cached pipeline for %s", full_model_name)
+            return self._pipelines[cache_key]
+
+        try:
+            created_pipeline = backend.create_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+            self._pipelines[cache_key] = created_pipeline
+            return created_pipeline
+        except Exception:
+            if getattr(self.config, "backend", None) is not None:
+                raise
+
+            logger.warning(
+                "Auto-selected backend %s failed for %s; falling back to HuggingFace.",
+                type(backend).__name__,
+                model_name,
+                exc_info=True,
+            )
+            return self._create_hf_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+
+    def _create_hf_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        use_fast_tokenizer: bool = True,
+        **kwargs,
+    ):
+        """Create a HuggingFace pipeline for the model.
+
+        Args:
+            model_name: Name of the model to use.
+            task: Task type (default: "token-classification").
+            aggregation_strategy: How to aggregate tokens (None for raw tokens,
+                                "simple", "first", "average", "max").
+            use_fast_tokenizer: Whether to use fast tokenizer.
+            **kwargs: Additional arguments for pipeline creation.
+
+        Returns:
+            HuggingFace pipeline object.
+        """
+        _ensure_hf_pipeline()
+        # Resolve model name if it's a registry key
+        full_model_name = self._resolve_model_name(model_name)
+        cache_key = self._build_pipeline_cache_key(
+            full_model_name,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            use_fast_tokenizer=use_fast_tokenizer,
+            kwargs=kwargs,
+        )
+
+        if cache_key in self._pipelines:
+            logger.info("Using cached pipeline for %s", full_model_name)
+            return self._pipelines[cache_key]
+
+        requested_local_loading = self._local_loading_kwargs(full_model_name, kwargs)
+        pipeline_model_reference = self._prepare_model_reference(
+            model_name,
+            full_model_name,
+            local_only=bool(requested_local_loading.get("local_files_only")),
+            revision=kwargs.get("revision"),
+        )
+
+        model_kwargs: Dict[str, Any] = {}
+        effective_local_only = bool(requested_local_loading.get("local_files_only"))
+        try:
+            # Create pipeline directly with model name for better caching
+            pipeline_device = kwargs.get("device", self._get_device_id())
+            pipeline_kwargs = {
+                "model": pipeline_model_reference,
+                "aggregation_strategy": aggregation_strategy,
+                "device": pipeline_device,
+                "use_fast": use_fast_tokenizer,
+            }
+            pipeline_kwargs.update(self._hub_auth_kwargs())
+            local_loading_kwargs = self._local_loading_kwargs(
+                pipeline_model_reference,
+                kwargs,
+            )
+            prepared_reference_local_only = bool(
+                local_loading_kwargs.get("local_files_only")
+            )
+            pipeline_load_kwargs = dict(kwargs)
+            model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
+            # The local snapshot and socket guard enforce offline loading.
+            # Transformers 5 supplies local_files_only to AutoConfig itself;
+            # forwarding it through model_kwargs passes the keyword twice.
+            pipeline_load_kwargs.pop("local_files_only", None)
+            model_kwargs.update(local_loading_kwargs)
+            model_kwargs.pop("local_files_only", None)
+            cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
+            if cache_dir is None and prepared_reference_local_only:
+                cache_dir = getattr(self.config, "cache_dir", None)
+            if cache_dir is not None:
+                model_kwargs.setdefault("cache_dir", cache_dir)
+            if "quantization_config" in pipeline_load_kwargs:
+                model_kwargs.setdefault(
+                    "quantization_config",
+                    pipeline_load_kwargs.pop("quantization_config"),
+                )
+            quantization_config = self._build_load_quantization_config(
+                pipeline_load_kwargs,
+                device=self._resolve_torch_device(kwargs.get("device")),
+                existing_quantization_config=model_kwargs.get("quantization_config"),
+            )
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            if model_kwargs:
+                pipeline_load_kwargs["model_kwargs"] = model_kwargs
+            pipeline_kwargs.update(pipeline_load_kwargs)
+            self._apply_attention_pipeline_kwargs(pipeline_kwargs)
+
+            effective_local_only = bool(
+                requested_local_loading.get("local_files_only")
+                or prepared_reference_local_only
+                or model_kwargs.get("local_files_only")
+            )
+            with network_blocked_if_offline(
+                self.config,
+                local_only=effective_local_only,
+            ):
+                ner_pipeline = pipeline(task, **pipeline_kwargs)
+            self._pipelines[cache_key] = ner_pipeline
+
+            logger.info("Created pipeline for %s", full_model_name)
+            return ner_pipeline
+
+        except Exception as e:
+            logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
+            # Fall back to loading model components manually
+            fallback_load_kwargs = (
+                {"local_files_only": True} if effective_local_only else {}
+            )
+            with network_blocked_if_offline(
+                self.config,
+                local_only=bool(fallback_load_kwargs.get("local_files_only")),
+            ):
+                model_data = self.load_model(model_name, **fallback_load_kwargs)
+
+                fallback_kwargs = dict(kwargs)
+                fallback_kwargs.pop("device", None)
+                fallback_kwargs.pop("local_files_only", None)
+                fallback_kwargs.pop("cache_dir", None)
+                fallback_kwargs.pop("model_kwargs", None)
+                if aggregation_strategy is not None:
+                    fallback_kwargs["aggregation_strategy"] = aggregation_strategy
+
+                ner_pipeline = pipeline(
+                    task,
+                    model=model_data["model"],
+                    tokenizer=model_data["tokenizer"],
+                    device=kwargs.get("device", self._get_device_id()),
+                    **fallback_kwargs,
+                )
+            self._pipelines[cache_key] = ner_pipeline
+            return ner_pipeline
+
+    def resolve_model_name(self, model_name: str) -> str:
+        """Resolve a registry alias, local path, or full model id."""
+        return self._resolve_model_name(model_name)
+
+    def loaded_models(self) -> Dict[str, Dict[str, int]]:
+        """Return cache counts grouped by resolved model name."""
+        model_names = set(self._models) | set(self._tokenizers)
+        model_names.update(key[0] for key in self._pipelines if key)
+
+        loaded = {}
+        for model_name in sorted(model_names):
+            loaded[model_name] = {
+                "models": int(model_name in self._models),
+                "tokenizers": int(model_name in self._tokenizers),
+                "pipelines": sum(
+                    1 for key in self._pipelines if key and key[0] == model_name
+                ),
+            }
+        return loaded
+
+    def unload_model(self, model_name: str) -> Dict[str, Any]:
+        """Release cached model, tokenizer, and pipelines for one model."""
+        full_model_name = self._resolve_model_name(model_name)
+        pipeline_keys = [
+            key for key in self._pipelines if key and key[0] == full_model_name
+        ]
+
+        for key in pipeline_keys:
+            self._pipelines.pop(key, None)
+
+        removed_models = int(self._models.pop(full_model_name, None) is not None)
+        removed_tokenizers = int(
+            self._tokenizers.pop(full_model_name, None) is not None
+        )
+        released = {
+            "model_name": full_model_name,
+            "models": removed_models,
+            "tokenizers": removed_tokenizers,
+            "pipelines": len(pipeline_keys),
+        }
+        if any(released[name] for name in ("models", "tokenizers", "pipelines")):
+            self._release_cached_memory()
+        return released
+
+    def unload_all_models(self) -> Dict[str, Any]:
+        """Release all cached models, tokenizers, and pipelines."""
+        released = {
+            "models": len(self._models),
+            "tokenizers": len(self._tokenizers),
+            "pipelines": len(self._pipelines),
+        }
+        self._models.clear()
+        self._tokenizers.clear()
+        self._pipelines.clear()
+        if any(released.values()):
+            self._release_cached_memory()
+        return released
+
+    def get_max_sequence_length(
+        self,
+        model_name: str,
+        *,
+        tokenizer: Optional[Any] = None,
+    ) -> Optional[int]:
+        """Infer the maximum supported sequence length for a model/tokenizer."""
+        from ..processing.tokenization import infer_tokenizer_max_length
+
+        if tokenizer is not None:
+            inferred = infer_tokenizer_max_length(tokenizer)
+            if inferred is not None:
+                return inferred
+
+        if getattr(self.config, "backend", None) == "onnx" or not HF_AVAILABLE:
+            return None
+
+        full_model_name = self._resolve_model_name(model_name)
+        auth_kwargs = self._hub_auth_kwargs()
+        local_loading_kwargs = self._local_loading_kwargs(full_model_name)
+        pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
+        if tokenizer is None:
+            try:
+                _ensure_hf_auto_tokenizer()
+                tokenizer = get_tokenizer_with_loader(
+                    full_model_name,
+                    AutoTokenizer.from_pretrained,
+                    cache_dir=self.config.cache_dir,
+                    use_fast=True,
+                    **pretrained_kwargs,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Failed to load tokenizer for %s when inferring max length: %s",
+                    full_model_name,
+                    exc,
+                )
+                tokenizer = None
+
+        if tokenizer is not None:
+            inferred = infer_tokenizer_max_length(tokenizer)
+            if inferred is not None:
+                return inferred
+
+        try:
+            _ensure_hf_auto_config()
+            config = AutoConfig.from_pretrained(
+                full_model_name,
+                cache_dir=self.config.cache_dir,
+                **pretrained_kwargs,
+            )
+            for attr in ("max_position_embeddings", "n_positions", "seq_length"):
+                value = getattr(config, attr, None)
+                if isinstance(value, int) and 0 < value < 1_000_000:
+                    return value
+        except Exception as exc:
+            logger.debug(
+                "Failed to load config for %s when inferring max length: %s",
+                full_model_name,
+                exc,
+            )
+
+        return None
+
+    def _resolve_model_name(self, model_name: str) -> str:
+        """Resolve model name from registry key or return full model name."""
+        local_path = self._as_existing_local_path(model_name)
+        if local_path is not None:
+            return str(local_path)
+
+        # Check if it's a registry key
+        registry_info = get_model_info(model_name)
+        if registry_info:
+            return registry_info.model_id
+
+        # Check if it needs org prefix
+        if "/" not in model_name:
+            return f"{self.config.default_org}/{model_name}"
+
+        return model_name
+
+    def _get_device_id(self) -> Union[int, str]:
+        """Get device ID for pipeline."""
+        resolved_device = self._resolve_torch_device()
+        if resolved_device == "cpu":
+            return -1
+        if resolved_device == "cuda":
+            return 0
+        return resolved_device
+
+    def _resolve_torch_device(self, prefer: Optional[str] = None) -> str:
+        """Resolve and prepare the torch device for this loader."""
+        from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+        device_preference = prefer if prefer is not None else self.config.device
+        resolved_device = resolve_torch_device(device_preference)
+        if resolved_device.startswith("mps"):
+            apply_mps_tuning()
+        return resolved_device
+
+    def _resolve_attn_implementation(
+        self, prefer: Optional[str] = None
+    ) -> Optional[str]:
+        """Resolve a safe Transformers attention backend for PyTorch loading."""
+        from openmed.torch.attention import select_attn_implementation
+
+        attention_preference = (
+            prefer
+            if prefer is not None
+            else getattr(self.config, "torch_attention_backend", "auto")
+        )
+        return select_attn_implementation(attention_preference, log=logger)
+
+    def _apply_attention_pipeline_kwargs(self, pipeline_kwargs: Dict[str, Any]) -> None:
+        """Thread attention backend selection into direct pipeline model loading."""
+        attention_preference = pipeline_kwargs.pop("attn_implementation", None)
+        model_kwargs = dict(pipeline_kwargs.pop("model_kwargs", {}) or {})
+        attention_preference = model_kwargs.pop(
+            "attn_implementation",
+            attention_preference,
+        )
+        attn_implementation = self._resolve_attn_implementation(attention_preference)
+        if attn_implementation is not None:
+            model_kwargs["attn_implementation"] = attn_implementation
+        if model_kwargs:
+            pipeline_kwargs["model_kwargs"] = model_kwargs
+
+    def get_registry_info(self, model_key: str) -> Optional[RegistryModelInfo]:
+        """Get information from model registry."""
+        return get_model_info(model_key)
+
+    def get_model_suggestions(
+        self, text: str
+    ) -> List[Tuple[str, RegistryModelInfo, str]]:
+        """Get model suggestions based on text content."""
+        return get_model_suggestions(text)
+
+    def list_models_by_category(self, category: str) -> List[RegistryModelInfo]:
+        """List models by category."""
+        return get_models_by_category(category)
+
+    def get_model_info(self, model_name: str):
+        """Get detailed information about a model.
+
+        Args:
+            model_name: Name of the model.
+
+        Returns:
+            ModelInfo object or None if not found.
+        """
+        full_model_name = self._resolve_model_name(model_name)
+        return get_model_info(model_name) or get_model_info(full_model_name)
+
+    def _hub_auth_kwargs(self) -> Dict[str, Any]:
+        """Return authentication kwargs for Hugging Face Hub calls."""
+        if getattr(self.config, "hf_token", None):
+            return {"token": self.config.hf_token}
+        return {}
+
+    def _prepare_model_reference(
+        self,
+        requested_model_name: str,
+        resolved_model_name: str,
+        *,
+        local_only: bool,
+        require_integrity: bool = False,
+        revision: Optional[str] = None,
+    ) -> str:
+        """Resolve and verify cached artifacts before model construction."""
+        registry_info = get_model_info(requested_model_name) or get_model_info(
+            resolved_model_name
+        )
+        prepared_reference = prepare_model_reference(
+            resolved_model_name,
+            registry_info=registry_info,
+            cache_dir=str(self.config.cache_dir),
+            local_only=local_only,
+            token=getattr(self.config, "hf_token", None),
+            require_integrity=require_integrity,
+        )
+        if (
+            require_integrity
+            or not local_only
+            or self._as_existing_local_path(prepared_reference) is not None
+        ):
+            return prepared_reference
+
+        cached_snapshot = self._find_cached_hf_snapshot(
+            prepared_reference,
+            revision=revision,
+        )
+        return cached_snapshot or prepared_reference
+
+    def _find_cached_hf_snapshot(
+        self,
+        model_name: str,
+        *,
+        revision: Optional[str] = None,
+    ) -> Optional[str]:
+        """Find a model snapshot in configured or standard Hub caches offline."""
+        from .hf_hub import _import_snapshot_download
+
+        snapshot_download, local_entry_not_found = _import_snapshot_download()
+        for cache_dir in (str(self.config.cache_dir), None):
+            download_kwargs: Dict[str, Any] = {
+                "repo_id": model_name,
+                "repo_type": "model",
+                "revision": revision,
+                "local_files_only": True,
+            }
+            if cache_dir is not None:
+                download_kwargs["cache_dir"] = cache_dir
+            try:
+                return str(snapshot_download(**download_kwargs))
+            except local_entry_not_found:
+                continue
+        return None
+
+    def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
+        """Return a filesystem path when ``model_name`` points to local files."""
+        try:
+            path = Path(model_name).expanduser()
+        except (TypeError, ValueError, OSError):
+            return None
+
+        try:
+            if path.exists():
+                return path
+        except OSError:
+            return None
+        return None
+
+    def _local_loading_kwargs(
+        self,
+        model_name: str,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Force local-only Hub loading for filesystem-backed model names."""
+        if is_local_only(self.config):
+            configure_offline_mode(self.config)
+            return {"local_files_only": True}
+        if kwargs and "local_files_only" in kwargs:
+            return {"local_files_only": kwargs["local_files_only"]}
+        if kwargs and isinstance(kwargs.get("model_kwargs"), Mapping):
+            model_kwargs = kwargs["model_kwargs"]
+            if "local_files_only" in model_kwargs:
+                return {"local_files_only": model_kwargs["local_files_only"]}
+        if self._as_existing_local_path(model_name) is not None:
+            return {"local_files_only": True}
+        return {}
+
+    def _build_load_quantization_config(
+        self,
+        load_kwargs: Dict[str, Any],
+        *,
+        device: str,
+        existing_quantization_config: Any | None = None,
+    ) -> Any | None:
+        """Extract loader quantization flags and return a model config."""
+        if (
+            existing_quantization_config is not None
+            or "quantization_config" in load_kwargs
+        ):
+            load_kwargs.pop("load_in_4bit", None)
+            load_kwargs.pop("bnb_4bit_use_double_quant", None)
+            return None
+
+        load_in_4bit = bool(load_kwargs.pop("load_in_4bit", self.config.load_in_4bit))
+        bnb_4bit_use_double_quant = bool(
+            load_kwargs.pop(
+                "bnb_4bit_use_double_quant",
+                self.config.bnb_4bit_use_double_quant,
+            )
+        )
+
+        from openmed.torch.loader_quant import build_bnb_4bit_quantization_config
+
+        return build_bnb_4bit_quantization_config(
+            load_in_4bit=load_in_4bit,
+            bnb_4bit_use_double_quant=bnb_4bit_use_double_quant,
+            device=device,
+        )
+
+    def _build_pipeline_cache_key(
+        self,
+        full_model_name: str,
+        *,
+        task: str,
+        aggregation_strategy: Optional[str],
+        use_fast_tokenizer: bool,
+        kwargs: Dict[str, Any],
+    ) -> Tuple[Any, ...]:
+        """Return a hashable cache key for pipeline creation."""
+        return (
+            full_model_name,
+            task,
+            aggregation_strategy,
+            use_fast_tokenizer,
+            self._get_device_id(),
+            self._freeze_cache_value(kwargs),
+        )
+
+    def _freeze_cache_value(self, value: Any) -> Any:
+        """Convert nested kwargs into a hashable representation."""
+        if isinstance(value, Mapping):
+            return tuple(
+                sorted(
+                    (str(key), self._freeze_cache_value(item))
+                    for key, item in value.items()
+                )
+            )
+        if isinstance(value, (list, tuple)):
+            return tuple(self._freeze_cache_value(item) for item in value)
+        if isinstance(value, set):
+            return tuple(sorted(self._freeze_cache_value(item) for item in value))
+        if isinstance(value, (str, int, float, bool, type(None))):
+            return value
+        return repr(value)
+
+    def _release_cached_memory(self) -> None:
+        """Nudge Python and torch runtimes after cache references are dropped."""
+        gc.collect()
+        if getattr(self.config, "backend", None) == "onnx":
+            return
+        try:
+            import torch
+        except Exception:
+            return
+
+        cuda = getattr(torch, "cuda", None)
+        if cuda is not None and callable(getattr(cuda, "is_available", None)):
+            try:
+                if cuda.is_available():
+                    cuda.empty_cache()
+            except Exception:
+                logger.debug(
+                    "Failed to clear CUDA cache after unloading model",
+                    exc_info=True,
+                )
+
+        mps = getattr(torch, "mps", None)
+        if mps is not None and callable(getattr(mps, "empty_cache", None)):
+            try:
+                mps.empty_cache()
+            except Exception:
+                logger.debug(
+                    "Failed to clear MPS cache after unloading model", exc_info=True
+                )
+
+
+# Convenience function for quick model loading
+def load_model(
+    model_name: str, config: Optional["OpenMedConfig"] = None, **kwargs
+) -> Dict[str, Any]:
+    """Convenience function to quickly load an OpenMed model.
+
+    Args:
+        model_name: Name of the model to load.
+        config: Optional configuration object.
+        **kwargs: Additional arguments for model loading.
+
+    Returns:
+        Dictionary containing 'model', 'tokenizer', and 'config'.
+    """
+    loader = ModelLoader(config)
+    return loader.load_model(model_name, **kwargs)

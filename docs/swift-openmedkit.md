@@ -1,0 +1,632 @@
+# OpenMedKit (Swift Package)
+
+## Local agent review and receipt evidence
+
+OpenMedKit parses content-free agent metadata with strict, bounded JSON:
+
+| Swift value | Existing Python wire contract |
+| --- | --- |
+| `AgentArtifactReference` | `ArtifactReference`, envelope version `1` |
+| `AgentReviewerHandoff` | `openmed.agent.reviewer_handoff.v1` |
+| `AgentApprovalReceipt` | `openmed.agent.approval_receipt.v2` |
+| `AgentRunEvidence` | `openmed.agent.run_summary.v1` |
+| `AgentOMOPPreview` | `openmed.interop.omop.mutation_batch.v1` |
+| `AgentApprovalEvidenceResult` | `openmed.agent.approval_evidence.v1` |
+
+The handoff and artifact parsers retain Python's optional default version
+fields. Other envelopes require their exact version. Unknown fields, duplicate
+keys (including escaped duplicates), non-finite numbers, numeric booleans,
+fractional integer fields, unsupported versions and malformed identifiers fail
+with fixed `AgentGovernanceError` codes. No rejected values enter diagnostics.
+Receipt/report inputs are bounded to 64 KiB; other inputs to 1 MiB, with a
+depth limit of 16 and a 200,000-node limit. Handoffs have at most 64 unique
+evidence references and whole-second UTC timestamps with exclusive expiry.
+Run summaries use the existing Python count, duration and sorted/unique bounds.
+
+`canonicalJSON()` emits Python-compatible sorted compact ASCII JSON. The OMOP
+parser checks both the preview digest and the batch's ordered row-digest
+commitment. It exposes typed mutation/issue metadata, never staged row values.
+It cannot establish the provenance of a supplied snapshot or row digest. This
+version supports the native OMOP preview and opaque preview artifact references;
+it does not interpret other domain-specific preview envelopes or execute a
+mobile workflow.
+
+A v2 receipt contains only its schema version, action/token digests and an `approved`
+code. Reviewer role and validity bounds stay in protected local custody. Legacy
+role or timestamp fields are rejected. A parsed receipt or report is not approval authority. Configure a local custody
+lookup only after the application has authenticated a reviewer and consumed the
+original approval in its own trusted store:
+
+```swift
+// receiptJSON is previously consumed evidence from application-owned custody.
+// localCustody is a protected local lookup established after approval consumption.
+// Its AgentReceiptCustody observations bind the exact digest, role and private validity.
+let receipt = try AgentApprovalReceipt.parse(receiptJSON)
+let verifier = AgentLocalApprovalEvidenceVerifier(authority: { digest in
+    guard let custody = localCustody[digest] else { return .unrecognized }
+    return .recognized(custody)
+})
+let observation = try verifier.verify(
+    receipt, actionDigest: currentlyReviewedActionDigest,
+    reviewerRole: expectedReviewerRole)
+// observation.reasonCode records a local evidence check for the review UI.
+// observation.authorizesClinicalAction always remains false.
+```
+
+Omitting the lookup returns `unsupported_authority`. An unrecognized digest,
+failed lookup, expired/future receipt, changed action/role, replay, failed clock
+or unavailable replay store remains a typed refusal. Time is checked again
+after custody lookup against its private consumption time and exclusive expiry.
+The Python lookup returns an actual verifier-created `ApprovalAuthorization`;
+a bare recognized flag cannot supply custody. Swift hosts provide a local
+`AgentReceiptCustody` observation from their protected approval store. It has no
+JSON decoder or serializer and cannot authorize dispatch. Recognized presentations are atomically claimed before
+action/role comparison, so a changed-action presentation is burned and cannot
+be retried under the original action. The default replay store is thread-safe
+and process-local; applications sharing evidence across processes or launches
+must inject an atomic application-owned store. It supplements the original
+durable approval nonce custody and never replaces dispatch authorization.
+
+The Python counterpart is `openmed.agent.approval_evidence`; the strict native
+OMOP projection parser is `openmed.agent.review_previews`. These APIs contain
+no signing, receipt issuance, dispatch callback, EHR connection or cloud
+fallback. Serialized `verified` observations cannot authorize another caller.
+Descriptions contain only controlled codes/counts; explicit canonical JSON
+contains opaque references and digests and should remain in local custody.
+
+Both platforms consume versioned synthetic vectors at
+`tests/fixtures/agent/governance_parity/v1.json`. Python regenerates the receipts
+from test-only signed approval consumption and the other packets from their
+native producers. Native Swift tests compare canonical bytes/digests, strict
+refusals, changed-action/role burns, replay and expiry. These are offline wire
+and local-boundary checks, not clinical validation or a mobile execution claim.
+
+## Guarded clinical briefs
+
+Maple has a structured `.brief` task. Use `OpenMedMaple.brief(source:
+originalIdentifiers:evaluate:privacyCheck:)` to buffer generation and validate a
+complete local evaluation packet before exposing it. The `evaluate` callback
+must execute reviewed-evidence and calibrated NLI verification **on-device**;
+it must not manufacture review history or call a cloud service. No verifier or
+calibrated checkpoint is implicitly installed by this API.
+
+The native boundary independently enforces source/output digest binding,
+identifier leakage, the human-review/non-diagnostic safety envelope, exact
+Unicode-scalar citation boundaries and entailment verdicts. `ClinicalBrief`
+exposes summary, citations, verdicts and digest. `responseJSON()` is protected
+output; `auditJSON()` excludes generated text. Typed failures never contain
+prompts, model responses or private exception strings. Missing local model files
+fail closed through the existing Maple runtime, with no cloud fallback.
+
+The scan demo now renders verified citations after de-identification. Configure
+its `briefEvaluator` and `briefPrivacyCheck` with trusted local integrations;
+without them the action displays a review-configuration refusal instead of the
+previous unverified reasoning answer. This is an integration boundary, not a
+bundled native NLI implementation or clinical readiness claim.
+
+Python and Swift consume `tests/fixtures/clinical/brief_parity/verified.json`.
+The Python test regenerates the packet from the composed pipeline with explicit
+test-only NLI/privacy doubles. The Swift test checks the native guards and
+byte-identical protected response for that fixed output. This proves wire and
+guard interoperability, not independent Swift reimplementation of all Python
+metrics or model-quality equivalence.
+
+The fixture also tests source-identifier matching, including two-character Han
+names, unspaced scripts, recognized Hangul particles and full-width, confusable,
+canonical and zero-width variants. Native matching preserves whitespace parts,
+its existing punctuation-separated components of at least three characters,
+and word boundaries for spaced scripts. The shared fixture records native-only
+component matches explicitly; Python retains its whitespace-part contract.
+Its confusable mappings mirror the
+existing Python detector inventory; the shared controls cover every mapping.
+See [summarization](clinical/summarization.md) for the remaining risks from
+inflected names and unrecognized suffixes. This guard complements `privacyCheck`.
+
+OpenMedKit is the Swift package for running OpenMed models in **macOS**,
+**iOS**, **iPadOS**, **watchOS**, and **visionOS** apps.
+
+OpenMedKit currently supports two Apple backends:
+
+- **MLX** for Apple Silicon Macs and real iPhone/iPad devices
+- **CoreML** for bundled Apple model packages, including constrained watchOS
+  and visionOS Nano artifacts
+
+Swift MLX supports the first OpenMed artifact families used by the public Apple demos:
+
+- `bert`
+- `distilbert`
+- `roberta`
+- `xlm-roberta`
+- `electra`
+- `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
+- `openai-privacy-filter`
+- `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
+- `cohere-compass` for native-resolution text-and-image generation with North
+  Micro Vision
+- DeepGrove `maple` causal language models through the dedicated local
+  `OpenMedMaple` runtime
+
+ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families are still part of the broader rollout work.
+
+## Requirements
+
+- iOS 17+ / macOS 14+ / watchOS 10+ / visionOS 1+
+- Xcode 15+
+- For MLX:
+  - Apple Silicon Mac, or
+  - a real iPhone/iPad device
+- For CoreML:
+  - a compatible `.mlpackage` or `.mlmodelc` bundle plus `id2label.json`
+
+iOS Simulator is **not** a Swift MLX validation target.
+watchOS and visionOS use the CoreML-only `PlatformModel` surface and require an
+INT8 Nano-tier artifact. See [Apple Platform Support](./runtimes/apple-platforms.md)
+for selection limits and simulator validation.
+
+Maple Preview 2-bit is a multi-gigabyte generative model. Test it on recent
+Apple hardware with sufficient storage and memory; keep a smaller specialized
+model available when the product must support constrained devices.
+
+## Apple Platform Matrix
+
+| Use case | Recommended path |
+|---|---|
+| Python on Apple Silicon Mac | `openmed[mlx]` |
+| Swift app on Apple Silicon macOS | `OpenMedKit` + MLX or CoreML |
+| Swift app on real iPhone/iPad | `OpenMedKit` + MLX or CoreML |
+| Swift app on iOS Simulator | CoreML only |
+| Swift app on Apple Watch | `PlatformModel` + Nano INT8 CoreML |
+| Swift app on Apple Vision Pro | `PlatformModel` + Nano INT8 CoreML |
+| Older Apple OS support | CoreML |
+
+## Install OpenMedKit
+
+### Xcode
+
+1. Open your app project in Xcode.
+2. Choose `File > Add Package Dependencies...`
+3. Enter `https://github.com/maziyarpanahi/openmed`
+4. Add the `OpenMedKit` product to your app target
+
+### Swift Package Manager
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
+]
+```
+
+Then add the product:
+
+```swift
+.target(
+    name: "YourApp",
+    dependencies: [
+        .product(name: "OpenMedKit", package: "openmed"),
+    ]
+)
+```
+
+### Privacy Manifests
+
+The `OpenMedKit`, `OpenMedExtensionSupport`, `OpenMedShareExtension` and
+`OpenMedActionExtension` products each ship a `PrivacyInfo.xcprivacy` at the
+root of their resource bundle. The manifests declare no tracking, no tracking
+domains and no collected data types. The kit sources use no required-reason
+APIs, so the accessed API lists are empty. The scan demo declares user defaults
+access with reason `CA92.1` for its saved engine choice and clinical presets.
+
+CI runs an offline scan that maps Apple's required-reason API symbols in the
+kit and scan demo Swift sources to their categories: file timestamps, system
+boot time, disk space, active keyboards and user defaults, including SwiftUI
+`@AppStorage`. Comments and string-literal text are ignored, but code inside
+string interpolation is scanned. The scan fails when a category is used without
+an approved reason in the covering manifest, when a kit target has no manifest,
+or when a manifest declares tracking or collected data:
+
+```bash
+python scripts/release/check_privacy_manifests.py
+```
+
+## Quick Start: Swift MLX
+
+This is the new on-device path for supported OpenMed MLX artifacts.
+
+```swift
+import OpenMedKit
+
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
+)
+
+let openmed = try OpenMed(
+    backend: .mlx(modelDirectoryURL: modelDirectory)
+)
+
+let entities = try openmed.extractPII(
+    "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"
+)
+```
+
+That MLX model directory must contain:
+
+- `openmed-mlx.json`
+- `config.json`
+- `id2label.json`
+- tokenizer assets
+- `weights.safetensors` preferred, `weights.npz` fallback
+
+The same converted MLX artifact is now intended to work in both:
+
+- Python on Apple Silicon
+- Swift via OpenMedKit
+
+OpenMedKit prefers the new self-contained artifact layout above. For older MLX repos that were uploaded before `openmed-mlx.json` and tokenizer asset bundling, it also keeps backward compatibility by falling back to `config.json` plus the source Hugging Face tokenizer reference when available.
+
+## Quick Start: North Micro Vision
+
+`OpenMedVisionLanguageModel` is the native OpenMedKit Cohere Compass runtime.
+It loads the same 4-bit, 5-bit, 6-bit, 8-bit, and bf16 repositories as the
+Python OpenMed runtime and performs prompt formatting, native-resolution image
+processing, vision encoding, and autoregressive generation on the device:
+
+```swift
+import OpenMedKit
+
+let model = try await OpenMedVisionLanguageModel.load(
+    modelID: "OpenMed/North-Micro-Vision-Instruct-6bit-mlx"
+)
+
+let result = try await model.generate(
+    "List the visible medication and dose.",
+    imageURL: clinicalDocumentURL,
+    maxTokens: 128
+)
+
+print(result.text)
+```
+
+Text-only generation uses the same loaded model:
+
+```swift
+let explanation = try await model.generate(
+    "Explain why local processing can improve clinical-document privacy.",
+    maxTokens: 96
+)
+```
+
+For an app-managed or air-gapped artifact, bypass Hub download entirely:
+
+```swift
+let model = try await OpenMedVisionLanguageModel.load(
+    modelDirectory: bundledOrCachedModelDirectory
+)
+```
+
+The directory must include `config.json`, `preprocessor_config.json`, tokenizer
+and chat-template assets, and the model safetensors payload. OpenMedKit does not
+send prompts, images, or generated text to a service and does not provide a
+cloud fallback. The initial Hub download is a separate network boundary; cache
+or bundle the artifact before processing PHI.
+
+North Micro Vision is useful for document OCR, chart questions, visual
+grounding, and structured extraction, but its output is generative. Validate
+every consequential field against the source document, apply OpenMedKit privacy
+policies before an authorized export, and never auto-trigger diagnosis or
+treatment from the result.
+
+## Maple Preview: Local Generative Tasks
+
+`OpenMedMaple` loads the exact-head
+[`deepgrove/maple-preview-2bit-mlx`](https://huggingface.co/deepgrove/maple-preview-2bit-mlx)
+checkpoint from a complete local directory. It supports de-identification,
+entity extraction, relation extraction, evidence-grounded reasoning, and chat.
+It never downloads, logs, or persists document text; the host app controls model
+acquisition and must pass a local directory.
+
+```swift
+import OpenMedKit
+
+let modelDirectory = URL(fileURLWithPath: "/path/to/maple-preview-2bit-mlx")
+guard OpenMedMaple.isModelDirectoryReady(modelDirectory) else {
+    fatalError("Download Maple's required config, tokenizer, and three weight shards first")
+}
+
+let maple = try await OpenMedMaple(modelDirectoryURL: modelDirectory)
+let masked = try await maple.complete(
+    OpenMedMapleRequest(task: .deidentify, document: scannedText)
+)
+
+let clinical = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .relationExtraction,
+        document: masked.redactedText ?? "",
+        entityLabels: ["condition", "medication", "dosage", "follow-up plan"],
+        relationLabels: ["treated with", "has dosage", "requires follow-up"]
+    )
+)
+
+let brief = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .reasoning,
+        document: masked.redactedText ?? "",
+        question: "What facts, uncertainties, and follow-up items are documented?"
+    )
+)
+
+var streamedAnswer = ""
+let chat = try await maple.complete(
+    OpenMedMapleRequest(
+        task: .chat,
+        document: masked.redactedText ?? "",
+        question: "What follow-up is documented?"
+    ),
+    onFinalAnswerChunk: { chunk in
+        await MainActor.run {
+            streamedAnswer.append(chunk)
+        }
+    }
+)
+```
+
+For multi-turn chat, pass the prior non-system turns through `messages` and the
+new prompt through `question`. Keep the `document` de-identified: OpenMedKit's
+prompt builder treats it as untrusted input, requests final answers without
+chain-of-thought, and adds a clinician-review boundary, but application-level
+data minimization remains required.
+
+`onFinalAnswerChunk` is called only for reasoning and chat, and only after Maple
+closes its private reasoning segment. De-identification, entity extraction, and
+relation extraction remain buffered until OpenMedKit has parsed complete JSON,
+validated its label vocabulary, repaired exact source spans, and dropped
+relations with unverified endpoints. The returned `chat.answer` is the canonical
+final value and can replace the accumulated UI text when generation completes.
+
+For de-identification, the generated rewrite is never trusted directly:
+OpenMedKit deterministically masks the validated source spans so unrelated
+clinical text cannot be silently rewritten. The runtime pins the public checkpoint revision in
+`OpenMedMaple.pinnedRevision`. Required files are exposed through
+`OpenMedMaple.requiredModelFiles`; the optional approximate
+`model-flashhead.safetensors` is not used. Structured outputs are parsed only
+after spans are validated or repaired against the source document, and
+relations with unverified endpoints are dropped.
+
+## Quick Start: CoreML
+
+CoreML is still supported and remains the right path when you already have an Apple model bundle or need a non-MLX fallback.
+
+```swift
+import OpenMedKit
+
+let modelURL = Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc")!
+let labelsURL = Bundle.main.url(forResource: "id2label", withExtension: "json")!
+
+let openmed = try OpenMed(
+    backend: .coreML(
+        modelURL: modelURL,
+        id2labelURL: labelsURL,
+        tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        tokenizerFolderURL: nil
+    )
+)
+
+let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
+```
+
+The convenience initializer remains available:
+
+```swift
+let openmed = try OpenMed(
+    modelURL: modelURL,
+    id2labelURL: labelsURL,
+    tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
+)
+```
+
+## Downloading MLX Models From Hugging Face
+
+OpenMedKit includes a built-in downloader and local cache for Hub-hosted MLX artifacts:
+
+```swift
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx",
+    revision: "main"
+)
+```
+
+Behavior:
+
+- downloads `openmed-mlx.json` first
+- downloads the config, labels, tokenizer assets, and available weight files
+- caches the model under the app cache directory
+- returns a local directory URL ready for `OpenMedBackend.mlx`
+
+If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
+
+The model store validates every manifest path before requesting artifact files,
+including all weight candidates and segmenter resources. Paths must be relative
+to the snapshot, with no empty, `.` or `..` components, backslashes or escaping
+symlinks. The exact tokenizer directory `"."` remains supported as the root
+layout used by the OpenMed exporter; tokenizer filenames still require valid
+relative paths. Nested directories such as `tokenizer/tokenizer.json` work.
+
+Cache inspection and local artifact loading use the same boundary, including
+standard tokenizer files discovered implicitly (config and chat templates). A declared
+label map must exist before the snapshot becomes ready. Path rejection throws
+`OpenMedModelStoreError.invalidManifestPath` with a controlled reason code and a
+fixed message containing no input path, URL or repository content. Rejection
+removes a stale ready marker and files newly written by that download where
+their parents remain confined; it never follows an escaping link during cleanup.
+The downloader repeats the check after each response and before writing. This
+does not provide synchronization against another process concurrently replacing
+filesystem entries; applications should keep their cache private to the app.
+
+## Offline Tokenizer Assets
+
+For MLX artifacts, tokenizer assets travel with the converted model directory, so Swift can load them locally without going back to the Hub.
+
+For CoreML bundles, you can still bundle tokenizer assets manually and pass `tokenizerFolderURL`:
+
+```swift
+let openmed = try OpenMed(
+    modelURL: modelURL,
+    id2labelURL: labelsURL,
+    tokenizerFolderURL: Bundle.main.url(forResource: "TokenizerAssets", withExtension: nil)
+)
+```
+
+## Public API
+
+### `OpenMedBackend`
+
+```swift
+public enum OpenMedBackend: Sendable {
+    case coreML(
+        modelURL: URL,
+        id2labelURL: URL,
+        tokenizerName: String,
+        tokenizerFolderURL: URL?
+    )
+    case mlx(modelDirectoryURL: URL)
+}
+```
+
+### `OpenMed`
+
+```swift
+public final class OpenMed {
+    public init(
+        backend: OpenMedBackend,
+        maxSeqLength: Int = 512
+    ) throws
+
+    public convenience init(
+        modelURL: URL,
+        id2labelURL: URL,
+        tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        tokenizerFolderURL: URL? = nil,
+        maxSeqLength: Int = 512
+    ) throws
+
+    public func analyzeText(
+        _ text: String,
+        confidenceThreshold: Float = 0.5
+    ) throws -> [EntityPrediction]
+
+    public func extractPII(
+        _ text: String,
+        confidenceThreshold: Float = 0.5,
+        useSmartMerging: Bool = true
+    ) throws -> [EntityPrediction]
+}
+```
+
+`extractPII(...)` now follows the Python PII path more closely by applying span repair plus semantic-unit merging for fragmented dates, SSNs, phone numbers, emails, and similar PII spans.
+
+### `OpenMedModelStore`
+
+```swift
+public enum OpenMedModelStore {
+    public static func downloadMLXModel(
+        repoID: String,
+        revision: String = "main",
+        cacheDirectory: URL? = nil
+    ) async throws -> URL
+}
+```
+
+### `OpenMedVisionLanguageModel`
+
+```swift
+public final class OpenMedVisionLanguageModel: Sendable {
+    public static func load(
+        modelID: String = "OpenMed/North-Micro-Vision-Instruct-4bit-mlx",
+        revision: String = "main",
+        progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
+    ) async throws -> OpenMedVisionLanguageModel
+
+    public static func load(
+        modelDirectory: URL
+    ) async throws -> OpenMedVisionLanguageModel
+
+    public func generate(
+        _ prompt: String,
+        imageURL: URL,
+        maxTokens: Int = 256,
+        temperature: Float = 0
+    ) async throws -> OpenMedVisionLanguageGeneration
+}
+```
+
+The generation result includes decoded text, generated token IDs, prompt and
+generation token counts, and prefill/generation timing. Overloads accept
+text-only prompts, `CIImage`, or multiple `UserInput.Image` values.
+
+## Supported Swift MLX Families
+
+The current Swift MLX runtime is the BERT-family token-classification path shared across:
+
+- BERT
+- DistilBERT
+- RoBERTa
+- XLM-RoBERTa
+- ELECTRA
+
+This is the same first-phase scope as the current public Python MLX BERT-family implementation.
+
+The separate vision-language surface supports Cohere Compass artifacts with
+`model_type: cohere_compass`, currently the five OpenMed North Micro Vision
+precision variants listed in the Python MLX guide.
+
+## Demo Apps
+
+The demo app in [`swift/OpenMedDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedDemo) now exposes:
+
+- bundled CoreML models discovered from the app target
+- a searchable catalog of Swift-MLX-compatible OpenMed PII models
+- public OpenMed MLX artifact download, local caching, and offline reuse
+
+On Apple Silicon macOS or a physical iPhone/iPad, the demo can download a supported MLX artifact and run it locally through OpenMedKit.
+
+The scanning demo in
+[`swift/OpenMedScanDemo/`](https://github.com/maziyarpanahi/openmed/tree/master/swift/OpenMedScanDemo)
+shows Maple's complete iOS workflow: VisionKit capture, Vision OCR, PII removal,
+entity and relation extraction, a grounded clinical brief, multi-turn document
+chat, and JSON export. All generative tasks run after de-identification, and the
+app unloads competing MLX runtimes before loading the larger Maple model.
+
+## CoreML Status
+
+CoreML remains part of the public Apple story, but it is no longer the only Swift path.
+
+Use CoreML when:
+
+- you already have a bundled Apple model package
+- you want an older-OS fallback
+- you are validating an app path that already depends on CoreML packaging
+
+For the current CoreML packaging status, see [CoreML packaging status](coreml-export.md).
+
+## Notes On Testing
+
+The Swift MLX runtime is intended for:
+
+- Apple Silicon macOS app builds
+- real iPhone/iPad hardware
+
+Command-line `swift test` may skip the MLX execution tests if the local test environment does not package MLX runtime Metal resources. That does not change the supported app runtime targets above.
+
+The Compass integration suite therefore runs through an Xcode test bundle with
+Metal resources. It strictly loads every precision and covers deterministic
+text extraction, a synthetic clinical-document image, and a synthetic chart.
+The ordinary Swift package suite keeps offline processor/configuration tests and
+skips multi-gigabyte model execution unless the local artifact environment
+variables are explicitly supplied.
+
+## Local speech recognition
+
+The optional `OpenMedSpeech` product provides a pinned Core ML English speech adapter with bounded PCM ownership, partial/final events and cooperative cancellation. See [local Core ML speech](multimodal/apple-speech.md) for model pins, lifecycle rules and offline validation.
+
+## Thermal admission for multimodal work
+
+`MultimodalThermalSession` can gate a local operation against current Apple thermal state, queue age and measured latency. See [Apple session admission](multimodal/thermal-latency-gates.md#apple-session-admission) for the policy table, recovery behavior and value-free evidence.

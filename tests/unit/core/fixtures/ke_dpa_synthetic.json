@@ -1,0 +1,109 @@
+{
+  "sensitive_classes": [
+    {
+      "dpa_class": "Race",
+      "canonical_labels": ["OTHER"]
+    },
+    {
+      "dpa_class": "Health status",
+      "canonical_labels": [
+        "CONDITION",
+        "MEDICATION",
+        "LAB_TEST",
+        "PROCEDURE",
+        "BODY_SITE"
+      ]
+    },
+    {
+      "dpa_class": "Ethnic social origin",
+      "canonical_labels": ["OTHER"]
+    },
+    {
+      "dpa_class": "Conscience",
+      "canonical_labels": ["OTHER"]
+    },
+    {
+      "dpa_class": "Belief",
+      "canonical_labels": ["OTHER"]
+    },
+    {
+      "dpa_class": "Genetic data",
+      "canonical_labels": [
+        "GENE_SYMBOL",
+        "VARIANT_DESCRIPTOR",
+        "PROTEIN_CHANGE",
+        "ZYGOSITY",
+        "CLINICAL_SIGNIFICANCE"
+      ]
+    },
+    {
+      "dpa_class": "Biometric data",
+      "canonical_labels": ["ID_NUM", "EYE_COLOR", "HEIGHT"]
+    },
+    {
+      "dpa_class": "Property details",
+      "canonical_labels": ["STREET_ADDRESS", "LOCATION", "ACCOUNT_NUMBER"]
+    },
+    {
+      "dpa_class": "Marital status",
+      "canonical_labels": ["OTHER"]
+    },
+    {
+      "dpa_class": "Family details",
+      "canonical_labels": ["PERSON", "FIRST_NAME", "LAST_NAME"]
+    },
+    {
+      "dpa_class": "Sex",
+      "canonical_labels": ["GENDER"]
+    },
+    {
+      "dpa_class": "Sexual orientation",
+      "canonical_labels": ["OTHER"]
+    }
+  ],
+  "records": [
+    {
+      "fixture_id": "swahili_nairobi",
+      "text": "Clinical note for Amina Wanjiku, phone +254 712 345 678, at 17 Kenyatta Avenue, Nairobi County. Huduma Namba 12345678. Ethnic origin Swahili. Diagnosed with diabetes.",
+      "entities": [
+        {"surface": "Amina Wanjiku", "label": "PERSON"},
+        {"surface": "+254 712 345 678", "label": "PHONE"},
+        {"surface": "17 Kenyatta Avenue", "label": "STREET_ADDRESS"},
+        {"surface": "Nairobi County", "label": "LOCATION"},
+        {"surface": "12345678", "label": "ID_NUM"},
+        {"surface": "Swahili", "label": "OTHER"},
+        {"surface": "diabetes", "label": "CONDITION"}
+      ],
+      "direct_identifiers": [
+        "Amina Wanjiku",
+        "+254 712 345 678",
+        "17 Kenyatta Avenue",
+        "Nairobi County",
+        "12345678"
+      ]
+    },
+    {
+      "fixture_id": "kikuyu_nairobi",
+      "text": "Patient Wanjikũ wa Karanja uses +254 733 654 321 and lives at 42 Mũigai Road, Nairobi County. National ID 87654321, NHIF member NHIF-849-002, fingerprint template KENBIO-849-001, ethnic origin Kikuyu.",
+      "entities": [
+        {"surface": "Wanjikũ wa Karanja", "label": "PERSON"},
+        {"surface": "+254 733 654 321", "label": "PHONE"},
+        {"surface": "42 Mũigai Road", "label": "STREET_ADDRESS"},
+        {"surface": "Nairobi County", "label": "LOCATION"},
+        {"surface": "87654321", "label": "ID_NUM"},
+        {"surface": "NHIF-849-002", "label": "ID_NUM"},
+        {"surface": "KENBIO-849-001", "label": "ID_NUM"},
+        {"surface": "Kikuyu", "label": "OTHER"}
+      ],
+      "direct_identifiers": [
+        "Wanjikũ wa Karanja",
+        "+254 733 654 321",
+        "42 Mũigai Road",
+        "Nairobi County",
+        "87654321",
+        "NHIF-849-002",
+        "KENBIO-849-001"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+# Contributing to OpenMed
+
+Thanks for helping improve OpenMed — bug reports, features, docs, and
+translations are all welcome. By participating you agree to our
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+> [!IMPORTANT]
+> **Security and privacy come first.** OpenMed de-identifies PHI. **Never** open
+> a public issue for a vulnerability, and **never** include real patient data in
+> an issue, pull request, test, or fixture — see [SECURITY.md](SECURITY.md). Any
+> test data committed to the repository must be synthetic.
+
+This page is a quick start. The full tooling, documentation, and release guide
+lives in **[docs/contributing.md](docs/contributing.md)**.
+
+## Development setup
+
+The canonical development environment is managed by [uv](https://docs.astral.sh/uv/).
+From the repository root, run:
+
+```bash
+uv sync --frozen --extra dev    # create .venv and install from uv.lock
+# stack extras as needed, e.g. --extra hf for Hugging Face model work
+uv run --frozen --extra dev pre-commit install  # auto-format staged files on commit
+```
+
+Use `uv run --frozen --extra dev <command>` or the Makefile targets so commands
+run inside the locked environment. If uv is unavailable, the supported fallback
+is a regular virtual environment and editable pip install:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/pre-commit install
+```
+
+The pre-commit hooks also run the Gitleaks secret scanner on staged changes.
+See [Secret Scanning](docs/security/secret-scanning.md) for local use, CI
+behavior, and baseline maintenance.
+
+## Run the checks before opening a PR
+
+```bash
+uv run --frozen --extra dev pytest tests/ -q
+make format                              # apply canonical Ruff formatting
+make lint                                # lint
+make type-check                          # scoped public-module type check
+make format-check                        # CI-parity format check
+```
+
+Ruff is the single source of truth for Python lint, import ordering, and
+formatting; the pinned mypy gate checks the annotated public-module scope. CI
+runs both gates. Do not run Black, isort, or flake8. For Swift changes under
+`swift/OpenMedKit`, run `make format-swift` and `make lint-swift`.
+
+`make lint`, the local pre-commit `effect-paths` hook and the CI lint job also
+run `python scripts/security/check_effect_paths.py --check`. New or removed
+HTTP/database effect candidates require an explicit review of
+`scripts/security/effect_paths.json`; do not regenerate classifications without
+reviewing the path. Built-in MCP, REST, CLI and Journey dependencies must not
+reach the legacy FHIR/OpenMRS writers. See the
+[agent boundary limits](docs/security/agent-threat-model.md#effect-path-inventory).
+
+## Pull requests
+
+- Keep each PR focused on a single feature or fix; avoid unrelated formatting
+  churn.
+- Name branches `<type>/issue-<number>-<short-kebab-slug>`, using a suitable type
+  such as `feat`, `fix`, `docs`, `test`, `chore`, or `refactor`; for example,
+  `docs/issue-280-maintainers`.
+- Write clear, imperative commit messages (the project uses concise prefixes
+  such as `fix:`, `feat:`, and `docs:`).
+- Reference the issue you are closing and complete the
+  [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
+- Update `CHANGELOG.md` and the docs when behavior changes.
+- For privacy-sensitive paths, add tests for direct-identifier recall, critical
+  leakage, and span integrity (see [docs/contributing.md](docs/contributing.md)).
+
+## Reporting issues
+
+- **Bugs and features:** use the
+  [issue templates](https://github.com/maziyarpanahi/openmed/issues/new/choose).
+- **Security vulnerabilities** (including redaction bypass or PHI/PII leakage):
+  report privately per [SECURITY.md](SECURITY.md) — never as a public issue.
+
+For the complete contributor and release workflow, see
+**[docs/contributing.md](docs/contributing.md)**.

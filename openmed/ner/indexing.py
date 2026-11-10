@@ -1,0 +1,635 @@
+"""Model discovery and indexing utilities for zero-shot NER models.
+
+The indexer walks a directory hierarchy that contains model artefacts (GLiNER
+checkpoints, Hugging Face exports, etc.) and generates a consolidated
+``index.json`` file. Each entry records the model identifier, detected family,
+domain tags, supported languages, on-disk path, and optional notes. The resulting
+metadata powers downstream domain default selection, smoke tests, and API UX.
+
+The module intentionally avoids making strong assumptions about the storage
+layout; instead it uses lightweight heuristics that can be refined as the model
+collection grows. Paths and identifiers stay stable across runs so that other
+components can reference models deterministically.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
+
+from .families.base import ModelFamily
+from .families.gliner2 import GLiNER2CheckpointSpec, list_gliner2_checkpoints
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_INDEX_PATH = PACKAGE_ROOT / "models" / "index.json"
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ModelRecord:
+    """Normalized metadata for a single model artefact."""
+
+    id: str
+    family: str
+    domains: Tuple[str, ...] = field(default_factory=tuple)
+    languages: Tuple[str, ...] = field(default_factory=tuple)
+    path: str = ""
+    notes: Optional[str] = None
+    license: Optional[str] = None
+    default_labels: Tuple[str, ...] = field(default_factory=tuple)
+
+    def to_dict(self) -> Dict[str, object]:
+        """Convert to a JSON-serialisable dictionary."""
+        payload: Dict[str, object] = {
+            "id": self.id,
+            "family": self.family,
+            "domains": list(self.domains),
+            "languages": list(self.languages),
+            "path": self.path,
+        }
+        if self.notes:
+            payload["notes"] = self.notes
+        if self.license:
+            payload["license"] = self.license
+        if self.default_labels:
+            payload["default_labels"] = list(self.default_labels)
+        return payload
+
+
+GLINER_BIOMED_MODEL_ID = "Ihor/gliner-biomed-large-v1.0"
+"""Stable Hugging Face identifier for the registered GLiNER-BioMed model."""
+
+
+GLINER_BIOMED_RECORD = ModelRecord(
+    id=GLINER_BIOMED_MODEL_ID,
+    family=ModelFamily.GLINER.value,
+    domains=("biomedical", "clinical"),
+    languages=("en",),
+    notes=(
+        "Public GLiNER-BioMed checkpoint; weights are loaded through the local "
+        "GLiNER cache when the optional dependency is enabled."
+    ),
+    license="Apache-2.0",
+)
+"""Built-in metadata for the production biomedical zero-shot backbone."""
+
+
+GLIFORMER_DISEASE_MODEL_ID = "OpenMed/GLiFormer-BioNER-Disease-Base-v1"
+GLIFORMER_DISEASE_RECORD = ModelRecord(
+    id=GLIFORMER_DISEASE_MODEL_ID,
+    family=ModelFamily.GLIFORMER.value,
+    domains=("biomedical", "clinical"),
+    languages=("en",),
+    default_labels=("disease",),
+    license="Apache-2.0",
+)
+
+GLINER2_DISEASE_MODEL_ID = "OpenMed/GLiNER2.5-BioNER-Disease-Base-v1"
+GLINER2_DISEASE_RECORD = ModelRecord(
+    id=GLINER2_DISEASE_MODEL_ID,
+    family=ModelFamily.GLINER2.value,
+    domains=("biomedical", "clinical"),
+    languages=("en",),
+    default_labels=("disease",),
+    license="Apache-2.0",
+)
+
+
+def _gliner2_record(spec: GLiNER2CheckpointSpec) -> ModelRecord:
+    kind = "decision-tuned " if spec.decision_tuned else ""
+    return ModelRecord(
+        id=spec.model_id,
+        family=ModelFamily.GLINER2.value,
+        domains=("generic",),
+        languages=spec.languages,
+        notes=(
+            f"GLiNER2.5 {spec.size_label}-parameter {kind}checkpoint loaded "
+            "through gliner2.AutoExtractor; weights are not bundled and load "
+            "from the local Hugging Face cache when the optional gliner2 "
+            "dependency is enabled."
+        ),
+        license=spec.license_id,
+    )
+
+
+BUILTIN_MODEL_RECORDS = (
+    GLINER_BIOMED_RECORD,
+    GLIFORMER_DISEASE_RECORD,
+    GLINER2_DISEASE_RECORD,
+    *(_gliner2_record(spec) for spec in list_gliner2_checkpoints()),
+)
+
+SPAN_MODEL_FAMILIES = frozenset({"gliner", "gliner2", "gliformer"})
+
+
+def resolve_model_record(
+    model_id: str,
+    *,
+    family: Optional[str] = None,
+    index: Optional[ModelIndex] = None,
+) -> Optional[ModelRecord]:
+    """Resolve indexed, named, or local span models without a network request.
+
+    Args:
+        model_id: Hugging Face identifier or local checkpoint directory.
+        family: Explicit family for an otherwise ambiguous identifier.
+        index: Optional index whose records take precedence over built-ins.
+
+    Returns:
+        Model metadata, or ``None`` when the model family cannot be identified.
+        Unindexed remote IDs can opt in with ``family``; local exports are
+        identified from their saved configuration before filename heuristics.
+    """
+
+    if family is not None and family not in SPAN_MODEL_FAMILIES:
+        raise ValueError("family must be gliner, gliner2, or gliformer")
+    records = index.models if index is not None else BUILTIN_MODEL_RECORDS
+    for record in records:
+        if record.id == model_id:
+            if family is not None and family != record.family:
+                raise ValueError("Explicit family conflicts with the indexed model")
+            return record
+
+    path = Path(model_id).expanduser()
+    detected = _local_model_family(path) if path.is_dir() else None
+    if detected and family is not None and family != detected:
+        raise ValueError("Explicit family conflicts with the checkpoint configuration")
+    resolved_family = family or detected or _named_model_family(path.name)
+    if resolved_family is None:
+        return None
+
+    # Named exports and Hub snapshots keep registered task-specific defaults.
+    defaults: Tuple[str, ...] = ()
+    if path.is_dir():
+        names = tuple(part.name.lower() for part in (path, *path.parents))
+        for record in BUILTIN_MODEL_RECORDS:
+            if record.family != resolved_family or not record.default_labels:
+                continue
+            checkpoint_name = record.id.rsplit("/", 1)[-1].lower()
+            if any(checkpoint_name in name for name in names):
+                defaults = record.default_labels
+                break
+    return ModelRecord(
+        id=model_id,
+        family=resolved_family,
+        path=str(path.resolve()) if path.is_dir() else "",
+        default_labels=defaults,
+    )
+
+
+def _named_model_family(name: str) -> Optional[str]:
+    lowered = name.lower()
+    if re.search(r"(?:^|[-_])gliformer(?:$|[-_.])", lowered):
+        return ModelFamily.GLIFORMER.value
+    if re.search(r"(?:^|[-_])(?:gliner2|gliner[-_]v2)(?:$|[-_.])", lowered):
+        return ModelFamily.GLINER2.value
+    if re.search(r"(?:^|[-_])gliner(?:$|[-_.])", lowered):
+        return ModelFamily.GLINER.value
+    return None
+
+
+def _local_model_family(path: Path) -> Optional[str]:
+    for filename in ("gliner_config.json", "config.json"):
+        source = path / filename
+        if not source.is_file():
+            continue
+        try:
+            payload = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            raise ValueError("Cannot read local checkpoint configuration") from None
+        if not isinstance(payload, dict):
+            raise ValueError("Local checkpoint configuration must be an object")
+        architectures = payload.get("architectures")
+        if (
+            payload.get("model_type") == "extractor"
+            and isinstance(payload.get("architecture"), str)
+            and payload.get("architecture") in {"span", "boundary"}
+            and isinstance(architectures, list)
+            and any(
+                name in {"Extractor", "BoundaryExtractor"}
+                for name in architectures
+                if isinstance(name, str)
+            )
+        ):
+            return ModelFamily.GLINER2.value
+        hints = [payload.get("model_type", "")]
+        if isinstance(architectures, list):
+            hints.extend(architectures)
+        for hint in hints:
+            if not isinstance(hint, str):
+                continue
+            hint = hint.lower()
+            if "gliformer" in hint:
+                return ModelFamily.GLIFORMER.value
+            if "gliner2" in hint:
+                return ModelFamily.GLINER2.value
+            if hint == "gliner":
+                return ModelFamily.GLINER.value
+        if filename == "gliner_config.json":
+            return ModelFamily.GLINER.value
+    return None
+
+
+@dataclass(frozen=True)
+class ModelIndex:
+    """Container for a discovered collection of models."""
+
+    models: Tuple[ModelRecord, ...]
+    generated_at: datetime
+    source_dir: Path
+
+    def to_dict(self) -> Dict[str, object]:
+        timestamp = (
+            self.generated_at.astimezone(timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        return {
+            "meta": {
+                "generated_at": timestamp,
+                "source_dir": str(self.source_dir),
+                "model_count": len(self.models),
+                "domain_count": len(self.unique_domains),
+            },
+            "models": [record.to_dict() for record in self.models],
+        }
+
+    @property
+    def unique_domains(self) -> Set[str]:
+        domains: Set[str] = set()
+        for record in self.models:
+            domains.update(record.domains)
+        return domains
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def build_index(models_dir: Path) -> ModelIndex:
+    """Discover models located under ``models_dir`` and return a structured index.
+
+    Args:
+        models_dir: Root directory that houses the model artefacts.
+
+    Returns:
+        ``ModelIndex`` instance containing model metadata and generation info.
+
+    Raises:
+        FileNotFoundError: If ``models_dir`` does not exist.
+        NotADirectoryError: If ``models_dir`` is not a directory.
+    """
+
+    if not models_dir.exists():
+        raise FileNotFoundError(f"Models directory not found: {models_dir}")
+    if not models_dir.is_dir():
+        raise NotADirectoryError(f"Models path is not a directory: {models_dir}")
+
+    records = tuple(_deduplicate(discover_models(models_dir)))
+    return ModelIndex(
+        models=records,
+        generated_at=datetime.now(timezone.utc),
+        source_dir=models_dir,
+    )
+
+
+def discover_models(models_dir: Path) -> Iterator[ModelRecord]:
+    """Yield ``ModelRecord`` instances discovered under ``models_dir``."""
+
+    for candidate in _iter_candidate_dirs(models_dir):
+        yield _build_record(candidate, models_dir)
+
+
+def write_index(index: ModelIndex, path: Path, *, pretty: bool = True) -> None:
+    """Persist ``index`` to ``path``.
+
+    Args:
+        index: The ``ModelIndex`` to serialise.
+        path: Destination file path. Parent directories will be created.
+        pretty: When True, write indented JSON. Otherwise compact.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = index.to_dict()
+    if pretty:
+        content = json.dumps(payload, indent=2, sort_keys=True)
+    else:
+        content = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    tmp_path = path.with_suffix(".tmp")
+    tmp_path.write_text(content, encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+# ---------------------------------------------------------------------------
+# Discovery heuristics
+# ---------------------------------------------------------------------------
+
+MODEL_CORE_FILES = {
+    "config.json",
+    "gliner_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "preprocessor_config.json",
+    "pytorch_model.bin",
+    "model.safetensors",
+    "tf_model.h5",
+    "rust_model.ot",
+}
+
+FAMILY_HINTS = {
+    "gliner": ModelFamily.GLINER,
+    "zero-shot": ModelFamily.GLINER,
+    "zeroshot": ModelFamily.GLINER,
+    "biomed": ModelFamily.GLINER,
+    "gliner2": ModelFamily.GLINER2,
+    "gliformer": ModelFamily.GLIFORMER,
+    "fastino": ModelFamily.GLINER2,
+    "fastgliner": ModelFamily.GLINER2,
+    "v2": ModelFamily.GLINER2,
+}
+
+LANGUAGE_HINTS = {
+    "multilingual": ("multi",),
+    "en": ("en", "english"),
+    "es": ("es", "spanish"),
+    "de": ("de", "german"),
+    "fr": ("fr", "french"),
+    "it": ("it", "italian"),
+    "pt": ("pt", "portuguese"),
+    "zh": ("zh", "chinese"),
+    "ja": ("ja", "japanese"),
+}
+
+DOMAIN_TOKENS = {
+    "biomed": "biomedical",
+    "biomedical": "biomedical",
+    "clinical": "clinical",
+    "genomic": "genomic",
+    "genomics": "genomic",
+    "finance": "finance",
+    "legal": "legal",
+    "news": "news",
+    "ecom": "ecommerce",
+    "ecommerce": "ecommerce",
+    "commerce": "ecommerce",
+    "cyber": "cybersecurity",
+    "cybersec": "cybersecurity",
+    "cybersecurity": "cybersecurity",
+    "security": "cybersecurity",
+    "chem": "chemistry",
+    "chemistry": "chemistry",
+    "organism": "organism",
+    "microbio": "organism",
+    "education": "education",
+    "acad": "education",
+    "social": "social",
+    "public": "public_health",
+    "public_health": "public_health",
+    "health": "public_health",
+    "population": "public_health",
+    "generic": "generic",
+}
+
+
+def _iter_candidate_dirs(root: Path) -> Iterator[Path]:
+    """Traverse ``root`` and yield directories likely to contain models."""
+
+    for path in root.rglob("*"):
+        if not path.is_dir():
+            continue
+        if _looks_like_model_dir(path):
+            yield path
+
+
+def _looks_like_model_dir(path: Path) -> bool:
+    """Heuristic to decide whether ``path`` represents a model artefact."""
+
+    file_names = {child.name.lower() for child in path.iterdir() if child.is_file()}
+    if file_names.intersection(MODEL_CORE_FILES):
+        return True
+
+    # Some exports may only contain safetensors with sharded suffixes.
+    if any(name.endswith(".safetensors") for name in file_names):
+        return True
+
+    # Last resort: directories with metadata.json or config.yaml hints.
+    if "metadata.json" in file_names or "config.yaml" in file_names:
+        return True
+
+    return False
+
+
+def _build_record(model_path: Path, root: Path) -> ModelRecord:
+    """Create a ``ModelRecord`` for ``model_path``."""
+
+    rel = model_path.relative_to(root)
+    identifier = _format_model_id(rel)
+    family = _local_model_family(model_path) or _guess_family(rel)
+    domains = tuple(sorted(_guess_domains(rel)))
+    languages = tuple(sorted(_guess_languages(rel)))
+    notes = _extract_notes(model_path)
+
+    return ModelRecord(
+        id=identifier,
+        family=family,
+        domains=domains,
+        languages=languages if languages else ("en",),
+        path=str(model_path),
+        notes=notes,
+    )
+
+
+def _format_model_id(relative_path: Path) -> str:
+    """Turn a relative path into a stable identifier."""
+
+    parts = [segment for segment in relative_path.parts if segment]
+    normalized = "-".join(part.replace(" ", "_") for part in parts)
+    return normalized.lower()
+
+
+def _guess_family(relative_path: Path) -> str:
+    tokens = _tokenise_path(relative_path)
+    # Specific architecture hints take precedence over generic biomedical tags.
+    for family in (ModelFamily.GLIFORMER, ModelFamily.GLINER2):
+        if any(FAMILY_HINTS.get(token) == family for token in tokens):
+            return family.value
+    for token in tokens:
+        if token in FAMILY_HINTS:
+            return FAMILY_HINTS[token].value
+    return ModelFamily.OTHER.value
+
+
+def _guess_domains(relative_path: Path) -> Set[str]:
+    domains: Set[str] = set()
+    tokens = _tokenise_path(relative_path)
+    for token in tokens:
+        match = DOMAIN_TOKENS.get(token)
+        if match:
+            domains.add(match)
+    if not domains:
+        domains.add("generic")
+    return domains
+
+
+def _guess_languages(relative_path: Path) -> Set[str]:
+    langs: Set[str] = set()
+    tokens = _tokenise_path(relative_path)
+    for lang, patterns in LANGUAGE_HINTS.items():
+        for pattern in patterns:
+            if pattern in tokens:
+                if lang == "multilingual":
+                    langs.add("multi")
+                else:
+                    langs.add(lang)
+                break
+    return langs
+
+
+def _extract_notes(model_path: Path) -> Optional[str]:
+    metadata_file = model_path / "metadata.json"
+    if metadata_file.exists():
+        try:
+            metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return "Metadata file unreadable"
+        note = metadata.get("notes") or metadata.get("description")
+        if isinstance(note, str):
+            return note.strip()
+    return None
+
+
+def _tokenise_path(path: Path) -> Set[str]:
+    tokens: Set[str] = set()
+    pattern = re.compile(r"[^\w]+")
+    for part in path.parts:
+        lowered = part.lower()
+        split = pattern.split(lowered)
+        for token in split:
+            if token:
+                tokens.add(token)
+    return tokens
+
+
+def _deduplicate(records: Iterable[ModelRecord]) -> Iterator[ModelRecord]:
+    unique: Dict[str, ModelRecord] = {}
+    for record in records:
+        unique.setdefault(record.id, record)
+    for record in sorted(unique.values(), key=lambda item: item.id):
+        yield record
+
+
+def load_index(path: Optional[Path] = None) -> ModelIndex:
+    """Load a generated index, including built-in public model records.
+
+    When ``path`` is omitted, the default local index is used when present and
+    built-in records are added to it. If the default local index does not exist,
+    an index containing the built-in records is returned. Explicit paths retain
+    the existing strict file-not-found behavior.
+    """
+
+    index_path = Path(path) if path is not None else DEFAULT_INDEX_PATH
+    if not index_path.exists():
+        if path is None:
+            return _builtin_index()
+        raise FileNotFoundError(f"Index file not found: {index_path}")
+
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in index file {index_path}: {exc}") from exc
+
+    models_payload = payload.get("models", [])
+    meta = payload.get("meta", {})
+
+    models: List[ModelRecord] = []
+    for entry in models_payload:
+        models.append(
+            ModelRecord(
+                id=entry["id"],
+                family=entry.get("family", ModelFamily.OTHER.value),
+                domains=tuple(entry.get("domains", [])),
+                languages=tuple(entry.get("languages", [])),
+                path=entry.get("path", ""),
+                notes=entry.get("notes"),
+                license=entry.get("license"),
+                default_labels=tuple(entry.get("default_labels", [])),
+            )
+        )
+
+    generated_raw = meta.get("generated_at")
+    if isinstance(generated_raw, str):
+        generated_str = generated_raw.strip().replace("Z", "+00:00")
+        try:
+            generated_at = datetime.fromisoformat(generated_str)
+        except ValueError:
+            generated_at = datetime.now(timezone.utc)
+    else:
+        generated_at = datetime.now(timezone.utc)
+
+    source_dir_raw = meta.get("source_dir")
+    source_dir = (
+        Path(source_dir_raw) if isinstance(source_dir_raw, str) else index_path.parent
+    )
+
+    index = ModelIndex(
+        models=tuple(models),
+        generated_at=generated_at.astimezone(timezone.utc),
+        source_dir=source_dir,
+    )
+    return _with_builtin_records(index) if path is None else index
+
+
+def _builtin_index() -> ModelIndex:
+    """Return an index containing the models registered by the package."""
+
+    return ModelIndex(
+        models=BUILTIN_MODEL_RECORDS,
+        generated_at=datetime.now(timezone.utc),
+        source_dir=DEFAULT_INDEX_PATH.parent,
+    )
+
+
+def _with_builtin_records(index: ModelIndex) -> ModelIndex:
+    """Add missing built-in records without replacing local metadata."""
+
+    known_ids = {record.id for record in index.models}
+    missing = tuple(
+        record for record in BUILTIN_MODEL_RECORDS if record.id not in known_ids
+    )
+    if not missing:
+        return index
+    return ModelIndex(
+        models=(*index.models, *missing),
+        generated_at=index.generated_at,
+        source_dir=index.source_dir,
+    )
+
+
+__all__ = [
+    "ModelRecord",
+    "ModelIndex",
+    "build_index",
+    "discover_models",
+    "write_index",
+    "load_index",
+    "DEFAULT_INDEX_PATH",
+    "GLINER_BIOMED_MODEL_ID",
+    "GLINER_BIOMED_RECORD",
+    "BUILTIN_MODEL_RECORDS",
+    "GLIFORMER_DISEASE_MODEL_ID",
+    "GLIFORMER_DISEASE_RECORD",
+    "GLINER2_DISEASE_MODEL_ID",
+    "GLINER2_DISEASE_RECORD",
+    "SPAN_MODEL_FAMILIES",
+    "resolve_model_record",
+]

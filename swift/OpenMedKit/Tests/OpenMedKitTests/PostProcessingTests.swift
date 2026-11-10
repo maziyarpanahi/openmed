@@ -1,0 +1,383 @@
+import XCTest
+
+@testable import OpenMedKit
+
+final class PostProcessingTests: XCTestCase {
+
+    func testDecodeSingleEntity() {
+        let text = "Patient John Doe visited"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 1, label: "B-first_name", score: 0.95, startOffset: 8, endOffset: 12),
+            .init(labelId: 2, label: "I-first_name", score: 0.90, startOffset: 13, endOffset: 16),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text)
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0].label, "first_name")
+        XCTAssertEqual(entities[0].text, "John Doe")
+        XCTAssertEqual(entities[0].start, 8)
+        XCTAssertEqual(entities[0].end, 16)
+    }
+
+    func testDecodeMultipleEntities() {
+        let text = "John Doe 555-1234"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 1, label: "B-first_name", score: 0.95, startOffset: 0, endOffset: 4),
+            .init(labelId: 2, label: "I-first_name", score: 0.90, startOffset: 5, endOffset: 8),
+            .init(labelId: 0, label: "O", score: 0.99, startOffset: 8, endOffset: 9),
+            .init(labelId: 3, label: "B-phone", score: 0.85, startOffset: 9, endOffset: 17),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text)
+
+        XCTAssertEqual(entities.count, 2)
+        XCTAssertEqual(entities[0].label, "first_name")
+        XCTAssertEqual(entities[1].label, "phone")
+    }
+
+    func testAverageAggregation() {
+        let text = "John Doe"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 1, label: "B-NAME", score: 0.90, startOffset: 0, endOffset: 4),
+            .init(labelId: 2, label: "I-NAME", score: 0.80, startOffset: 5, endOffset: 8),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text, strategy: .average)
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0].confidence, 0.85, accuracy: 0.01)
+    }
+
+    func testMaxAggregation() {
+        let text = "John Doe"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 1, label: "B-NAME", score: 0.90, startOffset: 0, endOffset: 4),
+            .init(labelId: 2, label: "I-NAME", score: 0.80, startOffset: 5, endOffset: 8),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text, strategy: .max)
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0].confidence, 0.90, accuracy: 0.01)
+    }
+
+    func testFirstAggregation() {
+        let text = "John Doe"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 1, label: "B-NAME", score: 0.90, startOffset: 0, endOffset: 4),
+            .init(labelId: 2, label: "I-NAME", score: 0.80, startOffset: 5, endOffset: 8),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text, strategy: .first)
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0].confidence, 0.90, accuracy: 0.01)
+    }
+
+    func testEmptyTokens() {
+        let entities = PostProcessing.decodeEntities(tokens: [], text: "")
+        XCTAssertTrue(entities.isEmpty)
+    }
+
+    func testAllOTokens() {
+        let text = "Hello world"
+        let tokens: [PostProcessing.TokenPrediction] = [
+            .init(labelId: 0, label: "O", score: 0.99, startOffset: 0, endOffset: 5),
+            .init(labelId: 0, label: "O", score: 0.99, startOffset: 6, endOffset: 11),
+        ]
+        let entities = PostProcessing.decodeEntities(tokens: tokens, text: text)
+        XCTAssertTrue(entities.isEmpty)
+    }
+
+    func testRepairEntitySpansExtendsTruncatedEnd() {
+        let text = "Patient Maria Garcia"
+        let entities = [
+            EntityPrediction(label: "NAME", text: "Mari", confidence: 0.9, start: 8, end: 12)
+        ]
+
+        let repaired = PostProcessing.repairEntitySpans(entities, text: text)
+
+        XCTAssertEqual(repaired.count, 1)
+        XCTAssertEqual(repaired[0].text, "Maria")
+        XCTAssertEqual(repaired[0].start, 8)
+        XCTAssertEqual(repaired[0].end, 13)
+    }
+
+    func testMergePIIEntitiesCombinesFragmentedSSN() {
+        let text = "Patient SSN: 123-45-6789"
+        let entities = [
+            EntityPrediction(label: "ssn", text: "123", confidence: 0.90, start: 13, end: 16),
+            EntityPrediction(label: "ssn", text: "45", confidence: 0.85, start: 17, end: 19),
+            EntityPrediction(label: "ssn", text: "6789", confidence: 0.88, start: 20, end: 24),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "ssn")
+        XCTAssertEqual(merged[0].text, "123-45-6789")
+        XCTAssertEqual(merged[0].start, 13)
+        XCTAssertEqual(merged[0].end, 24)
+        XCTAssertEqual(merged[0].confidence, 0.918, accuracy: 0.02)
+    }
+
+    func testMergePIIEntitiesPrefersSpecificDOBLabel() {
+        let text = "DOB: 01/15/1970"
+        let entities = [
+            EntityPrediction(label: "date", text: "01", confidence: 0.70, start: 5, end: 7),
+            EntityPrediction(label: "date_of_birth", text: "/15/1970", confidence: 0.90, start: 7, end: 15),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "date_of_birth")
+        XCTAssertEqual(merged[0].text, "01/15/1970")
+        XCTAssertEqual(merged[0].start, 5)
+        XCTAssertEqual(merged[0].end, 15)
+        XCTAssertEqual(merged[0].confidence, 0.876, accuracy: 0.03)
+    }
+
+    func testMergePIIEntitiesUpgradesGenericDateToDOBWhenSemanticMatchIsSpecific() {
+        let text = "DOB\n03/14/1981"
+        let entities = [
+            EntityPrediction(label: "date", text: "03/14/1981", confidence: 0.91, start: 4, end: 14)
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "date_of_birth")
+        XCTAssertEqual(merged[0].text, "03/14/1981")
+    }
+
+    func testMergePIIEntitiesKeepsNonSemanticEntities() {
+        let text = "Patient John Doe arrived"
+        let entities = [
+            EntityPrediction(label: "first_name", text: "John Doe", confidence: 0.95, start: 8, end: 16)
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged, entities)
+    }
+
+    func testMergePIIEntitiesAddsSemanticOnlyShowcaseMatches() {
+        let text = """
+            Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
+            """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "John Doe" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Jane Doe" })
+        XCTAssertTrue(merged.contains { $0.label == "date_of_birth" && $0.text == "01/15/1970" && $0.confidence >= 0.95 })
+        XCTAssertTrue(merged.contains { $0.label == "ssn" && $0.text == "000-00-0000" && $0.confidence >= 0.95 })
+        XCTAssertTrue(merged.contains { $0.label == "medical_record_number" && $0.text == "MRN-TEST-88421" })
+        XCTAssertTrue(merged.contains { $0.label == "street_address" && $0.text == "123 Example Street, Apt 4B, Springfield, CA 90000" })
+        XCTAssertEqual(merged.filter { $0.label == "phone_number" }.map(\.text).sorted(), ["(555) 010-2244", "(555) 010-7788"])
+        XCTAssertTrue(merged.contains { $0.label == "email" && $0.text == "john.doe@example.test" })
+        XCTAssertTrue(merged.contains { $0.label == "insurance_id" && $0.text == "TEST-POLICY-778291" })
+        XCTAssertTrue(merged.contains { $0.label == "driver_license" && $0.text == "DLT-TEST-442190" })
+        XCTAssertTrue(merged.contains { $0.label == "passport_number" && $0.text == "P-TEST-998877" })
+        XCTAssertTrue(merged.contains { $0.label == "organization" && $0.text == "Example Manufacturing LLC" })
+        XCTAssertTrue(merged.contains { $0.label == "employee_id" && $0.text == "EMP-20481" })
+        XCTAssertTrue(merged.contains { $0.label == "account_number" && $0.text == "ACCT-TEST-55667788" })
+        XCTAssertTrue(merged.contains { $0.label == "routing_number" && $0.text == "000000000" })
+    }
+
+    func testMergePIIEntitiesRecoversStructuredOCRHeaderFields() {
+        let text = """
+            OM
+            OpenMed Bayview Outpatient Center
+            390 Harbor Clinical Plaza • San Diego, CA 92111 • (415) 555-0100|
+            Emeraencv Department Follow-Up
+            Visit Date: 04/16/2026
+            PATIENT NAME
+            Eleanor Ruiz
+            eleanor.ruiz@sampleclinic.test
+            EMAIL
+            DOB
+            03/14/1981
+            HMO-99318442
+            INSURANCE ID
+            MRN
+            MRN-448271
+            EMPLOYER
+            Blue Harbor Foods
+            ADDRESS
+            1942 Harbor View Drive, Marseille, CA 92111
+            EMERGENCY CONTACT
+            Martin Ruiz, (415) 555-0199
+            PHONE
+            (415) 555-0142
+            PRIMARY CLINICAN
+            Dr. Maya Shah, MD
+            """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Eleanor Ruiz" })
+        XCTAssertTrue(merged.contains { $0.label == "email" && $0.text == "eleanor.ruiz@sampleclinic.test" })
+        XCTAssertTrue(merged.contains { $0.label == "date_of_birth" && $0.text == "03/14/1981" })
+        XCTAssertTrue(merged.contains { $0.label == "insurance_id" && $0.text == "HMO-99318442" })
+        XCTAssertTrue(merged.contains { $0.label == "medical_record_number" && $0.text == "MRN-448271" })
+        XCTAssertTrue(merged.contains { $0.label == "organization" && $0.text == "Blue Harbor Foods" })
+        XCTAssertTrue(merged.contains { $0.label == "street_address" && $0.text == "1942 Harbor View Drive, Marseille, CA 92111" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Martin Ruiz" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(415) 555-0199" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(415) 555-0142" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dr. Maya Shah, MD" })
+    }
+
+    func testMergePIIEntitiesRecoversCurrentDischargeSummaryHeaderFields() {
+        let text = """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            MRN
+            SRMC-7741920
+            ENCOUNTER #
+            ENC-20260601-3382
+            ACCOUNT #
+            ACC-55810394
+            INSURANCE
+            Summit Health PPO, Member ID
+            SHP-66201845, Group 4471
+            EMERGENCY CONTACT
+            Dana Whitfield (spouse), (720) 555-0193
+            PCP
+            Priya Nandakumar, MD
+            PCP NPI
+            1841992307
+            Document ID
+            SRMC-DS-20260601-3382
+            ELECTRONICALLY SIGNED
+            Maya Shah, MD
+            """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." })
+        XCTAssertTrue(merged.contains { $0.label == "medical_record_number" && $0.text == "SRMC-7741920" })
+        XCTAssertTrue(merged.contains { $0.label == "encounter_number" && $0.text == "ENC-20260601-3382" })
+        XCTAssertTrue(merged.contains { $0.label == "account_number" && $0.text == "ACC-55810394" })
+        XCTAssertTrue(merged.contains { $0.label == "insurance_id" && $0.text == "SHP-66201845" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dana Whitfield" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(720) 555-0193" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Priya Nandakumar, MD" })
+        XCTAssertTrue(merged.contains { $0.label == "npi" && $0.text == "1841992307" })
+        XCTAssertTrue(merged.contains { $0.label == "document_id" && $0.text == "SRMC-DS-20260601-3382" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Maya Shah, MD" })
+    }
+
+    #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        func testChunkedEntityDedupKeepsBestOverlappingSpan() {
+            let entities = [
+                EntityPrediction(label: "full_name", text: "Jordan", confidence: 0.92, start: 23, end: 29),
+                EntityPrediction(label: "full_name", text: "Whitfield, Jordan A.", confidence: 0.87, start: 12, end: 32),
+            ]
+
+            let deduplicated = OpenMed.deduplicateOverlappingEntities(entities)
+
+            XCTAssertEqual(deduplicated.count, 1)
+            XCTAssertEqual(deduplicated[0].text, "Whitfield, Jordan A.")
+        }
+    #endif
+
+    func testMergePIIEntitiesRecoversSurnameFirstPatientHeader() {
+        let text = """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            MRN
+            SRMC-7741920
+            """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
+            "Expected surname-first patient header in \(merged)"
+        )
+    }
+
+    func testMergePIIEntitiesRecoversSurnameFirstInlinePatient() {
+        let text = """
+            Patient: Whitfield, Jordan A.
+            DOB: 07/22/1984
+            """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
+            "Expected inline surname-first patient name in \(merged)"
+        )
+    }
+
+    func testMergePIIEntitiesExpandsSurnameFirstPatientHeaderOverlapWithoutLabelExpansion() {
+        let text = """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            """
+        let modelText = "Jordan"
+        let range = try! XCTUnwrap(text.range(of: modelText))
+        let start = text.distance(from: text.startIndex, to: range.lowerBound)
+        let end = text.distance(from: text.startIndex, to: range.upperBound)
+        let entities = [
+            EntityPrediction(
+                label: "private_person",
+                text: modelText,
+                confidence: 0.72,
+                start: start,
+                end: end
+            )
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(
+            entities,
+            text: text,
+            preferModelLabels: true,
+            allowSemanticOnlyMatches: false,
+            allowSemanticLabelExpansion: false
+        )
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "private_person" && $0.text == "Whitfield, Jordan A." },
+            "Expected overlapping model span to expand to the full surname-first header in \(merged)"
+        )
+    }
+
+    func testMergePIIEntitiesCanDisableSemanticOnlyMatches() {
+        let text = "Patient SSN: 123-45-6789"
+
+        let merged = PostProcessing.mergePIIEntities(
+            [],
+            text: text,
+            allowSemanticOnlyMatches: false
+        )
+
+        XCTAssertTrue(merged.isEmpty)
+    }
+
+    func testMergePIIEntitiesCanPreserveModelLabelTaxonomy() {
+        let text = "DOB: 01/15/1970"
+        let entities = [
+            EntityPrediction(label: "private_date", text: "/15/1970", confidence: 0.92, start: 7, end: 15)
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(
+            entities,
+            text: text,
+            preferModelLabels: true,
+            allowSemanticLabelExpansion: false
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "private_date")
+        XCTAssertEqual(merged[0].text, "01/15/1970")
+        XCTAssertEqual(merged[0].start, 5)
+        XCTAssertEqual(merged[0].end, 15)
+    }
+}

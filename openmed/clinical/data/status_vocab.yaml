@@ -1,0 +1,64 @@
+schema_version: 1
+provenance:
+  task: OM-325
+  source: OpenMed curated deterministic status cue table for SDOH normalization.
+  license: Apache-2.0 repository asset.
+  disclaimer: Advisory normalization only; not a clinical decision rule or a substitute for review.
+defaults:
+  unknown_status: unknown
+vocabularies:
+  substance:
+    priority: [never, former, current]
+    current_statuses: [current]
+    axis_overrides:
+      negated: never
+      historical_current: former
+    statuses:
+      current:
+        cues: ["smoker", "smoking", "active use", "current use", "currently uses", "uses tobacco", "uses alcohol", "uses drugs", "drinks daily", "drinks alcohol", "alcohol use", "drug use", "tobacco use", "vapes", "vaping"]
+      former:
+        cues: ["former", "ex-", "ex smoker", "quit", "quit smoking", "quit alcohol", "quit drugs", "stopped smoking", "stopped drinking", "stopped using", "in remission", "status post", "s/p", "history of", "hx of", "past use", "remote use"]
+      never:
+        cues: ["denies", "denied", "never", "none", "non-smoker", "non smoker", "nonsmoker", "no tobacco", "no tobacco use", "no alcohol", "no alcohol use", "no drug use", "does not smoke", "does not drink", "abstains", "abstinent"]
+  employment:
+    priority: [never, retired, disabled, student, unemployed, former, employed]
+    current_statuses: [employed, unemployed, disabled, student]
+    axis_overrides:
+      negated: unemployed
+      historical_current: former
+    statuses:
+      employed:
+        cues: ["employed", "currently employed", "working", "works", "full-time", "full time", "part-time", "part time", "has a job", "job employed"]
+      unemployed:
+        cues: ["unemployed", "not employed", "jobless", "without work", "out of work", "no job", "laid off"]
+      retired:
+        cues: ["retired", "retiree"]
+      disabled:
+        cues: ["disabled", "on disability", "disability benefits", "unable to work"]
+      student:
+        cues: ["student", "in school", "attends school"]
+      former:
+        cues: ["formerly employed", "previously employed", "past employment", "stopped working", "quit job", "lost job"]
+      never:
+        cues: ["never employed", "no employment history", "denies employment"]
+  living:
+    priority: [never, former, homeless, assisted_living, lives_alone, lives_with_family, housed]
+    current_statuses: [homeless, assisted_living, lives_alone, lives_with_family, housed]
+    axis_overrides:
+      negated: never
+      historical_current: former
+    statuses:
+      housed:
+        cues: ["housed", "stable housing", "has housing", "lives at home", "home with", "own apartment", "own home"]
+      homeless:
+        cues: ["homeless", "unhoused", "without housing", "no housing", "shelter", "living in shelter", "street homeless"]
+      lives_alone:
+        cues: ["lives alone", "living alone", "alone at home"]
+      lives_with_family:
+        cues: ["lives with family", "living with family", "lives with spouse", "lives with daughter", "lives with son", "stays with family"]
+      assisted_living:
+        cues: ["assisted living", "nursing home", "skilled nursing facility", "snf", "long-term care", "long term care", "group home"]
+      former:
+        cues: ["formerly homeless", "previously homeless", "past homelessness", "prior homelessness", "history of homelessness", "no longer homeless"]
+      never:
+        cues: ["denies homelessness", "not homeless", "never homeless", "no housing insecurity"]

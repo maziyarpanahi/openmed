@@ -1,0 +1,28 @@
+{
+  "resource_type": "Observation",
+  "checkpoint_context": {
+    "page_token": "SYNTH-PAGE-TOKEN-2200",
+    "policy": {
+      "name": "v22-synthetic-export",
+      "revision": 1
+    },
+    "endpoint_scope": "https://bulk.synthetic.invalid/group/SYNTH-GROUP-2200"
+  },
+  "resume_context": {
+    "page_token": "SYNTH-PAGE-TOKEN-2200",
+    "policy": {
+      "name": "v22-synthetic-export",
+      "revision": 1
+    },
+    "endpoint_scope": "https://bulk.synthetic.invalid/group/SYNTH-GROUP-OTHER"
+  },
+  "progress": {
+    "pages_processed": 2,
+    "resources_processed": 7
+  },
+  "sensitive_values": [
+    "SYNTH-PAGE-TOKEN-2200",
+    "SYNTH-GROUP-2200",
+    "SYNTH-GROUP-OTHER"
+  ]
+}

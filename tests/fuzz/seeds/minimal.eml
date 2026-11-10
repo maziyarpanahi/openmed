@@ -1,0 +1,9 @@
+From: Synthetic Clinic <clinic@example.test>
+To: Synthetic Patient <patient@example.test>
+Subject: Synthetic appointment PATIENT-001
+Date: Mon, 01 Jan 2024 12:00:00 +0000
+Message-ID: <synthetic-001@example.test>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+This fabricated message concerns patient token PATIENT-001.

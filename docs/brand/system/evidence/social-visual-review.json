@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-07-29",
+  "review_scope": "repository_candidate",
+  "reviewer_role": "approved-export repository-candidate review",
+  "methods": [
+    "original-size inspection",
+    "320px max-edge thumbnail inspection",
+    "safe-zone overlay inspection"
+  ],
+  "assets": [
+    {
+      "id": "website-og",
+      "path": "docs/brand/social/og.png",
+      "sha256": "e10d071f877206c736d538f66b1a8c563b2b34fa265d0c0f05ba4900db91ac23",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    },
+    {
+      "id": "github-social",
+      "path": "docs/brand/social/github-social.png",
+      "sha256": "8f9dedeaac9fac463c0f14f805efb7d78bd8af6c45d38363e4bb65b8bc9bd4ac",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    },
+    {
+      "id": "x-header",
+      "path": "docs/brand/social/x-header.png",
+      "sha256": "c66e6c5929bd59fce543e454835913eab49df8a04f75a1fbd04a6cee22f63d0a",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    },
+    {
+      "id": "hugging-face-card",
+      "path": "docs/brand/social/hf-card.png",
+      "sha256": "8632da48f249fa38c817e0312c106bfadaabfa7669457555878c864e3649c387",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    },
+    {
+      "id": "readme-banner",
+      "path": "docs/brand/social/readme-banner.png",
+      "sha256": "3002104ff49d294a7361108af5951c8861b2d34623a7c0692443ec6c7800627f",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    },
+    {
+      "id": "linkedin-banner",
+      "path": "docs/brand/social/linkedin-banner.png",
+      "sha256": "13a8450ebf0c46bbccd6fc204badff83422a822135d39e8be390eb4074b54296",
+      "original_size": "pass",
+      "thumbnail_320_max_edge": "pass"
+    }
+  ],
+  "safe_zone_previews": [
+    {
+      "id": "github-social",
+      "path": "docs/brand/social/previews/github-social-safe-zone.png",
+      "sha256": "bcadbc8f1d20b245fb054ab259c82eb39b881e7822805103b858e3610968fcb2",
+      "crop_safe": "pass"
+    },
+    {
+      "id": "x-header",
+      "path": "docs/brand/social/previews/x-header-safe-zone.png",
+      "sha256": "f64edfeec64fbfa2ed6e3e678d6ef615d10ca6756b1c7e540546dc6eeeff25d9",
+      "crop_safe": "pass"
+    },
+    {
+      "id": "hugging-face-card",
+      "path": "docs/brand/social/previews/hugging-face-card-safe-zone.png",
+      "sha256": "5289c8515641bd70f9968513f1810a1d6cd58bdec8f5abf59bfbca8dfe44bd43",
+      "crop_safe": "pass"
+    },
+    {
+      "id": "linkedin-banner",
+      "path": "docs/brand/social/previews/linkedin-banner-safe-zone.png",
+      "sha256": "eac0f78fe10703d708486e064feb10fcfbe9ffd50b556e3aa5e8243d5657c4a0",
+      "crop_safe": "pass"
+    }
+  ],
+  "avatars": [
+    {
+      "id": "hugging-face-avatar",
+      "path": "docs/brand/social/avatar-square-512.png",
+      "sha256": "ebec7042b55b39fa8b14cc9a151b3752db7cceadbe7fb3072e8a1329f7013493",
+      "crop_safe": "pass",
+      "distinctive": "pass"
+    },
+    {
+      "id": "x-avatar",
+      "path": "docs/brand/social/avatar-circle-400.png",
+      "sha256": "700fb2e6363cdeccd686589c77ccc9942d95a6047583a571bdf95ebf4ac06d2e",
+      "crop_safe": "pass",
+      "distinctive": "pass"
+    },
+    {
+      "id": "linkedin-company-tile",
+      "path": "docs/brand/social/avatar-linkedin-300.png",
+      "sha256": "8d2bed45bb42a5e0b0dd8834a1c15eeabda0bb352cceebd35cde9f01c70205e6",
+      "crop_safe": "pass",
+      "distinctive": "pass"
+    }
+  ],
+  "findings": {
+    "clipping": "pass",
+    "primary_headline_legibility_at_320px": "pass",
+    "avatar_crop_and_distinction": "pass"
+  },
+  "thumbnail_note": "Primary headlines and marks remain legible at 320px; supporting metadata is intentional fine print and is not claimed to be universally legible at thumbnail size.",
+  "external_platform_approval": "pending_phase_5",
+  "qualification": "Repository-candidate evidence for the exact supplied exports only; this is not platform-owner approval. Embedded counts and claims are handoff-supplied pixels and must be changed in the source design file, never patched in the PNGs."
+}

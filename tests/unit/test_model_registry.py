@@ -1,0 +1,197 @@
+"""Tests for the static OpenMed model registry helpers."""
+
+import pytest
+
+from openmed.core import model_registry
+
+
+def test_summarizer_package_registration_is_alias_and_revision_bound(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+    assert model_registry.resolve_summarizer_package() is None
+    model_registry.register_summarizer_package(
+        "maple", package_root=tmp_path, manifest_digest="A" * 64
+    )
+    assert model_registry.resolve_summarizer_package("mlx") == (
+        tmp_path,
+        "sha256:" + "a" * 64,
+    )
+    assert model_registry.resolve_summarizer_package(
+        "maple-preview"
+    ) == model_registry.resolve_summarizer_package("mlx")
+    model_registry.clear_summarizer_package("mlx")
+    assert model_registry.resolve_summarizer_package("maple") is None
+
+
+def test_summarizer_registration_failure_drops_values_and_context(subtests):
+    for alias, root, digest in [
+        ("unregistered-private-name", "/opt/openmed/synthetic", "a" * 64),
+        ("mlx", "relative/private/path", "a" * 64),
+        ("mlx", "/opt/openmed/synthetic", "synthetic-private-token"),
+        ([], "/opt/openmed/synthetic", "a" * 64),
+    ]:
+        with subtests.test(alias=alias, root=root, digest=digest):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+                with pytest.raises(ValueError) as caught:
+                    model_registry.register_summarizer_package(
+                        alias, package_root=root, manifest_digest=digest
+                    )
+                assert str(caught.value) == "invalid summarizer package registration"
+                assert caught.value.__context__ is None
+                assert not model_registry._SUMMARIZER_PACKAGES
+
+
+from openmed.core.labels import CANONICAL_LABELS
+
+
+def test_get_model_info_known_key():
+    info = model_registry.get_model_info("disease_detection_tiny")
+    assert info is not None
+    assert "Disease" in info.category
+    assert info.size_mb is not None
+
+
+def test_get_model_info_unknown_key():
+    assert model_registry.get_model_info("does_not_exist") is None
+
+
+def test_get_models_by_category():
+    disease_models = model_registry.get_models_by_category("Disease")
+    assert disease_models
+    assert all(m.category == "Disease" for m in disease_models)
+
+    assert model_registry.get_models_by_category("Unknown") == []
+
+
+def test_get_all_models_structure():
+    models = model_registry.get_all_models()
+    assert isinstance(models, dict)
+    key, info = next(iter(models.items()))
+    assert isinstance(info.model_id, str)
+
+
+def test_get_model_suggestions():
+    suggestions = model_registry.get_model_suggestions("Patient diagnosed with cancer")
+    assert suggestions
+    top_key, info, reason = suggestions[0]
+    assert isinstance(top_key, str)
+    assert isinstance(reason, str)
+
+
+def test_model_suggestions_various_texts():
+    """Different inputs should still yield meaningful suggestions."""
+    oncology_suggestions = model_registry.get_model_suggestions(
+        "Patient diagnosed with metastatic cancer"
+    )
+    pharma_suggestions = model_registry.get_model_suggestions(
+        "Chemotherapy regimen includes cisplatin"
+    )
+
+    assert oncology_suggestions
+    assert pharma_suggestions
+    assert all(reason for _key, _info, reason in oncology_suggestions[:3])
+    assert all(reason for _key, _info, reason in pharma_suggestions[:3])
+
+
+def test_resolve_draft_model_for_laneformer_uses_separate_permissive_artifact():
+    draft = model_registry.resolve_draft_model_for("laneformer-2b-it")
+
+    assert draft is not None
+    assert draft.target_model_id == "OpenMed/laneformer-2b-it-q4-mlx"
+    assert draft.draft_model_id == "OpenMed/laneformer-pii-draft-350m-q4-mlx"
+    assert draft.tokenizer == "shared"
+    assert draft.permissive_license is True
+
+
+def test_biomedical_ner_category_entity_types_are_reconciled():
+    expected = {
+        "Oncology": {
+            "ANATOMY",
+            "CANCER",
+            "CELL",
+            "CHEMICAL",
+            "GENE_OR_GENE_PRODUCT",
+            "ORGAN",
+            "ORGANISM",
+            "PATHOLOGY",
+            "SPECIES",
+            "TISSUE",
+        },
+        "Anatomy": {"ANATOMY", "ORGAN", "TISSUE"},
+        "Genomics": {
+            "CELL",
+            "DNA",
+            "GENE",
+            "GENE_OR_GENE_PRODUCT",
+            "PROTEIN",
+            "RNA",
+        },
+        "Pathology": {"CONDITION", "DISEASE", "PATHOLOGY"},
+        "Hematology": {"CANCER", "CELL", "DISEASE"},
+        "Protein": {"GENE_OR_GENE_PRODUCT", "PROTEIN"},
+        "Chemical": {"CHEMICAL", "DRUG", "MEDICATION"},
+    }
+
+    for category, entity_types in expected.items():
+        registered = model_registry._CATEGORY_ENTITY_TYPES[category]
+        registered_set = set(registered)
+        assert registered_set == entity_types
+        assert len(registered) == len(registered_set)
+
+
+def test_non_privacy_category_entity_types_are_canonical():
+    for category, entity_types in model_registry._CATEGORY_ENTITY_TYPES.items():
+        if category == "Privacy":
+            continue
+        assert set(entity_types) <= CANONICAL_LABELS, (
+            f"{category} has non-canonical entity types: "
+            f"{set(entity_types) - CANONICAL_LABELS}"
+        )
+
+
+def test_get_entity_types_by_category_surfaces_biomedical_family_labels():
+    oncology_types = model_registry.get_entity_types_by_category("Oncology")
+
+    assert {
+        "AMINO_ACID",
+        "ANATOMICAL_SYSTEM",
+        "CELL",
+        "CELLULAR_COMPONENT",
+        "DEVELOPING_ANATOMICAL_STRUCTURE",
+        "GENE_OR_GENE_PRODUCT",
+        "IMMATERIAL_ANATOMICAL_ENTITY",
+        "MULTI_TISSUE_STRUCTURE",
+        "ORGAN",
+        "ORGANISM_SUBDIVISION",
+        "ORGANISM_SUBSTANCE",
+        "PATHOLOGICAL_FORMATION",
+        "TISSUE",
+    }.issubset(oncology_types)
+    assert {"CELL_LINE", "CELL_TYPE"}.issubset(
+        model_registry.get_entity_types_by_category("Genomics")
+    )
+    assert {
+        "PROTEIN_COMPLEX",
+        "PROTEIN_ENUM",
+        "PROTEIN_FAMILIY_OR_GROUP",
+        "PROTEIN_VARIANT",
+    }.issubset(model_registry.get_entity_types_by_category("Protein"))
+    assert "CL" in model_registry.get_entity_types_by_category("Hematology")
+    assert {"DRUG", "MEDICATION"}.issubset(
+        model_registry.get_entity_types_by_category("Chemical")
+    )
+    assert "CONDITION" in model_registry.get_entity_types_by_category("Pathology")
+
+
+def test_find_models_by_entity_type_returns_models_with_reconciled_family_labels():
+    organ_models = {
+        model.model_id for model in model_registry.find_models_by_entity_type("ORGAN")
+    }
+    oncology = model_registry.get_model_info("oncology_detection_superclinical")
+
+    assert "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M" in organ_models
+    assert "OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M" in organ_models
+    assert oncology is not None
+    assert "ORGAN" in oncology.entity_types

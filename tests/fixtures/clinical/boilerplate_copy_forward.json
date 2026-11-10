@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "source": "OpenMed synthetic boilerplate and copy-forward evaluation cases",
+    "license": "Apache-2.0",
+    "restricted_data": false,
+    "synthetic": true
+  },
+  "boilerplate_cases": [
+    {
+      "case_id": "normal-exam-template",
+      "text": "Assessment: Synthetic cough is improving today.\nConstitutional: well developed, well nourished, and in no acute distress.\nPlan: Continue supportive care.\n",
+      "gold_surfaces": [
+        {
+          "surface": "Constitutional: well developed, well nourished, and in no acute distress.",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "checkbox-scaffold",
+      "text": "Review of systems\n[ ] Replace this synthetic checkbox item before signing\nCurrent concern: intermittent cough.\n",
+      "gold_surfaces": [
+        {
+          "surface": "[ ] Replace this synthetic checkbox item before signing",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "dot-phrase-scaffold",
+      "text": "History: Synthetic symptoms began today.\n.NORMAL_EXAM\nPlan: Review tomorrow.\n",
+      "gold_surfaces": [
+        {
+          "surface": ".NORMAL_EXAM",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "placeholder-scaffold",
+      "text": "Family history: {{ enter synthetic family details }}\nAssessment: No family details supplied.\n",
+      "gold_surfaces": [
+        {
+          "surface": "Family history: {{ enter synthetic family details }}",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "patient-specific-clean-line",
+      "text": "Assessment: A new synthetic cough began after today's exercise.\nPlan: Reassess the newly reported symptom tomorrow.\n",
+      "gold_surfaces": []
+    }
+  ],
+  "copy_forward_cases": [
+    {
+      "case_id": "cross-document-exact",
+      "document_id": "current-a",
+      "source_documents": {
+        "prior-a": "Prior assessment:\nSynthetic cough improved after oral fluids and quiet rest overnight.\nPrior plan: review as needed.\n"
+      },
+      "text": "Current assessment:\nSynthetic cough improved after oral fluids and quiet rest overnight.\nNew plan: review tomorrow.\n",
+      "gold_surfaces": [
+        {
+          "surface": "Synthetic cough improved after oral fluids and quiet rest overnight.",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "cross-document-normalized",
+      "document_id": "current-b",
+      "source_documents": {
+        "prior-b": "CARDIOPULMONARY: Synthetic examination showed steady rhythm, clear breath sounds, and comfortable effort."
+      },
+      "text": "cardiopulmonary - synthetic examination showed steady rhythm clear breath sounds AND comfortable effort!",
+      "gold_surfaces": [
+        {
+          "surface": "cardiopulmonary - synthetic examination showed steady rhythm clear breath sounds AND comfortable effort!",
+          "occurrence": 0
+        }
+      ]
+    },
+    {
+      "case_id": "intra-document-repeat",
+      "document_id": "current-c",
+      "source_documents": {},
+      "text": "Assessment:\nSynthetic abdominal discomfort improved with hydration and gentle activity today.\nPlan: Continue observation.\nSynthetic abdominal discomfort improved with hydration and gentle activity today.\n",
+      "gold_surfaces": [
+        {
+          "surface": "Synthetic abdominal discomfort improved with hydration and gentle activity today.",
+          "occurrence": 1
+        }
+      ]
+    },
+    {
+      "case_id": "copy-forward-clean-note",
+      "document_id": "current-d",
+      "source_documents": {
+        "prior-d": "Synthetic ankle stiffness resolved after rest and elevation yesterday."
+      },
+      "text": "A newly reported synthetic headache began during today's exercise session.",
+      "gold_surfaces": []
+    }
+  ]
+}

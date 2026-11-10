@@ -1,0 +1,108 @@
+{
+  "manifest_version": 1,
+  "packs": [
+    {
+      "budget": {
+        "max_bytes": 100000,
+        "max_skills": 12
+      },
+      "description": "Privacy-first de-identification, audit, policy, and risk workflows for local clinical data.",
+      "id": "privacy",
+      "skills": [
+        "auditing-deid-leakage",
+        "auditing-deidentification-runs",
+        "auditing-safe-harbor-checklist",
+        "checking-hipaa-compliance",
+        "configuring-privacy-policies",
+        "deidentifying-clinical-text",
+        "extracting-pii-entities",
+        "generating-synthetic-surrogates",
+        "pseudonymizing-for-gdpr",
+        "reviewing-reidentification-risk",
+        "shifting-clinical-dates"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "budget": {
+        "max_bytes": 100000,
+        "max_skills": 12
+      },
+      "description": "Local document intake, FHIR exchange, and standards-based interoperability workflows.",
+      "id": "interoperability",
+      "skills": [
+        "assembling-fhir-bundles",
+        "bridging-presidio-and-spacy",
+        "exporting-bulk-fhir",
+        "exporting-to-fhir",
+        "extracting-dicom-metadata",
+        "fetching-fhir-resources",
+        "ingesting-clinical-documents",
+        "parsing-ccda-documents",
+        "parsing-hl7v2-messages",
+        "scaffolding-smart-on-fhir",
+        "validating-us-core"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "budget": {
+        "max_bytes": 100000,
+        "max_skills": 12
+      },
+      "description": "Clinical terminology, coding, normalization, and structured cohort-mapping workflows.",
+      "id": "coding",
+      "skills": [
+        "coding-hcc-risk-adjustment",
+        "coding-icd10",
+        "etl-to-omop-cdm",
+        "linking-umls-concepts",
+        "mapping-loinc",
+        "mapping-to-snomed",
+        "normalizing-rxnorm",
+        "parsing-lab-values",
+        "querying-terminology-service"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "budget": {
+        "max_bytes": 100000,
+        "max_skills": 12
+      },
+      "description": "Offline evaluation, model selection, leakage gates, and quality evidence for OpenMed skills.",
+      "id": "evaluation",
+      "skills": [
+        "auditing-subgroup-fairness",
+        "authoring-model-cards",
+        "benchmark-pii-recall",
+        "benchmarking-clinical-ner",
+        "building-gold-corpus",
+        "evaluating-with-leakage-gates",
+        "gating-deid-leakage",
+        "pick-a-pii-model"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "budget": {
+        "max_bytes": 100000,
+        "max_skills": 12
+      },
+      "description": "Synthetic-data, biomedical research, clinical-trial, and longitudinal analysis workflows.",
+      "id": "research",
+      "skills": [
+        "annotating-variants",
+        "building-patient-timelines",
+        "computing-ecqms",
+        "defining-cohort-phenotypes",
+        "extracting-lab-tables",
+        "generating-synthea-data",
+        "mining-pubmed-literature",
+        "parsing-trial-eligibility",
+        "searching-clinicaltrials"
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}

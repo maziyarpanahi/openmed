@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0.0",
+  "examples": [
+    {
+      "case_id": "negated_condition",
+      "profile": "condition",
+      "fields": {
+        "assertion": "negated",
+        "certainty": "certain",
+        "experiencer": "patient",
+        "status": "inactive",
+        "value": {"code": "synthetic-condition-negated"}
+      },
+      "output": {"label": "condition", "polarity": "negated"},
+      "parent_fact_ids": [],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "uncertain_family_history",
+      "profile": "condition",
+      "fields": {
+        "assertion": "uncertain",
+        "certainty": "possible",
+        "experiencer": "family",
+        "status": "history",
+        "value": {"code": "synthetic-family-condition"}
+      },
+      "output": {"label": "condition", "subject": "family"},
+      "parent_fact_ids": [],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "partial_date_procedure",
+      "profile": "procedure",
+      "fields": {
+        "assertion": "affirmed",
+        "effective_time": {"precision": "month", "start": "2025-06"},
+        "experiencer": "patient",
+        "status": "completed",
+        "value": {"code": "synthetic-procedure"}
+      },
+      "output": {"date": "2025-06", "label": "procedure"},
+      "parent_fact_ids": [],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "laboratory_range_and_unit",
+      "profile": "laboratory",
+      "fields": {
+        "effective_time": {"precision": "day", "start": "2026-01-12"},
+        "status": "final",
+        "unit": "mg/dL",
+        "value": {"numeric": 88, "range": {"high": 99, "low": 70}}
+      },
+      "output": {"flag": "normal", "numeric": 88, "unit": "mg/dL"},
+      "parent_fact_ids": [],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "amended_observation",
+      "profile": "observation",
+      "fields": {
+        "assertion": "affirmed",
+        "effective_time": {"precision": "day", "start": "2026-01-12"},
+        "experiencer": "patient",
+        "status": "amended",
+        "value": {"code": "synthetic-observation-amended"}
+      },
+      "output": {"amendment": 2, "label": "observation"},
+      "parent_fact_ids": ["fact_aaaaaaaaaaaaaaaa"],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "cross_sentence_relation",
+      "profile": "medication",
+      "fields": {
+        "assertion": "affirmed",
+        "experiencer": "patient",
+        "relation_participants": [
+          {
+            "role": "indication",
+            "target_id": "fact_aaaaaaaaaaaaaaaa",
+            "target_type": "fact"
+          }
+        ],
+        "status": "active",
+        "value": {"code": "synthetic-medication"}
+      },
+      "output": {"relation": "drug_to_indication", "sentence_distance": 1},
+      "parent_fact_ids": ["fact_aaaaaaaaaaaaaaaa"],
+      "expected_state": "success"
+    },
+    {
+      "case_id": "multilingual_span",
+      "profile": "social_determinant",
+      "fields": {
+        "assertion": "affirmed",
+        "certainty": "certain",
+        "effective_time": {"precision": "year", "start": "2023"},
+        "experiencer": "patient",
+        "status": "historical",
+        "value": {"code": "synthetic-social-state"}
+      },
+      "output": {"end": 8, "mention": "合成状态", "start": 4},
+      "parent_fact_ids": [],
+      "expected_state": "success"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "locale": "hi-Latn-IN",
+  "language": "hi",
+  "synthetic": true,
+  "contains_real_phi": false,
+  "provenance": "Invented code-mixed note and seeded checksum-valid test identifier; no patient source was used.",
+  "text": "Patient ka naam Kavya Nawal hai; आधार 246778325484.",
+  "expected_script": "Latin",
+  "expected_segments": [
+    {"start": 0, "end": 33, "script": "Latin"},
+    {"start": 33, "end": 51, "script": "Devanagari"}
+  ],
+  "expected_entities": [
+    {"label": "national_id", "start": 38, "end": 50, "text": "246778325484"}
+  ],
+  "expected_tokens": [
+    {"start": 0, "end": 7, "text": "Patient"},
+    {"start": 8, "end": 10, "text": "ka"},
+    {"start": 11, "end": 15, "text": "naam"},
+    {"start": 16, "end": 21, "text": "Kavya"},
+    {"start": 22, "end": 27, "text": "Nawal"},
+    {"start": 28, "end": 31, "text": "hai"},
+    {"start": 31, "end": 32, "text": ";"},
+    {"start": 33, "end": 37, "text": "आधार"},
+    {"start": 38, "end": 50, "text": "246778325484"},
+    {"start": 50, "end": 51, "text": "."}
+  ]
+}

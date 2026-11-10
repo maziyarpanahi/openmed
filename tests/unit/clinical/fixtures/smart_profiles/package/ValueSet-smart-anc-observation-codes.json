@@ -1,0 +1,20 @@
+{
+  "resourceType": "ValueSet",
+  "id": "smart-anc-observation-codes",
+  "url": "https://openmed.example/fhir/ValueSet/smart-anc-observation-codes",
+  "version": "0.0.1",
+  "name": "SyntheticSmartAncObservationCodes",
+  "status": "draft",
+  "compose": {
+    "include": [
+      {
+        "system": "https://openmed.example/smart-anc/observations",
+        "concept": [
+          {
+            "code": "anc-weight"
+          }
+        ]
+      }
+    ]
+  }
+}

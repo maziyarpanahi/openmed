@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "synthetic_only": true,
+  "source_contracts": "Python project_visual/project_transcript factories",
+  "cases": [
+    {
+      "id": "ambiguous_visual",
+      "kind": "handwriting",
+      "status": "current",
+      "revision": "51dba8759d991d3b467418e18717c6c498a1849c1cea19c7576ef2ac4a45deb2",
+      "uncertainty": [
+        "ambiguousHandwriting"
+      ],
+      "wire": "{\"evidence_digest\":\"b1e036e42f0b8d30c4de0da22f4ffc6d0862540aa4ebd34d78dd713240a4a5e6\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_height_f64\":\"4089000000000000\",\"display_width_f64\":\"4082c00000000000\",\"height_f64\":\"4089000000000000\",\"kind\":\"pixels\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":0,\"source_digest\":\"1dcca6e4773ad47c94d4d88444ee08780e179b1eba689ea373070b5e42a7abcb\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":null,\"unit\":\"pixel\",\"width_f64\":\"4082c00000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "text": "Synthetic handwritten dose; compare both interpretations.",
+      "image_text": "12 ?",
+      "alternatives": [
+        {
+          "reference": "0000000000000000000000000000000a",
+          "value": "12 mg"
+        },
+        {
+          "reference": "0000000000000000000000000000000b",
+          "value": "17 mg"
+        }
+      ]
+    },
+    {
+      "id": "stale_evidence",
+      "kind": "visualConflict",
+      "status": "stale",
+      "revision": "0c710199c65e63a595b7d2fca483c79218b0ae3f11ed7f9e2b6ee35dd6a8d7da",
+      "uncertainty": [
+        "conflictingValues"
+      ],
+      "wire": "{\"evidence_digest\":\"b1e036e42f0b8d30c4de0da22f4ffc6d0862540aa4ebd34d78dd713240a4a5e6\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_height_f64\":\"4089000000000000\",\"display_width_f64\":\"4082c00000000000\",\"height_f64\":\"4089000000000000\",\"kind\":\"pixels\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":0,\"source_digest\":\"1dcca6e4773ad47c94d4d88444ee08780e179b1eba689ea373070b5e42a7abcb\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":null,\"unit\":\"pixel\",\"width_f64\":\"4082c00000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "text": "Synthetic handwritten dose; compare both interpretations.",
+      "image_text": "12 ?",
+      "alternatives": [
+        {
+          "reference": "0000000000000000000000000000000a",
+          "value": "12 mg"
+        },
+        {
+          "reference": "0000000000000000000000000000000b",
+          "value": "17 mg"
+        }
+      ]
+    },
+    {
+      "id": "missing_content",
+      "kind": "handwriting",
+      "status": "missing",
+      "revision": "2dad7e96d0c5578af76f46ccdc783b8968769b19d352eafa0dea6a84a5fa7ba7",
+      "uncertainty": [
+        "ambiguousHandwriting"
+      ],
+      "wire": "{\"evidence_digest\":\"b1e036e42f0b8d30c4de0da22f4ffc6d0862540aa4ebd34d78dd713240a4a5e6\",\"kind\":\"visual\",\"payload\":{\"box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_box_f64\":[\"4044000000000000\",\"4054000000000000\",\"4071800000000000\",\"4066000000000000\"],\"display_height_f64\":\"4089000000000000\",\"display_width_f64\":\"4082c00000000000\",\"height_f64\":\"4089000000000000\",\"kind\":\"pixels\",\"node_ref\":\"11111111111111111111111111111111\",\"page\":0,\"rotation\":0,\"source_digest\":\"1dcca6e4773ad47c94d4d88444ee08780e179b1eba689ea373070b5e42a7abcb\",\"source_schema\":\"openmed.multimodal.fused-evidence.v1\",\"span\":null,\"unit\":\"pixel\",\"width_f64\":\"4082c00000000000\"},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "text": "Synthetic handwritten dose; compare both interpretations.",
+      "image_text": "12 ?",
+      "alternatives": [
+        {
+          "reference": "0000000000000000000000000000000a",
+          "value": "12 mg"
+        },
+        {
+          "reference": "0000000000000000000000000000000b",
+          "value": "17 mg"
+        }
+      ]
+    },
+    {
+      "id": "uncertain_speaker",
+      "kind": "speakerRole",
+      "status": "current",
+      "revision": "439deaa0b994c95c98612a4a427842fc22a28c5abc0e28eaecc8b0da24343702",
+      "uncertainty": [
+        "uncertainSpeaker"
+      ],
+      "wire": "{\"evidence_digest\":\"d9da1d8b103f46116163e4f5e88cd2a7e0a5d82cecddac41143a8454a52dc538\",\"kind\":\"transcript\",\"payload\":{\"current_span\":[0,13],\"finalized\":true,\"invalidation\":null,\"length\":13,\"original_revision\":0,\"original_span\":[0,13],\"revision\":1,\"sample_bounds\":[0,16000],\"sample_rate_hz\":16000,\"segment_ref\":\"33333333333333333333333333333333\",\"session_ref\":\"22222222222222222222222222222222\",\"snapshot_digest\":\"02f5e29de5a2cb9dfd762fc94b6c33679ec8c605ad64be2552b847a0bf400f1b\",\"source_schema\":\"openmed.transcript.revisions.v1\",\"span_ref\":\"55555555555555555555555555555555\",\"time_ms\":[0,1000],\"token_refs\":[\"44444444444444444444444444444444\"]},\"schema_version\":\"openmed.multimodal.apple.v1\"}",
+      "text": "I took 12 mg.",
+      "image_text": null,
+      "alternatives": [
+        {
+          "reference": "0000000000000000000000000000000a",
+          "value": "Clinician"
+        },
+        {
+          "reference": "0000000000000000000000000000000b",
+          "value": "Patient"
+        },
+        {
+          "reference": "0000000000000000000000000000000c",
+          "value": "Unconfirmed"
+        }
+      ]
+    }
+  ]
+}

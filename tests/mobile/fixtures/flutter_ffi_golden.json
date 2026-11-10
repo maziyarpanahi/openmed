@@ -1,0 +1,27 @@
+{
+  "format": "openmed-flutter-ffi-golden",
+  "version": 1,
+  "text": "Patient Alice Nguyen was born on 1979-04-12. Email alice@example.org.",
+  "deidentified_text": "Patient [PERSON] was born on [DATE_OF_BIRTH]. Email [EMAIL].",
+  "score_tolerance": 0.02,
+  "spans": [
+    {
+      "start": 8,
+      "end": 20,
+      "label": "PERSON",
+      "score": 0.98
+    },
+    {
+      "start": 33,
+      "end": 43,
+      "label": "DATE_OF_BIRTH",
+      "score": 0.98
+    },
+    {
+      "start": 51,
+      "end": 68,
+      "label": "EMAIL",
+      "score": 0.98
+    }
+  ]
+}

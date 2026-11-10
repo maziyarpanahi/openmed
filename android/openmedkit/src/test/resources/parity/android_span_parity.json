@@ -1,0 +1,338 @@
+{
+  "android_profile": {
+    "onnx_format": "onnx-android",
+    "opset": 18,
+    "profile": "android"
+  },
+  "cases": [
+    {
+      "id": "synth-note-001",
+      "phi_free": true,
+      "spans": [
+        {
+          "canonical_label": "PERSON",
+          "detector": "android_onnx_parity",
+          "doc_id": "synth-note-001",
+          "end": 19,
+          "entity_type": "person",
+          "policy_label": "DIRECT_IDENTIFIER",
+          "raw_label": "PERSON",
+          "schema_version": 1,
+          "score": 1.0,
+          "start": 0,
+          "text_hash": "hmac-sha256:4e9d675a343ae3dfaa900289ef78fda6bc372cced15e276e5e6f36dc715d6252",
+          "token_end": 2,
+          "token_start": 1
+        },
+        {
+          "canonical_label": "ORGANIZATION",
+          "detector": "android_onnx_parity",
+          "doc_id": "synth-note-001",
+          "end": 45,
+          "entity_type": "organization",
+          "policy_label": "QUASI_IDENTIFIER",
+          "raw_label": "ORGANIZATION",
+          "schema_version": 1,
+          "score": 1.0,
+          "start": 28,
+          "text_hash": "hmac-sha256:fe690ffff70a97959a5946e28847bb7b42b089b77872186236c53f2e0d22cd56",
+          "token_end": 4,
+          "token_start": 3
+        },
+        {
+          "canonical_label": "DATE",
+          "detector": "android_onnx_parity",
+          "doc_id": "synth-note-001",
+          "end": 69,
+          "entity_type": "date",
+          "policy_label": "QUASI_IDENTIFIER",
+          "raw_label": "DATE",
+          "schema_version": 1,
+          "score": 1.0,
+          "start": 49,
+          "text_hash": "hmac-sha256:6f5a4eb910c5a99345e4d7437b0759bd6f1d77a97e456f335d8f1c4c17deb48e",
+          "token_end": 6,
+          "token_start": 5
+        }
+      ],
+      "synthetic": true,
+      "text": "SYNTH_PATIENT_ALPHA visited SYNTH_CLINIC_BETA on SYNTH_DATE_2099Q4D18.",
+      "tokens": [
+        {
+          "attention_mask": 1,
+          "id": 101,
+          "index": 0,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            0,
+            0
+          ],
+          "score": 1.0,
+          "special": true
+        },
+        {
+          "attention_mask": 1,
+          "id": 2100,
+          "index": 1,
+          "label": "B-PERSON",
+          "label_id": 1,
+          "offset": [
+            0,
+            19
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2101,
+          "index": 2,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            20,
+            27
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2102,
+          "index": 3,
+          "label": "B-ORGANIZATION",
+          "label_id": 3,
+          "offset": [
+            28,
+            45
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2103,
+          "index": 4,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            46,
+            48
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2104,
+          "index": 5,
+          "label": "B-DATE",
+          "label_id": 5,
+          "offset": [
+            49,
+            69
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 102,
+          "index": 6,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            0,
+            0
+          ],
+          "score": 1.0,
+          "special": true
+        }
+      ]
+    },
+    {
+      "id": "synth-note-002",
+      "phi_free": true,
+      "spans": [
+        {
+          "canonical_label": "PERSON",
+          "detector": "android_onnx_parity",
+          "doc_id": "synth-note-002",
+          "end": 35,
+          "entity_type": "person",
+          "policy_label": "DIRECT_IDENTIFIER",
+          "raw_label": "PERSON",
+          "schema_version": 1,
+          "score": 1.0,
+          "start": 17,
+          "text_hash": "hmac-sha256:9290293bdf5307d289e88db4674baf2b3c0eda6064fd22672e0b3ccae4e1627f",
+          "token_end": 5,
+          "token_start": 4
+        },
+        {
+          "canonical_label": "PHONE",
+          "detector": "android_onnx_parity",
+          "doc_id": "synth-note-002",
+          "end": 64,
+          "entity_type": "phone",
+          "policy_label": "DIRECT_IDENTIFIER",
+          "raw_label": "PHONE",
+          "schema_version": 1,
+          "score": 1.0,
+          "start": 44,
+          "text_hash": "hmac-sha256:fd2984cc51006ac9f8a2644588e4c4f99f7a57029f16207a4b19bf36b30d10ee",
+          "token_end": 7,
+          "token_start": 6
+        }
+      ],
+      "synthetic": true,
+      "text": "Route results to SYNTH_PERSON_BRAVO through SYNTH_PHONE_TOKEN_42.",
+      "tokens": [
+        {
+          "attention_mask": 1,
+          "id": 101,
+          "index": 0,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            0,
+            0
+          ],
+          "score": 1.0,
+          "special": true
+        },
+        {
+          "attention_mask": 1,
+          "id": 2200,
+          "index": 1,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            0,
+            5
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2201,
+          "index": 2,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            6,
+            13
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2202,
+          "index": 3,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            14,
+            16
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2203,
+          "index": 4,
+          "label": "B-PERSON",
+          "label_id": 1,
+          "offset": [
+            17,
+            35
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2204,
+          "index": 5,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            36,
+            43
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 2205,
+          "index": 6,
+          "label": "B-PHONE",
+          "label_id": 7,
+          "offset": [
+            44,
+            64
+          ],
+          "score": 1.0,
+          "special": false
+        },
+        {
+          "attention_mask": 1,
+          "id": 102,
+          "index": 7,
+          "label": "O",
+          "label_id": 0,
+          "offset": [
+            0,
+            0
+          ],
+          "score": 1.0,
+          "special": true
+        }
+      ]
+    }
+  ],
+  "contract": {
+    "char_offsets": {
+      "json_path": "cases[].tokens[].offset",
+      "mode": "exact"
+    },
+    "logit_ties": {
+      "reason": "Python argmax and Android decoder must be deterministic.",
+      "tie_break": "lowest_label_id"
+    },
+    "span_boundaries": {
+      "json_path": "cases[].spans[].start/end",
+      "mode": "exact",
+      "tolerance_chars": 0
+    },
+    "span_labels": {
+      "json_path": "cases[].spans[].canonical_label",
+      "mode": "exact"
+    },
+    "token_ids": {
+      "json_path": "cases[].tokens[].id",
+      "mode": "exact"
+    }
+  },
+  "format": "openmed-android-span-parity",
+  "format_version": 1,
+  "model": {
+    "label_map_path": "id2label.json",
+    "manifest_path": "openmed-onnx.json",
+    "max_sequence_length": 64,
+    "model_path": "model.onnx",
+    "source_model_id": "OpenMed/android-parity-fixture",
+    "tokenizer_path": "."
+  },
+  "openmed_span_schema_version": 1,
+  "paths": {
+    "android_resource": "android/openmedkit/src/test/resources/parity/android_span_parity.json",
+    "docs": "docs/android-parity.md",
+    "generator": "scripts/android/generate_parity_fixtures.py"
+  }
+}

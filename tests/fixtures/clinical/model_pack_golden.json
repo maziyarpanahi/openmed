@@ -1,0 +1,77 @@
+{
+  "compatibility_policy": "same_major",
+  "entries": [
+    {
+      "alias": "classifier.deberta",
+      "artifact_digest": "sha256:690e1aa7419a956ff38e5887861bb90fc2f724b3ce9c349f1a4beda65d8c8558",
+      "artifact_id": "local/clinical-classifier",
+      "artifact_kind": "model",
+      "calibration": {
+        "calibration_dataset_digest": "sha256:e152337e4e85aa3e81482f0ce329aec7bfad531413fe53fef84f1f0d4165caee",
+        "holdout_dataset_digest": "sha256:d179b28cc8927b726d766bc0a22ed40ffc879d40f62a100e7d97dabb24253669",
+        "method": "temperature",
+        "seed": 17,
+        "threshold": 0.7
+      },
+      "compatibility_policy": "same_major",
+      "domains": ["clinical"],
+      "experimental": false,
+      "fallback": {"alias": "rules.classification", "mode": "alias"},
+      "family": "deberta_v2",
+      "languages": ["en"],
+      "license": "apache-2.0",
+      "model_kind": "bounded",
+      "output_schema": "clinical_component",
+      "output_schema_version": "1.0.0",
+      "priority": 10,
+      "quantization": {
+        "evaluation_digest": null,
+        "maximum_delta": null,
+        "metric": null,
+        "mode": "fp32",
+        "observed_delta": null
+      },
+      "revision": "local-v1",
+      "runtime": "torch",
+      "schema_version": "1.0.0",
+      "task": "classification"
+    },
+    {
+      "alias": "rules.classification",
+      "artifact_digest": "sha256:3ae5d5b4b2aadbf4480c136eec6b054d42c97279ba43c498f4baf4245c8f726f",
+      "artifact_id": "builtin/rules.classification",
+      "artifact_kind": "builtin",
+      "calibration": {
+        "calibration_dataset_digest": null,
+        "holdout_dataset_digest": null,
+        "method": "none",
+        "seed": null,
+        "threshold": null
+      },
+      "compatibility_policy": "same_major",
+      "domains": ["clinical"],
+      "experimental": false,
+      "fallback": {"alias": null, "mode": "none"},
+      "family": "deterministic_rules",
+      "languages": ["en"],
+      "license": "apache-2.0",
+      "model_kind": "deterministic",
+      "output_schema": "clinical_component",
+      "output_schema_version": "1.0.0",
+      "priority": 900,
+      "quantization": {
+        "evaluation_digest": null,
+        "maximum_delta": null,
+        "metric": null,
+        "mode": "fp32",
+        "observed_delta": null
+      },
+      "revision": "builtin-v1",
+      "runtime": "builtin",
+      "schema_version": "1.0.0",
+      "task": "classification"
+    }
+  ],
+  "pack_id": "clinical.local.v1",
+  "schema_version": "1.0.0"
+}

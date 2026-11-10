@@ -1,0 +1,48 @@
+{
+  "schema_version": "openmed.cohort.phenotype.v1",
+  "id": "diabetes-on-metformin",
+  "name": "Diabetes on metformin",
+  "description": "Example definition using public OMOP concept identifiers.",
+  "concept_sets": [
+    {
+      "id": "diabetes",
+      "vocabulary": "OMOP",
+      "concept_ids": [201826],
+      "include_descendants": true
+    },
+    {
+      "id": "metformin",
+      "vocabulary": "OMOP",
+      "concept_ids": [1503297],
+      "include_descendants": false
+    }
+  ],
+  "expression": {
+    "operator": "and",
+    "children": [
+      {
+        "operator": "criterion",
+        "criterion": {
+          "id": "has-diabetes",
+          "concept_set": "diabetes",
+          "occurrence": {"minimum": 1},
+          "assertion": {"negation": ["affirmed"]}
+        }
+      },
+      {
+        "operator": "criterion",
+        "criterion": {
+          "id": "has-metformin",
+          "concept_set": "metformin",
+          "occurrence": {"minimum": 1},
+          "assertion": {"negation": ["affirmed"]},
+          "temporal": {
+            "anchor_criterion": "has-diabetes",
+            "days_before": 0,
+            "days_after": 365
+          }
+        }
+      }
+    ]
+  }
+}

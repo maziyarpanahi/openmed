@@ -1,0 +1,1276 @@
+"""Smoke tests for import-safe example scripts."""
+
+from __future__ import annotations
+
+import ast
+import importlib
+import json
+import os
+import re
+import runpy
+import socket
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+import yaml
+from jsonschema import validate
+
+from examples import (
+    clinical_ner_families,
+    datasets_walkthrough,
+    deid_chinese_clinical_note,
+    deid_hindi_hinglish_note,
+    gradio_deid_app,
+    onboarding_china_mirrors,
+    onboarding_india_dpdp,
+    v30_nli_relations,
+    v30_sdoh_timeline,
+)
+
+deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
+
+
+def test_federated_round_walkthrough_is_import_safe(capsys):
+    root = Path(__file__).resolve().parents[2]
+    namespace = runpy.run_path(
+        str(root / "examples/federated_round_walkthrough.py"),
+        run_name="example_import",
+    )
+    assert callable(namespace["run_example"])
+    assert callable(namespace["main"])
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("output_format", ("json", "markdown"))
+def test_federated_round_walkthrough_cli_matches_golden_bytes(output_format):
+    root = Path(__file__).resolve().parents[2]
+    extension = "json" if output_format == "json" else "md"
+    expected = (
+        root / f"tests/fixtures/training/federated_round_walkthrough.{extension}"
+    ).read_bytes()
+    assert expected.endswith(b"\n")
+    assert not expected.endswith(b"\n\n")
+    outputs = []
+    for _ in range(2):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "examples.federated_round_walkthrough",
+                "--format",
+                output_format,
+            ],
+            cwd=root,
+            input=b"EXTERNAL_INPUT_MUST_NOT_BE_READ\n",
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        assert result.stderr == b""
+        assert result.stdout == expected
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1]
+
+
+def _assert_sdoh_timeline_demo_output(output: str) -> None:
+    records = [json.loads(line) for line in output.splitlines()]
+    assert len(records) == 12
+    assert records[0] == {
+        "record": "demonstration",
+        "data": "synthetic",
+        "clinical_validation": "not_validated",
+        "review": "required",
+    }
+    assert records[1:4] == [
+        {
+            "record": "sdoh",
+            "category": "employment",
+            "status": "unemployed",
+            "span": [45, 55],
+        },
+        {
+            "record": "sdoh",
+            "category": "food_insecurity",
+            "status": "current",
+            "span": [70, 85],
+        },
+        {
+            "record": "sdoh",
+            "category": "living_status",
+            "status": "lives_alone",
+            "span": [57, 68],
+        },
+    ]
+    assert records[4:8] == [
+        {"record": "temporal", "kind": "DATE", "span": [121, 131], "state": "anchored"},
+        {"record": "temporal", "kind": "DATE", "span": [139, 144], "state": "anchored"},
+        {
+            "record": "temporal",
+            "kind": "DATE",
+            "span": [160, 170],
+            "state": "ambiguous",
+        },
+        {"record": "temporal", "kind": "DATE", "span": [197, 206], "state": "anchored"},
+    ]
+    assert [
+        (
+            row["kind"],
+            row["span"],
+            row["temporality"],
+            row["certainty"],
+            row["time_state"],
+        )
+        for row in records[8:]
+    ] == [
+        ("symptom", [115, 120], "historical", "certain", "anchored"),
+        ("symptom", [133, 138], "recent", "certain", "anchored"),
+        ("symptom", [146, 153], "recent", "uncertain", "relative_or_unknown"),
+        ("event", [187, 196], "hypothetical", "uncertain", "anchored"),
+    ]
+    for row in records[8:]:
+        assert set(row) == {
+            "record",
+            "kind",
+            "span",
+            "temporality",
+            "certainty",
+            "negation",
+            "experiencer",
+            "time_state",
+            "review",
+        }
+        assert row["record"] == "timeline"
+        assert row["negation"] == "affirmed"
+        assert row["experiencer"] == "patient"
+        assert row["review"] == "required"
+    for surface in (
+        v30_sdoh_timeline.SYNTHETIC_NOTE,
+        "retired teacher",
+        "fever",
+        "cough",
+        "fatigue",
+        "follow-up",
+        "03/04/2026",
+        "2026-06-12",
+        "2026-06-15",
+        "2026-06-17",
+        "3 days ago",
+        "in 2 days",
+    ):
+        assert surface not in output
+
+
+@pytest.fixture
+def forbid_sdoh_timeline_model_loading(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("synthetic example attempted model loading")
+
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+    monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
+
+
+def test_sdoh_timeline_example_is_import_safe(
+    capsys, forbid_sdoh_timeline_model_loading
+):
+    namespace = runpy.run_path(v30_sdoh_timeline.__file__, run_name="example_import")
+    assert callable(namespace["build_demo_records"])
+    assert capsys.readouterr() == ("", "")
+
+
+def test_sdoh_timeline_example_runs_real_public_calls_offline(
+    capsys, forbid_sdoh_timeline_model_loading
+):
+    first = v30_sdoh_timeline.build_demo_records()
+    assert v30_sdoh_timeline.build_demo_records() == first
+    assert v30_sdoh_timeline.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    _assert_sdoh_timeline_demo_output(captured.out)
+
+
+@pytest.mark.slow
+def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "examples.v30_sdoh_timeline"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(root), os.environ.get("PYTHONPATH")))
+            ),
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+        },
+        input="EXTERNAL_NOTE_MUST_NOT_BE_READ\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert result.stderr == ""
+    assert "EXTERNAL_NOTE_MUST_NOT_BE_READ" not in result.stdout
+    _assert_sdoh_timeline_demo_output(result.stdout)
+
+
+def test_sdoh_timeline_example_refuses_arguments_without_echo(subtests, capsys):
+    for arguments in [
+        ["PRIVATE_ARGUMENT_SENTINEL"],
+        ["--note", "PRIVATE_ARGUMENT_SENTINEL"],
+    ]:
+        with subtests.test(arguments=arguments):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+
+                def fail():
+                    pytest.fail("argument refusal ran extraction")
+
+                monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", fail)
+                assert v30_sdoh_timeline.main(arguments) == 2
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_example_accepts_no_arguments\n",
+                )
+
+
+def test_sdoh_timeline_example_reports_api_failure_without_partial_output(
+    subtests, capsys
+):
+    for public_call in [
+        "detect_sections",
+        "extract_sdoh",
+        "normalize_temporal",
+        "build_timeline",
+    ]:
+        with subtests.test(public_call=public_call):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+
+                def fail(*args, **kwargs):
+                    raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+                monkeypatch.setattr(v30_sdoh_timeline, public_call, fail)
+                assert v30_sdoh_timeline.main([]) == 1
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_example_contract_failed\n",
+                )
+
+
+def test_sdoh_timeline_example_detects_section_scope_drift(monkeypatch, capsys):
+    monkeypatch.setattr(v30_sdoh_timeline, "detect_sections", lambda _: [])
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_sdoh_timeline_example_detects_normalization_drift(monkeypatch, capsys):
+    normalize = v30_sdoh_timeline.normalize_temporal
+
+    def changed(*args, **kwargs):
+        from dataclasses import replace
+
+        values = list(normalize(*args, **kwargs))
+        values[0] = replace(values[0], value="1900-01-01")
+        return tuple(values)
+
+    monkeypatch.setattr(v30_sdoh_timeline, "normalize_temporal", changed)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_sdoh_timeline_output_check_rejects_unprojected_temporal_values():
+    records = v30_sdoh_timeline.build_demo_records()
+    records[4]["value"] = "2026-06-12"
+    with pytest.raises(AssertionError):
+        _assert_sdoh_timeline_demo_output("\n".join(json.dumps(row) for row in records))
+
+
+@pytest.mark.parametrize("drift", ["object", "private_kind", "nonfinite", "alias"])
+def test_sdoh_timeline_cli_refuses_scalar_drift_before_any_output(
+    drift, monkeypatch, capsys
+):
+    records = v30_sdoh_timeline.build_demo_records()
+    if drift == "object":
+        records[4]["kind"] = object()
+    elif drift == "private_kind":
+        records[4]["kind"] = "PRIVATE_PROVIDER_KIND"
+    elif drift == "nonfinite":
+        records[4]["span"][0] = float("nan")
+    else:
+
+        class Impersonator(str):
+            def __eq__(self, other):
+                return other == "unemployed"
+
+            def __hash__(self):
+                return hash("unemployed")
+
+        records[1]["status"] = Impersonator("PRIVATE_PROVIDER_STATUS")
+    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", lambda: records)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_clinical_ner_families_example_is_syntactically_valid():
+    source = Path("examples/clinical_ner_families.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_clinical_ner_families_selects_three_registry_families():
+    assert {"Disease", "Pharmaceutical", "Oncology"}.issubset(
+        clinical_ner_families.NER_FAMILIES
+    )
+
+    selections = clinical_ner_families.selected_families()
+
+    assert {selection.family for selection in selections} == {
+        "Disease",
+        "Pharmaceutical",
+        "Oncology",
+    }
+    assert all(selection.source == "accurate tier" for selection in selections)
+    assert all(
+        selection.model.model_id.startswith("OpenMed/") for selection in selections
+    )
+
+
+def test_clinical_ner_families_uses_mocked_analyzer_without_network(
+    capsys,
+    monkeypatch,
+):
+    monkeypatch.delenv(clinical_ner_families.ALLOW_DOWNLOAD_ENV, raising=False)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
+    calls = []
+
+    def fake_analyzer(text, *, model_name, confidence_threshold, group_entities):
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        calls.append(
+            {
+                "text": text,
+                "model_name": model_name,
+                "confidence_threshold": confidence_threshold,
+                "group_entities": group_entities,
+            }
+        )
+        return SimpleNamespace(
+            entities=[
+                SimpleNamespace(
+                    label="MOCK_ENTITY",
+                    text="synthetic span",
+                    confidence=0.99,
+                )
+            ]
+        )
+
+    clinical_ner_families.run_family_extraction(analyzer=fake_analyzer)
+
+    assert len(calls) == 3
+    assert all(call["group_entities"] is True for call in calls)
+    assert all(call["model_name"].startswith("OpenMed/") for call in calls)
+    assert "HF_HUB_OFFLINE" not in os.environ
+    assert "TRANSFORMERS_OFFLINE" not in os.environ
+    captured = capsys.readouterr().out
+    assert "Disease" in captured
+    assert "Pharmaceutical" in captured
+    assert "Oncology" in captured
+    assert "MOCK_ENTITY" in captured
+
+
+def test_clinical_ner_families_reports_offline_unavailable(capsys):
+    def unavailable_analyzer(*args, **kwargs):
+        raise OSError("cached files not found")
+
+    clinical_ner_families.run_family_extraction(
+        families=("Disease",),
+        analyzer=unavailable_analyzer,
+    )
+
+    captured = capsys.readouterr().out
+    assert "Disease: model unavailable offline" in captured
+    assert "cached files not found" in captured
+
+
+def test_gradio_deid_app_is_syntactically_valid():
+    source = Path("examples/gradio_deid_app.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_gradio_deid_app_exposes_public_surface():
+    assert gradio_deid_app.DEIDENTIFICATION_METHODS == ("mask", "replace", "hash")
+    assert callable(gradio_deid_app.build_demo)
+    assert callable(gradio_deid_app.run_deidentification)
+    assert "Synthetic note" in gradio_deid_app.SYNTHETIC_CLINICAL_TEXT
+
+
+def test_gradio_deid_app_builds_entity_rows():
+    entities = [
+        SimpleNamespace(label="NAME", text="John Doe", start=0, end=8, confidence=0.97),
+        SimpleNamespace(
+            label="EMAIL", text="j@x.org", start=20, end=27, confidence=0.5
+        ),
+    ]
+
+    rows = gradio_deid_app.entities_to_rows(entities)
+
+    assert rows == [
+        ["NAME", "John Doe", "0", "8", "0.97"],
+        ["EMAIL", "j@x.org", "20", "27", "0.50"],
+    ]
+
+
+def test_gradio_deid_app_run_uses_deidentify_without_network(monkeypatch):
+    calls = []
+
+    def fake_deidentify(text, *, method):
+        calls.append((text, method))
+        return SimpleNamespace(
+            deidentified_text="[NAME] was seen.",
+            pii_entities=[
+                SimpleNamespace(
+                    label="NAME", text="John Doe", start=0, end=8, confidence=0.9
+                )
+            ],
+        )
+
+    monkeypatch.setattr(gradio_deid_app, "deidentify", fake_deidentify)
+
+    view = gradio_deid_app.run_deidentification("John Doe was seen.", "mask")
+
+    assert calls == [("John Doe was seen.", "mask")]
+    assert view.deidentified_text == "[NAME] was seen."
+    assert view.entity_rows == [["NAME", "John Doe", "0", "8", "0.90"]]
+
+
+def test_gradio_deid_app_rejects_unknown_method():
+    with pytest.raises(ValueError, match="Unsupported method"):
+        gradio_deid_app.run_deidentification("text", "encrypt")
+
+
+def test_gradio_deid_app_missing_gradio_prints_hint(monkeypatch):
+    monkeypatch.setitem(sys.modules, "gradio", None)
+
+    with pytest.raises(SystemExit) as excinfo:
+        gradio_deid_app.build_demo()
+
+    assert "pip install gradio" in str(excinfo.value)
+
+
+def test_datasets_walkthrough_import_and_fixture_load_are_network_safe():
+    fixture = datasets_walkthrough.load_fixture()
+
+    assert datasets_walkthrough.fixture_path().is_file()
+    assert fixture["id"] == datasets_walkthrough.FIXTURE_ID
+    assert fixture["metadata"]["synthetic"] is True
+    assert fixture["text"]
+
+
+def test_datasets_walkthrough_reports_offline_unavailable(capsys, monkeypatch):
+    def unavailable_extractor(*args, **kwargs):
+        raise OSError("cached files not found")
+
+    monkeypatch.setattr(datasets_walkthrough, "extract_pii", unavailable_extractor)
+    datasets_walkthrough.run_walkthrough()
+
+    captured = capsys.readouterr().out
+    assert "Synthetic data: yes" in captured
+    assert "model unavailable offline" in captured
+
+
+def test_onboarding_china_mirrors_example_is_syntactically_valid():
+    source = Path("examples/onboarding_china_mirrors.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_onboarding_india_dpdp_example_is_syntactically_valid():
+    source = Path("examples/onboarding_india_dpdp.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_onboarding_china_mirrors_configures_download_endpoint(monkeypatch):
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+        assert "HF_HUB_OFFLINE" not in os.environ
+        assert "TRANSFORMERS_OFFLINE" not in os.environ
+        calls.append(kwargs)
+        return "/cache/downloaded-snapshot"
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+    path = onboarding_china_mirrors.predownload_model(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/downloaded-snapshot")
+    assert calls == [
+        {
+            "repo_id": onboarding_china_mirrors.DEFAULT_MODEL_ID,
+            "repo_type": "model",
+            "local_files_only": False,
+        }
+    ]
+    assert os.environ["HF_HUB_OFFLINE"] == "1"
+    assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+
+
+def test_onboarding_china_mirrors_loads_cache_without_network(monkeypatch):
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        calls.append(kwargs)
+        return "/cache/offline-snapshot"
+
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
+    path = onboarding_china_mirrors.load_cached_model(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/offline-snapshot")
+    assert calls == [
+        {
+            "repo_id": onboarding_china_mirrors.DEFAULT_MODEL_ID,
+            "repo_type": "model",
+            "local_files_only": True,
+        }
+    ]
+    assert "HF_ENDPOINT" not in os.environ
+    assert "HF_HUB_OFFLINE" not in os.environ
+    assert "TRANSFORMERS_OFFLINE" not in os.environ
+
+
+def test_onboarding_china_mirrors_run_defaults_to_offline_cache(
+    capsys,
+    monkeypatch,
+):
+    def fake_snapshot_download(**kwargs):
+        assert kwargs["local_files_only"] is True
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        return "/cache/offline-snapshot"
+
+    monkeypatch.delenv(onboarding_china_mirrors.ALLOW_DOWNLOAD_ENV, raising=False)
+
+    path = onboarding_china_mirrors.run(loader=fake_snapshot_download)
+
+    assert path == Path("/cache/offline-snapshot")
+    captured = capsys.readouterr().out
+    assert "Offline cache-only mode" in captured
+    assert "Resolved cached model" in captured
+
+
+def test_onboarding_india_dpdp_recognizers_cover_synthetic_direct_identifiers():
+    from openmed.core.custom_recognizer import ABDMRecognizer, CustomRecognizer
+
+    name_recognizer = CustomRecognizer.from_config(
+        onboarding_india_dpdp.SYNTHETIC_NAME_RECOGNIZER
+    )
+    abdm_recognizer = ABDMRecognizer()
+
+    assert {
+        (entity.text, entity.label)
+        for entity in name_recognizer.detect_entities(
+            onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE
+        )
+    } == {
+        (onboarding_india_dpdp.SYNTHETIC_PERSON, "PERSON"),
+    }
+    assert {
+        (entity.text, entity.label)
+        for entity in abdm_recognizer.detect_entities(
+            onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE
+        )
+    } == {
+        (onboarding_india_dpdp.SYNTHETIC_AADHAAR, "AADHAAR"),
+        (onboarding_india_dpdp.SYNTHETIC_ABHA, "ABHA_NUMBER"),
+    }
+
+
+def test_onboarding_india_dpdp_runs_policy_pipeline_without_network(monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        calls.append(
+            {
+                "text": text,
+                "model_name": model_name,
+                "lang": kwargs["lang"],
+            }
+        )
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+
+    result = onboarding_india_dpdp.run()
+
+    assert calls == [
+        {
+            "text": onboarding_india_dpdp.SYNTHETIC_HINGLISH_NOTE,
+            "model_name": onboarding_india_dpdp.HINDI_MODEL_ID,
+            "lang": "hi",
+        }
+    ]
+    onboarding_india_dpdp.assert_synthetic_pii_is_deidentified(result.deidentified_text)
+    protected_values = {entity.text for entity in result.pii_entities}
+    assert {
+        onboarding_india_dpdp.SYNTHETIC_PERSON,
+        onboarding_india_dpdp.SYNTHETIC_AADHAAR,
+        onboarding_india_dpdp.SYNTHETIC_ABHA,
+    }.issubset(protected_values)
+    assert all(entity.action == "replace" for entity in result.pii_entities)
+
+
+def test_chinese_hindi_deid_examples_are_syntactically_valid(subtests):
+    for example_path in [
+        Path("examples/deid_chinese_clinical_note.py"),
+        Path("examples/deid_hindi_hinglish_note.py"),
+    ]:
+        with subtests.test(example_path=example_path):
+            ast.parse(example_path.read_text(encoding="utf-8"))
+
+
+def test_chinese_deid_recognizer_covers_every_synthetic_identifier():
+    from openmed.core.custom_recognizer import CustomRecognizer
+
+    recognizer = CustomRecognizer.from_config(
+        deid_chinese_clinical_note.CHINESE_CUSTOM_RECOGNIZER
+    )
+
+    detected = {
+        entity.text
+        for entity in recognizer.detect_entities(
+            deid_chinese_clinical_note.SYNTHETIC_CHINESE_NOTE
+        )
+    }
+
+    assert detected == set(deid_chinese_clinical_note.SYNTHETIC_IDENTIFIERS)
+
+
+def test_chinese_deid_example_runs_without_network(tmp_path, monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        calls.append((text, model_name, kwargs["lang"]))
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+    output_path = tmp_path / "zh" / "redacted.txt"
+
+    result = deid_chinese_clinical_note.run_chinese_deidentification(output_path)
+
+    assert calls == [
+        (
+            deid_chinese_clinical_note.SYNTHETIC_CHINESE_NOTE,
+            deid_chinese_clinical_note.MODEL_KEY,
+            "zh",
+        )
+    ]
+    deid_chinese_clinical_note.assert_synthetic_identifiers_removed(
+        result.deidentified_text
+    )
+    assert output_path.read_text(encoding="utf-8") == result.deidentified_text + "\n"
+    rows = deid_chinese_clinical_note.structured_entities(result)
+    assert {row["text"] for row in rows} == set(
+        deid_chinese_clinical_note.SYNTHETIC_IDENTIFIERS
+    )
+
+
+def test_chinese_deid_example_fails_closed_on_synthetic_leak():
+    with pytest.raises(AssertionError, match="not redacted"):
+        deid_chinese_clinical_note.assert_synthetic_identifiers_removed(
+            deid_chinese_clinical_note.SYNTHETIC_CHINESE_NOTE
+        )
+
+
+def test_hindi_hinglish_recognizer_covers_every_synthetic_identifier(subtests):
+    for note_name, note in list(deid_hindi_hinglish_note.NOTES.items()):
+        with subtests.test(note_name=note_name, note=note):
+            from openmed.core.custom_recognizer import ABDMRecognizer, CustomRecognizer
+
+            recognizer = CustomRecognizer.from_config(
+                deid_hindi_hinglish_note.INDIA_CUSTOM_RECOGNIZER
+            )
+
+            custom_detected = {
+                entity.text for entity in recognizer.detect_entities(note)
+            }
+            abdm_detected = {
+                (entity.text, entity.label)
+                for entity in ABDMRecognizer().detect_entities(note)
+            }
+
+            expected_custom = {
+                deid_hindi_hinglish_note.SYNTHETIC_MEDICAL_RECORD_NUMBER,
+                deid_hindi_hinglish_note.SYNTHETIC_PHONE,
+                deid_hindi_hinglish_note.SYNTHETIC_HINDI_NAME
+                if note_name == "hindi"
+                else deid_hindi_hinglish_note.SYNTHETIC_HINGLISH_NAME,
+            }
+            if note_name == "hindi":
+                expected_custom.add(deid_hindi_hinglish_note.SYNTHETIC_CLINICIAN_NAME)
+
+            assert custom_detected == expected_custom
+            assert abdm_detected == {
+                (deid_hindi_hinglish_note.SYNTHETIC_AADHAAR, "AADHAAR"),
+                (deid_hindi_hinglish_note.SYNTHETIC_ABHA, "ABHA_NUMBER"),
+            }
+
+
+def test_hindi_hinglish_deid_example_runs_without_network(tmp_path, monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        calls.append((text, model_name, kwargs["lang"]))
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+    output_dir = tmp_path / "hi"
+
+    results = deid_hindi_hinglish_note.run_hindi_hinglish_deidentification(output_dir)
+
+    assert calls == [
+        (
+            note,
+            deid_hindi_hinglish_note.HINDI_MODEL_ID,
+            "hi",
+        )
+        for note in deid_hindi_hinglish_note.NOTES.values()
+    ]
+    assert set(results) == set(deid_hindi_hinglish_note.NOTES)
+    for note_name, result in results.items():
+        deid_hindi_hinglish_note.assert_synthetic_identifiers_removed(
+            note_name,
+            result.deidentified_text,
+        )
+        saved = output_dir / f"{note_name}_note_redacted.txt"
+        assert saved.read_text(encoding="utf-8") == result.deidentified_text + "\n"
+        rows = deid_hindi_hinglish_note.structured_entities(result)
+        assert {row["text"] for row in rows} == set(
+            deid_hindi_hinglish_note.SYNTHETIC_IDENTIFIERS_BY_NOTE[note_name]
+        )
+
+
+def test_hindi_hinglish_deid_example_fails_closed_on_synthetic_leak(subtests):
+    for note_name, note in list(deid_hindi_hinglish_note.NOTES.items()):
+        with subtests.test(note_name=note_name, note=note):
+            with pytest.raises(AssertionError, match="survived"):
+                deid_hindi_hinglish_note.assert_synthetic_identifiers_removed(
+                    note_name,
+                    note,
+                )
+
+
+def test_deid_demo_detects_unicode_script(subtests):
+    for text, expected_language in [
+        ("患者李晓雯今天复诊。", "zh"),
+        ("रोगी आज जाँच के लिए आए।", "hi"),
+        ("Patient Alex Example was seen today.", "en"),
+        ("Patient Ananya ka follow-up aaj hai.", "en"),
+        ("1234 / +1 555 0100", "en"),
+    ]:
+        with subtests.test(text=text, expected_language=expected_language):
+            assert deid_demo.detect_script(text) == expected_language
+
+
+def test_deid_demo_manual_override_wins(subtests):
+    for override in ["zh", "hi", "en"]:
+        with subtests.test(override=override):
+            route = deid_demo.resolve_model_route("患者 हिन्दी Patient", override)
+
+            assert route.language == override
+            assert route.model_id == deid_demo.MODEL_IDS[override]
+
+
+@pytest.mark.parametrize(
+    ("sample_language", "openmed_language"),
+    [("zh", "zh"), ("hi", "hi"), ("en", "en")],
+)
+def test_deid_demo_routes_samples_without_network(
+    sample_language,
+    openmed_language,
+):
+    calls = []
+
+    def fake_deidentify(text, **kwargs):
+        calls.append((text, kwargs))
+        return SimpleNamespace(deidentified_text=f"[{sample_language.upper()} MASKED]")
+
+    sample = deid_demo.SAMPLES[sample_language]
+    result = deid_demo.run_deidentification(
+        sample.text,
+        deidentifier=fake_deidentify,
+    )
+
+    assert result.deidentified_text == f"[{sample_language.upper()} MASKED]"
+    assert result.route.language == sample_language
+    assert calls[0][0] == sample.text
+    assert calls[0][1] == {
+        "method": "mask",
+        "model_name": deid_demo.MODEL_IDS[sample_language],
+        "lang": openmed_language,
+        "policy": "strict_no_leak",
+        "use_safety_sweep": True,
+        "custom_recognizer": deid_demo._sample_recognizer(sample_language),
+        "keep_mapping": False,
+        "audit": False,
+        "cache_results": False,
+    }
+
+
+def test_deid_demo_models_are_registered():
+    from openmed.core.model_registry import get_model_info
+
+    assert all(
+        get_model_info(model_id) is not None
+        for model_id in deid_demo.MODEL_IDS.values()
+    )
+
+
+def test_deid_demo_samples_run_through_pipeline_without_network(monkeypatch):
+    from openmed.core import pii
+    from openmed.processing.outputs import PredictionResult
+
+    calls = []
+
+    def fake_extract_pii(text, model_name, *args, **kwargs):
+        calls.append((text, model_name, kwargs["lang"]))
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name=model_name,
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(pii, "extract_pii", fake_extract_pii)
+
+    for language, sample in deid_demo.SAMPLES.items():
+        result = deid_demo.run_deidentification(sample.text, language)
+
+        assert all(
+            identifier not in result.deidentified_text
+            for identifier, _label in sample.identifiers
+        )
+
+    assert calls == [
+        (sample.text, deid_demo.MODEL_IDS[language], language)
+        for language, sample in deid_demo.SAMPLES.items()
+    ]
+
+
+def test_deid_demo_rejects_unknown_override():
+    with pytest.raises(ValueError, match="Unsupported language override"):
+        deid_demo.resolve_model_route("Synthetic note", "fr")
+
+
+def test_deid_demo_does_not_log_or_persist_input(caplog, monkeypatch, tmp_path):
+    raw_input = "Synthetic secret ZH-709-NEVER-LOG"
+    monkeypatch.chdir(tmp_path)
+
+    def fake_deidentify(text, **kwargs):
+        del text, kwargs
+        return SimpleNamespace(deidentified_text="Synthetic secret [ID_NUM]")
+
+    result = deid_demo.run_deidentification(
+        raw_input,
+        language_override="en",
+        deidentifier=fake_deidentify,
+    )
+
+    assert result.deidentified_text == "Synthetic secret [ID_NUM]"
+    assert raw_input not in caplog.text
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_deid_demo_disclaimer_contains_all_locales():
+    assert set(deid_demo.DISCLAIMERS) == {"zh", "hi", "en"}
+    assert all(
+        disclaimer in deid_demo.DISCLAIMER_MARKDOWN
+        for disclaimer in deid_demo.DISCLAIMERS.values()
+    )
+    assert "Never paste real patient data" in deid_demo.DISCLAIMERS["en"]
+    assert "真实患者数据" in deid_demo.DISCLAIMERS["zh"]
+    assert "वास्तविक रोगी डेटा" in deid_demo.DISCLAIMERS["hi"]
+
+
+def test_deid_demo_space_frontmatter_matches_schema():
+    readme = Path("examples/spaces/deid_demo/README.md").read_text(encoding="utf-8")
+    match = re.match(r"\A---\n(.*?)\n---\n", readme, flags=re.DOTALL)
+    assert match is not None
+    metadata = yaml.safe_load(match.group(1))
+    schema = {
+        "type": "object",
+        "required": ["title", "sdk", "sdk_version", "app_file", "models"],
+        "properties": {
+            "title": {"type": "string", "minLength": 1},
+            "sdk": {"const": "gradio"},
+            "sdk_version": {"type": "string", "pattern": r"^\d+\.\d+\.\d+$"},
+            "python_version": {"type": "string", "pattern": r"^3\.\d+(?:\.\d+)?$"},
+            "app_file": {"const": "app.py"},
+            "models": {
+                "type": "array",
+                "minItems": 3,
+                "items": {"type": "string", "pattern": r"^OpenMed/"},
+            },
+        },
+    }
+
+    validate(instance=metadata, schema=schema)
+    assert Path("examples/spaces/deid_demo", metadata["app_file"]).is_file()
+    assert metadata["sdk_version"] == "6.20.0"
+
+
+def test_deid_demo_requirements_are_pinned():
+    requirements = Path("examples/spaces/deid_demo/requirements.txt").read_text(
+        encoding="utf-8"
+    )
+    lines = [
+        line for line in requirements.splitlines() if line and not line.startswith("#")
+    ]
+
+    assert lines
+    assert all(
+        re.fullmatch(r"[A-Za-z0-9_.-]+(?:\[[A-Za-z0-9_,.-]+\])?==[^\s]+", line)
+        for line in lines
+    )
+
+
+def test_deid_demo_readme_has_local_run_instructions():
+    readme = Path("examples/spaces/deid_demo/README.md").read_text(encoding="utf-8")
+
+    assert "python -m pip install -r requirements.txt" in readme
+    assert "python app.py" in readme
+
+
+def _assert_nli_relation_demo_output(output: str) -> None:
+    records = [json.loads(line) for line in output.splitlines()]
+    assert len(records) == 9
+    assert records[0] == {
+        "record": "demonstration",
+        "synthetic": True,
+        "clinical_validation": False,
+        "requires_human_review": True,
+        "autonomous_decision": False,
+    }
+    expected_nli = (
+        ("heuristic-development-only", "heuristic", 0, "entailment", 1.0, False, False),
+        (
+            "heuristic-development-only",
+            "heuristic",
+            1,
+            "contradiction",
+            0.96,
+            True,
+            False,
+        ),
+        ("heuristic-development-only", "heuristic", 2, "neutral", 0.5, False, False),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            0,
+            "entailment",
+            1.0,
+            False,
+            False,
+        ),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            1,
+            "contradiction",
+            1.0,
+            True,
+            False,
+        ),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            2,
+            "abstention",
+            1.0,
+            False,
+            True,
+        ),
+    )
+    for row, expected in zip(records[1:7], expected_nli, strict=True):
+        usage, backend, index, label, score, contradicted, review = expected
+        assert row == {
+            "record": "nli",
+            "usage": usage,
+            "backend_id": backend,
+            "claim_index": index,
+            "label": label,
+            "score": score,
+            "contradicted": contradicted,
+            "review_required": review,
+        }
+    expected_relations = (
+        (
+            "diagnosis_to_treatment",
+            [21, 30],
+            [44, 55],
+            [[31, 43]],
+            0.851064,
+            2,
+            "sha256:693240d2d0dd94f2ec5cff33c1b7ab7184d20c09fd0d488ee9c7bc568e322f7d",
+            "sha256:1b7d83c996a793f155b13741f9dad37b42493b2ed48e15c6414f54589573942b",
+        ),
+        (
+            "procedure_to_indication",
+            [63, 69],
+            [93, 102],
+            [[70, 83]],
+            0.769231,
+            1,
+            "sha256:6c4adb5554cd0596723effb4f6442727aa7ed965a89125cd65e6544482674b37",
+            "sha256:b44293d43afad1e093641eda2cbe31c7fff2e9450fcd261e65d07fdbab6c612a",
+        ),
+    )
+    for row, expected in zip(records[7:], expected_relations, strict=True):
+        (
+            relation,
+            head,
+            tail,
+            evidence,
+            confidence,
+            score,
+            evidence_digest,
+            binding_digest,
+        ) = expected
+        assert row == {
+            "record": "relation",
+            "relation_type": relation,
+            "assertion_state": "uncertain",
+            "confidence": confidence,
+            "head_span": head,
+            "tail_span": tail,
+            "evidence_spans": evidence,
+            "evidence_digests": [evidence_digest],
+            "binding_digest": binding_digest,
+            "requires_clinician_review": True,
+            "autonomous_decision": False,
+            "review_band": "band_b",
+            "policy_score": score,
+            "clinical_urgency_inferred": False,
+        }
+    for surface in (
+        v30_nli_relations.SYNTHETIC_NOTE,
+        *v30_nli_relations.SYNTHETIC_CLAIMS,
+        "pneumonia",
+        "ceftriaxone",
+        "biopsy",
+        "lung mass",
+        "synthetic:relations",
+    ):
+        assert surface not in output
+
+
+@pytest.fixture
+def forbid_nli_relation_model_loading(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("synthetic relation example attempted model loading")
+
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+    monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
+
+
+def test_nli_relation_example_is_import_safe(capsys, forbid_nli_relation_model_loading):
+    namespace = runpy.run_path(v30_nli_relations.__file__, run_name="example_import")
+    assert callable(namespace["build_demo_records"])
+    assert capsys.readouterr() == ("", "")
+
+
+def test_nli_relation_example_runs_public_calls_offline(
+    capsys, forbid_nli_relation_model_loading
+):
+    records = v30_nli_relations.build_demo_records()
+    assert v30_nli_relations.build_demo_records() == records
+    assert v30_nli_relations.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    _assert_nli_relation_demo_output(captured.out)
+
+
+@pytest.mark.slow
+def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "examples.v30_nli_relations"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(root), os.environ.get("PYTHONPATH")))
+            ),
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+        },
+        input="EXTERNAL_NOTE_MUST_NOT_BE_READ\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert result.stderr == ""
+    assert "EXTERNAL_NOTE_MUST_NOT_BE_READ" not in result.stdout
+    _assert_nli_relation_demo_output(result.stdout)
+
+
+def test_nli_relation_example_refuses_arguments_without_echo(subtests, capsys):
+    for arguments in [
+        ["PRIVATE_ARGUMENT_SENTINEL"],
+        ["--note", "PRIVATE_ARGUMENT_SENTINEL"],
+    ]:
+        with subtests.test(arguments=arguments):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+
+                def fail():
+                    pytest.fail("argument refusal ran the relation demonstration")
+
+                monkeypatch.setattr(v30_nli_relations, "build_demo_records", fail)
+                assert v30_nli_relations.main(arguments) == 2
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_relation_example_accepts_no_arguments\n",
+                )
+
+
+def test_nli_relation_example_reports_failure_without_partial_output(subtests, capsys):
+    for public_call in [
+        "verify",
+        "evaluate_nli",
+        "detect_sections",
+        "generate_diagnosis_treatment_candidates",
+        "generate_procedure_indication_candidates",
+        "bind_relation_evidence",
+        "assign_review_priority",
+    ]:
+        with subtests.test(public_call=public_call):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+
+                def fail(*args, **kwargs):
+                    raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+                monkeypatch.setattr(v30_nli_relations, public_call, fail)
+                assert v30_nli_relations.main([]) == 1
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_relation_example_contract_failed\n",
+                )
+
+
+def test_nli_relation_example_blocks_python_network_attempts(monkeypatch, capsys):
+    def network(*args, **kwargs):
+        socket.create_connection(("example.invalid", 443))
+        pytest.fail("example's offline guard permitted an outbound socket")
+
+    monkeypatch.setattr(v30_nli_relations, "verify", network)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_example_detects_missing_candidates(monkeypatch, capsys):
+    monkeypatch.setattr(
+        v30_nli_relations,
+        "generate_diagnosis_treatment_candidates",
+        lambda *args, **kwargs: (),
+    )
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_example_projects_only_known_nli_fields(monkeypatch, capsys):
+    verify = v30_nli_relations.verify
+
+    def extra(*args, **kwargs):
+        return [
+            {**row, "source": "PRIVATE_SOURCE_SENTINEL"}
+            for row in verify(*args, **kwargs)
+        ]
+
+    monkeypatch.setattr(v30_nli_relations, "verify", extra)
+    assert v30_nli_relations.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "PRIVATE_SOURCE_SENTINEL" not in captured.out
+    _assert_nli_relation_demo_output(captured.out)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("score", object()),
+        ("score", float("nan")),
+        ("score", "PRIVATE_SOURCE_SENTINEL"),
+        ("backend_id", "PRIVATE_SOURCE_SENTINEL"),
+    ),
+)
+def test_nli_relation_example_closes_scalar_and_serialization_drift(
+    field, value, monkeypatch, capsys
+):
+    verify = v30_nli_relations.verify
+
+    def malformed(*args, **kwargs):
+        records = verify(*args, **kwargs)
+        records[0][field] = value
+        return records
+
+    monkeypatch.setattr(v30_nli_relations, "verify", malformed)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_output_check_rejects_changed_evidence_digest():
+    records = v30_nli_relations.build_demo_records()
+    records[7]["evidence_digests"] = ["sha256:" + "0" * 64]
+    with pytest.raises(AssertionError):
+        _assert_nli_relation_demo_output("\n".join(json.dumps(row) for row in records))

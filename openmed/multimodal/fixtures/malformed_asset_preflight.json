@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "cases": [
+    {
+      "case_id": "pdf_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "pdf_truncated",
+            "media_type": "application/pdf",
+            "sha256": "b9c39a040804e0b3424df7b13a11cca1d0e45bd246b541acb1177429cd3236ab",
+            "byte_size": 2,
+            "pages": 1
+          },
+          "header_hex": "2550"
+        }
+      ],
+      "expected_findings": [
+        "limits.insufficient_metadata",
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "png_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "png_truncated",
+            "media_type": "image/png",
+            "sha256": "449ba17f2a44989a58050282f82fec8663b84f57a6a443d3750033a0c02f8be9",
+            "byte_size": 3,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "89504e"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "jpeg_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "jpeg_truncated",
+            "media_type": "image/jpeg",
+            "sha256": "71563ad80061407ede9c6f316836284bd3710a520c5a792b5eda1cb703690815",
+            "byte_size": 2,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "ffd8"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "tiff_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "tiff_truncated",
+            "media_type": "image/tiff",
+            "sha256": "2e561ff2355c06484efc416619b5b7f7fc055acdb4e5b6db7a4bc0a5016b19e3",
+            "byte_size": 2,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "4949"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "dicom_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "dicom_truncated",
+            "media_type": "application/dicom",
+            "sha256": "ef2d8d1b20317cd4025b904d7e73adba4725199aed41390781fbb6f8a03eecbb",
+            "byte_size": 130,
+            "width": 8,
+            "height": 8,
+            "frames": 1
+          },
+          "header_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004449"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "wav_truncated",
+      "category": "truncation",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "wav_truncated",
+            "media_type": "audio/wav",
+            "sha256": "465c9de99e308a0f400eea7020cab9eb4e73149a0ff2dced52599a0e9b21f867",
+            "byte_size": 10,
+            "duration_seconds": 1
+          },
+          "header_hex": "52494646000000005741"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "type_mismatch",
+      "category": "type_mismatch",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "type_mismatch",
+            "media_type": "image/jpeg",
+            "sha256": "4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+            "byte_size": 8,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "expected_findings": [
+        "media_type.mismatch"
+      ]
+    },
+    {
+      "case_id": "invalid_dimensions",
+      "category": "invalid_dimensions",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "invalid_dimensions",
+            "media_type": "image/png",
+            "sha256": "4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+            "byte_size": 8,
+            "width": 0,
+            "height": 8
+          },
+          "header_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "expected_findings": [
+        "manifest.malformed_manifest"
+      ]
+    },
+    {
+      "case_id": "oversized_counts",
+      "category": "oversized_counts",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "oversized_counts",
+            "media_type": "application/dicom",
+            "sha256": "314a5c728edd839d51d46862b48989b0c1d791e6295301bd798390c741495ccb",
+            "byte_size": 132,
+            "width": 1,
+            "height": 1,
+            "frames": 2147483648
+          },
+          "header_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004449434d"
+        }
+      ],
+      "expected_findings": [
+        "manifest.malformed_manifest"
+      ]
+    },
+    {
+      "case_id": "bad_digest",
+      "category": "bad_digest",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "bad_digest",
+            "media_type": "image/png",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "byte_size": 8,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "expected_findings": [
+        "digest.sha256_mismatch"
+      ]
+    },
+    {
+      "case_id": "duplicate_asset",
+      "category": "duplicate_asset",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "duplicate_asset",
+            "media_type": "image/png",
+            "sha256": "4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+            "byte_size": 8,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "89504e470d0a1a0a"
+        },
+        {
+          "manifest": {
+            "asset_id": "duplicate_asset",
+            "media_type": "image/png",
+            "sha256": "4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+            "byte_size": 8,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "expected_findings": [
+        "batch.duplicate_asset_id",
+        "batch.duplicate_sha256"
+      ]
+    },
+    {
+      "case_id": "unknown_media",
+      "category": "unknown_media",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "unknown_media",
+            "media_type": "image/unknown",
+            "sha256": "b413f47d13ee2fe6c845b2ee141af81de858df4ec549a58b7970bb96645bc8d2",
+            "byte_size": 2,
+            "width": 8,
+            "height": 8
+          },
+          "header_hex": "0001"
+        }
+      ],
+      "expected_findings": [
+        "media_type.unknown"
+      ]
+    },
+    {
+      "case_id": "resource_limit",
+      "category": "resource_limit",
+      "assets": [
+        {
+          "manifest": {
+            "asset_id": "resource_limit",
+            "media_type": "image/png",
+            "sha256": "4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6",
+            "byte_size": 8,
+            "width": 100000,
+            "height": 100000
+          },
+          "header_hex": "89504e470d0a1a0a"
+        }
+      ],
+      "expected_findings": [
+        "limits.limit_exceeded"
+      ]
+    }
+  ]
+}

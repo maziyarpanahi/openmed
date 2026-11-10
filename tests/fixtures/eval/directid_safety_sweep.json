@@ -1,0 +1,48 @@
+{
+  "schema_version": "openmed.synthetic.directid_safety_sweep.v1",
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "model-misses-recovered-by-sweep",
+      "text": "Synthetic case: SSN 123-45-6789; card 4111 1111 1111 1111; email issue600@example.test.",
+      "gold_spans": [
+        {
+          "label": "SSN",
+          "surface": "123-45-6789"
+        },
+        {
+          "label": "CREDIT_CARD",
+          "surface": "4111 1111 1111 1111"
+        },
+        {
+          "label": "EMAIL",
+          "surface": "issue600@example.test"
+        }
+      ],
+      "model_spans": [
+        {
+          "confidence": 0.99,
+          "label": "ssn",
+          "surface": "123-45-6789"
+        }
+      ]
+    },
+    {
+      "id": "model-overlap-wins-without-duplicate",
+      "text": "Synthetic overlap: card 4111 1111 1111 1111.",
+      "gold_spans": [
+        {
+          "label": "CREDIT_CARD",
+          "surface": "4111 1111 1111 1111"
+        }
+      ],
+      "model_spans": [
+        {
+          "confidence": 0.98,
+          "label": "credit_debit_card",
+          "surface": "4111 1111 1111 1111"
+        }
+      ]
+    }
+  ]
+}

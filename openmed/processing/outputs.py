@@ -1,0 +1,658 @@
+"""Output formatting utilities for OpenMed."""
+
+import html as html_mod
+import json
+import logging
+import unicodedata
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from itertools import groupby
+from typing import Any, Dict, List, Optional, Union
+
+from openmed.core.errors import InputError, InternalError
+
+logger = logging.getLogger(__name__)
+
+
+def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
+    """Convert value to built-in float if possible."""
+    if value is None:
+        return default
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if hasattr(value, "item"):
+        try:
+            return float(value.item())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        logger.debug(
+            "Failed to convert value to float: value_type=%s",
+            type(value).__name__,
+        )
+        return default
+
+
+def _to_int(value: Any) -> Optional[int]:
+    """Convert value to built-in int if possible."""
+    if value is None:
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if hasattr(value, "item"):
+        try:
+            return int(value.item())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.debug(
+            "Failed to convert value to int: value_type=%s",
+            type(value).__name__,
+        )
+        return None
+
+
+@dataclass
+class EntityPrediction:
+    """Represents a single entity prediction."""
+
+    text: str
+    label: str
+    confidence: float
+    start: Optional[int] = None
+    end: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "text": self.text,
+            "label": self.label,
+            "confidence": _to_float(self.confidence, 0.0),
+            "start": _to_int(self.start),
+            "end": _to_int(self.end),
+            "metadata": self.metadata or {},
+        }
+
+
+@dataclass
+class PredictionResult:
+    """Represents the complete prediction result."""
+
+    text: str
+    entities: List[EntityPrediction]
+    model_name: str
+    timestamp: str
+    processing_time: Optional[float] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        result = asdict(self)
+        result["entities"] = [entity.to_dict() for entity in self.entities]
+        result["processing_time"] = _to_float(result.get("processing_time"))
+        return result
+
+
+class OutputFormatter:
+    """Formats model predictions into various output formats."""
+
+    def __init__(
+        self,
+        include_confidence: bool = True,
+        confidence_threshold: float = 0.0,
+        group_entities: bool = False,
+    ):
+        """Initialize output formatter.
+
+        Args:
+            include_confidence: Whether to include confidence scores.
+            confidence_threshold: Minimum confidence to include predictions.
+            group_entities: Whether to group adjacent entities of same type.
+        """
+        self.include_confidence = include_confidence
+        self.confidence_threshold = confidence_threshold
+        self.group_entities = group_entities
+        self._current_text: Optional[str] = None
+
+    def format_predictions(
+        self,
+        predictions: List[Dict[str, Any]],
+        original_text: str,
+        model_name: str = "unknown",
+        **kwargs,
+    ) -> PredictionResult:
+        """Format raw model predictions into structured output.
+
+        Args:
+            predictions: Raw predictions from model.
+            original_text: Original input text.
+            model_name: Name of the model used.
+            **kwargs: Additional metadata.
+
+        Returns:
+            Formatted prediction result.
+        """
+        entities = []
+
+        self._current_text = original_text
+
+        for pred in predictions:
+            score = _to_float(pred.get("score", 0.0), 0.0) or 0.0
+
+            if score < self.confidence_threshold:
+                continue
+
+            start = pred.get("start")
+            end = pred.get("end")
+            raw_word = pred.get("word", "")
+            token_text = ""
+            adjusted_start = start if isinstance(start, int) else None
+            adjusted_end = end if isinstance(end, int) else None
+
+            if isinstance(start, int) and isinstance(end, int):
+                token_text = original_text[start:end]
+
+                if token_text:
+                    leading_ws = len(token_text) - len(token_text.lstrip())
+                    trailing_ws = len(token_text) - len(token_text.rstrip())
+
+                    if leading_ws:
+                        adjusted_start = start + leading_ws
+                    if trailing_ws:
+                        adjusted_end = end - trailing_ws
+
+                    token_text = token_text.strip()
+
+            if not token_text and raw_word:
+                token_text = raw_word
+
+            normalized_text = self._normalize_token_text(token_text)
+
+            if not normalized_text and raw_word:
+                normalized_text = self._normalize_token_text(raw_word)
+
+            entity_text = normalized_text
+
+            raw_label = pred.get("entity_group") or pred.get("entity") or ""
+            clean_label = (
+                raw_label[2:] if raw_label.startswith(("B-", "I-")) else raw_label
+            )
+            label = clean_label or raw_label or "UNKNOWN"
+
+            span_metadata = None
+            raw_metadata = pred.get("metadata")
+            if raw_metadata:
+                if isinstance(raw_metadata, dict):
+                    span_metadata = dict(raw_metadata)
+                else:
+                    try:
+                        span_metadata = dict(raw_metadata)
+                    except (TypeError, ValueError):
+                        span_metadata = {"value": raw_metadata}
+
+            entity = EntityPrediction(
+                text=entity_text,
+                label=label,
+                confidence=score,
+                start=_to_int(adjusted_start if adjusted_start is not None else start),
+                end=_to_int(adjusted_end if adjusted_end is not None else end),
+                metadata=span_metadata,
+            )
+            entities.append(entity)
+
+        if original_text:
+            entities = self._fix_entity_spans(entities, original_text)
+            from openmed.core.quality_gates import validate_entity_spans
+
+            validate_entity_spans(entities, original_text)
+
+        if self.group_entities:
+            entities = self._group_adjacent_entities(entities)
+
+        result = PredictionResult(
+            text=original_text,
+            entities=entities,
+            model_name=model_name,
+            timestamp=datetime.now().isoformat(),
+            processing_time=kwargs.get("processing_time"),
+            metadata=kwargs.get("metadata", {}),
+        )
+
+        # Reset reference to avoid leaking state across calls
+        self._current_text = None
+
+        return result
+
+    @staticmethod
+    def _is_word_char(ch: str) -> bool:
+        """Return True if *ch* is a word-like character (letter, mark, or number).
+
+        Unlike ``str.isalnum()``, this also matches Unicode combining marks
+        and modifier letters — important for accented characters and
+        non-Latin scripts (Hindi, Telugu, etc.).
+        """
+        cat = unicodedata.category(ch)
+        return cat[0] in ("L", "M", "N")
+
+    @staticmethod
+    def _fix_entity_spans(
+        entities: List["EntityPrediction"],
+        text: str,
+    ) -> List["EntityPrediction"]:
+        """Correct off-by-one entity spans produced by HuggingFace tokenizers.
+
+        Some tokenizers return ``end`` offsets that are one character short,
+        causing ``text[start:end]`` to miss the final character of a word.
+        This method detects the mismatch and extends ``end`` forward while
+        the next character is still part of the same word (letter, combining
+        mark, or digit).  Extension is capped at 10 characters to prevent
+        runaway spans.
+        """
+        _MAX_EXTEND = 10
+        text_len = len(text)
+        fixed: List["EntityPrediction"] = []
+        is_word = OutputFormatter._is_word_char
+        for e in entities:
+            start = e.start
+            end = e.end
+            if start is None or end is None:
+                fixed.append(e)
+                continue
+
+            # Extend end forward if the next character is still word-like
+            extended = 0
+            while end < text_len and extended < _MAX_EXTEND and is_word(text[end]):
+                end += 1
+                extended += 1
+
+            # Trim leading/trailing whitespace
+            while start < end and text[start].isspace():
+                start += 1
+            while end > start and text[end - 1].isspace():
+                end -= 1
+
+            span_text = text[start:end]
+            if span_text and not span_text.isspace():
+                fixed.append(
+                    EntityPrediction(
+                        text=span_text,
+                        label=e.label,
+                        confidence=e.confidence,
+                        start=start,
+                        end=end,
+                        metadata=e.metadata,
+                    )
+                )
+            else:
+                fixed.append(e)
+        return fixed
+
+    def _normalize_token_text(self, text: Optional[str]) -> str:
+        """Clean token text produced by different tokenization strategies."""
+        if not text:
+            return ""
+
+        cleaned = (
+            text.replace("▁", " ")
+            .replace("Ġ", " ")
+            .replace("Ċ", " ")
+            .replace("@@", " ")
+        )
+
+        while cleaned.startswith("##"):
+            cleaned = cleaned[2:]
+
+        cleaned = cleaned.strip()
+
+        if not cleaned:
+            return ""
+
+        return " ".join(cleaned.split())
+
+    def _group_adjacent_entities(
+        self, entities: List[EntityPrediction]
+    ) -> List[EntityPrediction]:
+        """Group adjacent entities of the same type.
+
+        Args:
+            entities: List of entity predictions.
+
+        Returns:
+            Grouped entities.
+        """
+        if not entities:
+            return entities
+
+        grouped = []
+        current_group = [entities[0]]
+
+        for entity in entities[1:]:
+            last_entity = current_group[-1]
+
+            last_sentence = (last_entity.metadata or {}).get("sentence_index")
+            current_sentence = (entity.metadata or {}).get("sentence_index")
+            gap_text = ""
+            if (
+                self._current_text is not None
+                and entity.start is not None
+                and last_entity.end is not None
+            ):
+                gap_text = self._current_text[last_entity.end : entity.start]
+            crosses_hard_line = any(
+                char in "\r\n\v\f\x85\u2028\u2029" for char in gap_text
+            )
+
+            # Check if entities are adjacent and same label
+            if (
+                entity.label == last_entity.label
+                and entity.start is not None
+                and last_entity.end is not None
+                and entity.start <= last_entity.end + 2  # Allow small gaps
+                and last_sentence == current_sentence
+                and not crosses_hard_line
+            ):
+                current_group.append(entity)
+            else:
+                # Finalize current group
+                if len(current_group) > 1:
+                    grouped_entity = self._merge_entities(current_group)
+                    grouped.append(grouped_entity)
+                else:
+                    grouped.append(current_group[0])
+
+                current_group = [entity]
+
+        # Handle last group
+        if len(current_group) > 1:
+            grouped_entity = self._merge_entities(current_group)
+            grouped.append(grouped_entity)
+        else:
+            grouped.append(current_group[0])
+
+        return grouped
+
+    def _merge_entities(self, entities: List[EntityPrediction]) -> EntityPrediction:
+        """Merge multiple entities into one.
+
+        Args:
+            entities: List of entities to merge.
+
+        Returns:
+            Merged entity.
+        """
+        if not entities:
+            raise InternalError(
+                "Cannot merge an empty entity list because the grouping stage "
+                "violated an internal invariant. Retry without grouping; if it "
+                "persists, report the model identifier."
+            )
+
+        start = entities[0].start
+        end = entities[-1].end
+
+        if (
+            self._current_text is not None
+            and isinstance(start, int)
+            and isinstance(end, int)
+        ):
+            text = self._current_text
+            start_idx = start
+            end_idx = end
+
+            while start_idx > 0 and text[start_idx - 1].isalnum():
+                start_idx -= 1
+            while end_idx < len(text) and text[end_idx].isalnum():
+                end_idx += 1
+
+            merged_text = text[start_idx:end_idx].strip()
+            start = start_idx
+            end = end_idx
+        else:
+            text_parts = [entity.text for entity in entities if entity.text]
+            merged_text = " ".join(text_parts)
+
+        # Use the label and average confidence
+        label = entities[0].label
+        avg_confidence = sum(e.confidence for e in entities) / len(entities)
+        merged_metadata = entities[0].metadata.copy() if entities[0].metadata else None
+
+        # Use start of first and end of last
+        return EntityPrediction(
+            text=merged_text,
+            label=label,
+            confidence=avg_confidence,
+            start=start,
+            end=end,
+            metadata=merged_metadata,
+        )
+
+    def to_json(self, result: PredictionResult, indent: int = 2) -> str:
+        """Convert result to JSON string.
+
+        Args:
+            result: Prediction result to convert.
+            indent: JSON indentation.
+
+        Returns:
+            JSON string.
+        """
+        return json.dumps(result.to_dict(), indent=indent)
+
+    def to_html(self, result: PredictionResult) -> str:
+        """Convert result to HTML format with highlighted entities.
+
+        Highlight valid, nonempty source spans without changing their offsets
+        when escaping text and metadata for HTML.
+
+        Args:
+            result: Prediction result to convert.
+
+        Returns:
+            HTML string.
+        """
+        html = '<div class="openmed-result">\n'
+        html += "<h3>Analysis Results</h3>\n"
+        html += f"<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n"
+        html += f"<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n"
+
+        if result.processing_time:
+            html += f"<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n"
+
+        html += '<div class="text-content">\n'
+
+        # Map source boundaries to escaped boundaries before adding markup.
+        highlighted_text = html_mod.escape(result.text)
+        escaped_offsets = [0]
+        for character in result.text:
+            escaped_offsets.append(
+                escaped_offsets[-1] + len(html_mod.escape(character))
+            )
+        boundaries = []
+        highlight_starts = {}
+
+        # Sort entities by start position
+        sorted_entities = sorted(
+            [e for e in result.entities if e.start is not None and e.end is not None],
+            key=lambda x: x.start,
+        )
+
+        for index, entity in enumerate(sorted_entities):
+            if not 0 <= entity.start < entity.end <= len(result.text):
+                continue
+            start = escaped_offsets[entity.start]
+            end = escaped_offsets[entity.end]
+
+            color = self._get_entity_color(entity.label)
+
+            highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
+            highlight_starts[index] = highlight_start
+            boundaries.append((start, 1, -end, index))
+            boundaries.append((end, 0, 0, index))
+
+        chunks = []
+        cursor = 0
+        active = []
+        for position, events in groupby(sorted(boundaries), key=lambda event: event[0]):
+            chunks.append(highlighted_text[cursor:position])
+            closing = set()
+            opening = []
+            for _, kind, _, index in events:
+                if kind:
+                    opening.append(index)
+                else:
+                    closing.add(index)
+            remaining = [index for index in active if index not in closing] + opening
+            shared = 0
+            for previous, current in zip(active, remaining):
+                if previous != current:
+                    break
+                shared += 1
+            # Crossing source spans cannot be represented by nested HTML tags.
+            # Close and reopen only the affected inner highlights so each label
+            # still covers exactly its source range, without duplicating text.
+            chunks.extend("</span>" for _ in active[shared:])
+            chunks.extend(highlight_starts[index] for index in remaining[shared:])
+            active = remaining
+            cursor = position
+        chunks.append(highlighted_text[cursor:])
+        highlighted_text = "".join(chunks)
+
+        html += f"<p>{highlighted_text}</p>\n"
+        html += "</div>\n"
+
+        # Entity summary
+        if result.entities:
+            html += '<div class="entity-summary">\n'
+            html += f"<h4>Detected Entities ({len(result.entities)})</h4>\n"
+            html += "<ul>\n"
+
+            for entity in result.entities:
+                confidence_str = (
+                    f" (confidence: {entity.confidence:.3f})"
+                    if self.include_confidence
+                    else ""
+                )
+                html += f"<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n"
+
+            html += "</ul>\n"
+            html += "</div>\n"
+
+        html += "</div>\n"
+        return html
+
+    def _get_entity_color(self, label: str) -> str:
+        """Get color for entity label.
+
+        Args:
+            label: Entity label.
+
+        Returns:
+            CSS color string.
+        """
+        colors = {
+            "person": "#FFE4E1",
+            "organization": "#E6F3FF",
+            "location": "#E6FFE6",
+            "date": "#FFF0E6",
+            "time": "#F0E6FF",
+            "money": "#FFFFE6",
+            "medication": "#FFE4F0",
+            "condition": "#E4F0FF",
+            "procedure": "#F0FFE4",
+            "anatomy": "#F5F5DC",
+        }
+        return colors.get(label.lower(), "#F0F0F0")
+
+    def to_csv_rows(self, result: PredictionResult) -> List[Dict[str, Any]]:
+        """Convert result to CSV-compatible rows.
+
+        Args:
+            result: Prediction result to convert.
+
+        Returns:
+            List of dictionaries for CSV writing.
+        """
+        rows = []
+        for entity in result.entities:
+            row = {
+                "text": entity.text,
+                "label": entity.label,
+                "confidence": entity.confidence,
+                "start": entity.start,
+                "end": entity.end,
+                "model_name": result.model_name,
+                "timestamp": result.timestamp,
+                "processing_time": result.processing_time,
+                "original_text": result.text,
+            }
+            if entity.metadata:
+                sentence_index = entity.metadata.get("sentence_index")
+                sentence_text = entity.metadata.get("sentence_text")
+                if sentence_index is not None:
+                    row["sentence_index"] = sentence_index
+                if sentence_text:
+                    row["sentence_text"] = sentence_text
+                for key, value in entity.metadata.items():
+                    if key in {"sentence_index", "sentence_text"}:
+                        continue
+                    row[f"metadata_{key}"] = value
+            rows.append(row)
+        return rows
+
+
+def format_predictions(
+    predictions: List[Dict[str, Any]],
+    original_text: str,
+    model_name: str = "unknown",
+    output_format: str = "dict",
+    **kwargs,
+) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
+    """Convenience function to format predictions.
+
+    Args:
+        predictions: Raw model predictions.
+        original_text: Original input text.
+        model_name: Name of the model used.
+        output_format: Output format ("dict", "json", "html", "csv").
+        **kwargs: Additional formatting options.
+
+    Returns:
+        Formatted output in requested format.
+    """
+    formatter_keys = {"include_confidence", "confidence_threshold", "group_entities"}
+    formatter_kwargs = {k: v for k, v in kwargs.items() if k in formatter_keys}
+    downstream_kwargs = {k: v for k, v in kwargs.items() if k not in formatter_keys}
+
+    formatter = OutputFormatter(**formatter_kwargs)
+    result = formatter.format_predictions(
+        predictions,
+        original_text,
+        model_name,
+        **downstream_kwargs,
+    )
+
+    if output_format == "dict":
+        return result
+    elif output_format == "json":
+        return formatter.to_json(result)
+    elif output_format == "html":
+        return formatter.to_html(result)
+    elif output_format == "csv":
+        return formatter.to_csv_rows(result)
+    else:
+        supported = ["dict", "json", "html", "csv"]
+        raise InputError(
+            f"Unsupported output format. Pass one of: {supported}.",
+            details={"argument": "output_format", "supported": supported},
+        )

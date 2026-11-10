@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "contains_real_phi": false,
+    "license": "CC0-1.0",
+    "provenance": "Invented names composed only for the OM-651 regression suite",
+    "synthetic": true
+  },
+  "recall_threshold": 1.0,
+  "cases": [
+    {
+      "case_id": "single-surname-two-character-name",
+      "text": "患者王伟今日复诊，王伟报告症状缓解。",
+      "names": ["王伟", "王伟"]
+    },
+    {
+      "case_id": "single-surname-three-character-name",
+      "text": "病人赵雨辰今日就诊；赵雨辰表示睡眠改善。",
+      "names": ["赵雨辰", "赵雨辰"]
+    },
+    {
+      "case_id": "compound-surname-three-character-name",
+      "text": "姓名：欧阳清，今日接受随访；欧阳清复诊。",
+      "names": ["欧阳清", "欧阳清"]
+    },
+    {
+      "case_id": "compound-surname-four-character-name",
+      "text": "患者司马澄宁今日复诊；司马澄宁表示无不适。",
+      "names": ["司马澄宁", "司马澄宁"]
+    }
+  ]
+}

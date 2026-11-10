@@ -1,0 +1,45 @@
+{"aliases": ["type 2 diabetes", "type ii diabetes mellitus", "t2dm", "dm type 2"], "canonical_term": "Type 2 diabetes mellitus without complications", "concept_id": "E11.9", "system": "icd10cm"}
+{"aliases": ["type 2 diabetes with hyperglycemia", "t2dm with high glucose"], "canonical_term": "Type 2 diabetes mellitus with hyperglycemia", "concept_id": "E11.65", "system": "icd10cm"}
+{"aliases": ["type 2 diabetes with nephropathy", "t2dm kidney disease"], "canonical_term": "Type 2 diabetes mellitus with diabetic nephropathy", "concept_id": "E11.21", "system": "icd10cm"}
+{"aliases": ["high blood pressure", "essential hypertension", "htn"], "canonical_term": "Essential (primary) hypertension", "concept_id": "I10", "system": "icd10cm"}
+{"aliases": ["pneumonia", "lung infection unspecified"], "canonical_term": "Pneumonia, unspecified organism", "concept_id": "J18.9", "system": "icd10cm"}
+{"aliases": ["renal disorder zeta001", "zeta001 renal syndrome", "synthetic zeta001 condition"], "canonical_term": "Synthetic renal disorder zeta001", "concept_id": "RXNORM-0001", "system": "rxnorm"}
+{"aliases": ["cardiac disorder zeta002", "zeta002 cardiac syndrome", "synthetic zeta002 condition"], "canonical_term": "Synthetic cardiac disorder zeta002", "concept_id": "LOINC-0002", "system": "loinc"}
+{"aliases": ["pulmonary disorder zeta003", "zeta003 pulmonary syndrome", "synthetic zeta003 condition"], "canonical_term": "Synthetic pulmonary disorder zeta003", "concept_id": "HPO-0003", "system": "hpo"}
+{"aliases": ["gastric disorder zeta004", "zeta004 gastric syndrome", "synthetic zeta004 condition"], "canonical_term": "Synthetic gastric disorder zeta004", "concept_id": "MESH-0004", "system": "mesh"}
+{"aliases": ["cerebral disorder zeta005", "zeta005 cerebral syndrome", "synthetic zeta005 condition"], "canonical_term": "Synthetic cerebral disorder zeta005", "concept_id": "ICD10CM-0005", "system": "icd10cm"}
+{"aliases": ["cutaneous disorder zeta006", "zeta006 cutaneous syndrome", "synthetic zeta006 condition"], "canonical_term": "Synthetic cutaneous disorder zeta006", "concept_id": "RXNORM-0006", "system": "rxnorm"}
+{"aliases": ["skeletal disorder zeta007", "zeta007 skeletal syndrome", "synthetic zeta007 condition"], "canonical_term": "Synthetic skeletal disorder zeta007", "concept_id": "LOINC-0007", "system": "loinc"}
+{"aliases": ["vascular disorder zeta008", "zeta008 vascular syndrome", "synthetic zeta008 condition"], "canonical_term": "Synthetic vascular disorder zeta008", "concept_id": "HPO-0008", "system": "hpo"}
+{"aliases": ["thyroid disorder zeta009", "zeta009 thyroid syndrome", "synthetic zeta009 condition"], "canonical_term": "Synthetic thyroid disorder zeta009", "concept_id": "MESH-0009", "system": "mesh"}
+{"aliases": ["hepatic disorder zeta010", "zeta010 hepatic syndrome", "synthetic zeta010 condition"], "canonical_term": "Synthetic hepatic disorder zeta010", "concept_id": "ICD10CM-0010", "system": "icd10cm"}
+{"aliases": ["renal disorder zeta011", "zeta011 renal syndrome", "synthetic zeta011 condition"], "canonical_term": "Synthetic renal disorder zeta011", "concept_id": "RXNORM-0011", "system": "rxnorm"}
+{"aliases": ["cardiac disorder zeta012", "zeta012 cardiac syndrome", "synthetic zeta012 condition"], "canonical_term": "Synthetic cardiac disorder zeta012", "concept_id": "LOINC-0012", "system": "loinc"}
+{"aliases": ["pulmonary disorder zeta013", "zeta013 pulmonary syndrome", "synthetic zeta013 condition"], "canonical_term": "Synthetic pulmonary disorder zeta013", "concept_id": "HPO-0013", "system": "hpo"}
+{"aliases": ["gastric disorder zeta014", "zeta014 gastric syndrome", "synthetic zeta014 condition"], "canonical_term": "Synthetic gastric disorder zeta014", "concept_id": "MESH-0014", "system": "mesh"}
+{"aliases": ["cerebral disorder zeta015", "zeta015 cerebral syndrome", "synthetic zeta015 condition"], "canonical_term": "Synthetic cerebral disorder zeta015", "concept_id": "ICD10CM-0015", "system": "icd10cm"}
+{"aliases": ["cutaneous disorder zeta016", "zeta016 cutaneous syndrome", "synthetic zeta016 condition"], "canonical_term": "Synthetic cutaneous disorder zeta016", "concept_id": "RXNORM-0016", "system": "rxnorm"}
+{"aliases": ["skeletal disorder zeta017", "zeta017 skeletal syndrome", "synthetic zeta017 condition"], "canonical_term": "Synthetic skeletal disorder zeta017", "concept_id": "LOINC-0017", "system": "loinc"}
+{"aliases": ["vascular disorder zeta018", "zeta018 vascular syndrome", "synthetic zeta018 condition"], "canonical_term": "Synthetic vascular disorder zeta018", "concept_id": "HPO-0018", "system": "hpo"}
+{"aliases": ["thyroid disorder zeta019", "zeta019 thyroid syndrome", "synthetic zeta019 condition"], "canonical_term": "Synthetic thyroid disorder zeta019", "concept_id": "MESH-0019", "system": "mesh"}
+{"aliases": ["hepatic disorder zeta020", "zeta020 hepatic syndrome", "synthetic zeta020 condition"], "canonical_term": "Synthetic hepatic disorder zeta020", "concept_id": "ICD10CM-0020", "system": "icd10cm"}
+{"aliases": ["renal disorder zeta021", "zeta021 renal syndrome", "synthetic zeta021 condition"], "canonical_term": "Synthetic renal disorder zeta021", "concept_id": "RXNORM-0021", "system": "rxnorm"}
+{"aliases": ["cardiac disorder zeta022", "zeta022 cardiac syndrome", "synthetic zeta022 condition"], "canonical_term": "Synthetic cardiac disorder zeta022", "concept_id": "LOINC-0022", "system": "loinc"}
+{"aliases": ["pulmonary disorder zeta023", "zeta023 pulmonary syndrome", "synthetic zeta023 condition"], "canonical_term": "Synthetic pulmonary disorder zeta023", "concept_id": "HPO-0023", "system": "hpo"}
+{"aliases": ["gastric disorder zeta024", "zeta024 gastric syndrome", "synthetic zeta024 condition"], "canonical_term": "Synthetic gastric disorder zeta024", "concept_id": "MESH-0024", "system": "mesh"}
+{"aliases": ["cerebral disorder zeta025", "zeta025 cerebral syndrome", "synthetic zeta025 condition"], "canonical_term": "Synthetic cerebral disorder zeta025", "concept_id": "ICD10CM-0025", "system": "icd10cm"}
+{"aliases": ["cutaneous disorder zeta026", "zeta026 cutaneous syndrome", "synthetic zeta026 condition"], "canonical_term": "Synthetic cutaneous disorder zeta026", "concept_id": "RXNORM-0026", "system": "rxnorm"}
+{"aliases": ["skeletal disorder zeta027", "zeta027 skeletal syndrome", "synthetic zeta027 condition"], "canonical_term": "Synthetic skeletal disorder zeta027", "concept_id": "LOINC-0027", "system": "loinc"}
+{"aliases": ["vascular disorder zeta028", "zeta028 vascular syndrome", "synthetic zeta028 condition"], "canonical_term": "Synthetic vascular disorder zeta028", "concept_id": "HPO-0028", "system": "hpo"}
+{"aliases": ["thyroid disorder zeta029", "zeta029 thyroid syndrome", "synthetic zeta029 condition"], "canonical_term": "Synthetic thyroid disorder zeta029", "concept_id": "MESH-0029", "system": "mesh"}
+{"aliases": ["hepatic disorder zeta030", "zeta030 hepatic syndrome", "synthetic zeta030 condition"], "canonical_term": "Synthetic hepatic disorder zeta030", "concept_id": "ICD10CM-0030", "system": "icd10cm"}
+{"aliases": ["renal disorder zeta031", "zeta031 renal syndrome", "synthetic zeta031 condition"], "canonical_term": "Synthetic renal disorder zeta031", "concept_id": "RXNORM-0031", "system": "rxnorm"}
+{"aliases": ["cardiac disorder zeta032", "zeta032 cardiac syndrome", "synthetic zeta032 condition"], "canonical_term": "Synthetic cardiac disorder zeta032", "concept_id": "LOINC-0032", "system": "loinc"}
+{"aliases": ["pulmonary disorder zeta033", "zeta033 pulmonary syndrome", "synthetic zeta033 condition"], "canonical_term": "Synthetic pulmonary disorder zeta033", "concept_id": "HPO-0033", "system": "hpo"}
+{"aliases": ["gastric disorder zeta034", "zeta034 gastric syndrome", "synthetic zeta034 condition"], "canonical_term": "Synthetic gastric disorder zeta034", "concept_id": "MESH-0034", "system": "mesh"}
+{"aliases": ["cerebral disorder zeta035", "zeta035 cerebral syndrome", "synthetic zeta035 condition"], "canonical_term": "Synthetic cerebral disorder zeta035", "concept_id": "ICD10CM-0035", "system": "icd10cm"}
+{"aliases": ["cutaneous disorder zeta036", "zeta036 cutaneous syndrome", "synthetic zeta036 condition"], "canonical_term": "Synthetic cutaneous disorder zeta036", "concept_id": "RXNORM-0036", "system": "rxnorm"}
+{"aliases": ["skeletal disorder zeta037", "zeta037 skeletal syndrome", "synthetic zeta037 condition"], "canonical_term": "Synthetic skeletal disorder zeta037", "concept_id": "LOINC-0037", "system": "loinc"}
+{"aliases": ["vascular disorder zeta038", "zeta038 vascular syndrome", "synthetic zeta038 condition"], "canonical_term": "Synthetic vascular disorder zeta038", "concept_id": "HPO-0038", "system": "hpo"}
+{"aliases": ["thyroid disorder zeta039", "zeta039 thyroid syndrome", "synthetic zeta039 condition"], "canonical_term": "Synthetic thyroid disorder zeta039", "concept_id": "MESH-0039", "system": "mesh"}
+{"aliases": ["hepatic disorder zeta040", "zeta040 hepatic syndrome", "synthetic zeta040 condition"], "canonical_term": "Synthetic hepatic disorder zeta040", "concept_id": "ICD10CM-0040", "system": "icd10cm"}

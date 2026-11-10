@@ -1,0 +1,484 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 37,
+          "label": "SSN",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "ssn"
+          },
+          "start": 26,
+          "text": "123-45-6789"
+        }
+      ],
+      "id": "golden-multilingual-en-ssn",
+      "language": "en",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetic chart lists SSN [SSN] for test patient."
+        },
+        "identifier_type": "ssn",
+        "locale": "en_US",
+        "synthetic": true
+      },
+      "text": "Synthetic chart lists SSN 123-45-6789 for test patient."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 40,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "nir"
+          },
+          "start": 25,
+          "text": "242108708540372"
+        }
+      ],
+      "id": "golden-multilingual-fr-nir",
+      "language": "fr",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Dossier synthétique: NIR [ID_NUM] pour patient fictif."
+        },
+        "identifier_type": "nir",
+        "locale": "fr_FR",
+        "synthetic": true
+      },
+      "text": "Dossier synthétique: NIR 242108708540372 pour patient fictif."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 40,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "steuer_id"
+          },
+          "start": 29,
+          "text": "38449725069"
+        }
+      ],
+      "id": "golden-multilingual-de-steuer-id",
+      "language": "de",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetische Akte: Steuer-ID [ID_NUM] für Testperson."
+        },
+        "identifier_type": "steuer_id",
+        "locale": "de_DE",
+        "synthetic": true
+      },
+      "text": "Synthetische Akte: Steuer-ID 38449725069 für Testperson."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 51,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "codice_fiscale"
+          },
+          "start": 35,
+          "text": "MNCPNL59L71E221W"
+        }
+      ],
+      "id": "golden-multilingual-it-codice-fiscale",
+      "language": "it",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Cartella sintetica: codice fiscale [ID_NUM] per paziente fittizio."
+        },
+        "identifier_type": "codice_fiscale",
+        "locale": "it_IT",
+        "synthetic": true
+      },
+      "text": "Cartella sintetica: codice fiscale MNCPNL59L71E221W per paziente fittizio."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 29,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "dni"
+          },
+          "start": 20,
+          "text": "12345678Z"
+        }
+      ],
+      "id": "golden-multilingual-es-dni",
+      "language": "es",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: DNI [ID_NUM] para paciente ficticio."
+        },
+        "identifier_type": "dni",
+        "locale": "es_ES",
+        "synthetic": true
+      },
+      "text": "Nota sintética: DNI 12345678Z para paciente ficticio."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 34,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "bsn"
+          },
+          "start": 25,
+          "text": "456378923"
+        }
+      ],
+      "id": "golden-multilingual-nl-bsn",
+      "language": "nl",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Synthetisch dossier: BSN [ID_NUM] voor testpatiënt."
+        },
+        "identifier_type": "bsn",
+        "locale": "nl_NL",
+        "synthetic": true
+      },
+      "text": "Synthetisch dossier: BSN 456378923 voor testpatiënt."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 31,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          },
+          "start": 19,
+          "text": "659676687472"
+        }
+      ],
+      "id": "golden-multilingual-hi-aadhaar",
+      "language": "hi",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "सिंथेटिक नोट: आधार [ID_NUM] परीक्षण रोगी के लिए है।"
+        },
+        "identifier_type": "aadhaar",
+        "locale": "hi_IN",
+        "synthetic": true
+      },
+      "text": "सिंथेटिक नोट: आधार 659676687472 परीक्षण रोगी के लिए है।"
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 33,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          },
+          "start": 21,
+          "text": "691256223921"
+        }
+      ],
+      "id": "golden-multilingual-te-aadhaar",
+      "language": "te",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "కృత్రిమ గమనిక: ఆధార్ [ID_NUM] పరీక్ష రోగి కోసం ఉంది."
+        },
+        "identifier_type": "aadhaar",
+        "locale": "en_IN",
+        "synthetic": true
+      },
+      "text": "కృత్రిమ గమనిక: ఆధార్ 691256223921 పరీక్ష రోగి కోసం ఉంది."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 34,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "cpf"
+          },
+          "start": 20,
+          "text": "456.378.921-64"
+        }
+      ],
+      "id": "golden-multilingual-pt-cpf",
+      "language": "pt",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Nota sintética: CPF [ID_NUM] para paciente fictício."
+        },
+        "identifier_type": "cpf",
+        "locale": "pt_BR",
+        "synthetic": true
+      },
+      "text": "Nota sintética: CPF 456.378.921-64 para paciente fictício."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 32,
+          "label": "PERSON",
+          "start": 24,
+          "text": "كريم حسن"
+        },
+        {
+          "end": 54,
+          "label": "DATE",
+          "start": 44,
+          "text": "14/03/2026"
+        },
+        {
+          "end": 83,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "not_validated",
+            "identifier_type": "egyptian_national_id"
+          },
+          "start": 69,
+          "text": "29801011234567"
+        }
+      ],
+      "id": "golden-multilingual-ar-egyptian-national-id",
+      "language": "ar",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "ملاحظة اصطناعية: المريض [PERSON] حضر بتاريخ [DATE] والرقم القومي [ID_NUM]."
+        },
+        "identifier_type": "egyptian_national_id",
+        "locale": "ar_EG",
+        "synthetic": true
+      },
+      "text": "ملاحظة اصطناعية: المريض كريم حسن حضر بتاريخ 14/03/2026 والرقم القومي 29801011234567."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 16,
+          "label": "PERSON",
+          "start": 12,
+          "text": "山田太郎"
+        },
+        {
+          "end": 29,
+          "label": "DATE",
+          "start": 19,
+          "text": "2026年3月14日"
+        },
+        {
+          "end": 56,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "my_number"
+          },
+          "start": 42,
+          "text": "1234 5678 9018"
+        }
+      ],
+      "id": "golden-multilingual-ja-my-number",
+      "language": "ja",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "合成メモ: テスト患者 [PERSON] は [DATE] に受診し、マイナンバー [ID_NUM] を提示しました。"
+        },
+        "identifier_type": "my_number",
+        "locale": "ja_JP",
+        "synthetic": true
+      },
+      "text": "合成メモ: テスト患者 山田太郎 は 2026年3月14日 に受診し、マイナンバー 1234 5678 9018 を提示しました。"
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 25,
+          "label": "PERSON",
+          "start": 14,
+          "text": "Ayşe Yılmaz"
+        },
+        {
+          "end": 36,
+          "label": "DATE",
+          "start": 26,
+          "text": "14.03.2026"
+        },
+        {
+          "end": 70,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "tckn"
+          },
+          "start": 59,
+          "text": "13198785260"
+        }
+      ],
+      "id": "golden-multilingual-tr-tckn",
+      "language": "tr",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Sentetik not: [PERSON] [DATE] tarihinde geldi; TCKN [ID_NUM] test hastası içindir."
+        },
+        "identifier_type": "tckn",
+        "locale": "tr_TR",
+        "synthetic": true
+      },
+      "text": "Sentetik not: Ayşe Yılmaz 14.03.2026 tarihinde geldi; TCKN 13198785260 test hastası içindir."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "nik"
+          },
+          "start": 22,
+          "text": "3174055708850001"
+        }
+      ],
+      "id": "golden-multilingual-id-nik",
+      "language": "id",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Catatan sintetis: NIK [ID_NUM] untuk pasien uji."
+        },
+        "identifier_type": "nik",
+        "locale": "id_ID",
+        "synthetic": true
+      },
+      "text": "Catatan sintetis: NIK 3174055708850001 untuk pasien uji."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "DATE",
+          "start": 28,
+          "text": "15/03/1985"
+        },
+        {
+          "end": 62,
+          "label": "PHONE",
+          "start": 46,
+          "text": "+972 54-123-4567"
+        },
+        {
+          "end": 84,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "teudat_zehut"
+          },
+          "start": 75,
+          "text": "123456782"
+        },
+        {
+          "end": 99,
+          "label": "ZIPCODE",
+          "start": 92,
+          "text": "6423905"
+        },
+        {
+          "end": 119,
+          "label": "STREET_ADDRESS",
+          "start": 107,
+          "text": "רחוב הרצל 12"
+        }
+      ],
+      "id": "golden-multilingual-he-teudat-zehut",
+      "language": "he",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "מטופלת: דנה כהן. תאריך לידה [DATE], טלפון [PHONE], תעודת זהות [ID_NUM], מיקוד [ZIPCODE], כתובת [STREET_ADDRESS] תל אביב."
+        },
+        "identifier_type": "teudat_zehut",
+        "locale": "he_IL",
+        "synthetic": true
+      },
+      "text": "מטופלת: דנה כהן. תאריך לידה 15/03/1985, טלפון +972 54-123-4567, תעודת זהות 123456782, מיקוד 6423905, כתובת רחוב הרצל 12 תל אביב."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 9,
+          "label": "PERSON",
+          "start": 7,
+          "text": "王芳"
+        },
+        {
+          "end": 24,
+          "label": "DATE",
+          "start": 14,
+          "text": "1985年3月15日"
+        },
+        {
+          "end": 36,
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "synthetic_record_id"
+          },
+          "start": 28,
+          "text": "CN123456"
+        }
+      ],
+      "id": "golden-multilingual-zh-synthetic-record",
+      "language": "zh",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "合成病历：患者[PERSON]，出生日期[DATE]，病历号[ID_NUM]。"
+        },
+        "identifier_type": "synthetic_record_id",
+        "locale": "zh_CN",
+        "synthetic": true
+      },
+      "text": "合成病历：患者王芳，出生日期1985年3月15日，病历号CN123456。"
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

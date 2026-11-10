@@ -1,0 +1,1963 @@
+"""Model registry derived from the committed OpenMed model manifest."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import math
+import re
+from dataclasses import dataclass, field, replace
+from itertools import chain
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+from . import labels as label_taxonomy
+from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
+from .registry_slots import (
+    load_registry_state,
+    pointer_targets,
+    semantic_version,
+)
+
+
+@dataclass
+class ModelInfo:
+    """Information about an OpenMed model."""
+
+    model_id: str
+    display_name: str
+    category: str
+    specialization: str
+    description: str
+    entity_types: List[str]
+    size_category: str
+    recommended_confidence: float = 0.60
+    family: str = "Unknown"
+    task: str = "unknown"
+    languages: List[str] = field(default_factory=list)
+    tier: Optional[str] = None
+    param_count: Optional[int] = None
+    architecture: Optional[str] = None
+    base_model: Optional[str] = None
+    formats: List[str] = field(default_factory=list)
+    nnapi_compatible: Optional[bool] = None
+    min_sdk: Optional[int] = None
+    execution_providers: List[str] = field(default_factory=list)
+    tokenizer_assets: List[str] = field(default_factory=list)
+    benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
+    latency_ms: Dict[str, float] = field(default_factory=dict)
+    peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    download_mb: Optional[float] = None
+    disk_mb: Optional[float] = None
+    recommended_tier: Optional[str] = None
+    script_coverage: Dict[str, Dict[str, float | str]] = field(default_factory=dict)
+    arxiv: Optional[str] = None
+    license: Optional[str] = None
+    reproducibility_hash: Optional[str] = None
+    released: Optional[str] = None
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    semantic_version: str = "0.0.0"
+
+    @property
+    def size_mb(self) -> Optional[int]:
+        """Extract estimated size in millions of parameters from metadata/name."""
+        if self.param_count:
+            return round(self.param_count / 1_000_000)
+
+        patterns = (
+            ("33M", 33),
+            ("44M", 44),
+            ("60M", 60),
+            ("65M", 65),
+            ("66M", 66),
+            ("82M", 82),
+            ("108M", 108),
+            ("109M", 109),
+            ("110M", 110),
+            ("125M", 125),
+            ("135M", 135),
+            ("141M", 141),
+            ("149M", 149),
+            ("166M", 166),
+            ("184M", 184),
+            ("209M", 209),
+            ("210M", 210),
+            ("212M", 212),
+            ("220M", 220),
+            ("278M", 278),
+            ("279M", 279),
+            ("335M", 335),
+            ("340M", 340),
+            ("355M", 355),
+            ("395M", 395),
+            ("434M", 434),
+            ("459M", 459),
+            ("560M", 560),
+            ("568M", 568),
+            ("600M", 600),
+            ("770M", 770),
+        )
+        for token, value in patterns:
+            if token in self.model_id:
+                return value
+        return None
+
+
+@dataclass(frozen=True)
+class ModelSizeEstimate:
+    """Offline-safe storage and memory estimate for a manifest model."""
+
+    repo_id: str
+    task: str
+    download_mb: Optional[float]
+    disk_mb: Optional[float]
+    peak_ram_mb: Optional[float]
+    source: str
+
+
+@dataclass(frozen=True)
+class DraftModelInfo:
+    """Separate draft-model artifact metadata for speculative decoding."""
+
+    target_model_id: str
+    draft_model_id: str
+    display_name: str
+    license: str
+    tokenizer: str = "shared"
+    format: str = "mlx-4bit"
+    description: str = ""
+
+    @property
+    def permissive_license(self) -> bool:
+        """Return whether the declared draft license is permissive."""
+        return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
+
+
+@dataclass(frozen=True)
+class IndicEncoderConfig:
+    """Explicit user configuration for an optional Indic encoder backbone."""
+
+    source: str
+    family: str
+    languages: tuple[str, ...]
+    cache_dir: Optional[str] = None
+    token: Optional[str] = field(default=None, repr=False, compare=False)
+    revision: Optional[str] = None
+    local_files_only: bool = False
+    device: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class IndicEncoderSpec:
+    """Permissive-license metadata for a supported Indic encoder family."""
+
+    family: str
+    display_name: str
+    license_id: str
+    source_url: str
+    languages: frozenset[str]
+    supports_transliterated_text: bool = False
+
+
+@dataclass(frozen=True)
+class IndicEncoderLoadResult:
+    """Result of resolving optional encoder weights without hard failure."""
+
+    handle: Any | None
+    skip_reason: str | None
+    metadata: IndicEncoderSpec | None = None
+
+    @property
+    def available(self) -> bool:
+        """Return whether a tokenizer/backbone handle was loaded."""
+
+        return self.handle is not None
+
+
+@dataclass(frozen=True)
+class PiiFamilyTransferRoute:
+    """Registry-facing PII model and family-transfer metadata.
+
+    This is a metadata resolution result, not a loaded model or an instruction
+    to perform automatic clinical fallback.
+    """
+
+    language: str
+    family_id: str
+    family_display_name: str
+    target_model_id: Optional[str]
+    backbone_model_id: str
+    donor_language: Optional[str] = None
+    donor_model_id: Optional[str] = None
+    adapter_id: Optional[str] = None
+    adapter_license: Optional[str] = None
+    adapter_provenance: Optional[str] = None
+    clinical_disclaimer: Optional[str] = None
+    offline_runnable: bool = True
+    mode: str = "native"
+
+
+INDIC_ENCODER_SPECS: Mapping[str, IndicEncoderSpec] = MappingProxyType(
+    {
+        "muril": IndicEncoderSpec(
+            family="muril",
+            display_name="MuRIL",
+            license_id="Apache-2.0",
+            source_url="https://huggingface.co/google/muril-base-cased",
+            languages=frozenset(
+                {
+                    "as",
+                    "bn",
+                    "en",
+                    "gu",
+                    "hi",
+                    "kn",
+                    "ks",
+                    "ml",
+                    "mr",
+                    "ne",
+                    "or",
+                    "pa",
+                    "sa",
+                    "sd",
+                    "ta",
+                    "te",
+                    "ur",
+                }
+            ),
+            supports_transliterated_text=True,
+        ),
+        "indicbert": IndicEncoderSpec(
+            family="indicbert",
+            display_name="IndicBERT",
+            license_id="MIT",
+            source_url="https://huggingface.co/ai4bharat/indic-bert",
+            languages=frozenset(
+                {"as", "bn", "en", "gu", "hi", "kn", "ml", "mr", "or", "pa", "ta", "te"}
+            ),
+        ),
+    }
+)
+
+_INDIC_ENCODER_OFFICIAL_SOURCES = {
+    "google/muril-base-cased": "muril",
+    "ai4bharat/indic-bert": "indicbert",
+}
+
+
+MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
+
+PERMISSIVE_DRAFT_MODEL_LICENSES = frozenset(
+    {
+        "apache-2.0",
+        "bsd-2-clause",
+        "bsd-3-clause",
+        "mit",
+    }
+)
+
+GENERATION_DRAFT_MODELS: Dict[str, DraftModelInfo] = {
+    "OpenMed/laneformer-2b-it-q4-mlx": DraftModelInfo(
+        target_model_id="OpenMed/laneformer-2b-it-q4-mlx",
+        draft_model_id="OpenMed/laneformer-pii-draft-350m-q4-mlx",
+        display_name="Laneformer PII draft 350M Q4 MLX",
+        license="apache-2.0",
+        tokenizer="shared",
+        format="mlx-4bit",
+        description=(
+            "Small draft model packaged as a separate MLX-LM artifact for "
+            "exact speculative verification by the target model."
+        ),
+    ),
+}
+
+_INDIC_ENCODER_CONFIG: Optional[IndicEncoderConfig] = None
+
+_GENERATION_DRAFT_TARGET_ALIASES = {
+    "laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+    "kogai/laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+}
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_PARAM_RE = re.compile(r"^\d+(?:\.\d+)?[mb]$", re.IGNORECASE)
+_VERSION_RE = re.compile(r"^v\d+$", re.IGNORECASE)
+
+_LANGUAGE_NAME_TO_CODE = {
+    "arabic": "ar",
+    "assamese": "as",
+    "bengali": "bn",
+    "chinese": "zh",
+    "dutch": "nl",
+    "english": "en",
+    "french": "fr",
+    "german": "de",
+    "gujarati": "gu",
+    "hebrew": "he",
+    "hindi": "hi",
+    "indonesian": "id",
+    "italian": "it",
+    "japanese": "ja",
+    "kannada": "kn",
+    "malayalam": "ml",
+    "marathi": "mr",
+    "odia": "or",
+    "portuguese": "pt",
+    "punjabi": "pa",
+    "spanish": "es",
+    "tamil": "ta",
+    "telugu": "te",
+    "thai": "th",
+    "turkish": "tr",
+    "vietnamese": "vi",
+}
+_LOCALIZED_PII_LANGUAGE_KEYS = {
+    code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
+}
+_LANGUAGE_CONFIG = {
+    code: {"name": name.title(), "prefix": f"{name.title()}-"}
+    for name, code in _LANGUAGE_NAME_TO_CODE.items()
+    if code not in {"en", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
+}
+
+_PII_ENTITY_TYPES = [
+    "PERSON",
+    "FIRST_NAME",
+    "LAST_NAME",
+    "MIDDLE_NAME",
+    "PREFIX",
+    "USERNAME",
+    "EMAIL",
+    "PHONE",
+    "URL",
+    "LOCATION",
+    "STREET_ADDRESS",
+    "BUILDING_NUMBER",
+    "ZIPCODE",
+    "GPS_COORDINATES",
+    "ORDINAL_DIRECTION",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "TIME",
+    "AGE",
+    "ID_NUM",
+    "SSN",
+    "ACCOUNT_NUMBER",
+    "PASSWORD",
+    "PIN",
+    "API_KEY",
+    "CREDIT_CARD",
+    "CREDIT_CARD_ISSUER",
+    "CVV",
+    "IBAN",
+    "BIC",
+    "AMOUNT",
+    "CURRENCY",
+    "BITCOIN_ADDRESS",
+    "ETHEREUM_ADDRESS",
+    "LITECOIN_ADDRESS",
+    "MASKED_NUMBER",
+    "GENDER",
+    "EYE_COLOR",
+    "HEIGHT",
+    "ORGANIZATION",
+    "JOB_TITLE",
+    "JOB_DEPARTMENT",
+    "OCCUPATION",
+    "IP_ADDRESS",
+    "MAC_ADDRESS",
+    "USER_AGENT",
+    "VIN",
+    "VEHICLE_REGISTRATION",
+    "IMEI",
+    "OTHER",
+]
+
+_CATEGORY_ENTITY_TYPES = {
+    "Disease": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Pharmaceutical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Oncology": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.CANCER,
+        label_taxonomy.CELL,
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Anatomy": [
+        label_taxonomy.ORGAN,
+        label_taxonomy.TISSUE,
+        label_taxonomy.ANATOMY,
+    ],
+    "Genomics": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.GENE,
+        label_taxonomy.PROTEIN,
+        label_taxonomy.DNA,
+        label_taxonomy.RNA,
+        label_taxonomy.CELL,
+    ],
+    "Chemical": [
+        label_taxonomy.CHEMICAL,
+        label_taxonomy.DRUG,
+        label_taxonomy.MEDICATION,
+    ],
+    "Species": [
+        label_taxonomy.ORGANISM,
+        label_taxonomy.SPECIES,
+    ],
+    "Microbiology": [
+        label_taxonomy.MICROORGANISM,
+        label_taxonomy.ANTIBIOTIC,
+        label_taxonomy.SUSCEPTIBILITY,
+    ],
+    "Protein": [
+        label_taxonomy.GENE_OR_GENE_PRODUCT,
+        label_taxonomy.PROTEIN,
+    ],
+    "Pathology": [
+        label_taxonomy.DISEASE,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+    ],
+    "Hematology": [
+        label_taxonomy.CANCER,
+        label_taxonomy.DISEASE,
+        label_taxonomy.CELL,
+    ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
+    ],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.PATHOLOGY,
+        label_taxonomy.ANATOMY,
+    ],
+    "Ophthalmology": [
+        label_taxonomy.CONDITION,
+        label_taxonomy.BIOMARKER,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Radiology models; no such model is
+    # registered today (see issue #1971).
+    "Radiology": [
+        label_taxonomy.FINDING,
+        label_taxonomy.IMAGING_MODALITY,
+        label_taxonomy.ANATOMY,
+        label_taxonomy.LATERALITY,
+        label_taxonomy.MEASUREMENT,
+    ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        label_taxonomy.ANESTHESIA_TYPE,
+        label_taxonomy.ANESTHETIC_AGENT,
+        label_taxonomy.AIRWAY_MANAGEMENT,
+        label_taxonomy.ASA_CLASS,
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.CONDITION,
+    ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        label_taxonomy.DIET_TYPE,
+        label_taxonomy.NUTRITION_TARGET,
+        label_taxonomy.FEEDING_ROUTE,
+        label_taxonomy.NUTRITIONAL_STATUS,
+    ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        label_taxonomy.GLYCEMIC_MEASURE,
+        label_taxonomy.THYROID_MEASURE,
+        label_taxonomy.HORMONE_LEVEL,
+        label_taxonomy.INSULIN_REGIMEN,
+        label_taxonomy.CONDITION,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        label_taxonomy.ENDOSCOPIC_FINDING,
+        label_taxonomy.GI_SYMPTOM,
+        label_taxonomy.GI_SCORE,
+        label_taxonomy.POLYP_DESCRIPTOR,
+        label_taxonomy.BODY_SITE,
+    ],
+    # Forward metadata for future Procedures models; no such model is
+    # registered today (see issue #313).
+    "Procedures": [
+        label_taxonomy.PROCEDURE,
+        label_taxonomy.DEVICE,
+        label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Immunology, MentalHealth, and Dentistry
+    # models; no specialty models are registered today (see issue #2358).
+    "Immunology": [
+        label_taxonomy.ALLERGEN,
+        label_taxonomy.FINDING,
+        label_taxonomy.IMMUNIZATION,
+        label_taxonomy.PROTEIN,
+    ],
+    # Substance-use and SDOH entities remain out of scope for this category
+    # and are owned by OM-056. Mental-health spans are high-sensitivity content
+    # for redaction review.
+    "MentalHealth": [
+        label_taxonomy.PSYCH_SYMPTOM,
+        label_taxonomy.PROBLEM,
+        label_taxonomy.MEDICATION,
+        label_taxonomy.PROCEDURE,
+    ],
+    "Dentistry": [
+        label_taxonomy.TOOTH,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PROCEDURE,
+    ],
+    "Privacy": _PII_ENTITY_TYPES,
+}
+
+# Model-card labels remain visible in registry discovery results while the
+# category defaults above provide the canonical taxonomy spine.
+_FAMILY_NATIVE_ENTITY_TYPES = {
+    "Oncology": [
+        "SIMPLE_CHEMICAL",
+        "CHEM",
+        "AMINO_ACID",
+        "ANATOMICAL_SYSTEM",
+        "CANCER",
+        "CELL",
+        "GENE_OR_GENE_PRODUCT",
+        "CELLULAR_COMPONENT",
+        "DEVELOPING_ANATOMICAL_STRUCTURE",
+        "IMMATERIAL_ANATOMICAL_ENTITY",
+        "MULTI_TISSUE_STRUCTURE",
+        "ORGANISM",
+        "SPECIES",
+        "ORGAN",
+        "ORGANISM_SUBDIVISION",
+        "ORGANISM_SUBSTANCE",
+        "TISSUE",
+        "PATHOLOGICAL_FORMATION",
+    ],
+    "Genomics": ["CELL_LINE", "CELL_TYPE"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
+    "Protein": [
+        "PROTEIN_COMPLEX",
+        "PROTEIN_ENUM",
+        "PROTEIN_FAMILIY_OR_GROUP",
+        "PROTEIN_VARIANT",
+    ],
+    "Hematology": ["CL"],
+}
+
+_LEGACY_MODEL_ALIASES = {
+    "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": [
+        "disease_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": ["disease_detection_tiny"],
+    "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M": [
+        "pharma_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-PharmaDetect-SuperMedical-125M": [
+        "pharma_detection_supermedical"
+    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M": [
+        "oncology_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": ["oncology_detection_tiny"],
+    "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M": [
+        "anatomy_detection_electramed"
+    ],
+    "OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M": [
+        "genome_detection_bioclinical"
+    ],
+    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": ["chemical_detection_pubmed"],
+    "OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M": [
+        "species_detection_bioclinical"
+    ],
+    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": ["protein_detection_pubmed"],
+    "OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M": [
+        "pathology_detection_modern"
+    ],
+    "OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M": [
+        "blood_cancer_detection"
+    ],
+    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+    # The former dedicated Tamil checkpoint is no longer in the public Hub
+    # catalog. Keep its registry key as a compatibility alias for the explicit
+    # multilingual placeholder while callers migrate to qualified weights.
+    "OpenMed/privacy-filter-multilingual": ["pii_ta_msuperclinical_large"],
+}
+
+
+def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
+    """Load model manifest rows from the committed JSONL snapshot."""
+    if not path.exists():
+        return []
+
+    from .model_integrity import verify_manifest_signature_if_present
+
+    verify_manifest_signature_if_present(path)
+
+    rows: List[Dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                row = json.loads(stripped)
+            except json.JSONDecodeError as exc:  # pragma: no cover - import guard
+                raise ValueError(
+                    f"Invalid JSON in {path} line {line_number}: {exc}"
+                ) from exc
+            rows.append(row)
+    return rows
+
+
+def _slug(value: str) -> str:
+    slug = _SLUG_RE.sub("_", value.lower()).strip("_")
+    return slug or "model"
+
+
+def _repo_name(repo_id: str) -> str:
+    return repo_id.rsplit("/", 1)[-1]
+
+
+def _split_repo_tokens(repo_id: str) -> List[str]:
+    return [token for token in re.split(r"[-_]+", _repo_name(repo_id)) if token]
+
+
+def _clean_model_tokens(tokens: Iterable[str]) -> List[str]:
+    cleaned: List[str] = []
+    for token in tokens:
+        lowered = token.lower()
+        if lowered in {"openmed", "ner", "pii"}:
+            continue
+        if _VERSION_RE.match(lowered):
+            continue
+        cleaned.append(token)
+    return cleaned
+
+
+_PORTUGUESE_NER_LANGUAGE_TOKENS = frozenset(
+    {"portuguese", "brazil", "brazilian", "pt", "ptbr", "br"}
+)
+_PORTUGUESE_NER_CATEGORY_TOKENS = {
+    "Hematology": frozenset({"bloodcancerdetect", "hematology", "hematologia"}),
+    "Disease": frozenset({"diseasedetect", "disease", "doenca"}),
+    "Pharmaceutical": frozenset(
+        {"pharmadetect", "pharmaceutical", "drug", "medicamento"}
+    ),
+    "Oncology": frozenset({"oncologydetect", "oncology", "cancer"}),
+    "Anatomy": frozenset({"anatomydetect", "anatomy", "anatomia"}),
+    "Genomics": frozenset({"genomedetect", "genomicdetect", "dnadetect", "genomics"}),
+    "Chemical": frozenset({"chemicaldetect", "chemical", "chem", "quimica", "quimico"}),
+    "Species": frozenset({"speciesdetect", "organismdetect", "species", "organism"}),
+    "Protein": frozenset({"proteindetect", "protein", "proteina"}),
+    "Pathology": frozenset({"pathologydetect", "pathology", "patologia"}),
+}
+
+
+def _portuguese_ner_category_from_row(row: Dict[str, Any]) -> Optional[str]:
+    """Return the inferred category for a Portuguese NER repository, if any."""
+    if str(row.get("family") or "").casefold() != "ner":
+        return None
+
+    tokens = {token.casefold() for token in _split_repo_tokens(row.get("repo_id", ""))}
+    if not tokens.intersection(_PORTUGUESE_NER_LANGUAGE_TOKENS):
+        return None
+
+    for category, family_tokens in _PORTUGUESE_NER_CATEGORY_TOKENS.items():
+        if tokens.intersection(family_tokens):
+            return category
+    return None
+
+
+def _category_from_row(row: Dict[str, Any]) -> str:
+    repo = row.get("repo_id", "").lower()
+    family = str(row.get("family") or "").lower()
+
+    if family == "clinical-nli" and row.get("task") in {
+        "text-classification",
+        "sequence-classification",
+    }:
+        return "Clinical NLI"
+
+    if family == "pii" or "pii" in repo or "privacy-filter" in repo:
+        return "Privacy"
+    portuguese_category = _portuguese_ner_category_from_row(row)
+    if portuguese_category is not None:
+        return portuguese_category
+    if "bloodcancerdetect" in repo or "hematology" in repo or "leukemia" in repo:
+        return "Hematology"
+    if "diseasedetect" in repo:
+        return "Disease"
+    if "pharmadetect" in repo or "drug" in repo:
+        return "Pharmaceutical"
+    if "oncologydetect" in repo or "cancer" in repo:
+        return "Oncology"
+    if "anatomydetect" in repo or "anatomy" in repo:
+        return "Anatomy"
+    if (
+        "genomedetect" in repo
+        or "genomicdetect" in repo
+        or "dnadetect" in repo
+        or "rna" in repo
+    ):
+        return "Genomics"
+    if "chemicaldetect" in repo or "chem" in repo:
+        return "Chemical"
+    if "speciesdetect" in repo or "organismdetect" in repo:
+        return "Species"
+    if "proteindetect" in repo:
+        return "Protein"
+    if "pathologydetect" in repo:
+        return "Pathology"
+    return "Medical"
+
+
+def _display_name_from_row(row: Dict[str, Any]) -> str:
+    name = _repo_name(row["repo_id"])
+    name = re.sub(r"^OpenMed-", "", name)
+    name = name.replace("-", " ")
+    return re.sub(r"\s+", " ", name).strip()
+
+
+def _specialization_from_row(row: Dict[str, Any], category: str) -> str:
+    languages = _languages_from_row(row)
+    language = ""
+    if len(languages) == 1 and languages[0] != "en":
+        language = f"{languages[0].upper()} "
+
+    if category == "Privacy":
+        return f"{language}PII detection".strip()
+    if category == "Medical":
+        return str(row.get("task") or "medical model")
+    return f"{language}{category.lower()} entity detection".strip()
+
+
+def _description_from_row(row: Dict[str, Any], category: str) -> str:
+    task = row.get("task") or "model"
+    tier = row.get("tier")
+    param_count = row.get("param_count")
+    parts = [f"{category} {task} model"]
+    if tier:
+        parts.append(f"tier={tier}")
+    if isinstance(param_count, int):
+        parts.append(f"params={param_count}")
+    return "; ".join(parts)
+
+
+def _dedupe_entity_types(entity_types: Iterable[Any]) -> List[str]:
+    return list(dict.fromkeys(str(entity_type) for entity_type in entity_types))
+
+
+def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
+    labels = row.get("canonical_labels")
+    if isinstance(labels, list) and labels:
+        if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
+            return _dedupe_entity_types(
+                chain(
+                    labels,
+                    _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+                    _CATEGORY_ENTITY_TYPES.get(category, ()),
+                )
+            )
+        return _dedupe_entity_types(labels)
+    return _dedupe_entity_types(
+        chain(
+            _FAMILY_NATIVE_ENTITY_TYPES.get(category, ()),
+            _CATEGORY_ENTITY_TYPES.get(category, ()),
+        )
+    )
+
+
+def _recommended_confidence(category: str) -> float:
+    if category == "Privacy":
+        return 0.50
+    if category in {"Pharmaceutical", "Oncology", "Genomics", "Hematology"}:
+        return 0.65
+    return 0.60
+
+
+def _size_category(row: Dict[str, Any]) -> str:
+    tier = row.get("tier")
+    if isinstance(tier, str) and tier:
+        return "Medium" if tier == "Base" else tier
+
+    param_count = row.get("param_count")
+    if isinstance(param_count, int):
+        if param_count < 60_000_000:
+            return "Tiny"
+        if param_count < 100_000_000:
+            return "Small"
+        if param_count < 250_000_000:
+            return "Medium"
+        if param_count < 500_000_000:
+            return "Large"
+        return "XLarge"
+    return "Unknown"
+
+
+def _languages_from_row(row: Dict[str, Any]) -> List[str]:
+    """Return manifest languages, inferring Portuguese for tagged NER repos."""
+    languages = list(row.get("languages") or [])
+    if languages:
+        return languages
+    if _portuguese_ner_category_from_row(row) is not None:
+        return ["pt"]
+    return languages
+
+
+def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
+    category = _category_from_row(row)
+    languages = _languages_from_row(row)
+    return ModelInfo(
+        model_id=row["repo_id"],
+        display_name=_display_name_from_row(row),
+        category=category,
+        specialization=_specialization_from_row(row, category),
+        description=_description_from_row(row, category),
+        entity_types=_entity_types_from_row(row, category),
+        size_category=_size_category(row),
+        recommended_confidence=_recommended_confidence(category),
+        family=str(row.get("family") or "Unknown"),
+        task=str(row.get("task") or "unknown"),
+        languages=languages,
+        tier=row.get("tier"),
+        param_count=row.get("param_count"),
+        architecture=row.get("architecture"),
+        base_model=row.get("base_model"),
+        formats=list(row.get("formats") or []),
+        nnapi_compatible=row.get("nnapi_compatible")
+        if isinstance(row.get("nnapi_compatible"), bool)
+        else None,
+        min_sdk=_positive_int_from_row(row, "min_sdk"),
+        execution_providers=_string_list_from_row(row, "execution_providers"),
+        tokenizer_assets=_string_list_from_row(row, "tokenizer_assets"),
+        benchmark=_benchmark_from_row(row),
+        latency_ms=_number_map_from_row(row, "latency_ms"),
+        peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        download_mb=_positive_number_from_row(row, "download_mb"),
+        disk_mb=_positive_number_from_row(row, "disk_mb"),
+        recommended_tier=row.get("recommended_tier")
+        if isinstance(row.get("recommended_tier"), str)
+        else None,
+        script_coverage=_script_coverage_from_row(row),
+        arxiv=row.get("arxiv"),
+        license=row.get("license"),
+        reproducibility_hash=row.get("reproducibility_hash"),
+        released=row.get("released"),
+        provenance=dict(row.get("provenance") or {})
+        if isinstance(row.get("provenance"), dict)
+        else {},
+        semantic_version=semantic_version(str(row["repo_id"])),
+    )
+
+
+def _benchmark_from_row(row: Dict[str, Any]) -> Dict[str, Any] | List[Dict[str, Any]]:
+    benchmark = row.get("benchmark")
+    if isinstance(benchmark, list):
+        return [dict(entry) for entry in benchmark if isinstance(entry, dict)]
+    if isinstance(benchmark, dict):
+        return dict(benchmark)
+    return {}
+
+
+def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, float]:
+    value = row.get(field_name)
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(device): float(measurement)
+        for device, measurement in value.items()
+        if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
+    }
+
+
+def _script_coverage_from_row(
+    row: Dict[str, Any],
+) -> Dict[str, Dict[str, float | str]]:
+    value = row.get("script_coverage")
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(script): {
+            str(metric): measurement
+            for metric, measurement in metrics.items()
+            if isinstance(measurement, (int, float, str))
+            and not isinstance(measurement, bool)
+        }
+        for script, metrics in value.items()
+        if isinstance(metrics, dict)
+    }
+
+
+def _positive_number_from_row(row: Dict[str, Any], field_name: str) -> Optional[float]:
+    value = row.get(field_name)
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(float(value))
+        or value <= 0
+    ):
+        return None
+    return float(value)
+
+
+def _estimated_download_mb(row: Dict[str, Any]) -> Optional[float]:
+    recorded = _positive_number_from_row(row, "download_mb")
+    if recorded is not None:
+        return recorded
+
+    param_count = row.get("param_count")
+    if not isinstance(param_count, int) or isinstance(param_count, bool):
+        return None
+
+    formats = set(row.get("formats") or ())
+    if "mlx-2bit" in formats:
+        bytes_per_parameter = 0.30
+    elif formats.intersection({"mlx-4bit", "int4", "awq", "gptq"}):
+        bytes_per_parameter = 0.55
+    elif formats.intersection({"mlx-8bit", "int8", "onnx-int8"}):
+        bytes_per_parameter = 1.05
+    else:
+        bytes_per_parameter = 2.0
+
+    # Allow for tokenizer/config files in addition to the model weights.
+    return (param_count * bytes_per_parameter / 1_000_000) + 1.5
+
+
+def _estimated_peak_ram_mb(
+    row: Dict[str, Any], disk_mb: Optional[float]
+) -> Optional[float]:
+    recorded = _number_map_from_row(row, "peak_ram_mb")
+    if recorded:
+        return max(recorded.values())
+    if disk_mb is None:
+        return None
+    return max(256.0, disk_mb * 1.25)
+
+
+def estimate_model_sizes(
+    model_key: Optional[str] = None,
+    *,
+    manifest_path: Path = MANIFEST_PATH,
+) -> List[ModelSizeEstimate]:
+    """Return deterministic model size estimates from committed metadata.
+
+    The function is deliberately network-free. Explicit manifest measurements
+    win; otherwise the download estimate is derived from parameter count and
+    artifact format. ``model_key`` may be a registry alias or a full repo id.
+
+    Args:
+        model_key: Optional registry alias or model repository id.
+        manifest_path: Manifest snapshot to read.
+
+    Returns:
+        Estimates sorted by repository id.
+    """
+
+    rows = load_manifest_rows(manifest_path)
+    if model_key is not None:
+        resolved = get_model_info(model_key)
+        repo_id = resolved.model_id if resolved is not None else model_key
+        rows = [row for row in rows if row.get("repo_id") == repo_id]
+
+    estimates: List[ModelSizeEstimate] = []
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+        download_mb = _estimated_download_mb(row)
+        disk_mb = _positive_number_from_row(row, "disk_mb") or download_mb
+        estimates.append(
+            ModelSizeEstimate(
+                repo_id=repo_id,
+                task=str(row.get("task") or "unknown"),
+                download_mb=_rounded_mb(download_mb),
+                disk_mb=_rounded_mb(disk_mb),
+                peak_ram_mb=_rounded_mb(_estimated_peak_ram_mb(row, disk_mb)),
+                source=(
+                    "manifest"
+                    if _positive_number_from_row(row, "download_mb") is not None
+                    else "estimated"
+                ),
+            )
+        )
+    return sorted(estimates, key=lambda estimate: estimate.repo_id.lower())
+
+
+def _rounded_mb(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return round(value, 3)
+
+
+def _positive_int_from_row(row: Dict[str, Any], field_name: str) -> Optional[int]:
+    value = row.get(field_name)
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _string_list_from_row(row: Dict[str, Any], field_name: str) -> List[str]:
+    value = row.get(field_name)
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
+def _language_prefix(row: Dict[str, Any]) -> str:
+    languages = row.get("languages") or []
+    if len(languages) == 1 and languages[0] != "en":
+        return f"{languages[0]}_"
+    return ""
+
+
+def _strip_language_tokens(tokens: List[str], row: Dict[str, Any]) -> List[str]:
+    languages = set(row.get("languages") or [])
+    stripped: List[str] = []
+    for token in tokens:
+        lowered = token.lower()
+        code = _LANGUAGE_NAME_TO_CODE.get(lowered)
+        if code and code in languages:
+            continue
+        stripped.append(token)
+    return stripped
+
+
+def _pii_registry_key(row: Dict[str, Any]) -> str:
+    tokens = _clean_model_tokens(_split_repo_tokens(row["repo_id"]))
+    tokens = _strip_language_tokens(tokens, row)
+    if tokens and tokens[0].lower() == "privacy":
+        tokens = ["privacy_filter"] + tokens[2:] if len(tokens) > 1 else tokens
+    suffix = _slug("_".join(tokens))
+    return f"pii_{_language_prefix(row)}{suffix}"
+
+
+def _ner_registry_key(row: Dict[str, Any]) -> str:
+    tokens = _clean_model_tokens(_split_repo_tokens(row["repo_id"]))
+    if tokens and tokens[0].lower().endswith("detect"):
+        head = tokens[0][:-6]
+        tail = tokens[1:]
+        return _slug("_".join([head, "detection", *tail]))
+    return _slug("_".join(tokens))
+
+
+def _registry_key(row: Dict[str, Any]) -> str:
+    category = _category_from_row(row)
+    if category == "Privacy":
+        return _pii_registry_key(row)
+    if str(row.get("family") or "").upper() in {"NER", "ZEROSHOT"}:
+        return _ner_registry_key(row)
+    return _slug(_repo_name(row["repo_id"]))
+
+
+def _unique_key(
+    base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]
+) -> str:
+    if base_key not in registry:
+        return base_key
+
+    formats = row.get("formats") or []
+    for format_name in formats:
+        candidate = f"{base_key}_{_slug(format_name)}"
+        if candidate not in registry:
+            return candidate
+
+    repo_suffix = _slug(_repo_name(row["repo_id"]))
+    candidate = f"{base_key}_{repo_suffix}"
+    if candidate not in registry:
+        return candidate
+
+    index = 2
+    while f"{candidate}_{index}" in registry:
+        index += 1
+    return f"{candidate}_{index}"
+
+
+def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
+    if _category_from_row(row) != "Privacy":
+        return []
+    repo_id = row["repo_id"]
+    if "privacy-filter-multilingual" in repo_id:
+        aliases = []
+        tokens = _clean_model_tokens(_split_repo_tokens(repo_id))
+        if tokens and tokens[0].lower() == "privacy":
+            tokens = ["privacy_filter"] + tokens[2:] if len(tokens) > 1 else tokens
+        suffix = _slug("_".join(tokens))
+        for lang in row.get("languages") or []:
+            if lang != "en":
+                aliases.append(f"pii_{lang}_{suffix}")
+        return aliases
+    if "/OpenMed-PII-" not in repo_id:
+        return []
+
+    tokens = _clean_model_tokens(_split_repo_tokens(repo_id))
+    tokens = _strip_language_tokens(tokens, row)
+    no_param_tokens = [token for token in tokens if not _PARAM_RE.match(token)]
+    aliases = []
+    if no_param_tokens:
+        aliases.append(f"pii_{_language_prefix(row)}{_slug('_'.join(no_param_tokens))}")
+    return aliases
+
+
+def _multilingual_pii_aliases(row: Dict[str, Any]) -> List[str]:
+    if _category_from_row(row) != "Privacy":
+        return []
+    repo_id = row["repo_id"].lower()
+    languages = row.get("languages") or []
+    if "privacy-filter" not in repo_id or "multilingual" not in repo_id:
+        return []
+    if len(languages) <= 1:
+        return []
+
+    base_key = _pii_registry_key(row)
+    suffix = base_key.removeprefix("pii_")
+    return [f"pii_{lang}_{suffix}" for lang in languages if lang != "en"]
+
+
+def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
+    aliases = list(_LEGACY_MODEL_ALIASES.get(row["repo_id"], []))
+    aliases.extend(_pii_compatibility_aliases(row))
+    aliases.extend(_multilingual_pii_aliases(row))
+    return aliases
+
+
+def _add_pointer_aliases(
+    registry: Dict[str, ModelInfo],
+    registry_state: Mapping[str, Any],
+) -> None:
+    by_repo_id = {model.model_id: model for model in registry.values()}
+    slots = registry_state.get("slots", {})
+    pointer_sets = pointer_targets(registry_state)
+    family_counts: dict[str, int] = {}
+    for key in pointer_sets:
+        family = key.split("::", 1)[0]
+        family_counts[family] = family_counts.get(family, 0) + 1
+    for slot, pointers in pointer_sets.items():
+        checkpoints = slots.get(slot, {}).get("checkpoints", {})
+        for pointer_name, repo_id in pointers.items():
+            if repo_id is None:
+                continue
+            model = by_repo_id.get(repo_id)
+            if model is None:
+                continue
+            # Pointer aliases carry the slot's assigned registry version, not
+            # the display version parsed from the repo name.
+            assigned = checkpoints.get(repo_id)
+            if isinstance(assigned, str) and assigned:
+                model = replace(model, semantic_version=assigned)
+            registry[_slug(f"{slot}_{pointer_name}")] = model
+            family = slot.split("::", 1)[0]
+            if family_counts[family] == 1:
+                registry[_slug(f"{family}_{pointer_name}")] = model
+
+
+def _build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
+    registry: Dict[str, ModelInfo] = {}
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+
+        info = _model_info_from_row(row)
+        key = _unique_key(_registry_key(row), row, registry)
+        registry[key] = info
+
+        for alias in _compatibility_aliases(row):
+            registry.setdefault(alias, info)
+    if registry_state is not None:
+        _add_pointer_aliases(registry, registry_state)
+    return registry
+
+
+def build_registry(
+    rows: Iterable[Dict[str, Any]],
+    registry_state: Mapping[str, Any] | None = None,
+) -> Dict[str, ModelInfo]:
+    """Build model metadata and named-pointer aliases from committed inputs."""
+
+    return _build_registry(rows, registry_state)
+
+
+_MANIFEST_ROWS = load_manifest_rows()
+_REGISTRY_STATE = load_registry_state(missing_ok=True)
+OPENMED_MODELS = build_registry(_MANIFEST_ROWS, _REGISTRY_STATE)
+
+
+def _models_by_language_from_manifest(languages: Iterable[str]) -> Dict[str, ModelInfo]:
+    language_set = set(languages)
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith("pii_")
+        and info.category == "Privacy"
+        and language_set.intersection(info.languages or ["en"])
+    }
+
+
+def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
+    """Return French, German, Italian, and Spanish PII entries from manifest."""
+    return _models_by_language_from_manifest({"fr", "de", "it", "es"})
+
+
+def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
+    """Return Portuguese PII entries from manifest."""
+    return _models_by_language_from_manifest({"pt"})
+
+
+def _build_new_language_pii_models() -> Dict[str, ModelInfo]:
+    """Return Arabic, Japanese, and Turkish PII entries from manifest."""
+    return _models_by_language_from_manifest({"ar", "ja", "tr"})
+
+
+def _build_categories() -> Dict[str, List[str]]:
+    categories: Dict[str, List[str]] = {}
+    for key, model in OPENMED_MODELS.items():
+        categories.setdefault(model.category, []).append(key)
+    return {category: sorted(keys) for category, keys in categories.items()}
+
+
+CATEGORIES = _build_categories()
+
+SIZE_RECOMMENDATIONS = {
+    "fast": [
+        key
+        for key in (
+            "disease_detection_tiny",
+            "oncology_detection_tiny",
+            "pii_superclinical_small",
+            "pii_liteclinical_small",
+            "pii_fastclinical_small",
+        )
+        if key in OPENMED_MODELS
+    ],
+    "balanced": [
+        key
+        for key in (
+            "pharma_detection_supermedical",
+            "genome_detection_bioclinical",
+            "anatomy_detection_electramed",
+            "pii_superclinical_base",
+            "pii_clinicale5_base",
+        )
+        if key in OPENMED_MODELS
+    ],
+    "accurate": [
+        key
+        for key in (
+            "disease_detection_superclinical",
+            "pharma_detection_superclinical",
+            "oncology_detection_superclinical",
+            "pii_superclinical_large",
+            "pii_qwenmed_xlarge",
+        )
+        if key in OPENMED_MODELS
+    ],
+}
+
+
+def get_model_info(model_key: str) -> Optional[ModelInfo]:
+    """Get model information by registry key or repo id."""
+    if model_key in OPENMED_MODELS:
+        return OPENMED_MODELS[model_key]
+
+    for model in OPENMED_MODELS.values():
+        if model.model_id == model_key:
+            return model
+    return None
+
+
+def resolve_draft_model_for(
+    target_model: str,
+    *,
+    require_permissive: bool = True,
+) -> DraftModelInfo | None:
+    """Return a separate draft artifact for a generative target model.
+
+    The returned artifact is intentionally independent from the target model
+    manifest row so target packages do not silently bundle or load draft weights.
+    """
+
+    target_model_id = _GENERATION_DRAFT_TARGET_ALIASES.get(target_model, target_model)
+    model_info = get_model_info(target_model_id)
+    if model_info is not None:
+        target_model_id = model_info.model_id
+
+    draft_info = GENERATION_DRAFT_MODELS.get(target_model_id)
+    if draft_info is None:
+        return None
+    if require_permissive and not draft_info.permissive_license:
+        return None
+    return draft_info
+
+
+def get_models_by_category(category: str) -> List[ModelInfo]:
+    """Get all models in a specific category."""
+    model_keys = CATEGORIES.get(category, [])
+    return [OPENMED_MODELS[key] for key in model_keys if key in OPENMED_MODELS]
+
+
+def get_models_by_size(size_category: str) -> List[ModelInfo]:
+    """Get models by size category (Tiny, Small, Medium, Large, XLarge)."""
+    return [
+        model
+        for model in OPENMED_MODELS.values()
+        if model.size_category == size_category
+    ]
+
+
+def get_recommended_models(use_case: str = "balanced") -> List[ModelInfo]:
+    """Get recommended models for a specific use case."""
+    model_keys = SIZE_RECOMMENDATIONS.get(
+        use_case, SIZE_RECOMMENDATIONS.get("balanced", [])
+    )
+    return [OPENMED_MODELS[key] for key in model_keys if key in OPENMED_MODELS]
+
+
+def find_models_by_entity_type(entity_type: str) -> List[ModelInfo]:
+    """Find models that can detect a specific entity type."""
+    matching_models = []
+    for model in OPENMED_MODELS.values():
+        if any(entity_type.upper() in et.upper() for et in model.entity_types):
+            matching_models.append(model)
+    return matching_models
+
+
+def get_all_models() -> Dict[str, ModelInfo]:
+    """Get all available OpenMed models."""
+    return OPENMED_MODELS.copy()
+
+
+_CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
+    "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
+        "Privacy",
+        "Contains PII/de-identification terms",
+    ),
+    "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+        "Oncology",
+        "Contains cancer/oncology terms",
+    ),
+    "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
+        "Pharmaceutical",
+        "Contains pharmaceutical terms",
+    ),
+    "gene|dna|protein|mutation|chromosome": (
+        "Genomics",
+        "Contains genomic/genetic terms",
+    ),
+    "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
+        "Cardiology",
+        "Contains cardiology terms",
+    ),
+    "rash|lesion|macule|papule|erythema|pruritus|biopsy of skin|dermatolog|skin": (
+        "Dermatology",
+        "Contains dermatology terms",
+    ),
+    "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
+        "Ophthalmology",
+        "Contains ophthalmology terms",
+    ),
+    "\\bct\\b|\\bmri\\b|x[- ]?ray|ultrasound|radiograph|contrast|impression|nodule|opacity": (
+        "Radiology",
+        "Contains radiology/imaging terms",
+    ),
+    "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
+        "Anesthesia",
+        "Contains anesthesia-record terms",
+    ),
+    "heart|lung|brain|liver|kidney|organ": (
+        "Anatomy",
+        "Contains anatomical terms",
+    ),
+    "culture|gram\\s*stain|susceptib|\\bmic\\b|resistant|sensitive|e\\.\\s*coli|mrsa|oxacillin": (
+        "Microbiology",
+        "Contains microbiology terms",
+    ),
+    "bacteria|virus|organism|species": (
+        "Species",
+        "Contains organism/species terms",
+    ),
+    "disease|condition|disorder|syndrome": (
+        "Disease",
+        "Contains disease/condition terms",
+    ),
+    "pathology|histology|biopsy": (
+        "Pathology",
+        "Contains pathological terms",
+    ),
+    "blood|lymph|leukemia|lymphoma": (
+        "Hematology",
+        "Contains hematological terms",
+    ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
+    ),
+    "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
+        "Nutrition",
+        "Contains nutrition/diet-order terms",
+    ),
+    "hba1c|hemoglobin\\s*a1c|blood\\s*glucose|glycemic|thyroid\\s*function|\\btsh\\b|hormone\\s*level|cortisol|insulin\\s*regimen|glargine|endocrinolog": (
+        "Endocrinology",
+        "Contains endocrinology terms",
+    ),
+    "gastroenterolog|endoscopy|endoscopic|colonoscopy|polyp|varices|bowel\\s*prep|bristol\\s*stool|mayo\\s*score|abdominal\\s*pain|cramping": (
+        "Gastroenterology",
+        "Contains gastroenterology/endoscopy terms",
+    ),
+    "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic": (
+        "Procedures",
+        "Contains procedure/surgical terms",
+    ),
+    "allerg|anaphylaxis|vaccine|igg|antibody": (
+        "Immunology",
+        "Contains immunology/allergy terms",
+    ),
+    "depression|anxiety|psychosis|suicidal|antidepressant": (
+        "MentalHealth",
+        "Contains mental-health terms",
+    ),
+    r"caries|extraction|crown|periodontal|tooth\s*#": (
+        "Dentistry",
+        "Contains dentistry/oral-health terms",
+    ),
+}
+
+
+def _match_categories(text: str) -> List[Tuple[str, str]]:
+    """Return ``(category, reason)`` pairs whose keywords match ``text``.
+
+    This is the routing layer behind :func:`get_model_suggestions`. It reports
+    a category whenever the text matches its keywords, independently of whether
+    any model is registered for that category (e.g. ``Cardiology`` has keyword
+    routing but no registered model yet).
+    """
+
+    text_lower = text.lower()
+    return [
+        (category, reason)
+        for pattern, (category, reason) in _CATEGORY_KEYWORDS.items()
+        if re.search(pattern, text_lower)
+    ]
+
+
+def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
+    """Suggest appropriate models based on text content."""
+    suggestions: List[Tuple[str, ModelInfo, str]] = []
+
+    for category, reason in _match_categories(text):
+        for key in CATEGORIES.get(category, [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], reason))
+
+    if not suggestions:
+        for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], "General medical text"))
+
+    return suggestions[:3]
+
+
+def list_model_categories() -> List[str]:
+    """List all available model categories."""
+    return list(CATEGORIES.keys())
+
+
+def get_entity_types_by_category(category: str) -> List[str]:
+    """Get all entity types supported by models in a category."""
+    models = get_models_by_category(category)
+    entity_types = set()
+    for model in models:
+        entity_types.update(model.entity_types)
+    return sorted(entity_types)
+
+
+def get_indic_encoder_spec(
+    family: str | None = None,
+    *,
+    source: str | None = None,
+) -> IndicEncoderSpec:
+    """Return normalized family metadata, inferring from a known repo name."""
+
+    if family is not None:
+        if not isinstance(family, str):
+            raise TypeError("family must be a string or None")
+        normalized = family.strip().casefold().replace("-", "").replace("_", "")
+    else:
+        if source is not None and not isinstance(source, str):
+            raise TypeError("source must be a string or None")
+        normalized_source = (source or "").strip().casefold().rstrip("/")
+        try:
+            normalized = _INDIC_ENCODER_OFFICIAL_SOURCES[normalized_source]
+        except KeyError as exc:
+            raise ValueError(
+                "family must be 'muril' or 'indicbert' for an unrecognized source"
+            ) from exc
+    try:
+        return INDIC_ENCODER_SPECS[normalized]
+    except KeyError as exc:
+        allowed = ", ".join(sorted(INDIC_ENCODER_SPECS))
+        raise ValueError(
+            f"unsupported Indic encoder family {family!r}; expected {allowed}"
+        ) from exc
+
+
+def configure_indic_encoder(
+    source: str | Path,
+    *,
+    family: str | None = None,
+    languages: Iterable[str] | None = None,
+    cache_dir: str | Path | None = None,
+    token: str | None = None,
+    revision: str | None = None,
+    local_files_only: bool = False,
+    device: str | None = None,
+) -> IndicEncoderConfig:
+    """Configure user-supplied MuRIL or IndicBERT weights for PII discovery.
+
+    Configuration does not load or download weights. Loading happens only when
+    :func:`load_configured_indic_encoder` is called explicitly.
+    """
+
+    if not isinstance(source, (str, Path)):
+        raise TypeError("Indic encoder source must be a string or path")
+    if not isinstance(local_files_only, bool):
+        raise TypeError("local_files_only must be a boolean")
+    source_value = str(source).strip()
+    if not source_value:
+        raise ValueError("Indic encoder source must not be empty")
+    metadata = get_indic_encoder_spec(family, source=source_value)
+
+    if languages is None:
+        from .pii_i18n import INDIC_ENCODER_PII_LANGUAGES
+
+        normalized_languages = tuple(sorted(INDIC_ENCODER_PII_LANGUAGES))
+    else:
+        if isinstance(languages, (str, bytes)):
+            raise TypeError("languages must be an iterable of language codes")
+        language_values = tuple(languages)
+        if any(not isinstance(language, str) for language in language_values):
+            raise TypeError("each Indic encoder language must be a string")
+        normalized_languages = tuple(
+            sorted({language.strip().casefold() for language in language_values})
+        )
+    if not normalized_languages or any(
+        not language for language in normalized_languages
+    ):
+        raise ValueError("at least one Indic encoder language must be configured")
+    unsupported = set(normalized_languages) - metadata.languages
+    if unsupported:
+        raise ValueError(
+            f"{metadata.display_name} does not support language codes: "
+            + ", ".join(sorted(unsupported))
+        )
+
+    config = IndicEncoderConfig(
+        source=source_value,
+        family=metadata.family,
+        languages=normalized_languages,
+        cache_dir=str(cache_dir) if cache_dir is not None else None,
+        token=token,
+        revision=revision,
+        local_files_only=local_files_only,
+        device=device,
+    )
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = config
+    return config
+
+
+def get_indic_encoder_config() -> IndicEncoderConfig | None:
+    """Return the active Indic encoder configuration, if one was supplied."""
+
+    return _INDIC_ENCODER_CONFIG
+
+
+def clear_indic_encoder_config() -> None:
+    """Remove the process-local Indic encoder configuration."""
+
+    global _INDIC_ENCODER_CONFIG
+    _INDIC_ENCODER_CONFIG = None
+
+
+def load_configured_indic_encoder() -> IndicEncoderLoadResult:
+    """Load the configured encoder or return a result carrying a skip reason."""
+
+    config = get_indic_encoder_config()
+    if config is None:
+        return IndicEncoderLoadResult(
+            handle=None,
+            skip_reason="no Indic encoder weights are configured",
+        )
+
+    from openmed.ner.families.indic import load_indic_encoder
+
+    return load_indic_encoder(
+        config.source,
+        family=config.family,
+        cache_dir=config.cache_dir,
+        token=config.token,
+        revision=config.revision,
+        local_files_only=config.local_files_only,
+        device=config.device,
+    )
+
+
+def _configured_indic_encoder_pii_models(lang: str) -> Dict[str, ModelInfo]:
+    config = get_indic_encoder_config()
+    if config is None or lang not in config.languages:
+        return {}
+    if not _is_indic_encoder_runtime_available():
+        return {}
+
+    metadata = get_indic_encoder_spec(config.family)
+    key = f"pii_{lang}_{metadata.family}_encoder"
+    transliteration = (
+        " Includes transliterated-text support for Hinglish and code-mixed paths."
+        if metadata.supports_transliterated_text
+        else ""
+    )
+    return {
+        key: ModelInfo(
+            model_id=config.source,
+            display_name=f"{metadata.display_name} Indic encoder adapter",
+            category="Privacy",
+            specialization="Indic encoder-backed PII",
+            description=(
+                "Optional backbone-only encoder configured from user-supplied weights."
+                + transliteration
+            ),
+            entity_types=list(_PII_ENTITY_TYPES),
+            size_category="Unknown",
+            family=metadata.display_name,
+            task="feature-extraction",
+            languages=list(config.languages),
+            architecture="Transformer encoder",
+            base_model=config.source,
+            formats=["transformers"],
+            license=metadata.license_id,
+            provenance={
+                "source": config.source,
+                "weights": "user-supplied",
+                "bundled": False,
+                "revision": config.revision,
+            },
+        )
+    }
+
+
+def _is_indic_encoder_runtime_available() -> bool:
+    try:
+        return all(
+            importlib.util.find_spec(module_name) is not None
+            for module_name in ("transformers", "torch")
+        )
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
+    """Return script-compatible PII models and configured Indic adapters."""
+    if lang == "en":
+        localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
+        language_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
+            and info.category == "Privacy"
+            and "en" in (info.languages or ["en"])
+            and _supports_pii_language(info, lang)
+            and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
+        }
+    else:
+        prefix = f"pii_{lang}_"
+        language_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith(prefix)
+            and info.category == "Privacy"
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
+    optional_indic = _configured_indic_pii_model(lang)
+
+    from .pii_i18n import DEFAULT_PII_MODELS
+
+    default_model_id = DEFAULT_PII_MODELS.get(lang)
+    if default_model_id:
+        # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+        # so language-pack callers can reuse multilingual privacy filters safely.
+        fallback_models = {
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
+            and info.category == "Privacy"
+            and info.model_id == default_model_id
+            and lang in (info.languages or [])
+            and _supports_pii_language(info, lang)
+        }
+        language_models.update(fallback_models)
+
+    language_models.update(optional_indic)
+    language_models.update(_configured_indic_encoder_pii_models(lang))
+    return language_models
+
+
+def get_ner_models_by_language(lang: str) -> Dict[str, ModelInfo]:
+    """Return non-privacy NER models whose manifest language matches ``lang``."""
+    normalized_lang = str(lang).strip().casefold()
+    if not normalized_lang:
+        return {}
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if info.category != "Privacy"
+        and info.family.casefold() == "ner"
+        and normalized_lang
+        in {language.casefold() for language in (info.languages or [])}
+    }
+
+
+def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
+    from ..ner.families.indic import configured_indic_ner_model
+    from .pii_i18n import INDIC_NER_LANGUAGES, LANGUAGE_NAMES
+
+    if lang not in INDIC_NER_LANGUAGES:
+        return {}
+    model_id = configured_indic_ner_model()
+    if model_id is None:
+        return {}
+    return {
+        f"pii_{lang}_indic_ner": ModelInfo(
+            model_id=model_id,
+            display_name=f"{LANGUAGE_NAMES[lang]} Indic NER (optional)",
+            category="Privacy",
+            specialization="Indic PER/LOC/ORG de-identification",
+            description="User-configured CoNLL-2003 Indic NER adapter",
+            entity_types=["PERSON", "LOCATION", "ORGANIZATION"],
+            size_category="Unknown",
+            recommended_confidence=0.50,
+            family="IndicNER",
+            task="token-classification",
+            languages=[lang],
+            formats=["transformers"],
+        )
+    }
+
+
+def _supports_pii_language(info: ModelInfo, lang: str) -> bool:
+    normalized = lang.lower().replace("_", "-")
+    scripts = LANGUAGE_SCRIPT_TARGETS.get(normalized, ())
+    return not any(
+        info.script_coverage.get(script, {}).get("verdict") == "unsupported"
+        for script in scripts
+    )
+
+
+def get_default_pii_model(lang: str) -> Optional[str]:
+    """Return the default (recommended) PII model_id for a language."""
+    from .pii_i18n import (
+        DEFAULT_PII_MODELS,
+        OPTIONAL_PII_MODEL,
+        USER_SUPPLIED_PII_MODEL,
+    )
+
+    model_id = DEFAULT_PII_MODELS.get(lang)
+    if model_id == USER_SUPPLIED_PII_MODEL:
+        # Publicly registered but ships no weights; the caller must supply one.
+        return None
+    if model_id != OPTIONAL_PII_MODEL:
+        return model_id
+    from ..ner.families.indic import configured_indic_ner_model
+
+    return configured_indic_ner_model()
+
+
+def resolve_summarizer_model(model_key: str = "mlx") -> tuple[str, str]:
+    """Resolve a reviewed summarizer alias to a model and immutable revision.
+
+    This is a runtime selection, not a clinical-quality certification. Artifacts
+    must be provisioned with a trusted manifest pin; this function selects
+    the model identity and does not attest to files in a cache.
+    """
+    from openmed.mlx.lm import MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+
+    if model_key in {"mlx", "maple", "maple-preview", MAPLE_MLX_MODEL}:
+        return MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+    raise ValueError("unregistered local summarizer alias")
+
+
+_SUMMARIZER_PACKAGES: dict[tuple[str, str], tuple[Path, str]] = {}
+
+
+def register_summarizer_package(
+    model_key: str,
+    *,
+    package_root: str | Path,
+    manifest_digest: str,
+) -> None:
+    """Bind a registered summarizer revision to a trusted local package pin.
+
+    Configure this at application startup from reviewed deployment metadata.
+    The digest must come from a trusted channel, independently of package
+    contents. Registration performs no I/O, download or runtime loading.
+    Aliases selecting the same model and revision share the binding.
+
+    Args:
+        model_key: An existing registered summarizer alias or model identifier.
+        package_root: Absolute directory of provisioned regular package files.
+        manifest_digest: Trusted canonical SHA-256 manifest digest.
+
+    Raises:
+        ValueError: If the alias, directory form or digest is invalid.
+    """
+    invalid = False
+    try:
+        identity = resolve_summarizer_model(model_key)
+        root = Path(package_root)
+        if (
+            not root.is_absolute()
+            or type(manifest_digest) is not str
+            or re.fullmatch(r"(?:sha256:)?[0-9a-fA-F]{64}", manifest_digest) is None
+        ):
+            invalid = True
+    except Exception:
+        invalid = True
+    if invalid:
+        raise ValueError("invalid summarizer package registration")
+    _SUMMARIZER_PACKAGES[identity] = (
+        root,
+        "sha256:" + manifest_digest.removeprefix("sha256:").lower(),
+    )
+
+
+def resolve_summarizer_package(model_key: str = "mlx") -> tuple[Path, str] | None:
+    """Return a deployment's package and digest for a registered alias.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+
+    Returns:
+        Absolute package root and trusted digest, or ``None`` if unprovisioned.
+    """
+    return _SUMMARIZER_PACKAGES.get(resolve_summarizer_model(model_key))
+
+
+def clear_summarizer_package(model_key: str = "mlx") -> None:
+    """Remove a deployment binding without changing its local package files.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+    """
+    _SUMMARIZER_PACKAGES.pop(resolve_summarizer_model(model_key), None)
+
+
+def get_default_nli_model() -> Optional[str]:
+    """Return a released, pinned clinical NLI model or fail closed with ``None``.
+
+    Registry entries created for training or tests cannot become the default.
+    A model must carry an immutable revision, class mapping, and calibration.
+    """
+
+    candidates = [
+        info
+        for info in OPENMED_MODELS.values()
+        if info.category == "Clinical NLI"
+        and info.task in {"text-classification", "sequence-classification"}
+        and info.license is not None
+        and info.license.casefold() in {"apache-2.0", "mit", "bsd-3-clause"}
+        and isinstance(info.provenance.get("revision"), str)
+        and re.fullmatch(r"[0-9a-fA-F]{40}", info.provenance["revision"])
+        and isinstance(info.provenance.get("nli_label_mapping"), dict)
+        and isinstance(info.provenance.get("nli_calibration"), dict)
+        and info.released
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda info: (info.released or "", info.model_id))
+    return candidates[-1].model_id
+
+
+def resolve_pii_family_transfer_route(
+    lang: str,
+) -> Optional[PiiFamilyTransferRoute]:
+    """Return offline registry metadata for a PII family-transfer target.
+
+    Args:
+        lang: Supported PII language code, optionally with a region or script.
+
+    Returns:
+        Target model, family, backbone, and primary donor-adapter metadata, or
+        ``None`` when the language is not in the built-in taxonomy.
+    """
+
+    from openmed.training.adapters.config import DEFAULT_BACKBONE_MODEL_ID
+    from openmed.training.adapters.family_transfer import resolve_family_transfer
+
+    resolution = resolve_family_transfer(lang)
+    if resolution is None:
+        return None
+
+    target_model_id = get_default_pii_model(resolution.language)
+    edge = resolution.primary_edge
+    if edge is None:
+        return PiiFamilyTransferRoute(
+            language=resolution.language,
+            family_id=resolution.family.family_id,
+            family_display_name=resolution.family.display_name,
+            target_model_id=target_model_id,
+            backbone_model_id=DEFAULT_BACKBONE_MODEL_ID,
+        )
+
+    adapter = edge.adapter
+    return PiiFamilyTransferRoute(
+        language=resolution.language,
+        family_id=resolution.family.family_id,
+        family_display_name=resolution.family.display_name,
+        target_model_id=target_model_id,
+        backbone_model_id=adapter.backbone_model_id,
+        donor_language=edge.donor_language,
+        donor_model_id=get_default_pii_model(edge.donor_language),
+        adapter_id=adapter.adapter_id,
+        adapter_license=adapter.license,
+        adapter_provenance=adapter.provenance,
+        clinical_disclaimer=adapter.disclaimer,
+        offline_runnable=adapter.offline_runnable,
+        mode=edge.mode,
+    )

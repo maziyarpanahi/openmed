@@ -1,0 +1,51 @@
+schema_version: openmed.training.clinical_nli.v1
+preset_name: clinical_nli_small
+status: preparation_only
+seed: 3236
+base_model:
+  model_ref: OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1
+  revision: 2ea947130eb28d610ceb96472af0b694fce9c344
+  license: apache-2.0
+  original_task: token_classification
+  replace_head_with: sequence_classification
+  local_files_only: true
+labels: [contradiction, neutral, entailment]
+training:
+  sequence_length: 512
+  learning_rate: 0.00002
+  batch_size: 16
+  gradient_accumulation_steps: 2
+  epochs: 3
+  weight_decay: 0.01
+  validation_interval_steps: 250
+  early_stopping_metric: macro_f1
+  deterministic: true
+  mixed_precision: false
+  paid_compute_authorized: false
+data:
+  public_training_manifest: null
+  public_license_audit_required: true
+  synthetic_training_manifest: null
+  patient_data_allowed: false
+  mednli: eval_only_user_supplied
+  mednli_download_allowed: false
+splits:
+  method: source_grouped
+  train: 0.8
+  validation: 0.1
+  test: 0.1
+  deduplicate_before_split: true
+exports: [pytorch, onnx_int8, mlx]
+required_evidence:
+  - public_and_synthetic_accuracy
+  - clinical_error_slices
+  - threshold_calibration
+  - synthetic_negation_challenge
+  - offline_resolution
+  - format_parity
+  - license_and_provenance
+  - published_immutable_revision
+publication:
+  enabled: false
+  required_owner_approval: true
+  model_registry_alias: null

@@ -1,0 +1,7 @@
+{"id":"mpesa-en-shared","language":"en","locale":"en_KE","synthetic":true,"text":"MPESA Confirmed. TB17CVOCY9 KSh 1,250.00 paid to Afya Clinic for the outpatient bill.","expected_codes":["TB17CVOCY9"]}
+{"id":"mpesa-sw-shared","language":"sw","synthetic":true,"text":"MPESA: Umepokea KSh 1,250.00 kwa bili ya kliniki. Muamala TB17CVOCY9 umekamilika.","expected_codes":["TB17CVOCY9"]}
+{"id":"mpesa-tz-muamala","language":"en","locale":"en_TZ","synthetic":true,"text":"Muamala wa M-PESA umethibitishwa: VD56NPQRS7 imelipa TSh 18,000 kwa huduma za kliniki.","expected_codes":["VD56NPQRS7"]}
+{"id":"mpesa-sw-umepokea","language":"sw","synthetic":true,"text":"Umepokea KSh 3,400.00 kupitia MPESA. Muamala UC34HJKLM8 kutoka kwa mteja wa kliniki.","expected_codes":["UC34HJKLM8"]}
+{"id":"mpesa-ungated-ids","language":"en","locale":"en_KE","synthetic":true,"text":"Specimen AB12CDEFG3 and batch KL90MNOPQ4 cleared laboratory review.","candidate_codes":["AB12CDEFG3","KL90MNOPQ4"],"expected_codes":[]}
+{"id":"mpesa-gated-ids","language":"en","locale":"en_KE","synthetic":true,"text":"MPESA Confirmed. AB12CDEFG3 paid the first invoice. MPESA Confirmed. KL90MNOPQ4 paid the second invoice.","candidate_codes":["AB12CDEFG3","KL90MNOPQ4"],"expected_codes":["AB12CDEFG3","KL90MNOPQ4"]}
+{"id":"mpesa-repeated-code","language":"en","locale":"en_KE","synthetic":true,"text":"MPESA Confirmed. WE78TUVWX6 paid the clinic deposit. Receipt copy: MPESA Confirmed. WE78TUVWX6 paid the clinic deposit.","expected_codes":["WE78TUVWX6","WE78TUVWX6"]}

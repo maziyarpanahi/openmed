@@ -1,0 +1,1030 @@
+"""Tests for the fail-closed release-readiness gate (#1814)."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+from openmed.eval.release_gates import (
+    QUARANTINED,
+    RELEASABLE,
+    GateCheck,
+    GateReport,
+)
+from openmed.eval.release_readiness import (
+    NOT_READY,
+    READY,
+    ReadinessReport,
+    evaluate_readiness,
+    main,
+)
+
+GATE_KEY = "test-release-gate-key"
+READINESS_KEY = "test-readiness-key"
+
+
+def _make_gate_report(*, decision: str = RELEASABLE) -> GateReport:
+    gate_results: tuple[GateCheck, ...] = ()
+    if decision != RELEASABLE:
+        gate_results = (GateCheck("g1a_recall", False, reason="Recall 0.900 < 0.995"),)
+    return GateReport(
+        repo_id="test/model",
+        family="pii",
+        tier="t1",
+        param_count=100,
+        format="pytorch",
+        per_label_recall={"PERSON": 0.999},
+        per_label_precision={"PERSON": 0.999},
+        critical_leakage_count=0 if decision == RELEASABLE else 5,
+        residual_leakage_rate=0.001 if decision == RELEASABLE else 0.05,
+        quant_recall_delta=None,
+        p50_ms=10.0,
+        p95_ms=20.0,
+        ram_mb=256.0,
+        eval_set_hash="abc123",
+        leakage_fixture_hash="def456",
+        decision=decision,
+        gate_results=gate_results,
+    ).sign(GATE_KEY)
+
+
+def _make_repo_root(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
+    (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    migration = root / "docs" / "migration" / "2.5-to-3.0.md"
+    migration.parent.mkdir(parents=True)
+    migration.write_text("# Migration Guide\n", encoding="utf-8")
+
+    gates = root / "gates"
+    gates.mkdir()
+    (gates / "api_compat_report.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "before_ref": "v2.2.0",
+                "after_ref": "v2.3.0",
+                "summary": {
+                    "before_symbols": 100,
+                    "after_symbols": 105,
+                    "added": 5,
+                    "deprecated": 0,
+                    "breaking": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (gates / "e2e_golden_pass.json").write_text(
+        json.dumps({"passed": True, "suite": "golden_v2"}),
+        encoding="utf-8",
+    )
+
+    clinical = root / "openmed" / "clinical"
+    clinical.mkdir(parents=True)
+    (clinical / "__init__.py").write_text(
+        "OPENMED_CLINICAL_DISCLAIMER = 'Assistive output; not a medical device.'\n"
+        "__all__ = ['OPENMED_CLINICAL_DISCLAIMER']\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def _evaluate(root: Path, **kwargs) -> ReadinessReport:
+    return evaluate_readiness(
+        repo_root=root,
+        gate_report=_make_gate_report(),
+        gate_report_key=GATE_KEY,
+        signing_key=READINESS_KEY,
+        **kwargs,
+    )
+
+
+def test_ready_when_all_signed_inputs_are_satisfied(tmp_path):
+    report = _evaluate(_make_repo_root(tmp_path))
+
+    assert report.decision == READY
+    assert len(report.checks) == 5
+    assert all(check.passed for check in report.checks)
+
+
+def test_report_signature_covers_hash_decision_and_checks(tmp_path):
+    report = _evaluate(_make_repo_root(tmp_path))
+
+    assert report.verify(READINESS_KEY)
+    assert not report.verify("wrong-key")
+
+    report.checks = (
+        GateCheck("extraction_gates", False, reason="tampered"),
+        *report.checks[1:],
+    )
+    assert not report.verify(READINESS_KEY)
+
+
+def test_repro_hash_is_stable(tmp_path):
+    root = _make_repo_root(tmp_path)
+
+    first = _evaluate(root)
+    second = _evaluate(root)
+
+    assert first.repro_hash == second.repro_hash
+
+
+def test_unsigned_extraction_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    unsigned = _make_gate_report()
+    unsigned.signature = None
+
+    report = evaluate_readiness(
+        repo_root=root,
+        gate_report=unsigned,
+        gate_report_key=GATE_KEY,
+    )
+
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
+    assert "signature" in report.failing_checks()[0].reason
+
+
+def test_tampered_extraction_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    gate_report = _make_gate_report()
+    gate_report.per_label_recall = {"PERSON": 0.1}
+
+    report = evaluate_readiness(
+        repo_root=root,
+        gate_report=gate_report,
+        gate_report_key=GATE_KEY,
+    )
+
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
+
+
+def test_missing_gate_report_fails_closed(tmp_path):
+    report = evaluate_readiness(repo_root=_make_repo_root(tmp_path))
+
+    assert report.decision == NOT_READY
+    assert report.failing_checks()[0].gate == "extraction_gates"
+
+
+def test_quarantined_extraction_gate_propagates(tmp_path):
+    report = evaluate_readiness(
+        repo_root=_make_repo_root(tmp_path),
+        gate_report=_make_gate_report(decision=QUARANTINED),
+        gate_report_key=GATE_KEY,
+    )
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "extraction_gates"
+    )
+    assert "QUARANTINED" in check.reason
+    assert check.details["failing_gates"] == ["g1a_recall"]
+
+
+def test_missing_migration_guide_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "docs" / "migration" / "2.5-to-3.0.md").unlink()
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "required_docs"
+    )
+    assert "docs/migration/2.5-to-3.0.md" in check.reason
+
+
+def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "openmed" / "clinical" / "__init__.py").write_text(
+        "# OPENMED_CLINICAL_DISCLAIMER is intentionally absent\n",
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "clinical_disclaimer"
+    )
+    assert "non-empty string" in check.reason
+
+
+def test_disclaimer_must_be_publicly_exported(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "openmed" / "clinical" / "__init__.py").write_text(
+        "OPENMED_CLINICAL_DISCLAIMER = 'Not a medical device.'\n__all__ = []\n",
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(
+        item for item in report.failing_checks() if item.gate == "clinical_disclaimer"
+    )
+    assert "omit" in check.reason
+
+
+def test_breaking_api_report_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    path = root / "gates" / "api_compat_report.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["summary"]["breaking"] = 2
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(item for item in report.failing_checks() if item.gate == "api_compat")
+    assert "2 breaking change" in check.reason
+
+
+def test_non_boolean_or_unnamed_golden_result_fails_closed(tmp_path):
+    root = _make_repo_root(tmp_path)
+    (root / "gates" / "e2e_golden_pass.json").write_text(
+        json.dumps({"passed": 1, "suite": ""}),
+        encoding="utf-8",
+    )
+
+    report = _evaluate(root)
+
+    assert report.decision == NOT_READY
+    check = next(item for item in report.failing_checks() if item.gate == "e2e_golden")
+    assert "named passing suite" in check.reason
+
+
+def _document_breaking_api(root: Path) -> dict:
+    path = root / "gates/api_compat_report.json"
+    payload = json.loads(path.read_text())
+    payload["before_ref"] = "v2.5.0"
+    payload["summary"]["breaking"] = 1
+    payload["breaking"] = [{"symbol": "openmed.clinical.grounding.ground"}]
+    path.write_text(json.dumps(payload))
+    (root / "docs/migration/2.5-to-3.0.md").write_text(
+        "# Migration\nUse openmed.clinical.grounding.ground(text_or_entities=...).\n"
+    )
+    return payload
+
+
+def test_documented_breaking_api_is_allowed_for_major_release_only(tmp_path):
+    root = _make_repo_root(tmp_path)
+    _document_breaking_api(root)
+    report = _evaluate(root, version="3.0.0")
+    assert report.decision == READY
+    check = next(item for item in report.checks if item.gate == "api_compat")
+    assert check.details["breaking"] == 1
+    assert check.details["reviewed_major_migrations"] == [
+        "openmed.clinical.grounding.ground"
+    ]
+    assert check.details["migration_hash"]
+    assert report.verify(READINESS_KEY)
+
+
+def test_breaking_api_is_not_waived_for_minor_patch_or_invalid_version(
+    subtests, tmp_path
+):
+    case_root = tmp_path
+    for version in ["2.5.1", "2.6.0", "2.5.0", "1.0.0", "3.0.0rc1"]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _make_repo_root(tmp_path)
+            _document_breaking_api(root)
+            assert _evaluate(root, version=version).decision == NOT_READY
+
+
+def _document_v31_security_removals(root: Path) -> dict:
+    symbols = [
+        f"{namespace}.{field}"
+        for namespaces, fields in (
+            (
+                (
+                    "openmed.agent.approvals.ApprovalReceipt",
+                    "openmed.agent.approvals.tokens.ApprovalReceipt",
+                ),
+                ("reviewer_role", "consumed_at", "expires_at"),
+            ),
+            (
+                (
+                    "openmed.risk.AggregateDPRelease",
+                    "openmed.risk.aggregate_dp.AggregateDPRelease",
+                ),
+                ("noise", "seed_digest"),
+            ),
+        )
+        for namespace in namespaces
+        for field in fields
+    ]
+    payload = {
+        "schema_version": 1,
+        "before_ref": "v3.0.0",
+        "after_ref": "HEAD",
+        "summary": {"breaking": len(symbols)},
+        "breaking": [
+            {
+                "symbol": symbol,
+                "change": "removed",
+                "before": {"kind": "attribute", "name": symbol},
+            }
+            for symbol in symbols
+        ],
+    }
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    (root / "docs/migration/2.5-to-3.0.md").write_text("\n".join(symbols))
+    return payload
+
+
+def test_v31_security_exception_retains_breaks_and_signed_migration_evidence(tmp_path):
+    root = _make_repo_root(tmp_path)
+    _document_v31_security_removals(root)
+    report = _evaluate(root, version="3.1.0")
+    assert report.decision == READY
+    check = next(item for item in report.checks if item.gate == "api_compat")
+    assert check.details["breaking"] == 10
+    assert check.details["reviewed_major_migrations"] == []
+    assert len(check.details["reviewed_security_remediations"]) == 10
+    assert check.details["security_exception"] == "v3.1.0-privacy-remediations"
+    assert check.details["migration_hash"]
+    assert report.verify(READINESS_KEY)
+    check.details["reviewed_security_remediations"].clear()
+    assert not report.verify(READINESS_KEY)
+
+
+def test_v31_security_exception_does_not_apply_to_other_releases(subtests, tmp_path):
+    case_root = tmp_path
+    for version in ["3.0.1", "3.1.1", "3.2.0", "3.1.0rc1"]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _make_repo_root(tmp_path)
+            _document_v31_security_removals(root)
+            assert _evaluate(root, version=version).decision == NOT_READY
+
+
+def test_v31_security_exception_refuses_any_unreviewed_change(subtests, tmp_path):
+    case_root = tmp_path
+    for mutation in [
+        "extra_break",
+        "duplicate",
+        "wrong_baseline",
+        "changed_kind",
+        "changed_signature",
+        "after_present",
+        "missing_guide_symbol",
+        "missing_before",
+        "wrong_before_name",
+        "missing_removal",
+    ]:
+        with subtests.test(mutation=mutation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _make_repo_root(tmp_path)
+            payload = _document_v31_security_removals(root)
+            entry = payload["breaking"][0]
+            if mutation == "extra_break":
+                payload["breaking"].append(
+                    {"symbol": "openmed.clinical.ground", "change": "removed"}
+                )
+                payload["summary"]["breaking"] += 1
+            elif mutation == "duplicate":
+                payload["breaking"][-1] = entry
+            elif mutation == "wrong_baseline":
+                payload["before_ref"] = "v3.0.1"
+            elif mutation == "changed_kind":
+                entry["before"]["kind"] = "function"
+            elif mutation == "changed_signature":
+                entry["change"] = "signature_changed"
+            elif mutation == "after_present":
+                entry["after"] = entry["before"]
+            elif mutation == "missing_guide_symbol":
+                (root / "docs/migration/2.5-to-3.0.md").write_text(
+                    "# Incomplete migration"
+                )
+            elif mutation == "missing_before":
+                del entry["before"]
+            elif mutation == "wrong_before_name":
+                entry["before"]["name"] = "openmed.unrelated"
+            elif mutation == "missing_removal":
+                payload["breaking"].pop()
+                payload["summary"]["breaking"] -= 1
+            (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+            assert _evaluate(root, version="3.1.0").decision == NOT_READY
+
+
+def test_major_release_refuses_missing_or_malformed_migration_entries(
+    subtests, tmp_path
+):
+    case_root = tmp_path
+    for entries in [
+        [],
+        [None],
+        [{"symbol": []}],
+        [{"symbol": "unlisted.api"}],
+        [{"symbol": "openmed.missing"}],
+    ]:
+        with subtests.test(entries=entries):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _make_repo_root(tmp_path)
+            payload = _document_breaking_api(root)
+            payload["breaking"] = entries
+            (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+            assert _evaluate(root, version="3.0.0").decision == NOT_READY
+
+
+def test_invalid_breaking_change_count_fails_closed(subtests, tmp_path):
+    case_root = tmp_path
+    for count in [True, 1.0, "1", None, [], -1]:
+        with subtests.test(count=count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _make_repo_root(tmp_path)
+            payload = _document_breaking_api(root)
+            payload["summary"]["breaking"] = count
+            (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+            assert _evaluate(root, version="3.0.0").decision == NOT_READY
+
+
+def test_report_serialization_round_trip_remains_verifiable(tmp_path):
+    original = _evaluate(_make_repo_root(tmp_path))
+
+    restored = ReadinessReport.from_dict(original.to_dict())
+
+    assert restored.to_dict() == original.to_dict()
+    assert restored.verify(READINESS_KEY)
+
+
+def test_cli_writes_report_and_returns_success(tmp_path):
+    root = _make_repo_root(tmp_path)
+    gate_report_path = root / "release-gate-report.json"
+    gate_report_path.write_text(
+        json.dumps(_make_gate_report().to_dict()),
+        encoding="utf-8",
+    )
+    output = root / "release-readiness-report.json"
+
+    result = main(
+        [
+            "--repo-root",
+            str(root),
+            "--gate-report",
+            str(gate_report_path),
+            "--gate-report-key",
+            GATE_KEY,
+            "--signing-key",
+            READINESS_KEY,
+            "--output",
+            str(output),
+            "--json",
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["decision"] == READY
+
+
+def test_release_workflow_gates_publish_on_readiness():
+    workflow_path = Path(".github/workflows/release-gates.yml")
+    workflow = workflow_path.read_text(encoding="utf-8")
+    parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
+    steps = {
+        step["name"]: step
+        for step in parsed["jobs"]["release-gates"]["steps"]
+        if "name" in step
+    }
+
+    assert "Stage candidate before evaluation" in workflow
+    assert "Run golden and public SHIELD benchmarks" in workflow
+    assert "--suite golden" in workflow
+    assert "--suite shield" in workflow
+    assert "--baseline-store gates/baseline.json" in workflow
+    assert "Compare public SHIELD leakage to last green" in workflow
+    assert "Generate API compatibility evidence" in workflow
+    assert "tests/integration/test_end_to_end.py" in workflow
+    assert "Run release-readiness gate" in workflow
+    assert "--gate-report release-gate-report.json" in workflow
+    assert "--output release-readiness-report.json" in workflow
+    assert "Promote staged manifest and write last-green baseline" in workflow
+    assert "gate.recompute_repro_hash() != gate.repro_hash" in workflow
+    assert "Regenerate green trust artifacts from manifest" in workflow
+    assert "scripts/release/build_model_card.py" in workflow
+    assert "scripts/status/generate_status.py" in workflow
+    assert "Publish green promotion bundle" in workflow
+    assert "Quarantine incomplete or failing candidate" in workflow
+    assert "No manifest pointer or last-green baseline was changed." in workflow
+    assert "release-status-regression" in workflow
+    assert "openmed release rollback" in workflow
+    assert 'if [ "$elapsed_seconds" -ge 600 ]' in workflow
+    assert "steps.readiness.outcome == 'success'" in workflow
+    assert "steps.readiness.outcome != 'success'" in workflow
+    for step_name in ("Quarantine incomplete or failing candidate", "Fail closed"):
+        condition = steps[step_name]["if"]
+        assert "github.event_name == 'workflow_dispatch'" in condition
+        assert "github.event_name == 'push'" not in condition
+        assert "steps.check-candidate.outputs.exists != 'true'" in condition
+
+
+def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
+    """Create an isolated history with synthetic model metadata."""
+    import subprocess
+
+    root = _make_repo_root(tmp_path)
+    (root / "models.jsonl").write_text(
+        json.dumps(
+            {
+                "repo_id": "synthetic/model",
+                "family": "PII",
+                "tier": "small",
+                "formats": ["mlx-fp"],
+                "languages": ["en"],
+                "param_count": 100,
+                "license": "apache-2.0",
+                "reproducibility_hash": "sha256:synthetic",
+                "script_coverage": {
+                    "gujarati": {
+                        "unk_rate": 0.0,
+                        "byte_fallback_rate": 0.0,
+                        "tokens_per_grapheme": 0.8,
+                        "verdict": "unclaimed",
+                    }
+                },
+            }
+        )
+        + "\n",
+        newline=newline,
+    )
+    (root / "gates/baseline.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": {"pii::small::mlx-fp": {"repo_id": "synthetic/model"}},
+            }
+        )
+        + "\n",
+        newline=newline,
+    )
+    state = {
+        "schema_version": 1,
+        "families": {
+            "PII": {
+                "versions": {"synthetic/model": "1.0.0"},
+                "lineage": [],
+                "pointers": {
+                    "latest": "synthetic/model",
+                    "last_green": "synthetic/model",
+                    "canary": None,
+                },
+            }
+        },
+    }
+    (root / "gates/registry_state.json").write_text(json.dumps(state))
+    for args in (
+        ["init", "-q"],
+        # The continuity gate compares bytes; preserve the synthetic files
+        # verbatim instead of inheriting the host's line-ending conversion.
+        ["config", "core.autocrlf", "false"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Synthetic Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "Synthetic baseline",
+        ],
+        ["tag", "v1.0.0"],
+    ):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+    return root
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
+    tmp_path,
+    monkeypatch,
+    newline,
+):
+    git_config = tmp_path / "inherited.gitconfig"
+    git_config.write_text("[core]\n\tautocrlf = true\n", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(git_config))
+    root = _sdk_repository(tmp_path, newline=newline)
+    path = root / "gates/registry_state.json"
+    state = json.loads(path.read_text())
+    entry = state["families"]["PII"]
+    entry["checkpoints"] = entry.pop("versions")
+    path.write_text(
+        json.dumps({"schema_version": 2, "slots": {"pii::small::mlx-fp": entry}})
+    )
+    report = evaluate_readiness(
+        repo_root=root, sdk_baseline="v1.0.0", signing_key=READINESS_KEY
+    )
+    assert report.decision == READY, report.to_dict()
+    assert report.verify(READINESS_KEY)
+    assert report.checks[0].gate == "sdk_model_continuity"
+    assert report.checks[0].details["pointer_count"] == 3
+    assert "qualification" in report.checks[0].details["scope"]
+
+
+@pytest.mark.slow
+def test_sdk_continuity_rejects_changed_artifacts_evidence_and_pointers(tmp_path):
+    root = _sdk_repository(tmp_path)
+    for name in ("models.jsonl", "gates/baseline.json", "gates/registry_state.json"):
+        path = root / name
+        original = path.read_bytes()
+        if name.endswith("registry_state.json"):
+            state = json.loads(original)
+            state["families"]["PII"]["pointers"]["canary"] = "synthetic/other"
+            path.write_text(json.dumps(state))
+        else:
+            path.write_bytes(original + b" ")
+        report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed
+        path.write_bytes(original)
+
+
+@pytest.mark.slow
+def test_sdk_continuity_refuses_missing_or_unsafe_baseline(tmp_path):
+    root = _sdk_repository(tmp_path)
+    for baseline in ("v0.9.0", "HEAD", "--help", "v1.0.0:models.jsonl"):
+        report = evaluate_readiness(repo_root=root, sdk_baseline=baseline)
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed
+
+
+@pytest.mark.slow
+def test_sdk_continuity_accepts_catalog_edits_without_model_promotion(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "models.jsonl"
+    row = json.loads(path.read_text())
+    row["languages"].append("gu")
+    row["script_coverage"]["gujarati"]["verdict"] = "supported"
+    path.write_text(json.dumps(row) + "\n")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == READY
+    assert report.checks[0].details["catalog_metadata_changes"] == {
+        "synthetic/model": ["languages", "script_coverage"]
+    }
+
+
+def test_sdk_catalog_edits_cannot_mask_artifact_or_metadata_regressions(
+    subtests, tmp_path
+):
+    case_root = tmp_path
+    for field, value in [
+        ("formats", ["onnx"]),
+        ("license", "restricted"),
+        ("reproducibility_hash", "sha256:other"),
+        ("param_count", 101),
+        ("repo_id", "synthetic/other"),
+        ("languages", []),
+        ("languages", ["en", "en"]),
+        ("languages", ["en", True]),
+        ("script_coverage", []),
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _sdk_repository(tmp_path)
+            path = root / "models.jsonl"
+            row = json.loads(path.read_text())
+            row["languages"].append("gu")
+            row[field] = value
+            path.write_text(json.dumps(row) + "\n")
+            report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+            assert report.decision == NOT_READY
+            assert not report.checks[0].passed
+
+
+@pytest.mark.slow
+def test_sdk_catalog_edits_cannot_change_tokenizer_measurements(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "models.jsonl"
+    row = json.loads(path.read_text())
+    row["languages"].append("gu")
+    row["script_coverage"]["gujarati"].update(verdict="supported", unk_rate=0.2)
+    path.write_text(json.dumps(row) + "\n")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+def _add_summary_policy(root: Path) -> dict:
+    path = root / "gates/baseline.json"
+    payload = json.loads(path.read_text())
+    payload["summary"] = {
+        "clinical_fact_recall_min": 0.95,
+        "fact_coverage_min": 0.95,
+        "unsupported_claim_rate_max": 0.0,
+        "citation_support_min": 1.0,
+        "leaked_identifier_count_max": 0,
+    }
+    path.write_text(json.dumps(payload))
+    return payload
+
+
+@pytest.mark.slow
+def test_sdk_continuity_allows_new_strict_summary_policy_without_training(tmp_path):
+    root = _sdk_repository(tmp_path)
+    _add_summary_policy(root)
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == READY
+    assert report.checks[0].gate == "sdk_model_continuity"
+
+
+@pytest.mark.slow
+def test_sdk_continuity_rejects_invalid_or_relaxed_summary_policy(subtests, tmp_path):
+    case_root = tmp_path
+    for key, value in [
+        ("clinical_fact_recall_min", 0.5),
+        ("fact_coverage_min", 0.9),
+        ("unsupported_claim_rate_max", 0.01),
+        ("citation_support_min", 0.99),
+        ("leaked_identifier_count_max", 1),
+        ("leaked_identifier_count_max", False),
+        ("unknown_gate", 0),
+    ]:
+        with subtests.test(key=key, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _sdk_repository(tmp_path)
+            payload = _add_summary_policy(root)
+            payload["summary"][key] = value
+            (root / "gates/baseline.json").write_text(json.dumps(payload))
+            report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+            assert report.decision == NOT_READY
+
+
+@pytest.mark.slow
+def test_sdk_summary_policy_cannot_rewrite_retained_model_evidence(tmp_path):
+    root = _sdk_repository(tmp_path)
+    payload = _add_summary_policy(root)
+    payload["entries"]["pii::small::mlx-fp"]["repo_id"] = "synthetic/other"
+    (root / "gates/baseline.json").write_text(json.dumps(payload))
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+@pytest.mark.slow
+def test_sdk_continuity_rejects_non_object_evidence_without_crashing(tmp_path):
+    root = _sdk_repository(tmp_path)
+    (root / "gates/baseline.json").write_text("[]")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+def test_missing_model_gate_still_fails_without_explicit_sdk_scope(tmp_path):
+    root = _sdk_repository(tmp_path)
+    report = evaluate_readiness(repo_root=root)
+    assert report.decision == NOT_READY
+    assert not report.checks[0].passed
+
+
+@pytest.mark.slow
+def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "gates/registry_state.json"
+    entry = json.loads(path.read_text())["families"]["PII"]
+    entry["checkpoints"] = entry.pop("versions")
+    for slot, version in (
+        ("pii::large::mlx-fp", "1.0.0"),
+        ("pii::small::mlx-fp", "2.0.0"),
+    ):
+        entry["checkpoints"]["synthetic/model"] = version
+        path.write_text(json.dumps({"schema_version": 2, "slots": {slot: entry}}))
+        report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+        assert report.decision == NOT_READY
+        assert not report.checks[0].passed
+
+
+@pytest.mark.slow
+def test_sdk_workflow_classifies_real_version_boundaries(subtests, tmp_path):
+    """Ordinary PRs never claim READY; explicit dispatch never bypasses gates."""
+    case_root = tmp_path
+    for event, declared, release_branch, expected, expected_base, expected_guide in [
+        ("pull_request", "3.0.0", "master", False, "v3.0.0", ""),
+        (
+            "pull_request",
+            "3.1.0",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/3.0-to-3.1.md",
+        ),
+        (
+            "pull_request",
+            "4.0.0",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/3.0-to-4.0.md",
+        ),
+        (
+            "pull_request",
+            "3.0.1",
+            "master",
+            True,
+            "v3.0.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "workflow_dispatch",
+            "3.0.0",
+            "master",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "pull_request",
+            "3.0.0",
+            "release/v3.0.0",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+        (
+            "push",
+            "3.0.0",
+            "release/v3.0.0",
+            True,
+            "v2.5.0",
+            "docs/migration/2.5-to-3.0.md",
+        ),
+    ]:
+        with subtests.test(
+            event=event,
+            declared=declared,
+            expected=expected,
+            expected_base=expected_base,
+            expected_guide=expected_guide,
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = tmp_path / "repository"
+            (root / "openmed").mkdir(parents=True)
+            about = root / "openmed/__about__.py"
+            about.write_text('__version__ = "3.0.0"\n')
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Maziyar Panahi",
+                    "-c",
+                    "user.email=maziyar@live.co.uk",
+                    "commit",
+                    "-qm",
+                    "SDK baseline",
+                ],
+                cwd=root,
+                check=True,
+            )
+            base = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            about.write_text(f'__version__ = "{declared}"\n')
+            (root / "docs/migration").mkdir(parents=True)
+            (root / "docs/migration/2.5-to-3.0.md").write_text(
+                "Reviewed prior boundary"
+            )
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Maziyar Panahi",
+                    "-c",
+                    "user.email=maziyar@live.co.uk",
+                    "commit",
+                    "-qm",
+                    "SDK head",
+                ],
+                cwd=root,
+                check=True,
+            )
+            head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            # Input resolution must use the immutable commit, not a modified checkout.
+            about.write_text('__version__ = "99.0.0"\n')
+            workflow_path = (
+                Path(__file__).resolve().parents[3]
+                / ".github/workflows/sdk-release-candidate.yml"
+            )
+            workflow = yaml.safe_load(workflow_path.read_text())
+            steps = workflow["jobs"]["readiness"]["steps"]
+            resolver = next(step for step in steps if step.get("id") == "candidate")
+            script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+            output = tmp_path / "outputs"
+            env = os.environ.copy()
+            env.update(
+                GITHUB_EVENT_NAME=event,
+                PR_BASE_SHA=base,
+                CANDIDATE_SHA=head,
+                RELEASE_BASE_REF=release_branch,
+                GITHUB_OUTPUT=str(output),
+                REQUESTED_VERSION="3.0.0",
+                REQUESTED_API_BASE="v2.5.0",
+                REQUESTED_MIGRATION="docs/migration/2.5-to-3.0.md",
+            )
+            subprocess.run(
+                [sys.executable, "-c", script], cwd=root, env=env, check=True
+            )
+            values = dict(
+                line.split("=", 1) for line in output.read_text().splitlines()
+            )
+            assert values["evaluate"] == str(expected).lower()
+            assert values["version"] == declared
+            assert values["api_base"] == expected_base
+            assert values["migration"] == expected_guide
+            evidence = json.loads(
+                (root / "artifacts/sdk-readiness/scope.json").read_text()
+            )
+            assert evidence["classification"] == (
+                "CANDIDATE" if expected else "NOT_A_CANDIDATE"
+            )
+            assert evidence["release_readiness_required"] is expected
+            assert not (root / "artifacts/sdk-readiness/readiness.json").exists()
+            required = {
+                "Check version and API compatibility",
+                "Run end-to-end golden suite",
+                "Verify SDK readiness without model promotion",
+            }
+            guarded = [step for step in steps if step.get("name") in required]
+            assert len(guarded) == len(required)
+            assert all(
+                step["if"] == "steps.candidate.outputs.evaluate == 'true'"
+                for step in guarded
+            )
+
+
+@pytest.mark.slow
+def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
+    """Malformed metadata cannot turn a real candidate into an ordinary PR."""
+    root = tmp_path / "repository"
+    (root / "openmed").mkdir(parents=True)
+    (root / "openmed/__about__.py").write_text('__version__ = "unknown"\n')
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "Invalid SDK metadata",
+        ],
+        cwd=root,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github/workflows/sdk-release-candidate.yml"
+    )
+    workflow = yaml.safe_load(workflow_path.read_text())
+    resolver = next(
+        step
+        for step in workflow["jobs"]["readiness"]["steps"]
+        if step.get("id") == "candidate"
+    )
+    script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    env = os.environ.copy()
+    env.update(
+        GITHUB_EVENT_NAME="pull_request",
+        CANDIDATE_SHA=head,
+        GITHUB_OUTPUT=str(tmp_path / "outputs"),
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "stable SDK version" in result.stderr
+    assert not (tmp_path / "outputs").exists()
+    assert not (root / "artifacts/sdk-readiness/scope.json").exists()

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/terminology_mapping_result.schema.json",
+  "title": "OpenMed terminology mapping result",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidates",
+    "compatibility_policy",
+    "mapping_id",
+    "policy",
+    "reason_code",
+    "review_required",
+    "schema_version",
+    "selected_candidate_id",
+    "snapshot",
+    "source_code",
+    "source_digest",
+    "source_system",
+    "state"
+  ],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "compatibility_policy": {"const": "same_major"},
+    "mapping_id": {"$ref": "#/$defs/digest"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "reason_code": {"$ref": "#/$defs/controlled"},
+    "review_required": {"type": "boolean"},
+    "schema_version": {"const": "1.0.0"},
+    "selected_candidate_id": {
+      "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+    },
+    "snapshot": {"$ref": "#/$defs/snapshot"},
+    "source_code": {"type": ["string", "null"], "minLength": 1},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "source_system": {
+      "oneOf": [{"$ref": "#/$defs/controlled"}, {"type": "null"}]
+    },
+    "state": {"enum": ["mapped", "ambiguous", "unmapped", "rejected"]}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^(sha256|hmac-sha256):[0-9a-f]{64}$"
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "code",
+        "confidence",
+        "mapping_rule",
+        "rank",
+        "relationship",
+        "snapshot_digest",
+        "system",
+        "vocabulary",
+        "vocabulary_version"
+      ],
+      "properties": {
+        "candidate_id": {"$ref": "#/$defs/digest"},
+        "code": {"type": "string", "minLength": 1, "maxLength": 256},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "mapping_rule": {
+          "enum": [
+            "explicit_code",
+            "normalized_lexical",
+            "alias",
+            "hierarchy",
+            "semantic"
+          ]
+        },
+        "rank": {"type": "integer", "minimum": 1},
+        "relationship": {
+          "enum": ["equivalent", "narrower", "broader", "related", "source_code"]
+        },
+        "snapshot_digest": {"$ref": "#/$defs/digest"},
+        "system": {"type": "string", "minLength": 1, "maxLength": 256},
+        "vocabulary": {"$ref": "#/$defs/controlled"},
+        "vocabulary_version": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "id", "semantic_enabled", "version"],
+      "properties": {
+        "digest": {"$ref": "#/$defs/digest"},
+        "id": {"$ref": "#/$defs/controlled"},
+        "semantic_enabled": {"type": "boolean"},
+        "version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content_hash", "digest", "system", "version", "vocabulary"],
+      "properties": {
+        "content_hash": {"$ref": "#/$defs/digest"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "system": {"type": "string", "minLength": 1, "maxLength": 256},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "vocabulary": {"$ref": "#/$defs/controlled"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "mapped"}}},
+      "then": {
+        "properties": {
+          "review_required": {"const": false},
+          "selected_candidate_id": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "else": {
+        "properties": {
+          "review_required": {"const": true},
+          "selected_candidate_id": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

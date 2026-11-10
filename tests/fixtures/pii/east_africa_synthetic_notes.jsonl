@@ -1,0 +1,4 @@
+{"id":"east-africa-tanzania-nida","language":"sw","locale":null,"id_type":"nida_nin","text":"Namba ya NIDA: 19850712-12345-67890-12. NIDA number: 19850712123456789012.","identifiers":["19850712-12345-67890-12","19850712123456789012"],"synthetic":true}
+{"id":"east-africa-uganda-nin","language":"en","locale":"en_UG","id_type":"nin","text":"NIRA NIN: CF123456789ABC was recorded for the synthetic patient.","identifiers":["CF123456789ABC"],"synthetic":true}
+{"id":"east-africa-rwanda-id","language":"rw","locale":null,"id_type":"rwanda_id","text":"Indangamuntu: 1198571234567890 yabitswe muri dosiye y'umurwayi w'igerageza.","identifiers":["1198571234567890"],"synthetic":true}
+{"id":"east-africa-ethiopia-fayda","language":"am","locale":null,"id_type":"fayda_fan","text":"Fayda FAN: 234123412346 was recorded for the synthetic patient.","identifiers":["234123412346"],"synthetic":true}

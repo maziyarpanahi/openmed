@@ -1,0 +1,29 @@
+{
+  "authenticate": {
+    "method": "GET",
+    "path": "/authenticate/openhim%40example.org",
+    "response_status": 200,
+    "response_body": {
+      "salt": "synthetic-fixture-salt",
+      "ts": "2026-01-01T00:00:00.000Z"
+    }
+  },
+  "registration": {
+    "method": "POST",
+    "path": "/mediators",
+    "response_status": 201,
+    "response_body": {
+      "registered": true
+    }
+  },
+  "heartbeat": {
+    "method": "POST",
+    "path": "/mediators/urn%3Aopenhim-mediator%3Aopenmed-deidentification/heartbeat",
+    "response_status": 200,
+    "response_body": {
+      "config": {
+        "policy": "hipaa_safe_harbor"
+      }
+    }
+  }
+}

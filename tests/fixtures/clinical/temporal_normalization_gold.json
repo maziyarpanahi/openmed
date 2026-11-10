@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "reference_time": "2026-06-15T10:30:00Z",
+  "cases": [
+    {
+      "id": "absolute-date",
+      "text": "Seen June 1, 2026.",
+      "span": [5, 17],
+      "type": "DATE",
+      "value": "2026-06-01",
+      "anchor": null,
+      "granularity_flags": ["day"]
+    },
+    {
+      "id": "relative-ago",
+      "text": "Symptoms began 3 weeks ago.",
+      "span": [15, 26],
+      "type": "DATE",
+      "value": "2026-05-25",
+      "anchor": "2026-06-15T10:30:00+00:00",
+      "granularity_flags": ["day"]
+    },
+    {
+      "id": "since-last-month",
+      "text": "Symptoms since last March.",
+      "span": [9, 25],
+      "type": "DATE",
+      "value": "2026-03",
+      "anchor": "2026-06-15T10:30:00+00:00",
+      "granularity_flags": ["month", "since"]
+    },
+    {
+      "id": "duration",
+      "text": "Treatment for 5 days.",
+      "span": [10, 20],
+      "type": "DURATION",
+      "value": "P5D",
+      "anchor": null,
+      "granularity_flags": ["day"]
+    },
+    {
+      "id": "bounded-set",
+      "text": "Take q6h x5 days.",
+      "span": [5, 16],
+      "type": "SET",
+      "value": "R20/PT6H",
+      "anchor": null,
+      "granularity_flags": ["hour", "bounded"]
+    },
+    {
+      "id": "anchored-time",
+      "text": "Dose at 2:30 PM.",
+      "span": [8, 15],
+      "type": "TIME",
+      "value": "2026-06-15T14:30:00+00:00",
+      "anchor": "2026-06-15T10:30:00+00:00",
+      "granularity_flags": ["minute"]
+    },
+    {
+      "id": "post-operative-day",
+      "text": "Fever on POD 2.",
+      "span": [9, 14],
+      "type": "DATE",
+      "value": "2026-06-17",
+      "anchor": "2026-06-15T10:30:00+00:00",
+      "granularity_flags": ["day"]
+    },
+    {
+      "id": "next-weekday",
+      "text": "Follow-up next Monday.",
+      "span": [10, 21],
+      "type": "DATE",
+      "value": "2026-06-22",
+      "anchor": "2026-06-15T10:30:00+00:00",
+      "granularity_flags": ["day"]
+    }
+  ]
+}

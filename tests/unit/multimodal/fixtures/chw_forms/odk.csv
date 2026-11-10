@@ -1,0 +1,3 @@
+KEY,meta/instanceID,meta/deviceID,household/respondent_name,household/phone,household/national_id,household/geopoint,household/symptoms,household/visit_note,children/name,children/immunization_status
+odk-key-873-001,uuid:odk-csv-873-001,odk-csv-device-873-001,Amina Njeri,+254700111222,KEN-873-001,-1.292066 36.821946 1798 4,fever cough,Visited Amina Njeri at home,Neema Njeri,complete
+odk-key-873-001,uuid:odk-csv-873-001,odk-csv-device-873-001,Amina Njeri,+254700111222,KEN-873-001,-1.292066 36.821946 1798 4,fever cough,Second visit with Amina Njeri,Juma Njeri,due_soon

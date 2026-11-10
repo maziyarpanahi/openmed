@@ -1,0 +1,14 @@
+/* Normalize platform-only paint details without changing page layout. */
+html {
+  scrollbar-width: none !important;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+}
+
+* {
+  caret-color: transparent !important;
+}

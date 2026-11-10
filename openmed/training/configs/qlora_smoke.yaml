@@ -1,0 +1,27 @@
+schema_version: openmed.training.qlora_recipe.v1
+preset_name: qlora_smoke
+base_model:
+  model_ref: local://openmed/qlora-smoke-base
+  revision: synthetic-smoke-v1
+  load_in_4bit: true
+  quantization_type: nf4
+  double_quant: true
+  local_files_only: true
+adapter:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: [query, value]
+  target_trainable_ratio: 0.008
+heads: [token_classification, generative_pii]
+data:
+  corpus_path: qlora_smoke_corpus.jsonl
+  heldout_split: smoke
+  local_files_only: true
+gates:
+  max_recall_drop: 0.0
+  max_leakage_increase: 0.0
+evidence:
+  output_dir: .openmed/evidence/qlora-smoke
+  signing_required: true
+seed: 601

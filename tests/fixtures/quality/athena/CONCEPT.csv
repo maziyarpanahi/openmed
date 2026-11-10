@@ -1,0 +1,4 @@
+concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concept	concept_code	valid_start_date	valid_end_date	invalid_reason
+1001	Diabetes mellitus	Condition	SNOMED	Clinical Finding	S	44054006	1970-01-01	2099-12-31
+1002	Metformin	Drug	RxNorm	Ingredient	S	860975	1970-01-01	2099-12-31
+1003	Glucose [Mass/volume] in Blood	Measurement	LOINC	Lab Test	S	2345-7	1970-01-01	2099-12-31

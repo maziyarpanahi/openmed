@@ -1,0 +1,72 @@
+# Per-family Model-Steward target-leakage config (roadmap section 7.4 / 6.4).
+#
+# Signed floors keyed by (family, tier, format). The ReleaseGate harness
+# (OM-031b) reads this file to obtain each family's enforced leakage floor.
+# Entries may omit any ceiling; omitted values inherit from `defaults` below.
+# All values are synthetic and algorithmically seeded, not measured releases.
+schema_version: 1
+steward_owner: "model-stewardship-council"
+defaults:
+  target_leakage_rate: 0.005
+  residual_leakage_ceiling: 0.005
+  over_redaction_ceiling: 0.02
+entries:
+  # DirectID (P0): direct identifiers must never leak (G3 critical == 0).
+  directid::small::pytorch:
+    family: DirectID
+    tier: small
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  directid::base::pytorch:
+    family: DirectID
+    tier: base
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  directid::small::mlx-fp:
+    family: DirectID
+    tier: small
+    format: mlx-fp
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  # ClinicalPrivacy (P0): clinical PHI carries the same critical-zero floor.
+  clinicalprivacy::small::pytorch:
+    family: ClinicalPrivacy
+    tier: small
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  clinicalprivacy::base::pytorch:
+    family: ClinicalPrivacy
+    tier: base
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  # Multilingual PII (P1): non-Latin scripts share the critical-zero floor.
+  multilingual-pii::small::pytorch:
+    family: multilingual-pii
+    tier: small
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"
+  multilingual-pii::base::pytorch:
+    family: multilingual-pii
+    tier: base
+    format: pytorch
+    target_leakage_rate: 0.0
+    residual_leakage_ceiling: 0.005
+    over_redaction_ceiling: 0.02
+    steward_owner: "model-stewardship-council"

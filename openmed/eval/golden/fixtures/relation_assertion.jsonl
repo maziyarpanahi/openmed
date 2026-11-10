@@ -1,0 +1,8 @@
+{"text": "Metformin 500 mg PO daily", "head": "Metformin", "attribute": "500 mg", "relation_type": "drug_to_dose", "expected_status": "confirmed"}
+{"text": "Lisinopril 10 mg once daily for hypertension", "head": "Lisinopril", "attribute": "10 mg", "relation_type": "drug_to_dose", "expected_status": "confirmed"}
+{"text": "Denies taking metformin 500 mg", "head": "metformin", "attribute": "500 mg", "relation_type": "drug_to_dose", "expected_status": "refuted"}
+{"text": "No aspirin 81 mg given in the ED", "head": "aspirin", "attribute": "81 mg", "relation_type": "drug_to_dose", "expected_status": "refuted"}
+{"text": "Would start metformin 1000 mg if A1c remains elevated", "head": "metformin", "attribute": "1000 mg", "relation_type": "drug_to_dose", "expected_status": "conditional"}
+{"text": "Start atorvastatin 40 mg if LDL stays high", "head": "atorvastatin", "attribute": "40 mg", "relation_type": "drug_to_dose", "expected_status": "conditional"}
+{"text": "Possible reaction to amoxicillin 500 mg", "head": "amoxicillin", "attribute": "500 mg", "relation_type": "drug_to_dose", "expected_status": "possible"}
+{"text": "Likely warfarin 5 mg overdose", "head": "warfarin", "attribute": "5 mg", "relation_type": "drug_to_dose", "expected_status": "possible"}

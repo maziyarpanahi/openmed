@@ -1,0 +1,818 @@
+"""Documentation publication, localization, and custom-surface contracts."""
+
+from __future__ import annotations
+
+import ast
+import importlib.util
+import json
+import posixpath
+import re
+from collections import Counter
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+from urllib.parse import unquote, urlsplit
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+DOCS = ROOT / "docs"
+MKDOCS = ROOT / "mkdocs.yml"
+PUBLICATION = DOCS / "brand" / "system" / "publication.yml"
+LOCALES = ("hi", "zh")
+BRIEF_THREAT_MODEL = DOCS / "security" / "clinical-brief-threat-model.md"
+REPOSITORY_LINK = re.compile(
+    r"https://github\.com/maziyarpanahi/openmed/blob/master/"
+    r"(?P<path>[^\s)#]+)(?:#L(?P<start>\d+)(?:-L(?P<end>\d+))?)?"
+)
+
+
+def _brief_mitigation_rows(markdown: str) -> list[str]:
+    heading = "## Attack surface, mitigations and attacker stories\n"
+    assert heading in markdown, "clinical brief mitigation table is missing"
+    section = markdown.split(heading, 1)[1].split("\n## ", 1)[0]
+    rows = [line for line in section.splitlines() if re.match(r"^\| B\d+ \|", line)]
+    assert rows, "clinical brief mitigation table is missing"
+    return rows
+
+
+def _assert_brief_mitigation_test_links(markdown: str, *, root: Path) -> None:
+    for row in _brief_mitigation_rows(markdown):
+        paths = [match["path"] for match in REPOSITORY_LINK.finditer(row)]
+        tests = [
+            path
+            for path in paths
+            if (path.startswith("tests/") and path.endswith(".py"))
+            or (path.startswith("swift/OpenMedKit/Tests/") and path.endswith(".swift"))
+        ]
+        assert tests, "clinical brief mitigation row has no test evidence"
+        for path in tests:
+            relative = Path(path)
+            assert ".." not in relative.parts and not relative.is_absolute()
+            assert (root / relative).is_file(), f"missing mitigation test: {path}"
+
+
+def test_brief_threat_model_mitigations_link_to_existing_tests() -> None:
+    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+    _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_threat_model_declares_each_surface_boundary(subtests) -> None:
+    for surface in ["Python", "CLI", "REST", "MCP", "OpenMedKit"]:
+        with subtests.test(surface=surface):
+            markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+            boundaries = markdown.split("### Surface boundaries\n", 1)[-1].split(
+                "\n### ", 1
+            )[0]
+            assert re.search(rf"(?m)^\| {surface} \|", boundaries)
+
+
+def test_brief_threat_model_repository_citations_resolve() -> None:
+    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+    links = list(REPOSITORY_LINK.finditer(markdown))
+    assert links
+    for match in links:
+        path = ROOT / match["path"]
+        assert path.is_file(), f"missing threat-model source: {match['path']}"
+        if match["start"] is not None:
+            start = int(match["start"])
+            end = int(match["end"] or match["start"])
+            assert (
+                1 <= start <= end <= len(path.read_text(encoding="utf-8").splitlines())
+            )
+
+
+def test_brief_mitigation_check_rejects_missing_test_path() -> None:
+    markdown = (
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | [missing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief_missing.py) |\n"
+    )
+    with pytest.raises(AssertionError, match="missing mitigation test"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_requires_evidence_in_each_row() -> None:
+    markdown = (
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | [existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py) |\n"
+        "| B2 | No test evidence. |\n"
+    )
+    with pytest.raises(AssertionError, match="row has no test evidence"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_ignores_evidence_outside_the_table() -> None:
+    markdown = (
+        "[existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py)\n"
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | No test evidence. |\n"
+    )
+    with pytest.raises(AssertionError, match="row has no test evidence"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_rejects_missing_table() -> None:
+    with pytest.raises(AssertionError, match="table is missing"):
+        _assert_brief_mitigation_test_links("No mitigation table.\n", root=ROOT)
+
+
+def test_brief_mitigation_check_rejects_rows_without_the_section() -> None:
+    markdown = (
+        "| B1 | [existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py) |\n"
+    )
+    with pytest.raises(AssertionError, match="table is missing"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def _load_docs_hooks() -> Any:
+    pytest.importorskip(
+        "mkdocs",
+        reason="documentation hooks require the optional docs dependency set",
+    )
+    spec = importlib.util.spec_from_file_location(
+        "openmed_docs_hooks", DOCS / "_hooks.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _HookConfig(dict[str, Any]):
+    def __init__(self, site_dir: Path, plugins: dict[str, Any]) -> None:
+        super().__init__(
+            extra_css=["shared.css", "shared.css", "docs.css"],
+            extra_javascript=["shared.js", "shared.js", "docs.js"],
+        )
+        self.site_dir = str(site_dir)
+        self.plugins = plugins
+
+
+def test_localized_builds_restore_canonical_feeds_and_english_404(
+    tmp_path: Path,
+) -> None:
+    hooks = _load_docs_hooks()
+    i18n = SimpleNamespace(is_default_language_build=True)
+    llmstxt = SimpleNamespace(config=SimpleNamespace(full_output="llms-full.txt"))
+    config = _HookConfig(tmp_path, {"i18n": i18n, "llmstxt": llmstxt})
+    canonical = {
+        "404.html": b'<!doctype html><html lang="en">English 404</html>',
+        "llms.txt": b"# OpenMed\n\n## Guides\n\n- [Guide](/docs/guide.md)\n",
+        "llms-full.txt": b"# OpenMed full documentation\n\nComplete content.\n",
+    }
+    for name, payload in canonical.items():
+        (tmp_path / name).write_bytes(payload)
+
+    hooks.on_post_build(config)
+
+    i18n.is_default_language_build = False
+    for name in canonical:
+        (tmp_path / name).write_bytes(b"localized overwrite")
+    hooks.on_post_build(config)
+    assert {name: (tmp_path / name).read_bytes() for name in canonical} == canonical
+
+    hooks._DEFAULT_BUILD_ARTIFACTS.clear()
+    with pytest.raises(RuntimeError, match="cannot restore.*404.html"):
+        hooks.on_post_build(config)
+
+
+def test_generated_template_assets_are_deduplicated(tmp_path: Path) -> None:
+    hooks = _load_docs_hooks()
+    config = _HookConfig(tmp_path, {})
+
+    hooks.on_template_context({}, config)
+
+    assert config["extra_css"] == ["shared.css", "docs.css"]
+    assert config["extra_javascript"] == ["shared.js", "docs.js"]
+
+
+def _load_yaml(path: Path, *, base: bool = False) -> dict[str, Any]:
+    loader = yaml.BaseLoader if base else yaml.SafeLoader
+    payload = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)
+    assert isinstance(payload, dict)
+    return payload
+
+
+def _nav_paths(node: object) -> list[str]:
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, list):
+        return [path for child in node for path in _nav_paths(child)]
+    if isinstance(node, dict):
+        return [path for child in node.values() for path in _nav_paths(child)]
+    return []
+
+
+def _public_default_markdown() -> set[str]:
+    paths: set[str] = set()
+    for path in DOCS.rglob("*.md"):
+        relative = path.relative_to(DOCS).as_posix()
+        if relative.startswith(("brand/", "website/")):
+            continue
+        if relative == "demo/web/README.md":
+            continue
+        if any(relative.endswith(f".{locale}.md") for locale in LOCALES):
+            continue
+        paths.add(relative)
+    return paths
+
+
+def _resolve_docs_link(
+    source: str,
+    href: str,
+    *,
+    published: set[str],
+) -> str | None:
+    parsed = urlsplit(href)
+    if parsed.scheme or parsed.netloc:
+        return None
+    raw_path = unquote(parsed.path)
+    if not raw_path:
+        return source
+    if raw_path.startswith("/docs/"):
+        candidate = raw_path.removeprefix("/docs/")
+    elif raw_path.startswith("/"):
+        return None
+    else:
+        candidate = posixpath.normpath(
+            posixpath.join(posixpath.dirname(source), raw_path)
+        )
+    candidate = candidate.lstrip("./")
+    choices = [candidate]
+    if candidate.endswith("/"):
+        choices.append(f"{candidate}index.md")
+    elif not candidate.endswith(".md"):
+        choices.extend((f"{candidate}.md", f"{candidate}/index.md"))
+    for choice in choices:
+        if choice in published:
+            return choice
+    return None
+
+
+def _markdown_targets(source: str, *, published: set[str]) -> set[str]:
+    markdown = (DOCS / source).read_text(encoding="utf-8")
+    hrefs = re.findall(r"!?\[[^\]]*\]\(([^)\s]+)", markdown)
+    return {
+        target
+        for href in hrefs
+        if (target := _resolve_docs_link(source, href, published=published)) is not None
+    }
+
+
+def _migration_python_examples(markdown: str) -> list[tuple[bool, str]]:
+    examples = re.findall(r"(?ms)^```python\n(.*?)^```\s*$", markdown)
+    if not examples:
+        raise ValueError("migration guide has no Python examples")
+    classified: list[tuple[bool, str]] = []
+    for source in examples:
+        marker = source.splitlines()[0]
+        if not marker.startswith(("# Runnable:", "# Fragment:")):
+            raise ValueError("migration example needs a Runnable or Fragment marker")
+        compile(source, "migration_example.py", "exec")
+        classified.append((marker.startswith("# Runnable:"), source))
+    return classified
+
+
+def test_v31_migration_examples_run_offline_without_models_or_source_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openmed.core.models import ModelLoader
+    from openmed.core.offline import HF_OFFLINE_ENV_VARS, network_blocked_if_offline
+
+    def reject_model_load(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("migration examples must not load a model")
+
+    monkeypatch.setattr(ModelLoader, "load_model", reject_model_load)
+    for name in HF_OFFLINE_ENV_VARS:
+        monkeypatch.setenv(name, "1")
+    markdown = (DOCS / "migration" / "3.0-to-3.1.md").read_text(encoding="utf-8")
+    examples = _migration_python_examples(markdown)
+    assert any(runnable for runnable, _ in examples)
+    assert any(not runnable for runnable, _ in examples)
+
+    with network_blocked_if_offline(local_only=True):
+        for runnable, source in examples:
+            if runnable:
+                exec(compile(source, "migration_example.py", "exec"), {})
+
+    output = capsys.readouterr().out
+    results = [ast.literal_eval(line) for line in output.splitlines()]
+    assert results == [
+        {"refused": True, "compatible": True},
+        {"projected_fields": 1, "insufficient_scope_denied": True},
+        {
+            "concept": 1,
+            "person": 1,
+            "visit_occurrence": 1,
+            "note": 1,
+            "note_nlp": 0,
+            "condition_occurrence": 0,
+            "drug_exposure": 0,
+            "measurement": 0,
+            "procedure_occurrence": 0,
+            "observation": 0,
+            "source_to_concept_map": 0,
+        },
+        {"operation_counts": {"insert": 1}, "duplicate_denied": True},
+        {"bundle_type": "transaction", "entry_count": 1},
+    ]
+    assert "synthetic-" not in output
+    assert "org.example" not in output
+
+
+def test_migration_examples_require_explicit_execution_classification(subtests) -> None:
+    for markdown in ["No examples.", "```python\nprint('unclassified')\n```\n"]:
+        with subtests.test(markdown=markdown):
+            with pytest.raises(ValueError):
+                _migration_python_examples(markdown)
+
+
+def test_migration_fragment_compiles_without_executing_application_effects() -> None:
+    examples = _migration_python_examples(
+        "```python\n# Fragment: not executed.\n"
+        "raise RuntimeError('must never run')\n```\n"
+    )
+    assert examples[0][0] is False
+
+
+def test_publication_classifies_every_default_markdown_page_exactly_once() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    publication = _load_yaml(PUBLICATION)
+    classification = publication["classification"]
+    navigated = classification["navigated"]
+    link_only = classification["link_only"]
+
+    assert publication["version"] == 1
+    assert publication["fallback_policy"] == "disabled"
+    assert config["plugins"][1]["i18n"]["fallback_to_default"] == "false"
+    assert navigated == _nav_paths(config["nav"])
+    assert len(navigated) == len(set(navigated))
+    assert not set(navigated) & set(link_only)
+    assert set(navigated) | set(link_only) == _public_default_markdown()
+    assert classification["excluded"] == [
+        "_hooks.py",
+        "__pycache__/**",
+        "overrides/**",
+        "brand/**",
+        "website/**",
+        "demo/web/README.md",
+    ]
+
+
+def _governance_navigation() -> set[str]:
+    config = _load_yaml(MKDOCS, base=True)
+    sections = [
+        item["Governed Agents"] for item in config["nav"] if "Governed Agents" in item
+    ]
+    assert len(sections) == 1
+    paths = _nav_paths(sections[0])
+    assert len(paths) == len(set(paths))
+    return set(paths)
+
+
+def _assert_governance_links_once(text: str, expected: set[str]) -> None:
+    counts = Counter(
+        _resolve_docs_link("agent/index.md", href, published=expected)
+        for href in re.findall(r"\[[^\]]+\]\(([^\s)]+)\)", text)
+    )
+    incorrect = {path: counts[path] for path in sorted(expected) if counts[path] != 1}
+    assert not incorrect, f"governance links: {incorrect}"
+
+
+def test_governance_overview_covers_each_existing_contract_once() -> None:
+    paths = _governance_navigation()
+    assert {
+        path.relative_to(DOCS).as_posix() for path in (DOCS / "agent").glob("*.md")
+    } <= paths
+    assert {
+        "interop/fhir-write-preflight.md",
+        "interop/smart-scope-audit.md",
+        "interop/omop-staged-mutations.md",
+        "interop/omop-vocabulary-write-gates.md",
+        "interop/fhir-omop-write-lineage.md",
+        "interop/omop-rollback-manifests.md",
+        "interop/omop-rollback-schema.md",
+        "interop/fhir-capability-fixtures.md",
+        "evaluation/governed-agent-fixtures.md",
+        "evaluation/sealed-workflow-manifests.md",
+        "evaluation/v3.1-agent-gates.md",
+        "security/agent-threat-model.md",
+        "compliance/v3.1-agent-assurance.md",
+    } <= paths
+    paths.remove("agent/index.md")
+    _assert_governance_links_once((DOCS / "agent/index.md").read_text(), paths)
+    publication = _load_yaml(PUBLICATION)
+    assert "docs/agent/index.html" in publication["expected_routes"]
+
+
+def test_governance_overview_link_guard_rejects_missing_or_repeated_contracts(
+    subtests,
+) -> None:
+    for mutation in ("missing", "duplicate", "anchor_duplicate"):
+        with subtests.test(mutation=mutation):
+            paths = _governance_navigation() - {"agent/index.md"}
+            text = (DOCS / "agent/index.md").read_text()
+            if mutation == "missing":
+                text = re.sub(r"(?m)^- \[Signed capability grants\].*\n", "", text)
+            else:
+                target = "capability-grants.md" + (
+                    "#verify" if mutation == "anchor_duplicate" else ""
+                )
+                text += f"\n[Repeated contract]({target})\n"
+            with pytest.raises(AssertionError, match="governance links"):
+                _assert_governance_links_once(text, paths)
+
+
+def _assert_multimodal_section(
+    nav: list[dict[str, Any]], navigated: list[str], pages: set[str]
+) -> None:
+    sections = [group["Multimodal"] for group in nav if "Multimodal" in group]
+    assert len(sections) == 1
+    section = sections[0]
+    assert section[0] == {"Overview": "multimodal/index.md"}
+    paths = _nav_paths(section)
+    assert Counter(paths) == Counter({page: 1 for page in pages})
+    assert Counter(path for path in _nav_paths(nav) if path in pages) == Counter(paths)
+    start = navigated.index("multimodal/index.md")
+    assert navigated[start : start + len(paths)] == paths
+    assert Counter(path for path in navigated if path.startswith("multimodal/")) == (
+        Counter(paths)
+    )
+
+
+def test_multimodal_pages_have_one_ordered_section_and_manifest_block() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    publication = _load_yaml(PUBLICATION)
+    pages = {
+        path.relative_to(DOCS).as_posix()
+        for path in (DOCS / "multimodal").rglob("*.md")
+    }
+
+    _assert_multimodal_section(
+        config["nav"], publication["classification"]["navigated"], pages
+    )
+    assert "docs/multimodal/index.html" in publication["expected_routes"]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["missing", "duplicate", "outside_section", "manifest_duplicate", "manifest_order"],
+)
+def test_multimodal_publication_rejects_broken_grouping(fault: str) -> None:
+    # Synthetic navigation controls exercise omissions, duplicate ownership and
+    # publication drift without modifying repository files.
+    overview = "multimodal/index.md"
+    guide = "multimodal/synthetic.md"
+    nav = [{"Multimodal": [{"Overview": overview}, {"Intake": [{"Guide": guide}]}]}]
+    navigated = [overview, guide]
+    if fault == "missing":
+        nav[0]["Multimodal"].pop()
+    elif fault == "duplicate":
+        nav[0]["Multimodal"].append({"Duplicate": guide})
+    elif fault == "outside_section":
+        nav.append({"Core Guides": [{"Misplaced": guide}]})
+    elif fault == "manifest_duplicate":
+        navigated.append(guide)
+    elif fault == "manifest_order":
+        navigated.reverse()
+
+    with pytest.raises(AssertionError):
+        _assert_multimodal_section(nav, navigated, {overview, guide})
+
+
+@pytest.mark.integration
+def test_multimodal_navigation_keeps_mkdocs_routes_and_overview_links(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("mkdocs")
+    from mkdocs.config import load_config
+    from mkdocs.structure.files import File, Files
+    from mkdocs.structure.nav import get_navigation
+
+    raw = _load_yaml(MKDOCS, base=True)
+    section = next(group for group in raw["nav"] if "Multimodal" in group)
+    paths = _nav_paths(section)
+    # Use the real MkDocs route/nav machinery with no provider or build plugins.
+    config = load_config(
+        config_file=None,
+        site_name="Synthetic route check",
+        docs_dir=str(DOCS),
+        site_dir=str(tmp_path / "site"),
+        nav=[section],
+        plugins=[],
+    )
+    files = Files([File(path, str(DOCS), config.site_dir, True) for path in paths])
+    navigation = get_navigation(files, config)
+    assert [page.file.src_uri for page in navigation.pages] == paths
+    for page in navigation.pages:
+        source = page.file.src_uri
+        expected = (
+            "multimodal/"
+            if source == "multimodal/index.md"
+            else source.removesuffix(".md") + "/"
+        )
+        assert page.url == expected
+        assert (DOCS / source).is_file()
+
+    publication = _load_yaml(PUBLICATION)["classification"]
+    published = set(publication["navigated"]) | set(publication["link_only"])
+    overview = "multimodal/index.md"
+    markdown = (DOCS / overview).read_text(encoding="utf-8")
+    hrefs = re.findall(r"\[[^\]]*\]\(([^)\s]+)", markdown)
+    assert hrefs
+    for href in hrefs:
+        assert _resolve_docs_link(overview, href, published=published) is not None
+    assert (
+        _resolve_docs_link(overview, "missing-synthetic-page.md", published=published)
+        is None
+    )
+    # Check existing inbound references as well as the new overview's links.
+    for source in sorted(published):
+        content = (DOCS / source).read_text(encoding="utf-8")
+        for href in re.findall(r"\[[^\]]*\]\(([^)\s]+)", content):
+            if "multimodal/" in href and not urlsplit(href).netloc:
+                assert _resolve_docs_link(source, href, published=published) in set(
+                    paths
+                )
+
+
+def test_docs_build_excludes_local_demo_payloads() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    excluded = {
+        pattern.strip()
+        for pattern in config["exclude_docs"].splitlines()
+        if pattern.strip()
+    }
+
+    assert {"demo/web/models/**", "demo/web/vendor/**"} <= excluded
+
+
+def test_every_link_only_page_is_reachable_from_the_documentation_nav() -> None:
+    publication = _load_yaml(PUBLICATION)
+    classification = publication["classification"]
+    published = set(classification["navigated"]) | set(classification["link_only"])
+    reachable = set(classification["navigated"])
+    pending = list(reachable)
+
+    while pending:
+        source = pending.pop()
+        for target in _markdown_targets(source, published=published):
+            if target not in reachable:
+                reachable.add(target)
+                pending.append(target)
+
+    assert set(classification["link_only"]) <= reachable
+
+
+def test_translation_groups_are_complete_without_false_fallback_routes() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    publication = _load_yaml(PUBLICATION)
+    groups = publication["translation_groups"]
+    declared: set[str] = set()
+
+    for group in groups.values():
+        source = group["source"]
+        assert (DOCS / source).is_file()
+        for locale, translation in group["translations"].items():
+            assert locale in LOCALES
+            assert translation.endswith(f".{locale}.md")
+            assert (DOCS / translation).is_file()
+            declared.add(translation)
+
+    actual = {
+        path.relative_to(DOCS).as_posix()
+        for path in DOCS.rglob("*.md")
+        if any(path.name.endswith(f".{locale}.md") for locale in LOCALES)
+    }
+    assert declared == actual
+    assert {
+        "docs/zh/index.html",
+        "docs/zh/getting-started/index.html",
+        "docs/zh/onboarding-china/index.html",
+        "docs/hi/index.html",
+        "docs/hi/getting-started/index.html",
+        "docs/hi/onboarding-india/index.html",
+    } <= set(publication["expected_routes"])
+
+    language_configs = config["plugins"][1]["i18n"]["languages"]
+    localized_nav = {
+        language["locale"]: set(_nav_paths(language["nav"]))
+        for language in language_configs
+        if language["locale"] in LOCALES
+    }
+    assert localized_nav == {
+        "zh": {"index.md", "getting-started.md", "onboarding-china.md"},
+        "hi": {"index.md", "getting-started.md", "onboarding-india.md"},
+    }
+
+
+def test_localized_entry_pages_keep_content_and_link_parity() -> None:
+    from openmed.core.language_pack_catalog import DEFAULT_PII_MODELS
+
+    english_index = (DOCS / "index.md").read_text(encoding="utf-8")
+    chinese_index = (DOCS / "index.zh.md").read_text(encoding="utf-8")
+    hindi_index = (DOCS / "index.hi.md").read_text(encoding="utf-8")
+
+    for localized in (chinese_index, hindi_index):
+        assert "/docs/export-onnx-webgpu/" in localized
+        assert re.search(rf"\*\*{len(DEFAULT_PII_MODELS)}\s", localized)
+        assert re.search(r"(?m)^    - ", localized)
+        assert re.search(r"(?m)^5\. ", localized)
+    assert re.search(rf"\*\*{len(DEFAULT_PII_MODELS)}\s", english_index)
+    assert re.search(r"(?m)^    - ", english_index)
+    assert re.search(r"(?m)^5\. ", english_index)
+
+    for locale in LOCALES:
+        getting_started = (DOCS / f"getting-started.{locale}.md").read_text(
+            encoding="utf-8"
+        )
+        assert "/docs/low-bandwidth-install/" in getting_started
+        assert "/docs/anonymization/#quickstart-choosing-a-method" in getting_started
+
+    china = (DOCS / "onboarding-china.md").read_text(encoding="utf-8")
+    china_zh = (DOCS / "onboarding-china.zh.md").read_text(encoding="utf-8")
+    india = (DOCS / "onboarding-india.md").read_text(encoding="utf-8")
+    india_hi = (DOCS / "onboarding-india.hi.md").read_text(encoding="utf-8")
+    assert "/docs/zh/onboarding-china/" in china
+    assert "/docs/onboarding-china/" in china_zh
+    assert "/docs/hi/onboarding-india/" in india
+    assert "/docs/onboarding-india/" in india_hi
+
+
+def test_docs_consume_the_shared_system_and_repository_owned_fonts() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    main_override = (DOCS / "overrides" / "main.html").read_text(encoding="utf-8")
+    docs_script = (DOCS / "javascripts" / "openmed-docs.js").read_text(encoding="utf-8")
+    assert config["theme"]["font"] == "false"
+    assert config["theme"]["custom_dir"] == "docs/overrides"
+    assert config["extra_css"][:2] == [
+        "stylesheets/openmed-system.css",
+        "stylesheets/openmed-brand.css",
+    ]
+    assert "javascripts/openmed-docs.js" in config["extra_javascript"]
+    assert "page.file.alternates.items()" in main_override
+    assert "alternate_language != page_language" in main_override
+    assert "alternate.dataset.openmedHreflangRel" in main_override
+    assert 'alternate.removeAttribute("rel")' in main_override
+    assert "restoreHreflangLinks()" in docs_script
+    assert "link[data-openmed-hreflang-rel]" in docs_script
+
+
+def test_published_theme_controls_offer_only_light_and_dark() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    website_script = (DOCS / "website" / "assets" / "script.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_script = (DOCS / "javascripts" / "openmed-standalone.js").read_text(
+        encoding="utf-8"
+    )
+    standalone_pages = [
+        (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "demo" / "rtl" / "index.html").read_text(encoding="utf-8"),
+        (DOCS / "eval" / "benchmark-leaderboard" / "index.html").read_text(
+            encoding="utf-8"
+        ),
+    ]
+
+    palette = config["theme"]["palette"]
+    assert [entry["scheme"] for entry in palette] == ["default", "slate"]
+    assert [entry["toggle"]["name"] for entry in palette] == [
+        "Switch to dark mode",
+        "Switch to light mode",
+    ]
+    assert 'const preferences = ["light", "dark"]' in website_script
+    assert 'const modes = ["light", "dark"]' in standalone_script
+    assert "Color theme: system" not in website
+    assert "OpenMed provides technical controls, not legal compliance." not in website
+    assert all("Theme: system" not in page for page in standalone_pages)
+
+
+def test_website_preserves_the_approved_head_to_head_matrix() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+
+    expected_copy = (
+        "Every other option asks you to give something up.",
+        "What we don't claim",
+        "AWS Comprehend Medical · Azure Health · Google Healthcare NLP",
+        "Enterprise NLP suites, per-server subscription",
+        "medspaCy · MedCAT · cTAKES",
+        "Where inference runs",
+        "Patient data leaves the network",
+        "What it costs at 10M notes",
+        "Languages supported",
+        "Runs on iPhone and Android",
+        "Apple Silicon acceleration",
+        "Runs in the browser",
+        "CPU-optimised ONNX builds",
+        "Release cadence",
+        "Benchmarks you can rerun",
+        "Capability and cadence rows describe publicly documented positions",
+    )
+    for text in expected_copy:
+        assert text in website
+    assert website.count("<tr>") >= 11
+
+
+def test_website_preserves_every_approved_landing_view_and_interaction() -> None:
+    website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
+    script = (DOCS / "website" / "assets" / "script.js").read_text(encoding="utf-8")
+    # Community numbers come from the dated evidence snapshot, so a refresh
+    # updates the page and this test together.
+    community = json.loads(
+        (DOCS / "brand" / "system" / "evidence" / "community-metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    shown = community["display"]
+    claims = yaml.safe_load(
+        (DOCS / "brand" / "system" / "claims.yml").read_text(encoding="utf-8")
+    )["claims"]
+
+    approved_copy = (
+        "current release",
+        "Your data. Your model. Your",
+        "pii.detect() · on-device",
+        "Live PHI detection · "
+        f"{claims['model_backed_pii_languages']['value']} model-backed languages",
+        "Model downloads · all-time",
+        f"{shown['downloads_all_time_millions']}<span>M</span>",
+        f"{shown['downloads_30d_millions']}<span>M</span>",
+        f"{shown['installs_total_millions']}<span>M</span>",
+        f"{shown['public_models_floor']:,}<span>+</span>",
+        "Counted, not claimed · Hugging Face + PyPI + GitHub · "
+        f"{shown['captured_month']}",
+        "Four lines, no account.",
+        "No API key to provision, no procurement call",
+        "The one thing no cloud API can do: run in a pocket.",
+        "24–33× faster than CPU PyTorch",
+        "De-identification you can audit, not just trust.",
+        "Signed audit reports",
+        "Zero data movement",
+        "Pick the entity type, not the platform.",
+        "ElectraMed · 33M",
+        f"{shown['featured_models_millions'][next(iter(community['featured_models']))]}M"
+        "</strong> all-time downloads",
+        "Open at the core. Real products on top.",
+        "Terminal-native AI for clinical workflows",
+        "Benchmarks you can rerun on your own notes.",
+        "25+</strong><b>Curated datasets",
+        "Questions from ML, clinical and procurement.",
+        "How is this different from a cloud medical NLP API?",
+        "Are these generative models?",
+        "Next release is already in progress.",
+        "Built by Maziyar Panahi · Paris",
+    )
+    for text in approved_copy:
+        assert text in website
+
+    assert len(re.findall(r'<article class="faq-item">', website)) == 6
+    runtimes = website.split('<section id="runtimes"', 1)[1].split(
+        '<section id="privacy"', 1
+    )[0]
+    assert len(re.findall(r"<article>", runtimes)) == 3
+    assert 'const GITHUB_CACHE_KEY = "om_gh_repo"' in script
+    assert "6 * 60 * 60 * 1000" in script
+    assert "https://api.github.com/repos/maziyarpanahi/openmed" in script
+    assert "James Whitfield" in script
+    assert "Claire Moreau" in script
+    assert "Jonas Weber" in script
+    assert "Ayşe Yılmaz" in script
+
+
+def test_custom_surfaces_have_metadata_shared_chrome_and_rtl_fixture_policy() -> None:
+    publication = _load_yaml(PUBLICATION)
+    demo = (DOCS / "demo" / "web" / "index.html").read_text(encoding="utf-8")
+    demo_app = (DOCS / "demo" / "web" / "app.js").read_text(encoding="utf-8")
+    rtl = (DOCS / "demo" / "rtl" / "index.html").read_text(encoding="utf-8")
+
+    for html in (demo, rtl):
+        assert "../../stylesheets/openmed-system.css" in html
+        assert "../../stylesheets/openmed-standalone.css" in html
+        assert "../../javascripts/openmed-standalone.js" in html
+        assert 'class="om-site-header"' in html
+        assert 'class="om-site-footer"' in html
+        assert "<main" in html and "<h1" in html
+
+    assert '<html lang="ar" dir="rtl">' in rtl
+    assert 'name="robots" content="noindex,nofollow"' in rtl
+    assert "SYNTH-AR-0042" in rtl
+    assert "https://" not in demo_app
+    assert "import(configuration.runtimeUrl.href)" in demo_app
+    assert "resolved.origin !== window.location.origin" in demo_app
+    assert publication["fixtures"] == [
+        {
+            "source": "demo/rtl/index.html",
+            "route": "docs/demo/rtl/index.html",
+            "indexing": "noindex,nofollow",
+            "data_policy": "synthetic_only",
+            "social_metadata": "prohibited",
+            "purpose": "rtl_layout_and_accessibility",
+        }
+    ]

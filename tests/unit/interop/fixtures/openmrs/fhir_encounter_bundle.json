@@ -1,0 +1,43 @@
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://facility.test/openmrs/ws/fhir2/R4/Encounter/encounter-1",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-1",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "https://facility.test/openmrs/encounter-type",
+                "code": "adult-return",
+                "display": "Adult return visit"
+              }
+            ]
+          }
+        ],
+        "subject": {
+          "reference": "Patient/patient-1"
+        },
+        "period": {
+          "start": "2026-07-01T09:30:00+03:00",
+          "end": "2026-07-01T10:00:00+03:00"
+        },
+        "note": [
+          {
+            "text": "Amina Wanjiku confirmed Kenya ID 12345678."
+          }
+        ]
+      }
+    }
+  ],
+  "link": []
+}

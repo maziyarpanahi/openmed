@@ -1,0 +1,583 @@
+"""Tests for the locale national-ID provider registry."""
+
+from __future__ import annotations
+
+import pytest
+from faker import Faker
+
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
+from openmed.core.anonymizer.providers import registry_ids
+from openmed.core.anonymizer.providers.clinical_ids import (
+    AfricanPhoneProvider,
+    BangladeshNIDProvider,
+    IranNationalIDProvider,
+    IrishPPSProvider,
+    JapaneseMyNumberProvider,
+    MexicanCURPProvider,
+    MexicanRFCProvider,
+    register_clinical_providers,
+)
+from openmed.core.anonymizer.providers.registry_ids import (
+    ID_PROVIDER_REGISTRY,
+    NationalIdSpec,
+    clinical_faker_provider_classes,
+    get_national_id,
+    register_national_id,
+)
+from openmed.core.pii_i18n import (
+    validate_bangladesh_nid,
+    validate_bengali_aadhaar,
+    validate_iran_national_id,
+    validate_irish_pps,
+    validate_japanese_my_number,
+    validate_mexican_curp,
+    validate_mexican_rfc,
+)
+
+
+def _always_valid(_text: str) -> bool:
+    return True
+
+
+EXPECTED_VALIDATOR_KEYS = (
+    ("be", "rrn"),
+    ("ch", "ahv"),
+    ("sw", "mpesa_tx_code"),
+    ("tz", "nida_nin"),
+    ("ug", "nin"),
+    ("rw", "rwanda_id"),
+    ("et", "fayda_fan"),
+    ("fr", "nir"),
+    ("de", "steuer_id"),
+    ("it", "codice_fiscale"),
+    ("es", "dni"),
+    ("es", "nie"),
+    ("es", "curp"),
+    ("es", "rfc"),
+    ("nl", "bsn"),
+    ("en_IE", "pps"),
+    ("ja", "my_number"),
+    ("in", "aadhaar"),
+    ("ir", "iran_national_id"),
+    ("zh", "resident_id"),
+    ("in", "pan"),
+    ("in", "gstin"),
+    ("in", "abha"),
+    ("id", "nik"),
+    ("ms", "mykad"),
+    ("tl", "philsys_psn"),
+    ("tl", "philhealth_pin"),
+    ("da", "cpr"),
+    ("sv", "personnummer"),
+    ("no", "fodselsnummer"),
+    ("th", "thai_national_id"),
+    ("he", "teudat_zehut"),
+    ("pl", "pesel"),
+    ("lv", "personas_kods"),
+    ("ko", "rrn"),
+    ("hu", "taj"),
+    ("uk", "rnokpp"),
+    ("cs", "rodne_cislo"),
+    ("sk", "rodne_cislo"),
+    ("pt", "cpf"),
+    ("pt", "cnpj"),
+    ("tr", "tckn"),
+    ("vi", "cccd"),
+    ("vi", "cmnd"),
+    ("us", "npi"),
+    ("ng", "nin"),
+    ("ng", "bvn"),
+    ("gh", "ghana_card_pin"),
+    ("ke", "kenya_national_id"),
+    ("ke", "maisha_namba"),
+    ("za", "sa_id_number"),
+    ("eg", "egyptian_national_id"),
+    ("ma", "moroccan_cin"),
+    ("sw", "mobile_money_paybill"),
+    ("sw", "momo_reference"),
+    ("ke", "kmhfl_code"),
+    ("ng", "hfr_facility_code"),
+)
+
+
+ROUND_TRIP_CASES = (
+    ("be", "rrn", "fr_BE"),
+    ("ch", "ahv", "de_CH"),
+    ("tz", "nida_nin", "sw"),
+    ("ug", "nin", "en_UG"),
+    ("rw", "rwanda_id", "rw_RW"),
+    ("et", "fayda_fan", "am_ET"),
+    ("fr", "nir", "fr_FR"),
+    ("de", "steuer_id", "de_DE"),
+    ("it", "codice_fiscale", "it_IT"),
+    ("es", "dni", "es_ES"),
+    ("es", "nie", "es_ES"),
+    ("es", "curp", "es_MX"),
+    ("es", "rfc", "es_MX"),
+    ("nl", "bsn", "nl_NL"),
+    ("en_IE", "pps", "en_IE"),
+    ("ja", "my_number", "ja_JP"),
+    ("in", "aadhaar", "en_IN"),
+    ("ir", "iran_national_id", "fa_IR"),
+    ("zh", "resident_id", "zh_CN"),
+    ("in", "pan", "en_IN"),
+    ("in", "gstin", "en_IN"),
+    ("in", "abha", "en_IN"),
+    ("id", "nik", "id_ID"),
+    ("ms", "mykad", "ms_MY"),
+    ("tl", "philsys_psn", "fil_PH"),
+    ("tl", "philhealth_pin", "fil_PH"),
+    ("da", "cpr", "da_DK"),
+    ("sv", "personnummer", "sv_SE"),
+    ("no", "fodselsnummer", "no_NO"),
+    ("th", "thai_national_id", "th_TH"),
+    ("he", "teudat_zehut", "he_IL"),
+    ("pl", "pesel", "pl_PL"),
+    ("lv", "personas_kods", "lv_LV"),
+    ("ko", "rrn", "ko_KR"),
+    ("hu", "taj", "hu_HU"),
+    ("uk", "rnokpp", "uk_UA"),
+    ("cs", "rodne_cislo", "cs_CZ"),
+    ("sk", "rodne_cislo", "sk_SK"),
+    ("pt", "cpf", "pt_BR"),
+    ("pt", "cnpj", "pt_BR"),
+    ("tr", "tckn", "tr_TR"),
+    ("vi", "cccd", "vi_VN"),
+    ("vi", "cmnd", "vi_VN"),
+    ("us", "npi", "en_US"),
+    ("ng", "nin", "en_NG"),
+    ("ng", "bvn", "en_NG"),
+    ("gh", "ghana_card_pin", "en_US"),
+    ("ke", "kenya_national_id", "en_KE"),
+    ("ke", "maisha_namba", "en_KE"),
+    ("za", "sa_id_number", "zu_ZA"),
+    ("eg", "egyptian_national_id", "ar_EG"),
+    ("ma", "moroccan_cin", "ar_MA"),
+)
+
+
+class TestNationalIdRegistry:
+    def test_east_african_aliases_resolve(self, subtests):
+        for alias, id_type in (
+            ("tz", "nida_nin"),
+            ("sw", "nida_nin"),
+            ("en_TZ", "nida_nin"),
+            ("ug", "nin"),
+            ("en_UG", "nin"),
+            ("rw", "rwanda_id"),
+            ("rw_RW", "rwanda_id"),
+            ("et", "fayda_fan"),
+            ("am", "fayda_fan"),
+            ("en_ET", "fayda_fan"),
+        ):
+            with subtests.test(alias=alias, id_type=id_type):
+                spec = get_national_id(alias, id_type)
+                assert spec is not None
+                assert spec.faker_provider is not None
+
+    def test_acceptance_lookups_return_validating_specs(self):
+        for lang, id_type, locale in (
+            ("it", "codice_fiscale", "it_IT"),
+            ("in", "aadhaar", "en_IN"),
+        ):
+            spec = get_national_id(lang, id_type)
+            assert spec is not None
+
+            faker = Faker(locale)
+            register_clinical_providers(faker)
+            surrogate = getattr(faker, spec.faker_method)()
+
+            assert spec.validate(surrogate), (
+                f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
+            )
+
+    def test_mexican_curp_and_rfc_aliases_generate_valid_surrogates(self):
+        faker = Faker("es_MX")
+        register_clinical_providers(faker)
+        faker.seed_instance(826)
+
+        curp_spec = get_national_id("ES-mx", "CURP")
+        rfc_spec = get_national_id("mx", "RFC")
+        assert curp_spec is not None
+        assert rfc_spec is not None
+        assert curp_spec.validate is validate_mexican_curp
+        assert rfc_spec.validate is validate_mexican_rfc
+
+        curp = getattr(faker, curp_spec.faker_method)("MOBI851113MSPMTP95")
+        person_rfc = getattr(faker, rfc_spec.faker_method)("MYNB630325659")
+        company_rfc = getattr(faker, rfc_spec.faker_method)("MYN430819Q64")
+
+        assert curp != "MOBI851113MSPMTP95"
+        assert validate_mexican_curp(curp)
+        assert len(person_rfc) == 13
+        assert len(company_rfc) == 12
+        assert validate_mexican_rfc(person_rfc)
+        assert validate_mexican_rfc(company_rfc)
+        assert clinical_faker_provider_classes().count(MexicanCURPProvider) == 1
+        assert clinical_faker_provider_classes().count(MexicanRFCProvider) == 1
+
+    def test_es_mx_anonymizer_dispatch_preserves_identifier_form(self, subtests):
+        for source, validator, length in (
+            ("MOBI851113MSPMTP95", validate_mexican_curp, 18),
+            ("MYNB630325659", validate_mexican_rfc, 13),
+            ("MYN430819Q64", validate_mexican_rfc, 12),
+        ):
+            with subtests.test(source=source, validator=validator, length=length):
+                surrogate = Anonymizer(
+                    lang="es",
+                    locale="es_MX",
+                    consistent=True,
+                    seed=826,
+                ).surrogate(source, "national_id")
+
+                assert surrogate != source
+                assert len(surrogate) == length
+                assert validator(surrogate)
+
+    def test_bengali_id_aliases_resolve_and_generate(self):
+        faker = Faker("bn_BD")
+        register_clinical_providers(faker)
+        faker.seed_instance(292)
+
+        for alias in ("bn", "bn_BD"):
+            aadhaar_spec = get_national_id(alias, "aadhaar")
+            assert aadhaar_spec is not None
+            assert aadhaar_spec.validate(faker.aadhaar())
+
+        for alias in ("bd", "bn", "bn_BD"):
+            nid_spec = get_national_id(alias, "bangladesh_nid")
+            assert nid_spec is not None
+            assert nid_spec.validate(faker.bangladesh_nid())
+
+        assert clinical_faker_provider_classes().count(BangladeshNIDProvider) == 1
+
+    def test_bengali_anonymizer_dispatches_aadhaar_and_bangladesh_nid(self):
+        anonymizer = Anonymizer(lang="bn", consistent=True, seed=292)
+
+        aadhaar = anonymizer.surrogate(
+            "২৪৬৭ ৭৮৩২ ৫৪৮৪",
+            "national_id",
+        )
+        nid = anonymizer.surrogate(
+            "১২৩৪৫৬৭৮৯০",
+            "national_id",
+        )
+
+        assert validate_bengali_aadhaar(aadhaar)
+        assert validate_bangladesh_nid(nid)
+        assert len(nid) == 10
+
+    def test_bangladesh_nid_provider_preserves_length(self, subtests):
+        for length in (10, 13, 17):
+            with subtests.test(length=length):
+                faker = Faker("bn_BD")
+                register_clinical_providers(faker)
+                faker.seed_instance(length)
+
+                original = "1" + ("0" * (length - 1))
+                surrogate = faker.bangladesh_nid(original)
+                spec = get_national_id("bn_BD", "bangladesh_nid")
+
+                assert spec is not None
+                assert surrogate != original
+                assert len(surrogate) == length
+                assert spec.validate(surrogate)
+
+    def test_iran_national_id_aliases_resolve_and_generate(self):
+        faker = Faker("fa_IR")
+        register_clinical_providers(faker)
+        faker.seed_instance(295)
+
+        for alias in ("ir", "fa", "fa_IR"):
+            spec = get_national_id(alias, "iran_national_id")
+            assert spec is not None
+            assert spec.validate(faker.iran_national_id())
+
+        assert clinical_faker_provider_classes().count(IranNationalIDProvider) == 1
+
+    def test_iran_national_id_provider_returns_distinct_valid_id(self, subtests):
+        for original in ("1234567891", "۱۲۳۴۵۶۷۸۹۱", "١٢٣٤٥٦٧٨٩١"):
+            with subtests.test(original=original):
+                faker = Faker("fa_IR")
+                register_clinical_providers(faker)
+                faker.seed_instance(295)
+
+                surrogate = faker.iran_national_id(original)
+
+                assert surrogate != "1234567891"
+                assert validate_iran_national_id(surrogate)
+
+    def test_persian_anonymizer_dispatches_iran_national_id(self):
+        anonymizer = Anonymizer(lang="fa", consistent=True, seed=295)
+
+        surrogate = anonymizer.surrogate("۱۲۳۴۵۶۷۸۹۱", "national_id")
+
+        assert surrogate != "1234567891"
+        assert validate_iran_national_id(surrogate)
+
+    def test_pre_existing_validators_are_reachable(self, subtests):
+        for lang, id_type in EXPECTED_VALIDATOR_KEYS:
+            with subtests.test(lang=lang, id_type=id_type):
+                spec = get_national_id(lang, id_type)
+                assert spec is not None
+                assert spec.validate is not None
+                assert spec.faker_method
+
+    def test_registered_surrogates_pass_registered_validator(self, subtests):
+        for lang, id_type, locale in ROUND_TRIP_CASES:
+            with subtests.test(lang=lang, id_type=id_type, locale=locale):
+                spec = get_national_id(lang, id_type)
+                assert spec is not None
+
+                faker = Faker(FAKER_BACKEND_LOCALE.get(locale, locale))
+                register_clinical_providers(faker)
+                faker.seed_instance(42)
+                surrogate = getattr(faker, spec.faker_method)()
+
+                assert spec.validate(surrogate), (
+                    f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
+                )
+
+    def test_checksum_provider_specs_use_the_new_validators(self):
+        pps_spec = get_national_id("en_IE", "pps")
+        my_number_spec = get_national_id("ja", "my_number")
+
+        assert pps_spec is not None
+        assert pps_spec.validate is validate_irish_pps
+        assert pps_spec.faker_provider is IrishPPSProvider
+        assert my_number_spec is not None
+        assert my_number_spec.validate is validate_japanese_my_number
+        assert my_number_spec.faker_provider is JapaneseMyNumberProvider
+
+    def test_checksum_locale_dispatch_generates_valid_surrogates(self, subtests):
+        for language, locale, validator in (
+            ("en", "en_IE", validate_irish_pps),
+            ("ja", "ja_JP", validate_japanese_my_number),
+        ):
+            with subtests.test(language=language, locale=locale, validator=validator):
+                anonymizer = Anonymizer(lang=language, consistent=True, seed=827)
+
+                surrogate = anonymizer.surrogate(
+                    "synthetic-id",
+                    "national_id",
+                    locale=locale,
+                )
+
+                assert validator(surrogate)
+
+    def test_lookup_normalizes_case_hyphens_and_locale(self):
+        assert get_national_id("IT-it", "Codice Fiscale") == get_national_id(
+            "it_IT",
+            "codice_fiscale",
+        )
+        assert get_national_id("EN-in", "Aadhaar") == get_national_id(
+            "en_IN",
+            "aadhaar",
+        )
+
+    def test_south_african_aliases_resolve_matching_specs(self):
+        aliases = ("za", "en_ZA", "af", "af_ZA", "zu", "zu_ZA", "xh", "xh_ZA")
+        specs = [get_national_id(alias, "sa_id_number") for alias in aliases]
+
+        assert all(spec is not None for spec in specs)
+        assert len({spec.validate for spec in specs if spec is not None}) == 1
+        assert {spec.faker_method for spec in specs if spec is not None} == {
+            "south_african_id"
+        }
+
+    def test_egypt_morocco_aliases_resolve_working_specs(self, subtests):
+        for aliases, id_type, faker_method in (
+            (
+                ("eg", "ar", "ar_EG"),
+                "egyptian_national_id",
+                "egyptian_national_id",
+            ),
+            (("ma", "ar_MA", "fr_MA"), "moroccan_cin", "moroccan_cin"),
+        ):
+            with subtests.test(
+                aliases=aliases, id_type=id_type, faker_method=faker_method
+            ):
+                specs = [get_national_id(alias, id_type) for alias in aliases]
+                resolved_specs = [spec for spec in specs if spec is not None]
+                assert len(resolved_specs) == len(aliases)
+                assert {spec.validate for spec in resolved_specs} == {
+                    resolved_specs[0].validate
+                }
+                assert {spec.faker_method for spec in resolved_specs} == {faker_method}
+
+                faker = Faker("ar_EG")
+                register_clinical_providers(faker)
+                faker.seed_instance(842)
+                surrogate = getattr(faker, faker_method)()
+                assert resolved_specs[0].validate(surrogate)
+
+    def test_nigerian_aliases_resolve_working_faker_methods(self, subtests):
+        for id_type in ("nin", "bvn"):
+            with subtests.test(id_type=id_type):
+                specs = [
+                    get_national_id(alias, id_type)
+                    for alias in ("ng", "en_NG", "ha", "ig", "yo")
+                ]
+                assert all(spec is not None for spec in specs)
+                assert {spec.validate for spec in specs} == {specs[0].validate}
+
+                faker = Faker("en_NG")
+                register_clinical_providers(faker)
+                faker.seed_instance(840)
+                surrogate = getattr(faker, specs[0].faker_method)()
+                assert specs[0].validate(surrogate)
+
+    def test_ghana_kenya_aliases_resolve_working_specs(self, subtests):
+        for aliases, id_type, faker_method in (
+            (("gh", "en_GH"), "ghana_card_pin", "ghana_card_pin"),
+            (("ke", "en_KE", "sw"), "kenya_national_id", "kenya_national_id"),
+            (("ke", "en_KE", "sw"), "maisha_namba", "kenya_maisha_namba"),
+        ):
+            with subtests.test(
+                aliases=aliases, id_type=id_type, faker_method=faker_method
+            ):
+                specs = [get_national_id(alias, id_type) for alias in aliases]
+                assert all(spec is not None for spec in specs)
+                assert {spec.validate for spec in specs} == {specs[0].validate}
+                assert {spec.faker_method for spec in specs} == {faker_method}
+
+                faker = Faker("sw" if "sw" in aliases else "en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(841)
+                surrogate = getattr(faker, faker_method)()
+                assert specs[0].validate(surrogate)
+
+    def test_unknown_lookup_returns_none(self):
+        assert get_national_id("zz", "unknown") is None
+
+    def test_mpesa_transaction_code_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "tz", "sw", "en_ke", "en_tz"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "mpesa_tx_code")
+                assert spec is not None
+
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(859)
+                surrogate = getattr(faker, spec.faker_method)("TB17CVOCY9")
+
+                assert surrogate.startswith("T")
+                assert surrogate != "TB17CVOCY9"
+                assert spec.validate(surrogate)
+
+    def test_mobile_money_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "tz", "gh", "ug", "sw", "en_ke", "en_tz", "en_gh", "en_ug"):
+            for id_type, original in (
+                ("mobile_money_paybill", "542542"),
+                ("mobile_money_till", "83290"),
+                ("mobile_money_agent", "5544331"),
+                ("momo_reference", "81234567890"),
+            ):
+                with subtests.test(alias=alias, id_type=id_type, original=original):
+                    spec = get_national_id(alias, id_type)
+                    assert spec is not None
+
+                    faker = Faker("en_KE")
+                    register_clinical_providers(faker)
+                    faker.seed_instance(860)
+                    surrogate = getattr(faker, spec.faker_method)(original)
+
+                    assert surrogate != original
+                    assert len(surrogate) == len(original)
+                    assert spec.validate(surrogate)
+
+    def test_kenya_facility_registry_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "sw", "en_KE"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "kmhfl_code")
+                assert spec is not None
+
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(861)
+                surrogate = getattr(faker, spec.faker_method)()
+
+                assert spec.faker_method == "kmhfl_code"
+                assert spec.validate(surrogate)
+
+    def test_nigeria_facility_registry_aliases_generate_valid_surrogates(
+        self, subtests
+    ):
+        for alias in ("ng", "en_NG"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "hfr_facility_code")
+                assert spec is not None
+
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(861)
+                surrogate = getattr(faker, spec.faker_method)()
+
+                assert spec.faker_method == "hfr_facility_code"
+                assert spec.validate(surrogate)
+
+    def test_duplicate_registration_rejects_key_with_clear_error(self):
+        key = ("zz", "dummy")
+        ID_PROVIDER_REGISTRY.pop(key, None)
+        spec = NationalIdSpec("zz", "dummy", _always_valid, "word")
+
+        try:
+            register_national_id(spec)
+            with pytest.raises(ValueError, match="already registered.*zz.*dummy"):
+                register_national_id(spec)
+        finally:
+            ID_PROVIDER_REGISTRY.pop(key, None)
+
+    def test_module_docstring_documents_language_pack_steps(self):
+        doc = registry_ids.__doc__
+        assert doc is not None
+        for expected in (
+            "Implement or import a deterministic validator",
+            "Ensure Faker can generate matching surrogates",
+            "Register a NationalIdSpec",
+            "Register every needed alias explicitly",
+            "Add unit tests",
+        ):
+            assert expected in doc
+
+
+class TestAfricanPhoneProviderRegistry:
+    def test_provider_is_registered_once(self):
+        provider_classes = clinical_faker_provider_classes()
+
+        assert provider_classes.count(AfricanPhoneProvider) == 1
+
+    def test_registered_provider_preserves_country_and_operator_prefix(self, subtests):
+        for original, preserved_digits in [
+            ("+251 91 234 5678", "25191"),
+            ("00250 78 123 4567", "0025078"),
+            ("0752 876 543", "0752"),
+        ]:
+            with subtests.test(original=original, preserved_digits=preserved_digits):
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(858)
+
+                surrogate = faker.african_phone(original)
+
+                assert surrogate is not None
+                assert "".join(char for char in surrogate if char.isdigit()).startswith(
+                    preserved_digits
+                )
+                assert surrogate != original
+                assert "".join(
+                    char for char in surrogate if not char.isdigit()
+                ) == "".join(char for char in original if not char.isdigit())
+
+    def test_seeded_provider_is_deterministic(self):
+        first = Faker("en_US")
+        second = Faker("en_US")
+        register_clinical_providers(first)
+        register_clinical_providers(second)
+        first.seed_instance(858)
+        second.seed_instance(858)
+
+        assert first.african_phone("+233 24 123 4567") == second.african_phone(
+            "+233 24 123 4567"
+        )

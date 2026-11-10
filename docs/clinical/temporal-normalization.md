@@ -1,0 +1,153 @@
+# Temporal Normalization
+
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for public normalization calls and a state-only projection that omits date values.
+
+Clinical notes mix absolute dates with expressions such as `3 weeks ago`,
+`since last March`, `POD 2`, and `q6h x5 days`. The temporal normalizer converts
+caller-supplied spans into deterministic TIMEX3-style `DATE`, `TIME`,
+`DURATION`, and `SET` records with ISO 8601 values.
+
+## Normalize temporal spans
+
+```python
+from openmed.clinical import normalize_temporal
+
+text = "Symptoms began 3 weeks ago; continue q6h x5 days."
+spans = [
+    {"start": 15, "end": 26},
+    {"start": 37, "end": 48},
+]
+
+records = normalize_temporal(
+    text,
+    spans,
+    reference_time="2026-06-15T10:30:00Z",
+)
+
+records[0].to_dict()
+# {
+#   "text": "3 weeks ago",
+#   "span": [15, 26],
+#   "start": 15,
+#   "end": 26,
+#   "type": "DATE",
+#   "value": "2026-05-25",
+#   "anchor": "2026-06-15T10:30:00+00:00",
+#   "granularity_flags": ["day"],
+# }
+
+records[1].value
+# "R20/PT6H"
+```
+
+Spans can also be two-item `(start, end)` sequences. Results preserve input
+order and use inclusive start/exclusive end offsets, so
+`text[result.start:result.end] == result.text` always holds.
+
+## Values and anchors
+
+| Type | Examples | Value form |
+|---|---|---|
+| `DATE` | `2026-06-01`, `3 weeks ago`, `last March`, `POD 2` | ISO date, month, year, or datetime |
+| `TIME` | `14:30`, `2:30 PM` | ISO datetime when anchored; ISO time when unanchored |
+| `DURATION` | `for 5 days`, `2 weeks` | ISO duration such as `P5D` or `P2W` |
+| `SET` | `daily`, `q6h`, `q6h x5 days` | ISO repeating interval such as `R/P1D` or `R20/PT6H` |
+
+For relative expressions, `anchor` records the normalized reference time used
+for date arithmetic. `reference_time` accepts an ISO string, `date`,
+`datetime`, or `None`. Passing `None` never substitutes the current time.
+
+### Shared ISO input profile
+
+Clinical and Journey ISO parsing uses `openmed.core.iso_temporal` rather than
+the interpreter's changing `fromisoformat()` grammar. The shared profile accepts
+ASCII calendar dates `YYYY-MM-DD` and optional `HH[:MM[:SS[.ffffff]]]` times,
+with a `T`, `t` or space separator. A fractional second has one to six digits.
+Offsets are `Z`/`z` or `+HH:MM`/`-HH:MM`; offset minutes are 00–59 and the
+absolute offset is less than 24 hours.
+
+Basic-format dates/times, week dates, ordinal dates, compact `+HHMM` offsets,
+offset seconds, comma fractions, more than six fractional digits, arbitrary
+Unicode separators and impossible calendar/clock values are rejected. Existing
+normalization and contract errors remain the caller-visible outcomes and do
+not echo the rejected value. The shared parsers raise only
+`ValueError("invalid_iso_temporal")`, without retaining a raw parsing exception.
+
+`parse_iso_date()` requires a complete calendar date; `parse_iso_datetime()`
+maps a date-only input to naive midnight, preserving existing date coercion;
+`parse_iso_time()` parses a clock value. Each caller still owns requirements
+for a time, timezone or reduced precision. Journey timestamps, for example,
+continue to require a timezone. Temporal-expression rules, year/month precision
+and caller-supplied `date`/`datetime` objects keep their existing semantics.
+
+The same synthetic conformance vectors run in the existing Python 3.11–3.13
+compatibility lanes. An AST check prevents direct clinical `fromisoformat`
+access. Python's [datetime documentation](https://docs.python.org/3.13/library/datetime.html#datetime.datetime.fromisoformat)
+records the grammar expansion in 3.11; this profile is defined independently of
+that expansion.
+
+`since X` stores the normalized start in `value`, the supplied document time
+as `anchor`, and adds the `since` flag. This keeps the value layer separate
+from interval and event ordering, which belong to the timeline resolver.
+
+## Granularity and ambiguity
+
+`granularity_flags` identifies the supported precision (`second`, `minute`,
+`hour`, `day`, `week`, `month`, `year`, or `part_of_day`) and adds qualifiers
+when needed:
+
+- `unanchored`: a relative date has no supplied reference time, or a time has
+  no document date.
+- `ambiguous`: the source permits multiple interpretations, such as
+  `03/04/2026`; the normalizer returns `value=None` instead of choosing a
+  locale convention.
+- `approximate`: the source explicitly says `about`, `around`, `roughly`, or
+  `approximately`.
+- `bounded`: a recurring set includes a duration, such as `q6h x5 days`.
+- `since`: the value is the beginning of a since-interval whose end is the
+  recorded anchor.
+
+Month-only expressions without `last`, `next`, or an explicit year remain
+ambiguous. Numeric dates with two-digit years, impossible dates, zero-length
+recurrence periods, inexact bounded schedules, and vague quantities are
+likewise flagged rather than coerced into precise timestamps.
+
+## Privacy and determinism
+
+Normalization is pure, offline, and rules-based. The module performs no
+network access, reads no environment state, emits no logs, and never defaults
+to the wall clock. Temporal spans can contain sensitive dates, so callers
+should apply the same PHI handling policy to returned values as to the source
+document.
+
+## Anchor EVENT spans to document time
+
+Use `anchor_events` to attach already-extracted EVENT spans to the nearest
+resolved DATE or TIME in the same sentence. Relative TIMEX values are resolved
+against the required document creation time (DCT). Events without a usable
+nearby TIMEX receive an explicit `dct_fallback` anchor.
+
+```python
+from openmed.clinical import anchor_events
+
+text = "Fever started 3 days ago."
+result = anchor_events(
+    text,
+    event_spans=[(6, 13)],
+    document_creation_time="2026-06-15",
+    timex_spans=[(14, 24)],
+)
+
+result.anchors[0].anchor_value
+# "2026-06-12"
+result.anchors[0].dct_position
+# "before"
+```
+
+When `timex_spans` is omitted, local deterministic detection supplies TIMEX
+offsets. Passing an empty iterable disables detection. Supplied
+`NormalizedTimex` records retain their resolved values rather than being
+normalized again. The anchoring result does not retain raw EVENT or TIMEX
+text: source evidence is represented by inclusive/exclusive offsets and
+SHA-256 hashes only.

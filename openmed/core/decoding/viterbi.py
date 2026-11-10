@@ -1,0 +1,874 @@
+"""BIOES-aware Viterbi decoder for token-classification logits.
+
+Used by both the MLX and PyTorch privacy-filter pipelines. It operates on
+lists of floats produced by ``logits.tolist()`` from either backend, with an
+optional NumPy acceleration path and a pure-Python fallback.
+
+The algorithm enforces the standard BIOES (B-egin / I-nside / E-nd /
+S-ingleton, plus background ``O``) state machine and supports six learned
+transition biases consumed by the OpenAI privacy-filter family.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Final, Sequence
+
+try:  # Optional fast path; the decoder stays pure-Python without numpy.
+    import numpy as _np
+except ImportError:  # pragma: no cover - numpy ships with the MLX extra
+    _np = None
+
+from .spans import (
+    CjkOffsetMap,
+    assert_cjk_span_boundaries,
+    is_han_dominant,
+    snap_char_span_to_word_boundaries,
+    snap_span_to_graphemes,
+)
+
+# ---------------------------------------------------------------------------
+# Public types
+# ---------------------------------------------------------------------------
+
+VITERBI_BIAS_KEYS: Final = (
+    "transition_bias_background_stay",
+    "transition_bias_background_to_start",
+    "transition_bias_inside_to_continue",
+    "transition_bias_inside_to_end",
+    "transition_bias_end_to_background",
+    "transition_bias_end_to_start",
+)
+
+ViterbiTables = tuple[list[float], list[float], list[list[float]]]
+ViterbiTableCacheEntry = tuple[tuple[float, ...], ViterbiTables]
+
+
+class TokenLabelInfo:
+    """Resolves a flat ``id2label`` map into BIOES tag / span-label tables.
+
+    Token labels arrive as strings like ``B-NAME``, ``I-NAME``, ``E-NAME``,
+    ``S-NAME``, plus the background ``O``. ``TokenLabelInfo`` precomputes
+    the mappings used during decoding:
+
+    - ``span_class_names``: deduplicated list of underlying span labels
+      (``["O", "NAME", "EMAIL", ...]``) where index 0 is always background.
+    - ``span_label_lookup``: ``{base_label: span_index}``.
+    - ``token_to_span_label``: ``{token_label_id: span_index}``.
+    - ``token_boundary_tags``: ``{token_label_id: "B" | "I" | "E" | "S" | None}``
+      with ``None`` reserved for the background token.
+    - ``background_token_label`` / ``background_span_label``: indices of
+      the ``O`` class in token-label and span-label space respectively.
+    """
+
+    def __init__(self, class_names: Sequence[str]) -> None:
+        self.span_class_names: list[str] = ["O"]
+        self.span_label_lookup: dict[str, int] = {"O": 0}
+        self.token_to_span_label: dict[int, int] = {}
+        self.token_boundary_tags: dict[int, str | None] = {}
+        self.background_token_label = 0
+        self.background_span_label = 0
+        # Keep only the most recent ``(start, end, transition)`` tables.
+        # A single entry accelerates the stable per-model bias configuration
+        # without retaining an unbounded number of O(C^2) matrices when a
+        # public caller varies biases dynamically.
+        self._viterbi_table_cache: ViterbiTableCacheEntry | None = None
+
+        for index, label in enumerate(class_names):
+            if label == "O":
+                self.background_token_label = index
+                self.token_to_span_label[index] = self.background_span_label
+                self.token_boundary_tags[index] = None
+                continue
+
+            boundary, base_label = _split_boundary_label(label)
+            span_label = self.span_label_lookup.get(base_label)
+            if span_label is None:
+                span_label = len(self.span_class_names)
+                self.span_class_names.append(base_label)
+                self.span_label_lookup[base_label] = span_label
+            self.token_to_span_label[index] = span_label
+            self.token_boundary_tags[index] = boundary
+
+
+@dataclass(frozen=True)
+class IncrementalViterbiState:
+    """Resumable Viterbi score state at a committed token boundary."""
+
+    token_count: int
+    scores: tuple[float, ...]
+    last_backpointer: tuple[int, ...] = ()
+
+
+def build_label_info(id2label: dict[int, str]) -> TokenLabelInfo:
+    """Construct a ``TokenLabelInfo`` from a ``{id: label_string}`` map."""
+    class_names = [id2label[index] for index in sorted(id2label)]
+    return TokenLabelInfo(class_names)
+
+
+def zero_viterbi_biases() -> dict[str, float]:
+    """Return a zero-initialized bias dict keyed by ``VITERBI_BIAS_KEYS``."""
+    return {key: 0.0 for key in VITERBI_BIAS_KEYS}
+
+
+def resolve_viterbi_biases(biases: dict[str, float]) -> dict[str, float]:
+    """Return only supported Viterbi biases with missing keys filled as zero.
+
+    Raises:
+        ValueError: If a supported bias is NaN or positive infinity.
+    """
+    resolved_biases = zero_viterbi_biases()
+    resolved_biases.update(
+        {key: float(value) for key, value in biases.items() if key in resolved_biases}
+    )
+    if any(_is_invalid_score(value) for value in resolved_biases.values()):
+        raise ValueError("Viterbi biases must not contain NaN or positive infinity")
+    return resolved_biases
+
+
+# ---------------------------------------------------------------------------
+# Internals
+# ---------------------------------------------------------------------------
+
+_NEG_INF: Final = -1e9
+
+
+def _is_invalid_score(value: float) -> bool:
+    return math.isnan(value) or value == math.inf
+
+
+def _validate_scores(values: Sequence[float], *, field: str) -> None:
+    if any(_is_invalid_score(value) for value in values):
+        raise ValueError(f"{field} must not contain NaN or positive infinity")
+
+
+def _split_boundary_label(label: str) -> tuple[str, str]:
+    if len(label) > 2 and label[1] == "-" and label[0] in {"B", "I", "E", "S"}:
+        return label[0], label[2:]
+    return "B", label
+
+
+def _transition_bias(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    previous_idx: int,
+    next_idx: int,
+    biases: dict[str, float],
+) -> float:
+    previous_is_background = (
+        previous_span == background_span_idx or previous_idx == background_token_idx
+    )
+    next_is_background = (
+        next_span == background_span_idx or next_idx == background_token_idx
+    )
+
+    if previous_is_background:
+        if next_is_background:
+            return biases["transition_bias_background_stay"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_background_to_start"]
+        return 0.0
+
+    if previous_tag in {"B", "I"}:
+        if next_tag == "I" and previous_span == next_span:
+            return biases["transition_bias_inside_to_continue"]
+        if next_tag == "E" and previous_span == next_span:
+            return biases["transition_bias_inside_to_end"]
+        return 0.0
+
+    if previous_tag in {"E", "S"}:
+        if next_is_background:
+            return biases["transition_bias_end_to_background"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_end_to_start"]
+        return 0.0
+
+    return 0.0
+
+
+def _is_valid_transition(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    next_idx: int,
+) -> bool:
+    next_is_background = (
+        next_span == background_span_idx or next_idx == background_token_idx
+    )
+    if (next_span is None or next_tag is None) and not next_is_background:
+        return False
+
+    if previous_span is None or previous_tag is None:
+        return next_is_background or next_tag in {"B", "S"}
+
+    previous_is_background = previous_span == background_span_idx
+    if previous_is_background:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"E", "S"}:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"B", "I"}:
+        return previous_span == next_span and next_tag in {"I", "E"}
+    return False
+
+
+def _viterbi_tables(
+    label_info: TokenLabelInfo,
+    resolved_biases: dict[str, float],
+) -> ViterbiTables:
+    """Return cached ``(start, end, transition)`` tables for *label_info*.
+
+    The transition matrix is O(C^2) to construct and identical across
+    decode calls that share a label space and biases, so the most recent table
+    is memoized on the ``TokenLabelInfo`` instance. Replacing that one entry
+    keeps memory bounded when callers vary bias configurations.
+    """
+    cache_key = tuple(resolved_biases[key] for key in VITERBI_BIAS_KEYS)
+    cached = label_info._viterbi_table_cache
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
+
+    tables = _build_viterbi_scores(label_info, resolved_biases)
+    label_info._viterbi_table_cache = (cache_key, tables)
+    return tables
+
+
+def _build_viterbi_scores(
+    label_info: TokenLabelInfo,
+    biases: dict[str, float],
+) -> ViterbiTables:
+    num_classes = len(label_info.token_to_span_label)
+    start_scores = [_NEG_INF] * num_classes
+    end_scores = [_NEG_INF] * num_classes
+    transition_scores = [[_NEG_INF] * num_classes for _ in range(num_classes)]
+
+    background_token_idx = label_info.background_token_label
+    background_span_idx = label_info.background_span_label
+    for previous_idx in range(num_classes):
+        previous_tag = label_info.token_boundary_tags.get(previous_idx)
+        previous_span = label_info.token_to_span_label.get(previous_idx)
+        if previous_tag in {"B", "S"} or previous_idx == background_token_idx:
+            start_scores[previous_idx] = 0.0
+        if previous_tag in {"E", "S"} or previous_idx == background_token_idx:
+            end_scores[previous_idx] = 0.0
+
+        for next_idx in range(num_classes):
+            next_tag = label_info.token_boundary_tags.get(next_idx)
+            next_span = label_info.token_to_span_label.get(next_idx)
+            if _is_valid_transition(
+                previous_tag=previous_tag,
+                previous_span=previous_span,
+                next_tag=next_tag,
+                next_span=next_span,
+                background_token_idx=background_token_idx,
+                background_span_idx=background_span_idx,
+                next_idx=next_idx,
+            ):
+                transition_scores[previous_idx][next_idx] = _transition_bias(
+                    previous_tag=previous_tag,
+                    previous_span=previous_span,
+                    next_tag=next_tag,
+                    next_span=next_span,
+                    background_token_idx=background_token_idx,
+                    background_span_idx=background_span_idx,
+                    previous_idx=previous_idx,
+                    next_idx=next_idx,
+                    biases=biases,
+                )
+    return start_scores, end_scores, transition_scores
+
+
+# ---------------------------------------------------------------------------
+# Public decoders
+# ---------------------------------------------------------------------------
+
+
+def viterbi_decode(
+    token_logprobs: list[list[float]],
+    *,
+    label_info: TokenLabelInfo,
+    biases: dict[str, float],
+) -> list[int]:
+    """Decode token-class indices via constrained BIOES Viterbi.
+
+    Args:
+        token_logprobs: One inner list of class log-probabilities per token.
+        label_info: Tag/span mapping built from the model's ``id2label``.
+        biases: Optional learned transition biases keyed by
+            ``VITERBI_BIAS_KEYS``. Unknown keys are ignored.
+
+    Returns:
+        A list of class indices (one per token) representing the most
+        likely BIOES-valid path. Falls back to a per-token argmax when
+        no finite-score path exists (e.g. degenerate label space).
+
+    Raises:
+        ValueError: If emissions or supported transition biases contain NaN
+            or positive infinity.
+    """
+    decoded, _ = viterbi_decode_incremental(
+        token_logprobs,
+        label_info=label_info,
+        biases=biases,
+    )
+    return decoded
+
+
+def viterbi_decode_incremental(
+    token_logprobs: list[list[float]],
+    *,
+    label_info: TokenLabelInfo,
+    biases: dict[str, float],
+    state: IncrementalViterbiState | None = None,
+) -> tuple[list[int], IncrementalViterbiState]:
+    """Decode a suffix and return Viterbi state for the new boundary.
+
+    ``state`` is the dynamic-programming score vector at the previously
+    committed token boundary. Supplying it lets callers decode only the newly
+    affected suffix instead of replaying tokens from zero. The returned path
+    contains labels only for ``token_logprobs``.
+
+    When numpy is importable the O(T·C^2) dynamic program runs as vectorized
+    matrix operations; otherwise it falls back to the pure-Python loop.
+    Both paths share identical transition semantics and first-max
+    tie-breaking.
+
+    Raises:
+        ValueError: If emissions, transition biases, or incremental state
+            scores contain NaN or positive infinity. Negative infinity remains
+            valid and represents an impossible emission.
+    """
+    resolved_biases = resolve_viterbi_biases(biases)
+    start_scores, end_scores, transition_scores = _viterbi_tables(
+        label_info, resolved_biases
+    )
+
+    num_classes = len(label_info.token_to_span_label)
+    if state is not None and len(state.scores) != num_classes:
+        raise ValueError("incremental Viterbi state does not match label space")
+    if state is not None:
+        _validate_scores(state.scores, field="incremental Viterbi state scores")
+
+    if any(len(row) < num_classes for row in token_logprobs):
+        raise ValueError(
+            "token_logprobs has fewer classes than the configured label space"
+        )
+    for row in token_logprobs:
+        _validate_scores(row[:num_classes], field="token_logprobs")
+
+    if not token_logprobs:
+        if state is not None:
+            return [], state
+        return [], IncrementalViterbiState(
+            token_count=0,
+            scores=tuple(start_scores),
+            last_backpointer=(),
+        )
+
+    backpointers: list[list[int]] = []
+
+    if _np is not None:
+        emissions = _np.asarray(
+            [row[:num_classes] for row in token_logprobs], dtype=_np.float64
+        )
+        transitions = _np.asarray(transition_scores, dtype=_np.float64)
+        start_vec = _np.asarray(start_scores, dtype=_np.float64)
+        end_vec = _np.asarray(end_scores, dtype=_np.float64)
+
+        if state is None:
+            scores = emissions[0] + start_vec
+            token_count = 1
+        else:
+            candidate = _np.asarray(state.scores, dtype=_np.float64)[:, None] + (
+                transitions
+            )
+            scores = candidate.max(axis=0) + emissions[0]
+            token_count = state.token_count + 1
+
+        for step in range(1, len(token_logprobs)):
+            candidate = scores[:, None] + transitions
+            backpointers.append(candidate.argmax(axis=0).astype(int).tolist())
+            scores = candidate.max(axis=0) + emissions[step]
+            token_count += 1
+
+        final_scores = scores + end_vec
+        next_state = IncrementalViterbiState(
+            token_count=token_count,
+            scores=tuple(float(value) for value in scores),
+            last_backpointer=tuple(backpointers[-1]) if backpointers else (),
+        )
+        if not bool(_np.isfinite(final_scores).any()):
+            return (
+                [
+                    max(range(num_classes), key=lambda idx: row[idx])
+                    for row in token_logprobs
+                ],
+                next_state,
+            )
+
+        last_label = int(final_scores.argmax())
+        path = [last_label]
+        for paths in reversed(backpointers):
+            last_label = paths[last_label]
+            path.append(last_label)
+        path.reverse()
+        return path, next_state
+
+    if state is None:
+        scores = [
+            token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)
+        ]
+        start_index = 1
+        token_count = 1
+    else:
+        scores = []
+        for next_idx in range(num_classes):
+            best_score = -math.inf
+            for previous_idx, previous_score in enumerate(state.scores):
+                score = previous_score + transition_scores[previous_idx][next_idx]
+                if score > best_score:
+                    best_score = score
+            scores.append(best_score + token_logprobs[0][next_idx])
+        start_index = 1
+        token_count = state.token_count + 1
+
+    for token_scores in token_logprobs[start_index:]:
+        next_scores: list[float] = []
+        paths: list[int] = []
+        for next_idx in range(num_classes):
+            best_idx = 0
+            best_score = -math.inf
+            for previous_idx, previous_score in enumerate(scores):
+                score = previous_score + transition_scores[previous_idx][next_idx]
+                if score > best_score:
+                    best_score = score
+                    best_idx = previous_idx
+            next_scores.append(best_score + token_scores[next_idx])
+            paths.append(best_idx)
+        scores = next_scores
+        backpointers.append(paths)
+        token_count += 1
+
+    final_scores = [score + end_scores[idx] for idx, score in enumerate(scores)]
+    next_state = IncrementalViterbiState(
+        token_count=token_count,
+        scores=tuple(scores),
+        last_backpointer=tuple(backpointers[-1]) if backpointers else (),
+    )
+    if not any(math.isfinite(score) for score in final_scores):
+        return (
+            [
+                max(range(num_classes), key=lambda idx: row[idx])
+                for row in token_logprobs
+            ],
+            next_state,
+        )
+
+    last_label = max(range(num_classes), key=lambda idx: final_scores[idx])
+    path = [last_label]
+    for paths in reversed(backpointers):
+        last_label = paths[last_label]
+        path.append(last_label)
+    path.reverse()
+    return path, next_state
+
+
+def labels_to_token_spans(
+    labels_by_index: dict[int, int],
+    label_info: TokenLabelInfo,
+    *,
+    token_offsets: Sequence[Sequence[int]] | None = None,
+    text: str | None = None,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
+) -> list[tuple[int, int, int]]:
+    """Convert per-token class indices into ``(span_label, start, end)`` triples.
+
+    The decoder honours BIOES boundary semantics:
+      - ``S`` produces a singleton ``[idx, idx+1)`` span.
+      - ``B`` opens a new span; mismatched continuations close + restart.
+      - ``E`` closes the current span at ``[start, idx+1)``.
+      - The background token (``O``) closes any open span without emitting it.
+
+    Gaps in ``labels_by_index`` (non-contiguous keys) are treated as a hard
+    span break — they typically indicate the caller is filtering tokens
+    pre-decoding (e.g. dropping special-token positions).
+
+    Supplying a ``zh`` language hint plus Han-dominant source text activates
+    CJK assembly. In that mode adjacent same-label spans merge only when their
+    source code points are contiguous, and optional Chinese segmenter tokens
+    expand partial subword spans outward to whole word boundaries. The default
+    path and return values are unchanged when no Chinese hint is supplied.
+    """
+    spans: list[tuple[int, int, int]] = []
+    current_label: int | None = None
+    start_idx: int | None = None
+    previous_idx: int | None = None
+
+    for token_idx in sorted(labels_by_index):
+        label_id = labels_by_index[token_idx]
+        span_label = label_info.token_to_span_label.get(label_id)
+        boundary_tag = label_info.token_boundary_tags.get(label_id)
+
+        if previous_idx is not None and token_idx != previous_idx + 1:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = None
+            start_idx = None
+
+        if span_label is None:
+            previous_idx = token_idx
+            continue
+
+        if span_label == label_info.background_span_label:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, token_idx))
+            current_label = None
+            start_idx = None
+            previous_idx = token_idx
+            continue
+
+        if boundary_tag == "S":
+            if (
+                current_label is not None
+                and start_idx is not None
+                and previous_idx is not None
+            ):
+                spans.append((current_label, start_idx, previous_idx + 1))
+            spans.append((span_label, token_idx, token_idx + 1))
+            current_label = None
+            start_idx = None
+        elif boundary_tag == "B":
+            if (
+                current_label is not None
+                and start_idx is not None
+                and previous_idx is not None
+            ):
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = span_label
+            start_idx = token_idx
+        elif boundary_tag == "I":
+            if current_label is None or current_label != span_label:
+                if (
+                    current_label is not None
+                    and start_idx is not None
+                    and previous_idx is not None
+                ):
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                current_label = span_label
+                start_idx = token_idx
+        elif boundary_tag == "E":
+            if (
+                current_label is None
+                or current_label != span_label
+                or start_idx is None
+            ):
+                if (
+                    current_label is not None
+                    and start_idx is not None
+                    and previous_idx is not None
+                ):
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                spans.append((span_label, token_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+            else:
+                spans.append((current_label, start_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+
+        previous_idx = token_idx
+
+    if current_label is not None and start_idx is not None and previous_idx is not None:
+        spans.append((current_label, start_idx, previous_idx + 1))
+    if not _is_chinese_language_hint(language_hint):
+        return spans
+    if token_offsets is None or text is None:
+        raise ValueError(
+            "Chinese decoding requires source text and token code-point offsets"
+        )
+    if not is_han_dominant(text):
+        return spans
+    return _assemble_cjk_token_spans(
+        spans,
+        token_offsets,
+        text,
+        segmenter_word_tokens,
+    )
+
+
+def _is_chinese_language_hint(language_hint: str | None) -> bool:
+    normalized = str(language_hint or "").strip().casefold().replace("_", "-")
+    return normalized == "zh" or normalized.startswith("zh-")
+
+
+def _assemble_cjk_token_spans(
+    spans: Sequence[tuple[int, int, int]],
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+    segmenter_word_tokens: Sequence[object] | None,
+) -> list[tuple[int, int, int]]:
+    offset_map = (
+        CjkOffsetMap(text, segmenter_word_tokens)
+        if segmenter_word_tokens is not None
+        else None
+    )
+    assembled: list[tuple[int, int, int, int, int]] = []
+
+    for span_label, token_start, token_end in spans:
+        for run_start, run_end in _contiguous_token_runs(
+            token_start,
+            token_end,
+            token_offsets,
+            text,
+        ):
+            char_start, _ = _validated_token_offset(
+                token_offsets[run_start],
+                text,
+            )
+            _, char_end = _validated_token_offset(
+                token_offsets[run_end - 1],
+                text,
+            )
+            char_start, char_end = snap_span_to_graphemes(
+                char_start,
+                char_end,
+                text,
+            )
+            if offset_map is not None:
+                char_start, char_end = snap_char_span_to_word_boundaries(
+                    char_start,
+                    char_end,
+                    offset_map,
+                )
+            assert_cjk_span_boundaries(
+                char_start,
+                char_end,
+                text,
+                offset_map,
+            )
+            expanded_start, expanded_end = _token_range_for_char_span(
+                char_start,
+                char_end,
+                token_offsets,
+                text,
+            )
+
+            if (
+                assembled
+                and assembled[-1][0] == span_label
+                and char_start <= assembled[-1][4]
+            ):
+                previous = assembled[-1]
+                assembled[-1] = (
+                    span_label,
+                    min(previous[1], expanded_start),
+                    max(previous[2], expanded_end),
+                    min(previous[3], char_start),
+                    max(previous[4], char_end),
+                )
+            else:
+                assembled.append(
+                    (
+                        span_label,
+                        expanded_start,
+                        expanded_end,
+                        char_start,
+                        char_end,
+                    )
+                )
+
+    return [
+        (span_label, token_start, token_end)
+        for span_label, token_start, token_end, _, _ in assembled
+    ]
+
+
+def _contiguous_token_runs(
+    token_start: int,
+    token_end: int,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> list[tuple[int, int]]:
+    if not 0 <= token_start < token_end <= len(token_offsets):
+        raise ValueError("token span falls outside token offsets")
+
+    runs: list[tuple[int, int]] = []
+    run_start = token_start
+    _, previous_end = _validated_token_offset(token_offsets[token_start], text)
+    for token_index in range(token_start + 1, token_end):
+        current_start, current_end = _validated_token_offset(
+            token_offsets[token_index],
+            text,
+        )
+        if current_start > previous_end:
+            runs.append((run_start, token_index))
+            run_start = token_index
+        previous_end = max(previous_end, current_end)
+    runs.append((run_start, token_end))
+    return runs
+
+
+def _validated_token_offset(
+    offset: Sequence[int],
+    text: str,
+) -> tuple[int, int]:
+    if len(offset) < 2:
+        raise ValueError("token offsets must contain start and end")
+    start = offset[0]
+    end = offset[1]
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or not 0 <= start < end <= len(text)
+    ):
+        raise ValueError("token offsets must be non-empty source code-point spans")
+    return start, end
+
+
+def _token_range_for_char_span(
+    char_start: int,
+    char_end: int,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> tuple[int, int]:
+    intersecting: list[int] = []
+    for token_index, offset in enumerate(token_offsets):
+        if len(offset) < 2:
+            continue
+        start, end = offset[0], offset[1]
+        if (
+            isinstance(start, bool)
+            or isinstance(end, bool)
+            or not isinstance(start, int)
+            or not isinstance(end, int)
+            or not 0 <= start <= end <= len(text)
+            or start == end
+        ):
+            continue
+        if end > char_start and start < char_end:
+            intersecting.append(token_index)
+    if not intersecting:
+        raise AssertionError("CJK span does not intersect any source token")
+    return intersecting[0], intersecting[-1] + 1
+
+
+def token_spans_to_char_spans(
+    token_spans: Sequence[tuple[int, int, int]],
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+    *,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
+) -> list[tuple[int, int, int]]:
+    """Map token spans to grapheme-safe Unicode scalar spans.
+
+    Args:
+        token_spans: ``(span_label, token_start, token_end)`` triples.
+        token_offsets: Half-open character offsets for every source token.
+        text: Exact source text referenced by ``token_offsets``.
+        language_hint: Optional BCP-47-style language hint. ``zh`` activates
+            CJK assembly when ``text`` is Han-dominant.
+        segmenter_word_tokens: Optional Chinese word tokens whose offsets index
+            the exact same ``text``.
+
+    Returns:
+        ``(span_label, start, end)`` triples with Unicode scalar offsets.
+        Invalid token ranges are omitted. Every non-empty span is expanded to
+        enclosing grapheme boundaries so Viterbi output cannot split an
+        aksara, combining sequence, or joiner sequence. Chinese spans are also
+        snapped to optional segmenter words, then adjacent same-label spans
+        merge only across contiguous source code points.
+    """
+
+    cjk_enabled = _is_chinese_language_hint(language_hint) and is_han_dominant(text)
+    offset_map = (
+        CjkOffsetMap(text, segmenter_word_tokens)
+        if cjk_enabled and segmenter_word_tokens is not None
+        else None
+    )
+    char_spans: list[tuple[int, int, int]] = []
+    for span_label, token_start, token_end in token_spans:
+        if not (0 <= token_start < token_end <= len(token_offsets)):
+            continue
+        start_offset = token_offsets[token_start]
+        end_offset = token_offsets[token_end - 1]
+        if len(start_offset) < 2 or len(end_offset) < 2:
+            continue
+        start = max(0, min(int(start_offset[0]), len(text)))
+        end = max(start, min(int(end_offset[1]), len(text)))
+        start, end = snap_span_to_graphemes(start, end, text)
+        if cjk_enabled:
+            if offset_map is not None:
+                start, end = snap_char_span_to_word_boundaries(
+                    start,
+                    end,
+                    offset_map,
+                )
+            assert_cjk_span_boundaries(start, end, text, offset_map)
+        if (
+            cjk_enabled
+            and char_spans
+            and char_spans[-1][0] == span_label
+            and start <= char_spans[-1][2]
+        ):
+            previous_label, previous_start, previous_end = char_spans[-1]
+            char_spans[-1] = (
+                previous_label,
+                min(previous_start, start),
+                max(previous_end, end),
+            )
+        else:
+            char_spans.append((span_label, start, end))
+    return char_spans
+
+
+def labels_to_char_spans(
+    labels_by_index: dict[int, int],
+    label_info: TokenLabelInfo,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+    *,
+    language_hint: str | None = None,
+    segmenter_word_tokens: Sequence[object] | None = None,
+) -> list[tuple[int, int, int]]:
+    """Decode labels directly to grapheme-safe character span triples.
+
+    Args:
+        labels_by_index: Predicted label id for each token index.
+        label_info: Parsed label scheme and span-label lookup.
+        token_offsets: Half-open source character offsets for each token.
+        text: Exact source text referenced by ``token_offsets``.
+        language_hint: Optional BCP-47-style language hint.
+        segmenter_word_tokens: Optional Chinese word segmentation over
+            ``text``.
+
+    Returns:
+        ``(span_label, start, end)`` triples with safe character offsets.
+    """
+
+    return token_spans_to_char_spans(
+        labels_to_token_spans(
+            labels_by_index,
+            label_info,
+            token_offsets=token_offsets,
+            text=text,
+            language_hint=language_hint,
+            segmenter_word_tokens=segmenter_word_tokens,
+        ),
+        token_offsets,
+        text,
+        language_hint=language_hint,
+        segmenter_word_tokens=segmenter_word_tokens,
+    )

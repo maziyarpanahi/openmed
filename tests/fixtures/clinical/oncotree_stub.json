@@ -1,0 +1,154 @@
+[
+  {
+    "code": "SYN_ORG_A",
+    "name": "Helion Organ",
+    "mainType": "Synthetic Helion Neoplasia",
+    "tissue": "Helion",
+    "level": 1,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_ADN",
+    "name": "Helion Adenoid Tumor",
+    "mainType": "Synthetic Helion Adenoid Group",
+    "tissue": "Helion",
+    "level": 2,
+    "parent": "SYN_ORG_A",
+    "children": {},
+    "history": [
+      "SYN_OLD_ADN"
+    ],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_SQN",
+    "name": "Helion Squamoid Tumor",
+    "mainType": "Synthetic Helion Adenoid Group",
+    "tissue": "Helion",
+    "level": 2,
+    "parent": "SYN_ORG_A",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_ORG_B",
+    "name": "Vestra Surface",
+    "mainType": "Synthetic Vestra Neoplasia",
+    "tissue": "Vestra",
+    "level": 1,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_BCL",
+    "name": "Vestra Basaloid Tumor",
+    "mainType": "Synthetic Vestra Surface Group",
+    "tissue": "Vestra",
+    "level": 2,
+    "parent": "SYN_ORG_B",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_PIG",
+    "name": "Vestra Pigment Tumor",
+    "mainType": "Synthetic Vestra Pigment Group",
+    "tissue": "Vestra",
+    "level": 2,
+    "parent": "SYN_ORG_B",
+    "children": {},
+    "history": [],
+    "revocations": [
+      "SYN_OLD_PIG"
+    ],
+    "precursors": []
+  },
+  {
+    "code": "SYN_GLN",
+    "name": "Nexil Glandular Tumor",
+    "mainType": "Synthetic Nexil Neoplasia",
+    "tissue": "Nexil",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_MAR",
+    "name": "Marrowoid Blast Tumor",
+    "mainType": "Synthetic Marrowoid Neoplasia",
+    "tissue": "Marrowoid",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [
+      "SYN_OLD_MAR"
+    ],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_QOR",
+    "name": "Quorin (Type-II) Tumor",
+    "mainType": "Synthetic Quorin Neoplasia",
+    "tissue": "Quorin",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [
+      "SYN_OLD_QOR"
+    ],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_COR",
+    "name": "Corial Spindle Tumor",
+    "mainType": "Synthetic Corial Neoplasia",
+    "tissue": "Corial",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_DUP_A",
+    "name": "Shared Collision Tumor",
+    "mainType": "Synthetic Collision A",
+    "tissue": "Auxiliary",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  },
+  {
+    "code": "SYN_DUP_B",
+    "name": "Shared Collision Tumor",
+    "mainType": "Synthetic Collision B",
+    "tissue": "Auxiliary",
+    "level": 2,
+    "parent": "SYN_ROOT",
+    "children": {},
+    "history": [],
+    "revocations": [],
+    "precursors": []
+  }
+]

@@ -1,0 +1,2753 @@
+"""Canonical PII/PHI and biomedical label taxonomy.
+
+Different OpenMed PII model families use different label-naming conventions:
+
+- English / multilingual SuperClinical models use lowercase ``snake_case``
+  (``first_name``, ``date_of_birth``).
+- Portuguese models expose 52 ``UPPERCASE`` labels (``FIRSTNAME``,
+  ``DATEOFBIRTH``).
+- The privacy-filter family emits BIOES-tagged labels (``B-NAME``,
+  ``I-EMAIL``, ``E-ADDRESS``, ``S-PHONE``).
+- Biomedical NER families emit uppercase and snake-case concepts
+  (``DISEASE``, ``simple_chemical``, ``gene_or_gene_product``).
+
+This module provides a single ``CANONICAL_LABELS`` taxonomy in
+``UPPER_SNAKE_CASE`` and a ``normalize_label`` helper that maps any of the
+above input forms to its canonical name. Downstream code (anonymization,
+mapping tables, configuration) should key off canonical labels only.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Final, FrozenSet, Mapping, cast
+
+# ---------------------------------------------------------------------------
+# Canonical taxonomy
+# ---------------------------------------------------------------------------
+
+#: People-related entities
+PERSON: Final = "PERSON"
+FIRST_NAME: Final = "FIRST_NAME"
+LAST_NAME: Final = "LAST_NAME"
+MIDDLE_NAME: Final = "MIDDLE_NAME"
+PREFIX: Final = "PREFIX"
+USERNAME: Final = "USERNAME"
+
+#: Contact
+EMAIL: Final = "EMAIL"
+PHONE: Final = "PHONE"
+URL: Final = "URL"
+
+#: Location
+LOCATION: Final = "LOCATION"
+STREET_ADDRESS: Final = "STREET_ADDRESS"
+BUILDING_NUMBER: Final = "BUILDING_NUMBER"
+ZIPCODE: Final = "ZIPCODE"
+GPS_COORDINATES: Final = "GPS_COORDINATES"
+ORDINAL_DIRECTION: Final = "ORDINAL_DIRECTION"
+
+#: Time
+DATE: Final = "DATE"
+DATE_OF_BIRTH: Final = "DATE_OF_BIRTH"
+TIME: Final = "TIME"
+AGE: Final = "AGE"
+
+#: Identifiers
+ID_NUM: Final = "ID_NUM"
+SSN: Final = "SSN"
+ACCOUNT_NUMBER: Final = "ACCOUNT_NUMBER"
+PASSWORD: Final = "PASSWORD"
+PIN: Final = "PIN"
+API_KEY: Final = "API_KEY"
+
+#: Financial
+CREDIT_CARD: Final = "CREDIT_CARD"
+CREDIT_CARD_ISSUER: Final = "CREDIT_CARD_ISSUER"
+CVV: Final = "CVV"
+IBAN: Final = "IBAN"
+BIC: Final = "BIC"
+AMOUNT: Final = "AMOUNT"
+CURRENCY: Final = "CURRENCY"
+BITCOIN_ADDRESS: Final = "BITCOIN_ADDRESS"
+ETHEREUM_ADDRESS: Final = "ETHEREUM_ADDRESS"
+LITECOIN_ADDRESS: Final = "LITECOIN_ADDRESS"
+MASKED_NUMBER: Final = "MASKED_NUMBER"
+
+#: Demographics
+GENDER: Final = "GENDER"
+ETHNICITY: Final = "ETHNICITY"
+EYE_COLOR: Final = "EYE_COLOR"
+HEIGHT: Final = "HEIGHT"
+
+#: Work
+ORGANIZATION: Final = "ORGANIZATION"
+JOB_TITLE: Final = "JOB_TITLE"
+JOB_DEPARTMENT: Final = "JOB_DEPARTMENT"
+OCCUPATION: Final = "OCCUPATION"
+
+#: Tech
+IP_ADDRESS: Final = "IP_ADDRESS"
+MAC_ADDRESS: Final = "MAC_ADDRESS"
+USER_AGENT: Final = "USER_AGENT"
+VIN: Final = "VIN"
+VEHICLE_REGISTRATION: Final = "VEHICLE_REGISTRATION"
+IMEI: Final = "IMEI"
+
+#: Microbiology
+MICROORGANISM: Final = "MICROORGANISM"
+ANTIBIOTIC: Final = "ANTIBIOTIC"
+SUSCEPTIBILITY: Final = "SUSCEPTIBILITY"
+
+#: Biomedical entities emitted by the shipped NER model families.
+DISEASE: Final = "DISEASE"
+DRUG: Final = "DRUG"
+CHEMICAL: Final = "CHEMICAL"
+GENE_OR_GENE_PRODUCT: Final = "GENE_OR_GENE_PRODUCT"
+GENE: Final = "GENE"
+PROTEIN: Final = "PROTEIN"
+DNA: Final = "DNA"
+RNA: Final = "RNA"
+ANATOMY: Final = "ANATOMY"
+ORGAN: Final = "ORGAN"
+TISSUE: Final = "TISSUE"
+CELL: Final = "CELL"
+CANCER: Final = "CANCER"
+SPECIES: Final = "SPECIES"
+ORGANISM: Final = "ORGANISM"
+PATHOLOGY: Final = "PATHOLOGY"
+BIOMARKER: Final = "BIOMARKER"
+
+#: Radiology finding concepts (issue #1971)
+FINDING: Final = "FINDING"
+IMAGING_MODALITY: Final = "IMAGING_MODALITY"
+LATERALITY: Final = "LATERALITY"
+MEASUREMENT: Final = "MEASUREMENT"
+
+#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO).
+#: Laboratory labels expose only future coding-system intent; no UMLS or LOINC
+#: vocabulary is bundled with OpenMed.
+CONDITION: Final = "CONDITION"
+MEDICATION: Final = "MEDICATION"
+LAB_TEST: Final = "LAB_TEST"
+PROCEDURE: Final = "PROCEDURE"
+BODY_SITE: Final = "BODY_SITE"
+#: Procedure-record device concepts (issue #313)
+DEVICE: Final = "DEVICE"
+
+#: Medical-device and UDI mention concepts (issue #908)
+DEVICE_TYPE: Final = "DEVICE_TYPE"
+DEVICE_IDENTIFIER: Final = "DEVICE_IDENTIFIER"
+DEVICE_MODEL: Final = "DEVICE_MODEL"
+IMPLANT_SITE: Final = "IMPLANT_SITE"
+
+#: Canonical non-identifier labels shared by the biomedical NER families.
+BIOMEDICAL_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        DISEASE,
+        CONDITION,
+        DRUG,
+        CHEMICAL,
+        GENE_OR_GENE_PRODUCT,
+        GENE,
+        PROTEIN,
+        DNA,
+        RNA,
+        ANATOMY,
+        ORGAN,
+        TISSUE,
+        CELL,
+        CANCER,
+        SPECIES,
+        ORGANISM,
+        PATHOLOGY,
+        BIOMARKER,
+        FINDING,
+        IMAGING_MODALITY,
+        LATERALITY,
+        MEASUREMENT,
+    }
+)
+# ``CONDITION`` predates this taxonomy and retains its existing compatibility
+# cross-maps. Newly canonical biomedical labels intentionally carry none.
+_BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS: Final[FrozenSet[str]] = BIOMEDICAL_LABELS - {
+    CONDITION
+}
+
+#: Relation-extraction and laboratory measurement concepts (issues #252/#2353).
+#: ``LOINC`` in the metadata below documents the intended future linkage for
+#: lab observations; it does not ship a vocabulary or perform grounding.
+PROBLEM: Final = "PROBLEM"
+SEVERITY: Final = "SEVERITY"
+DOSAGE: Final = "DOSAGE"
+ROUTE: Final = "ROUTE"
+FREQUENCY: Final = "FREQUENCY"
+DURATION: Final = "DURATION"
+FORM: Final = "FORM"
+STRENGTH: Final = "STRENGTH"
+INDICATION: Final = "INDICATION"
+LAB_VALUE: Final = "LAB_VALUE"
+UNIT: Final = "UNIT"
+REFERENCE_RANGE: Final = "REFERENCE_RANGE"
+ABNORMAL_FLAG: Final = "ABNORMAL_FLAG"
+SPECIMEN: Final = "SPECIMEN"
+
+#: Stable relation-extraction vocabulary for clinical heads and attributes.
+#: ``MEDICATION`` and ``BODY_SITE`` pre-date issue #252 but belong to the same
+#: public vocabulary as the labels introduced here.
+CLINICAL_CONCEPT_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        PROBLEM,
+        MEDICATION,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
+        BODY_SITE,
+        SEVERITY,
+    }
+)
+
+#: Anesthesia-record concepts (issue #952)
+ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
+ANESTHETIC_AGENT: Final = "ANESTHETIC_AGENT"
+AIRWAY_MANAGEMENT: Final = "AIRWAY_MANAGEMENT"
+ASA_CLASS: Final = "ASA_CLASS"
+
+#: Nutrition and diet-order concepts (issue #951)
+DIET_TYPE: Final = "DIET_TYPE"
+NUTRITION_TARGET: Final = "NUTRITION_TARGET"
+FEEDING_ROUTE: Final = "FEEDING_ROUTE"
+NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
+
+#: Immunization and vaccine-administration concepts (issue #897)
+VACCINE_NAME: Final = "VACCINE_NAME"
+DOSE_NUMBER: Final = "DOSE_NUMBER"
+ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
+VACCINE_LOT: Final = "VACCINE_LOT"
+VACCINE_SERIES: Final = "VACCINE_SERIES"
+
+#: Allergy and intolerance concepts (issue #865)
+ALLERGEN: Final = "ALLERGEN"
+REACTION_MANIFESTATION: Final = "REACTION_MANIFESTATION"
+REACTION_SEVERITY: Final = "REACTION_SEVERITY"
+ALLERGY_CRITICALITY: Final = "ALLERGY_CRITICALITY"
+
+#: Immunology, mental-health, and dentistry domain concepts (issue #2358)
+IMMUNIZATION: Final = "IMMUNIZATION"
+PSYCH_SYMPTOM: Final = "PSYCH_SYMPTOM"
+TOOTH: Final = "TOOTH"
+
+#: Nursing-care observation concepts (issue #910)
+INTAKE_OUTPUT: Final = "INTAKE_OUTPUT"
+LINE_DRAIN_TUBE: Final = "LINE_DRAIN_TUBE"
+NURSING_RISK_SCORE: Final = "NURSING_RISK_SCORE"
+CARE_INTERVENTION: Final = "CARE_INTERVENTION"
+
+#: Wound and skin-assessment concepts (issue #909)
+WOUND_TYPE: Final = "WOUND_TYPE"
+WOUND_STAGE: Final = "WOUND_STAGE"
+EXUDATE_DESCRIPTOR: Final = "EXUDATE_DESCRIPTOR"
+DRESSING_TYPE: Final = "DRESSING_TYPE"
+#: Functional-status and activities-of-daily-living concepts (issue #911)
+ADL_ACTIVITY: Final = "ADL_ACTIVITY"
+ASSISTANCE_LEVEL: Final = "ASSISTANCE_LEVEL"
+MOBILITY_ABILITY: Final = "MOBILITY_ABILITY"
+FUNCTIONAL_SCALE: Final = "FUNCTIONAL_SCALE"
+
+#: Structured substance-use history concepts (issue #912). These labels
+#: describe explicit note spans that can feed ``openmed.clinical.sdoh``;
+#: callers can normalize status spans with
+#: ``openmed.clinical.status_vocab.normalize_substance_status``. They do not
+#: replace SDOH determinant classification or normalization.
+SUBSTANCE: Final = "SUBSTANCE"
+USE_STATUS: Final = "USE_STATUS"
+USE_QUANTITY: Final = "USE_QUANTITY"
+PACK_YEARS: Final = "PACK_YEARS"
+
+#: Clinical-genomics variant-mention concepts (issue #906)
+GENE_SYMBOL: Final = "GENE_SYMBOL"
+VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
+PROTEIN_CHANGE: Final = "PROTEIN_CHANGE"
+ZYGOSITY: Final = "ZYGOSITY"
+CLINICAL_SIGNIFICANCE: Final = "CLINICAL_SIGNIFICANCE"
+
+#: Endocrinology concepts (issue #895)
+GLYCEMIC_MEASURE: Final = "GLYCEMIC_MEASURE"
+THYROID_MEASURE: Final = "THYROID_MEASURE"
+HORMONE_LEVEL: Final = "HORMONE_LEVEL"
+INSULIN_REGIMEN: Final = "INSULIN_REGIMEN"
+
+#: Gastroenterology and endoscopy concepts (issue #894)
+ENDOSCOPIC_FINDING: Final = "ENDOSCOPIC_FINDING"
+GI_SYMPTOM: Final = "GI_SYMPTOM"
+GI_SCORE: Final = "GI_SCORE"
+POLYP_DESCRIPTOR: Final = "POLYP_DESCRIPTOR"
+
+#: Nephrology and renal concepts (issue #892)
+CKD_STAGE: Final = "CKD_STAGE"
+DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
+RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
+URINE_FINDING: Final = "URINE_FINDING"
+
+#: Pulmonology concepts (issue #893)
+SPIROMETRY_MEASURE: Final = "SPIROMETRY_MEASURE"
+OXYGEN_SUPPORT: Final = "OXYGEN_SUPPORT"
+RESPIRATORY_FINDING: Final = "RESPIRATORY_FINDING"
+DYSPNEA_GRADE: Final = "DYSPNEA_GRADE"
+
+#: Pediatric growth and developmental-surveillance concepts (issue #896)
+GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
+GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
+DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
+
+#: Obstetrics and gynecology concepts (issue #907)
+GRAVIDITY_PARITY: Final = "GRAVIDITY_PARITY"
+GESTATIONAL_AGE: Final = "GESTATIONAL_AGE"
+FETAL_FINDING: Final = "FETAL_FINDING"
+OBSTETRIC_EVENT: Final = "OBSTETRIC_EVENT"
+
+#: Pathology and histology concepts (issue #903)
+HISTOLOGIC_FINDING: Final = "HISTOLOGIC_FINDING"
+HISTOLOGIC_GRADE: Final = "HISTOLOGIC_GRADE"
+MARGIN_STATUS: Final = "MARGIN_STATUS"
+IHC_STAIN: Final = "IHC_STAIN"
+SPECIMEN_TYPE: Final = "SPECIMEN_TYPE"
+#: Oncology TNM staging and tumor-descriptor concepts (issue #864)
+TNM_T: Final = "TNM_T"
+TNM_N: Final = "TNM_N"
+TNM_M: Final = "TNM_M"
+STAGE_GROUP: Final = "STAGE_GROUP"
+TUMOR_GRADE: Final = "TUMOR_GRADE"
+RECEPTOR_STATUS: Final = "RECEPTOR_STATUS"
+
+#: Catch-all
+OTHER: Final = "OTHER"
+
+
+# Optional sub-type metadata for labels that still normalize to ID_NUM.
+ID_SUBTYPE_MRN: Final = "mrn"
+ID_SUBTYPE_NPI: Final = "npi"
+ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
+ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+#: Ayushman Bharat Health Account number; still normalizes to ID_NUM.
+ID_SUBTYPE_ABHA_NUMBER: Final = "abha_number"
+#: ABDM personal health record address; still normalizes to ID_NUM.
+ID_SUBTYPE_ABHA_ADDRESS: Final = "abha_address"
+#: Unified Payments Interface virtual payment address; still normalizes to ID_NUM.
+ID_SUBTYPE_UPI_ID: Final = "upi_id"
+#: Indian public-distribution ration card identifier; still normalizes to ID_NUM.
+ID_SUBTYPE_RATION_CARD: Final = "ration_card"
+#: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
+ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
+#: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
+ID_SUBTYPE_SOCIAL_CREDIT_CODE: Final = "social_credit_code"
+#: Indian Permanent Account Number; normalizes to ID_NUM.
+ID_SUBTYPE_PAN: Final = "pan"
+#: Indian GST registration number; normalizes to ID_NUM.
+ID_SUBTYPE_GSTIN: Final = "gstin"
+#: Indian Financial System Code; normalizes to ID_NUM.
+ID_SUBTYPE_IFSC: Final = "ifsc"
+#: Indian Electoral Photo Identity Card number; normalizes to ID_NUM.
+ID_SUBTYPE_VOTER_ID_EPIC: Final = "voter_id_epic"
+#: Indian driving-licence number; normalizes to ID_NUM.
+ID_SUBTYPE_INDIAN_DRIVING_LICENCE: Final = "indian_driving_licence"
+#: Indian passport number outside an MRZ block; normalizes to ID_NUM.
+ID_SUBTYPE_INDIAN_PASSPORT: Final = "indian_passport"
+#: Ayushman Bharat Health Account identifier; normalizes to ID_NUM.
+ID_SUBTYPE_ABHA: Final = "abha"
+#: Mainland China passport number; normalizes to ID_NUM.
+ID_SUBTYPE_CHINESE_PASSPORT: Final = "chinese_passport"
+#: Mainland Travel Permit for Hong Kong/Macau residents; normalizes to ID_NUM.
+ID_SUBTYPE_HONG_KONG_MACAU_PERMIT: Final = "hong_kong_macau_permit"
+#: Mainland Travel Permit for Taiwan residents; normalizes to ID_NUM.
+ID_SUBTYPE_TAIWAN_PERMIT: Final = "taiwan_permit"
+ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
+    {
+        ID_SUBTYPE_MRN,
+        ID_SUBTYPE_NPI,
+        ID_SUBTYPE_NATIONAL_ID,
+        ID_SUBTYPE_SSN_ADJACENT,
+        ID_SUBTYPE_ABHA_NUMBER,
+        ID_SUBTYPE_ABHA_ADDRESS,
+        ID_SUBTYPE_UPI_ID,
+        ID_SUBTYPE_RATION_CARD,
+        ID_SUBTYPE_PASSPORT_MRZ,
+        ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+        ID_SUBTYPE_PAN,
+        ID_SUBTYPE_GSTIN,
+        ID_SUBTYPE_IFSC,
+        ID_SUBTYPE_VOTER_ID_EPIC,
+        ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+        ID_SUBTYPE_INDIAN_PASSPORT,
+        ID_SUBTYPE_ABHA,
+        ID_SUBTYPE_CHINESE_PASSPORT,
+        ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+        ID_SUBTYPE_TAIWAN_PERMIT,
+    }
+)
+
+
+CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        PERSON,
+        FIRST_NAME,
+        LAST_NAME,
+        MIDDLE_NAME,
+        PREFIX,
+        USERNAME,
+        EMAIL,
+        PHONE,
+        URL,
+        LOCATION,
+        STREET_ADDRESS,
+        BUILDING_NUMBER,
+        ZIPCODE,
+        GPS_COORDINATES,
+        ORDINAL_DIRECTION,
+        DATE,
+        DATE_OF_BIRTH,
+        TIME,
+        AGE,
+        ID_NUM,
+        SSN,
+        ACCOUNT_NUMBER,
+        PASSWORD,
+        PIN,
+        API_KEY,
+        CREDIT_CARD,
+        CREDIT_CARD_ISSUER,
+        CVV,
+        IBAN,
+        BIC,
+        AMOUNT,
+        CURRENCY,
+        BITCOIN_ADDRESS,
+        ETHEREUM_ADDRESS,
+        LITECOIN_ADDRESS,
+        MASKED_NUMBER,
+        GENDER,
+        ETHNICITY,
+        EYE_COLOR,
+        HEIGHT,
+        ORGANIZATION,
+        JOB_TITLE,
+        JOB_DEPARTMENT,
+        OCCUPATION,
+        IP_ADDRESS,
+        MAC_ADDRESS,
+        USER_AGENT,
+        VIN,
+        VEHICLE_REGISTRATION,
+        IMEI,
+        MICROORGANISM,
+        ANTIBIOTIC,
+        SUSCEPTIBILITY,
+        DISEASE,
+        DRUG,
+        CHEMICAL,
+        GENE_OR_GENE_PRODUCT,
+        GENE,
+        PROTEIN,
+        DNA,
+        RNA,
+        ANATOMY,
+        ORGAN,
+        TISSUE,
+        CELL,
+        CANCER,
+        SPECIES,
+        ORGANISM,
+        PATHOLOGY,
+        BIOMARKER,
+        FINDING,
+        IMAGING_MODALITY,
+        LATERALITY,
+        MEASUREMENT,
+        CONDITION,
+        MEDICATION,
+        LAB_TEST,
+        SPECIMEN,
+        PROCEDURE,
+        BODY_SITE,
+        DEVICE,
+        DEVICE_TYPE,
+        DEVICE_IDENTIFIER,
+        DEVICE_MODEL,
+        IMPLANT_SITE,
+        PROBLEM,
+        SEVERITY,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
+        ANESTHESIA_TYPE,
+        ANESTHETIC_AGENT,
+        AIRWAY_MANAGEMENT,
+        ASA_CLASS,
+        DIET_TYPE,
+        NUTRITION_TARGET,
+        FEEDING_ROUTE,
+        NUTRITIONAL_STATUS,
+        VACCINE_NAME,
+        DOSE_NUMBER,
+        ADMINISTRATION_ROUTE,
+        VACCINE_LOT,
+        VACCINE_SERIES,
+        ALLERGEN,
+        REACTION_MANIFESTATION,
+        REACTION_SEVERITY,
+        ALLERGY_CRITICALITY,
+        IMMUNIZATION,
+        PSYCH_SYMPTOM,
+        TOOTH,
+        INTAKE_OUTPUT,
+        LINE_DRAIN_TUBE,
+        NURSING_RISK_SCORE,
+        CARE_INTERVENTION,
+        WOUND_TYPE,
+        WOUND_STAGE,
+        EXUDATE_DESCRIPTOR,
+        DRESSING_TYPE,
+        ADL_ACTIVITY,
+        ASSISTANCE_LEVEL,
+        MOBILITY_ABILITY,
+        FUNCTIONAL_SCALE,
+        SUBSTANCE,
+        USE_STATUS,
+        USE_QUANTITY,
+        PACK_YEARS,
+        GENE_SYMBOL,
+        CKD_STAGE,
+        DIALYSIS_MODALITY,
+        RENAL_FUNCTION_MEASURE,
+        URINE_FINDING,
+        SPIROMETRY_MEASURE,
+        OXYGEN_SUPPORT,
+        RESPIRATORY_FINDING,
+        DYSPNEA_GRADE,
+        GROWTH_PARAMETER,
+        GROWTH_PERCENTILE,
+        DEVELOPMENTAL_MILESTONE,
+        GRAVIDITY_PARITY,
+        GESTATIONAL_AGE,
+        FETAL_FINDING,
+        OBSTETRIC_EVENT,
+        VARIANT_DESCRIPTOR,
+        PROTEIN_CHANGE,
+        ZYGOSITY,
+        CLINICAL_SIGNIFICANCE,
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
+        ENDOSCOPIC_FINDING,
+        GI_SYMPTOM,
+        GI_SCORE,
+        POLYP_DESCRIPTOR,
+        HISTOLOGIC_FINDING,
+        HISTOLOGIC_GRADE,
+        MARGIN_STATUS,
+        IHC_STAIN,
+        SPECIMEN_TYPE,
+        TNM_T,
+        TNM_N,
+        TNM_M,
+        STAGE_GROUP,
+        TUMOR_GRADE,
+        RECEPTOR_STATUS,
+        OTHER,
+    }
+)
+
+# Structured-table semantic types map onto the same canonical vocabulary used
+# by text de-identification. Keeping this mapping in the label taxonomy avoids
+# a second, subtly incompatible label system in the tabular workflow.
+COLUMN_SEMANTIC_LABELS: Final[Mapping[str, str]] = {
+    "person_name": PERSON,
+    "medical_record_number": ID_NUM,
+    "nhs_number": ID_NUM,
+    "social_security_number": SSN,
+    "record_identifier": ID_NUM,
+    "email_address": EMAIL,
+    "phone_number": PHONE,
+    "street_address": STREET_ADDRESS,
+    "date_of_birth": DATE_OF_BIRTH,
+    "date": DATE,
+    "age": AGE,
+    "postal_code": ZIPCODE,
+    "location": LOCATION,
+    "gender": GENDER,
+    "organization": ORGANIZATION,
+    "clinical_code": CONDITION,
+    "diagnosis_code": CONDITION,
+    "procedure_code": PROCEDURE,
+    "medication_code": MEDICATION,
+    "lab_code": LAB_TEST,
+    "clinical_condition": CONDITION,
+    "medication": MEDICATION,
+    "procedure": PROCEDURE,
+    "lab_test": LAB_TEST,
+    "lab_value": LAB_VALUE,
+    "unit": UNIT,
+    "reference_range": REFERENCE_RANGE,
+    "free_text": OTHER,
+    "boolean": OTHER,
+    "categorical": OTHER,
+    "numeric": OTHER,
+    "unknown": OTHER,
+}
+
+
+def canonical_label_for_column_semantic(semantic_type: str) -> str:
+    """Return the canonical label for a structured column semantic type.
+
+    Args:
+        semantic_type: Stable semantic type emitted by the structured column
+            classifier.
+
+    Raises:
+        KeyError: If ``semantic_type`` is not part of the public mapping.
+    """
+
+    try:
+        return COLUMN_SEMANTIC_LABELS[semantic_type]
+    except (KeyError, TypeError):
+        raise KeyError(f"unknown column semantic type: {semantic_type!r}") from None
+
+
+# Boundary morphology is limited to labels that unambiguously identify a
+# person's name. Prefixes and usernames remain excluded because suffix-like
+# text can be part of those identifiers.
+NAME_BOUNDARY_REFINEMENT_LABELS: Final[FrozenSet[str]] = frozenset(
+    {PERSON, FIRST_NAME, LAST_NAME, MIDDLE_NAME}
+)
+
+
+# ---------------------------------------------------------------------------
+# Policy metadata
+# ---------------------------------------------------------------------------
+
+DIRECT_IDENTIFIER: Final = "DIRECT_IDENTIFIER"
+QUASI_IDENTIFIER: Final = "QUASI_IDENTIFIER"
+SENSITIVE_ATTRIBUTE: Final = "SENSITIVE_ATTRIBUTE"
+CLINICAL_CONCEPT: Final = "CLINICAL_CONCEPT"
+PII_LABEL_KIND: Final = "PII"
+BIOMEDICAL_LABEL_KIND: Final = "BIOMEDICAL"
+LABEL_KINDS: Final[FrozenSet[str]] = frozenset({PII_LABEL_KIND, BIOMEDICAL_LABEL_KIND})
+POLICY_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        DIRECT_IDENTIFIER,
+        QUASI_IDENTIFIER,
+        SENSITIVE_ATTRIBUTE,
+        CLINICAL_CONCEPT,
+    }
+)
+
+RISK_LOW: Final = "low"
+RISK_MEDIUM: Final = "medium"
+RISK_HIGH: Final = "high"
+RISK_LEVELS: Final[tuple[str, ...]] = (RISK_LOW, RISK_MEDIUM, RISK_HIGH)
+
+RXNORM: Final = "RxNorm"
+LOINC: Final = "LOINC"
+ICD_10_CM: Final = "ICD-10-CM"
+CHINESE_ICD_10: Final = "ICD-10-CN"
+CHINESE_DRUG: Final = "CN-DRUG"
+HPO: Final = "HPO"
+SNOMED: Final = "SNOMED"
+CLINICAL_SYSTEM_HINTS: Final[tuple[str, ...]] = (
+    SNOMED,
+    ICD_10_CM,
+    HPO,
+    RXNORM,
+    LOINC,
+)
+
+HIPAA_NAME: Final = "NAME"
+HIPAA_GEOGRAPHIC_SUBDIVISION: Final = "GEOGRAPHIC_SUBDIVISION"
+HIPAA_DATE_ELEMENT: Final = "DATE_ELEMENT"
+HIPAA_TELEPHONE_NUMBER: Final = "TELEPHONE_NUMBER"
+HIPAA_FAX_NUMBER: Final = "FAX_NUMBER"
+HIPAA_EMAIL_ADDRESS: Final = "EMAIL_ADDRESS"
+HIPAA_SOCIAL_SECURITY_NUMBER: Final = "SOCIAL_SECURITY_NUMBER"
+HIPAA_MEDICAL_RECORD_NUMBER: Final = "MEDICAL_RECORD_NUMBER"
+HIPAA_HEALTH_PLAN_BENEFICIARY_NUMBER: Final = "HEALTH_PLAN_BENEFICIARY_NUMBER"
+HIPAA_ACCOUNT_NUMBER: Final = "ACCOUNT_NUMBER"
+HIPAA_CERTIFICATE_LICENSE_NUMBER: Final = "CERTIFICATE_LICENSE_NUMBER"
+HIPAA_VEHICLE_IDENTIFIER: Final = "VEHICLE_IDENTIFIER"
+HIPAA_DEVICE_IDENTIFIER: Final = "DEVICE_IDENTIFIER"
+HIPAA_URL: Final = "URL"
+HIPAA_IP_ADDRESS: Final = "IP_ADDRESS"
+HIPAA_BIOMETRIC_IDENTIFIER: Final = "BIOMETRIC_IDENTIFIER"
+HIPAA_FULL_FACE_PHOTO: Final = "FULL_FACE_PHOTO"
+HIPAA_UNIQUE_IDENTIFIER: Final = "UNIQUE_IDENTIFIER"
+
+HIPAA_SAFE_HARBOR_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        HIPAA_NAME,
+        HIPAA_GEOGRAPHIC_SUBDIVISION,
+        HIPAA_DATE_ELEMENT,
+        HIPAA_TELEPHONE_NUMBER,
+        HIPAA_FAX_NUMBER,
+        HIPAA_EMAIL_ADDRESS,
+        HIPAA_SOCIAL_SECURITY_NUMBER,
+        HIPAA_MEDICAL_RECORD_NUMBER,
+        HIPAA_HEALTH_PLAN_BENEFICIARY_NUMBER,
+        HIPAA_ACCOUNT_NUMBER,
+        HIPAA_CERTIFICATE_LICENSE_NUMBER,
+        HIPAA_VEHICLE_IDENTIFIER,
+        HIPAA_DEVICE_IDENTIFIER,
+        HIPAA_URL,
+        HIPAA_IP_ADDRESS,
+        HIPAA_BIOMETRIC_IDENTIFIER,
+        HIPAA_FULL_FACE_PHOTO,
+        HIPAA_UNIQUE_IDENTIFIER,
+    }
+)
+
+POPIA_NAME: Final = "NAME"
+POPIA_CONTACT_DETAILS: Final = "CONTACT_DETAILS"
+POPIA_LOCATION_INFORMATION: Final = "LOCATION_INFORMATION"
+POPIA_IDENTIFYING_NUMBER: Final = "IDENTIFYING_NUMBER"
+POPIA_BIOMETRIC_INFORMATION: Final = "BIOMETRIC_INFORMATION"
+POPIA_ONLINE_IDENTIFIER: Final = "ONLINE_IDENTIFIER"
+POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES: Final = "DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES"
+POPIA_HEALTH_INFORMATION: Final = "HEALTH_INFORMATION"
+POPIA_OTHER_SPECIAL_INFORMATION: Final = "OTHER_SPECIAL_INFORMATION"
+
+POPIA_IDENTIFIER_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        POPIA_NAME,
+        POPIA_CONTACT_DETAILS,
+        POPIA_LOCATION_INFORMATION,
+        POPIA_IDENTIFYING_NUMBER,
+        POPIA_BIOMETRIC_INFORMATION,
+        POPIA_ONLINE_IDENTIFIER,
+        POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+        POPIA_HEALTH_INFORMATION,
+        POPIA_OTHER_SPECIAL_INFORMATION,
+    }
+)
+
+NDPA_GENETIC_AND_BIOMETRIC_DATA: Final = "GENETIC_AND_BIOMETRIC_DATA"
+NDPA_RACE_OR_ETHNIC_ORIGIN: Final = "RACE_OR_ETHNIC_ORIGIN"
+NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: Final = "RELIGIOUS_OR_SIMILAR_BELIEFS"
+NDPA_HEALTH_STATUS: Final = "HEALTH_STATUS"
+NDPA_SEX_LIFE: Final = "SEX_LIFE"
+NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: Final = "POLITICAL_OPINIONS_OR_AFFILIATIONS"
+NDPA_TRADE_UNION_MEMBERSHIPS: Final = "TRADE_UNION_MEMBERSHIPS"
+NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: Final = "OTHER_COMMISSION_PRESCRIBED_DATA"
+
+NDPA_SENSITIVE_DATA_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        NDPA_GENETIC_AND_BIOMETRIC_DATA,
+        NDPA_RACE_OR_ETHNIC_ORIGIN,
+        NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS,
+        NDPA_HEALTH_STATUS,
+        NDPA_SEX_LIFE,
+        NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS,
+        NDPA_TRADE_UNION_MEMBERSHIPS,
+        NDPA_OTHER_COMMISSION_PRESCRIBED_DATA,
+    }
+)
+
+NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
+    NDPA_GENETIC_AND_BIOMETRIC_DATA: frozenset(
+        {
+            ID_NUM,
+            EYE_COLOR,
+            HEIGHT,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+        }
+    ),
+    NDPA_RACE_OR_ETHNIC_ORIGIN: frozenset({ETHNICITY, OTHER}),
+    NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: frozenset({OTHER}),
+    NDPA_HEALTH_STATUS: frozenset(
+        {
+            ID_NUM,
+            MICROORGANISM,
+            ANTIBIOTIC,
+            SUSCEPTIBILITY,
+            CONDITION,
+            MEDICATION,
+            LAB_TEST,
+            SPECIMEN,
+            PROCEDURE,
+            BODY_SITE,
+            DEVICE,
+            DEVICE_TYPE,
+            DEVICE_IDENTIFIER,
+            DEVICE_MODEL,
+            IMPLANT_SITE,
+            ALLERGEN,
+            IMMUNIZATION,
+            PSYCH_SYMPTOM,
+            TOOTH,
+            PROBLEM,
+            SEVERITY,
+            DOSAGE,
+            ROUTE,
+            FREQUENCY,
+            DURATION,
+            FORM,
+            STRENGTH,
+            INDICATION,
+            LAB_VALUE,
+            UNIT,
+            REFERENCE_RANGE,
+            ABNORMAL_FLAG,
+            ANESTHESIA_TYPE,
+            ANESTHETIC_AGENT,
+            AIRWAY_MANAGEMENT,
+            ASA_CLASS,
+            DIET_TYPE,
+            NUTRITION_TARGET,
+            FEEDING_ROUTE,
+            NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
+            VACCINE_LOT,
+            VACCINE_SERIES,
+            INTAKE_OUTPUT,
+            LINE_DRAIN_TUBE,
+            NURSING_RISK_SCORE,
+            CARE_INTERVENTION,
+            WOUND_TYPE,
+            WOUND_STAGE,
+            EXUDATE_DESCRIPTOR,
+            DRESSING_TYPE,
+            ADL_ACTIVITY,
+            ASSISTANCE_LEVEL,
+            MOBILITY_ABILITY,
+            FUNCTIONAL_SCALE,
+            SUBSTANCE,
+            USE_STATUS,
+            USE_QUANTITY,
+            PACK_YEARS,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
+            GRAVIDITY_PARITY,
+            GESTATIONAL_AGE,
+            FETAL_FINDING,
+            OBSTETRIC_EVENT,
+            HISTOLOGIC_FINDING,
+            HISTOLOGIC_GRADE,
+            MARGIN_STATUS,
+            IHC_STAIN,
+            SPECIMEN_TYPE,
+            TNM_T,
+            TNM_N,
+            TNM_M,
+            STAGE_GROUP,
+            TUMOR_GRADE,
+            RECEPTOR_STATUS,
+        }
+    ),
+    NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
+    NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: frozenset({ORGANIZATION, OTHER}),
+    NDPA_TRADE_UNION_MEMBERSHIPS: frozenset({ORGANIZATION, JOB_DEPARTMENT, OTHER}),
+    NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: frozenset({OTHER}),
+}
+
+_NO_SYSTEM_HINTS: Final[tuple[str, ...]] = ()
+
+
+def _label_metadata(
+    policy_label: str,
+    risk_level: str,
+    system_hints: tuple[str, ...] = _NO_SYSTEM_HINTS,
+) -> Mapping[str, object]:
+    return {
+        "kind": (
+            BIOMEDICAL_LABEL_KIND
+            if policy_label == CLINICAL_CONCEPT
+            else PII_LABEL_KIND
+        ),
+        "policy_label": policy_label,
+        "risk_level": risk_level,
+        "system_hints": system_hints,
+    }
+
+
+LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
+    # People
+    PERSON: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    FIRST_NAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    LAST_NAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    MIDDLE_NAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    PREFIX: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    USERNAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    # Contact
+    EMAIL: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    PHONE: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    URL: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    # Location
+    LOCATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    STREET_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    BUILDING_NUMBER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    ZIPCODE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    GPS_COORDINATES: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    ORDINAL_DIRECTION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    # Time
+    DATE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    DATE_OF_BIRTH: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    TIME: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    AGE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    # Identifiers
+    ID_NUM: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    SSN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    ACCOUNT_NUMBER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    PASSWORD: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    PIN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    API_KEY: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    # Financial
+    CREDIT_CARD: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    CREDIT_CARD_ISSUER: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    CVV: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    IBAN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    BIC: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    AMOUNT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    CURRENCY: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    BITCOIN_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    ETHEREUM_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    LITECOIN_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    MASKED_NUMBER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    # Demographics
+    GENDER: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    ETHNICITY: _label_metadata(SENSITIVE_ATTRIBUTE, RISK_HIGH),
+    EYE_COLOR: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    HEIGHT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    # Work
+    ORGANIZATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    JOB_TITLE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    JOB_DEPARTMENT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    OCCUPATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    # Tech
+    IP_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    MAC_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    USER_AGENT: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    VIN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    VEHICLE_REGISTRATION: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    IMEI: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    # Microbiology
+    MICROORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    ANTIBIOTIC: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    SUSCEPTIBILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Biomedical NER family concepts
+    DISEASE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    DRUG: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    CHEMICAL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    GENE_OR_GENE_PRODUCT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    GENE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    PROTEIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DNA: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    RNA: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ANATOMY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ORGAN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    TISSUE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CELL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CANCER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    SPECIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PATHOLOGY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED, HPO)),
+    BIOMARKER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Radiology finding concepts (issue #1971)
+    FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMAGING_MODALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    LATERALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MEASUREMENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Clinical concepts
+    CONDITION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (ICD_10_CM, CHINESE_ICD_10, SNOMED),
+    ),
+    MEDICATION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (RXNORM, CHINESE_DRUG, SNOMED),
+    ),
+    LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    SPECIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Medical-device and UDI mention concepts (issue #908). UDI-like values
+    # remain direct identifiers with the dedicated HIPAA device-identifier
+    # cross-reference; no lookup, decoding, or network access is implied.
+    DEVICE_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DEVICE_IDENTIFIER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
+    DEVICE_MODEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IMPLANT_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Relation-extraction heads and attributes (issue #252). Free-text
+    # problem/indication text and result values remain medium-risk so rare
+    # conditions and distinctive measurements are visible to risk tooling,
+    # while their policy class keeps them out of default PII redaction.
+    PROBLEM: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (ICD_10_CM, SNOMED, HPO),
+    ),
+    SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DOSAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FREQUENCY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DURATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FORM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    STRENGTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    INDICATION: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (ICD_10_CM, SNOMED, HPO),
+    ),
+    LAB_VALUE: _label_metadata(CLINICAL_CONCEPT, RISK_MEDIUM, (LOINC, SNOMED)),
+    UNIT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    REFERENCE_RANGE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (LOINC, SNOMED),
+    ),
+    ABNORMAL_FLAG: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_MEDIUM,
+        (LOINC, SNOMED),
+    ),
+    # Anesthesia-record concepts (issue #952)
+    ANESTHESIA_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ANESTHETIC_AGENT: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (RXNORM, SNOMED),
+    ),
+    AIRWAY_MANAGEMENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ASA_CLASS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Nutrition and diet-order concepts (issue #951)
+    DIET_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Immunization and vaccine-administration concepts (issue #897)
+    VACCINE_NAME: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    DOSE_NUMBER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_LOT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Allergy and intolerance concepts (issue #865). These hints support the
+    # planned FHIR AllergyIntolerance projection without bundling terminology.
+    ALLERGEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    REACTION_MANIFESTATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    REACTION_SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ALLERGY_CRITICALITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Specialty concepts added by issue #2358. Psychiatric symptoms carry
+    # high residual-risk metadata for redaction review.
+    IMMUNIZATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PSYCH_SYMPTOM: _label_metadata(CLINICAL_CONCEPT, RISK_HIGH, (SNOMED, HPO)),
+    TOOTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Nursing-care observation concepts (issue #910)
+    INTAKE_OUTPUT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    LINE_DRAIN_TUBE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NURSING_RISK_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    CARE_INTERVENTION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Wound and skin-assessment concepts (issue #909). These are descriptive
+    # extraction labels only; they do not infer staging or treatment.
+    WOUND_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, ICD_10_CM)),
+    WOUND_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    EXUDATE_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    # Functional-status and activities-of-daily-living concepts (issue #911).
+    # These labels describe documented function only; they do not score a
+    # scale, infer care needs, or recommend a disposition.
+    ADL_ACTIVITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ASSISTANCE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MOBILITY_ABILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FUNCTIONAL_SCALE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
+    # Structured substance-use spans complement the SDOH determinant helper;
+    # they do not classify risk or compute pack-years.
+    SUBSTANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    USE_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    USE_QUANTITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PACK_YEARS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DRESSING_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Clinical genomics
+    GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PROTEIN_CHANGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ZYGOSITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CLINICAL_SIGNIFICANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    # Endocrinology concepts (issue #895)
+    GLYCEMIC_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Gastroenterology and endoscopy concepts (issue #894)
+    ENDOSCOPIC_FINDING: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    GI_SYMPTOM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    GI_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    POLYP_DESCRIPTOR: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    # Nephrology and renal concepts (issue #892)
+    CKD_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    DIALYSIS_MODALITY: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    RENAL_FUNCTION_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pulmonology concepts (issue #893)
+    SPIROMETRY_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    OXYGEN_SUPPORT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RESPIRATORY_FINDING: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    DYSPNEA_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pediatric growth and developmental-surveillance concepts (issue #896)
+    GROWTH_PARAMETER: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
+    GROWTH_PERCENTILE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
+    DEVELOPMENTAL_MILESTONE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (
+            SNOMED,
+            LOINC,
+        ),
+    ),
+    # Obstetrics and gynecology concepts (issue #907)
+    GRAVIDITY_PARITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    GESTATIONAL_AGE: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (SNOMED, LOINC),
+    ),
+    FETAL_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    OBSTETRIC_EVENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Pathology and histology concepts (issue #903)
+    HISTOLOGIC_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HISTOLOGIC_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    MARGIN_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    IHC_STAIN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    SPECIMEN_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Oncology TNM staging and tumor-descriptor concepts (issue #864). These
+    # are descriptive extraction labels; coding hints do not imply stage
+    # computation, prognosis, or treatment logic.
+    TNM_T: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_N: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TNM_M: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    STAGE_GROUP: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    TUMOR_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RECEPTOR_STATUS: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        CLINICAL_SYSTEM_HINTS,
+    ),
+    OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+}
+
+LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
+    # People
+    PERSON: HIPAA_NAME,
+    FIRST_NAME: HIPAA_NAME,
+    LAST_NAME: HIPAA_NAME,
+    MIDDLE_NAME: HIPAA_NAME,
+    PREFIX: HIPAA_NAME,
+    USERNAME: HIPAA_UNIQUE_IDENTIFIER,
+    # Contact
+    EMAIL: HIPAA_EMAIL_ADDRESS,
+    PHONE: HIPAA_TELEPHONE_NUMBER,
+    URL: HIPAA_URL,
+    # Location
+    LOCATION: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    STREET_ADDRESS: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    BUILDING_NUMBER: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    ZIPCODE: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    GPS_COORDINATES: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    ORDINAL_DIRECTION: HIPAA_GEOGRAPHIC_SUBDIVISION,
+    # Time
+    DATE: HIPAA_DATE_ELEMENT,
+    DATE_OF_BIRTH: HIPAA_DATE_ELEMENT,
+    TIME: HIPAA_DATE_ELEMENT,
+    AGE: HIPAA_DATE_ELEMENT,
+    # Identifiers
+    ID_NUM: HIPAA_UNIQUE_IDENTIFIER,
+    SSN: HIPAA_SOCIAL_SECURITY_NUMBER,
+    ACCOUNT_NUMBER: HIPAA_ACCOUNT_NUMBER,
+    PASSWORD: HIPAA_UNIQUE_IDENTIFIER,
+    PIN: HIPAA_UNIQUE_IDENTIFIER,
+    API_KEY: HIPAA_UNIQUE_IDENTIFIER,
+    # Financial
+    CREDIT_CARD: HIPAA_ACCOUNT_NUMBER,
+    CREDIT_CARD_ISSUER: HIPAA_UNIQUE_IDENTIFIER,
+    CVV: HIPAA_ACCOUNT_NUMBER,
+    IBAN: HIPAA_ACCOUNT_NUMBER,
+    BIC: HIPAA_ACCOUNT_NUMBER,
+    AMOUNT: HIPAA_UNIQUE_IDENTIFIER,
+    CURRENCY: HIPAA_UNIQUE_IDENTIFIER,
+    BITCOIN_ADDRESS: HIPAA_ACCOUNT_NUMBER,
+    ETHEREUM_ADDRESS: HIPAA_ACCOUNT_NUMBER,
+    LITECOIN_ADDRESS: HIPAA_ACCOUNT_NUMBER,
+    MASKED_NUMBER: HIPAA_ACCOUNT_NUMBER,
+    # Demographics
+    GENDER: HIPAA_UNIQUE_IDENTIFIER,
+    ETHNICITY: HIPAA_UNIQUE_IDENTIFIER,
+    EYE_COLOR: HIPAA_UNIQUE_IDENTIFIER,
+    HEIGHT: HIPAA_UNIQUE_IDENTIFIER,
+    # Work
+    ORGANIZATION: HIPAA_UNIQUE_IDENTIFIER,
+    JOB_TITLE: HIPAA_UNIQUE_IDENTIFIER,
+    JOB_DEPARTMENT: HIPAA_UNIQUE_IDENTIFIER,
+    OCCUPATION: HIPAA_UNIQUE_IDENTIFIER,
+    # Tech
+    IP_ADDRESS: HIPAA_IP_ADDRESS,
+    MAC_ADDRESS: HIPAA_DEVICE_IDENTIFIER,
+    USER_AGENT: HIPAA_UNIQUE_IDENTIFIER,
+    VIN: HIPAA_VEHICLE_IDENTIFIER,
+    VEHICLE_REGISTRATION: HIPAA_VEHICLE_IDENTIFIER,
+    IMEI: HIPAA_DEVICE_IDENTIFIER,
+    # Microbiology
+    MICROORGANISM: HIPAA_UNIQUE_IDENTIFIER,
+    ANTIBIOTIC: HIPAA_UNIQUE_IDENTIFIER,
+    SUSCEPTIBILITY: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical concepts
+    CONDITION: HIPAA_UNIQUE_IDENTIFIER,
+    MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
+    LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN: HIPAA_UNIQUE_IDENTIFIER,
+    PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
+    BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE_IDENTIFIER: HIPAA_DEVICE_IDENTIFIER,
+    DEVICE_MODEL: HIPAA_UNIQUE_IDENTIFIER,
+    IMPLANT_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
+    SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
+    DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
+    ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    FREQUENCY: HIPAA_UNIQUE_IDENTIFIER,
+    DURATION: HIPAA_UNIQUE_IDENTIFIER,
+    FORM: HIPAA_UNIQUE_IDENTIFIER,
+    STRENGTH: HIPAA_UNIQUE_IDENTIFIER,
+    INDICATION: HIPAA_UNIQUE_IDENTIFIER,
+    LAB_VALUE: HIPAA_UNIQUE_IDENTIFIER,
+    UNIT: HIPAA_UNIQUE_IDENTIFIER,
+    REFERENCE_RANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ABNORMAL_FLAG: HIPAA_UNIQUE_IDENTIFIER,
+    # Anesthesia-record concepts
+    ANESTHESIA_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    ANESTHETIC_AGENT: HIPAA_UNIQUE_IDENTIFIER,
+    AIRWAY_MANAGEMENT: HIPAA_UNIQUE_IDENTIFIER,
+    ASA_CLASS: HIPAA_UNIQUE_IDENTIFIER,
+    # Nutritional and Diet concepts
+    DIET_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
+    FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Immunization and vaccine-administration concepts
+    VACCINE_NAME: HIPAA_UNIQUE_IDENTIFIER,
+    DOSE_NUMBER: HIPAA_UNIQUE_IDENTIFIER,
+    ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_LOT: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
+    # Allergy and intolerance concepts
+    ALLERGEN: HIPAA_UNIQUE_IDENTIFIER,
+    REACTION_MANIFESTATION: HIPAA_UNIQUE_IDENTIFIER,
+    REACTION_SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
+    ALLERGY_CRITICALITY: HIPAA_UNIQUE_IDENTIFIER,
+    IMMUNIZATION: HIPAA_UNIQUE_IDENTIFIER,
+    PSYCH_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
+    TOOTH: HIPAA_UNIQUE_IDENTIFIER,
+    # Nursing-care observation concepts
+    INTAKE_OUTPUT: HIPAA_UNIQUE_IDENTIFIER,
+    LINE_DRAIN_TUBE: HIPAA_UNIQUE_IDENTIFIER,
+    NURSING_RISK_SCORE: HIPAA_UNIQUE_IDENTIFIER,
+    CARE_INTERVENTION: HIPAA_UNIQUE_IDENTIFIER,
+    # Wound and skin-assessment concepts
+    WOUND_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    WOUND_STAGE: HIPAA_UNIQUE_IDENTIFIER,
+    EXUDATE_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    DRESSING_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    # Functional-status and activities-of-daily-living concepts
+    ADL_ACTIVITY: HIPAA_UNIQUE_IDENTIFIER,
+    ASSISTANCE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    MOBILITY_ABILITY: HIPAA_UNIQUE_IDENTIFIER,
+    FUNCTIONAL_SCALE: HIPAA_UNIQUE_IDENTIFIER,
+    SUBSTANCE: HIPAA_UNIQUE_IDENTIFIER,
+    USE_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    USE_QUANTITY: HIPAA_UNIQUE_IDENTIFIER,
+    PACK_YEARS: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical genomics
+    GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
+    VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    PROTEIN_CHANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ZYGOSITY: HIPAA_UNIQUE_IDENTIFIER,
+    CLINICAL_SIGNIFICANCE: HIPAA_UNIQUE_IDENTIFIER,
+    # Endocrinology concepts
+    GLYCEMIC_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
+    # Gastroenterology and endoscopy concepts
+    ENDOSCOPIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    GI_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
+    GI_SCORE: HIPAA_UNIQUE_IDENTIFIER,
+    POLYP_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    # Nephrology concepts
+    CKD_STAGE: HIPAA_UNIQUE_IDENTIFIER,
+    DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
+    RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    # Pulmonology concepts
+    SPIROMETRY_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    OXYGEN_SUPPORT: HIPAA_UNIQUE_IDENTIFIER,
+    RESPIRATORY_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    DYSPNEA_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    # Pediatric growth and developmental-surveillance concepts
+    GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
+    GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
+    GRAVIDITY_PARITY: HIPAA_UNIQUE_IDENTIFIER,
+    GESTATIONAL_AGE: HIPAA_UNIQUE_IDENTIFIER,
+    FETAL_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    OBSTETRIC_EVENT: HIPAA_UNIQUE_IDENTIFIER,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    HISTOLOGIC_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    MARGIN_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    IHC_STAIN: HIPAA_UNIQUE_IDENTIFIER,
+    SPECIMEN_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_N: HIPAA_UNIQUE_IDENTIFIER,
+    TNM_M: HIPAA_UNIQUE_IDENTIFIER,
+    STAGE_GROUP: HIPAA_UNIQUE_IDENTIFIER,
+    TUMOR_GRADE: HIPAA_UNIQUE_IDENTIFIER,
+    RECEPTOR_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Catch-all
+    OTHER: HIPAA_UNIQUE_IDENTIFIER,
+}
+
+LABEL_TO_POPIA: Final[Mapping[str, str]] = {
+    # People
+    PERSON: POPIA_NAME,
+    FIRST_NAME: POPIA_NAME,
+    LAST_NAME: POPIA_NAME,
+    MIDDLE_NAME: POPIA_NAME,
+    PREFIX: POPIA_NAME,
+    USERNAME: POPIA_ONLINE_IDENTIFIER,
+    # Contact
+    EMAIL: POPIA_CONTACT_DETAILS,
+    PHONE: POPIA_CONTACT_DETAILS,
+    URL: POPIA_ONLINE_IDENTIFIER,
+    # Location
+    LOCATION: POPIA_LOCATION_INFORMATION,
+    STREET_ADDRESS: POPIA_LOCATION_INFORMATION,
+    BUILDING_NUMBER: POPIA_LOCATION_INFORMATION,
+    ZIPCODE: POPIA_LOCATION_INFORMATION,
+    GPS_COORDINATES: POPIA_LOCATION_INFORMATION,
+    ORDINAL_DIRECTION: POPIA_LOCATION_INFORMATION,
+    # Time and demographic attributes
+    DATE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    DATE_OF_BIRTH: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    TIME: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    AGE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    # Identifiers
+    ID_NUM: POPIA_IDENTIFYING_NUMBER,
+    SSN: POPIA_IDENTIFYING_NUMBER,
+    ACCOUNT_NUMBER: POPIA_IDENTIFYING_NUMBER,
+    PASSWORD: POPIA_ONLINE_IDENTIFIER,
+    PIN: POPIA_IDENTIFYING_NUMBER,
+    API_KEY: POPIA_ONLINE_IDENTIFIER,
+    # Financial information and account identifiers
+    CREDIT_CARD: POPIA_IDENTIFYING_NUMBER,
+    CREDIT_CARD_ISSUER: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    CVV: POPIA_IDENTIFYING_NUMBER,
+    IBAN: POPIA_IDENTIFYING_NUMBER,
+    BIC: POPIA_IDENTIFYING_NUMBER,
+    AMOUNT: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    CURRENCY: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    BITCOIN_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    ETHEREUM_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    LITECOIN_ADDRESS: POPIA_IDENTIFYING_NUMBER,
+    MASKED_NUMBER: POPIA_IDENTIFYING_NUMBER,
+    # Demographic and physical attributes
+    GENDER: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    ETHNICITY: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    EYE_COLOR: POPIA_BIOMETRIC_INFORMATION,
+    HEIGHT: POPIA_BIOMETRIC_INFORMATION,
+    # Employment history
+    ORGANIZATION: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    JOB_TITLE: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    JOB_DEPARTMENT: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    OCCUPATION: POPIA_DEMOGRAPHIC_AND_HISTORY_ATTRIBUTES,
+    # Online and device identifiers
+    IP_ADDRESS: POPIA_ONLINE_IDENTIFIER,
+    MAC_ADDRESS: POPIA_ONLINE_IDENTIFIER,
+    USER_AGENT: POPIA_ONLINE_IDENTIFIER,
+    VIN: POPIA_IDENTIFYING_NUMBER,
+    VEHICLE_REGISTRATION: POPIA_IDENTIFYING_NUMBER,
+    IMEI: POPIA_ONLINE_IDENTIFIER,
+    # Health information
+    MICROORGANISM: POPIA_HEALTH_INFORMATION,
+    ANTIBIOTIC: POPIA_HEALTH_INFORMATION,
+    SUSCEPTIBILITY: POPIA_HEALTH_INFORMATION,
+    CONDITION: POPIA_HEALTH_INFORMATION,
+    MEDICATION: POPIA_HEALTH_INFORMATION,
+    LAB_TEST: POPIA_HEALTH_INFORMATION,
+    SPECIMEN: POPIA_HEALTH_INFORMATION,
+    PROCEDURE: POPIA_HEALTH_INFORMATION,
+    BODY_SITE: POPIA_HEALTH_INFORMATION,
+    DEVICE: POPIA_HEALTH_INFORMATION,
+    DEVICE_TYPE: POPIA_HEALTH_INFORMATION,
+    DEVICE_IDENTIFIER: POPIA_IDENTIFYING_NUMBER,
+    DEVICE_MODEL: POPIA_HEALTH_INFORMATION,
+    IMPLANT_SITE: POPIA_HEALTH_INFORMATION,
+    PROBLEM: POPIA_HEALTH_INFORMATION,
+    SEVERITY: POPIA_HEALTH_INFORMATION,
+    DOSAGE: POPIA_HEALTH_INFORMATION,
+    ROUTE: POPIA_HEALTH_INFORMATION,
+    FREQUENCY: POPIA_HEALTH_INFORMATION,
+    DURATION: POPIA_HEALTH_INFORMATION,
+    FORM: POPIA_HEALTH_INFORMATION,
+    STRENGTH: POPIA_HEALTH_INFORMATION,
+    INDICATION: POPIA_HEALTH_INFORMATION,
+    LAB_VALUE: POPIA_HEALTH_INFORMATION,
+    UNIT: POPIA_HEALTH_INFORMATION,
+    REFERENCE_RANGE: POPIA_HEALTH_INFORMATION,
+    ABNORMAL_FLAG: POPIA_HEALTH_INFORMATION,
+    ANESTHESIA_TYPE: POPIA_HEALTH_INFORMATION,
+    ANESTHETIC_AGENT: POPIA_HEALTH_INFORMATION,
+    AIRWAY_MANAGEMENT: POPIA_HEALTH_INFORMATION,
+    ASA_CLASS: POPIA_HEALTH_INFORMATION,
+    DIET_TYPE: POPIA_HEALTH_INFORMATION,
+    NUTRITION_TARGET: POPIA_HEALTH_INFORMATION,
+    FEEDING_ROUTE: POPIA_HEALTH_INFORMATION,
+    NUTRITIONAL_STATUS: POPIA_HEALTH_INFORMATION,
+    VACCINE_NAME: POPIA_HEALTH_INFORMATION,
+    DOSE_NUMBER: POPIA_HEALTH_INFORMATION,
+    ADMINISTRATION_ROUTE: POPIA_HEALTH_INFORMATION,
+    VACCINE_LOT: POPIA_HEALTH_INFORMATION,
+    VACCINE_SERIES: POPIA_HEALTH_INFORMATION,
+    ALLERGEN: POPIA_HEALTH_INFORMATION,
+    REACTION_MANIFESTATION: POPIA_HEALTH_INFORMATION,
+    REACTION_SEVERITY: POPIA_HEALTH_INFORMATION,
+    ALLERGY_CRITICALITY: POPIA_HEALTH_INFORMATION,
+    IMMUNIZATION: POPIA_HEALTH_INFORMATION,
+    PSYCH_SYMPTOM: POPIA_HEALTH_INFORMATION,
+    TOOTH: POPIA_HEALTH_INFORMATION,
+    INTAKE_OUTPUT: POPIA_HEALTH_INFORMATION,
+    LINE_DRAIN_TUBE: POPIA_HEALTH_INFORMATION,
+    NURSING_RISK_SCORE: POPIA_HEALTH_INFORMATION,
+    CARE_INTERVENTION: POPIA_HEALTH_INFORMATION,
+    WOUND_TYPE: POPIA_HEALTH_INFORMATION,
+    WOUND_STAGE: POPIA_HEALTH_INFORMATION,
+    EXUDATE_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    DRESSING_TYPE: POPIA_HEALTH_INFORMATION,
+    ADL_ACTIVITY: POPIA_HEALTH_INFORMATION,
+    ASSISTANCE_LEVEL: POPIA_HEALTH_INFORMATION,
+    MOBILITY_ABILITY: POPIA_HEALTH_INFORMATION,
+    FUNCTIONAL_SCALE: POPIA_HEALTH_INFORMATION,
+    SUBSTANCE: POPIA_HEALTH_INFORMATION,
+    USE_STATUS: POPIA_HEALTH_INFORMATION,
+    USE_QUANTITY: POPIA_HEALTH_INFORMATION,
+    PACK_YEARS: POPIA_HEALTH_INFORMATION,
+    GENE_SYMBOL: POPIA_HEALTH_INFORMATION,
+    VARIANT_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    PROTEIN_CHANGE: POPIA_HEALTH_INFORMATION,
+    ZYGOSITY: POPIA_HEALTH_INFORMATION,
+    CLINICAL_SIGNIFICANCE: POPIA_HEALTH_INFORMATION,
+    GLYCEMIC_MEASURE: POPIA_HEALTH_INFORMATION,
+    THYROID_MEASURE: POPIA_HEALTH_INFORMATION,
+    HORMONE_LEVEL: POPIA_HEALTH_INFORMATION,
+    INSULIN_REGIMEN: POPIA_HEALTH_INFORMATION,
+    ENDOSCOPIC_FINDING: POPIA_HEALTH_INFORMATION,
+    GI_SYMPTOM: POPIA_HEALTH_INFORMATION,
+    GI_SCORE: POPIA_HEALTH_INFORMATION,
+    POLYP_DESCRIPTOR: POPIA_HEALTH_INFORMATION,
+    CKD_STAGE: POPIA_HEALTH_INFORMATION,
+    DIALYSIS_MODALITY: POPIA_HEALTH_INFORMATION,
+    RENAL_FUNCTION_MEASURE: POPIA_HEALTH_INFORMATION,
+    URINE_FINDING: POPIA_HEALTH_INFORMATION,
+    SPIROMETRY_MEASURE: POPIA_HEALTH_INFORMATION,
+    OXYGEN_SUPPORT: POPIA_HEALTH_INFORMATION,
+    RESPIRATORY_FINDING: POPIA_HEALTH_INFORMATION,
+    DYSPNEA_GRADE: POPIA_HEALTH_INFORMATION,
+    GROWTH_PARAMETER: POPIA_HEALTH_INFORMATION,
+    GROWTH_PERCENTILE: POPIA_HEALTH_INFORMATION,
+    DEVELOPMENTAL_MILESTONE: POPIA_HEALTH_INFORMATION,
+    GRAVIDITY_PARITY: POPIA_HEALTH_INFORMATION,
+    GESTATIONAL_AGE: POPIA_HEALTH_INFORMATION,
+    FETAL_FINDING: POPIA_HEALTH_INFORMATION,
+    OBSTETRIC_EVENT: POPIA_HEALTH_INFORMATION,
+    # Pathology and histology concepts
+    HISTOLOGIC_FINDING: POPIA_HEALTH_INFORMATION,
+    HISTOLOGIC_GRADE: POPIA_HEALTH_INFORMATION,
+    MARGIN_STATUS: POPIA_HEALTH_INFORMATION,
+    IHC_STAIN: POPIA_HEALTH_INFORMATION,
+    SPECIMEN_TYPE: POPIA_HEALTH_INFORMATION,
+    # Oncology TNM staging and tumor-descriptor concepts
+    TNM_T: POPIA_HEALTH_INFORMATION,
+    TNM_N: POPIA_HEALTH_INFORMATION,
+    TNM_M: POPIA_HEALTH_INFORMATION,
+    STAGE_GROUP: POPIA_HEALTH_INFORMATION,
+    TUMOR_GRADE: POPIA_HEALTH_INFORMATION,
+    RECEPTOR_STATUS: POPIA_HEALTH_INFORMATION,
+    # Catch-all for special personal information without a dedicated label
+    OTHER: POPIA_OTHER_SPECIAL_INFORMATION,
+}
+
+
+def _validate_label_metadata() -> None:
+    metadata_labels = set(LABEL_METADATA)
+    hipaa_labels = set(LABEL_TO_HIPAA)
+    popia_labels = set(LABEL_TO_POPIA)
+    ndpa_classes = set(NDPA_SENSITIVE_CLASS_LABELS)
+    cross_map_labels = CANONICAL_LABELS - _BIOMEDICAL_CROSS_MAP_EXEMPT_LABELS
+    if metadata_labels != CANONICAL_LABELS:
+        missing = sorted(CANONICAL_LABELS - metadata_labels)
+        extra = sorted(metadata_labels - CANONICAL_LABELS)
+        raise RuntimeError(
+            "LABEL_METADATA must cover CANONICAL_LABELS exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    if hipaa_labels != cross_map_labels:
+        missing = sorted(cross_map_labels - hipaa_labels)
+        extra = sorted(hipaa_labels - cross_map_labels)
+        raise RuntimeError(
+            "LABEL_TO_HIPAA must cover identifier cross-map labels exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    if popia_labels != cross_map_labels:
+        missing = sorted(cross_map_labels - popia_labels)
+        extra = sorted(popia_labels - cross_map_labels)
+        raise RuntimeError(
+            "LABEL_TO_POPIA must cover identifier cross-map labels exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    if ndpa_classes != set(NDPA_SENSITIVE_DATA_CLASSES):
+        missing = sorted(set(NDPA_SENSITIVE_DATA_CLASSES) - ndpa_classes)
+        extra = sorted(ndpa_classes - set(NDPA_SENSITIVE_DATA_CLASSES))
+        raise RuntimeError(
+            "NDPA_SENSITIVE_CLASS_LABELS must cover NDPA classes exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items():
+        if not labels:
+            raise RuntimeError(f"{ndpa_class} requires a canonical label anchor")
+        unknown_labels = sorted(set(labels) - CANONICAL_LABELS)
+        if unknown_labels:
+            raise RuntimeError(
+                f"{ndpa_class} has unknown canonical labels {unknown_labels}"
+            )
+        biomedical_labels = sorted(set(labels) - cross_map_labels)
+        if biomedical_labels:
+            raise RuntimeError(
+                f"{ndpa_class} has non-identifier biomedical labels {biomedical_labels}"
+            )
+    for label, metadata in LABEL_METADATA.items():
+        policy_label = metadata["policy_label"]
+        kind = metadata["kind"]
+        risk_level = metadata["risk_level"]
+        system_hints = metadata["system_hints"]
+        if kind not in LABEL_KINDS:
+            raise RuntimeError(f"{label} has invalid kind {kind!r}")
+        expected_kind = (
+            BIOMEDICAL_LABEL_KIND
+            if policy_label == CLINICAL_CONCEPT
+            else PII_LABEL_KIND
+        )
+        if kind != expected_kind:
+            raise RuntimeError(
+                f"{label} kind {kind!r} does not match policy {policy_label!r}"
+            )
+        if policy_label not in POLICY_LABELS:
+            raise RuntimeError(f"{label} has invalid policy_label {policy_label!r}")
+        if risk_level not in RISK_LEVELS:
+            raise RuntimeError(f"{label} has invalid risk_level {risk_level!r}")
+        if not isinstance(system_hints, tuple):
+            raise RuntimeError(f"{label} system_hints must be a tuple")
+        if policy_label == CLINICAL_CONCEPT and not system_hints:
+            raise RuntimeError(f"{label} clinical concepts require system_hints")
+        if policy_label != CLINICAL_CONCEPT and system_hints:
+            raise RuntimeError(f"{label} identifier labels must not have system_hints")
+    for label, hipaa_class in LABEL_TO_HIPAA.items():
+        if hipaa_class not in HIPAA_SAFE_HARBOR_CLASSES:
+            raise RuntimeError(f"{label} has invalid HIPAA class {hipaa_class!r}")
+    for label, popia_class in LABEL_TO_POPIA.items():
+        if popia_class not in POPIA_IDENTIFIER_CLASSES:
+            raise RuntimeError(f"{label} has invalid POPIA class {popia_class!r}")
+
+
+# ---------------------------------------------------------------------------
+# Alias map
+# ---------------------------------------------------------------------------
+
+# Inputs are lowercased + non-alphanumerics stripped before lookup. So
+# ``first_name``, ``FIRSTNAME``, ``First-Name`` all reduce to ``firstname``.
+_ALIAS_MAP: Final[Mapping[str, str]] = {
+    # People
+    "name": PERSON,
+    "person": PERSON,
+    "per": PERSON,
+    "patient": PERSON,
+    "doctor": PERSON,
+    "fullname": PERSON,
+    "firstname": FIRST_NAME,
+    "givenname": FIRST_NAME,
+    "lastname": LAST_NAME,
+    "surname": LAST_NAME,
+    "familyname": LAST_NAME,
+    "middlename": MIDDLE_NAME,
+    "prefix": PREFIX,
+    "title": PREFIX,
+    "username": USERNAME,
+    "userhandle": USERNAME,
+    # Contact
+    "email": EMAIL,
+    "emailaddress": EMAIL,
+    "phone": PHONE,
+    "phonenumber": PHONE,
+    "telephone": PHONE,
+    "fax": PHONE,
+    "url": URL,
+    "urlpersonal": URL,
+    "website": URL,
+    "personalurl": URL,
+    # Location
+    "location": LOCATION,
+    "loc": LOCATION,
+    "city": LOCATION,
+    "state": LOCATION,
+    "country": LOCATION,
+    "county": LOCATION,
+    "region": LOCATION,
+    "place": LOCATION,
+    "address": STREET_ADDRESS,
+    "street": STREET_ADDRESS,
+    "streetaddress": STREET_ADDRESS,
+    "secondaryaddress": STREET_ADDRESS,
+    "buildingnumber": BUILDING_NUMBER,
+    "zipcode": ZIPCODE,
+    "zip": ZIPCODE,
+    "postcode": ZIPCODE,
+    "postalcode": ZIPCODE,
+    "gpscoordinates": GPS_COORDINATES,
+    "gps": GPS_COORDINATES,
+    "ordinaldirection": ORDINAL_DIRECTION,
+    # Time
+    "date": DATE,
+    "dateofbirth": DATE_OF_BIRTH,
+    "dob": DATE_OF_BIRTH,
+    "birthdate": DATE_OF_BIRTH,
+    "time": TIME,
+    "age": AGE,
+    # Identifiers
+    "idnum": ID_NUM,
+    "id": ID_NUM,
+    "identifier": ID_NUM,
+    "passportmrz": ID_NUM,
+    "chinesepassport": ID_NUM,
+    "prcpassport": ID_NUM,
+    "homereturnpermit": ID_NUM,
+    "hkmacaupermit": ID_NUM,
+    "mainlandtravelpermithongkongmacau": ID_NUM,
+    "taiwancompatriotpermit": ID_NUM,
+    "taiwanpermit": ID_NUM,
+    "mainlandtravelpermittaiwan": ID_NUM,
+    "socialcreditcode": ID_NUM,
+    "unifiedsocialcreditcode": ID_NUM,
+    "uscc": ID_NUM,
+    "medicalrecordnumber": ID_NUM,
+    "mrn": ID_NUM,
+    "nhsnumber": ID_NUM,
+    "nhs": ID_NUM,
+    "nationalid": ID_NUM,
+    "cpf": ID_NUM,
+    "cnpj": ID_NUM,
+    "nir": ID_NUM,
+    "steuerid": ID_NUM,
+    "codicefiscale": ID_NUM,
+    "dni": ID_NUM,
+    "nie": ID_NUM,
+    "bsn": ID_NUM,
+    "aadhaar": ID_NUM,
+    "aadhaarnumber": ID_NUM,
+    "abha": ID_NUM,
+    "abhanumber": ID_NUM,
+    "abhaid": ID_NUM,
+    "abhaaddress": ID_NUM,
+    "upiid": ID_NUM,
+    "vpa": ID_NUM,
+    "rationcard": ID_NUM,
+    "pan": ID_NUM,
+    "permanentaccountnumber": ID_NUM,
+    "abdmhprid": ID_NUM,
+    "abdmhfrid": ID_NUM,
+    "ngnin": ID_NUM,
+    "ngbvn": ID_NUM,
+    "ngphone": PHONE,
+    "ghghanacard": ID_NUM,
+    "kenationalid": ID_NUM,
+    "kemaishanamba": ID_NUM,
+    "gstin": ID_NUM,
+    "gstnumber": ID_NUM,
+    "ifsc": ID_NUM,
+    "ifsccode": ID_NUM,
+    "voteridepic": ID_NUM,
+    "voterid": ID_NUM,
+    "epic": ID_NUM,
+    "indiandrivinglicence": ID_NUM,
+    "drivinglicence": ID_NUM,
+    "indiandrivinglicense": ID_NUM,
+    "drivinglicense": ID_NUM,
+    "indianpassport": ID_NUM,
+    "passport": ID_NUM,
+    "teudatzehut": ID_NUM,
+    "mpesatxcode": ID_NUM,
+    "mobilemoneypaybill": ID_NUM,
+    "mobilemoneytill": ID_NUM,
+    "mobilemoneyagent": ID_NUM,
+    "momoreference": ID_NUM,
+    "facilityid": ID_NUM,
+    "tz": ID_NUM,
+    "npi": ID_NUM,
+    "ssn": SSN,
+    "socialsecuritynumber": SSN,
+    "accountnumber": ACCOUNT_NUMBER,
+    "accountname": ACCOUNT_NUMBER,
+    "bankaccount": ACCOUNT_NUMBER,
+    "mobilemoneyaccount": ACCOUNT_NUMBER,
+    "password": PASSWORD,
+    "pin": PIN,
+    "apikey": API_KEY,
+    # Financial
+    "creditcard": CREDIT_CARD,
+    "creditdebitcard": CREDIT_CARD,
+    "creditcardnumber": CREDIT_CARD,
+    "creditcardissuer": CREDIT_CARD_ISSUER,
+    "cvv": CVV,
+    "iban": IBAN,
+    "bic": BIC,
+    "swift": BIC,
+    "amount": AMOUNT,
+    "currency": CURRENCY,
+    "currencycode": CURRENCY,
+    "currencyname": CURRENCY,
+    "currencysymbol": CURRENCY,
+    "bitcoinaddress": BITCOIN_ADDRESS,
+    "ethereumaddress": ETHEREUM_ADDRESS,
+    "litecoinaddress": LITECOIN_ADDRESS,
+    "maskednumber": MASKED_NUMBER,
+    # Demographics
+    "gender": GENDER,
+    "sex": GENDER,
+    "ethnicity": ETHNICITY,
+    "ethnicorigin": ETHNICITY,
+    "race": ETHNICITY,
+    "racialorigin": ETHNICITY,
+    "tribe": ETHNICITY,
+    "tribalaffiliation": ETHNICITY,
+    "eyecolor": EYE_COLOR,
+    "height": HEIGHT,
+    # Work
+    "organization": ORGANIZATION,
+    "org": ORGANIZATION,
+    "company": ORGANIZATION,
+    "employer": ORGANIZATION,
+    "jobtitle": JOB_TITLE,
+    "jobdepartment": JOB_DEPARTMENT,
+    "department": JOB_DEPARTMENT,
+    "occupation": OCCUPATION,
+    "profession": OCCUPATION,
+    # Tech
+    "ipaddress": IP_ADDRESS,
+    "ip": IP_ADDRESS,
+    "macaddress": MAC_ADDRESS,
+    "useragent": USER_AGENT,
+    "vin": VIN,
+    "vrm": VEHICLE_REGISTRATION,
+    "licenseplate": VEHICLE_REGISTRATION,
+    "indianvehicleregistration": VEHICLE_REGISTRATION,
+    "rtoregistration": VEHICLE_REGISTRATION,
+    "imei": IMEI,
+    # Microbiology
+    "microorganism": MICROORGANISM,
+    "microbe": MICROORGANISM,
+    "pathogen": MICROORGANISM,
+    "antibiotic": ANTIBIOTIC,
+    "antimicrobial": ANTIBIOTIC,
+    "susceptibility": SUSCEPTIBILITY,
+    "susceptibilityresult": SUSCEPTIBILITY,
+    # Biomedical NER family concepts and family-native aliases
+    "disease": DISEASE,
+    "drug": DRUG,
+    "chemical": CHEMICAL,
+    "chem": CHEMICAL,
+    "simplechemical": CHEMICAL,
+    "aminoacid": CHEMICAL,
+    "geneorgeneproduct": GENE_OR_GENE_PRODUCT,
+    "geneproduct": GENE_OR_GENE_PRODUCT,
+    "gene": GENE,
+    "protein": PROTEIN,
+    "proteincomplex": PROTEIN,
+    "proteinenum": PROTEIN,
+    "proteinenumeration": PROTEIN,
+    "proteinfamilyorgroup": PROTEIN,
+    "proteinfamiliyorgroup": PROTEIN,
+    "proteinvariant": PROTEIN,
+    # Portuguese biomedical NER family labels.
+    "doenca": DISEASE,
+    "anatomia": ANATOMY,
+    "dna": DNA,
+    "rna": RNA,
+    "anatomy": ANATOMY,
+    "anatomical": ANATOMY,
+    "anatomicalsystem": ANATOMY,
+    "developinganatomicalstructure": ANATOMY,
+    "immaterialanatomicalentity": ANATOMY,
+    "multitissuestructure": TISSUE,
+    "organ": ORGAN,
+    "tissue": TISSUE,
+    "cell": CELL,
+    "cellline": CELL,
+    "celltype": CELL,
+    "cellularcomponent": CELL,
+    "cl": CELL,
+    "cancer": CANCER,
+    "species": SPECIES,
+    "organism": ORGANISM,
+    "organismsubdivision": ORGANISM,
+    "organismsubstance": ORGANISM,
+    "pathology": PATHOLOGY,
+    "pathologicalformation": PATHOLOGY,
+    "biomarker": BIOMARKER,
+    # Radiology finding concepts
+    "finding": FINDING,
+    "radiologyfinding": FINDING,
+    "imagingfinding": FINDING,
+    "impression": FINDING,
+    "imagingmodality": IMAGING_MODALITY,
+    "modality": IMAGING_MODALITY,
+    "laterality": LATERALITY,
+    "measurement": MEASUREMENT,
+    # Clinical concepts
+    "condition": CONDITION,
+    "diagnosis": PROBLEM,
+    "ayushmorbidity": CONDITION,
+    "namastemorbidity": CONDITION,
+    "problem": PROBLEM,
+    "disorder": CONDITION,
+    "syndrome": CONDITION,
+    "medication": MEDICATION,
+    "med": MEDICATION,
+    "indiandrug": MEDICATION,
+    "indiandrugbrand": MEDICATION,
+    "substance": MEDICATION,
+    "labtest": LAB_TEST,
+    "test": LAB_TEST,
+    "lab": LAB_TEST,
+    "analyte": LAB_TEST,
+    "specimen": SPECIMEN,
+    "specimensource": SPECIMEN,
+    "procedure": PROCEDURE,
+    "surgery": PROCEDURE,
+    "operation": PROCEDURE,
+    "intervention": PROCEDURE,
+    "diagnosticprocedure": PROCEDURE,
+    "resection": PROCEDURE,
+    "biopsy": PROCEDURE,
+    "endoscopicprocedure": PROCEDURE,
+    "laparoscopic": PROCEDURE,
+    "approach": OTHER,
+    "bodysite": BODY_SITE,
+    "bodypart": BODY_SITE,
+    # Procedure-record device concepts (issue #313)
+    "device": DEVICE,
+    "medicaldevice": DEVICE,
+    "implant": DEVICE,
+    "catheter": DEVICE,
+    # Medical-device and UDI mention concepts (issue #908)
+    "devicetype": DEVICE_TYPE,
+    "deviceidentifier": DEVICE_IDENTIFIER,
+    "udi": DEVICE_IDENTIFIER,
+    "udidi": DEVICE_IDENTIFIER,
+    "devicemodel": DEVICE_MODEL,
+    "modelnumber": DEVICE_MODEL,
+    "manufacturer": ORGANIZATION,
+    "implantsite": IMPLANT_SITE,
+    "implantlocation": IMPLANT_SITE,
+    "devicestatus": OTHER,
+    # Anesthesia-record concepts
+    "anesthesiatype": ANESTHESIA_TYPE,
+    "anesthesia": ANESTHESIA_TYPE,
+    "anestheticagent": ANESTHETIC_AGENT,
+    "anesthetic": ANESTHETIC_AGENT,
+    "anestheticdrug": ANESTHETIC_AGENT,
+    "airwaymanagement": AIRWAY_MANAGEMENT,
+    "airway": AIRWAY_MANAGEMENT,
+    "asaclass": ASA_CLASS,
+    "asaphysicalstatus": ASA_CLASS,
+    "asa": ASA_CLASS,
+    "monitoringmodality": OTHER,
+    "intraoperativeevent": OTHER,
+    # Nutrition and Diet concepts
+    "diettype": DIET_TYPE,
+    "diet": DIET_TYPE,
+    "nutritiontarget": NUTRITION_TARGET,
+    "feedingroute": FEEDING_ROUTE,
+    "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Immunization and Vaccine Administration concepts
+    "vaccinename": VACCINE_NAME,
+    "vaccine": VACCINE_NAME,
+    "vaccinationname": VACCINE_NAME,
+    "vaccination": VACCINE_NAME,
+    "dosenumber": DOSE_NUMBER,
+    "dose": DOSAGE,
+    "administrationroute": ADMINISTRATION_ROUTE,
+    "vaccineroute": ADMINISTRATION_ROUTE,
+    "vaccinelot": VACCINE_LOT,
+    "vaccinelotnumber": VACCINE_LOT,
+    "vaccineseries": VACCINE_SERIES,
+    "vaccinationseries": VACCINE_SERIES,
+    "administrationdate": DATE,
+    "administrationsite": BODY_SITE,
+    # Allergy and intolerance concepts
+    "allergen": ALLERGEN,
+    "reactionmanifestation": REACTION_MANIFESTATION,
+    "reactionseverity": REACTION_SEVERITY,
+    "criticality": ALLERGY_CRITICALITY,
+    "allergytype": OTHER,
+    "onsetcontext": OTHER,
+    # Immunology, mental-health, and dentistry concepts (issue #2358)
+    "allergy": ALLERGEN,
+    "allergies": ALLERGEN,
+    "allergicreaction": FINDING,
+    "immunization": IMMUNIZATION,
+    "antibody": PROTEIN,
+    "psychiatricsymptom": PSYCH_SYMPTOM,
+    "therapy": PROCEDURE,
+    "tooth": TOOTH,
+    "dentalcondition": CONDITION,
+    "dentalprocedure": PROCEDURE,
+    "restoration": PROCEDURE,
+    # Relation-extraction heads and attributes (issue #252)
+    "dx": PROBLEM,
+    "problemlist": PROBLEM,
+    "problemlistitem": PROBLEM,
+    "activeproblem": PROBLEM,
+    "severity": SEVERITY,
+    "severitygrade": SEVERITY,
+    "dosage": DOSAGE,
+    "dosing": DOSAGE,
+    "route": ROUTE,
+    "routeofadministration": ROUTE,
+    "frequency": FREQUENCY,
+    "freq": FREQUENCY,
+    "duration": DURATION,
+    "form": FORM,
+    "doseform": FORM,
+    "dosageform": FORM,
+    "strength": STRENGTH,
+    "dosestrength": STRENGTH,
+    "indication": INDICATION,
+    "reasonfordrug": INDICATION,
+    "labvalue": LAB_VALUE,
+    "labresult": LAB_VALUE,
+    "resultvalue": LAB_VALUE,
+    "unit": UNIT,
+    "units": UNIT,
+    "uom": UNIT,
+    "referencerange": REFERENCE_RANGE,
+    "normalrange": REFERENCE_RANGE,
+    "refrange": REFERENCE_RANGE,
+    "abnormalflag": ABNORMAL_FLAG,
+    "abnormalityflag": ABNORMAL_FLAG,
+    # Nursing-care observation concepts
+    "intakeoutput": INTAKE_OUTPUT,
+    "intakeandoutput": INTAKE_OUTPUT,
+    "urineoutput": INTAKE_OUTPUT,
+    "foley": LINE_DRAIN_TUBE,
+    "foleycatheter": LINE_DRAIN_TUBE,
+    "centralline": LINE_DRAIN_TUBE,
+    "chesttube": LINE_DRAIN_TUBE,
+    "linedraintube": LINE_DRAIN_TUBE,
+    "nursingriskscore": NURSING_RISK_SCORE,
+    "riskscore": NURSING_RISK_SCORE,
+    "bradenscore": NURSING_RISK_SCORE,
+    "braden": NURSING_RISK_SCORE,
+    "morsefallscale": NURSING_RISK_SCORE,
+    "fallrisk": NURSING_RISK_SCORE,
+    "careintervention": CARE_INTERVENTION,
+    "wounddressing": CARE_INTERVENTION,
+    "dressingchange": CARE_INTERVENTION,
+    "repositioning": CARE_INTERVENTION,
+    "mobilitystatus": OTHER,
+    "painscore": OTHER,
+    "skinassessment": BODY_SITE,
+    # Wound and skin-assessment concepts
+    "woundtype": WOUND_TYPE,
+    "wound": WOUND_TYPE,
+    "pressureinjury": WOUND_TYPE,
+    "pressureulcer": WOUND_TYPE,
+    "woundlocation": BODY_SITE,
+    "woundsite": BODY_SITE,
+    "woundstage": WOUND_STAGE,
+    "pressureinjurystage": WOUND_STAGE,
+    "pressureulcerstage": WOUND_STAGE,
+    "woundgrade": WOUND_STAGE,
+    "wounddimension": MEASUREMENT,
+    "wounddimensions": MEASUREMENT,
+    "woundsize": MEASUREMENT,
+    "woundmeasurement": MEASUREMENT,
+    "exudatedescriptor": EXUDATE_DESCRIPTOR,
+    "exudate": EXUDATE_DESCRIPTOR,
+    "woundexudate": EXUDATE_DESCRIPTOR,
+    "wounddrainage": EXUDATE_DESCRIPTOR,
+    "tissuetype": TISSUE,
+    "woundtissue": TISSUE,
+    "dressingtype": DRESSING_TYPE,
+    "wounddressingtype": DRESSING_TYPE,
+    "dressing": DRESSING_TYPE,
+    # Functional-status and activities-of-daily-living concepts
+    "adlactivity": ADL_ACTIVITY,
+    "activityofdailyliving": ADL_ACTIVITY,
+    "feeding": ADL_ACTIVITY,
+    "bathing": ADL_ACTIVITY,
+    "assistancelevel": ASSISTANCE_LEVEL,
+    "assistance": ASSISTANCE_LEVEL,
+    "independent": ASSISTANCE_LEVEL,
+    "requiresassistance": ASSISTANCE_LEVEL,
+    "minimalassistance": ASSISTANCE_LEVEL,
+    "mobilityability": MOBILITY_ABILITY,
+    "mobility": MOBILITY_ABILITY,
+    "ambulation": MOBILITY_ABILITY,
+    "transferability": MOBILITY_ABILITY,
+    "transfers": MOBILITY_ABILITY,
+    "assistivedevice": DEVICE,
+    "walkeraid": DEVICE,
+    "functionalscale": FUNCTIONAL_SCALE,
+    "barthel": FUNCTIONAL_SCALE,
+    "barthelindex": FUNCTIONAL_SCALE,
+    "katz": FUNCTIONAL_SCALE,
+    "katzindex": FUNCTIONAL_SCALE,
+    "cognitivestatus": OTHER,
+    # Structured substance-use history concepts. Frequency, duration, and date
+    # reuse the established canonical attributes instead of creating a second
+    # vocabulary alongside the SDOH helper.
+    "substance": SUBSTANCE,
+    "usestatus": USE_STATUS,
+    "usequantity": USE_QUANTITY,
+    "usefrequency": FREQUENCY,
+    "useduration": DURATION,
+    "quitdate": DATE,
+    "packyears": PACK_YEARS,
+    # Clinical genomics
+    "genesymbol": GENE_SYMBOL,
+    "genename": GENE_SYMBOL,
+    "variantdescriptor": VARIANT_DESCRIPTOR,
+    "hgvs": VARIANT_DESCRIPTOR,
+    "variant": VARIANT_DESCRIPTOR,
+    "variantnotation": VARIANT_DESCRIPTOR,
+    "proteinchange": PROTEIN_CHANGE,
+    "aminoacidchange": PROTEIN_CHANGE,
+    "zygosity": ZYGOSITY,
+    "heterozygous": ZYGOSITY,
+    "homozygous": ZYGOSITY,
+    "clinicalsignificance": CLINICAL_SIGNIFICANCE,
+    "pathogenicity": CLINICAL_SIGNIFICANCE,
+    # Endocrinology concepts
+    "glycemic": GLYCEMIC_MEASURE,
+    "glycemicmeasure": GLYCEMIC_MEASURE,
+    "glucose": GLYCEMIC_MEASURE,
+    "hba1c": GLYCEMIC_MEASURE,
+    "a1c": GLYCEMIC_MEASURE,
+    "thyroid": THYROID_MEASURE,
+    "thyroidmeasure": THYROID_MEASURE,
+    "thyroidfunctionmeasure": THYROID_MEASURE,
+    "tsh": THYROID_MEASURE,
+    "hormone": HORMONE_LEVEL,
+    "hormones": HORMONE_LEVEL,
+    "hormonelevel": HORMONE_LEVEL,
+    "cortisol": HORMONE_LEVEL,
+    "insulin": INSULIN_REGIMEN,
+    "insulinregimen": INSULIN_REGIMEN,
+    "basalbolus": INSULIN_REGIMEN,
+    "insulinpump": INSULIN_REGIMEN,
+    "glargine": INSULIN_REGIMEN,
+    # Gastroenterology and endoscopy concepts
+    "endoscopicfinding": ENDOSCOPIC_FINDING,
+    "endoscopyfinding": ENDOSCOPIC_FINDING,
+    "endoscopy": ENDOSCOPIC_FINDING,
+    "colonoscopy": ENDOSCOPIC_FINDING,
+    "erosion": ENDOSCOPIC_FINDING,
+    "varices": ENDOSCOPIC_FINDING,
+    "gisymptom": GI_SYMPTOM,
+    "gastrointestinalsymptom": GI_SYMPTOM,
+    "abdominalpain": GI_SYMPTOM,
+    "cramping": GI_SYMPTOM,
+    "giscore": GI_SCORE,
+    "bowelprepquality": GI_SCORE,
+    "bostonbowelprep": GI_SCORE,
+    "bristolstool": GI_SCORE,
+    "mayoscore": GI_SCORE,
+    "polypdescriptor": POLYP_DESCRIPTOR,
+    "lesionmorphology": POLYP_DESCRIPTOR,
+    "sessilepolyp": POLYP_DESCRIPTOR,
+    "pedunculatedpolyp": POLYP_DESCRIPTOR,
+    "biopsysite": BODY_SITE,
+    # Nephrology concepts
+    "ckdstage": CKD_STAGE,
+    "dialysis": DIALYSIS_MODALITY,
+    "dialysismodality": DIALYSIS_MODALITY,
+    "renalfunctionmeasure": RENAL_FUNCTION_MEASURE,
+    "renalfunction": RENAL_FUNCTION_MEASURE,
+    "egfr": RENAL_FUNCTION_MEASURE,
+    "creatinine": RENAL_FUNCTION_MEASURE,
+    "urinefinding": URINE_FINDING,
+    "proteinuria": URINE_FINDING,
+    "hematuria": URINE_FINDING,
+    # Pulmonology concepts
+    "spirometrymeasure": SPIROMETRY_MEASURE,
+    "spirometry": SPIROMETRY_MEASURE,
+    "fev1": SPIROMETRY_MEASURE,
+    "fvc": SPIROMETRY_MEASURE,
+    "oxygensupport": OXYGEN_SUPPORT,
+    "oxygentherapy": OXYGEN_SUPPORT,
+    "nasalcannula": OXYGEN_SUPPORT,
+    "respiratoryfinding": RESPIRATORY_FINDING,
+    "wheeze": RESPIRATORY_FINDING,
+    "crackles": RESPIRATORY_FINDING,
+    "dyspneagrade": DYSPNEA_GRADE,
+    "mmrc": DYSPNEA_GRADE,
+    "dyspnea": DYSPNEA_GRADE,
+    # Pediatric growth and developmental-surveillance concepts
+    "growthparameter": GROWTH_PARAMETER,
+    "weight": GROWTH_PARAMETER,
+    "length": GROWTH_PARAMETER,
+    "headcircumference": GROWTH_PARAMETER,
+    "armcircumference": GROWTH_PARAMETER,
+    "muac": GROWTH_PARAMETER,
+    "skinfold": GROWTH_PARAMETER,
+    "subscapularskinfold": GROWTH_PARAMETER,
+    "tricepsskinfold": GROWTH_PARAMETER,
+    "bmi": GROWTH_PARAMETER,
+    "bodymassindex": GROWTH_PARAMETER,
+    "growthvelocity": GROWTH_PARAMETER,
+    "growthpercentile": GROWTH_PERCENTILE,
+    "percentile": GROWTH_PERCENTILE,
+    "growthzscore": GROWTH_PERCENTILE,
+    "developmentalmilestone": DEVELOPMENTAL_MILESTONE,
+    "milestone": DEVELOPMENTAL_MILESTONE,
+    "motordevelopment": DEVELOPMENTAL_MILESTONE,
+    # Obstetrics and gynecology concepts (issue #907)
+    "gravidityparity": GRAVIDITY_PARITY,
+    "gravidity": GRAVIDITY_PARITY,
+    "parity": GRAVIDITY_PARITY,
+    "gxp": GRAVIDITY_PARITY,
+    "gestationalage": GESTATIONAL_AGE,
+    "gestationalageweeks": GESTATIONAL_AGE,
+    "gestation": GESTATIONAL_AGE,
+    "fetalfinding": FETAL_FINDING,
+    "fetalstatus": FETAL_FINDING,
+    "obstetricevent": OBSTETRIC_EVENT,
+    "obstetricevents": OBSTETRIC_EVENT,
+    "menstrualhistory": OTHER,
+    "menstrual": OTHER,
+    "gynecologicfinding": CONDITION,
+    "gynaecologicfinding": CONDITION,
+    "deliverymode": PROCEDURE,
+    "modeofdelivery": PROCEDURE,
+    # Oncology TNM staging and tumor-descriptor concepts
+    "tnmt": TNM_T,
+    "tumorcategory": TNM_T,
+    "tumourcategory": TNM_T,
+    "tcategory": TNM_T,
+    "tnmn": TNM_N,
+    "nodecategory": TNM_N,
+    "ncategory": TNM_N,
+    "tnmm": TNM_M,
+    "metastasiscategory": TNM_M,
+    "mcategory": TNM_M,
+    "stagegroup": STAGE_GROUP,
+    "overallstage": STAGE_GROUP,
+    "overallstagegroup": STAGE_GROUP,
+    "tumorgrade": TUMOR_GRADE,
+    "tumourgrade": TUMOR_GRADE,
+    "grade": TUMOR_GRADE,
+    "tumorsize": MEASUREMENT,
+    "tumoursize": MEASUREMENT,
+    "receptorstatus": RECEPTOR_STATUS,
+    "receptor": RECEPTOR_STATUS,
+    "hormonereceptorstatus": RECEPTOR_STATUS,
+    "responseassessment": OTHER,
+    "treatmentresponse": OTHER,
+    "primarysite": BODY_SITE,
+    "primarytumorsite": BODY_SITE,
+    # Domain labels backed by existing canonical clinical concepts.
+    "metabolicfinding": CONDITION,
+    "endocrinegland": BODY_SITE,
+    "lungauscultation": RESPIRATORY_FINDING,
+    "airwaydevice": AIRWAY_MANAGEMENT,
+    "feedinghistory": NUTRITIONAL_STATUS,
+    "pediatricfinding": CONDITION,
+    # Pathology and histology concepts
+    "specimentype": SPECIMEN_TYPE,
+    "grossdescription": OTHER,
+    "histologicfinding": HISTOLOGIC_FINDING,
+    "histologicalfinding": HISTOLOGIC_FINDING,
+    "histologicgrade": HISTOLOGIC_GRADE,
+    "histologicalgrade": HISTOLOGIC_GRADE,
+    "marginstatus": MARGIN_STATUS,
+    "ihc": IHC_STAIN,
+    "ihcstain": IHC_STAIN,
+    "immunohistochemistry": IHC_STAIN,
+    "immunohistochemistrystain": IHC_STAIN,
+    "mitoticcount": MEASUREMENT,
+    "mitoticindex": MEASUREMENT,
+    "tissuesite": BODY_SITE,
+}  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
+
+# CMeEE/CBLUE uses terse source codes that are ambiguous outside Chinese
+# clinical NER. Equipment maps to the canonical clinical device concept.
+CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
+    "bod": BODY_SITE,
+    "body": BODY_SITE,
+    "body_site": BODY_SITE,
+    "bodysite": BODY_SITE,
+    "dep": JOB_DEPARTMENT,
+    "department": JOB_DEPARTMENT,
+    "dis": CONDITION,
+    "disease": CONDITION,
+    "dru": MEDICATION,
+    "drug": MEDICATION,
+    "equ": DEVICE,
+    "equipment": DEVICE,
+    "exam": LAB_TEST,
+    "ite": LAB_TEST,
+    "item": LAB_TEST,
+    "lab_test": LAB_TEST,
+    "labtest": LAB_TEST,
+    "mic": MICROORGANISM,
+    "microorganism": MICROORGANISM,
+    "pro": PROCEDURE,
+    "procedure": PROCEDURE,
+    "sym": CONDITION,
+    "symptom": CONDITION,
+}
+
+ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
+    "medicalrecordnumber": ID_SUBTYPE_MRN,
+    "mrn": ID_SUBTYPE_MRN,
+    "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
+    "chinesepassport": ID_SUBTYPE_CHINESE_PASSPORT,
+    "prcpassport": ID_SUBTYPE_CHINESE_PASSPORT,
+    "homereturnpermit": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "hkmacaupermit": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "mainlandtravelpermithongkongmacau": ID_SUBTYPE_HONG_KONG_MACAU_PERMIT,
+    "taiwancompatriotpermit": ID_SUBTYPE_TAIWAN_PERMIT,
+    "taiwanpermit": ID_SUBTYPE_TAIWAN_PERMIT,
+    "mainlandtravelpermittaiwan": ID_SUBTYPE_TAIWAN_PERMIT,
+    "socialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "unifiedsocialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "uscc": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "npi": ID_SUBTYPE_NPI,
+    "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
+    "nhs": ID_SUBTYPE_NATIONAL_ID,
+    "nationalid": ID_SUBTYPE_NATIONAL_ID,
+    "cpf": ID_SUBTYPE_NATIONAL_ID,
+    "cnpj": ID_SUBTYPE_NATIONAL_ID,
+    "nir": ID_SUBTYPE_NATIONAL_ID,
+    "steuerid": ID_SUBTYPE_NATIONAL_ID,
+    "codicefiscale": ID_SUBTYPE_NATIONAL_ID,
+    "dni": ID_SUBTYPE_NATIONAL_ID,
+    "nie": ID_SUBTYPE_NATIONAL_ID,
+    "bsn": ID_SUBTYPE_NATIONAL_ID,
+    "aadhaar": ID_SUBTYPE_NATIONAL_ID,
+    "aadhaarnumber": ID_SUBTYPE_NATIONAL_ID,
+    "abha": ID_SUBTYPE_NATIONAL_ID,
+    "abhanumber": ID_SUBTYPE_NATIONAL_ID,
+    "abhaid": ID_SUBTYPE_NATIONAL_ID,
+    "abhaaddress": ID_SUBTYPE_NATIONAL_ID,
+    "upiid": ID_SUBTYPE_UPI_ID,
+    "vpa": ID_SUBTYPE_UPI_ID,
+    "rationcard": ID_SUBTYPE_RATION_CARD,
+    "pan": ID_SUBTYPE_NATIONAL_ID,
+    "permanentaccountnumber": ID_SUBTYPE_NATIONAL_ID,
+    "abdmhprid": ID_SUBTYPE_NATIONAL_ID,
+    "abdmhfrid": ID_SUBTYPE_NATIONAL_ID,
+    "ngnin": ID_SUBTYPE_NATIONAL_ID,
+    "ngbvn": ID_SUBTYPE_NATIONAL_ID,
+    "ghghanacard": ID_SUBTYPE_NATIONAL_ID,
+    "kenationalid": ID_SUBTYPE_NATIONAL_ID,
+    "kemaishanamba": ID_SUBTYPE_NATIONAL_ID,
+    "gstin": ID_SUBTYPE_NATIONAL_ID,
+    "gstnumber": ID_SUBTYPE_NATIONAL_ID,
+    "ifsc": ID_SUBTYPE_IFSC,
+    "ifsccode": ID_SUBTYPE_IFSC,
+    "voteridepic": ID_SUBTYPE_VOTER_ID_EPIC,
+    "voterid": ID_SUBTYPE_VOTER_ID_EPIC,
+    "epic": ID_SUBTYPE_VOTER_ID_EPIC,
+    "indiandrivinglicence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "drivinglicence": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indiandrivinglicense": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "drivinglicense": ID_SUBTYPE_INDIAN_DRIVING_LICENCE,
+    "indianpassport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "passport": ID_SUBTYPE_INDIAN_PASSPORT,
+    "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
+    "mpesatxcode": ID_SUBTYPE_NATIONAL_ID,
+    "tz": ID_SUBTYPE_NATIONAL_ID,
+}
+
+_BIOES_PREFIX_RE: Final = re.compile(r"^[BIES]-")
+
+
+def _strip_bioes_prefix(label: str) -> str:
+    """Strip an optional BIOES-style prefix from a label.
+
+    ``B-NAME`` -> ``NAME``; ``I-DATE`` -> ``DATE``; ``S-EMAIL`` -> ``EMAIL``.
+    Labels without a prefix are returned unchanged.
+    """
+    return _BIOES_PREFIX_RE.sub("", label, count=1)
+
+
+def _key(label: str) -> str:
+    """Lowercase, strip non-alphanumerics, drop BIOES prefix."""
+    stripped = _strip_bioes_prefix(label.strip())
+    return re.sub(r"[^a-z0-9]", "", stripped.lower())
+
+
+def normalize_label(label: str, lang: str = "en") -> str:
+    """Normalize an entity label to the canonical taxonomy.
+
+    Accepts any of:
+      - English lowercase ``snake_case`` (``first_name``)
+      - Portuguese ``UPPERCASE`` no-separator (``FIRSTNAME``)
+      - BIOES-tagged forms (``B-NAME``, ``I-EMAIL``)
+      - Mixed case with arbitrary separators (``First-Name``, ``First Name``)
+
+    Unknown labels fall through to ``OTHER`` rather than raising — callers
+    that need strict checking should compare against ``CANONICAL_LABELS``
+    explicitly.
+
+    Args:
+        label: Source label as emitted by a model or registered in a config.
+        lang: ISO 639 language hint used for language-conditional mappings,
+            including CMeEE labels for Chinese clinical NER.
+
+    Returns:
+        A canonical label in ``UPPER_SNAKE_CASE``.
+    """
+    if not label:
+        return OTHER
+    key = _key(label)
+    if not key:
+        return OTHER
+    language = str(lang).strip().replace("-", "_").split("_", 1)[0].casefold()
+    if language == "zh":
+        cmeee = CMEEE_LABEL_TO_CANONICAL.get(key)
+        if cmeee is not None:
+            return cmeee
+    canonical = _ALIAS_MAP.get(key)
+    if canonical is not None:
+        return canonical
+    # If the input already matches a canonical label after stripping
+    # separators (e.g. ``ID_NUM`` -> key ``idnum`` -> aliased; but
+    # ``CREDIT_CARD`` -> ``creditcard`` -> aliased), the alias map covers
+    # it. The ``upper`` fallback handles any future canonical label not
+    # yet in the alias map.
+    upper = re.sub(r"[^A-Z0-9_]", "", label.upper().replace("-", "_").replace(" ", "_"))
+    if upper in CANONICAL_LABELS:
+        return upper
+    return OTHER
+
+
+def is_recognized_label(label: str, lang: str = "en") -> bool:
+    """Return whether ``label`` resolves to a real member of the taxonomy.
+
+    :func:`normalize_label` sends anything it does not recognise to ``OTHER``,
+    which is itself a canonical label — so ``normalize_label(x) in
+    CANONICAL_LABELS`` is ``True`` for *every* string and cannot gate anything.
+    This predicate is ``True`` only when ``label`` resolves through an explicit
+    path (a CMeEE mapping, the alias map, or a direct canonical match) and
+    ``False`` when it would fall through to the ``OTHER`` default. Use it to
+    check a manifest or config column against the taxonomy.
+    """
+
+    if not label or not _key(label):
+        return False
+    if normalize_label(label, lang=lang) != OTHER:
+        return True
+    # Reached OTHER: accept only labels that legitimately ARE OTHER — the literal
+    # canonical label or an explicit alias to it — never the fallthrough default.
+    return _key(label) == _key(OTHER) or _key(label) in _ALIAS_MAP
+
+
+def supports_name_boundary_refinement(label: str, lang: str = "en") -> bool:
+    """Return whether ``label`` is eligible for conservative name stemming."""
+
+    return normalize_label(label, lang=lang) in NAME_BOUNDARY_REFINEMENT_LABELS
+
+
+def id_subtype_for(label: str, lang: str = "en") -> str | None:
+    """Return optional ID_NUM subtype metadata for a source label.
+
+    The canonical taxonomy remains flat: all values returned by this helper
+    still normalize to ``ID_NUM``. Callers that only need canonical labels
+    should continue to use :func:`normalize_label`.
+    """
+    if normalize_label(label, lang=lang) != ID_NUM:
+        return None
+    return ID_ALIAS_SUBTYPES.get(_key(label))
+
+
+def _metadata_for(label: str, lang: str = "en") -> Mapping[str, object]:
+    return LABEL_METADATA[normalize_label(label, lang=lang)]
+
+
+def policy_label_for(label: str, lang: str = "en") -> str:
+    """Return the policy class for a label after canonical normalization."""
+    return cast(str, _metadata_for(label, lang=lang)["policy_label"])
+
+
+def label_kind_for(label: str, lang: str = "en") -> str:
+    """Return whether a normalized label is PII or a biomedical concept."""
+
+    return cast(str, _metadata_for(label, lang=lang)["kind"])
+
+
+def risk_level_for(label: str, lang: str = "en") -> str:
+    """Return the residual-risk level for a label after canonical normalization."""
+    return cast(str, _metadata_for(label, lang=lang)["risk_level"])
+
+
+def system_hints_for(label: str, lang: str = "en") -> tuple[str, ...]:
+    """Return candidate clinical coding systems for a normalized label."""
+    return cast(tuple[str, ...], _metadata_for(label, lang=lang)["system_hints"])
+
+
+def hipaa_class_for(label: str, lang: str = "en") -> str | None:
+    """Return the HIPAA class, or ``None`` for non-identifier biomedical labels."""
+    return LABEL_TO_HIPAA.get(normalize_label(label, lang=lang))
+
+
+def popia_class_for(label: str, lang: str = "en") -> str | None:
+    """Return the POPIA class, or ``None`` for non-identifier biomedical labels."""
+    return LABEL_TO_POPIA.get(normalize_label(label, lang=lang))
+
+
+def ndpa_classes_for(label: str, lang: str = "en") -> FrozenSet[str]:
+    """Return NDPA sensitive-data classes anchored by a normalized label."""
+    canonical = normalize_label(label, lang=lang)
+    return frozenset(
+        ndpa_class
+        for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items()
+        if canonical in labels
+    )
+
+
+_validate_label_metadata()
+
+__all__ = [
+    "CANONICAL_LABELS",
+    "BIOMEDICAL_LABELS",
+    "COLUMN_SEMANTIC_LABELS",
+    "CLINICAL_CONCEPT_LABELS",
+    "NAME_BOUNDARY_REFINEMENT_LABELS",
+    "normalize_label",
+    "is_recognized_label",
+    "canonical_label_for_column_semantic",
+    "supports_name_boundary_refinement",
+    "CMEEE_LABEL_TO_CANONICAL",
+    "id_subtype_for",
+    "ID_ALIAS_SUBTYPES",
+    "ID_SUBTYPES",
+    "ID_SUBTYPE_MRN",
+    "ID_SUBTYPE_NPI",
+    "ID_SUBTYPE_NATIONAL_ID",
+    "ID_SUBTYPE_SSN_ADJACENT",
+    "ID_SUBTYPE_ABHA_NUMBER",
+    "ID_SUBTYPE_ABHA_ADDRESS",
+    "ID_SUBTYPE_UPI_ID",
+    "ID_SUBTYPE_RATION_CARD",
+    "ID_SUBTYPE_PASSPORT_MRZ",
+    "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
+    "ID_SUBTYPE_PAN",
+    "ID_SUBTYPE_GSTIN",
+    "ID_SUBTYPE_IFSC",
+    "ID_SUBTYPE_VOTER_ID_EPIC",
+    "ID_SUBTYPE_INDIAN_DRIVING_LICENCE",
+    "ID_SUBTYPE_INDIAN_PASSPORT",
+    "ID_SUBTYPE_ABHA",
+    "ID_SUBTYPE_CHINESE_PASSPORT",
+    "ID_SUBTYPE_HONG_KONG_MACAU_PERMIT",
+    "ID_SUBTYPE_TAIWAN_PERMIT",
+    "LABEL_METADATA",
+    "LABEL_TO_HIPAA",
+    "LABEL_TO_POPIA",
+    "NDPA_SENSITIVE_CLASS_LABELS",
+    "POLICY_LABELS",
+    "LABEL_KINDS",
+    "DIRECT_IDENTIFIER",
+    "QUASI_IDENTIFIER",
+    "SENSITIVE_ATTRIBUTE",
+    "CLINICAL_CONCEPT",
+    "PII_LABEL_KIND",
+    "BIOMEDICAL_LABEL_KIND",
+    "RISK_LEVELS",
+    "RISK_LOW",
+    "RISK_MEDIUM",
+    "RISK_HIGH",
+    "CLINICAL_SYSTEM_HINTS",
+    "HIPAA_SAFE_HARBOR_CLASSES",
+    "POPIA_IDENTIFIER_CLASSES",
+    "NDPA_SENSITIVE_DATA_CLASSES",
+    "NDPA_GENETIC_AND_BIOMETRIC_DATA",
+    "NDPA_RACE_OR_ETHNIC_ORIGIN",
+    "NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS",
+    "NDPA_HEALTH_STATUS",
+    "NDPA_SEX_LIFE",
+    "NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS",
+    "NDPA_TRADE_UNION_MEMBERSHIPS",
+    "NDPA_OTHER_COMMISSION_PRESCRIBED_DATA",
+    "policy_label_for",
+    "label_kind_for",
+    "risk_level_for",
+    "system_hints_for",
+    "hipaa_class_for",
+    "popia_class_for",
+    "ndpa_classes_for",
+    # canonical label constants
+    "PERSON",
+    "FIRST_NAME",
+    "LAST_NAME",
+    "MIDDLE_NAME",
+    "PREFIX",
+    "USERNAME",
+    "EMAIL",
+    "PHONE",
+    "URL",
+    "LOCATION",
+    "STREET_ADDRESS",
+    "BUILDING_NUMBER",
+    "ZIPCODE",
+    "GPS_COORDINATES",
+    "ORDINAL_DIRECTION",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "TIME",
+    "AGE",
+    "ID_NUM",
+    "SSN",
+    "ACCOUNT_NUMBER",
+    "PASSWORD",
+    "PIN",
+    "API_KEY",
+    "CREDIT_CARD",
+    "CREDIT_CARD_ISSUER",
+    "CVV",
+    "IBAN",
+    "BIC",
+    "AMOUNT",
+    "CURRENCY",
+    "BITCOIN_ADDRESS",
+    "ETHEREUM_ADDRESS",
+    "LITECOIN_ADDRESS",
+    "MASKED_NUMBER",
+    "GENDER",
+    "ETHNICITY",
+    "EYE_COLOR",
+    "HEIGHT",
+    "ORGANIZATION",
+    "JOB_TITLE",
+    "JOB_DEPARTMENT",
+    "OCCUPATION",
+    "IP_ADDRESS",
+    "MAC_ADDRESS",
+    "USER_AGENT",
+    "VIN",
+    "VEHICLE_REGISTRATION",
+    "IMEI",
+    "MICROORGANISM",
+    "ANTIBIOTIC",
+    "SUSCEPTIBILITY",
+    "DISEASE",
+    "DRUG",
+    "CHEMICAL",
+    "GENE_OR_GENE_PRODUCT",
+    "GENE",
+    "PROTEIN",
+    "DNA",
+    "RNA",
+    "ANATOMY",
+    "ORGAN",
+    "TISSUE",
+    "CELL",
+    "CANCER",
+    "SPECIES",
+    "ORGANISM",
+    "PATHOLOGY",
+    "BIOMARKER",
+    "FINDING",
+    "IMAGING_MODALITY",
+    "LATERALITY",
+    "MEASUREMENT",
+    "CONDITION",
+    "MEDICATION",
+    "LAB_TEST",
+    "SPECIMEN",
+    "PROCEDURE",
+    "BODY_SITE",
+    "DEVICE",
+    "DEVICE_TYPE",
+    "DEVICE_IDENTIFIER",
+    "DEVICE_MODEL",
+    "IMPLANT_SITE",
+    "PROBLEM",
+    "SEVERITY",
+    "DOSAGE",
+    "ROUTE",
+    "FREQUENCY",
+    "DURATION",
+    "FORM",
+    "STRENGTH",
+    "INDICATION",
+    "LAB_VALUE",
+    "UNIT",
+    "REFERENCE_RANGE",
+    "ABNORMAL_FLAG",
+    "ANESTHESIA_TYPE",
+    "ANESTHETIC_AGENT",
+    "AIRWAY_MANAGEMENT",
+    "ASA_CLASS",
+    "DIET_TYPE",
+    "NUTRITION_TARGET",
+    "FEEDING_ROUTE",
+    "NUTRITIONAL_STATUS",
+    "VACCINE_NAME",
+    "DOSE_NUMBER",
+    "ADMINISTRATION_ROUTE",
+    "VACCINE_LOT",
+    "VACCINE_SERIES",
+    "ALLERGEN",
+    "REACTION_MANIFESTATION",
+    "REACTION_SEVERITY",
+    "ALLERGY_CRITICALITY",
+    "IMMUNIZATION",
+    "PSYCH_SYMPTOM",
+    "TOOTH",
+    "INTAKE_OUTPUT",
+    "LINE_DRAIN_TUBE",
+    "NURSING_RISK_SCORE",
+    "CARE_INTERVENTION",
+    "WOUND_TYPE",
+    "WOUND_STAGE",
+    "EXUDATE_DESCRIPTOR",
+    "DRESSING_TYPE",
+    "ADL_ACTIVITY",
+    "ASSISTANCE_LEVEL",
+    "MOBILITY_ABILITY",
+    "FUNCTIONAL_SCALE",
+    "SUBSTANCE",
+    "USE_STATUS",
+    "USE_QUANTITY",
+    "PACK_YEARS",
+    "GENE_SYMBOL",
+    "VARIANT_DESCRIPTOR",
+    "PROTEIN_CHANGE",
+    "ZYGOSITY",
+    "CLINICAL_SIGNIFICANCE",
+    "GLYCEMIC_MEASURE",
+    "THYROID_MEASURE",
+    "HORMONE_LEVEL",
+    "INSULIN_REGIMEN",
+    "ENDOSCOPIC_FINDING",
+    "GI_SYMPTOM",
+    "GI_SCORE",
+    "POLYP_DESCRIPTOR",
+    "OTHER",
+    "CKD_STAGE",
+    "DIALYSIS_MODALITY",
+    "RENAL_FUNCTION_MEASURE",
+    "URINE_FINDING",
+    "GROWTH_PARAMETER",
+    "GROWTH_PERCENTILE",
+    "DEVELOPMENTAL_MILESTONE",
+    "GRAVIDITY_PARITY",
+    "GESTATIONAL_AGE",
+    "FETAL_FINDING",
+    "OBSTETRIC_EVENT",
+    "HISTOLOGIC_FINDING",
+    "HISTOLOGIC_GRADE",
+    "MARGIN_STATUS",
+    "IHC_STAIN",
+    "SPECIMEN_TYPE",
+    "TNM_T",
+    "TNM_N",
+    "TNM_M",
+    "STAGE_GROUP",
+    "TUMOR_GRADE",
+    "RECEPTOR_STATUS",
+]

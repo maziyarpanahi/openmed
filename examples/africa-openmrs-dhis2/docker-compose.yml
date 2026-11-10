@@ -1,0 +1,89 @@
+# Optional demo-grade servers. The offline fixture workflow does not use this
+# file, and CI must never enable the "live" profile.
+services:
+  openmrs-db:
+    profiles: [live]
+    image: mariadb:10.11.7
+    command: >-
+      mysqld --character-set-server=utf8mb4
+      --collation-server=utf8mb4_general_ci
+    environment:
+      MYSQL_DATABASE: openmrs
+      MYSQL_USER: openmrs
+      MYSQL_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs-demo-only}
+      MYSQL_ROOT_PASSWORD: ${OPENMRS_DB_ROOT_PASSWORD:-openmrs-root-demo-only}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mariadb-admin ping -h 127.0.0.1 -uopenmrs
+          -p$${MYSQL_PASSWORD}
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - openmrs-db-data:/var/lib/mysql
+
+  openmrs:
+    profiles: [live]
+    image: openmrs/openmrs-reference-application-3-backend:3.7.1
+    depends_on:
+      openmrs-db:
+        condition: service_healthy
+    environment:
+      OMRS_CONFIG_MODULE_WEB_ADMIN: "true"
+      OMRS_CONFIG_AUTO_UPDATE_DATABASE: "true"
+      OMRS_CONFIG_CREATE_TABLES: "true"
+      OMRS_CONFIG_CONNECTION_SERVER: openmrs-db
+      OMRS_CONFIG_CONNECTION_DATABASE: openmrs
+      OMRS_CONFIG_CONNECTION_USERNAME: openmrs
+      OMRS_CONFIG_CONNECTION_PASSWORD: ${OPENMRS_DB_PASSWORD:-openmrs-demo-only}
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - http://localhost:8080/openmrs
+      interval: 10s
+      timeout: 5s
+      retries: 60
+    ports:
+      - "127.0.0.1:${OPENMRS_DEMO_PORT:-8080}:8080"
+    volumes:
+      - openmrs-app-data:/openmrs/data
+
+  dhis2-db:
+    profiles: [live]
+    image: ghcr.io/baosystems/postgis:16-3.5
+    environment:
+      POSTGRES_DB: dhis2
+      POSTGRES_USER: dhis2
+      POSTGRES_PASSWORD: ${DHIS2_DB_PASSWORD:-dhis2-demo-only}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready --username=dhis2 --dbname=dhis2
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - dhis2-db-data:/var/lib/postgresql/data
+
+  dhis2:
+    profiles: [live]
+    image: dhis2/core:2.43.0.1
+    depends_on:
+      dhis2-db:
+        condition: service_healthy
+    environment:
+      DB_HOSTNAME: dhis2-db
+      DB_NAME: dhis2
+      DB_USERNAME: dhis2
+      DB_PASSWORD: ${DHIS2_DB_PASSWORD:-dhis2-demo-only}
+    ports:
+      - "127.0.0.1:${DHIS2_DEMO_PORT:-8081}:8080"
+
+volumes:
+  openmrs-app-data: {}
+  openmrs-db-data: {}
+  dhis2-db-data: {}

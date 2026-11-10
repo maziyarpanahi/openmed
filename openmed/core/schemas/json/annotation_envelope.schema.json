@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/annotation-envelope/1.0.0",
+  "title": "OpenMed Annotation Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["compatibility_policy", "envelope_id", "records", "schema_version"],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "envelope_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{8,128}$"},
+    "records": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "schema_version": {"const": "1.0.0"}
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotation_id", "annotation_type", "compatibility_policy", "coordinate_convention", "document_id", "embedding", "end", "metadata", "namespace", "result", "schema_version", "start", "state"],
+      "properties": {
+        "annotation_id": {"type": "string"},
+        "annotation_type": {"enum": ["entity", "relation", "fact_correction", "registry_label"]},
+        "compatibility_policy": {"const": "same_major"},
+        "coordinate_convention": {"enum": ["unicode_codepoint", "utf8_byte", "utf16_code_unit", "token_index", "none"]},
+        "document_id": {"type": "string"},
+        "embedding": {"type": ["array", "null"], "maxItems": 4096, "items": {"type": "number"}},
+        "end": {"type": ["integer", "null"]},
+        "metadata": {"type": "object"},
+        "namespace": {"type": "string"},
+        "result": {"type": "object"},
+        "schema_version": {"const": "1.0.0"},
+        "start": {"type": ["integer", "null"]},
+        "state": {"enum": ["success", "partial", "unknown", "conflict", "unsupported", "denied", "failure"]}
+      }
+    }
+  }
+}

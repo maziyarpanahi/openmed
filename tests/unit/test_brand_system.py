@@ -1,0 +1,234 @@
+"""Regression tests for the repository-owned OpenMed brand system."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+VALIDATOR = REPO_ROOT / "scripts/brand/validate_system.py"
+SOCIAL_RENDERER = REPO_ROOT / "scripts/brand/render_social_assets.py"
+
+
+def _load_validator():
+    spec = importlib.util.spec_from_file_location("validate_brand_system", VALIDATOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_social_renderer():
+    pytest.importorskip("PIL")
+    spec = importlib.util.spec_from_file_location(
+        "render_social_assets", SOCIAL_RENDERER
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.slow
+def test_brand_system_contract() -> None:
+    pytest.importorskip("PIL")
+    validator = _load_validator()
+    assert validator.validate(reproduce=False) == []
+
+
+def test_brand_fonts_consumers_and_homepage_on_every_interpreter() -> None:
+    validator = _load_validator()
+    errors = []
+    validator._validate_fonts_and_consumers(errors)
+    validator._validate_governance(errors)
+    assert errors == []
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("command", _load_validator().GENERATOR_CHECKS)
+def test_brand_generator_reproducibility(command, monkeypatch) -> None:
+    if command[0] == "scripts/brand/render_social_assets.py":
+        pytest.importorskip("PIL")
+    validator = _load_validator()
+    monkeypatch.setattr(validator, "GENERATOR_CHECKS", (command,))
+    errors = []
+    validator._run_generator_checks(errors)
+    assert errors == []
+
+
+def test_brand_package_version_tracks_candidate_and_rejects_stale_claim(monkeypatch):
+    validator = _load_validator()
+    original = validator._load_json
+
+    def stale(path):
+        value = original(path)
+        if path == "docs/brand/system/claims.yml":
+            value = deepcopy(value)
+            value["claims"]["package_version"]["value"] = "0.0.0"
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", stale)
+    errors = []
+    validator._validate_claims(errors)
+    assert any("claim package_version" in error for error in errors)
+
+
+def test_brand_package_version_snapshot_uses_candidate_changelog_date():
+    spec = importlib.util.spec_from_file_location(
+        "update_brand_claims", REPO_ROOT / "scripts/brand/update_claims.py"
+    )
+    assert spec is not None and spec.loader is not None
+    updater = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updater)
+    registry = updater.build_registry()
+    version = updater._read_version()
+    assert registry["claims"]["package_version"]["as_of"] == (
+        updater._read_version_date(version).isoformat()
+    )
+
+
+def test_social_masters_are_exact_approved_handoff_exports() -> None:
+    source = json.loads(
+        (REPO_ROOT / "docs/brand/social/_src/exports.json").read_text(encoding="utf-8")
+    )
+    provenance = json.loads(
+        (REPO_ROOT / "docs/brand/system/handoff-provenance.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    approved_hashes = provenance["approved_exports"]
+    assert {Path(asset["source"]).name for asset in source["assets"]} == set(
+        approved_hashes
+    )
+
+    for asset in source["assets"]:
+        approved = REPO_ROOT / asset["source"]
+        master = REPO_ROOT / asset["master"]
+        assert (
+            hashlib.sha256(approved.read_bytes()).hexdigest()
+            == approved_hashes[approved.name]
+        )
+        assert master.read_bytes() == approved.read_bytes()
+
+
+def test_social_manifest_portability_preserves_pixel_contract_across_pillow() -> None:
+    renderer = _load_social_renderer()
+    manifest = json.loads(
+        (REPO_ROOT / "docs/brand/social/manifest.json").read_text(encoding="utf-8")
+    )
+    platform_variant = deepcopy(manifest)
+    platform_variant["synchronizer"]["pillow_version"] = "13.0.0"
+    platform_variant["assets"][0]["native_sha256"] = "platform-specific-png"
+    platform_variant["assets"][1]["safe_zone_preview_sha256"] = (
+        "platform-specific-preview"
+    )
+    platform_variant["derived_assets"][0]["sha256"] = "platform-specific-encoding"
+
+    assert renderer._portable_manifest(platform_variant) == renderer._portable_manifest(
+        manifest
+    )
+
+    platform_variant["assets"][0]["native_pixel_sha256"] = "pixel-drift"
+    assert renderer._portable_manifest(platform_variant) != renderer._portable_manifest(
+        manifest
+    )
+
+
+def test_brand_validation_is_python310_and_crlf_portable(tmp_path: Path) -> None:
+    validator = _load_validator()
+    crlf_source = tmp_path / "provenance.md"
+    crlf_source.write_bytes(b"approved\r\nmetadata\r\n")
+    expected = hashlib.sha256(b"approved\nmetadata\n").hexdigest()
+
+    assert abs(validator._cube_root(-8.0) + 2.0) < 1e-12
+    assert validator._source_sha256(crlf_source) == expected
+    assert validator._sha256(crlf_source) != expected
+
+
+def test_social_renderer_provenance_is_crlf_portable(tmp_path: Path) -> None:
+    renderer = _load_social_renderer()
+    crlf_source = tmp_path / "provenance.md"
+    crlf_source.write_bytes(b"approved\r\nmetadata\r\n")
+    expected = hashlib.sha256(b"approved\nmetadata\n").hexdigest()
+    assert renderer._source_sha256(crlf_source) == expected
+
+
+def test_faq_parity_rejects_visible_answer_drift() -> None:
+    validator = _load_validator()
+    faq_page = {
+        "mainEntity": [
+            {
+                "name": "Where does clinical text go?",
+                "acceptedAnswer": {"text": "The deployment determines the data path."},
+            }
+        ]
+    }
+    website = """
+    <section id="faq">
+      <article class="faq-item">
+        <button><span>Where does clinical text go?</span></button>
+        <div id="faq-answer-1"><p>The deployment determines the data path.</p></div>
+      </article>
+    </section>
+    """
+    errors: list[str] = []
+    validator._validate_faq_parity(website, faq_page, errors)
+    assert errors == []
+
+    drifted = website.replace(
+        "The deployment determines the data path.",
+        "Nothing ever leaves the device.",
+    )
+    validator._validate_faq_parity(drifted, faq_page, errors)
+    assert any("visible FAQ disagrees with JSON-LD" in error for error in errors)
+
+
+def test_brand_rejects_substituted_national_id_only_language(monkeypatch):
+    validator = _load_validator()
+    original = validator._load_json
+
+    def changed(path):
+        value = original(path)
+        if path == "docs/brand/system/claims.yml":
+            value = deepcopy(value)
+            value["claims"]["national_id_only_languages"]["value"][0] = "zz"
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", changed)
+    errors = []
+    validator._validate_claims(errors)
+    assert any("national-ID-only language claim" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        ("86108e13d57f44f69a4c67a445df1f17", "wrong-site-token"),
+        ("beacon.min.js", "beacon.min.js?extra=1"),
+        ("static.cloudflareinsights.com", "unapproved.example"),
+        ('type="module"', 'type="module" onload="unapproved()"'),
+        ("</script>", "unapproved()</script>"),
+    ],
+)
+def test_marketing_beacon_exception_is_exact_and_homepage_only(mutation):
+    validator = _load_validator()
+    snippet = (
+        '<script type="module" '
+        'src="https://static.cloudflareinsights.com/beacon.min.js" '
+        'data-cf-beacon=\'{"token": "86108e13d57f44f69a4c67a445df1f17"}\'>'
+        "</script>"
+    )
+    source = snippet if mutation is None else snippet.replace(*mutation)
+    assert validator._without_marketing_beacon(source, marketing_page=False) == source
+    assert validator._without_marketing_beacon(source, marketing_page=True) == (
+        "" if mutation is None else source
+    )
+    assert validator._without_marketing_beacon(
+        source + source, marketing_page=True
+    ) == (source if mutation is None else source + source)

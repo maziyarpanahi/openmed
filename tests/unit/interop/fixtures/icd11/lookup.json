@@ -1,0 +1,10 @@
+{
+  "@id": "http://id.who.int/icd/release/11/2026-01/mms/2001",
+  "classKind": "category",
+  "code": "TEST-5A11",
+  "source": "http://id.who.int/icd/entity/2001",
+  "title": {
+    "@language": "en",
+    "@value": "Type 2 diabetes mellitus"
+  }
+}

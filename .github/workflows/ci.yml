@@ -1,0 +1,935 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop, 'release/v*' ]
+  pull_request:
+    branches: [ main, master, develop, 'release/v*' ]
+    types: [opened, synchronize, reopened, labeled]
+
+concurrency:
+  # Concurrency is evaluated before job conditions. An unrelated label event
+  # must not replace the useful PR run with a run whose jobs all skip.
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'pull_request' &&
+    (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+    github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' &&
+    (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
+
+jobs:
+  repo-policy:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    runs-on: ubuntu-latest
+    outputs:
+      run-i18n-cjk-indic: ${{ steps.i18n_changes.outputs.should_run }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Detect CJK and Indic test changes
+      id: i18n_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- \
+          openmed/core/pii_i18n.py \
+          openmed/core/script_detect.py \
+          openmed/core/decoding \
+          openmed/interop/zh.py \
+          openmed/interop/indic.py \
+          openmed/processing/zh_pinyin.py \
+          tests/unit/core/test_script_detect.py \
+          tests/unit/core/test_chinese_pinyin_surrogates.py \
+          tests/unit/test_pii_i18n.py \
+          tests/unit/interop/test_language_adapters.py \
+          tests/unit/interop/test_i18n_cjk_indic_fixtures.py \
+          tests/unit/processing/test_zh_pinyin.py \
+          tests/fixtures/i18n; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No CJK or Indic test paths changed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Enforce repo file policy
+      run: |
+        python scripts/release/check_repo_policy.py
+
+    - name: Enforce Apple privacy manifests
+      run: |
+        python scripts/release/check_privacy_manifests.py
+
+    - name: Enforce dependency license policy
+      run: |
+        python scripts/release/check_license_policy.py
+
+    - name: Assert built wheel contains no restricted vocabulary data
+      run: |
+        uv build --wheel --out-dir "$RUNNER_TEMP/openmed-wheel"
+        python scripts/release/check_license_policy.py \
+          --wheel "$RUNNER_TEMP"/openmed-wheel/*.whl
+
+    - name: Validate GitHub Actions references
+      run: |
+        uv run --no-project --with pyyaml==6.0.3 python scripts/release/check_github_actions_refs.py --require-sha
+        uv run --no-project --with pyyaml==6.0.3 python scripts/release/check_github_actions_refs.py --require-sha \
+          --workflows-dir .github/actions
+
+  readme-i18n-drift:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      with:
+        python-version: "3.11"
+
+    - name: Detect README changes
+      id: readme_changes
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        elif git diff --quiet "$BASE_SHA" HEAD -- 'README*'; then
+          echo "should_run=false" >> "$GITHUB_OUTPUT"
+          echo "No README files changed; translation drift check is not needed."
+        else
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Check README translation drift
+      if: steps.readme_changes.outputs.should_run == 'true'
+      run: |
+        if ! python scripts/i18n/check_readme_drift.py; then
+          echo "::error title=README translation drift::One or more README translations are stale. Review them using docs/i18n/glossary.md, then refresh the committed section manifest."
+          exit 1
+        fi
+
+  grounding-export-validation:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up Java
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install validation dependencies
+      run: |
+        uv sync --frozen --extra dev --extra grounding-validate --python 3.11
+
+    - name: Fetch pinned HL7 FHIR validator
+      run: |
+        # HL7 FHIR validator CLI 6.8.1.
+        curl --fail --silent --show-error --location \
+          --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+          --header 'Accept: application/octet-stream' \
+          --header 'X-GitHub-Api-Version: 2022-11-28' \
+          https://api.github.com/repos/hapifhir/org.hl7.fhir.core/releases/assets/358670016 \
+          --output "$RUNNER_TEMP/validator_cli.jar"
+        echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  $RUNNER_TEMP/validator_cli.jar" \
+          | sha256sum --check --strict
+
+    - name: Validate synthetic FHIR and OMOP grounding exports
+      run: |
+        uv run python -m openmed.eval.suites.grounding_export \
+          --validator-jar "$RUNNER_TEMP/validator_cli.jar" \
+          --output grounding-export-validation.json \
+          --markdown-output grounding-export-validation.md
+
+    - name: Upload grounding export validation report
+      if: always() && hashFiles('grounding-export-validation.json') != ''
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: grounding-export-validation
+        path: |
+          grounding-export-validation.json
+          grounding-export-validation.md
+
+  lockfile-drift:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Check uv.lock matches pyproject.toml
+      run: |
+        if ! uv lock --check; then
+          echo "::error title=uv.lock is out of date::Run 'uv lock' and commit the updated uv.lock."
+          exit 1
+        fi
+
+  lint:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install lint dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Lint with Ruff
+      run: |
+        uv run ruff check --output-format=github .
+
+    - name: Check Ruff formatting
+      run: |
+        uv run ruff format --check .
+
+    - name: Check classified effects and legacy-writer boundaries
+      run: |
+        uv run python scripts/security/check_effect_paths.py --check
+
+    - name: Enforce public API backwards-compatibility policy
+      run: |
+        uv run python scripts/release/check_public_api.py
+
+    - name: Type-check annotated public modules
+      run: |
+        uv run mypy
+
+  test:
+    needs: [repo-policy, lint]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      # Pull requests run the fast tier (everything except `slow` and `fuzz`)
+      # on Linux at both ends of the supported range, plus the portability
+      # checks on Windows and macOS. Pushes to the default branches, and pull
+      # requests labelled `full-ci`, run the full suite on every platform.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"full","coverage":true},{"os":"windows-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"windows-latest","python-version":"3.12","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"full","coverage":false}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"fast","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"fast","coverage":true},{"os":"windows-latest","python-version":"3.12","tier":"portability","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"portability","coverage":false}]}') }}
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install dependencies
+      run: |
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
+
+    - name: Validate model manifest schema
+      run: |
+        uv run python -m scripts.manifest.validate_manifest
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
+
+    - name: Verify secure image dependency selection
+      run: >-
+        uv run --frozen python -c
+        "from importlib.metadata import version;
+        assert int(version('Pillow').split('.')[0]) >= 13"
+
+    - name: Portability regression checks
+      if: matrix.tier == 'portability'
+      timeout-minutes: 15
+      run: >-
+        uv run --frozen pytest -q -n auto --tb=short --show-capture=no
+        tests/unit/test_utils.py
+        tests/unit/structured/registry/test_naaccr.py
+        tests/unit/release/test_agent_release_candidate.py
+        tests/unit/service/test_workflow_routes.py
+        tests/unit/test_doctests.py
+        tests/unit/cli/test_clinical_cli.py
+        tests/unit/cli/test_clinical_review_cli.py
+        tests/unit/cli/test_multimodal_preflight.py
+        tests/unit/clinical/test_multilingual_brief.py
+        tests/unit/clinical/test_summarize_backends.py
+        tests/unit/clinical/test_brief_parity.py
+        tests/unit/clinical/grounding/test_ground_facade.py
+        tests/unit/multimodal/test_apple_speech_contract.py
+        tests/unit/multimodal/test_transcript_language.py
+        tests/unit/agent/permissions/test_access_events.py
+        tests/unit/agent/workflows/test_journal_retirement.py
+        tests/integration/test_clinical_cli_offline.py
+        tests/integration/test_clinical_workflow_examples.py
+        tests/integration/test_clinical_review_cli.py
+        tests/integration/test_multilingual_clinical_brief.py
+        tests/integration/test_governed_mcp_offline.py
+        tests/integration/test_dqd_adapter.py
+        tests/integration/agent/test_access_event_log.py
+        tests/fuzz/test_format_parsers_fuzz.py
+
+    - name: Test with pytest
+      if: matrix.tier != 'portability'
+      # Leave bounded completion time for the full Windows suite and coverage.
+      timeout-minutes: 40
+      shell: bash
+      env:
+        TIER_MARKERS: ${{ matrix.tier == 'fast' && 'not slow and not fuzz' || '' }}
+        COVERAGE_ARGS: ${{ matrix.coverage && '--cov=openmed --cov-report=xml --cov-report=term-missing' || '' }}
+      run: >-
+        uv run --frozen python -c
+        "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
+        -n auto
+        -m "$TIER_MARKERS"
+        $COVERAGE_ARGS
+        --tb=line --show-capture=no --color=no --code-highlight=no -ra
+        --junitxml=pytest-results.xml
+
+    - name: Upload test diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.run_attempt }}
+        path: |
+          pytest-results.xml
+          coverage.xml
+        if-no-files-found: warn
+
+    - name: Upload coverage to Codecov
+      if: matrix.coverage
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        files: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  multimodal-tests:
+    needs: [repo-policy, lint]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Install Tesseract on Linux
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+    - name: Install Tesseract on macOS
+      if: runner.os == 'macOS'
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+      run: brew install tesseract
+    - name: Export frozen multimodal constraints
+      shell: bash
+      run: >-
+        uv export --frozen --no-default-groups --no-emit-project --no-hashes
+        --extra dev --extra multimodal
+        --output-file "$RUNNER_TEMP/multimodal-constraints.txt"
+    - name: Install lightweight multimodal test dependencies
+      shell: bash
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+        .venv/bin/python -m scripts.testing.multimodal_ci --requirements > "$RUNNER_TEMP/multimodal-requirements.txt"
+        uv pip install --python .venv/bin/python --only-binary :all: \
+          --constraint "$RUNNER_TEMP/multimodal-constraints.txt" \
+          --requirement "$RUNNER_TEMP/multimodal-requirements.txt"
+    - name: Run synthetic multimodal tests, eval suites and parser fuzz targets
+      timeout-minutes: 10
+      run: make test-multimodal
+
+  sdk-compatibility:
+    # Bounded core contracts and installed artifacts on every advertised lane.
+    # Model/runtime qualification remains separate; no weights are downloaded.
+    needs: repo-policy
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      # Pull requests cover both ends of the supported Python range on Linux
+      # and the newest interpreter on Windows and macOS. Pushes to the default
+      # branches, and pull requests labelled `full-ci`, run all 9 combinations.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.12"}]}') }}
+    env:
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: ${{ matrix.python-version }}
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Prepare frozen test and package dependencies
+      shell: bash
+      run: |
+        uv sync --frozen --extra dev --python "${{ matrix.python-version }}"
+        uv export --frozen --no-hashes --no-emit-project --extra cli --extra service --extra mcp --output-file "$RUNNER_TEMP/compat-constraints.txt"
+    - name: Core privacy and platform contracts
+      run: >-
+        uv run --frozen pytest -q --timeout=120 --timeout-method=thread
+        tests/unit/install/test_smoke_check.py
+        tests/unit/release/test_release_budget_workflow.py
+        tests/unit/service/test_brief_surfaces.py
+        tests/unit/clinical/test_temporal_normalizer.py
+        tests/unit/clinical/test_journey_contracts.py
+        tests/unit/clinical/test_clinical_timeline_evidence.py
+        tests/unit/ner/test_infer.py
+        tests/unit/test_no_raw_text_logging.py
+    - name: Build wheel and source distribution
+      shell: bash
+      run: uv build --out-dir "$RUNNER_TEMP/compat-dist"
+    - name: Verify clean core and adapter installs plus missing-resource controls
+      shell: bash
+      run: >-
+        python scripts/install/smoke_check.py
+        --artifacts "$RUNNER_TEMP/compat-dist"
+        --constraints "$RUNNER_TEMP/compat-constraints.txt"
+        --report sdk-compatibility.json
+    - name: Upload value-free compatibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: sdk-compatibility-${{ matrix.os }}-${{ matrix.python-version }}
+        path: sdk-compatibility.json
+        if-no-files-found: warn
+
+  sdk-compatibility-gate:
+    # Stable required-check name; a missing/cancelled matrix is not success.
+    needs: sdk-compatibility
+    if: always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require every advertised combination
+      env:
+        MATRIX_RESULT: ${{ needs.sdk-compatibility.result }}
+      run: test "$MATRIX_RESULT" = success
+
+  security:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Run Bandit report
+      run: |
+        uv run --with 'bandit[toml]' bandit -r openmed -f json -o bandit-report.json --exit-zero
+
+    - name: Enforce high-severity Bandit findings
+      run: |
+        uv run --with 'bandit[toml]' bandit -r openmed --severity-level high --confidence-level medium
+
+    - name: Run pip-audit dependency gate
+      run: |
+        uv run \
+          --with pip-audit \
+          --with 'requests>=2.33.0' \
+          --with 'urllib3>=2.7.0' \
+          python scripts/security/pip_audit_gate.py
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          pip-audit-report.json
+      if: always()
+
+  sbom:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Sync runtime environment
+      run: |
+        uv sync --frozen --python 3.11
+
+    - name: Generate CycloneDX SBOM
+      run: |
+        uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: sbom
+        path: sbom.cdx.json
+      if: always()
+
+  spacy-integration:
+    needs: [repo-policy, lint]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install spaCy test dependencies
+      run: |
+        uv sync --frozen --extra dev --extra spacy --python 3.11
+
+    - name: Run spaCy adapter tests
+      run: |
+        uv run pytest tests/unit/interop/test_spacy_component.py -q
+
+  browser-extension:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: web/extension/package-lock.json
+
+    - name: Install extension dependencies
+      working-directory: web/extension
+      run: npm ci
+
+    - name: Install headless Chromium
+      working-directory: web/extension
+      run: npx playwright install --with-deps chromium
+
+    - name: Test browser extension
+      working-directory: web/extension
+      run: npm test
+
+  yasbd-integration:
+    needs: [repo-policy, lint]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install YASBD integration dependencies
+      run: |
+        uv sync --frozen --extra dev --extra yasbd --python ${{ matrix.python-version }}
+
+    - name: Test the real YASBD adapter and sentence API
+      run: |
+        uv run pytest tests/unit/processing/test_sentences.py tests/unit/test_core.py \
+          -q -k "yasbd or sentence"
+
+  i18n-cjk-indic:
+    needs: [repo-policy, lint]
+    if: needs.repo-policy.outputs.run-i18n-cjk-indic == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install CJK and Indic test dependencies
+      run: |
+        uv sync --frozen --extra dev --extra zh --extra indic --python 3.11
+
+    - name: Run CJK and Indic fixture tests
+      run: |
+        uv run pytest tests/unit -q -k "i18n or script_detect or cjk or indic or pinyin"
+
+    - name: Trust-CI no-raw-PHI logging guard
+      run: |
+        uv run pytest tests/unit/test_no_raw_text_logging.py -q
+
+  build:
+    needs:
+    - repo-policy
+    - lint
+    - test
+    - multimodal-tests
+    - security
+    - spacy-integration
+    - yasbd-integration
+    - i18n-cjk-indic
+    - browser-extension
+    - sdk-compatibility-gate
+    if: >-
+      always() &&
+      needs.repo-policy.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.test.result == 'success' &&
+      needs.multimodal-tests.result == 'success' &&
+      needs.security.result == 'success' &&
+      needs.spacy-integration.result == 'success' &&
+      needs.yasbd-integration.result == 'success' &&
+      needs.browser-extension.result == 'success' &&
+      needs.sdk-compatibility-gate.result == 'success' &&
+      (
+        needs.i18n-cjk-indic.result == 'success' ||
+        needs.i18n-cjk-indic.result == 'skipped'
+      )
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Build package
+      run: |
+        uv build
+
+    - name: Verify refreshed wheel-size baseline
+      id: wheel_baseline
+      shell: bash
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        git fetch --no-tags --depth=1 origin "$BASE_SHA"
+        if git diff --quiet "$BASE_SHA" HEAD -- gates/release_budgets.json; then
+          echo "Release budgets unchanged; no baseline refresh to verify."
+          exit 0
+        else
+          diff_status=$?
+          if [ "$diff_status" -ne 1 ]; then
+            exit "$diff_status"
+          fi
+        fi
+        baseline_source="$(mktemp -d)"
+        git archive "$BASE_SHA" | tar -x -C "$baseline_source"
+        uv build --out-dir "$RUNNER_TEMP/openmed-baseline-dist" "$baseline_source"
+        echo "measured=true" >> "$GITHUB_OUTPUT"
+        python - "$RUNNER_TEMP/openmed-baseline-dist" <<'PY'
+        import hashlib
+        import json
+        import os
+        import platform
+        import subprocess
+        import sys
+        import zipfile
+        from pathlib import Path
+
+        wheels = list(Path(sys.argv[1]).glob("openmed-*.whl"))
+        if len(wheels) != 1:
+            raise SystemExit("Expected exactly one frozen-base wheel")
+        wheel = wheels[0]
+        measured = wheel.stat().st_size
+        budget = json.loads(Path("gates/release_budgets.json").read_text())
+        expected = budget["entries"]["package::openmed::wheel"]["metrics"]["baseline_bytes"]
+        with zipfile.ZipFile(wheel) as archive:
+            metadata_paths = [name for name in archive.namelist() if name.endswith(".dist-info/WHEEL")]
+            if len(metadata_paths) != 1:
+                raise SystemExit("Expected exactly one wheel metadata record")
+            wheel_metadata = archive.read(metadata_paths[0]).decode("utf-8")
+        receipt = {
+            "base_sha": os.environ["BASE_SHA"],
+            "python": platform.python_version(),
+            "uv": subprocess.check_output(["uv", "--version"], text=True).strip(),
+            "wheel_metadata": wheel_metadata,
+            "measured_bytes": measured,
+            "proposed_baseline_bytes": expected,
+            "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+            "matches": measured == expected,
+        }
+        (wheel.parent / "baseline-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+        print(f"Frozen-base wheel: {measured} bytes, sha256={hashlib.sha256(wheel.read_bytes()).hexdigest()}")
+        if measured != expected:
+            raise SystemExit(f"Wheel baseline mismatch: measured {measured}, proposed {expected}")
+        PY
+
+    - name: Enforce wheel size budget and record language-extra footprints
+      run: |
+        python scripts/release/check_size_budget.py \
+          --skip-build \
+          --wheel-dir dist \
+          --report size-budget-report.json
+
+    - name: Install built core wheel for import budget
+      run: |
+        uv pip install --system dist/*.whl
+
+    - name: Enforce core import budget
+      run: |
+        python scripts/release/check_import_budget.py
+
+    - name: Verify PEP 561 marker in built artifacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import tarfile
+        import zipfile
+
+        wheel = next(Path("dist").glob("*.whl"))
+        sdist = next(Path("dist").glob("*.tar.gz"))
+        with zipfile.ZipFile(wheel) as archive:
+            assert "openmed/py.typed" in archive.namelist()
+        with tarfile.open(sdist, "r:gz") as archive:
+            assert any(name.endswith("/openmed/py.typed") for name in archive.getnames())
+        PY
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: dist-packages
+        path: |
+          dist/
+          size-budget-report.json
+      if: always()
+
+    - name: Upload wheel baseline evidence
+      if: always() && steps.wheel_baseline.outputs.measured == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: wheel-size-baseline
+        path: ${{ runner.temp }}/openmed-baseline-dist/
+
+  tauri-paths:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.paths.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect changes to the Tauri client and validation
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            js/openmedkit-tauri tests/desktop .github/workflows/ci.yml)
+          if [[ -n "$changed" ]]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  tauri-client:
+    needs: tauri-paths
+    if: needs.tauri-paths.outputs.changed == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Get the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux helpers Tauri needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+
+      - name: Install Rust 1.99.1
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+
+      - name: Install Node 22.14.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22.14.0"
+
+      - name: Run the TypeScript tests
+        working-directory: js/openmedkit-tauri
+        run: |
+          npm ci
+          npm --offline test
+
+      - name: Download the Rust parts
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: cargo fetch --locked
+
+      - name: Check and test the Rust code
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: |
+          cargo check --locked --offline
+          cargo test --locked --offline
+
+  tauri-ci:
+    name: Tauri CI
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: [tauri-paths, tauri-client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require Tauri validation when its paths changed
+        env:
+          DETECTION: ${{ needs.tauri-paths.result }}
+          CHANGED: ${{ needs.tauri-paths.outputs.changed }}
+          VALIDATION: ${{ needs.tauri-client.result }}
+        run: |
+          case "$DETECTION:$CHANGED:$VALIDATION" in
+            success:false:skipped|success:true:success) exit 0 ;;
+            *) echo 'Tauri path detection or validation did not succeed.' >&2; exit 1 ;;
+          esac

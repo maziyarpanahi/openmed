@@ -1,0 +1,86 @@
+group 'org.openmed.openmedkit.flutter'
+version '0.1.0'
+
+buildscript {
+    ext.kotlin_version = '1.9.24'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+configurations {
+    onnxRuntimeArchive
+}
+
+def onnxRuntimeVersion = '1.20.0'
+def extractedOnnxRuntime = layout.buildDirectory.dir('onnxruntime')
+def extractOnnxRuntime = tasks.register('extractOnnxRuntime', Sync) {
+    from {
+        configurations.onnxRuntimeArchive.collect { archive -> zipTree(archive) }
+    }
+    into extractedOnnxRuntime
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    namespace 'org.openmed.openmedkit.flutter'
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 26
+        externalNativeBuild {
+            cmake {
+                arguments '-DOPENMED_FFI_ENABLE_TEST_SESSION=OFF',
+                    "-DOPENMED_ONNXRUNTIME_ROOT=${extractedOnnxRuntime.get().asFile.absolutePath}"
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = '11'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('../native/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntimeVersion"
+    onnxRuntimeArchive(
+        "com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntimeVersion@aar"
+    ) {
+        transitive = false
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith('configureCMake') ||
+        task.name.startsWith('buildCMake') ||
+        task.name == 'preBuild') {
+        task.dependsOn(extractOnnxRuntime)
+    }
+}

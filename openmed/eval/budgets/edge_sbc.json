@@ -1,0 +1,17 @@
+{
+  "profiles": {
+    "jetson-nano": {
+      "device": "NVIDIA Jetson Nano 4GB",
+      "install_size_bytes_max": 314572800,
+      "peak_rss_bytes_max": 367001600,
+      "tier": "Tiny"
+    },
+    "raspberry-pi-5": {
+      "device": "Raspberry Pi 5 8GB",
+      "install_size_bytes_max": 314572800,
+      "peak_rss_bytes_max": 943718400,
+      "tier": "Base"
+    }
+  },
+  "schema_version": 1
+}

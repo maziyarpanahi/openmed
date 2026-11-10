@@ -1,0 +1,8 @@
+Patient: Jordan Lee
+DOB: 04/18/1982
+MRN: OM-DEMO-88421
+Phone: (555) 010-2244
+Email: jordan.lee@example.test
+Address: 123 Example Street, Springfield, CA 90000
+Visit: Follow-up for hypertension. No acute distress. Continue lisinopril and recheck blood pressure in two weeks.
+Clinician: Priya Shah, MD

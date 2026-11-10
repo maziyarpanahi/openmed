@@ -1,0 +1,75 @@
+{
+  "deidentifiedText": "Patient [PERSON], DOB [DATE_OF_BIRTH], email [EMAIL].",
+  "spans": [
+    {
+      "action": "redact",
+      "canonical_label": "PERSON",
+      "detector": "fixture-token-classifier",
+      "doc_id": "web-fixture",
+      "end": 20,
+      "entity_type": "NAME",
+      "evidence": {
+        "token_count": 2
+      },
+      "metadata": {
+        "fixture": "python-generated"
+      },
+      "policy_label": "DIRECT_IDENTIFIER",
+      "regulatory_tags": [],
+      "replacement": "[PERSON]",
+      "reversible_id": null,
+      "schema_version": 1,
+      "score": 0.98,
+      "section": null,
+      "start": 8,
+      "text_hash": "hmac-sha256:942b7c85d5cfd4db8a8c20839d5743df174b44edb79d5016f478a8e4297a5fb3"
+    },
+    {
+      "action": "redact",
+      "canonical_label": "DATE_OF_BIRTH",
+      "detector": "fixture-token-classifier",
+      "doc_id": "web-fixture",
+      "end": 36,
+      "entity_type": "DATE_OF_BIRTH",
+      "evidence": {
+        "token_count": 1
+      },
+      "metadata": {
+        "fixture": "python-generated"
+      },
+      "policy_label": "DIRECT_IDENTIFIER",
+      "regulatory_tags": [],
+      "replacement": "[DATE_OF_BIRTH]",
+      "reversible_id": null,
+      "schema_version": 1,
+      "score": 0.96,
+      "section": null,
+      "start": 26,
+      "text_hash": "hmac-sha256:c66f92b448894b016f2b71555eba31acac911c8bfb8f2d30215dd076ac9b19d3"
+    },
+    {
+      "action": "redact",
+      "canonical_label": "EMAIL",
+      "detector": "fixture-token-classifier",
+      "doc_id": "web-fixture",
+      "end": 61,
+      "entity_type": "EMAIL",
+      "evidence": {
+        "token_count": 1
+      },
+      "metadata": {
+        "fixture": "python-generated"
+      },
+      "policy_label": "DIRECT_IDENTIFIER",
+      "regulatory_tags": [],
+      "replacement": "[EMAIL]",
+      "reversible_id": null,
+      "schema_version": 1,
+      "score": 0.98,
+      "section": null,
+      "start": 44,
+      "text_hash": "hmac-sha256:7900c832abc555d87e2efc8dd37fa329844c78ba1495b567a39cc108c7429d1d"
+    }
+  ],
+  "text": "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org."
+}

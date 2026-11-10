@@ -1,0 +1,109 @@
+name: Bug report
+description: Report a reproducible problem with OpenMed
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve OpenMed.
+
+        **Do not include protected health information (PHI), personally identifiable information (PII), secrets, or real patient data.** Use only synthetic or fully de-identified examples. Report security vulnerabilities privately through [GitHub Security Advisories](https://github.com/maziyarpanahi/openmed/security/advisories/new).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      description: Clearly describe what went wrong.
+      placeholder: Tell us what happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimal_reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest set of steps or code that reproduces the problem. Use synthetic data only.
+      placeholder: |
+        1. Install or import ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error_output
+    attributes:
+      label: Error output
+      description: Paste the relevant error or traceback after removing PHI, PII, secrets, and patient data.
+
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      description: Run `python -c "import openmed; print(openmed.__version__)"` if needed.
+      placeholder: e.g. 2.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating system
+      placeholder: e.g. Windows 11, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: e.g. 3.12.4
+    validations:
+      required: true
+
+  - type: input
+    id: model_id
+    attributes:
+      label: Model ID
+      description: Provide the Hugging Face or OpenMed model ID. Enter `N/A` if no model is involved.
+      placeholder: e.g. OpenMed/... or N/A
+    validations:
+      required: true
+
+  - type: input
+    id: pytorch_version
+    attributes:
+      label: PyTorch version
+      description: Enter `N/A` if PyTorch is not involved.
+      placeholder: e.g. 2.7.0 or N/A
+
+  - type: input
+    id: transformers_version
+    attributes:
+      label: Transformers version
+      description: Enter `N/A` if Transformers is not involved.
+      placeholder: e.g. 4.53.0 or N/A
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Add any other relevant, non-sensitive details.
+
+  - type: checkboxes
+    id: privacy_confirmation
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I confirm that this issue contains no PHI, PII, secrets, or real patient data.
+          required: true

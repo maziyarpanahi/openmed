@@ -1,0 +1,19 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/retry.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt": {"minimum": 1, "type": "integer"},
+    "classification": {"enum": ["cancelled", "contention", "dependency", "permanent", "policy_denied", "resource", "transient", "unknown"]},
+    "job_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "reason_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "recorded_at": {"format": "date-time", "type": "string"},
+    "retry_after": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}]},
+    "retry_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"}
+  },
+  "required": ["attempt", "classification", "job_id", "reason_code", "recorded_at", "retry_after", "retry_id", "schema_version"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionRetry",
+  "type": "object"
+}

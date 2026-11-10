@@ -1,0 +1,1 @@
+{"id":"deft-smoke-1","language":"fr","split":"smoke","text":"Note fictive: douleur thoracique traitee par kinesitherapie.","spans":[{"start":14,"end":32,"label":"pathologie","text":"douleur thoracique"},{"start":45,"end":59,"label":"traitement","text":"kinesitherapie"}],"metadata":{"synthetic":true}}

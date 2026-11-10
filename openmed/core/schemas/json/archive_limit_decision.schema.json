@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/archive-limit-decision/1.0.0",
+  "title": "OpenMed Archive Limit Decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "state",
+    "code",
+    "report",
+    "schema_version",
+    "compatibility_policy"
+  ],
+  "properties": {
+    "state": {"enum": ["success", "denied", "unsupported", "failure"]},
+    "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "report": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "entry_count",
+        "total_compressed_bytes",
+        "total_uncompressed_bytes",
+        "reason_counts"
+      ],
+      "properties": {
+        "decision": {"enum": ["allow", "quarantine", "reject"]},
+        "entry_count": {"type": "integer", "minimum": 0},
+        "total_compressed_bytes": {"type": "integer", "minimum": 0},
+        "total_uncompressed_bytes": {"type": "integer", "minimum": 0},
+        "reason_counts": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "invalid_metadata",
+              "absolute_path",
+              "path_traversal",
+              "path_too_long",
+              "link",
+              "duplicate_path",
+              "entry_limit",
+              "member_size_limit",
+              "total_size_limit",
+              "expansion_ratio"
+            ]
+          },
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"}
+  }
+}

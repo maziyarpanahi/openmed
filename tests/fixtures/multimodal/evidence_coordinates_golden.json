@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "pdf_rotation",
+      "source_format": "pdf",
+      "source_version": "1.7",
+      "media_type": "application/pdf",
+      "coordinate_space": "points",
+      "source_dimensions": [100, 200],
+      "steps": [
+        {
+          "operation": "rotate_clockwise",
+          "input_dimensions": [100, 200],
+          "output_dimensions": [200, 100],
+          "parameters": {"degrees": 90}
+        }
+      ],
+      "observed_box": [150, 10, 190, 30],
+      "expected_source_box": [10, 10, 30, 50],
+      "tolerance": 0.001
+    },
+    {
+      "name": "ocr_crop_rescale",
+      "source_format": "ocr",
+      "source_version": "synthetic",
+      "media_type": "image/png",
+      "coordinate_space": "pixels",
+      "source_dimensions": [400, 200],
+      "steps": [
+        {
+          "operation": "crop",
+          "input_dimensions": [400, 200],
+          "output_dimensions": [320, 160],
+          "parameters": {"box": [40, 20, 360, 180]}
+        },
+        {
+          "operation": "ocr_scale",
+          "input_dimensions": [320, 160],
+          "output_dimensions": [640, 320],
+          "parameters": {}
+        }
+      ],
+      "observed_box": [200, 100, 400, 200],
+      "expected_source_box": [140, 70, 240, 120],
+      "tolerance": 0.001
+    },
+    {
+      "name": "image_scale",
+      "source_format": "image",
+      "source_version": "png",
+      "media_type": "image/png",
+      "coordinate_space": "pixels",
+      "source_dimensions": [800, 600],
+      "steps": [
+        {
+          "operation": "scale",
+          "input_dimensions": [800, 600],
+          "output_dimensions": [400, 300],
+          "parameters": {}
+        }
+      ],
+      "observed_box": [50, 25, 150, 75],
+      "expected_source_box": [100, 50, 300, 150],
+      "tolerance": 0.001
+    }
+  ],
+  "dicom_sr": {
+    "study_uid": "1.2.826.0.1.3680043.8.498.1",
+    "series_uid": "1.2.826.0.1.3680043.8.498.2",
+    "instance_uid": "1.2.826.0.1.3680043.8.498.3",
+    "tag": "0040,A730",
+    "node_paths": ["1", "1.1"]
+  }
+}

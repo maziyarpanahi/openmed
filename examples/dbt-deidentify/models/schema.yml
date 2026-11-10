@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_redacted
+    description: >
+      Staging model that applies OpenMed de-identification to the configured
+      free-text columns via the `openmed_deidentify(text, policy)` warehouse UDF.
+      Structured columns pass through unchanged.
+    columns:
+      - name: patient_id
+        description: Structured identifier, passed through unchanged.
+      - name: notes
+        description: Free-text clinical note, de-identified by the redact() macro.
+      - name: reason_for_visit
+        description: Free-text visit reason, de-identified by the redact() macro.
+
+seeds:
+  - name: synthetic_patients
+    description: Fully synthetic sample rows (no real PHI) for local runs.

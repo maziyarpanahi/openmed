@@ -1,0 +1,59 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 800] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 429 >>
+stream
+q
+0 0 0 RG
+1 w
+50 550 m 350 550 l S
+50 580 m 350 580 l S
+50 610 m 350 610 l S
+50 640 m 350 640 l S
+50 550 m 50 640 l S
+180 550 m 180 640 l S
+350 550 m 350 640 l S
+Q
+BT
+/F1 12 Tf
+1 0 0 1 55 710 Tm
+(Figure 1: MRI of Synthetic Patient) Tj
+1 0 0 1 55 620 Tm
+(Patient ID) Tj
+1 0 0 1 185 620 Tm
+(Value) Tj
+1 0 0 1 55 590 Tm
+(Name) Tj
+1 0 0 1 185 590 Tm
+(Synthetic) Tj
+1 0 0 1 55 560 Tm
+(Record) Tj
+1 0 0 1 185 560 Tm
+(MRN-12345) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000241 00000 n
+0000000311 00000 n
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+790
+%%EOF
