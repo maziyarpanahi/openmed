@@ -81,3 +81,17 @@ Trusted hosts needed for loopback probes and in-cluster Service DNS.
 {{- end -}}
 {{- join "," (uniq $hosts) -}}
 {{- end -}}
+
+{{/*
+Fail the render when Kubernetes would kill the pod before the service finishes
+draining: terminationGracePeriodSeconds must exceed config.shutdownDrainSeconds
+plus a few seconds for the process to exit after the drain.
+*/}}
+{{- define "openmed-service.validateShutdownTimings" -}}
+{{- $grace := float64 .Values.terminationGracePeriodSeconds -}}
+{{- $drain := float64 .Values.config.shutdownDrainSeconds -}}
+{{- $margin := 5.0 -}}
+{{- if le $grace (addf $drain $margin) -}}
+{{- fail (printf "terminationGracePeriodSeconds (%v) must be greater than config.shutdownDrainSeconds (%v) plus %v seconds, or Kubernetes kills the pod mid-drain" .Values.terminationGracePeriodSeconds .Values.config.shutdownDrainSeconds $margin) -}}
+{{- end -}}
+{{- end -}}

@@ -100,6 +100,25 @@ graceful shutdown. Probe requests set `Host: localhost` so the service trusted
 host middleware accepts kubelet checks without weakening the application host
 allowlist.
 
+## Graceful shutdown
+
+On SIGTERM the service stops accepting work and drains in-flight requests for
+up to `config.shutdownDrainSeconds`. Kubernetes kills the pod once
+`terminationGracePeriodSeconds` has passed, so the chart refuses to render
+unless the grace period is greater than the drain timeout plus 5 seconds. With
+the defaults (45 and 30) the check passes. If you raise the drain timeout,
+raise the grace period with it:
+
+```bash
+helm upgrade --install openmed-service deploy/helm/openmed-service \
+  --namespace openmed \
+  --set config.shutdownDrainSeconds=60 \
+  --set terminationGracePeriodSeconds=75
+```
+
+Setting only `config.shutdownDrainSeconds=60` fails `helm template` and
+`helm install` with a message that names both values.
+
 ## Secrets
 
 Do not put tokens or other secrets in `values.yaml`. Reference an existing
@@ -134,7 +153,7 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `podAnnotations` | `{}` | Additional pod annotations. |
 | `podSecurityContext` | `{}` | Pod security context. |
 | `securityContext` | `{}` | Container security context. |
-| `terminationGracePeriodSeconds` | `45` | Pod shutdown grace period. |
+| `terminationGracePeriodSeconds` | `45` | Pod shutdown grace period. Must be greater than `config.shutdownDrainSeconds` plus 5 seconds. |
 | `config.profile` | `prod` | `OPENMED_PROFILE`. |
 | `config.cacheDir` | `/root/.cache/huggingface/openmed` | `OPENMED_CACHE_DIR`. |
 | `config.preloadModels` | `[]` | Models joined into `OPENMED_SERVICE_PRELOAD_MODELS`. |

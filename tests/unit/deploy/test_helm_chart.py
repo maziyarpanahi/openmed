@@ -110,6 +110,44 @@ def test_default_render_configures_service_environment():
     )
 
 
+def test_default_grace_period_covers_the_shutdown_drain():
+    manifests = _render_chart()
+    deployment = _by_kind(manifests, "Deployment")
+    configmap = _by_kind(manifests, "ConfigMap")
+
+    grace = deployment["spec"]["template"]["spec"]["terminationGracePeriodSeconds"]
+    drain = float(configmap["data"]["OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"])
+    assert grace > drain + 5
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        ("--set", "config.shutdownDrainSeconds=60"),
+        ("--set", "config.shutdownDrainSeconds=40"),
+        ("--set", "terminationGracePeriodSeconds=30"),
+    ],
+)
+def test_grace_period_shorter_than_drain_fails_the_render(overrides):
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        _render_chart(*overrides)
+
+    message = excinfo.value.stderr
+    assert "terminationGracePeriodSeconds" in message
+    assert "config.shutdownDrainSeconds" in message
+
+
+def test_grace_period_above_drain_plus_margin_renders():
+    manifests = _render_chart(
+        "--set",
+        "config.shutdownDrainSeconds=60",
+        "--set",
+        "terminationGracePeriodSeconds=66",
+    )
+    deployment = _by_kind(manifests, "Deployment")
+    assert deployment["spec"]["template"]["spec"]["terminationGracePeriodSeconds"] == 66
+
+
 def test_synthetic_values_exercise_image_resources_and_secret_env():
     manifests = _render_chart("--values", str(CI_VALUES))
     deployment = _by_kind(manifests, "Deployment")
