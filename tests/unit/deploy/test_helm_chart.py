@@ -110,6 +110,62 @@ def test_default_render_configures_service_environment():
     )
 
 
+def test_default_render_has_no_pod_disruption_budget():
+    manifests = _render_chart()
+    assert not [m for m in manifests if m.get("kind") == "PodDisruptionBudget"]
+
+
+def test_enabled_pod_disruption_budget_selects_the_api_pods():
+    manifests = _render_chart(
+        "--set", "replicaCount=2", "--set", "podDisruptionBudget.enabled=true"
+    )
+    pdb = _by_kind(manifests, "PodDisruptionBudget")
+    deployment = _by_kind(manifests, "Deployment")
+
+    assert pdb["apiVersion"] == "policy/v1"
+    assert pdb["spec"]["minAvailable"] == 1
+    assert "maxUnavailable" not in pdb["spec"]
+    selector = pdb["spec"]["selector"]["matchLabels"]
+    assert selector == deployment["spec"]["selector"]["matchLabels"]
+    pod_labels = deployment["spec"]["template"]["metadata"]["labels"]
+    assert selector.items() <= pod_labels.items()
+    assert selector["app.kubernetes.io/component"] == "api"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        (("--set", "podDisruptionBudget.minAvailable=2"), {"minAvailable": 2}),
+        (("--set", "podDisruptionBudget.minAvailable=0"), {"minAvailable": 0}),
+        (("--set", "podDisruptionBudget.maxUnavailable=1"), {"maxUnavailable": 1}),
+        (
+            ("--set-string", "podDisruptionBudget.maxUnavailable=50%"),
+            {"maxUnavailable": "50%"},
+        ),
+    ],
+)
+def test_pod_disruption_budget_uses_the_configured_bound(overrides, expected):
+    manifests = _render_chart("--set", "podDisruptionBudget.enabled=true", *overrides)
+    spec = _by_kind(manifests, "PodDisruptionBudget")["spec"]
+    assert {
+        key: spec[key] for key in ("minAvailable", "maxUnavailable") if key in spec
+    } == expected
+
+
+def test_pod_disruption_budget_with_both_bounds_fails_the_render():
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        _render_chart(
+            "--set",
+            "podDisruptionBudget.enabled=true",
+            "--set",
+            "podDisruptionBudget.minAvailable=1",
+            "--set",
+            "podDisruptionBudget.maxUnavailable=1",
+        )
+
+    assert "either minAvailable or maxUnavailable, not both" in excinfo.value.stderr
+
+
 def test_synthetic_values_exercise_image_resources_and_secret_env():
     manifests = _render_chart("--values", str(CI_VALUES))
     deployment = _by_kind(manifests, "Deployment")

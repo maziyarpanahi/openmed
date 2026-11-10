@@ -34,6 +34,16 @@ securityContext: {}
 # How long Kubernetes waits for graceful shutdown after SIGTERM.
 terminationGracePeriodSeconds: 45
 
+# Optional PodDisruptionBudget for the API pods. Set either minAvailable or
+# maxUnavailable (a number or a percentage such as "50%"), not both. With
+# neither set, the budget keeps one pod available (minAvailable: 1). With
+# replicaCount: 1 a minAvailable of 1 blocks voluntary evictions such as node
+# drains, so enable this together with two or more replicas.
+podDisruptionBudget:
+  enabled: false
+  minAvailable: null
+  maxUnavailable: null
+
 # REST service configuration rendered into a ConfigMap.
 config:
   # OpenMed configuration profile.
