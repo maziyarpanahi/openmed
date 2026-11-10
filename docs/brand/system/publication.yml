@@ -840,6 +840,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - compliance/templates/field-safety-notice.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
     - clinical-domains.md

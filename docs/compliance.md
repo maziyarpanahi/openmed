@@ -55,6 +55,12 @@ These artifacts are templates requiring legal review, not legal advice. Adapt
 them to the actual parties, purpose, data, jurisdiction, deployment boundaries,
 and supervisory-authority guidance:
 
+- [Breach-report template](compliance/templates/breach-report-template.md)
+  organizes reviewed facts and evidence for suspected personal-data incidents.
+- [Field-safety notice template](compliance/templates/field-safety-notice.md)
+  communicates affected releases, immediate actions, and verification steps
+  after human approval.
+
 - [Data Protection Impact Assessment template](compliance/dpia-template.md)
   connects a deployment's processing description, policy profile, audit
   residual-risk score, validation evidence, safeguards, and approval decision.
