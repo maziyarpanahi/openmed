@@ -119,6 +119,8 @@ role, update the referenced Secret, roll migration/worker/API in order, verify
 health, and revoke the old role after the rollback window. Kubernetes Secret
 objects are not backups; use the cluster's encrypted secret manager.
 
+The chart ships a `values.schema.json` that Helm applies automatically. It checks types and minimums for `replicaCount`, `image`, `service`, `probes`, `resources`, `persistence` and `terminationGracePeriodSeconds` (for example `replicaCount: -1` or `probes.readiness.periodSeconds: 0` fails the render). `resources.requests` and `resources.limits` accept any resource name, such as `ephemeral-storage` or `nvidia.com/gpu`, as long as the value is a quantity. Other keys stay unconstrained so existing installs keep working.
+
 ## Values Reference
 
 | Value | Default | Description |
