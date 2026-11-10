@@ -224,3 +224,29 @@ def test_schema_rejects_zero_readiness_period():
     assert (
         "schema" in combined or "values don't meet" in combined or "invalid" in combined
     )
+
+
+def test_schema_allows_extended_resource_names():
+    manifests = _render_chart(
+        "--set-string",
+        "resources.limits.nvidia\\.com/gpu=1",
+        "--set-string",
+        "resources.requests.ephemeral-storage=2Gi",
+        "--set-string",
+        "resources.limits.ephemeral-storage=4Gi",
+    )
+    deployment = _by_kind(manifests, "Deployment")
+    resources = deployment["spec"]["template"]["spec"]["containers"][0]["resources"]
+    assert resources["limits"]["nvidia.com/gpu"] == "1"
+    assert resources["requests"]["ephemeral-storage"] == "2Gi"
+    assert resources["limits"]["ephemeral-storage"] == "4Gi"
+    assert resources["requests"]["cpu"] == "500m"
+
+
+def test_schema_rejects_non_quantity_resource_value():
+    result = _render_chart_unchecked("--set", "resources.limits.nvidia\\.com/gpu=true")
+    assert result.returncode != 0
+    combined = f"{result.stderr}\n{result.stdout}".lower()
+    assert (
+        "schema" in combined or "values don't meet" in combined or "invalid" in combined
+    )

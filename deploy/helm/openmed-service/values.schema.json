@@ -78,11 +78,11 @@
     },
     "resourceList": {
       "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "cpu": { "type": ["string", "number"] },
-        "memory": { "type": ["string", "number"] }
-      }
+      "description": "Kubernetes resource quantities keyed by resource name, e.g. cpu, memory, ephemeral-storage or nvidia.com/gpu.",
+      "additionalProperties": { "$ref": "#/definitions/quantity" }
+    },
+    "quantity": {
+      "type": ["string", "number"]
     }
   }
 }
