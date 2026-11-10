@@ -266,6 +266,70 @@ def test_local_hierarchy_filter_requires_remote_delegation() -> None:
         expand_valueset(valueset, vocabularies={SYSTEM: _snapshot()})
 
 
+def _filtered_valueset(definition: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "resourceType": "ValueSet",
+        "version": "1",
+        "compose": {"include": [{"system": SYSTEM, "filter": [definition]}]},
+    }
+
+
+def test_unsupported_local_filter_operator_is_named_in_the_error() -> None:
+    valueset = _filtered_valueset(
+        {"property": "concept", "op": "is-a", "value": "synthetic-filter-value"}
+    )
+
+    with pytest.raises(ValueSetExpansionUnsupportedError) as excinfo:
+        expand_valueset(valueset, vocabularies={SYSTEM: _snapshot()})
+
+    message = str(excinfo.value)
+    assert "property 'concept', op 'is-a'" in message
+    assert "supported operators: =, ==, exists, regex" in message
+    assert "supported properties: code, concept, display, system" in message
+    assert "synthetic-filter-value" not in message
+
+
+def test_unsupported_local_filter_property_is_named_in_the_error() -> None:
+    valueset = _filtered_valueset(
+        {"property": "parent", "op": "=", "value": "synthetic-filter-value"}
+    )
+
+    with pytest.raises(
+        ValueSetExpansionUnsupportedError,
+        match="terminology-property filters require delegation",
+    ) as excinfo:
+        expand_valueset(valueset, vocabularies={SYSTEM: _snapshot()})
+
+    message = str(excinfo.value)
+    assert "property 'parent', op '='" in message
+    assert "supported properties: code, concept, display, system" in message
+    assert "synthetic-filter-value" not in message
+
+
+@pytest.mark.parametrize(
+    ("property_name", "operator", "free_text", "named"),
+    [
+        ("parent code", "=", "parent code", "property '<unrecognized>', op '='"),
+        ("parent;drop", "is-a", "parent;drop", "property '<unrecognized>', op 'is-a'"),
+        ("code", "is a!", "is a!", "property 'code', op '<unrecognized>'"),
+    ],
+)
+def test_free_text_filter_tokens_are_replaced_with_a_placeholder(
+    property_name: str, operator: str, free_text: str, named: str
+) -> None:
+    valueset = _filtered_valueset(
+        {"property": property_name, "op": operator, "value": "synthetic-filter-value"}
+    )
+
+    with pytest.raises(ValueSetExpansionUnsupportedError) as excinfo:
+        expand_valueset(valueset, vocabularies={SYSTEM: _snapshot()})
+
+    message = str(excinfo.value)
+    assert named in message
+    assert free_text not in message
+    assert "synthetic-filter-value" not in message
+
+
 def test_ecl_is_delegated_to_configured_fhir_expand_endpoint() -> None:
     ecl = "*"
     response = _remote_valueset(system="http://snomed.info/sct")

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Name the rejected `property` and `op` in local ValueSet filter errors and
+  list the supported properties and operators. Tokens outside a short
+  controlled pattern are shown as `<unrecognized>`, and the filter value is
+  never included (#4666).
+
 - Reject missing, repeated, or unsupported content types on the local privacy
   proxy's chat routes before reading the request body (#5185).
 
