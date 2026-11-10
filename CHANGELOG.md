@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fail `helm template` and `helm install` of the service chart when
+  `terminationGracePeriodSeconds` is not greater than
+  `config.shutdownDrainSeconds` plus 5 seconds, so a longer drain timeout can
+  no longer be cut off by Kubernetes mid-drain (#4556).
+
 - Reject missing, repeated, or unsupported content types on the local privacy
   proxy's chat routes before reading the request body (#5185).
 

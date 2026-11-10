@@ -81,3 +81,28 @@ Trusted hosts needed for loopback probes and in-cluster Service DNS.
 {{- end -}}
 {{- join "," (uniq $hosts) -}}
 {{- end -}}
+
+{{/*
+Fail the render when Kubernetes would kill the pod before the service finishes
+draining: terminationGracePeriodSeconds must exceed config.shutdownDrainSeconds
+plus a few seconds for the process to exit after the drain.
+*/}}
+{{- define "openmed-service.validateShutdownTimings" -}}
+{{- $grace := float64 .Values.terminationGracePeriodSeconds -}}
+{{- $drainValue := .Values.config.shutdownDrainSeconds -}}
+{{- $drainSource := "config.shutdownDrainSeconds" -}}
+{{- range .Values.extraEnv -}}
+{{- if eq (toString .name) "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS" -}}
+{{- if hasKey . "valueFrom" -}}
+{{- fail "extraEnv must not set OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS from valueFrom; set config.shutdownDrainSeconds so the chart can check it against terminationGracePeriodSeconds" -}}
+{{- end -}}
+{{- $drainValue = .value -}}
+{{- $drainSource = "extraEnv OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS" -}}
+{{- end -}}
+{{- end -}}
+{{- $drain := float64 $drainValue -}}
+{{- $margin := 5.0 -}}
+{{- if le $grace (addf $drain $margin) -}}
+{{- fail (printf "terminationGracePeriodSeconds (%v) must be greater than %s (%v) plus %v seconds, or Kubernetes kills the pod mid-drain" .Values.terminationGracePeriodSeconds $drainSource $drainValue $margin) -}}
+{{- end -}}
+{{- end -}}
