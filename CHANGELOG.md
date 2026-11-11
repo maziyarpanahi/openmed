@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Run the biomedical NER suite's model once per fixture and score the
+  per-corpus slices from those same predictions, instead of running every
+  fixture a second time for its corpus slice (#4963).
+
 - Reject missing, repeated, or unsupported content types on the local privacy
   proxy's chat routes before reading the request body (#5185).
 
