@@ -24,7 +24,7 @@ from openmed.core.labels import (
     normalize_label,
 )
 from openmed.core.policy import PolicyProfile, load_policy
-from openmed.core.schemas.span import ACTION_VALUES
+from openmed.core.schemas.span import ACTION_GENERALIZE, ACTION_KEEP, ACTION_VALUES
 
 SAFE_HARBOR_POLICY: Final = "hipaa_safe_harbor"
 SAFE_HARBOR_ATTESTATION_SCHEMA_VERSION: Final = 1
@@ -248,6 +248,10 @@ def generate_safe_harbor_attestation(
     action_counts: dict[str, Counter[str]] = {
         category: Counter() for category in SAFE_HARBOR_CATEGORY_ORDER
     }
+    # Detections the ``generalize`` rule left unchanged, such as ages 89 and
+    # below. They are counted as ``keep`` but are the policy outcome, not an
+    # unprotected identifier.
+    rule_keep_counts: Counter[str] = Counter()
 
     for span in spans:
         canonical_label = _canonical_span_label(span)
@@ -259,6 +263,11 @@ def generate_safe_harbor_attestation(
             raise ValueError("audit span contains an unsupported action")
         detection_counts[category] += 1
         action_counts[category][action] += 1
+        if (
+            action == ACTION_KEEP
+            and profile.action_for(canonical_label) == ACTION_GENERALIZE
+        ):
+            rule_keep_counts[category] += 1
 
     categories = tuple(
         _category_attestation(
@@ -267,6 +276,7 @@ def generate_safe_harbor_attestation(
             profile=profile,
             detection_count=detection_counts[category],
             action_counts=action_counts[category],
+            rule_keep_count=rule_keep_counts[category],
         )
         for ordinal, category in enumerate(SAFE_HARBOR_CATEGORY_ORDER, start=1)
     )
@@ -284,6 +294,7 @@ def _category_attestation(
     profile: PolicyProfile,
     detection_count: int,
     action_counts: Mapping[str, int],
+    rule_keep_count: int = 0,
 ) -> SafeHarborCategoryAttestation:
     labels = SAFE_HARBOR_CATEGORY_LABELS[category]
     policy_actions = {label: profile.action_for(label) for label in labels}
@@ -293,7 +304,7 @@ def _category_attestation(
             "No canonical OpenMed labels map to this category; qualified "
             "expert review is required."
         )
-    if action_counts.get("keep", 0):
+    if action_counts.get(ACTION_KEEP, 0) > rule_keep_count:
         reasons.append(
             "One or more detections used the keep action; qualified expert "
             "review is required."

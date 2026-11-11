@@ -28,8 +28,12 @@ SCHEMA_NAMES = (
 )
 ACTION_KEEP = "keep"
 ACTION_FORMAT_PRESERVE = "format_preserve"
+ACTION_GENERALIZE = "generalize"
+# Order matters to callers that rank actions by position: ``generalize`` keeps
+# more than every redacting action, so it sits directly after ``keep``.
 ACTION_VALUES = (
     ACTION_KEEP,
+    ACTION_GENERALIZE,
     "redact",
     "replace",
     "mask",
@@ -346,6 +350,7 @@ def _schema_state(schema: Mapping[str, Any]) -> dict[str, Any]:
 __all__ = [
     "ACTION_KEEP",
     "ACTION_FORMAT_PRESERVE",
+    "ACTION_GENERALIZE",
     "ACTION_VALUES",
     "CURRENT_SCHEMA_VERSION",
     "SCHEMA_NAMES",
