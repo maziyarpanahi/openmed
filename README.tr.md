@@ -393,7 +393,7 @@ OpenMed araştırmanızda faydalı olduysa, lütfen atıfta bulunun:
 
 OpenMed sizin için faydalıysa, bir yıldız başkalarının onu keşfetmesine yardımcı olur.
 
-[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,700+ GitHub stars · 11 Nov 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
