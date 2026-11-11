@@ -364,6 +364,22 @@ def test_tool_config_passes_through_byte_identical_while_content_is_redacted():
             "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
         },
     }
+    functions = [
+        {
+            "name": "lookup_record",
+            "description": "Look up a record",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "inactive"],
+                        "description": "Record status",
+                    }
+                },
+            },
+        }
+    ]
 
     with _client(transport) as client:
         response = client.post(
@@ -373,6 +389,7 @@ def test_tool_config_passes_through_byte_identical_while_content_is_redacted():
                 "messages": [{"role": "user", "content": f"hello {SYNTHETIC_NAME}"}],
                 "tools": tools,
                 "tool_choice": "auto",
+                "functions": functions,
                 "response_format": response_format,
             },
         )
@@ -381,6 +398,7 @@ def test_tool_config_passes_through_byte_identical_while_content_is_redacted():
     assert seen_payloads
     forwarded = seen_payloads[0]
     assert forwarded["tools"] == tools
+    assert forwarded["functions"] == functions
     assert forwarded["response_format"] == response_format
     assert forwarded["tool_choice"] == "auto"
     assert SYNTHETIC_NAME not in json.dumps(forwarded["messages"], sort_keys=True)
@@ -411,6 +429,42 @@ def test_identifier_in_tool_definition_is_rejected_closed():
                 "model": "local-fixture",
                 "messages": [{"role": "user", "content": "hello"}],
                 "tools": tools,
+            },
+        )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["error"]["details"]["reason"]
+        == "tool_definition_contains_identifier"
+    )
+    assert seen_payloads == []
+    assert SYNTHETIC_NAME not in response.text
+
+
+
+def test_identifier_in_functions_definition_is_rejected_closed():
+    """An identifier inside a legacy functions definition fails closed (#5124)."""
+    seen_payloads: list[dict[str, Any]] = []
+
+    def transport(payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+        seen_payloads.append(payload)
+        return {"choices": []}
+
+    functions = [
+        {
+            "name": "notify",
+            "description": f"Notify {SYNTHETIC_NAME} of the result",
+            "parameters": {"type": "object", "properties": {}},
+        }
+    ]
+
+    with _client(transport) as client:
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "local-fixture",
+                "messages": [{"role": "user", "content": "hello"}],
+                "functions": functions,
             },
         )
 
