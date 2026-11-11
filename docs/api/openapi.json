@@ -3605,7 +3605,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "3.2.0"
+    "version": "3.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
