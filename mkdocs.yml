@@ -128,6 +128,7 @@ nav:
       - Inbound Placeholder Restoration: service/inbound-restoration.md
       - Local Privacy Proxy: service/privacy-proxy.md
       - MCP Client Connections: mcp-clients.md
+      - MCP Tool Reference: mcp-tools.md
       - MCP Clinical Gateway Threat Model: security/mcp-threat-model.md
       - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
@@ -915,6 +916,7 @@ plugins:
         Agents and tool surfaces:
           - agent-usage.md: Consumer API map, privacy invariants, and repository skills
           - mcp-clients.md: MCP client setup and transport guidance
+          - mcp-tools.md: MCP tools with versions and behavior hints
           - rest-service.md: REST service endpoints and deployment
           - rest-recipes.md: Copy-ready REST API recipes
           - plugin-sdk.md: Detector plugin interfaces
