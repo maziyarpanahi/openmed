@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 from openmed.clinical.model_packs import (
     MODEL_FAMILY_CAPABILITIES,
@@ -387,7 +387,9 @@ def test_default_family_capabilities_cover_bounded_specialists() -> None:
         "assertion",
         "classification",
         "pair_scoring",
+        "passage_embedding",
         "relation_extraction",
+        "reranking",
         "span_extraction",
         "temporality",
         "token_classification",
@@ -608,3 +610,40 @@ def test_manifest_digest_changes_with_pinned_artifact() -> None:
     )
 
     assert first.digest != changed.digest
+
+
+def test_passage_embedding_and_reranking_packs_load_and_route(subtests) -> None:
+    for task in ("passage_embedding", "reranking"):
+        with subtests.test(task=task):
+            alias = f"rules.{task}"
+            manifest = _pack(_rules(alias=alias, task=task))
+
+            loaded = load_model_pack_json(manifest.to_json())
+            assert loaded == manifest
+            Draft202012Validator(load_model_pack_schema()).validate(manifest.to_dict())
+
+            router = ClinicalTaskRouter(
+                manifest,
+                bindings=(_builtin_binding(alias=alias),),
+                available_runtimes=("builtin",),
+            )
+            result = router.route(_request(task=task, requested_alias=alias))
+
+            assert result.ok
+            assert result.value is not None
+            assert result.value.task == task
+            assert result.value.alias == alias
+            Draft202012Validator(load_model_route_schema()).validate(
+                result.value.to_dict()
+            )
+
+
+def test_unknown_task_kind_is_still_rejected() -> None:
+    with pytest.raises(ModelPackError):
+        _rules(alias="rules.unknown", task="not_a_task")
+
+    manifest = _pack(_rules(alias="rules.reranking", task="reranking"))
+    tampered = manifest.to_dict()
+    tampered["entries"][0]["task"] = "not_a_task"
+    with pytest.raises(ValidationError):
+        Draft202012Validator(load_model_pack_schema()).validate(tampered)
