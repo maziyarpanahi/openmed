@@ -112,6 +112,53 @@ def test_biomedical_ner_report_contains_per_corpus_exact_and_relaxed_f1(
         assert corpus_metrics["relaxed_span_f1"]["f1"] == 1.0
 
 
+def test_biomedical_ner_runs_the_model_once_per_fixture(tmp_path: Path) -> None:
+    _write_synthetic_suite(tmp_path)
+    fixtures = load_biomedical_ner_fixtures(tmp_path)
+    calls: dict[str, int] = defaultdict(int)
+
+    def runner(fixture, model_name, device):
+        calls[fixture.fixture_id] += 1
+        return list(fixture.gold_spans)
+
+    report = run_biomedical_ner_benchmark(
+        fixtures,
+        model_name="fixture-model",
+        runner=runner,
+    )
+
+    assert dict(calls) == {fixture.fixture_id: 1 for fixture in fixtures}
+    metrics = report.to_dict()["metrics"]
+    assert set(metrics["per_corpus"]) == set(BIOMEDICAL_NER_CORPORA)
+
+
+def test_biomedical_ner_per_corpus_slices_use_the_overall_predictions(
+    tmp_path: Path,
+) -> None:
+    _write_synthetic_suite(tmp_path)
+    fixtures = load_biomedical_ner_fixtures(tmp_path)
+    calls: dict[str, int] = defaultdict(int)
+
+    def runner(fixture, model_name, device):
+        # Gold spans on the first call, nothing after: a second pass over the
+        # same fixture would score differently from the first.
+        calls[fixture.fixture_id] += 1
+        return list(fixture.gold_spans) if calls[fixture.fixture_id] == 1 else []
+
+    report = run_biomedical_ner_benchmark(
+        fixtures,
+        model_name="fixture-model",
+        runner=runner,
+    )
+
+    metrics = report.to_dict()["metrics"]
+    assert metrics["exact_span_f1"]["f1"] == 1.0
+    for corpus in BIOMEDICAL_NER_CORPORA:
+        corpus_metrics = metrics["per_corpus"][corpus]
+        assert corpus_metrics["exact_span_f1"]["f1"] == 1.0
+        assert corpus_metrics["relaxed_span_f1"]["f1"] == 1.0
+
+
 def test_biomedical_ner_suite_registry_and_metadata(tmp_path: Path) -> None:
     _write_synthetic_suite(tmp_path)
 
