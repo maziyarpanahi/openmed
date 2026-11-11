@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 _FIXTURE_PATH = (
     Path(__file__).parents[2] / "fixtures" / "generative" / "unanswerable_v1.jsonl"
 )
@@ -30,6 +32,11 @@ def _load_fixture() -> list[dict[str, Any]]:
         for line in _FIXTURE_PATH.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+def _validate_supporting_quote(note: str, quote: str) -> None:
+    if not quote or note.count(quote) != 1:
+        raise ValueError("Supporting quote must occur exactly once in the note")
 
 
 def test_fixture_has_at_least_thirty_notes_and_sixty_questions() -> None:
@@ -91,7 +98,22 @@ def test_supporting_quotes_occur_exactly_once_in_their_notes() -> None:
 
             if question["expected"] == "answer":
                 assert isinstance(quote, str)
-                assert quote
-                assert record["note"].count(quote) == 1
+                _validate_supporting_quote(record["note"], quote)
             else:
                 assert quote is None
+
+
+@pytest.mark.parametrize(
+    ("note", "quote"),
+    [
+        ("Patient has diabetes.", "Patient has hypertension."),
+        (
+            "Patient has diabetes. Patient has diabetes.",
+            "Patient has diabetes.",
+        ),
+    ],
+    ids=["missing-supporting-quote", "duplicate-supporting-quote"],
+)
+def test_invalid_supporting_quotes_are_rejected(note: str, quote: str) -> None:
+    with pytest.raises(ValueError, match="must occur exactly once"):
+        _validate_supporting_quote(note, quote)
