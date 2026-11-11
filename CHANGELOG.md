@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document every built-in MCP tool with its version and read-only,
+  destructive, idempotent and open-world hints in `docs/mcp-tools.md`,
+  generated from the tool registry and guarded by a drift test (#5187).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
