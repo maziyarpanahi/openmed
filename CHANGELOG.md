@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document every local privacy-proxy reason code with its HTTP status,
+  meaning and next step in `docs/service/privacy-proxy.md`, with an AST-based
+  test that fails when a new code is left undocumented (#5183).
+
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
