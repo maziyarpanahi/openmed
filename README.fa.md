@@ -472,7 +472,7 @@ OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شد�
 
 </div>
 
-[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,700+ GitHub stars · 11 Nov 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
