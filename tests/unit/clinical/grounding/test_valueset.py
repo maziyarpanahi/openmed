@@ -266,6 +266,9 @@ def test_local_hierarchy_filter_requires_remote_delegation() -> None:
         expand_valueset(valueset, vocabularies={SYSTEM: _snapshot()})
 
 
+FILTER_VALUE_SENTINEL = "SYNTHETIC_FILTER_VALUE_SENTINEL"
+
+
 def _filtered_valueset(definition: dict[str, Any]) -> dict[str, Any]:
     return {
         "resourceType": "ValueSet",
@@ -274,9 +277,20 @@ def _filtered_valueset(definition: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _assert_filter_value_absent(error: BaseException) -> None:
+    """The planted filter value stays out of the error and every chained error."""
+
+    seen: BaseException | None = error
+    while seen is not None:
+        assert FILTER_VALUE_SENTINEL not in str(seen)
+        assert FILTER_VALUE_SENTINEL not in repr(seen)
+        assert all(FILTER_VALUE_SENTINEL not in repr(arg) for arg in seen.args)
+        seen = seen.__cause__ or seen.__context__
+
+
 def test_unsupported_local_filter_operator_is_named_in_the_error() -> None:
     valueset = _filtered_valueset(
-        {"property": "concept", "op": "is-a", "value": "synthetic-filter-value"}
+        {"property": "concept", "op": "is-a", "value": FILTER_VALUE_SENTINEL}
     )
 
     with pytest.raises(ValueSetExpansionUnsupportedError) as excinfo:
@@ -286,12 +300,12 @@ def test_unsupported_local_filter_operator_is_named_in_the_error() -> None:
     assert "property 'concept', op 'is-a'" in message
     assert "supported operators: =, ==, exists, regex" in message
     assert "supported properties: code, concept, display, system" in message
-    assert "synthetic-filter-value" not in message
+    _assert_filter_value_absent(excinfo.value)
 
 
 def test_unsupported_local_filter_property_is_named_in_the_error() -> None:
     valueset = _filtered_valueset(
-        {"property": "parent", "op": "=", "value": "synthetic-filter-value"}
+        {"property": "parent", "op": "=", "value": FILTER_VALUE_SENTINEL}
     )
 
     with pytest.raises(
@@ -303,7 +317,7 @@ def test_unsupported_local_filter_property_is_named_in_the_error() -> None:
     message = str(excinfo.value)
     assert "property 'parent', op '='" in message
     assert "supported properties: code, concept, display, system" in message
-    assert "synthetic-filter-value" not in message
+    _assert_filter_value_absent(excinfo.value)
 
 
 @pytest.mark.parametrize(
@@ -318,7 +332,7 @@ def test_free_text_filter_tokens_are_replaced_with_a_placeholder(
     property_name: str, operator: str, free_text: str, named: str
 ) -> None:
     valueset = _filtered_valueset(
-        {"property": property_name, "op": operator, "value": "synthetic-filter-value"}
+        {"property": property_name, "op": operator, "value": FILTER_VALUE_SENTINEL}
     )
 
     with pytest.raises(ValueSetExpansionUnsupportedError) as excinfo:
@@ -327,7 +341,7 @@ def test_free_text_filter_tokens_are_replaced_with_a_placeholder(
     message = str(excinfo.value)
     assert named in message
     assert free_text not in message
-    assert "synthetic-filter-value" not in message
+    _assert_filter_value_absent(excinfo.value)
 
 
 def test_ecl_is_delegated_to_configured_fhir_expand_endpoint() -> None:
