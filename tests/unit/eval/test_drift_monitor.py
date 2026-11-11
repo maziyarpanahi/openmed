@@ -22,8 +22,10 @@ from openmed.eval.drift_monitor import (
     DRIFT_TRIGGER_SCHEMA_VERSION,
     LABEL_RATE_FAMILY,
     VERDICT_DRIFT,
+    VERDICT_INSUFFICIENT_DATA,
     VERDICT_STABLE,
     DriftAggregateWindow,
+    DriftInputError,
     DriftPrivacyError,
     assert_no_raw_text,
     build_drift_window,
@@ -157,6 +159,79 @@ def test_trigger_signal_is_directly_consumable():
     assert payload["max_divergence"] == report.max_divergence
     # The boundary shape must round-trip through JSON for the trigger to read it.
     assert json.loads(json.dumps(payload)) == payload
+
+
+# ---------------------------------------------------------------------------
+# Minimum sample count
+# ---------------------------------------------------------------------------
+
+
+def _tiny_window(window_id: str = "tiny") -> DriftAggregateWindow:
+    # Three documents, all NAME: PSI is far past the drift threshold.
+    return build_drift_window(
+        window_id,
+        label_counts={"NAME": 3},
+        score_histogram=[0, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+        length_histogram={"len_0000_0064": 3},
+        script_histogram={"Latin": 3},
+    )
+
+
+def test_window_below_minimum_sample_count_is_insufficient_data():
+    report = compute_drift_report(
+        _baseline_window(), _tiny_window(), minimum_sample_count=100
+    )
+
+    assert report.max_divergence >= DEFAULT_DRIFT_THRESHOLD
+    assert report.verdict == VERDICT_INSUFFICIENT_DATA
+    assert report.drift_detected is False
+    assert report.to_dict()["minimum_sample_count"] == 100
+
+    payload = report.to_trigger_signal().to_dict()
+    assert payload["verdict"] == VERDICT_INSUFFICIENT_DATA
+    assert payload["drift_detected"] is False
+
+
+def test_window_at_minimum_sample_count_keeps_its_verdict():
+    tiny = compute_drift_report(
+        _baseline_window(), _tiny_window(), minimum_sample_count=3
+    )
+    assert tiny.verdict == VERDICT_DRIFT
+    assert tiny.drift_detected
+
+    drifted = compute_drift_report(
+        _baseline_window(), _label_drifted_window(), minimum_sample_count=100
+    )
+    assert drifted.verdict == VERDICT_DRIFT
+    stable = compute_drift_report(
+        _baseline_window(), _stable_window(), minimum_sample_count=100
+    )
+    assert stable.verdict == VERDICT_STABLE
+
+
+@pytest.mark.parametrize("minimum", [-1, True, 2.5])
+def test_invalid_minimum_sample_count_is_rejected(minimum):
+    with pytest.raises(DriftInputError):
+        compute_drift_report(
+            _baseline_window(), _tiny_window(), minimum_sample_count=minimum
+        )
+
+
+def test_declared_sample_count_below_label_total_is_rejected():
+    payload = {
+        "window_id": "undercounted",
+        "sample_count": 2,
+        "label_counts": {"NAME": 7, "DATE": 3},
+    }
+    with pytest.raises(DriftInputError):
+        DriftAggregateWindow.from_mapping(payload)
+
+
+def test_declared_sample_count_at_or_above_label_total_is_kept():
+    window = DriftAggregateWindow.from_mapping(
+        {"window_id": "counted", "sample_count": 12, "label_counts": {"NAME": 10}}
+    )
+    assert window.sample_count == 12
 
 
 # ---------------------------------------------------------------------------

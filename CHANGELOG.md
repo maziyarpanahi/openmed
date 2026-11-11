@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Return an `insufficient_data` drift verdict, with `drift_detected` false,
+  when the observation window is smaller than the new `minimum_sample_count`
+  keyword of `compute_drift_report`, and reject drift windows whose declared
+  `sample_count` is below their label total (#4548).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
