@@ -174,7 +174,7 @@ class LoincLoaderError(VocabLoaderError):
     """Raised when a caller-supplied LOINC release is invalid or unreadable."""
 
 
-_LOINC_CODE_PATTERN = re.compile(r"(\d{1,7})-(\d)")
+_LOINC_CODE_PATTERN = re.compile(r"([0-9]{1,7})-([0-9])")
 
 
 def loinc_check_digit_is_valid(code: object) -> bool:
@@ -183,8 +183,8 @@ def loinc_check_digit_is_valid(code: object) -> bool:
     The LOINC Users' Guide algorithm: take the digits in odd positions
     counting from the right of the base number, double that number, place
     the even-position digits in front, sum every digit, and subtract the sum
-    from the next multiple of ten.  Codes that are not ``NNNNN-N`` shaped are
-    not valid.
+    from the next multiple of ten.  Codes that are not one to seven ASCII
+    digits, a hyphen and one check digit are not valid.
     """
 
     match = _LOINC_CODE_PATTERN.fullmatch(str(code).strip())

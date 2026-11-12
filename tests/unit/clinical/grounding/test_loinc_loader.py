@@ -140,7 +140,18 @@ def test_check_digit_accepts_sample_codes():
 
 @pytest.mark.parametrize(
     "code",
-    ["4548-5", "4584-4", "17856-0", "45484", "4548-", "-4", "LP100-1", "", None],
+    [
+        "4548-5",
+        "4584-4",
+        "17856-0",
+        "45484",
+        "4548-",
+        "-4",
+        "LP100-1",
+        "",
+        None,
+        "\u0664\u0665\u0664\u0668-\u0664",  # 4548-4 in Arabic-Indic digits
+    ],
 )
 def test_check_digit_rejects_wrong_or_malformed_codes(code):
     assert loinc_check_digit_is_valid(code) is False
