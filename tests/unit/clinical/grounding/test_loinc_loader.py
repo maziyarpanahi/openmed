@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from openmed.clinical.grounding import (
     LOINC_SYSTEM_URI,
     LoincLoader,
+    LoincLoaderError,
     VocabularyLoaderRegistry,
+    loinc_check_digit_is_valid,
     validate_vocabulary_loader,
+)
+
+SAMPLE = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "clinical"
+    / "grounding"
+    / "loinc_sample.jsonl"
 )
 
 
@@ -102,3 +115,60 @@ def test_loader_conforms_to_registry_and_exposes_answer_lists(tmp_path):
         "LA100-1",
         "LA100-2",
     ]
+
+
+def _sample_projection(tmp_path: Path, *extra_codes: str) -> Path:
+    projection = tmp_path / "loinc.jsonl"
+    rows = SAMPLE.read_text(encoding="utf-8").splitlines()
+    rows.extend(
+        json.dumps({"code": code, "preferred_term": f"Invented test {index}"})
+        for index, code in enumerate(extra_codes)
+    )
+    projection.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return projection
+
+
+def test_check_digit_accepts_sample_codes():
+    sample_codes = [
+        json.loads(line)["code"]
+        for line in SAMPLE.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert sample_codes == ["4548-4", "17856-6"]
+    assert all(loinc_check_digit_is_valid(code) for code in sample_codes)
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["4548-5", "4584-4", "17856-0", "45484", "4548-", "-4", "LP100-1", "", None],
+)
+def test_check_digit_rejects_wrong_or_malformed_codes(code):
+    assert loinc_check_digit_is_valid(code) is False
+
+
+def test_loader_counts_invalid_check_digits_without_dropping_rows(tmp_path):
+    loader = LoincLoader(_sample_projection(tmp_path, "4548-5", "17856-0"))
+
+    assert loader.invalid_check_digit_count == 2
+    assert [record.code for record in loader.records] == [
+        "4548-4",
+        "17856-6",
+        "4548-5",
+        "17856-0",
+    ]
+
+
+def test_loader_reports_zero_for_valid_sample(tmp_path):
+    loader = LoincLoader(_sample_projection(tmp_path), strict_check_digits=True)
+
+    assert loader.invalid_check_digit_count == 0
+
+
+def test_strict_check_digits_raises_without_naming_the_code(tmp_path):
+    loader = LoincLoader(
+        _sample_projection(tmp_path, "4548-5"), strict_check_digits=True
+    )
+
+    with pytest.raises(LoincLoaderError, match="1 LOINC table row") as excinfo:
+        loader.load()
+    assert "4548-5" not in str(excinfo.value)

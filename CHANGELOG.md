@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate LOINC Mod 10 check digits in `LoincLoader`: rows with a wrong check digit are counted in `invalid_check_digit_count`, and `strict_check_digits=True` raises `LoincLoaderError` (#4660).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
