@@ -38,7 +38,7 @@ stable = render_private_training_schemas()
 ```
 
 Each builder returns a fresh mapping. Mutating an export cannot affect later
-builds. Unknown names raise `PrivateTrainingSchemaError` without echoing input.
+builds. Unknown names raise `PrivateTrainingSchemaError` with the sorted list of valid catalog names; the requested value is never echoed.
 
 ## Offline structural validation
 
