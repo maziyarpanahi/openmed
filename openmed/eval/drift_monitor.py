@@ -477,6 +477,14 @@ def compute_drift_report(
         reference_window = _as_window(reference)
         observation_window = _as_window(observation)
 
+        reference_bins = len(reference_window.score_histogram)
+        observation_bins = len(observation_window.score_histogram)
+        if reference_bins != observation_bins:
+            raise DriftInputError(
+                "score_histogram bin count mismatch between reference "
+                f"({reference_bins} bins) and observation ({observation_bins} bins)"
+            )
+
         families = tuple(
             _family_divergence(
                 family,
