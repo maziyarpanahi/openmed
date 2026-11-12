@@ -13,6 +13,10 @@ See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration 
 
 ### Fixed
 
+- Name the rejected `property` and `op` in local ValueSet filter errors and
+  list the supported properties and operators. Tokens outside a short
+  controlled pattern are shown as `<unrecognized>`, and the filter value is
+  never included (#4666).
 - Save evaluator rollout state and champion pointers atomically (#4949).
 - Probe the application readiness endpoint on loopback in the Docker Compose health check (#4662).
 - Normalize line endings before checking the OpenPHI-Vision fixture catalog digest, so the bundled fixtures load from Windows and Unix checkouts.
