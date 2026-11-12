@@ -7,15 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-08
+
+See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
+
 ### Fixed
 
 - Name the rejected `property` and `op` in local ValueSet filter errors and
   list the supported properties and operators. Tokens outside a short
   controlled pattern are shown as `<unrecognized>`, and the filter value is
   never included (#4666).
+- Save evaluator rollout state and champion pointers atomically (#4949).
+- Probe the application readiness endpoint on loopback in the Docker Compose health check (#4662).
+- Normalize line endings before checking the OpenPHI-Vision fixture catalog digest, so the bundled fixtures load from Windows and Unix checkouts.
+- Keep synthetic federated example snapshots comparable across Windows and Unix checkouts.
 
-- Reject missing, repeated, or unsupported content types on the local privacy
-  proxy's chat routes before reading the request body (#5185).
+- Return HTTP 415 for missing, repeated, or unsupported content types on the local privacy proxy's chat routes before reading the request body (#5185).
 
 - Discover nested public multimodal packages in the API compatibility gate,
   require committed baseline coverage, and document baseline updates for new
@@ -23,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without loading their runtimes during discovery (#3844).
 
 ### Added
+
+- Add value-free configuration provenance to the CLI (#5472), a reviewer disagreement schema (#5473), and an offline Node.js de-identification example (#5474).
+- Ship privacy manifests with OpenMedKit and its extension products, declare the scan demo's user-defaults access, and check Swift sources for undeclared required-reason APIs in CI (#3946, #4248).
+- Localize OpenMedKit share-extension controls, messages, policy names, and accessibility labels in English, Chinese, and Hindi. Update fonts and picker rows when Dynamic Type changes, preserve the selected policy, and keep controls and the scrollable text preview usable at accessibility sizes (#3955, #4229).
+- Add a metadata-only federated round walkthrough (#4130) and enforce native Tauri checks when relevant (#4129).
 
 - Add a runnable TypeScript REST client example that de-identifies a note
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
@@ -36,17 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session-scoped opaque voice embedding handles in Python and OpenMedKit, with
   same-session similarity, value-free evidence, retention erasure callbacks and
   buffer destruction on pause, withdrawal, cancellation and finalization.
-  Serialization, persistence and cross-session comparison are refused.
+  Serialization, persistence and cross-session comparison are refused (#3818).
 
-- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
-  with digest-bound clinician confirmation, evidence/speaker references,
-  freshness and correction holds, and counts-only conversion-loss reports.
+- Export, validate, and import fixed, reviewed ambient notes as a bounded FHIR R4 document in Python and OpenMedKit. Bind confirmation to the reviewed digest and preserve evidence and speaker references, freshness checks, correction holds, and counts-only conversion-loss reports (#3837).
 
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
 
-- Experimental Android mirrors of multimodal asset manifests, profile references,
-  preflight findings, abstention records, and provider result envelopes with strict
-  content-free parsing and shared offline Python/Kotlin serialization vectors.
+- Add experimental Android mirrors of multimodal asset manifests, profile references, preflight findings, abstention records, and provider result envelopes, with strict content-free parsing and shared Python/Kotlin fixtures for v1 records and v1.1 waveform manifests (#3843, #3814).
 
 - Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
 
@@ -69,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
 
 - Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
-  parser fuzz coverage, with required-resource checks and a zero-skip gate.
+  parser fuzz coverage, with required-resource checks and a zero-skip gate (#3811).
 
 - Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
   two-patient packet fixtures with verified pixel/gold digests, critical flags,
@@ -94,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate ambient capture on unanimous consent in Python and OpenMedKit, with explicit interruption/resume, non-renewable retention, revocable owned-memory references and draft-only review exports with conservative deletion accounting (#3208).
 
-- Add an isolated local MLX Whisper streaming provider with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
+- Add an isolated local MLX Whisper streaming provider on Apple Silicon through the optional `edge-asr` extra, with bounded PCM, private partials, stability and PHI gates, word timing, language confidence, explicit unknown speakers and cancellation cleanup (#3203).
 
 - Flag ASR hypotheses over non-speech audio and repetition loops for review, using bounded provider statistics, voice-activity evidence and content-free decisions (#3815).
 
@@ -113,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
-- Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
+- Add a local SmolVLM2 adapter on Apple Silicon through the optional `edge-vlm` extra, with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
 
@@ -125,15 +133,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
   16, 212 and 80 with windowed integer outputs, streamed checksum verification,
-  value-safe metadata
-  and MIT annotation summaries, synthetic privacy fixtures and explicit human
-  review boundaries.
+  value-safe metadata and MIT annotation summaries, synthetic privacy fixtures
+  and explicit human review boundaries (#3827).
 
 - Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
 
 - Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
 
-- Support separately acquired d1-omni-600M for local text, image and English voice-command decisions; record revision-bound model license provenance separately from the Apache-2.0 adapter (#4263).
+- Run a pinned, user-supplied d1-omni-600M snapshot on CPU for local text, image, and English voice-command decisions. Record the model revision, license label, and license-file digest separately from the Apache-2.0 adapter (#4263).
 
 - Add bounded local speaker-diarization observations and an optional CPU adapter with explicit acoustic uncertainty, pinned caller-supplied artifacts, cancellation and alias lineage; clinical roles remain separate (#3676).
 
@@ -155,7 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
   integer/scaled samples, withheld identification/date/annotation text, explicit
-  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff (#3826).
 
 - Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
   separate rhythm and representative-beat signals, withheld identifying
@@ -177,13 +184,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   core report byte parity, bounded manifests and bodies, and content-free errors
   and access logs (#3835).
 
-- Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
+- Add the opt-in, authenticated `POST /v1/systemone` route and Python client method. The route de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
 
 - Run the pinned d3-edge model on CPU for local text, image and video decisions with an explicit custom-code allowlist (#4262).
 
 - Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
   retention, provenance and review/export threats to enforcing code/tests or
-  tracked gaps, with offline dangling-reference and publication regression gates.
+  tracked gaps, with offline dangling-reference and publication regression gates (#3830).
 
 - Contain optional media decoder probes in disposable Linux workers with hard resource limits, denied writes/network/process creation, content-free outcomes and synthetic crash/recovery controls (#3206).
 
@@ -220,7 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
 
-- Carry verified local images and bounded video clips through decision requests and the loopback System One bridge; strip metadata before dispatch and keep media out of audit logs (#4261).
+- Carry verified local images and bounded video clips through Python and MCP decision requests and the System One bridge over loopback or a Unix socket. Strip metadata before dispatch and keep media out of audit logs (#4261).
 
 - Add an experimental CPU ONNX streaming speech adapter for pinned local character-CTC exports, with bounded timed hypotheses and content-free reports (#3842).
 
@@ -256,7 +263,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Offline critical transcript-token classification and value-free confirmation
   holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
-  reviewer receipts, guarded export permits and unchanged local dosing checks.
+  reviewer receipts, guarded export permits and unchanged local dosing checks (#3820).
 
 - Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
 
@@ -288,6 +295,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Require the typed `externalData` option for browser ONNX Runtime and WebGPU session loading. Reject remote or query-bearing shard locations, duplicate shard paths, and untyped `sessionOptions.externalData`. Check declared per-shard and configured total byte limits before creating a session, and include the shard declarations in the session cache key (#3934, #4249).
+
 - Enforce conservative, policy-selectable asset limits before Python image,
   PDF and DICOM pixel redaction decodes media, with bounded header reads,
   runtime page/frame guards and code-and-number-only admission errors (#3832).
@@ -302,26 +311,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
   label/overview outputs unless explicitly retained after verified pixel
   redaction and reviewer confirmation. Synthetic fixtures cover privacy and
-  hostile layout controls; structural removal does not certify pixel privacy.
+  hostile layout controls; structural removal does not certify pixel privacy (#3817).
 
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
-  token IDs. Callers must supply a local guard and asset provenance to release text.
+  token IDs. Callers must supply a local guard and asset provenance to release text (#3813).
 
 - Local barcode, QR and DataMatrix region detection across image, DICOM pixel
   and PDF raster redaction, with a caller-installed optional ZXing backend,
   deterministic fake, payload-free coverage reports, explicit unavailable
-  coverage policy and residual-code verification.
+  coverage policy and residual-code verification (#3816).
 
-- Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
+- Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation. [CVE-2026-49272](https://github.com/oauthlib/oauthlib/security/advisories/GHSA-3jp2-3mrg-2vxc)
 
-- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
-  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
-  printer settings and presentation template text; refuse unsupported hidden
-  carriers with category/count/digest evidence and preserve destinations (#3810).
+- Fail closed before publishing redacted DOCX, XLSX, and PPTX packages with uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails, printer settings, and presentation template text. Refuse unsupported hidden carriers with category, count, and digest evidence before touching the destination. Caller-supplied output streams must be seekable and writable, and successful exports replace and truncate existing stream contents (#3810).
 
 ### Changed
+
+- Decision result schemas accept a model-weight license label and an optional license-file digest bound to an immutable revision. GLiNER2 uses an explicit declaration or the loaded snapshot's local model card. Custom GLiNER2 and GLiClass revisions without a license declaration or applicable local evidence report `NOASSERTION` (#4263).
 
 - Use the stable 1.x release of the optional `yasbd-lib` sentence segmentation backend (#3596).
 
@@ -559,9 +567,6 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
   device-isolated caches, offline loading, exact spans, and disease-label
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
-- Ship privacy manifests with the OpenMedKit and extension products, declare
-  the scan demo's user defaults access, and fail CI when Swift sources use an
-  undeclared required-reason API (#3946).
 
 ### Fixed
 
@@ -605,14 +610,6 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
   extractor and retain native span offsets and confidence scores instead of
   attempting to use older `gliner` classes (#4329).
 
-### Security
-
-- Load ONNX Runtime Web external-data shards only through the typed
-  `externalData` option: reject remote and query-bearing shard locations and
-  untyped `sessionOptions.externalData`, enforce declared per-shard and total
-  byte limits before session creation, and key cached sessions by shard
-  (#3934).
-
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
@@ -646,14 +643,6 @@ clinical efficacy. Package publication remains a separate release action.
   without restoring the invalid classical scale (#3724).
 
 ### Added
-
-- Localize OpenMedKit share-extension buttons, status/error messages, policy
-  display names, and accessibility labels/hints in English, Chinese, and Hindi.
-  Update fonts and picker rows on live Dynamic Type changes, preserve policy
-  selection, and keep controls reachable at accessibility sizes. Use internally
-  scrollable text previews, a policy menu with an option count and selection
-  checkmark, and distinct, full-width primary/secondary actions
-  (#3955).
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).

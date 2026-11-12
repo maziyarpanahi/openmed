@@ -102,7 +102,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.3.0"),
 ]
 ```
 
@@ -393,7 +393,7 @@ OpenMed SDK のソースは [Apache-2.0 License](LICENSE) の下で公開され�
 
 OpenMed が役立つと感じたら、スターを付けると他の人が見つけやすくなります。
 
-[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,700+ GitHub stars · 11 Nov 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
