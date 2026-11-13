@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
 
+### Added
+
+- Add an EU evidence index page to the Compliance docs that links the existing
+  DPIA, DPA, GDPR DSAR export, EU AI Act model-card field, and ISO 27701
+  evidence pages, says what each is for and what it is not, and states that it
+  is an index and not legal advice (#5427).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
