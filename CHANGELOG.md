@@ -46,6 +46,10 @@ See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration 
   with an injected `fetch` and handles `OpenMedApiError` by its code, with
   offline stubbed-fetch tests (#5429).
 
+- Add runnable Go client examples for `New`, `Deidentify`, `DeidentifyStream`
+  and `AsAPIError` that run against an in-process test server with synthetic
+  responses and are checked by `go test` (#5428).
+
 - Document multimodal dependency licenses through the existing offline inventory,
   with separate guidance for the Tesseract binary and TCIA collection terms (#257).
 
