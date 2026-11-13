@@ -267,7 +267,7 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
         )
         == versions
     )
-    assert project["requires-python"] == ">=3.11"
+    assert project["requires-python"] == ">=3.11.5"
     # Every supported interpreter ships tomllib, so no TOML backport remains.
     assert not any(value.startswith("tomli") for value in project["dependencies"])
     assert {

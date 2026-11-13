@@ -2,6 +2,8 @@ FROM python:3.11-slim@sha256:be1575ed968de893bd54f4c56315ff7c4736ce522c1bca08fd5
 
 FROM debian:forky-slim@sha256:91b0aaebf7a1ccacfe7a9cbff6ab2d6be7d9b3b6cf1dfcf44b25f9095c0e0464
 
+ARG DEBIAN_SNAPSHOT=20261108T000000Z
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
@@ -10,8 +12,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Keep the immutable base's Python runtime while using Debian's fixed SQLite
-# release. Runtime libraries stay exact and come from one Debian suite.
-RUN apt-get update \
+# release. The signed snapshot retains exact pins after live mirrors replace them.
+# Snapshot metadata expires; its signatures and package hashes stay required.
+RUN sed -i \
+        -e "s|http://deb.debian.org/debian-security|http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/|g" \
+        -e "s|http://deb.debian.org/debian|http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/|g" \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         "ca-certificates=20260816+nmu1" \
         "libbz2-1.0=1.0.8-6+b2" \
