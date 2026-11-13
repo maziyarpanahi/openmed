@@ -20,8 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add synthetic cross-runtime date-shift vectors for the patient-keyed and
-  seeded offset helpers, with leap-day and year-boundary shifted dates and a
-  Python test that recomputes every vector (#5413).
+  seeded offset helpers, covering non-ASCII patient keys, raw-byte secrets,
+  seeds beyond 64 bits, and leap-day, month-end and year-boundary shifted
+  dates, with a Python test that recomputes every vector and reports
+  mismatches by vector id only (#5413).
 
 ## [3.3.0] - 2026-11-08
 

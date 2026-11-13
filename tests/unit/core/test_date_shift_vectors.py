@@ -1,4 +1,7 @@
-"""Recompute the synthetic cross-runtime date-shift vectors."""
+"""Recompute the synthetic cross-runtime date-shift vectors.
+
+Failures name the vector id only, never its patient key, secret or digest.
+"""
 
 import hashlib
 import hmac
@@ -15,8 +18,21 @@ FIXTURE_PATH = (
     Path(__file__).resolve().parents[2] / "fixtures/parity/date_shift_v1.json"
 )
 FIXTURE = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-SECRET = FIXTURE["secret"]["utf8"]
+SECRETS = {item["id"]: bytes.fromhex(item["hex"]) for item in FIXTURE["secrets"]}
 SEED_DOMAIN = bytes.fromhex(FIXTURE["algorithm"]["seed_domain_hex"])
+PATIENT_VECTORS = FIXTURE["patient_key_offsets"]
+SEED_VECTORS = FIXTURE["seed_offsets"]
+DATE_VECTORS = FIXTURE["date_shifts"]
+
+
+def _ids(vectors):
+    return [vector["id"] for vector in vectors]
+
+
+def _check(matches: bool, vector_id: str, what: str) -> None:
+    # pytrace=False keeps keys, secrets and digests out of the report.
+    if not matches:
+        pytest.fail(f"date-shift vector {vector_id}: {what} mismatch", pytrace=False)
 
 
 def _offset_from_hex_digest(digest_hex: str, max_days: int) -> int:
@@ -24,90 +40,129 @@ def _offset_from_hex_digest(digest_hex: str, max_days: int) -> int:
     return bucket - max_days if bucket < max_days else bucket - max_days + 1
 
 
-def test_fixture_is_synthetic_with_a_test_only_secret():
+def _is_utf8(data: bytes) -> bool:
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def _expected_offset(vector) -> int:
+    if "patient_key" in vector:
+        return stable_offset_for(
+            vector["patient_key"],
+            max_days=vector["max_days"],
+            secret=SECRETS[vector["secret_id"]],
+        )
+    return stable_offset_from_seed(vector["seed"], max_days=vector["max_days"])
+
+
+def test_fixture_is_synthetic_with_test_only_secrets_and_unique_ids():
     assert FIXTURE["synthetic_only"] is True
     assert FIXTURE["version"] == 1
-    assert FIXTURE["secret"]["test_only"] is True
-    assert bytes.fromhex(FIXTURE["secret"]["hex"]) == SECRET.encode("utf-8")
-    keys = {vector["patient_key"] for vector in FIXTURE["patient_key_offsets"]}
-    assert keys and all(re.fullmatch(r"SYNTH-PATIENT-\d{4}", key) for key in keys)
+    assert FIXTURE["secrets"]
+    assert all(item["test_only"] is True for item in FIXTURE["secrets"])
+    utf8 = [item for item in FIXTURE["secrets"] if "utf8" in item]
+    assert all(SECRETS[item["id"]] == item["utf8"].encode("utf-8") for item in utf8)
+    ids = _ids(PATIENT_VECTORS) + _ids(SEED_VECTORS) + _ids(DATE_VECTORS)
+    assert len(ids) == len(set(ids))
+    keys = {vector["patient_key"] for vector in PATIENT_VECTORS}
+    assert all(re.fullmatch(r"SYNTH-PATIENT-\d{4}(-\S+)?", key) for key in keys)
 
 
-@pytest.mark.parametrize("vector", FIXTURE["patient_key_offsets"])
+@pytest.mark.parametrize("vector", PATIENT_VECTORS, ids=_ids(PATIENT_VECTORS))
 def test_patient_key_offsets_recompute(vector):
-    key, max_days = vector["patient_key"], vector["max_days"]
-    digest = hmac.new(SECRET.encode("utf-8"), key.encode("utf-8"), hashlib.sha256)
-    assert digest.hexdigest() == vector["digest_sha256_hex"]
+    vector_id, max_days = vector["id"], vector["max_days"]
+    secret = SECRETS[vector["secret_id"]]
+    message = vector["patient_key"].encode("utf-8")
+    digest = hmac.new(secret, message, hashlib.sha256).hexdigest()
+    _check(digest == vector["digest_sha256_hex"], vector_id, "digest")
     offset = vector["offset_days"]
-    assert _offset_from_hex_digest(vector["digest_sha256_hex"], max_days) == offset
-    assert stable_offset_for(key, max_days=max_days, secret=SECRET) == offset
-    assert (
-        stable_offset_for(key.encode(), max_days=max_days, secret=SECRET.encode())
-        == offset
-    )
-    assert offset != 0 and -max_days <= offset <= max_days
+    _check(_offset_from_hex_digest(digest, max_days) == offset, vector_id, "formula")
+    _check(_expected_offset(vector) == offset, vector_id, "offset")
+    by_bytes = stable_offset_for(message, max_days=max_days, secret=secret)
+    _check(by_bytes == offset, vector_id, "bytes input")
+    _check(offset != 0 and -max_days <= offset <= max_days, vector_id, "bounds")
 
 
-@pytest.mark.parametrize("vector", FIXTURE["seed_offsets"])
+@pytest.mark.parametrize("vector", SEED_VECTORS, ids=_ids(SEED_VECTORS))
 def test_seed_offsets_recompute(vector):
-    seed, max_days = vector["seed"], vector["max_days"]
-    digest = hashlib.sha256(SEED_DOMAIN + str(seed).encode("ascii")).hexdigest()
-    assert digest == vector["digest_sha256_hex"]
+    vector_id, max_days = vector["id"], vector["max_days"]
+    text = str(vector["seed"]).encode("ascii")
+    digest = hashlib.sha256(SEED_DOMAIN + text).hexdigest()
+    _check(digest == vector["digest_sha256_hex"], vector_id, "digest")
     offset = vector["offset_days"]
-    assert _offset_from_hex_digest(digest, max_days) == offset
-    assert stable_offset_from_seed(seed, max_days=max_days) == offset
-    assert offset != 0 and -max_days <= offset <= max_days
+    _check(_offset_from_hex_digest(digest, max_days) == offset, vector_id, "formula")
+    _check(_expected_offset(vector) == offset, vector_id, "offset")
+    _check(offset != 0 and -max_days <= offset <= max_days, vector_id, "bounds")
 
 
-@pytest.mark.parametrize("vector", FIXTURE["date_shifts"])
+@pytest.mark.parametrize("vector", DATE_VECTORS, ids=_ids(DATE_VECTORS))
 def test_date_shifts_recompute(vector):
-    max_days = vector["max_days"]
-    if "patient_key" in vector:
-        offset = stable_offset_for(
-            vector["patient_key"], max_days=max_days, secret=SECRET
-        )
-    else:
-        offset = stable_offset_from_seed(vector["seed"], max_days=max_days)
-    assert offset == vector["offset_days"]
+    vector_id = vector["id"]
+    offset = _expected_offset(vector)
+    _check(offset == vector["offset_days"], vector_id, "offset")
     source = date.fromisoformat(vector["source_date"])
     shifted = source + timedelta(days=offset)
-    assert shifted.isoformat() == vector["shifted_date"]
-    assert shifted - timedelta(days=offset) == source
+    _check(shifted.isoformat() == vector["shifted_date"], vector_id, "shifted date")
 
 
-def test_vectors_cover_every_max_days_leap_days_and_year_boundaries():
+def test_vectors_cover_inputs_and_calendar_edges():
     max_days_values = set(FIXTURE["max_days_values"])
-    for section in ("patient_key_offsets", "seed_offsets"):
-        assert {vector["max_days"] for vector in FIXTURE[section]} == max_days_values
-    signs = {vector["offset_days"] > 0 for vector in FIXTURE["seed_offsets"]}
-    assert signs == {True, False}
+    for vectors in (PATIENT_VECTORS, SEED_VECTORS):
+        assert {vector["max_days"] for vector in vectors} == max_days_values
+    assert {vector["offset_days"] > 0 for vector in SEED_VECTORS} == {True, False}
+    assert any(not vector["patient_key"].isascii() for vector in PATIENT_VECTORS)
+    assert set(SECRETS) == {vector["secret_id"] for vector in PATIENT_VECTORS}
+    assert any(not _is_utf8(secret) for secret in SECRETS.values())
+    seeds = {vector["seed"] for vector in SEED_VECTORS}
+    assert any(not -(2**63) <= seed < 2**63 for seed in seeds)
 
-    pairs = [
-        (date.fromisoformat(v["source_date"]), date.fromisoformat(v["shifted_date"]))
-        for v in FIXTURE["date_shifts"]
-    ]
-    assert any(day.month == 2 and day.day == 29 for pair in pairs for day in pair)
-    assert any(source.year != shifted.year for source, shifted in pairs)
-    assert any(source.year % 100 == 0 and source.year % 400 != 0 for source, _ in pairs)
+    def pair(vector):
+        return (
+            date.fromisoformat(vector["source_date"]),
+            date.fromisoformat(vector["shifted_date"]),
+        )
+
+    def crosses(vector, boundary):
+        low, high = sorted(pair(vector))
+        return low <= boundary < high
+
+    def covering(name):
+        return [vector for vector in DATE_VECTORS if vector["covers"] == name]
+
+    for vector in covering("leap_day") + covering("leap_day_source"):
+        assert any(day.month == 2 and day.day == 29 for day in pair(vector))
+    for vector in covering("year_boundary"):
+        low, high = sorted(pair(vector))
+        assert low.year != high.year, vector["id"]
+    for name in ("month_end", "non_leap_february", "non_leap_century"):
+        cases = covering(name)
+        assert cases, name
+        for vector in cases:
+            low, high = sorted(pair(vector))
+            assert low.month != high.month, vector["id"]
+    for vector in covering("non_leap_february") + covering("non_leap_century"):
+        year = pair(vector)[0].year
+        assert year % 4 != 0 or (year % 100 == 0 and year % 400 != 0)
+        assert crosses(vector, date(year, 2, 28)), vector["id"]
+    assert covering("leap_day") and covering("leap_day_source")
 
 
 def test_wrong_secret_or_seed_text_does_not_reproduce_the_vectors():
-    vectors = FIXTURE["patient_key_offsets"]
     assert any(
         stable_offset_for(
             vector["patient_key"],
             max_days=vector["max_days"],
-            secret=SECRET + "-other",
+            secret=SECRETS[vector["secret_id"]] + b"-other",
         )
         != vector["offset_days"]
-        for vector in vectors
+        for vector in PATIENT_VECTORS
         if vector["max_days"] > 1
     )
-    undomained = [
-        hashlib.sha256(str(vector["seed"]).encode("ascii")).hexdigest()
-        for vector in FIXTURE["seed_offsets"]
-    ]
     assert all(
-        digest != vector["digest_sha256_hex"]
-        for digest, vector in zip(undomained, FIXTURE["seed_offsets"])
+        hashlib.sha256(str(vector["seed"]).encode("ascii")).hexdigest()
+        != vector["digest_sha256_hex"]
+        for vector in SEED_VECTORS
     )
