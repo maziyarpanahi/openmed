@@ -261,7 +261,7 @@ The same converted MLX artifact is now intended to work in both:
 - Python on Apple Silicon
 - Swift via OpenMedKit
 
-OpenMedKit prefers the new self-contained artifact layout above. For older MLX repos that were uploaded before `openmed-mlx.json` and tokenizer asset bundling, it also keeps backward compatibility by falling back to `config.json` plus the source Hugging Face tokenizer reference when available.
+OpenMedKit prefers the new self-contained artifact layout above. Older MLX repos that were uploaded before `openmed-mlx.json` and tokenizer asset bundling still load from `config.json`, but their tokenizer is no longer fetched implicitly: add the tokenizer files to the directory, or opt into a pinned download as described in [Offline Tokenizer Assets](#offline-tokenizer-assets).
 
 ## Quick Start: North Micro Vision
 
@@ -400,13 +400,13 @@ import OpenMedKit
 
 let modelURL = Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc")!
 let labelsURL = Bundle.main.url(forResource: "id2label", withExtension: "json")!
+let tokenizerURL = Bundle.main.url(forResource: "TokenizerAssets", withExtension: nil)!
 
 let openmed = try OpenMed(
     backend: .coreML(
         modelURL: modelURL,
         id2labelURL: labelsURL,
-        tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
-        tokenizerFolderURL: nil
+        tokenizerFolderURL: tokenizerURL
     )
 )
 
@@ -419,9 +419,12 @@ The convenience initializer remains available:
 let openmed = try OpenMed(
     modelURL: modelURL,
     id2labelURL: labelsURL,
-    tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
+    tokenizerFolderURL: tokenizerURL
 )
 ```
+
+Core ML backends have no default tokenizer. Ship the tokenizer that matches
+the model; see [Offline Tokenizer Assets](#offline-tokenizer-assets).
 
 ## Downloading MLX Models From Hugging Face
 
@@ -463,9 +466,16 @@ filesystem entries; applications should keep their cache private to the app.
 
 ## Offline Tokenizer Assets
 
-For MLX artifacts, tokenizer assets travel with the converted model directory, so Swift can load them locally without going back to the Hub.
+OpenMedKit loads tokenizers from local files only, and makes no network request
+unless you explicitly opt in. A tokenizer that drifts or does not match the
+model changes token IDs and offsets without any visible error, so a missing
+tokenizer fails closed instead of being fetched.
 
-For CoreML bundles, you can still bundle tokenizer assets manually and pass `tokenizerFolderURL`:
+- MLX artifacts carry their tokenizer assets in the model directory.
+- Core ML bundles must ship `tokenizer.json` and `tokenizer_config.json` and
+  pass the folder as `tokenizerFolderURL`. There is no default
+  `tokenizerName`; the name, when given, is only an identity check and never
+  triggers a download.
 
 ```swift
 let openmed = try OpenMed(
@@ -474,6 +484,72 @@ let openmed = try OpenMed(
     tokenizerFolderURL: Bundle.main.url(forResource: "TokenizerAssets", withExtension: nil)
 )
 ```
+
+When the assets are absent, initialization throws
+`OpenMedTokenizerError.missingLocalAssets` before model weights load, with no
+request made. Tokenizer errors are value-free: they carry no model path, URL,
+repository ID or tokenizer content, and `reasonCode` gives a stable code such
+as `tokenizer_assets_missing`.
+
+### Opting into a pinned download
+
+If you cannot ship the tokenizer, opt into network acquisition with
+`allowNetworkAccess: true` and an `OpenMedTokenizerPin`. The pin names the
+repository, a full 40-character commit SHA (branch names such as `main` are
+rejected) and the SHA-256 digest of every file. `allowNetworkAccess: true`
+without a pin throws `pinnedRevisionRequired` without making a request.
+
+```swift
+let pin = try OpenMedTokenizerPin(
+    repositoryID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+    revision: "<40-character commit SHA>",
+    files: [
+        .init(name: "tokenizer.json", sha256: "<sha256>"),
+        .init(name: "tokenizer_config.json", sha256: "<sha256>"),
+    ]
+)
+
+let openmed = try await OpenMed.load(
+    backend: .coreML(
+        modelURL: modelURL,
+        id2labelURL: labelsURL,
+        tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
+    ),
+    allowNetworkAccess: true,
+    tokenizerPin: pin
+)
+```
+
+With a pin, OpenMedKit:
+
+- requests only `https://huggingface.co/<repo>/resolve/<pinned commit>/<file>`
+  for the pinned files;
+- checks each file's size (when given) and SHA-256 digest before writing it,
+  then installs the snapshot atomically under
+  `Caches/OpenMed/TokenizerAssets/`, never under Documents;
+- verifies every cached file again before each use, removes a cached copy that
+  no longer matches, and reuses a verified copy offline even when
+  `allowNetworkAccess` is `false`;
+- fails with `identityMismatch` when the pin names a different repository than
+  `tokenizerName` or the MLX artifact's declared source model.
+
+### Async loading
+
+`OpenMed.load(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)` loads the
+tokenizer without blocking a thread. The synchronous initializers still work
+but block the calling thread on a semaphore while the tokenizer loads; that
+blocking bridge is deprecated in favour of `OpenMed.load` and should not be
+used from Swift concurrency contexts.
+
+### Migrating from OpenMedKit 3.x
+
+- `allowNetworkAccess` now defaults to `false`. Apps that relied on implicit
+  tokenizer downloads must bundle the tokenizer or pass an
+  `OpenMedTokenizerPin` with `allowNetworkAccess: true`.
+- `OpenMedBackend.coreML` and `OpenMed(modelURL:id2labelURL:)` no longer
+  default `tokenizerName` to `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1`.
+- The unpinned `resolve/main` download and the `AutoTokenizer.from(pretrained:)`
+  fallback, which wrote under Documents, are removed.
 
 ## Public API
 
@@ -484,8 +560,8 @@ public enum OpenMedBackend: Sendable {
     case coreML(
         modelURL: URL,
         id2labelURL: URL,
-        tokenizerName: String,
-        tokenizerFolderURL: URL?
+        tokenizerName: String? = nil,
+        tokenizerFolderURL: URL? = nil
     )
     case mlx(modelDirectoryURL: URL)
 }
@@ -495,17 +571,28 @@ public enum OpenMedBackend: Sendable {
 
 ```swift
 public final class OpenMed {
-    public init(
+    public convenience init(
         backend: OpenMedBackend,
-        maxSeqLength: Int = 512
+        maxSeqLength: Int = 512,
+        allowNetworkAccess: Bool = false,
+        tokenizerPin: OpenMedTokenizerPin? = nil
     ) throws
+
+    public static func load(
+        backend: OpenMedBackend,
+        maxSeqLength: Int = 512,
+        allowNetworkAccess: Bool = false,
+        tokenizerPin: OpenMedTokenizerPin? = nil
+    ) async throws -> OpenMed
 
     public convenience init(
         modelURL: URL,
         id2labelURL: URL,
-        tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        tokenizerName: String? = nil,
         tokenizerFolderURL: URL? = nil,
-        maxSeqLength: Int = 512
+        maxSeqLength: Int = 512,
+        allowNetworkAccess: Bool = false,
+        tokenizerPin: OpenMedTokenizerPin? = nil
     ) throws
 
     public func analyzeText(
@@ -522,6 +609,32 @@ public final class OpenMed {
 ```
 
 `extractPII(...)` now follows the Python PII path more closely by applying span repair plus semantic-unit merging for fragmented dates, SSNs, phone numbers, emails, and similar PII spans.
+
+### `OpenMedTokenizerPin` and `OpenMedTokenizerError`
+
+```swift
+public struct OpenMedTokenizerPin: Sendable, Hashable {
+    public struct File: Sendable, Hashable {
+        public init(name: String, sha256: String, byteCount: Int? = nil)
+    }
+
+    public init(repositoryID: String, revision: String, files: [File]) throws
+}
+
+public enum OpenMedTokenizerError: Error, Equatable, Sendable {
+    case missingLocalAssets
+    case pinnedRevisionRequired
+    case invalidPin(OpenMedTokenizerPinIssue)
+    case identityMismatch
+    case downloadFailed(statusCode: Int?)
+    case sizeMismatch
+    case digestMismatch
+    case cacheUnavailable
+    case invalidAssets
+
+    public var reasonCode: String { get }
+}
+```
 
 ### `OpenMedModelStore`
 

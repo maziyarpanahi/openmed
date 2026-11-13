@@ -20,7 +20,12 @@ export interface OpenMedModelSource {
   modelPath: string;
   backend?: OpenMedBackendKind;
   id2LabelPath?: string;
+  /** Optional tokenizer repository ID; it never triggers a download. */
   tokenizerName?: string;
+  /**
+   * Local tokenizer folder for Core ML models. iOS loads tokenizer assets
+   * offline only and fails closed when they are missing.
+   */
   tokenizerFolderPath?: string;
   cacheKey?: string;
 }
