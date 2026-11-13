@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Keep exact container runtime packages available through a signed Debian
   snapshot, and recover release image SBOMs by verifying and scanning the
   published image's immutable digest.
+- Require patched Soup Sieve for optional HTML/document dependencies and
+  Python 3.11.5 or newer, matching its supported Python patch level.
 
 ## [3.3.0] - 2026-11-08
 

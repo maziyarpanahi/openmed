@@ -19,7 +19,7 @@ WORKDIR /app
 
 # Keep the immutable base's Python runtime while using Debian's fixed SQLite
 # release. The signed snapshot retains exact pins after live mirrors replace them.
-# Snapshot Release metadata expires; package signatures and hashes remain required.
+# Snapshot metadata expires; its signatures and package hashes stay required.
 RUN sed -i \
         -e "s|http://deb.debian.org/debian-security|http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/|g" \
         -e "s|http://deb.debian.org/debian|http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/|g" \
