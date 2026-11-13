@@ -20,9 +20,14 @@ public enum PolicyAction: String, Codable, Equatable, Sendable {
 }
 
 /// Errors raised while loading bundled policy profiles.
+///
+/// The requested name is never echoed back. `allowed` lists the bundled
+/// names and aliases, `missingResource` names a bundled profile, and
+/// `invalidProfile` carries a fixed reason code: `unreadable_resource`,
+/// `malformed_resource` or `unsupported_schema_version`.
 public enum PolicyError: Error, Equatable, LocalizedError, Sendable {
     case blankName
-    case unknownProfile(String, allowed: [String])
+    case unknownProfile(allowed: [String])
     case missingResource(String)
     case invalidProfile(String)
 
@@ -30,8 +35,8 @@ public enum PolicyError: Error, Equatable, LocalizedError, Sendable {
         switch self {
         case .blankName:
             return "policy name must not be blank"
-        case .unknownProfile(let name, let allowed):
-            return "unknown policy profile '\(name)'; expected one of: \(allowed.joined(separator: ", "))"
+        case .unknownProfile(let allowed):
+            return "unknown policy profile; expected one of: \(allowed.joined(separator: ", "))"
         case .missingResource(let name):
             return "bundled policy profile '\(name)' was not found"
         case .invalidProfile(let reason):
@@ -89,14 +94,20 @@ public struct Policy: Equatable, Sendable {
             throw PolicyError.missingResource(canonicalName)
         }
 
+        // Foundation errors can carry the bundle path, so map them to codes.
+        let data: Data
+        do {
+            data = try Data(contentsOf: resourceURL)
+        } catch {
+            throw PolicyError.invalidProfile("unreadable_resource")
+        }
         let payload: PolicyPayload
         do {
-            let data = try Data(contentsOf: resourceURL)
             payload = try JSONDecoder.openMedPolicy.decode(PolicyPayload.self, from: data)
         } catch let error as PolicyError {
             throw error
         } catch {
-            throw PolicyError.invalidProfile(error.localizedDescription)
+            throw PolicyError.invalidProfile("malformed_resource")
         }
 
         try self.init(payload: payload)
@@ -178,16 +189,14 @@ public struct Policy: Equatable, Sendable {
 
         let canonical = aliases[normalized] ?? normalized
         guard bundledProfileNames.contains(canonical) else {
-            throw PolicyError.unknownProfile(name, allowed: allowedProfileNames)
+            throw PolicyError.unknownProfile(allowed: allowedProfileNames)
         }
         return canonical
     }
 
     private init(payload: PolicyPayload) throws {
         guard payload.schemaVersion == 1 else {
-            throw PolicyError.invalidProfile(
-                "schema_version \(payload.schemaVersion) is not supported"
-            )
+            throw PolicyError.invalidProfile("unsupported_schema_version")
         }
 
         let canonicalName = try Self.canonicalProfileName(payload.name)

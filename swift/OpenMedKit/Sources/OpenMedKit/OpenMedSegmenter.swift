@@ -49,19 +49,56 @@ public struct OpenMedSegment: Equatable, Sendable {
     }
 }
 
-public enum OpenMedSegmenterError: LocalizedError {
-    case missingDescriptor(URL)
-    case invalidDescriptor(String)
-    case missingResource(URL)
+/// Value-free segmenter failures.
+///
+/// Cases carry a stable reason code or the index of a descriptor resource
+/// entry. They never hold a bundle URL, path, file name or descriptor string.
+public enum OpenMedSegmenterError: LocalizedError, Equatable, Sendable {
+    /// Stable reason codes for a rejected segmenter descriptor.
+    public enum DescriptorReason: String, CaseIterable, Sendable {
+        case malformedManifest = "malformed_manifest"
+        case unsupportedFormatVersion = "unsupported_format_version"
+        case missingIdentity = "missing_identity"
+        case invalidSizeBudget = "invalid_size_budget"
+        case unsupportedSegmenterID = "unsupported_segmenter_id"
+        case scriptsOrLicenseMismatch = "scripts_or_license_mismatch"
+        case unexpectedResources = "unexpected_resources"
+        case invalidResourceEntry = "invalid_resource_entry"
+        case resourceRoleMismatch = "resource_role_mismatch"
+        case resourceEscapesBundle = "resource_escapes_bundle"
+        case resourceSizeMismatch = "resource_size_mismatch"
+        case hanDictionaryNotUTF8 = "han_dictionary_not_utf8"
+        case malformedIndicRules = "malformed_indic_rules"
+        case indicRulesProvenance = "indic_rules_provenance"
+        case licenseNoticeNotUTF8 = "license_notice_not_utf8"
+        case licenseNoticeIncomplete = "license_notice_incomplete"
+        case totalSizeMismatch = "total_size_mismatch"
+        case sizeBudgetExceeded = "size_budget_exceeded"
+    }
+
+    /// The manifest could not be read.
+    case unreadableManifest
+    /// The manifest has no `segmenter` descriptor.
+    case missingDescriptor
+    /// The descriptor or one of its resources failed validation.
+    case invalidDescriptor(DescriptorReason)
+    /// `resource_files[index]` does not exist inside the bundle.
+    case missingResource(index: Int)
+    /// `resource_files[index]` exists but could not be read.
+    case unreadableResource(index: Int)
 
     public var errorDescription: String? {
         switch self {
-        case .missingDescriptor(let url):
-            return "No segmenter descriptor was found in \(url.path)"
+        case .unreadableManifest:
+            return "The segmenter manifest could not be read."
+        case .missingDescriptor:
+            return "The artifact manifest has no segmenter descriptor."
         case .invalidDescriptor(let reason):
-            return "Invalid segmenter descriptor: \(reason)"
-        case .missingResource(let url):
-            return "Segmenter resource is missing: \(url.path)"
+            return "Invalid segmenter descriptor (\(reason.rawValue))."
+        case .missingResource(let index):
+            return "Segmenter resource \(index) is missing from the bundle."
+        case .unreadableResource(let index):
+            return "Segmenter resource \(index) could not be read."
         }
     }
 }
@@ -114,25 +151,33 @@ public struct OpenMedSegmenter: Sendable {
         manifestFilename: String = "openmed-mlx.json"
     ) throws {
         let manifestURL = bundleURL.appending(path: manifestFilename)
-        let data = try Data(contentsOf: manifestURL)
-        let envelope = try JSONDecoder().decode(ManifestEnvelope.self, from: data)
+        let data: Data
+        do {
+            data = try Data(contentsOf: manifestURL)
+        } catch {
+            throw OpenMedSegmenterError.unreadableManifest
+        }
+        let envelope: ManifestEnvelope
+        do {
+            envelope = try JSONDecoder().decode(ManifestEnvelope.self, from: data)
+        } catch {
+            throw OpenMedSegmenterError.invalidDescriptor(.malformedManifest)
+        }
         guard let descriptor = envelope.segmenter else {
-            throw OpenMedSegmenterError.missingDescriptor(manifestURL)
+            throw OpenMedSegmenterError.missingDescriptor
         }
         try self.init(bundleURL: bundleURL, descriptor: descriptor)
     }
 
     init(bundleURL: URL, descriptor: OpenMedSegmenterDescriptor) throws {
         guard descriptor.formatVersion == 1 else {
-            throw OpenMedSegmenterError.invalidDescriptor(
-                "unsupported format version \(descriptor.formatVersion)"
-            )
+            throw OpenMedSegmenterError.invalidDescriptor(.unsupportedFormatVersion)
         }
         guard !descriptor.id.isEmpty, !descriptor.scripts.isEmpty, !descriptor.license.isEmpty else {
-            throw OpenMedSegmenterError.invalidDescriptor("missing id, scripts, or license")
+            throw OpenMedSegmenterError.invalidDescriptor(.missingIdentity)
         }
         guard descriptor.sizeBudgetBytes == 64 * 1024 else {
-            throw OpenMedSegmenterError.invalidDescriptor("size budget must be 64 KiB")
+            throw OpenMedSegmenterError.invalidDescriptor(.invalidSizeBudget)
         }
 
         let expectedResources: [String: [String: String]]
@@ -165,17 +210,13 @@ public struct OpenMedSegmenter: Sendable {
                 "ICU.txt": ["role": "license_notice", "license": "ICU"],
             ]
         default:
-            throw OpenMedSegmenterError.invalidDescriptor(
-                "unsupported segmenter id \(descriptor.id)"
-            )
+            throw OpenMedSegmenterError.invalidDescriptor(.unsupportedSegmenterID)
         }
         guard descriptor.scripts == expectedScripts, descriptor.license == expectedLicense else {
-            throw OpenMedSegmenterError.invalidDescriptor(
-                "scripts or license do not match the segmenter id"
-            )
+            throw OpenMedSegmenterError.invalidDescriptor(.scriptsOrLicenseMismatch)
         }
         guard descriptor.resourceFiles.count == expectedResources.count else {
-            throw OpenMedSegmenterError.invalidDescriptor("unexpected segmenter resources")
+            throw OpenMedSegmenterError.invalidDescriptor(.unexpectedResources)
         }
 
         var loadedHanWords: Set<String> = []
@@ -187,13 +228,13 @@ public struct OpenMedSegmenter: Sendable {
         let rootURL = bundleURL.standardizedFileURL
         let rootPrefix = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
 
-        for resource in descriptor.resourceFiles {
+        for (resourceIndex, resource) in descriptor.resourceFiles.enumerated() {
             guard
                 !resource.path.isEmpty,
                 !resource.license.isEmpty,
                 resource.sha256.hasPrefix("sha256:")
             else {
-                throw OpenMedSegmenterError.invalidDescriptor("resource path or license is empty")
+                throw OpenMedSegmenterError.invalidDescriptor(.invalidResourceEntry)
             }
             let filename = URL(fileURLWithPath: resource.path).lastPathComponent
             guard
@@ -201,33 +242,30 @@ public struct OpenMedSegmenter: Sendable {
                 resource.role == expected["role"],
                 resource.license == expected["license"]
             else {
-                throw OpenMedSegmenterError.invalidDescriptor(
-                    "resource role or license does not match the segmenter id"
-                )
+                throw OpenMedSegmenterError.invalidDescriptor(.resourceRoleMismatch)
             }
             seenResources.insert(filename)
             let resourceURL = rootURL.appending(path: resource.path).standardizedFileURL
             guard resourceURL.path.hasPrefix(rootPrefix) else {
-                throw OpenMedSegmenterError.invalidDescriptor(
-                    "resource escapes the artifact bundle"
-                )
+                throw OpenMedSegmenterError.invalidDescriptor(.resourceEscapesBundle)
             }
             guard FileManager.default.fileExists(atPath: resourceURL.path) else {
-                throw OpenMedSegmenterError.missingResource(resourceURL)
+                throw OpenMedSegmenterError.missingResource(index: resourceIndex)
             }
-            let data = try Data(contentsOf: resourceURL)
+            let data: Data
+            do {
+                data = try Data(contentsOf: resourceURL)
+            } catch {
+                throw OpenMedSegmenterError.unreadableResource(index: resourceIndex)
+            }
             guard data.count == resource.sizeBytes else {
-                throw OpenMedSegmenterError.invalidDescriptor(
-                    "resource size mismatch for \(resource.path)"
-                )
+                throw OpenMedSegmenterError.invalidDescriptor(.resourceSizeMismatch)
             }
             actualTotalSize += data.count
 
             if resource.role == "han_dictionary" {
                 guard let contents = String(data: data, encoding: .utf8) else {
-                    throw OpenMedSegmenterError.invalidDescriptor(
-                        "Han dictionary is not UTF-8"
-                    )
+                    throw OpenMedSegmenterError.invalidDescriptor(.hanDictionaryNotUTF8)
                 }
                 for line in contents.split(whereSeparator: \Character.isNewline) {
                     let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -237,7 +275,12 @@ public struct OpenMedSegmenter: Sendable {
                     }
                 }
             } else if resource.role == "indic_break_rules" {
-                let rules = try JSONDecoder().decode(IndicRules.self, from: data)
+                let rules: IndicRules
+                do {
+                    rules = try JSONDecoder().decode(IndicRules.self, from: data)
+                } catch {
+                    throw OpenMedSegmenterError.invalidDescriptor(.malformedIndicRules)
+                }
                 guard
                     rules.license == "ICU",
                     rules.licenseFile == "ICU.txt",
@@ -249,9 +292,7 @@ public struct OpenMedSegmenter: Sendable {
                     rules.source.retrieved == "2026-07-28",
                     !rules.source.modifications.isEmpty
                 else {
-                    throw OpenMedSegmenterError.invalidDescriptor(
-                        "Indic rules do not record the required ICU provenance"
-                    )
+                    throw OpenMedSegmenterError.invalidDescriptor(.indicRulesProvenance)
                 }
                 if let devanagari = rules.scripts["Devanagari"] {
                     loadedRanges = devanagari.ranges.compactMap { values in
@@ -263,9 +304,7 @@ public struct OpenMedSegmenter: Sendable {
                 }
             } else if resource.role == "license_notice" {
                 guard let notice = String(data: data, encoding: .utf8) else {
-                    throw OpenMedSegmenterError.invalidDescriptor(
-                        "ICU license notice is not UTF-8"
-                    )
+                    throw OpenMedSegmenterError.invalidDescriptor(.licenseNoticeNotUTF8)
                 }
                 let requiredMarkers = [
                     "Copyright (C) 2002-2016, International Business Machines Corporation and others.",
@@ -274,22 +313,20 @@ public struct OpenMedSegmenter: Sendable {
                     "Permission is hereby granted, free of charge",
                 ]
                 guard requiredMarkers.allSatisfy({ notice.contains($0) }) else {
-                    throw OpenMedSegmenterError.invalidDescriptor(
-                        "ICU license notice is incomplete"
-                    )
+                    throw OpenMedSegmenterError.invalidDescriptor(.licenseNoticeIncomplete)
                 }
             }
         }
 
         guard seenResources == Set(expectedResources.keys) else {
-            throw OpenMedSegmenterError.invalidDescriptor("unexpected segmenter resources")
+            throw OpenMedSegmenterError.invalidDescriptor(.unexpectedResources)
         }
 
         guard actualTotalSize == descriptor.totalSizeBytes else {
-            throw OpenMedSegmenterError.invalidDescriptor("total resource size mismatch")
+            throw OpenMedSegmenterError.invalidDescriptor(.totalSizeMismatch)
         }
         guard actualTotalSize <= descriptor.sizeBudgetBytes else {
-            throw OpenMedSegmenterError.invalidDescriptor("resource size exceeds budget")
+            throw OpenMedSegmenterError.invalidDescriptor(.sizeBudgetExceeded)
         }
 
         scripts = Set(descriptor.scripts)

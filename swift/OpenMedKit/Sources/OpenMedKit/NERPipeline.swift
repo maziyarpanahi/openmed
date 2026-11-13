@@ -65,7 +65,7 @@ public class NERPipeline {
         switch modelURL.pathExtension.lowercased() {
         case "mlpackage", "mlmodel":
             #if os(watchOS) || os(visionOS)
-                throw NERPipelineError.uncompiledModelUnsupported(modelURL)
+                throw NERPipelineError.uncompiledModelUnsupported
             #else
                 return try MLModel.compileModel(at: modelURL)
             #endif
@@ -173,16 +173,19 @@ public class NERPipeline {
 }
 
 /// Errors thrown by the NER pipeline.
+///
+/// `missingOutput` names the fixed CoreML output the pipeline reads. No case
+/// carries a model URL, path or file name.
 public enum NERPipelineError: Error, LocalizedError {
     case missingOutput(String)
-    case uncompiledModelUnsupported(URL)
+    case uncompiledModelUnsupported
 
     public var errorDescription: String? {
         switch self {
         case .missingOutput(let name):
             return "CoreML model output '\(name)' not found"
-        case .uncompiledModelUnsupported(let url):
-            return "\(url.lastPathComponent) must be compiled to .mlmodelc before bundling on watchOS or visionOS"
+        case .uncompiledModelUnsupported:
+            return "CoreML models must be compiled to .mlmodelc before bundling on watchOS or visionOS"
         }
     }
 }

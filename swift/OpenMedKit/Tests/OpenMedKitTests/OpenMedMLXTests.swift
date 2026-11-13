@@ -561,10 +561,11 @@
             let directory = try makeManifestOnlyArtifact(family: "deberta-v2")
 
             XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { error in
-                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let family) = error else {
+                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let task, let family) = error else {
                     return XCTFail("Unexpected error: \(error)")
                 }
-                XCTAssertEqual(family, "deberta-v2")
+                XCTAssertEqual(task, .tokenClassification)
+                XCTAssertEqual(family, .debertaV2)
             }
         }
 
@@ -807,10 +808,11 @@
             )
 
             XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { error in
-                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let family) = error else {
+                guard case OpenMedMLXArtifactError.unsupportedArchitecture(let task, let family) = error else {
                     return XCTFail("Unexpected error: \(error)")
                 }
-                XCTAssertEqual(family, "gliner-bi-encoder-span")
+                XCTAssertEqual(task, .zeroShotNER)
+                XCTAssertNil(family, "an unrecognized family must not be echoed back")
             }
         }
 

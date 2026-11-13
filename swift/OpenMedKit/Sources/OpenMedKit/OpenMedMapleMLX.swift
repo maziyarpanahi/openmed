@@ -113,7 +113,7 @@
 
         func validate() throws {
             guard modelType == "maple" else {
-                throw OpenMedMapleRuntimeError.unsupportedArchitecture(modelType)
+                throw OpenMedMapleRuntimeError.unsupportedArchitecture
             }
             guard hiddenLayers == layerTypes.count else {
                 throw OpenMedMapleRuntimeError.invalidConfiguration(
@@ -627,17 +627,21 @@
     }
 
     /// Errors raised before or during local Maple inference.
+    ///
+    /// `missingFiles` lists names from ``OpenMedMaple/requiredModelFiles`` and
+    /// `invalidConfiguration` carries a fixed OpenMedKit phrase. Neither holds a
+    /// directory path or a value read from the model configuration.
     public enum OpenMedMapleRuntimeError: LocalizedError {
         case missingFiles([String])
-        case unsupportedArchitecture(String)
+        case unsupportedArchitecture
         case invalidConfiguration(String)
 
         public var errorDescription: String? {
             switch self {
             case .missingFiles(let files):
                 return "The Maple model cache is incomplete. Missing: \(files.joined(separator: ", "))."
-            case .unsupportedArchitecture(let type):
-                return "Unsupported Maple model_type: \(type)."
+            case .unsupportedArchitecture:
+                return "The Maple configuration declares an unsupported model_type."
             case .invalidConfiguration(let detail):
                 return "Invalid Maple model configuration: \(detail)."
             }

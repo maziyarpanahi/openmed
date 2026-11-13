@@ -31,10 +31,11 @@ final class PolicyTests: XCTestCase {
 
     func testUnknownProfileThrowsClearError() {
         XCTAssertThrowsError(try Policy(named: "unknown_policy")) { error in
-            guard case PolicyError.unknownProfile(let name, let allowed) = error else {
+            guard case PolicyError.unknownProfile(let allowed) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
-            XCTAssertEqual(name, "unknown_policy")
+            XCTAssertFalse(String(reflecting: error).contains("unknown_policy"))
+            XCTAssertFalse(error.localizedDescription.contains("unknown_policy"))
             XCTAssertTrue(allowed.contains("hipaa_safe_harbor"))
             XCTAssertTrue(allowed.contains("gdpr"))
             XCTAssertTrue(allowed.contains("gdpr_health"))

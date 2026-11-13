@@ -562,6 +562,47 @@ The generation result includes decoded text, generated token IDs, prompt and
 generation token counts, and prefill/generation timing. Overloads accept
 text-only prompts, `CIImage`, or multiple `UserInput.Image` values.
 
+## Value-Free Errors
+
+OpenMedKit errors are safe to log. `localizedDescription`, `description`,
+`String(reflecting:)` and the bridged `NSError` never contain input text,
+byte-level token pieces, file or entry names, directory paths, URLs, or strings
+read from a manifest or configuration. Error cases carry only stable reason
+codes, counts and limits, indices, file roles, and values from OpenMedKit's own
+closed vocabularies. Loaders for artifacts, weights, segmenters and the Privacy
+Filter tokenizer map Foundation and MLX read failures, which embed the absolute
+path, to a role-based case.
+
+| Error | Reason codes and payloads |
+|---|---|
+| `OpenMedSegmenterError` | `unreadableManifest`, `missingDescriptor`, `missingResource(index:)`, `unreadableResource(index:)`, `invalidDescriptor(DescriptorReason)`. The index points into `resource_files`. `DescriptorReason` raw values: `malformed_manifest`, `unsupported_format_version`, `missing_identity`, `invalid_size_budget`, `unsupported_segmenter_id`, `scripts_or_license_mismatch`, `unexpected_resources`, `invalid_resource_entry`, `resource_role_mismatch`, `resource_escapes_bundle`, `resource_size_mismatch`, `han_dictionary_not_utf8`, `malformed_indic_rules`, `indic_rules_provenance`, `license_notice_not_utf8`, `license_notice_incomplete`, `total_size_mismatch`, `size_budget_exceeded`. |
+| `ExtensionRedactionError` | Input cases carry counts and limits. `nonLocalAsset`, `missingAsset` and `invalidAsset` carry an `ExtensionAssetRole`: `bundle_resources`, `model`, `label_map`, `tokenizer_folder`, `tokenizer_file`. `unsupportedModelFormat` has no payload. |
+| `PolicyError` | `blankName`, `unknownProfile(allowed:)` (bundled names and aliases; the requested name is not echoed), `missingResource` (a bundled name), `invalidProfile` with `unreadable_resource`, `malformed_resource` or `unsupported_schema_version`. |
+| `OpenMedMapleOutputParser.Error` | `missingJSONObject`; `invalidJSONObject` with `type_mismatch`, `value_not_found`, `key_not_found` or `data_corrupted`. |
+| `OpenMedMapleRuntimeError` | `missingFiles` (names from `OpenMedMaple.requiredModelFiles`), `unsupportedArchitecture`, `invalidConfiguration` (a fixed OpenMedKit phrase). |
+| `OpenMedZeroShotError` | `unsupportedArtifact` with task and family values from the OpenMedKit MLX vocabulary (for example `token-classification` and `bert`), `missingPromptSpec` (a `prompt_spec` field name), `emptyInput`. |
+| `NERPipelineError` | `missingOutput("logits")`, `uncompiledModelUnsupported`. |
+| `PlatformModelError` | `noCompatibleModel(OpenMedApplePlatform)`, `invalidInputShape`, `sequenceTooLong(actual:maximum:)`. |
+| `EDFError`, `OpenMedAECGError`, `BigTiffPreflightError` | A fixed snake_case `code`, `reasonCode` or `category`. |
+| String-backed refusals | The raw value is the code: `AgentGovernanceError`, `AmbientAudioCaptureError`, `AmbientSessionError`, `AudioSampleConversionError`, `ClinicalBriefError`, `ClinicalBriefFHIRDocumentError`, `MultimodalContractRefusal`, `MultimodalReviewError`, `PreprocessingConformanceError`, `ReviewAdmissionRefusal`, `StreamingSpeechError`, `TranscriptLanguageError`. `SpeechEndpointError` and `MultimodalThermalError` cases have no payload. |
+
+Internal MLX errors follow the same rule and surface through the public
+loaders: a Privacy Filter unknown token reports `unknownToken(index:)`, the
+position in the encoded sequence, rather than the token piece. Artifact
+failures name a file role (`manifest`, `config`, `label_map`), weight failures
+a candidate or archive-entry index, and an unrecognized task or family is
+reported as `unrecognized` instead of echoing the manifest.
+
+`ValueFreeErrorSentinelTests` and `ExtensionErrorSentinelTests` enforce this.
+They enumerate every error type declared under `swift/OpenMedKit/Sources`,
+require a sample for every declared case, drive the loaders from a temporary
+directory whose name contains a sentinel, and fail if any rendering contains
+the sentinel, its byte-level BPE form, the directory or the home path. A new
+error type or case without a sample fails the suite. `OpenMedModelStoreError`
+is excluded until the model-store work in issue #3644 lands. Errors raised by
+dependencies outside these loaders, such as tokenizer loading through
+swift-transformers or CoreML compilation, pass through unchanged.
+
 ## Supported Swift MLX Families
 
 The current Swift MLX runtime is the BERT-family token-classification path shared across:
