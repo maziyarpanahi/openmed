@@ -218,6 +218,7 @@ classification:
     - offline-install.md
     - install/standalone.md
     - install/smoke-check.md
+    - install/python-versions.md
     - serving/async-jobs.md
     - serving/request-signing.md
     - serving/grpc.md
