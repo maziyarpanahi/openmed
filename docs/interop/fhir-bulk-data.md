@@ -157,3 +157,45 @@ by `max_inflight_downloads` and `max_buffered_resources`, and each file is
 written to a temporary sibling before an atomic rename. Keep credentials in
 the caller's secret-management system; do not put them in source-controlled
 fixtures or committed configuration.
+
+## Job admission and retention
+
+Each REST job manager (`/fhir/bulk/*` and `/fhir/smart-backend/ingestions`)
+bounds its own in-memory jobs:
+
+| Environment variable | Default | Meaning |
+| --- | ---: | --- |
+| `OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS` | `4` | Most jobs one manager runs at once. |
+| `OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS` | `256` | Most job records, running or finished, one manager keeps. |
+| `OPENMED_SERVICE_BULK_JOB_TTL_SECONDS` | `3600` | Seconds a finished, failed or cancelled record stays readable. |
+
+Values must be positive integers, and the running ceiling must not exceed the
+retained cap. Invalid values fail at startup, so admission can always make
+room for a new record. A start beyond the running ceiling returns `503` with
+error code `bulk_jobs_saturated` and a `Retry-After` header. The check runs
+before an output directory, task or remote request is created. The rejection
+details hold only the manager kind, the configured ceiling and the retry
+delay; they never include paths, URLs or credentials.
+
+Expiry is lazy. Each start, status read, report, manifest, summary or cancel
+first drops terminal records older than the TTL, so no background thread is
+needed. When the retained cap is reached, the oldest terminal records are
+evicted first. Running jobs are never evicted or expired. An expired job id
+returns the same `404` response as an unknown id. Shutdown still cancels every
+running job, as before.
+
+Callers may tune each job only within server ceilings:
+
+| Field | Allowed range | Default |
+| --- | --- | ---: |
+| `max_inflight_downloads` | `1` to `16` | `2` |
+| `max_buffered_resources` (`/fhir/bulk/*` only) | `1` to `1000` | `1` |
+| `poll_interval_seconds` | `1` to `300` | `1` |
+| `request_timeout_seconds` | above `0`, up to `300` | `30` |
+
+Out-of-range values return `422` with error code `validation_error`. Each
+detail names the field and a controlled type such as `greater_than_equal` or
+`less_than_equal`, without echoing the submitted value. Migration: requests
+that sent `poll_interval_seconds: 0` or values above these ceilings must use an
+in-range value. The direct Python `SMARTBackendConfig` and
+`FHIRBulkJobConfig` APIs keep their previous lower bounds.
