@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
 
+### Added
+
+- Add synthetic cross-runtime date-shift vectors for the patient-keyed and
+  seeded offset helpers, with leap-day and year-boundary shifted dates and a
+  Python test that recomputes every vector (#5413).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).
