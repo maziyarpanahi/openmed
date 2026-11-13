@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep exact container runtime packages available through a signed Debian
+  snapshot, and recover release image SBOMs by verifying and scanning the
+  published image's immutable digest.
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).

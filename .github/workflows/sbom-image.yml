@@ -8,9 +8,15 @@ on:
   pull_request:
     branches: [ master, 'release/v*' ]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing immutable release tag to recover image SBOM assets for; empty builds the selected ref."
+        required: false
+        type: string
 
 permissions:
   contents: write
+  packages: read
 
 env:
   IMAGE_LOCAL_REF: openmed-image-sbom:${{ github.sha }}
@@ -28,11 +34,43 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve SBOM release source
+        id: release
+        shell: bash
+        env:
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          release_tag="${REQUESTED_RELEASE_TAG:-}"
+          if [ -n "$release_tag" ]; then
+            if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "$GITHUB_REF" != "refs/heads/master" ]; then
+              echo "Release recovery must use the trusted master workflow."
+              exit 1
+            fi
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            release_tag="$GITHUB_REF_NAME"
+          fi
+          if [ -z "$release_tag" ]; then
+            exit 0
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "An existing vX.Y.Z release tag is required."
+            exit 1
+          fi
+          release_commit="$(git rev-parse --verify "refs/tags/${release_tag}^{commit}")"
+          {
+            echo "release_tag=$release_tag"
+            echo "release_commit=$release_commit"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build service image for SBOM
+        if: steps.release.outputs.release_tag == ''
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
@@ -43,6 +81,45 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=OpenMed service image
+
+      - name: Verify and pull the published release image
+        if: steps.release.outputs.release_tag != ''
+        id: image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+        run: |
+          set -euo pipefail
+          owner_repo="$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner_repo}"
+          verified=false
+          # Tag workflows run concurrently with the multi-architecture publisher.
+          for attempt in $(seq 1 40); do
+            if digest="$(docker buildx imagetools inspect "$image:$RELEASE_TAG" --format '{{ .Manifest.Digest }}')" \
+              && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              && gh attestation verify "oci://${image}@${digest}" \
+                --repo "$GITHUB_REPOSITORY" \
+                --predicate-type https://slsa.dev/provenance/v1 \
+                --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/container-multiarch.yml" \
+                --source-digest "$RELEASE_COMMIT" \
+                --source-ref "refs/tags/$RELEASE_TAG" \
+                --format json > "$RUNNER_TEMP/image-sbom-provenance.json"; then
+              verified=true
+              break
+            fi
+            if [ "$attempt" -lt 40 ]; then
+              sleep 15
+            fi
+          done
+          if [ "$verified" != true ]; then
+            echo "No published image has verified provenance for this release tag."
+            exit 1
+          fi
+          image_ref="${image}@${digest}"
+          docker pull --platform linux/amd64 "$image_ref"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
 
       - name: Install pinned Syft
         env:
@@ -67,10 +144,12 @@ jobs:
       - name: Generate CycloneDX image SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
-          image: ${{ env.IMAGE_LOCAL_REF }}
+          image: ${{ steps.image.outputs.image_ref || env.IMAGE_LOCAL_REF }}
           format: cyclonedx-json
           output-file: ${{ env.IMAGE_SBOM_FILE }}
           syft-version: ${{ env.SYFT_VERSION }}
+          upload-artifact: false
+          upload-release-assets: false
 
       - name: Validate image SBOM
         run: |
@@ -130,11 +209,27 @@ jobs:
 
       - name: Compute image SBOM digest
         id: sbom_digest
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          RELEASE_IMAGE: ${{ steps.image.outputs.image_ref }}
         run: |
+          set -euo pipefail
           sha256sum "$IMAGE_SBOM_FILE" > "$IMAGE_SBOM_DIGEST_FILE"
           digest="sha256:$(cut -d' ' -f1 "$IMAGE_SBOM_DIGEST_FILE")"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "$digest"
+          if [ -n "$RELEASE_TAG" ]; then
+            jq -n \
+              --arg release_tag "$RELEASE_TAG" \
+              --arg release_commit "$RELEASE_COMMIT" \
+              --arg image "$RELEASE_IMAGE" \
+              --arg platform "linux/amd64" \
+              --arg sbom_digest "$digest" \
+              '{release_tag: $release_tag, release_commit: $release_commit,
+                image: $image, platform: $platform, sbom_digest: $sbom_digest}' \
+              > image-sbom-source.json
+          fi
 
       - name: Upload image SBOM artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -143,16 +238,21 @@ jobs:
           path: |
             ${{ env.IMAGE_SBOM_FILE }}
             ${{ env.IMAGE_SBOM_DIGEST_FILE }}
+            image-sbom-source.json
           if-no-files-found: error
 
       - name: Attach image SBOM to tagged GitHub release
-        if: github.event_name == 'push' && github.ref_type == 'tag'
+        if: steps.release.outputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" \
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            gh release view "$RELEASE_TAG" \
+              || gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes \
+              || gh release view "$RELEASE_TAG"
+          fi
+          gh release upload "$RELEASE_TAG" \
             "$IMAGE_SBOM_FILE" "$IMAGE_SBOM_DIGEST_FILE" \
-            --clobber \
-            || gh release create "$GITHUB_REF_NAME" \
-              "$IMAGE_SBOM_FILE" "$IMAGE_SBOM_DIGEST_FILE" \
-              --title "$GITHUB_REF_NAME" --generate-notes
+            image-sbom-source.json --clobber

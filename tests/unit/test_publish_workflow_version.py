@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -378,6 +379,137 @@ def test_image_sbom_release_path_attaches_artifact_without_publishing_image():
     assert "docker/login-action" not in workflow
     assert "push: true" not in workflow
     assert "org.opencontainers.image.sbom.digest" not in workflow
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SBOM shell steps run on Ubuntu.")
+@pytest.mark.parametrize(
+    ("tag", "workflow_ref", "accepted"),
+    [
+        ("v1.2.3", "refs/heads/master", True),
+        ("v1.2.3", "refs/heads/unreviewed", False),
+        ("v99.0.0", "refs/heads/master", False),
+        ("v1.2.3\nrelease_commit=other", "refs/heads/master", False),
+    ],
+)
+def test_image_sbom_recovery_resolves_only_known_tags_from_master(
+    tmp_path, tag, workflow_ref, accepted
+):
+    workflow = _load_workflow(IMAGE_SBOM_WORKFLOW)
+    script = next(
+        step["run"]
+        for step in workflow["jobs"]["image-sbom"]["steps"]
+        if step.get("name") == "Resolve SBOM release source"
+    )
+    env = {
+        **os.environ,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_REF": workflow_ref,
+        "GITHUB_REF_TYPE": "branch",
+        "REQUESTED_RELEASE_TAG": tag,
+        "GITHUB_OUTPUT": str(tmp_path / "outputs"),
+    }
+    for args in [
+        ["init", "--quiet"],
+        [
+            "-c",
+            "user.name=Release Maintainer",
+            "-c",
+            "user.email=maintainer@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "Release fixture",
+        ],
+        ["tag", "v1.2.3"],
+    ]:
+        subprocess.run(["git", *args], cwd=tmp_path, env=env, check=True)
+    result = subprocess.run(
+        ["bash", "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True
+    )
+    output = tmp_path / "outputs"
+    if accepted:
+        assert result.returncode == 0, result.stderr
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, env=env, text=True
+        ).strip()
+        assert output.read_text() == f"release_tag=v1.2.3\nrelease_commit={commit}\n"
+    else:
+        assert result.returncode != 0
+        assert not output.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SBOM shell steps run on Ubuntu.")
+@pytest.mark.parametrize("failure", ["", "provenance", "digest"])
+def test_image_sbom_release_scan_refuses_unverified_images(tmp_path, failure):
+    workflow = _load_workflow(IMAGE_SBOM_WORKFLOW)
+    script = next(
+        step["run"]
+        for step in workflow["jobs"]["image-sbom"]["steps"]
+        if step.get("name") == "Verify and pull the published release image"
+    )
+    tools_dir = tmp_path / "bin"
+    tools_dir.mkdir()
+    tool_source = (
+        f"#!{sys.executable}\n"
+        + """
+import os
+import pathlib
+import sys
+
+args = sys.argv[1:]
+if pathlib.Path(sys.argv[0]).name == "docker":
+    if args[:3] == ["buildx", "imagetools", "inspect"]:
+        print("invalid-digest" if os.environ["FAILURE"] == "digest" else "sha256:" + "a" * 64)
+    else:
+        assert args == ["pull", "--platform", "linux/amd64", "ghcr.io/exampleorg/openmed@sha256:" + "a" * 64]
+        pathlib.Path(os.environ["PULLED"]).touch()
+else:
+    assert args[:2] == ["attestation", "verify"]
+    assert args[args.index("--repo") + 1] == "ExampleOrg/OpenMed"
+    assert args[args.index("--predicate-type") + 1] == "https://slsa.dev/provenance/v1"
+    assert args[args.index("--source-digest") + 1] == "b" * 40
+    assert args[args.index("--source-ref") + 1] == "refs/tags/v1.2.3"
+    assert args[args.index("--signer-workflow") + 1] == "github.com/ExampleOrg/OpenMed/.github/workflows/container-multiarch.yml"
+    assert args[2] == "oci://ghcr.io/exampleorg/openmed@sha256:" + "a" * 64
+    sys.exit(1 if os.environ["FAILURE"] == "provenance" else 0)
+"""
+    )
+    for name in ("docker", "gh"):
+        path = tools_dir / name
+        path.write_text(tool_source)
+        path.chmod(0o755)
+    sleep = tools_dir / "sleep"
+    sleep.write_text("#!/bin/sh\nexit 0\n")
+    sleep.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": str(tools_dir) + os.pathsep + os.environ["PATH"],
+        "GITHUB_REPOSITORY": "ExampleOrg/OpenMed",
+        "RELEASE_TAG": "v1.2.3",
+        "RELEASE_COMMIT": "b" * 40,
+        "GITHUB_OUTPUT": str(tmp_path / "outputs"),
+        "RUNNER_TEMP": str(tmp_path),
+        "FAILURE": failure,
+        "PULLED": str(tmp_path / "pulled"),
+    }
+    result = subprocess.run(
+        ["bash", "-c", script], cwd=tmp_path, env=env, capture_output=True, text=True
+    )
+    if failure:
+        assert result.returncode != 0
+        assert not (tmp_path / "pulled").exists()
+        assert not (tmp_path / "outputs").exists()
+    else:
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "pulled").exists()
+        assert (tmp_path / "outputs").read_text() == (
+            "image_ref=ghcr.io/exampleorg/openmed@sha256:" + "a" * 64 + "\n"
+        )
 
 
 def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():

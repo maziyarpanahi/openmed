@@ -7,8 +7,19 @@ Python wheels, and system libraries present in the runtime image.
 
 ## CI generation
 
-The `Image SBOM` workflow builds `Dockerfile`, scans the local image with Syft,
-and writes `image-sbom.cdx.json`. The workflow fails if the SBOM is missing,
+For pull requests and branch builds, the `Image SBOM` workflow builds
+`Dockerfile` and scans the local image with Syft. Both service Dockerfiles use
+a dated Debian snapshot so their exact runtime package versions remain
+available after live mirrors replace them. APT still verifies the signed
+Release metadata and package hashes; only the snapshot metadata's expiration
+check is disabled. Review the snapshot and package pins together when updating
+runtime dependencies.
+
+For release tags, the workflow waits for the published multi-architecture
+image, resolves its immutable manifest digest, and verifies the publisher's
+SLSA provenance against the exact tag, commit, repository, and
+`container-multiarch.yml` workflow. It then pulls and scans the `linux/amd64`
+image. The workflow writes `image-sbom.cdx.json` and fails if the SBOM is missing,
 empty, malformed JSON, not a CycloneDX document, or does not include both OS
 package components and Python package components.
 
@@ -17,7 +28,25 @@ Each run uploads:
 - `image-sbom.cdx.json`
 - `image-sbom.cdx.json.sha256`
 
-Tagged release runs also attach both files to the GitHub release.
+Tagged release runs also attach both files and `image-sbom-source.json` to the
+GitHub release. The source record binds the SBOM digest to the image manifest
+digest, platform, release tag, and source commit. Assets are uploaded only after
+SBOM validation succeeds.
+
+## Recover an existing release
+
+If a tag's image SBOM job failed, run the repaired workflow from `master` with
+the existing tag:
+
+```bash
+gh workflow run sbom-image.yml --ref master -f release_tag=vX.Y.Z
+```
+
+Recovery verifies and scans the already-published image by digest. It does not
+rebuild or republish the released image, move the tag, or upload Python/npm
+packages. Unknown tags, unverified images, and recovery dispatches from another
+branch fail before release assets can be uploaded. A manual run without
+`release_tag` retains the normal local-build behavior.
 
 ## Published image
 
