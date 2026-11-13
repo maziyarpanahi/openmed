@@ -745,6 +745,7 @@ nav:
       - Policy-impact Digest: security/policy-impact.md
       - Dependency License Inventory: security/license-inventory.md
       - Multimodal Dependency Licenses: compliance/multimodal-dependency-licenses.md
+      - Export Toolchains and Redistribution: security/export-redistribution.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Differential-Privacy Budget Migrations: security/budget-migrations.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md

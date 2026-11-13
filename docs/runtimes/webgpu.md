@@ -244,7 +244,9 @@ tokens, note text, browser user agents, and adapter fingerprints.
 - The package enables no telemetry, remote model fallback, console logging, or
   raw-PHI benchmark fields.
 - Model licensing remains the deployer's responsibility. OpenMed bundles no
-  restricted model weights or clinical datasets.
+  restricted model weights or clinical datasets. See
+  [Export Toolchains, Artifact Licenses and Redistribution](../security/export-redistribution.md)
+  for runtime library licenses and model-license propagation.
 
 ## Validation
 
