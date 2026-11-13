@@ -388,17 +388,12 @@ class JourneyReleasePacket:
     def sign(self, key: bytes | str, *, key_id: str) -> JourneyReleasePacket:
         """Return a copy signed over every packet field and its digest."""
 
-        key_bytes = _key_bytes(key)
         packet_digest = self.recompute_packet_digest()
         signed_payload = {
             **self._unsigned_payload(),
             "packet_digest": packet_digest,
         }
-        value = hmac.new(
-            key_bytes,
-            _canonical_json(signed_payload).encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        value = _release_hmac(key, signed_payload)
         return replace(
             self,
             packet_digest=packet_digest,
@@ -427,11 +422,7 @@ class JourneyReleasePacket:
             **self._unsigned_payload(),
             "packet_digest": self.packet_digest,
         }
-        expected = hmac.new(
-            _key_bytes(key),
-            _canonical_json(signed_payload).encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        expected = _release_hmac(key, signed_payload)
         return hmac.compare_digest(expected, self.signature.value)
 
     def to_dict(self) -> dict[str, Any]:
@@ -637,6 +628,17 @@ def write_journey_release_packet(
 ) -> Path:
     """Atomically write a packet, refusing replacement unless requested."""
 
+    return _write_release_json(packet.to_dict(), path, overwrite=overwrite)
+
+
+def _write_release_json(
+    payload: Mapping[str, Any],
+    path: str | Path,
+    *,
+    overwrite: bool,
+) -> Path:
+    """Atomically write deterministic release JSON shared by release gates."""
+
     output = Path(path)
     if output.exists() and not overwrite:
         raise JourneyReleaseError("refusing to overwrite existing output")
@@ -646,7 +648,7 @@ def write_journey_release_packet(
         raise JourneyReleaseError("temporary output already exists")
     rendered = (
         json.dumps(
-            packet.to_dict(),
+            payload,
             allow_nan=False,
             ensure_ascii=True,
             indent=2,
@@ -1391,6 +1393,16 @@ def _key_bytes(key: bytes | str) -> bytes:
     if len(value) < 32:
         raise JourneyReleaseError("signing key must contain at least 32 bytes")
     return value
+
+
+def _release_hmac(key: bytes | str, payload: Mapping[str, Any]) -> str:
+    """Return the caller-keyed HMAC-SHA256 over canonical release JSON."""
+
+    return hmac.new(
+        _key_bytes(key),
+        _canonical_json(payload).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

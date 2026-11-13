@@ -378,6 +378,7 @@ classification:
     - interop/annotation-interchange.md
     - interop/v3-golden-journey.md
     - release/v3.0-journey-release-gate.md
+    - release/v4.0-service-release-gate.md
     - structured/clinical-fact-normalization.md
     - structured/fact-reconciliation.md
     - structured/terminology-cache.md
@@ -804,6 +805,7 @@ classification:
     - security/threat-model.md
     - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
+    - security/service-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/threat-model-multimodal-ambient.md
     - security/red-team-corpus.md
