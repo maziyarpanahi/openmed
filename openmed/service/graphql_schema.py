@@ -18,12 +18,12 @@ from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
 from .auth import AuthPrincipal, scopes_satisfy
+from .journey_access import JourneyAccessGate, JourneyAccessRequest
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
     JourneyResourceKind,
     JourneyResourcePage,
-    JourneyResourceQuery,
     parse_access_attributes,
     parse_resource_fields,
 )
@@ -80,10 +80,27 @@ class OpenMedGraphQLContext(BaseContext):
         runtime: ServiceRuntime,
         journey_resources: JourneyResourceCatalog,
         journey_access_policy: JourneyAccessPolicy,
+        *,
+        journey_access: JourneyAccessGate | None = None,
+        principal: AuthPrincipal | None = None,
     ) -> None:
+        """Bind shared service state and the authenticated caller.
+
+        Args:
+            runtime: Shared service runtime.
+            journey_resources: Shared Journey catalog.
+            journey_access_policy: Active Journey policy envelope.
+            journey_access: Shared Journey access gate; built from the
+                environment when omitted.
+            principal: Authenticated principal from the transport, if any.
+        """
         self.runtime = runtime
         self.journey_resources = journey_resources
         self.journey_access_policy = journey_access_policy
+        self.journey_access = (
+            JourneyAccessGate.from_env() if journey_access is None else journey_access
+        )
+        self.principal = principal if type(principal) is AuthPrincipal else None
 
 
 @strawberry.enum(name="JourneyResourceKind")
@@ -585,34 +602,43 @@ class Query:
         self,
         info: Info[OpenMedGraphQLContext, None],
         resource_type: JourneyResourceKindType,
-        namespace: str = "default",
-        purpose: str = "care_review",
-        role: str = "clinician",
+        namespace: Optional[str] = None,
+        purpose: Optional[str] = None,
+        role: Optional[str] = None,
         attributes: Optional[list[str]] = None,
-        consent_state: str = "active",
-        export_policy: str = "metadata_only",
+        consent_state: Optional[str] = None,
+        export_policy: Optional[str] = None,
         first: int = 20,
         after: Optional[str] = None,
         fields: Optional[list[str]] = None,
     ) -> JourneyResourceConnection:
-        """List one bounded, policy-filtered Journey resource connection."""
+        """List one bounded, principal-bound Journey resource connection.
+
+        Access context comes from the authenticated principal. Access
+        arguments may only narrow it; wider requests return a denied state.
+        """
 
         try:
-            query = JourneyResourceQuery(
+            access_request = JourneyAccessRequest(
                 resource_type=JourneyResourceKind(resource_type.value),
                 namespace=namespace,
                 purpose=purpose,
                 role=role,
-                attributes=parse_access_attributes(attributes),
+                attributes=(
+                    None if attributes is None else parse_access_attributes(attributes)
+                ),
                 consent_state=consent_state,
                 export_policy=export_policy,
                 first=first,
                 after=after,
                 fields=parse_resource_fields(fields),
             )
-            page = info.context.journey_resources.list_resources(
-                query,
+            page = info.context.journey_access.list_resources(
+                info.context.journey_resources,
+                access_request,
+                principal=info.context.principal,
                 policy=info.context.journey_access_policy,
+                transport="graphql",
             )
             return JourneyResourceConnection.from_page(page)
         except Exception:
