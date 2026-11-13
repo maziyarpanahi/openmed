@@ -129,7 +129,9 @@ secrets (one UTF-8 text, one raw bytes that are not valid UTF-8), request seeds
 inside and just outside the signed 64-bit range, several `date_shift_max_days`
 values, the intermediate SHA-256 digests and the expected offsets, plus ISO
 dates shifted across leap days, month ends, non-leap Februaries and year
-boundaries. Every vector has an id. A Swift, Kotlin or web port can recompute
+boundaries. Every vector has an id. Each seed is given as `seed_decimal`, the
+exact decimal text that is hashed, so ports never read a large seed as a
+rounded JSON number. A Swift, Kotlin or web port can recompute
 every vector to prove it shifts the same patient by the same number of days;
 `tests/unit/core/test_date_shift_vectors.py` recomputes them in Python and
 reports a mismatch by vector id only.

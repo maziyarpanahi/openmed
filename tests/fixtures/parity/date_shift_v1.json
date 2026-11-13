@@ -4,9 +4,10 @@
   "description": "Synthetic cross-runtime vectors for openmed.core.date_shift. Patient keys, seeds and secrets are invented test values.",
   "algorithm": {
     "patient_key_digest": "HMAC-SHA256(key=secret bytes, message=patient_key UTF-8 bytes)",
-    "seed_digest": "SHA-256(seed_domain bytes + ASCII decimal text of seed)",
+    "seed_digest": "SHA-256(seed_domain bytes + ASCII bytes of seed_decimal)",
     "seed_domain_hex": "6f70656e6d65642d646174652d73686966742d736565642d763100",
     "seed_range": "seeds are arbitrary integers; some vectors lie outside the signed 64-bit range",
+    "seed_encoding": "seed_decimal is the canonical decimal text of the seed and is what seed_digest hashes; the numeric seed field is present only when |seed| <= 2^53 - 1, so every JSON reader parses it exactly",
     "bucket": "unsigned big-endian digest integer mod (2 * max_days)",
     "offset_days": "bucket - max_days if bucket < max_days else bucket - max_days + 1",
     "shifted_date": "proleptic Gregorian source_date + offset_days days"
@@ -397,6 +398,7 @@
     {
       "id": "seed-001",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 1,
       "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
       "offset_days": -1
@@ -404,6 +406,7 @@
     {
       "id": "seed-002",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 7,
       "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
       "offset_days": -7
@@ -411,6 +414,7 @@
     {
       "id": "seed-003",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 30,
       "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
       "offset_days": 21
@@ -418,6 +422,7 @@
     {
       "id": "seed-004",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 365,
       "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
       "offset_days": -105
@@ -425,6 +430,7 @@
     {
       "id": "seed-005",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 3650,
       "digest_sha256_hex": "2e8ca3dfd54d906e48929d6f403c269953b61606bfa0bd98b3891414b8e59f96",
       "offset_days": 1721
@@ -432,6 +438,7 @@
     {
       "id": "seed-006",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 1,
       "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
       "offset_days": 1
@@ -439,6 +446,7 @@
     {
       "id": "seed-007",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 7,
       "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
       "offset_days": 7
@@ -446,6 +454,7 @@
     {
       "id": "seed-008",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 30,
       "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
       "offset_days": -27
@@ -453,6 +462,7 @@
     {
       "id": "seed-009",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 365,
       "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
       "offset_days": 199
@@ -460,6 +470,7 @@
     {
       "id": "seed-010",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 3650,
       "digest_sha256_hex": "e82e5a6e8a5eda1209aff14b368bd780185ee8c39ad38f6cc0f4db285ee9b417",
       "offset_days": -1627
@@ -467,6 +478,7 @@
     {
       "id": "seed-011",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 1,
       "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
       "offset_days": -1
@@ -474,6 +486,7 @@
     {
       "id": "seed-012",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 7,
       "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
       "offset_days": 2
@@ -481,6 +494,7 @@
     {
       "id": "seed-013",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 30,
       "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
       "offset_days": 7
@@ -488,6 +502,7 @@
     {
       "id": "seed-014",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 365,
       "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
       "offset_days": -9
@@ -495,6 +510,7 @@
     {
       "id": "seed-015",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 3650,
       "digest_sha256_hex": "c18315b43fca4c0d70ae2c657062a1ae5db20d91cf6c2b1db359fc7bf4e70ffc",
       "offset_days": 2547
@@ -502,6 +518,7 @@
     {
       "id": "seed-016",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 1,
       "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
       "offset_days": -1
@@ -509,6 +526,7 @@
     {
       "id": "seed-017",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 7,
       "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
       "offset_days": -1
@@ -516,6 +534,7 @@
     {
       "id": "seed-018",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 30,
       "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
       "offset_days": 29
@@ -523,6 +542,7 @@
     {
       "id": "seed-019",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 365,
       "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
       "offset_days": 244
@@ -530,6 +550,7 @@
     {
       "id": "seed-020",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 3650,
       "digest_sha256_hex": "557653a6bf8dafcb54ddc8478cf0a638f3238be291a4846fa4733b2fff0711fe",
       "offset_days": -852
@@ -537,6 +558,7 @@
     {
       "id": "seed-021",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 1,
       "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
       "offset_days": -1
@@ -544,6 +566,7 @@
     {
       "id": "seed-022",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 7,
       "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
       "offset_days": -7
@@ -551,6 +574,7 @@
     {
       "id": "seed-023",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 30,
       "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
       "offset_days": -22
@@ -558,6 +582,7 @@
     {
       "id": "seed-024",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 365,
       "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
       "offset_days": 124
@@ -565,146 +590,147 @@
     {
       "id": "seed-025",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 3650,
       "digest_sha256_hex": "1b8f21cf3295236db091d75d33c6b72b66fcb9e785293fe72c19cc076cbbe89c",
       "offset_days": 2679
     },
     {
       "id": "seed-026",
-      "seed": 9223372036854775807,
+      "seed_decimal": "9223372036854775807",
       "max_days": 1,
       "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
       "offset_days": -1
     },
     {
       "id": "seed-027",
-      "seed": 9223372036854775807,
+      "seed_decimal": "9223372036854775807",
       "max_days": 7,
       "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
       "offset_days": -1
     },
     {
       "id": "seed-028",
-      "seed": 9223372036854775807,
+      "seed_decimal": "9223372036854775807",
       "max_days": 30,
       "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
       "offset_days": 23
     },
     {
       "id": "seed-029",
-      "seed": 9223372036854775807,
+      "seed_decimal": "9223372036854775807",
       "max_days": 365,
       "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
       "offset_days": 318
     },
     {
       "id": "seed-030",
-      "seed": 9223372036854775807,
+      "seed_decimal": "9223372036854775807",
       "max_days": 3650,
       "digest_sha256_hex": "c21d0f8c0338193231f2b7041ef34204c3826386aa2fd119e0758a738af17528",
       "offset_days": 2143
     },
     {
       "id": "seed-031",
-      "seed": -9223372036854775808,
+      "seed_decimal": "-9223372036854775808",
       "max_days": 1,
       "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
       "offset_days": -1
     },
     {
       "id": "seed-032",
-      "seed": -9223372036854775808,
+      "seed_decimal": "-9223372036854775808",
       "max_days": 7,
       "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
       "offset_days": 2
     },
     {
       "id": "seed-033",
-      "seed": -9223372036854775808,
+      "seed_decimal": "-9223372036854775808",
       "max_days": 30,
       "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
       "offset_days": -24
     },
     {
       "id": "seed-034",
-      "seed": -9223372036854775808,
+      "seed_decimal": "-9223372036854775808",
       "max_days": 365,
       "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
       "offset_days": -119
     },
     {
       "id": "seed-035",
-      "seed": -9223372036854775808,
+      "seed_decimal": "-9223372036854775808",
       "max_days": 3650,
       "digest_sha256_hex": "4555e4f25464961dd091def27b60bb20441a0bdfb1b0241f2542b9bcf3d81f0a",
       "offset_days": 2437
     },
     {
       "id": "seed-036",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 1,
       "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
       "offset_days": -1
     },
     {
       "id": "seed-037",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 7,
       "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
       "offset_days": 6
     },
     {
       "id": "seed-038",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 30,
       "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
       "offset_days": -2
     },
     {
       "id": "seed-039",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 365,
       "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
       "offset_days": 294
     },
     {
       "id": "seed-040",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 3650,
       "digest_sha256_hex": "7e39ad390cf5d2f0cae79371b49c2850a61a183fb171376889f94437b24a4a24",
       "offset_days": -802
     },
     {
       "id": "seed-041",
-      "seed": -9223372036854775809,
+      "seed_decimal": "-9223372036854775809",
       "max_days": 1,
       "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
       "offset_days": 1
     },
     {
       "id": "seed-042",
-      "seed": -9223372036854775809,
+      "seed_decimal": "-9223372036854775809",
       "max_days": 7,
       "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
       "offset_days": 1
     },
     {
       "id": "seed-043",
-      "seed": -9223372036854775809,
+      "seed_decimal": "-9223372036854775809",
       "max_days": 30,
       "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
       "offset_days": 22
     },
     {
       "id": "seed-044",
-      "seed": -9223372036854775809,
+      "seed_decimal": "-9223372036854775809",
       "max_days": 365,
       "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
       "offset_days": -24
     },
     {
       "id": "seed-045",
-      "seed": -9223372036854775809,
+      "seed_decimal": "-9223372036854775809",
       "max_days": 3650,
       "digest_sha256_hex": "46fab697fe55c18086bc05be62522011ca503be4dc0d083928d853a01892de77",
       "offset_days": 342
@@ -824,6 +850,7 @@
     {
       "id": "date-012",
       "seed": 822,
+      "seed_decimal": "822",
       "max_days": 30,
       "offset_days": 29,
       "source_date": "2100-01-31",
@@ -833,6 +860,7 @@
     {
       "id": "date-013",
       "seed": 0,
+      "seed_decimal": "0",
       "max_days": 7,
       "offset_days": -7,
       "source_date": "2000-01-01",
@@ -842,6 +870,7 @@
     {
       "id": "date-014",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 365,
       "offset_days": 199,
       "source_date": "2019-08-14",
@@ -851,6 +880,7 @@
     {
       "id": "date-015",
       "seed": -1,
+      "seed_decimal": "-1",
       "max_days": 30,
       "offset_days": 7,
       "source_date": "1900-02-22",
@@ -860,6 +890,7 @@
     {
       "id": "date-016",
       "seed": 2026,
+      "seed_decimal": "2026",
       "max_days": 1,
       "offset_days": -1,
       "source_date": "2024-03-01",
@@ -869,6 +900,7 @@
     {
       "id": "date-017",
       "seed": 1,
+      "seed_decimal": "1",
       "max_days": 365,
       "offset_days": 199,
       "source_date": "2020-02-29",
@@ -877,7 +909,7 @@
     },
     {
       "id": "date-018",
-      "seed": 9223372036854775808,
+      "seed_decimal": "9223372036854775808",
       "max_days": 30,
       "offset_days": -2,
       "source_date": "2025-10-01",
