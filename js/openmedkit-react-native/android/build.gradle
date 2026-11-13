@@ -1,0 +1,64 @@
+// Android library for the OpenMedKit React Native bridge.
+//
+// Inside a React Native app the host build supplies the Android Gradle Plugin
+// and Kotlin plugin, and the React Native Gradle plugin forces the app's own
+// react-android version. The pinned defaults below are the compile baseline used
+// when this module is built as the root project, for example by a compile check.
+// Hosts can override them through `rootProject.ext`.
+
+buildscript {
+    if (project == rootProject) {
+        repositories {
+            google()
+            mavenCentral()
+        }
+        dependencies {
+            classpath "com.android.tools.build:gradle:8.7.3"
+            classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21"
+        }
+    }
+}
+
+def safeExtGet(String name, Object fallback) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+    namespace "com.openmed.openmedkit.reactnative"
+    compileSdk safeExtGet("compileSdkVersion", 35)
+
+    defaultConfig {
+        // OpenMedKit Android requires API 26, so host apps need minSdkVersion 26.
+        minSdk 26
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    // OpenMedKit Android is published from immutable release tags via JitPack.
+    maven {
+        url "https://jitpack.io"
+        content {
+            includeGroup "com.github.maziyarpanahi"
+        }
+    }
+}
+
+dependencies {
+    implementation "com.facebook.react:react-android:${safeExtGet("reactNativeVersion", "0.77.3")}"
+    implementation safeExtGet("openmedkitAndroidDependency", "com.github.maziyarpanahi:openmed:v3.2.0")
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${safeExtGet("kotlinxCoroutinesVersion", "1.8.1")}"
+}

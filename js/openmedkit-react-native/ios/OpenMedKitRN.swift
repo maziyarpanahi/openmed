@@ -3,6 +3,13 @@ import Foundation
 import OpenMedKit
 import React
 
+/// React Native bridge module exposing OpenMedKit as `OpenMedKitRN`.
+///
+/// `OpenMedKitRN.m` registers this class and its four promise methods with
+/// React Native; the `@objc` selectors below must stay in sync with it.
+/// Promise rejections carry a stable error code and a value-free message:
+/// input text, file paths, option values and underlying error descriptions
+/// never cross the bridge.
 @objc(OpenMedKitRN)
 final class OpenMedKitRN: NSObject, RCTBridgeModule {
     private let queue = DispatchQueue(label: "org.openmed.openmedkit.reactnative")
@@ -52,7 +59,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
                     "loaded": true,
                 ])
             } catch {
-                reject("openmedkit_load_failed", error.localizedDescription, error)
+                Self.rejectValueFree(reject, code: "openmedkit_load_failed", error: error)
             }
         }
     }
@@ -82,7 +89,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
                     )
                 })
             } catch {
-                reject("openmedkit_analyze_failed", error.localizedDescription, error)
+                Self.rejectValueFree(reject, code: "openmedkit_analyze_failed", error: error)
             }
         }
     }
@@ -113,7 +120,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
                     )
                 })
             } catch {
-                reject("openmedkit_extract_failed", error.localizedDescription, error)
+                Self.rejectValueFree(reject, code: "openmedkit_extract_failed", error: error)
             }
         }
     }
@@ -147,10 +154,24 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
                     },
                 ])
             } catch {
-                reject("openmedkit_deidentify_failed", error.localizedDescription, error)
+                Self.rejectValueFree(reject, code: "openmedkit_deidentify_failed", error: error)
             }
         }
     }
+
+    /// Forward only bridge-authored messages, which never embed caller values;
+    /// every other failure collapses to one fixed message without the
+    /// underlying `NSError`, whose user info could carry input-derived text.
+    private static func rejectValueFree(
+        _ reject: RCTPromiseRejectBlock,
+        code: String,
+        error: Error
+    ) {
+        let message = (error as? BridgeError)?.errorDescription ?? nativeCallFailed
+        reject(code, message, nil)
+    }
+
+    private static let nativeCallFailed = "OpenMedKit native call failed"
 
     private func requireRuntime() throws -> OpenMed {
         guard let runtime else {
@@ -179,7 +200,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
                 tokenizerFolderURL: tokenizerFolderPath.map(URL.init(fileURLWithPath:))
             )
         default:
-            throw BridgeError.unsupportedBackend(backendName)
+            throw BridgeError.unsupportedBackend
         }
     }
 
@@ -369,7 +390,7 @@ private struct BridgeOptions {
 private enum BridgeError: LocalizedError {
     case emptyHashSecret
     case missingOption(String)
-    case unsupportedBackend(String)
+    case unsupportedBackend
     case modelNotLoaded
 
     var errorDescription: String? {
@@ -378,8 +399,8 @@ private enum BridgeError: LocalizedError {
             return "hashSecret must not be empty"
         case .missingOption(let key):
             return "missing required OpenMedKit bridge option: \(key)"
-        case .unsupportedBackend(let backend):
-            return "unsupported OpenMedKit iOS backend: \(backend)"
+        case .unsupportedBackend:
+            return "unsupported OpenMedKit iOS backend"
         case .modelNotLoaded:
             return "OpenMedKit model is not loaded"
         }
