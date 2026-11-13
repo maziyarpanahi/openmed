@@ -26,6 +26,11 @@ SCHEMA_NAMES = (
     "code",
     "provenance",
 )
+_SCHEMA_ALIASES: dict[str, str] = {
+    # ``audit`` stays the bundled name; ``audit_event`` is the unambiguous
+    # name for the per-span OpenMedAuditEvent document.
+    "audit_event": "audit",
+}
 ACTION_KEEP = "keep"
 ACTION_FORMAT_PRESERVE = "format_preserve"
 ACTION_VALUES = (
@@ -205,8 +210,33 @@ def current_schema_version() -> int:
     return CURRENT_SCHEMA_VERSION
 
 
+def schema_aliases() -> dict[str, str]:
+    """Return the accepted schema-name aliases and the names they resolve to.
+
+    Each key is an alternative name accepted by :func:`load_schema` and
+    :func:`compare_schema_drift`; each value is the bundled name used in
+    :data:`SCHEMA_NAMES`, :func:`load_all_schemas` and the fingerprint
+    snapshot. ``audit_event`` is the unambiguous name for the per-span
+    ``OpenMedAuditEvent`` schema; ``audit`` keeps working.
+
+    Returns:
+        A new mapping of alias to bundled schema name, safe to modify.
+    """
+
+    return dict(_SCHEMA_ALIASES)
+
+
 def load_schema(name: str) -> dict[str, Any]:
-    """Load one bundled JSON Schema by logical name."""
+    """Load one bundled JSON Schema by logical name or alias.
+
+    Args:
+        name: A name from ``SCHEMA_NAMES`` or an alias from
+            :func:`schema_aliases`, optionally with a ``.schema`` or
+            ``.schema.json`` suffix.
+
+    Raises:
+        KeyError: If the name is neither a bundled schema nor an alias.
+    """
 
     schema_name = _normalise_schema_name(name)
     resource = resources.files(SCHEMA_PACKAGE).joinpath(f"{schema_name}.schema.json")
@@ -328,6 +358,7 @@ def _plain_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _normalise_schema_name(name: str) -> str:
     schema_name = name.removesuffix(".schema.json").removesuffix(".schema")
+    schema_name = _SCHEMA_ALIASES.get(schema_name, schema_name)
     if schema_name not in SCHEMA_NAMES:
         raise KeyError(f"unknown schema: {name!r}")
     return schema_name
@@ -360,5 +391,6 @@ __all__ = [
     "load_schema",
     "load_schema_bundle",
     "load_schema_snapshot",
+    "schema_aliases",
     "schema_fingerprint",
 ]

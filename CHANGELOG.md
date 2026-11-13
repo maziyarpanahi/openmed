@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Load the per-span audit event schema as `audit_event` and list schema-name
+  aliases with `schema_aliases()`; `audit` keeps working and
+  `load_all_schemas()` and the fingerprint snapshot are unchanged (#5390).
+
 ### Fixed
 
 - Keep exact container runtime packages available through a signed Debian
