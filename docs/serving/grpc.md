@@ -103,4 +103,8 @@ make grpc-proto-check
 ```
 
 The unit test suite also runs the same drift check, so CI fails when
-`openmed.proto` and the committed generated stubs disagree.
+`openmed.proto` and the committed generated stubs disagree. Stub freshness does
+not judge compatibility: the [API compatibility gate](../api/compatibility-gate.md)
+compiles `openmed.proto` to a descriptor set and fails on removed, renumbered
+or retyped fields, reused reserved numbers or names, and removed messages,
+services or RPCs relative to `docs/api/baselines/openmed-proto-descriptor.json`.

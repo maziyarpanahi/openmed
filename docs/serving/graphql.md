@@ -96,4 +96,9 @@ Regenerate that artifact after changing the schema:
 ```
 
 The unit test compares the committed SDL byte-for-byte with the live Strawberry
-schema so drift fails CI.
+schema so drift fails CI. Regenerating the snapshot does not hide a breaking
+change: the [API compatibility gate](../api/compatibility-gate.md) also
+classifies the live schema against the accepted baseline in
+`docs/api/baselines/graphql-schema.graphql` and fails on removed or retyped
+fields, arguments and enum values, tightened input nullability, and new
+required arguments.
