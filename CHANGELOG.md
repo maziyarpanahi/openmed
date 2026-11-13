@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published image's immutable digest.
 - Require patched Soup Sieve for optional HTML/document dependencies and
   Python 3.11.5 or newer, matching its supported Python patch level.
+- Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
+  headers before parsing.
 
 ## [3.3.0] - 2026-11-08
 
