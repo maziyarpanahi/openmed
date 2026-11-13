@@ -391,6 +391,15 @@ clinical text cannot be silently rewritten. The runtime pins the public checkpoi
 after spans are validated or repaired against the source document, and
 relations with unverified endpoints are dropped.
 
+## Apple Foundation Models
+
+If an app uses Apple Foundation Models alongside OpenMedKit, the same on-device
+rule applies: run the model locally, and never route PHI to Private Cloud
+Compute or to any other cloud model, including as a fallback. Treat the output
+as borderline, non-diagnostic draft text that a reviewer confirms before use.
+See [Apple Foundation Models](generative-model-policy.md#apple-foundation-models)
+in the generative model policy for the full rules.
+
 ## Quick Start: CoreML
 
 CoreML is still supported and remains the right path when you already have an Apple model bundle or need a non-MLX fallback.
