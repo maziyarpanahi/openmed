@@ -123,12 +123,14 @@ jobs:
 
       - name: Install pinned Syft
         env:
+          GH_TOKEN: ${{ github.token }}
           SYFT_LINUX_X64_ASSET_ID: "377338300"
           SYFT_SHA256: "0d6be741479eddd2c8644a288990c04f3df0d609bbc1599a005532a9dff63509"
         run: |
           archive="$RUNNER_TEMP/syft-${SYFT_VERSION}.tar.gz"
           curl --fail --silent --show-error --location \
             --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            --header "Authorization: Bearer $GH_TOKEN" \
             --header 'Accept: application/octet-stream' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             --output "$archive" \
