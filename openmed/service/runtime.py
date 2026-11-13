@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
+import functools
+import logging
+import math
 import os
 import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
@@ -24,6 +29,8 @@ from .warm_pool import (
     parse_memory_admission_wait_seconds,
     parse_model_memory_budget_bytes,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
 SERVICE_SERVED_MODELS_ENV_VAR = "OPENMED_SERVICE_SERVED_MODELS"
@@ -47,6 +54,8 @@ SERVICE_BATCH_LOW_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_LOW_WATERMARK"
 SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"
 SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
+SERVICE_STREAM_WRITE_IDLE_ENV_VAR = "OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS"
+SERVICE_STREAM_MAX_EVENTS_ENV_VAR = "OPENMED_SERVICE_STREAM_MAX_EVENTS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
 SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
@@ -84,6 +93,9 @@ DEFAULT_SERVICE_BATCH_HIGH_WATERMARK = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
 DEFAULT_SERVICE_BATCH_LOW_WATERMARK = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK // 2
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS = 1000.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
+DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS = 30.0
+DEFAULT_SERVICE_STREAM_MAX_EVENTS = 100_000
+MAX_SERVICE_STREAM_MAX_EVENTS = 10_000_000
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
 DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS = 512
@@ -446,6 +458,66 @@ def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_stream_write_idle_seconds(raw_value: Optional[str]) -> float:
+    """Parse how long an NDJSON stream may stay blocked on one client write.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS`` value.
+
+    Returns:
+        A positive, finite number of seconds. Blank values use the default.
+
+    Raises:
+        ValueError: If the value is not a positive, finite number. The bound
+            cannot be disabled.
+    """
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_STREAM_WRITE_IDLE_ENV_VAR} must be a positive number"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_STREAM_WRITE_IDLE_ENV_VAR} must be a positive, finite number"
+        )
+    return parsed
+
+
+def parse_stream_max_events(raw_value: Optional[str]) -> int:
+    """Parse the maximum number of NDJSON events one stream may emit.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_STREAM_MAX_EVENTS`` value.
+
+    Returns:
+        An event count between 1 and ``MAX_SERVICE_STREAM_MAX_EVENTS``. Blank
+        values use the default.
+
+    Raises:
+        ValueError: If the value is not an integer inside that range. The cap
+            cannot be disabled.
+    """
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_STREAM_MAX_EVENTS
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_STREAM_MAX_EVENTS_ENV_VAR} must be a positive integer"
+        ) from exc
+    if not 1 <= parsed <= MAX_SERVICE_STREAM_MAX_EVENTS:
+        raise ValueError(
+            f"{SERVICE_STREAM_MAX_EVENTS_ENV_VAR} must be between 1 and "
+            f"{MAX_SERVICE_STREAM_MAX_EVENTS}"
+        )
+    return parsed
+
+
 def parse_service_rate_limit_rps(raw_value: Optional[str]) -> float:
     """Parse the configured token-bucket refill rate in requests per second."""
     return _parse_non_negative_float(
@@ -717,6 +789,19 @@ class ModelNotServedError(ValueError):
         super().__init__("model_not_served")
 
 
+class StreamDeadlineExceeded(TimeoutError):
+    """A streaming request ran past its one request-wide deadline.
+
+    Attributes:
+        timeout_seconds: The configured deadline, in seconds. The exception
+            carries no request content.
+    """
+
+    def __init__(self, timeout_seconds: float) -> None:
+        self.timeout_seconds = float(timeout_seconds)
+        super().__init__("stream_deadline_exceeded")
+
+
 def _is_served_identifier(value: str) -> bool:
     # Deliberately pure: never expand a home directory or probe the filesystem.
     return (
@@ -743,6 +828,8 @@ class ServiceRuntime:
     model_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
+    stream_write_idle_seconds: float = DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS
+    stream_max_events: int = DEFAULT_SERVICE_STREAM_MAX_EVENTS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
@@ -816,6 +903,12 @@ class ServiceRuntime:
             default_keep_alive_seconds=keep_alive,
             shutdown_drain_seconds=parse_shutdown_drain_seconds(
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
+            ),
+            stream_write_idle_seconds=parse_stream_write_idle_seconds(
+                os.getenv(SERVICE_STREAM_WRITE_IDLE_ENV_VAR)
+            ),
+            stream_max_events=parse_stream_max_events(
+                os.getenv(SERVICE_STREAM_MAX_EVENTS_ENV_VAR)
             ),
             batching=batching,
             coalescing=coalescing,
@@ -912,13 +1005,53 @@ class ServiceRuntime:
         window_chars: int,
         tokenizer_context_chars: int,
         max_entity_chars: int,
-    ) -> AsyncIterator[Any]:
-        """Yield incremental PII extraction events for a service request."""
-        import asyncio
+        timeout_seconds: Optional[float] = None,
+        retain_abandoned_work: Optional[Callable[["asyncio.Future[Any]"], None]] = None,
+    ) -> AsyncGenerator[Any, None]:
+        """Yield incremental PII extraction events for a service request.
 
+        One deadline spans every ``append`` and ``finish`` window. The deadline
+        is checked before a window starts, so an expired request never starts
+        new model work, and each window wait is bounded by the time left. A
+        worker thread cannot be interrupted, so when the stream ends while a
+        window is still running (deadline, cancellation, or the consumer
+        closing the stream) the model reference is released only after that
+        window returns.
+
+        Args:
+            text: Source text to classify. It never reaches logs or errors.
+            model_name: Served model identifier.
+            confidence_threshold: Minimum span confidence.
+            use_smart_merging: Whether to merge adjacent subword spans.
+            lang: PII language code.
+            normalize_accents: Optional accent normalization override.
+            keep_alive: Request-level keep-alive override.
+            chunk_size: Characters appended per window.
+            window_chars: Model input window size.
+            tokenizer_context_chars: Recomputed tokenizer context.
+            max_entity_chars: Longest entity the tail must keep open.
+            timeout_seconds: Request-wide deadline in seconds. ``None`` uses
+                the active profile timeout; ``0`` disables the deadline.
+            retain_abandoned_work: Optional callback that receives a window
+                future the stream stopped waiting for while it still runs, so
+                admission capacity can stay held until it settles.
+
+        Yields:
+            Streaming token-classification events.
+
+        Raises:
+            StreamDeadlineExceeded: If the deadline passes before every window
+                completes. Events already yielded remain valid; no later events
+                follow.
+        """
         import openmed
         from openmed.processing.advanced_ner import StreamingTokenClassifier
 
+        loop = asyncio.get_running_loop()
+        if timeout_seconds is None:
+            timeout_seconds = float(getattr(self.config, "timeout", 0) or 0)
+        timeout_seconds = float(timeout_seconds)
+        deadline = loop.time() + timeout_seconds if timeout_seconds > 0 else None
         model_key = self.begin_model_request(model_name)
 
         def classify(window_text: str) -> Any:
@@ -941,17 +1074,62 @@ class ServiceRuntime:
             confidence_threshold=confidence_threshold,
         )
 
+        window: Optional[asyncio.Future[Any]] = None
         try:
             for chunk in _iter_text_chunks(text, chunk_size):
-                events = await asyncio.to_thread(streamer.append, chunk)
+                window = _start_stream_window(
+                    loop, deadline, timeout_seconds, streamer.append, chunk
+                )
+                events = await _await_stream_window(window, deadline, timeout_seconds)
                 for event in events:
                     yield event
                 await asyncio.sleep(0)
-            events = await asyncio.to_thread(streamer.finish)
+            window = _start_stream_window(
+                loop, deadline, timeout_seconds, streamer.finish
+            )
+            events = await _await_stream_window(window, deadline, timeout_seconds)
             for event in events:
                 yield event
         finally:
-            self.finish_model_request(model_key, keep_alive)
+            self._release_stream_model(
+                model_key, keep_alive, window, retain_abandoned_work
+            )
+
+    def _release_stream_model(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        window: Optional["asyncio.Future[Any]"],
+        retain_abandoned_work: Optional[Callable[["asyncio.Future[Any]"], None]],
+    ) -> None:
+        """Release a stream's model reference once its last window has settled.
+
+        The recorded resilience outcome is the worker's own result, so stream
+        control (deadline, disconnect, slow consumer) never counts as a model
+        failure, matching the shielded single-shot timeout path.
+        """
+        if window is None or window.done():
+            self.finish_model_request(
+                model_key, keep_alive, _stream_window_outcome(window)
+            )
+            return
+
+        def settled(done: "asyncio.Future[Any]") -> None:
+            try:
+                self.finish_model_request(
+                    model_key, keep_alive, _stream_window_outcome(done)
+                )
+            except Exception as exc:
+                # A loop callback has no caller; report only the type name.
+                _LOGGER.warning(
+                    "Deferred stream model release failed (%s)", type(exc).__name__
+                )
+
+        # Callbacks run on the event loop in registration order: the model
+        # reference is released before any retained admission is returned.
+        window.add_done_callback(settled)
+        if retain_abandoned_work is not None:
+            retain_abandoned_work(window)
 
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
@@ -1082,3 +1260,47 @@ def _iter_text_chunks(text: str, chunk_size: int):
     chunk_size = max(1, int(chunk_size))
     for index in range(0, len(text), chunk_size):
         yield text[index : index + chunk_size]
+
+
+def _start_stream_window(
+    loop: asyncio.AbstractEventLoop,
+    deadline: Optional[float],
+    timeout_seconds: float,
+    func: Callable[..., Any],
+    *args: Any,
+) -> "asyncio.Future[Any]":
+    """Start one blocking stream window in a worker thread, or refuse late.
+
+    The returned future settles only when the worker thread returns, so it is
+    the handle for deferring cleanup of a window the caller stopped awaiting.
+    """
+    if deadline is not None and deadline - loop.time() <= 0:
+        raise StreamDeadlineExceeded(timeout_seconds)
+    context = contextvars.copy_context()
+    return loop.run_in_executor(None, functools.partial(context.run, func, *args))
+
+
+async def _await_stream_window(
+    window: "asyncio.Future[Any]",
+    deadline: Optional[float],
+    timeout_seconds: float,
+) -> Any:
+    """Wait for a window without cancelling it, bounded by the time left."""
+    if deadline is None:
+        return await asyncio.shield(window)
+    remaining = deadline - asyncio.get_running_loop().time()
+    try:
+        return await asyncio.wait_for(asyncio.shield(window), max(remaining, 0.0))
+    except TimeoutError:
+        if window.done():
+            # The worker itself raised TimeoutError; surface its own outcome.
+            return window.result()
+        raise StreamDeadlineExceeded(timeout_seconds) from None
+
+
+def _stream_window_outcome(
+    window: Optional["asyncio.Future[Any]"],
+) -> Optional[BaseException]:
+    if window is None or window.cancelled():
+        return None
+    return window.exception()
