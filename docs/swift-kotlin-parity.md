@@ -48,3 +48,9 @@ spans with `JSONDecoder`, then compare `EntityPrediction.label`,
 `EntityPrediction.start`, and `EntityPrediction.end` against the shared JSON.
 Keeping both tests on these root-level files makes fixture changes explicit in
 one diff.
+
+The other shared contract vectors live in `tests/fixtures/parity/`. Its
+[README](https://github.com/maziyarpanahi/openmed/blob/master/tests/fixtures/parity/README.md)
+lists every fixture with its version, the Python, Swift and Android tests that
+read it, the workflow path filters that run them, and how to add a synthetic
+case.

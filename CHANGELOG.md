@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Document the shared parity fixtures in `tests/fixtures/parity/`: each
+  fixture's version, its Python, Swift and Android consumers, the workflow
+  path filters that run them and how to add a synthetic case, with a test that
+  every fixture has a README row (#5425).
+
 ### Fixed
 
 - Keep exact container runtime packages available through a signed Debian
