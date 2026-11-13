@@ -21,6 +21,21 @@ request as `X-API-Key: <key>` or `Authorization: ApiKey <key>`. The service
 hashes the presented key in memory and compares it with the configured digest;
 raw API keys are not stored in service config.
 
+In a container deployment, put the same JSON in a mounted secret file and set
+`OPENMED_SERVICE_AUTH_API_KEYS_FILE` instead of the inline variable, so the
+hashes stay out of the container environment:
+
+```bash
+OPENMED_SERVICE_AUTH_ENABLED=true \
+OPENMED_SERVICE_AUTH_API_KEYS_FILE=/run/secrets/openmed_api_keys \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+The inline and `_FILE` forms are mutually exclusive. Under the production
+profile the file must not be accessible to other users; see
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the size, newline, permission, and error-code rules.
+
 ## JWT Bearer Tokens
 
 JWT bearer authentication validates HS256 and RS256 signatures against a
@@ -43,8 +58,11 @@ OPENMED_SERVICE_AUTH_JWT_AUDIENCE=openmed-rest \
 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
-You can also set `OPENMED_SERVICE_AUTH_JWKS` to an inline JWKS JSON object with
-a top-level `keys` array. JWT scopes are read from `scope`, `scp`, or `scopes`
+You can instead set `OPENMED_SERVICE_AUTH_JWKS` to an inline JWKS JSON object
+with a top-level `keys` array. The inline and file forms are mutually exclusive:
+setting both fails startup. `OPENMED_SERVICE_AUTH_JWKS_FILE` follows the shared
+secret-file rules, including the production-profile permission check, because a
+JWKS can carry HS256 secrets. JWT scopes are read from `scope`, `scp`, or `scopes`
 claims. `scope` may be a space-delimited string; `scp` and `scopes` may be
 lists.
 

@@ -12,18 +12,19 @@ import os
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Request
 from starlette.responses import Response
 from starlette.routing import Match
 
+from .secret_files import is_production_profile, read_secret_setting, resolve_secret
 from .throttle import TokenBucketRateLimiter, client_identity, format_retry_after
 
 SERVICE_AUTH_ENABLED_ENV_VAR = "OPENMED_SERVICE_AUTH_ENABLED"
 SERVICE_AUTH_DENY_BY_DEFAULT_ENV_VAR = "OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT"
 SERVICE_AUTH_API_KEYS_ENV_VAR = "OPENMED_SERVICE_AUTH_API_KEYS"
+SERVICE_AUTH_API_KEYS_FILE_ENV_VAR = "OPENMED_SERVICE_AUTH_API_KEYS_FILE"
 SERVICE_AUTH_JWKS_ENV_VAR = "OPENMED_SERVICE_AUTH_JWKS"
 SERVICE_AUTH_JWKS_FILE_ENV_VAR = "OPENMED_SERVICE_AUTH_JWKS_FILE"
 SERVICE_AUTH_JWT_ISSUER_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_ISSUER"
@@ -37,6 +38,8 @@ SERVICE_AUTH_FAILURE_KEY_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY"
 
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_RPS = 5.0
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST = 10
+# Upper bound for API-key and JWKS secret files.
+MAX_AUTH_SECRET_FILE_BYTES = 1024 * 1024
 DEFAULT_AUTH_EXEMPT_PATHS = frozenset(
     {
         "/health",
@@ -274,7 +277,12 @@ def parse_service_auth_config() -> ServiceAuthConfig:
     return ServiceAuthConfig(
         enabled=True,
         deny_by_default=deny_by_default,
-        api_keys=parse_api_key_credentials(os.getenv(SERVICE_AUTH_API_KEYS_ENV_VAR)),
+        api_keys=parse_api_key_credentials(
+            read_secret_setting(
+                SERVICE_AUTH_API_KEYS_ENV_VAR,
+                max_bytes=MAX_AUTH_SECRET_FILE_BYTES,
+            )
+        ),
         jwks=parse_jwks(
             os.getenv(SERVICE_AUTH_JWKS_ENV_VAR),
             os.getenv(SERVICE_AUTH_JWKS_FILE_ENV_VAR),
@@ -398,19 +406,36 @@ def parse_api_key_credentials(raw_value: Optional[str]) -> tuple[APIKeyCredentia
 
 def parse_jwks(
     inline_jwks: Optional[str],
-    jwks_file: Optional[str],
+    jwks_file: Optional[str] = None,
 ) -> tuple[Mapping[str, Any], ...]:
-    """Parse JWT verification keys from inline JSON and optional JWKS file."""
-    keys: list[Mapping[str, Any]] = []
-    for raw_value, env_var in (
-        (_read_optional_file(jwks_file), SERVICE_AUTH_JWKS_FILE_ENV_VAR),
-        (inline_jwks, SERVICE_AUTH_JWKS_ENV_VAR),
-    ):
-        if raw_value is None or not raw_value.strip():
-            continue
-        payload = _load_json(raw_value, env_var=env_var)
-        keys.extend(_extract_jwks_keys(payload, env_var=env_var))
-    return tuple(keys)
+    """Parse JWT verification keys from inline JSON or a JWKS file.
+
+    Args:
+        inline_jwks: Value of ``OPENMED_SERVICE_AUTH_JWKS``.
+        jwks_file: Value of ``OPENMED_SERVICE_AUTH_JWKS_FILE``. It is read with
+            the shared secret-file rules and is mutually exclusive with
+            ``inline_jwks``.
+
+    Returns:
+        The configured verification keys.
+
+    Raises:
+        SecretSourceError: Both sources are set or the file cannot be used.
+        ValueError: The JWKS JSON is invalid.
+    """
+    from_file = jwks_file is not None and bool(jwks_file.strip())
+    raw_value = resolve_secret(
+        SERVICE_AUTH_JWKS_ENV_VAR,
+        inline=inline_jwks,
+        file_path=jwks_file,
+        max_bytes=MAX_AUTH_SECRET_FILE_BYTES,
+        enforce_permissions=is_production_profile(),
+    )
+    if raw_value is None or not raw_value.strip():
+        return ()
+    env_var = SERVICE_AUTH_JWKS_FILE_ENV_VAR if from_file else SERVICE_AUTH_JWKS_ENV_VAR
+    payload = _load_json(raw_value, env_var=env_var)
+    return tuple(_extract_jwks_keys(payload, env_var=env_var))
 
 
 def parse_audiences(raw_value: Optional[str]) -> tuple[str, ...]:
@@ -712,12 +737,6 @@ def _load_json(raw_value: str, *, env_var: str) -> Any:
         return json.loads(raw_value)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{env_var} must contain valid JSON") from exc
-
-
-def _read_optional_file(raw_path: Optional[str]) -> Optional[str]:
-    if raw_path is None or not raw_path.strip():
-        return None
-    return Path(raw_path).read_text(encoding="utf-8")
 
 
 def _extract_jwks_keys(payload: Any, *, env_var: str) -> list[Mapping[str, Any]]:

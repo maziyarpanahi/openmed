@@ -79,8 +79,22 @@ config:
     keyBy: global
 
 # Additional environment variables appended directly to the container.
-# Use this for secretKeyRef/configMapKeyRef entries such as HF_TOKEN.
+# Use this for non-OpenMed settings such as HF_TOKEN; prefer secretFiles for
+# OpenMed credentials so they stay out of the container environment.
 extraEnv: []
+
+# OpenMed credential settings read from mounted Secret files. Each entry mounts
+# one key of an existing Secret read-only under secretFilesMountPath and sets
+# `<env>_FILE` to it; do not also set `<env>` through extraEnv. The files are
+# root-owned and group-readable (0440), so the pod needs an fsGroup matching
+# the container group unless the container runs as root. Supported settings:
+# OPENMED_SERVICE_AUTH_API_KEYS, OPENMED_SERVICE_AUTH_JWKS,
+# OPENMED_SERVICE_OTLP_HEADERS and OPENMED_OPENHIM_PASSWORD.
+secretFilesMountPath: /var/run/secrets/openmed
+secretFiles: []
+#  - env: OPENMED_SERVICE_AUTH_API_KEYS
+#    secretName: openmed-service-auth
+#    secretKey: api-keys.json
 
 # HTTP service settings.
 service:
@@ -160,6 +174,11 @@ journey:
   database:
     secretName: openmed-journey-database
     secretKey: dsn
+    # "file" mounts the Secret key read-only and sets
+    # OPENMED_JOURNEY_POSTGRES_DSN_FILE; "env" keeps the secretKeyRef
+    # OPENMED_JOURNEY_POSTGRES_DSN mapping used by images before v4.0.
+    source: file
+    mountPath: /var/run/secrets/openmed/journey-database
   artifacts:
     existingClaim: ""
     storageClassName: ""

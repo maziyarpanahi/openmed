@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Mapping, Sequence
 
 from openmed.clinical.journey_contracts import ClinicalArtifact, sha256_digest
+from openmed.service.secret_files import SecretSourceError, read_secret_setting
 from openmed.structured.store import (
     FsspecArtifactStore,
     MigrationHealth,
@@ -422,8 +423,9 @@ def _serve_worker(
     return 0
 
 
-def _required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
+def _required_secret(name: str) -> str:
+    """Read ``name`` or the secret file named by ``<name>_FILE``."""
+    value = (read_secret_setting(name) or "").strip()
     if not value:
         raise ValueError(f"{name} is required")
     return value
@@ -438,7 +440,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dsn-env",
         default="OPENMED_JOURNEY_POSTGRES_DSN",
-        help="Environment variable containing the PostgreSQL DSN.",
+        help=(
+            "Environment variable containing the PostgreSQL DSN; "
+            "<NAME>_FILE may name a mounted secret file instead."
+        ),
     )
     parser.add_argument(
         "--schema", default=os.getenv("OPENMED_JOURNEY_SCHEMA", DEFAULT_SCHEMA)
@@ -465,7 +470,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = _parser().parse_args(argv)
     try:
-        dsn = _required_env(args.dsn_env)
+        dsn = _required_secret(args.dsn_env)
+    except SecretSourceError as exc:
+        _print_json(
+            {
+                "schema_version": DEPLOYMENT_HEALTH_SCHEMA_VERSION,
+                "state": "not_ready",
+                "code": exc.code,
+            }
+        )
+        return 2
     except ValueError:
         _print_json(
             {

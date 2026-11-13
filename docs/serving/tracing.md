@@ -44,6 +44,12 @@ OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
+When the headers carry a collector credential, store the same comma-separated
+`key=value` list in a mounted secret file and set
+`OPENMED_SERVICE_OTLP_HEADERS_FILE` instead of `OPENMED_SERVICE_OTLP_HEADERS`.
+The two forms are mutually exclusive; see
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files).
+
 ## Span Shape
 
 Each traced HTTP request creates one `openmed.service.request` server span. For

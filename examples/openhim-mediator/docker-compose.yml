@@ -6,13 +6,18 @@ services:
     environment:
       OPENMED_OPENHIM_CORE_URL: ${OPENMED_OPENHIM_CORE_URL:?Set OPENMED_OPENHIM_CORE_URL}
       OPENMED_OPENHIM_USERNAME: ${OPENMED_OPENHIM_USERNAME:?Set OPENMED_OPENHIM_USERNAME}
-      OPENMED_OPENHIM_PASSWORD: ${OPENMED_OPENHIM_PASSWORD:?Set OPENMED_OPENHIM_PASSWORD}
+      OPENMED_OPENHIM_PASSWORD_FILE: /run/secrets/openmed_openhim_password
       OPENMED_OPENHIM_AUTH_MODE: ${OPENMED_OPENHIM_AUTH_MODE:-basic}
       OPENMED_OPENHIM_POLICY: ${OPENMED_OPENHIM_POLICY:-hipaa_safe_harbor}
       OPENMED_OPENHIM_METHOD: ${OPENMED_OPENHIM_METHOD:-replace}
       OPENMED_OPENHIM_VERIFY_TLS: ${OPENMED_OPENHIM_VERIFY_TLS:-true}
       OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: ${OPENMED_OPENHIM_ALLOW_INSECURE_HTTP:-false}
       OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS: ${OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS:-10}
+    # Compose copies the host OPENMED_OPENHIM_PASSWORD into an owner-only file;
+    # the container environment never carries the password.
+    secrets:
+      - source: openmed_openhim_password
+        mode: 0400
     ports:
       - "127.0.0.1:${OPENMED_OPENHIM_HOST_PORT:-8080}:8080"
     volumes:
@@ -42,3 +47,7 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+
+secrets:
+  openmed_openhim_password:
+    environment: OPENMED_OPENHIM_PASSWORD

@@ -53,6 +53,15 @@ helm upgrade --install openmed-service deploy/helm/openmed-service \
   --set journey.networkPolicy.databasePodSelector.app=postgres
 ```
 
+The chart mounts the `dsn` key read-only at
+`/var/run/secrets/openmed/journey-database/dsn` in the migration Job, worker,
+and API pods and sets `OPENMED_JOURNEY_POSTGRES_DSN_FILE`, so the DSN never
+appears in a container environment. Kubernetes presents the file as root-owned
+`0440` with the pod `fsGroup` (`65532`), which the service accepts under the
+`prod` profile. Set `journey.database.source=env` only for images that predate
+`_FILE` support; it restores the `secretKeyRef` mapping of
+`OPENMED_JOURNEY_POSTGRES_DSN`.
+
 For an external database, keep `databasePodSelector` empty and supply a
 reviewed `journey.networkPolicy.additionalEgress` IP block. Do not disable the
 whole policy merely to make an unknown destination reachable. DNS is the only
@@ -102,8 +111,33 @@ allowlist.
 
 ## Secrets
 
-Do not put tokens or other secrets in `values.yaml`. Reference an existing
-Kubernetes Secret through `extraEnv`:
+Do not put tokens or other secrets in `values.yaml`. Mount OpenMed
+credentials from an existing Kubernetes Secret with `secretFiles`; each entry
+mounts one key read-only and sets the setting's `_FILE` companion, so the value
+stays out of the container environment and `kubectl describe`:
+
+```yaml
+secretFiles:
+  - env: OPENMED_SERVICE_AUTH_API_KEYS
+    secretName: openmed-service-auth
+    secretKey: api-keys.json
+  - env: OPENMED_SERVICE_OTLP_HEADERS
+    secretName: openmed-otlp
+    secretKey: headers
+```
+
+This renders `OPENMED_SERVICE_AUTH_API_KEYS_FILE` pointing at
+`/var/run/secrets/openmed/openmed-service-auth-api-keys/value`. Supported
+settings are `OPENMED_SERVICE_AUTH_API_KEYS`, `OPENMED_SERVICE_AUTH_JWKS`,
+`OPENMED_SERVICE_OTLP_HEADERS`, and `OPENMED_OPENHIM_PASSWORD`; do not also set
+the inline variable. The files are root-owned `0440`, so outside the Journey
+profile set `podSecurityContext.fsGroup` to the container's group unless the
+container runs as root. See
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the file rules and error codes.
+
+Third-party variables without a `_FILE` form can still reference a Secret
+through `extraEnv`:
 
 ```yaml
 extraEnv:
@@ -158,7 +192,9 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `config.throttle.maxConcurrency` | `0` | `OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`; `0` disables concurrency limiting. |
 | `config.throttle.concurrencyWaitSeconds` | `0.05` | `OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS`. |
 | `config.throttle.keyBy` | `global` | `OPENMED_SERVICE_THROTTLE_KEY`. |
-| `extraEnv` | `[]` | Extra container env entries, typically secret references. |
+| `extraEnv` | `[]` | Extra container env entries, such as third-party secret references. |
+| `secretFiles` | `[]` | OpenMed credential settings mounted from Secret keys as `<env>_FILE`. |
+| `secretFilesMountPath` | `/var/run/secrets/openmed` | Parent directory for `secretFiles` mounts. |
 | `service.type` | `ClusterIP` | Kubernetes Service type. |
 | `service.port` | `8080` | Service port. |
 | `service.targetPort` | `8080` | Container port. |
@@ -194,6 +230,8 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `journey.schema` | `openmed_journey` | Controlled PostgreSQL schema name. |
 | `journey.database.secretName` | `openmed-journey-database` | Existing Secret containing the DSN. |
 | `journey.database.secretKey` | `dsn` | Key inside the database Secret. |
+| `journey.database.source` | `file` | `file` mounts the DSN and sets `OPENMED_JOURNEY_POSTGRES_DSN_FILE`; `env` uses a `secretKeyRef` value. |
+| `journey.database.mountPath` | `/var/run/secrets/openmed/journey-database` | Read-only DSN Secret mount for `source: file`. |
 | `journey.artifacts.existingClaim` | `""` | Existing artifact PVC; empty creates one. |
 | `journey.artifacts.size` | `20Gi` | Requested content-addressed artifact capacity. |
 | `journey.worker.replicas` | `1` | Operational worker replicas. |
