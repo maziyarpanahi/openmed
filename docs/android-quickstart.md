@@ -13,8 +13,11 @@ model from the catalog, and redact a synthetic clinical note.
 | Requirement | Value |
 | --- | --- |
 | Minimum Android API | 26 (Android 8.0) |
-| Compile / target SDK | 33 |
-| Build JDK | 11 |
+| Compile SDK | 35 |
+| Demo target SDK | 35 |
+| Build JDK | 17 |
+| Android Gradle Plugin | 8.7.3 (8.5.1 or newer for 16 KB zip alignment) |
+| Consumer Kotlin | 1.9 or newer |
 | Language | Kotlin (coroutines) |
 
 The library performs inference on device via ONNX Runtime Mobile. See
