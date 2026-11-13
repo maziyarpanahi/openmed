@@ -1,6 +1,14 @@
 """Durable local persistence for longitudinal Journey records."""
 
 from .composed import ComposedJourneyStore, StoredJourneyGraph
+from .encryption import (
+    JOURNEY_KEY_PURPOSE,
+    JourneyEncryptionError,
+    JourneyStoreEncryption,
+    LocalJourneyReencryptionReport,
+    ReencryptionReport,
+    resolve_journey_profile,
+)
 from .local import (
     IngestedGraph,
     LocalArtifactStore,
@@ -51,6 +59,7 @@ from .protocols import (
 )
 
 __all__ = [
+    "JOURNEY_KEY_PURPOSE",
     "LOCAL_STORE_SCHEMA_VERSION",
     "LATEST_MIGRATION_VERSION",
     "LATEST_POSTGRES_MIGRATION_VERSION",
@@ -73,9 +82,12 @@ __all__ = [
     "IngestedGraph",
     "JobMetadata",
     "JobMetadataStore",
+    "JourneyEncryptionError",
     "JourneyQueryStore",
+    "JourneyStoreEncryption",
     "JourneyStoreTransaction",
     "LocalArtifactStore",
+    "LocalJourneyReencryptionReport",
     "LocalJourneyStore",
     "LocalStoreError",
     "MigrationHealth",
@@ -86,6 +98,7 @@ __all__ = [
     "PostgresMigration",
     "PostgresMigrationReport",
     "PostgresStoreError",
+    "ReencryptionReport",
     "ResolutionStore",
     "SQLiteJourneyStore",
     "SQLiteJourneyTransaction",
@@ -98,4 +111,5 @@ __all__ = [
     "StoreState",
     "StoredJourneyGraph",
     "TransactionalJourneyStore",
+    "resolve_journey_profile",
 ]

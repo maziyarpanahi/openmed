@@ -562,12 +562,37 @@
     },
     {
       "classification": "operational",
+      "function": "SQLiteJourneyStore._bind_encryption",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._complete_migration",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._reencrypt_batch",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._write_encryption_state",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
       "function": "SQLiteJourneyStore.close",
       "module": "openmed.structured.store.local"
     },
     {
       "classification": "operational",
       "function": "SQLiteJourneyStore.integrity_check",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore.reencrypt",
       "module": "openmed.structured.store.local"
     },
     {
@@ -598,6 +623,11 @@
     {
       "classification": "operational",
       "function": "SQLiteJourneyTransaction.put_job",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "_SQLiteKeyVerifiers.save_key_verifier",
       "module": "openmed.structured.store.local"
     },
     {

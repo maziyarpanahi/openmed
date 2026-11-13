@@ -12,7 +12,15 @@ from openmed.clinical.review_transitions import (
     persist_review_packet,
     transition_review_packet,
 )
-from openmed.structured.store import SQLiteJourneyStore, StorePoint, StoreState
+from openmed.structured.store import (
+    JourneyStoreEncryption,
+    SQLiteJourneyStore,
+    StorePoint,
+    StoreState,
+)
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 T0 = "2026-09-21T10:00:00Z"
 T1 = "2026-09-21T11:00:00Z"
@@ -88,7 +96,7 @@ def test_completed_review_reopens_with_append_only_provenance() -> None:
 
 
 def test_packet_versions_persist_and_reconstruct_point_in_time(tmp_path: Path) -> None:
-    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     original = _packet()
     started = _transition(original, "in_review", T1).value
     assert started is not None

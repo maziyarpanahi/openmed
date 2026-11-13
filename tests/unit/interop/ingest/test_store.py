@@ -21,7 +21,15 @@ from openmed.interop.ingest import (
     SourceManifest,
     SQLiteIngestionStore,
 )
-from openmed.structured.store import MIGRATIONS, DenyStorageOperations, StoreState
+from openmed.structured.store import (
+    MIGRATIONS,
+    DenyStorageOperations,
+    JourneyStoreEncryption,
+    StoreState,
+)
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 T0 = "2026-01-02T03:04:05Z"
 T0_LIVE = "2026-01-02T03:04:15Z"
@@ -82,7 +90,7 @@ def _checkpoint(job_id: str, manifest_digest: str, sequence: int = 1) -> Checkpo
 
 def test_manifest_replay_is_audited_noop_and_survives_restart(tmp_path: Path) -> None:
     path = tmp_path / "journey.sqlite3"
-    store = SQLiteIngestionStore(path)
+    store = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     assert isinstance(store, IngestionLedger)
 
     first = store.register_manifest(_manifest(), recorded_at=T0)
@@ -103,7 +111,7 @@ def test_manifest_replay_is_audited_noop_and_survives_restart(tmp_path: Path) ->
     assert [row["action"] for row in rows] == ["created", "noop"]
     store.close()
 
-    reopened = SQLiteIngestionStore(path)
+    reopened = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     assert reopened.get_job(first.value.job.job_id).value == first.value.job
     assert reopened.ingestion_integrity_check().ok
     reopened.close()
@@ -128,7 +136,7 @@ def test_existing_v1_journey_database_migrates_to_ingestion_ledger(
     connection.commit()
     connection.close()
 
-    store = SQLiteIngestionStore(path)
+    store = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     versions = store._connection.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
     ).fetchall()
@@ -139,7 +147,9 @@ def test_existing_v1_journey_database_migrates_to_ingestion_ledger(
         )
     }
 
-    assert [row["version"] for row in versions] == [1, 2, 3]
+    assert [row["version"] for row in versions] == [
+        migration.version for migration in MIGRATIONS
+    ]
     assert "ingestion_jobs" in tables
     assert "ingestion_pipeline_stages" in tables
     assert store.ingestion_integrity_check().ok
@@ -147,7 +157,7 @@ def test_existing_v1_journey_database_migrates_to_ingestion_ledger(
 
 
 def test_manifest_id_cannot_be_reused_for_changed_contents(tmp_path: Path) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     assert store.register_manifest(_manifest(), recorded_at=T0).ok
     changed = replace(_manifest(), artifact_digests=(DIGEST_B,))
 
@@ -161,7 +171,7 @@ def test_manifest_id_cannot_be_reused_for_changed_contents(tmp_path: Path) -> No
 def test_only_one_worker_holds_a_live_lease_and_expiry_allows_takeover(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     job = _registered(store).job
     first = _lease(store, job.job_id, duration_seconds=30)
 
@@ -194,7 +204,7 @@ def test_only_one_worker_holds_a_live_lease_and_expiry_allows_takeover(
 
 
 def test_checkpoint_is_gap_safe_idempotent_and_advances_job(tmp_path: Path) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     registration = _registered(store)
     lease = _lease(store, registration.job.job_id)
     checkpoint = _checkpoint(
@@ -234,7 +244,7 @@ def test_checkpoint_is_gap_safe_idempotent_and_advances_job(tmp_path: Path) -> N
 def test_completion_and_cancellation_are_idempotent_and_terminal(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     registration = _registered(store)
     lease = _lease(store, registration.job.job_id)
 
@@ -274,7 +284,7 @@ def test_completion_and_cancellation_are_idempotent_and_terminal(
 def test_quarantine_requires_explicit_promotion_before_new_lease(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     registration = _registered(store)
     lease = _lease(store, registration.job.job_id)
     quarantine = QuarantineResult(
@@ -320,7 +330,7 @@ def test_quarantine_requires_explicit_promotion_before_new_lease(
 
 
 def test_retry_records_are_value_free_and_release_lease(tmp_path: Path) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     registration = _registered(store)
     lease = _lease(store, registration.job.job_id)
     retry = Retry(
@@ -349,7 +359,7 @@ def test_retry_records_are_value_free_and_release_lease(tmp_path: Path) -> None:
 
 
 def test_integrity_check_detects_tampered_ingestion_payload(tmp_path: Path) -> None:
-    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     _registered(store)
     store._connection.execute(
         "UPDATE ingestion_manifests SET payload_json = ?",
@@ -368,19 +378,21 @@ def test_ingestion_policy_denials_are_typed(tmp_path: Path) -> None:
     denied_write = SQLiteIngestionStore(
         path,
         policy=DenyStorageOperations(frozenset({"write"})),
+        encryption=PLAINTEXT_DEV,
     )
     result = denied_write.register_manifest(_manifest(), recorded_at=T0)
     assert result.state is StoreState.DENIED
     assert result.code == "policy_denied"
     denied_write.close()
 
-    allowed = SQLiteIngestionStore(path)
+    allowed = SQLiteIngestionStore(path, encryption=PLAINTEXT_DEV)
     registration = _registered(allowed)
     allowed.close()
 
     denied_read = SQLiteIngestionStore(
         path,
         policy=DenyStorageOperations(frozenset({"read", "verify"})),
+        encryption=PLAINTEXT_DEV,
     )
     assert denied_read.get_job(registration.job.job_id).state is StoreState.DENIED
     assert denied_read.ingestion_integrity_check().state is StoreState.DENIED

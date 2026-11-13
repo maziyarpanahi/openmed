@@ -48,7 +48,11 @@ from openmed.interop.ingest import (
     SourceManifest,
 )
 
-store = SQLiteIngestionStore("./journey-data/journey.sqlite3")
+# `encryption` is a JourneyStoreEncryption; see the local Journey store guide.
+store = SQLiteIngestionStore(
+    "./journey-data/journey.sqlite3",
+    encryption=encryption,
+)
 coordinator = IngestionCoordinator(store)
 manifest = SourceManifest(
     manifest_id="manifest_0123456789abcdef",

@@ -19,7 +19,10 @@ from openmed.interop.ingest import (
     build_stage_manifest,
     load_pipeline_lineage_schema,
 )
-from openmed.structured.store import StoreState
+from openmed.structured.store import JourneyStoreEncryption, StoreState
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 T0 = "2026-01-02T03:04:05Z"
 T1 = "2026-01-02T04:04:05Z"
@@ -98,7 +101,7 @@ def test_stage_manifest_rejects_raw_or_unknown_metadata() -> None:
 def test_store_persists_edges_and_invalidates_only_descendants(
     tmp_path: Path,
 ) -> None:
-    store = SQLiteIngestionStore(tmp_path / "lineage.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "lineage.sqlite3", encryption=PLAINTEXT_DEV)
     first = store.register_manifest(_source_manifest("a"), recorded_at=T0)
     second = store.register_manifest(_source_manifest("b"), recorded_at=T1)
     assert first.ok and first.value is not None
@@ -149,7 +152,7 @@ def test_store_persists_edges_and_invalidates_only_descendants(
 
 
 def test_stage_parent_must_exist(tmp_path: Path) -> None:
-    store = SQLiteIngestionStore(tmp_path / "lineage.sqlite3")
+    store = SQLiteIngestionStore(tmp_path / "lineage.sqlite3", encryption=PLAINTEXT_DEV)
     registration = store.register_manifest(_source_manifest(), recorded_at=T0)
     assert registration.ok and registration.value is not None
     stage = _stage(
