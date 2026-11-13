@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
 
+### Added
+
+- Add an offline example that signs a synthetic de-identification audit report,
+  verifies a received copy and shows verification failing after one span offset
+  changes; the key comes from `OPENMED_AUDIT_KEY` or is generated and is never
+  printed (#5424).
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).

@@ -28,6 +28,7 @@ from examples import (
     onboarding_india_dpdp,
     v30_nli_relations,
     v30_sdoh_timeline,
+    verify_audit_report,
 )
 
 deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
@@ -1274,3 +1275,105 @@ def test_nli_relation_output_check_rejects_changed_evidence_digest():
     records[7]["evidence_digests"] = ["sha256:" + "0" * 64]
     with pytest.raises(AssertionError):
         _assert_nli_relation_demo_output("\n".join(json.dumps(row) for row in records))
+
+
+_AUDIT_KEY_SENTINEL = "AUDIT-KEY-SENTINEL-must-not-print"
+
+
+def _assert_no_audit_key_material(output: str, key: bytes) -> None:
+    for form in (key.hex(), key.decode("latin-1"), repr(key)):
+        assert form not in output
+
+
+@pytest.fixture
+def forbid_audit_example_network_and_models(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("audit report example attempted network or model use")
+
+    monkeypatch.setattr(socket.socket, "connect", fail)
+    monkeypatch.setattr(socket, "create_connection", fail)
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+
+
+def test_verify_audit_report_example_is_import_safe(capsys):
+    namespace = runpy.run_path(verify_audit_report.__file__, run_name="example_import")
+    assert callable(namespace["run_example"])
+    assert callable(namespace["main"])
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("key_source", ["environment", "generated"])
+def test_verify_audit_report_example_passes_then_fails_offline(
+    key_source, monkeypatch, capsys, forbid_audit_example_network_and_models
+):
+    generated = b"\x01generated-throwaway-key\xfe" * 2
+    if key_source == "environment":
+        monkeypatch.setenv(verify_audit_report.KEY_ENV, _AUDIT_KEY_SENTINEL)
+        key = _AUDIT_KEY_SENTINEL.encode("utf-8")
+    else:
+        monkeypatch.delenv(verify_audit_report.KEY_ENV, raising=False)
+        monkeypatch.setattr(
+            verify_audit_report.secrets, "token_bytes", lambda size: generated
+        )
+        key = generated
+
+    assert verify_audit_report.main() == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    summary = json.loads(captured.out)
+    assert summary["key_source"] == key_source
+    assert summary["algorithm"] == "HMAC-SHA256"
+    assert summary["original_verified"] is True
+    assert summary["tampered_verified"] is False
+    assert summary["repro_hash"].startswith("sha256:")
+    _assert_no_audit_key_material(captured.out, key)
+    assert verify_audit_report.SYNTHETIC_NOTE not in captured.out
+    assert "Alex Example" not in captured.out
+
+
+def test_verify_audit_report_example_generates_a_fresh_key_each_run(monkeypatch):
+    monkeypatch.delenv(verify_audit_report.KEY_ENV, raising=False)
+    first, first_source = verify_audit_report.load_key()
+    second, _ = verify_audit_report.load_key()
+    assert first_source == "generated"
+    assert len(first) == 32
+    assert first != second
+
+
+def test_verify_audit_report_example_fails_when_tampering_goes_unnoticed(
+    monkeypatch, capsys
+):
+    from openmed.core.audit import AuditReport
+
+    monkeypatch.setattr(AuditReport, "verify", lambda self, key, **kwargs: True)
+    assert verify_audit_report.main() == 1
+    assert json.loads(capsys.readouterr().out)["tampered_verified"] is True
+
+
+def test_verify_audit_report_example_cli_runs_offline_without_printing_key():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "examples.verify_audit_report"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(root), os.environ.get("PYTHONPATH")))
+            ),
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+            verify_audit_report.KEY_ENV: _AUDIT_KEY_SENTINEL,
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert result.stderr == ""
+    summary = json.loads(result.stdout)
+    assert summary["key_source"] == "environment"
+    assert summary["original_verified"] is True
+    assert summary["tampered_verified"] is False
+    _assert_no_audit_key_material(result.stdout, _AUDIT_KEY_SENTINEL.encode())
