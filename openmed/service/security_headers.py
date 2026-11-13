@@ -21,7 +21,10 @@ SERVICE_CORS_HEADERS = (
     "Content-Language",
     "Content-Type",
     "X-Request-ID",
+    "X-OpenMed-Priority",
 )
+SERVICE_CORS_AUTH_HEADERS = ("Authorization", "X-API-Key")
+SERVICE_CORS_EXPOSE_HEADERS = ("X-Request-ID", "Retry-After")
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,21 @@ def parse_trusted_hosts(raw_value: Optional[str]) -> Tuple[str, ...]:
             f"{SERVICE_TRUSTED_HOSTS_ENV_VAR} must not contain the global '*' host"
         )
     return hosts
+
+
+def service_cors_allow_headers(*, auth_enabled: bool) -> Tuple[str, ...]:
+    """Return the request headers a CORS preflight may approve.
+
+    Args:
+        auth_enabled: Whether service authentication is active. Credential
+            headers are only approved when the service will read them.
+
+    Returns:
+        Explicit header names; wildcards are never returned.
+    """
+    if auth_enabled:
+        return SERVICE_CORS_HEADERS + SERVICE_CORS_AUTH_HEADERS
+    return SERVICE_CORS_HEADERS
 
 
 def parse_service_security_config() -> ServiceSecurityConfig:
