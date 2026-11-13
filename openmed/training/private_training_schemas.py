@@ -27,6 +27,8 @@ from openmed.training.federated_round import (
 )
 from openmed.training.federated_schedule import (
     FEDERATED_SCHEDULE_SCHEMA_VERSION,
+    FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+    MAX_FEDERATED_CLOCK_SKEW_SECONDS,
     MAX_FEDERATED_PHASE_DURATION_SECONDS,
 )
 from openmed.training.federated_status import (
@@ -152,6 +154,31 @@ def build_federated_round_schedule_schema() -> dict[str, Any]:
             },
         },
     }
+
+
+def build_federated_round_schedule_v2_schema() -> dict[str, Any]:
+    """Build the JSON Schema for skew-aware federated schedule payloads.
+
+    Returns:
+        A new JSON-compatible Draft 2020-12 schema mapping. It extends the v1
+        schedule shape with the required ``max_clock_skew_seconds`` bound.
+    """
+
+    schema = build_federated_round_schedule_schema()
+    schema["$id"] = (
+        "urn:openmed:training:federated_round_schedule:"
+        f"{FEDERATED_SCHEDULE_V2_SCHEMA_VERSION}"
+    )
+    schema["required"] = sorted([*schema["required"], "max_clock_skew_seconds"])
+    schema["properties"]["schema_version"]["const"] = (
+        FEDERATED_SCHEDULE_V2_SCHEMA_VERSION
+    )
+    schema["properties"]["max_clock_skew_seconds"] = {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": MAX_FEDERATED_CLOCK_SKEW_SECONDS,
+    }
+    return schema
 
 
 def build_federated_round_status_schema() -> dict[str, Any]:
@@ -514,6 +541,7 @@ PRIVATE_TRAINING_SCHEMA_BUILDERS: Final[Mapping[str, Callable[[], dict[str, Any]
         {
             "federated_round_lifecycle": build_federated_round_lifecycle_schema,
             "federated_round_schedule": build_federated_round_schedule_schema,
+            "federated_round_schedule_v2": build_federated_round_schedule_v2_schema,
             "federated_round_status": build_federated_round_status_schema,
             "federated_update_metadata": build_federated_update_metadata_schema,
             "federated_aggregate_metric": build_federated_aggregate_metric_schema,
@@ -586,6 +614,7 @@ __all__ = [
     "build_federated_aggregate_metric_schema",
     "build_federated_round_lifecycle_schema",
     "build_federated_round_schedule_schema",
+    "build_federated_round_schedule_v2_schema",
     "build_federated_round_status_schema",
     "build_federated_update_metadata_schema",
     "build_private_training_schemas",

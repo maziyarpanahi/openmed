@@ -57,6 +57,82 @@ The configured maximum is inclusive, and each phase also has a hard upper bound
 of 365 days. These limits reject accidental year-scale windows while allowing a
 caller to apply a tighter scheduling policy.
 
-The schema contains only boundaries, duration limits, phase names, and its
-version. It has no fields for site or client identities, patient counts, local
-metrics, network endpoints, notifications, or retry policy.
+## Clock skew tolerance
+
+Exact boundaries are deterministic for one clock, but sites and the coordinator
+do not share one. Schema `openmed.training.federated_schedule.v2` adds a
+required `max_clock_skew_seconds` field: the largest tolerated difference
+between any site clock and the coordinator clock. The coordinator clock is
+authoritative; site clocks are advisory.
+
+The bound is an integer from 0 to 900 seconds (15 minutes). Negative, larger,
+fractional, non-finite, boolean, and missing values are rejected. A larger
+bound would hide an unsynchronized site rather than tolerate drift, so fix the
+site's time source instead. Every phase must also last longer than twice the
+bound, so each phase keeps a non-empty site window.
+
+Two checks consume the schedule. Neither reads the system clock; callers pass
+readings from their injected clock sources.
+
+| Check | Clock | Admits when | Refusal reason codes |
+| --- | --- | --- | --- |
+| `client_admission_at(phase, local_time)` | site, advisory | `start + skew <= local_time < end - skew` | `local_clock_before_window`, `local_clock_after_window` |
+| `coordinator_admission_at(phase, received_at, coordinator_sequence=n)` | coordinator receipt, authoritative | `start <= received_at < end` | `received_before_window`, `received_after_window` |
+
+A site whose clock is within the bound and reads inside the shrunk window
+therefore starts only when the phase is open on the coordinator clock. A site
+must check its decision before training and stop on any refusal. The
+coordinator ignores site-reported times and the skew bound; it refuses a late
+arrival by receipt time only, even if the site started in time. The client
+check requires a v2 schedule, while the coordinator check works for v1 and v2.
+
+```python
+from openmed.training import (
+    FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+    FederatedRoundSchedule,
+    FederatedSchedulePhase,
+    order_admission_evidence,
+)
+
+schedule = FederatedRoundSchedule(
+    enrollment_starts_at=start,
+    update_submission_starts_at=start + timedelta(hours=12),
+    aggregation_starts_at=start + timedelta(hours=24),
+    evaluation_starts_at=start + timedelta(hours=30),
+    finishes_at=start + timedelta(hours=36),
+    schema_version=FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+    max_clock_skew_seconds=120,
+)
+
+phase = FederatedSchedulePhase.UPDATE_SUBMISSION
+site_clock = lambda: start + timedelta(hours=12, minutes=1)
+decision = schedule.client_admission_at(phase, site_clock())
+assert decision.reason_code == "local_clock_before_window"
+assert not decision.admitted  # refuse before training
+
+coordinator_clock = lambda: start + timedelta(hours=12, minutes=5)
+received = schedule.coordinator_admission_at(
+    phase, coordinator_clock(), coordinator_sequence=1
+)
+evidence = order_admission_evidence([received])
+```
+
+Admission decisions are shareable status and evidence records. Their
+`to_dict()` and `to_json()` output contains only `admitted`, `clock_basis`
+(`site_advisory` or `coordinator_receipt`), `coordinator_sequence`, `phase`,
+and `reason_code`. They never retain the local or receipt time, a clock
+offset, or a site identity. `order_admission_evidence` orders coordinator
+decisions by coordinator sequence and rejects site decisions and duplicate
+sequences, because site timestamps cannot order events.
+
+## Schema versions
+
+Schema v1 is unchanged: it has no skew field, parses and serializes
+byte-for-byte as before, and rejects `max_clock_skew_seconds`. Schema v2 adds
+only the top-level `max_clock_skew_seconds` field. A payload whose fields do
+not match its declared version is rejected.
+
+The schema contains only boundaries, duration limits, the skew bound, phase
+names, and its version. It has no fields for site or client identities,
+patient counts, local metrics, network endpoints, notifications, or retry
+policy.

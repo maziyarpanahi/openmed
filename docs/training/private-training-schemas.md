@@ -3,7 +3,8 @@
 External coordinators and air-gapped clients can validate the structure of
 private-training metadata against versioned Draft 2020-12 JSON Schemas.
 OpenMed exports one self-contained catalog covering round lifecycle, round
-scheduling, round status, dense update metadata, and aggregate metric envelopes.
+scheduling (v1 and the clock-skew aware v2), round status, dense update
+metadata, and aggregate metric envelopes.
 
 The catalog is import-light and deterministic. Each schema:
 
@@ -31,8 +32,8 @@ from openmed.training.private_training_schemas import (
 
 catalog = build_private_training_schemas()
 # keys: federated_round_lifecycle, federated_round_schedule,
-#       federated_round_status, federated_update_metadata,
-#       federated_aggregate_metric
+#       federated_round_schedule_v2, federated_round_status,
+#       federated_update_metadata, federated_aggregate_metric
 lifecycle = build_schema("federated_round_lifecycle")
 stable = render_private_training_schemas()
 ```
@@ -86,7 +87,8 @@ validator.validate(payload)
 
 Schema validation is the first gate. Draft 2020-12 cannot express arbitrary
 comparisons or arithmetic between fields. Python constructors and validators
-remain required for schedule ordering and phase durations, count thresholds
+remain required for schedule ordering, phase durations and the minimum phase
+length implied by the clock skew bound, count thresholds
 and completion bands, sorted digest references, clipping and interval ordering,
 shape products, total element counts, unique parameter names and update-policy
 compatibility. JSON Schema also treats integral numbers such as `1.0` as
