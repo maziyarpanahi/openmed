@@ -68,8 +68,29 @@ Use synthetic payloads only in tests and committed fixtures. Do not place raw
 clinical text, identifiers, credentials, or other sensitive values in headers,
 logs, reports, or fixture data.
 
+## Per-span audit event schema
+
+Each audited span is described by the bundled `OpenMedAuditEvent` JSON Schema.
+Load it as `audit_event`, which names the per-span event unambiguously:
+
+```python
+from openmed.core.schemas import load_schema, schema_aliases
+
+event_schema = load_schema("audit_event")
+schema_aliases()  # {"audit_event": "audit"}
+```
+
+`audit_event` is an alias of the bundled `audit` name, and both return the same
+document. `load_all_schemas()`, `SCHEMA_NAMES` and the schema fingerprint
+snapshot keep listing it as `audit`, and the schema file and `$id` are
+unchanged. `schema_aliases()` maps each alias to its bundled name so client
+generators can pick the unambiguous one. The `audit` name keeps working until a
+major release decides otherwise. Unknown names raise `KeyError` that names only
+the requested schema.
+
 Focused tests:
 
 ```bash
 .venv/bin/python -m pytest tests/unit/compliance/test_audit_envelope.py -q
+.venv/bin/python -m pytest tests/unit/core/test_openmed_span.py -q
 ```
