@@ -12,6 +12,8 @@ this directory must have a row in the table below;
 | `multimodal_contract_v1.json` | `version: 1` | `tests/unit/multimodal/test_apple_contract.py` | `MultimodalContractParityTests.swift` | none | `swift-test.yml` | Regenerate from `tests/fixtures/multimodal/apple_contract.py` |
 | `multimodal_contracts_v1.json` | `version: 1` | `tests/unit/multimodal/test_android_contract_parity.py` | none | `MultimodalContractParityTest.kt` | `android-ci.yml` | Edit by hand |
 | `speech_contract_v1.json` | `version: 1` | `tests/unit/multimodal/test_apple_speech_contract.py` | `SpeechContractParityTests.swift` | none | `swift-test.yml` | Edit by hand |
+| `date_shift_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/core/test_date_shift_vectors.py` | none yet | none yet | none | Edit by hand; the Python test recomputes every digest, offset and shifted date |
+| `identifier_validators_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/core/test_identifier_vectors.py` | none yet | none yet | none | Edit by hand; the Python test checks every value against its reference validator |
 | `README.md` | n/a | `tests/unit/test_parity_fixture_readme.py` | none | none | none | This file |
 
 Swift tests live in `swift/OpenMedKit/Tests/OpenMedKitTests/` and resolve the
