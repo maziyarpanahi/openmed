@@ -6,6 +6,10 @@ terminology server that you supply. No vocabulary or endpoint is configured by
 default, and importing or using the local path does not create a network
 client.
 
+For a side-by-side view of which terminology operations run offline and which
+need your server, see the
+[terminology operation support matrix](terminology-support-matrix.md).
+
 The result is a `ValueSetExpansion`: an immutable set of member codes with
 system-aware `codings` and deterministic `provenance`. The provenance records
 the ValueSet or response version, the expansion method, vocabulary release

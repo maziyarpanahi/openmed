@@ -152,3 +152,7 @@ any network operation. Pass a caller-owned bridge through
 `terminology_bridge=` (or the `restricted_endpoint=` alias). License
 credentials belong to that endpoint and are never accepted by the REST or CLI
 payloads.
+
+For which FHIR terminology operations run offline and which are delegated to
+that endpoint, see the
+[terminology operation support matrix](clinical/terminology-support-matrix.md).
