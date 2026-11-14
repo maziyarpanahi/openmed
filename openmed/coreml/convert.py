@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import plistlib
 import re
 import statistics
@@ -26,6 +27,13 @@ from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from openmed.core.capabilities import raise_missing_backend
 from openmed.core.decoding import build_label_info, labels_to_token_spans
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    context_from_metadata,
+    resolve_source_context,
+    write_canonical_manifest,
+)
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.metrics import compute_recall_slices, normalize_eval_spans
 from openmed.eval.quant_delta import (
@@ -54,6 +62,7 @@ COMPUTE_UNIT_CHOICES = ("all", "cpuAndNeuralEngine", "cpuOnly")
 QUANTIZATION_CHOICES = ("int8", "int4", "all")
 COREML_MANIFEST_FILENAME = "openmed-coreml.json"
 COREML_MANIFEST_VERSION = 1
+COREML_PACKAGE_MANIFEST_VERSION = 2
 COREML_RESIDENCY_THRESHOLD = 0.90
 COREML_PARITY_REPORT_VERSION = 1
 
@@ -239,6 +248,18 @@ def convert(
         conversion_manifest_path,
     )
 
+    observation_paths = {"conversion_manifest_path": manifest_path}
+    if parity_report_path is not None or eval_suite_path is not None:
+        observation_paths["parity_report_path"] = _resolve_parity_report_path(
+            output_path, parity_report_path
+        )
+    if swift_parity_corpus_path is not None:
+        observation_paths["swift_parity_corpus_path"] = Path(swift_parity_corpus_path)
+    for package_path in (output_path, *quantized_outputs.values()):
+        for option, report_path in observation_paths.items():
+            if report_path.resolve().is_relative_to(package_path.resolve()):
+                raise ValueError(f"{option} must be outside CoreML packages")
+
     try:
         import coremltools as ct
         import torch
@@ -250,18 +271,20 @@ def convert(
     except ImportError as e:
         raise_missing_backend("coreml", feature="CoreML model conversion", cause=e)
 
-    source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    source = resolve_source_context(model_id, cache_dir=cache_dir)
+    load_reference = source.load_reference
+    source_config = AutoConfig.from_pretrained(load_reference, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
 
     # 1. Load model and tokenizer
-    logger.info("Loading HuggingFace model %s ...", model_id)
+    logger.info("Loading HuggingFace model %s ...", source.source_model_id)
     tokenizer = get_tokenizer_with_loader(
-        model_id,
+        load_reference,
         AutoTokenizer.from_pretrained,
         cache_dir=cache_dir,
     )
     model = AutoModelForTokenClassification.from_pretrained(
-        model_id,
+        load_reference,
         cache_dir=cache_dir,
     )
     model.eval()
@@ -342,7 +365,7 @@ def convert(
     # 5. Add metadata
     _apply_metadata(
         mlmodel,
-        model_id=model_id,
+        model_id=source.source_model_id,
         model_type=model_type,
         num_labels=num_labels,
         id2label=id2label,
@@ -367,7 +390,7 @@ def convert(
         quantized_model = _palettize(ct, mlmodel, bits=bits)
         _apply_metadata(
             quantized_model,
-            model_id=model_id,
+            model_id=source.source_model_id,
             model_type=model_type,
             num_labels=num_labels,
             id2label=id2label,
@@ -412,7 +435,8 @@ def convert(
     parity_by_variant: dict[str, Mapping[str, Any]] = {}
     if eval_suite_path is not None:
         parity_report = write_coreml_variant_parity_report(
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
+            source_load_reference=load_reference,
             variant_paths=variant_paths,
             eval_suite_path=eval_suite_path,
             output_path=parity_report_path,
@@ -447,22 +471,25 @@ def convert(
                 parity=parity_by_variant.get(name, {}),
             )
         )
+    assert_source_unchanged(source)
     _write_coreml_conversion_manifest(
         manifest_path,
-        model_id=model_id,
+        model_id=source.source_model_id,
         model_type=model_type,
         compute_units=compute_units,
         max_seq_length=max_seq_length,
         optimize_for_ane=optimize_for_ane,
         variants=records,
         segmenter=segmenter,
+        source=source,
+        variant_paths=variant_paths,
     )
 
     logger.info("CoreML model saved to %s", output_path)
     if publish_to_hub:
         result = publish_artifact(
             artifact_dir=output_path,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             format_name="coreml",
             repo_id=publish_repo_id,
             org=publish_org,
@@ -612,6 +639,14 @@ def _resolve_conversion_manifest_path(
     return output_path.with_name(f"{stem}_coreml_manifest.json")
 
 
+def _resolve_parity_report_path(
+    first_variant_path: str | Path, output_path: str | Path | None
+) -> Path:
+    if output_path is not None:
+        return Path(output_path)
+    return Path(first_variant_path).with_name("coreml_parity.json")
+
+
 def _coreml_input_shape(
     ct,
     *,
@@ -759,21 +794,21 @@ def write_coreml_variant_parity_report(
     candidate_runners: Mapping[str, CoreMLRunner] | None = None,
     span_tolerance: int = 0,
     recall_delta_limit: float = COREML_RECALL_DELTA_LIMIT,
+    source_load_reference: str | None = None,
 ) -> dict[str, Any]:
     """Run PyTorch-vs-CoreML parity for all variants and write evidence JSON."""
 
     from openmed.eval.harness import load_fixtures
 
     eval_suite_path = Path(eval_suite_path)
-    report_path = (
-        Path(output_path)
-        if output_path is not None
-        else Path(next(iter(variant_paths.values()))).with_name("coreml_parity.json")
+    report_path = _resolve_parity_report_path(
+        next(iter(variant_paths.values())), output_path
     )
     generated_at = _utc_now()
     fixtures = load_fixtures(eval_suite_path)
+    load_reference = source_load_reference or source_model_id
     parent_runner = parent_runner or _hf_token_classification_runner(
-        source_model_id,
+        load_reference,
         cache_dir=cache_dir,
     )
     reference_spans = _capture_spans(
@@ -789,7 +824,7 @@ def write_coreml_variant_parity_report(
     for format_name, variant_path in sorted(variant_paths.items()):
         runner = candidate_runners.get(format_name) or _coreml_artifact_runner(
             variant_path,
-            source_model_id=source_model_id,
+            source_model_id=load_reference,
             max_seq_length=max_seq_length,
             cache_dir=cache_dir,
         )
@@ -1076,35 +1111,93 @@ def _write_coreml_conversion_manifest(
     optimize_for_ane: bool,
     variants: Sequence[CoreMLVariantRecord],
     segmenter: Mapping[str, Any] | None = None,
+    source: SourceContext | None = None,
+    variant_paths: Mapping[str, Path] | None = None,
 ) -> Path:
+    """Write legacy observations outside packages and canonical package manifests."""
+    source = source or context_from_metadata(model_id)
+    package_paths = dict(variant_paths or {})
+    for variant in variants:
+        package_paths.setdefault(variant.name, manifest_path.parent / variant.path)
+    if any(
+        manifest_path.resolve().is_relative_to(path.resolve())
+        for path in package_paths.values()
+    ):
+        raise ValueError("conversion_manifest_path must be outside CoreML packages")
+    observations = []
+    for variant in variants:
+        observation = variant.to_dict()
+        package_path = package_paths[variant.name]
+        residency = dict(variant.residency)
+        if "artifact_path" in residency:
+            residency["artifact_path"] = _artifact_relative_path(
+                package_path, manifest_path.parent
+            )
+        residency_source = residency.get("source")
+        if isinstance(residency_source, str) and Path(residency_source).is_absolute():
+            residency["source"] = _artifact_relative_path(
+                Path(residency_source), manifest_path.parent
+            )
+        observation["residency"] = residency
+        parity = dict(variant.parity)
+        if "path" in parity:
+            parity["path"] = _artifact_relative_path(package_path, manifest_path.parent)
+        observation["parity"] = parity
+        observations.append(observation)
     payload = {
         "schema_version": COREML_MANIFEST_VERSION,
         "format": "openmed-coreml",
         "generated_at": _utc_now(),
-        "source_model_id": model_id,
+        "source_model_id": source.source_model_id,
         "source_model_type": model_type,
         "compute_units": compute_units,
         "max_sequence_length": max_seq_length,
         "ane_optimization_profile": (
             "static-rank2-fp16" if optimize_for_ane else "dynamic"
         ),
-        "variants": [variant.to_dict() for variant in variants],
+        "variants": observations,
     }
     if segmenter is not None:
         payload["segmenter"] = dict(segmenter)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
+        json.dump(payload, handle, indent=2, sort_keys=True, allow_nan=False)
         handle.write("\n")
 
     for variant in variants:
-        package_path = (manifest_path.parent / variant.path).resolve()
-        if package_path.is_dir():
-            package_manifest = package_path / COREML_MANIFEST_FILENAME
-            with package_manifest.open("w", encoding="utf-8") as handle:
-                json.dump(payload, handle, indent=2, sort_keys=True)
-                handle.write("\n")
-            validate_coreml_bundle(package_path)
+        package_path = package_paths[variant.name]
+        if not package_path.is_dir():
+            raise ValueError("CoreML variant package is missing")
+        canonical = {
+            "schema_version": COREML_PACKAGE_MANIFEST_VERSION,
+            "format": "openmed-coreml",
+            "source_model_id": source.source_model_id,
+            "source_model_type": model_type,
+            "compute_units": compute_units,
+            "max_sequence_length": max_seq_length,
+            "ane_optimization_profile": payload["ane_optimization_profile"],
+            "variants": [
+                {
+                    "name": variant.name,
+                    "path": ".",
+                    "precision": variant.precision,
+                    "quantization": variant.quantization,
+                    "size_bytes": _artifact_size_bytes(
+                        package_path, exclude=COREML_MANIFEST_FILENAME
+                    ),
+                }
+            ],
+        }
+        if segmenter is not None:
+            canonical["segmenter"] = dict(segmenter)
+        write_canonical_manifest(
+            package_path,
+            COREML_MANIFEST_FILENAME,
+            canonical,
+            source=source,
+            backend="coreml",
+        )
+        validate_coreml_bundle(package_path)
     return manifest_path
 
 
@@ -1344,7 +1437,7 @@ def _plain_span(span: Any) -> dict[str, Any]:
 
 def _artifact_relative_path(path: Path, base_dir: Path) -> str:
     try:
-        return str(path.resolve().relative_to(base_dir.resolve()))
+        return Path(os.path.relpath(path.resolve(), base_dir.resolve())).as_posix()
     except (OSError, ValueError):
         return path.name
 
@@ -1371,9 +1464,14 @@ def _optional_float(value: Any) -> float | None:
     return result
 
 
-def _artifact_size_bytes(path: Path) -> int:
+def _artifact_size_bytes(path: Path, *, exclude: str | None = None) -> int:
     if path.is_dir():
-        return sum(file.stat().st_size for file in path.rglob("*") if file.is_file())
+        excluded = path / exclude if exclude is not None else None
+        return sum(
+            file.stat().st_size
+            for file in path.rglob("*")
+            if file.is_file() and file != excluded
+        )
     return path.stat().st_size
 
 

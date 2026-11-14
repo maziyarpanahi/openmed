@@ -81,3 +81,64 @@ truth is the backend code, but the essentials are:
 - [Android ONNX Export](export-onnx-android.md)
 - [Transformers.js Export](export-transformersjs.md)
 - [GGUF Embedding Export](export-gguf.md)
+
+## Producer provenance and offline verification
+
+MLX, ONNX and CoreML record versioned `provenance`: source ID, resolved remote
+revision or local content digest, available source license, toolchain versions,
+and sorted relative POSIX `{path, size_bytes, sha256}` records. Unknown license/version metadata
+is `null`; OpenMed's license does not imply the source license.
+
+Remote model, config and tokenizer loaders share one pinned snapshot. Local inputs
+must stay unchanged and are rechecked before finalization. Local input/output
+symlinks are rejected; normal remote HF-cache links are allowed. Private load
+paths, credentials and CLI/environment values are excluded. Direct writers
+record unavailable remote revisions as `null`; use converters for resolution.
+
+Call `openmed.core.export_provenance.verify_export_provenance(root, name)`
+offline with `openmed-mlx.json`, `openmed-onnx.json` or `openmed-coreml.json`.
+It checks safe paths, exact membership, sizes and digests, including nested
+files and ONNX sidecars. It rejects symlinks and excludes only the root
+manifest, not nested namesakes. Verification is explicit, not loader-enforced. Legacy
+readers and segmenter checks remain; manifests without provenance cannot pass
+this check. Unsigned consistency requires a trusted manifest: it cannot
+authenticate publishers or prevent replacing manifest and files together.
+Signing and bundle schemas remain separate.
+
+### CoreML package schema v2
+
+Each `.mlpackage/openmed-coreml.json` uses `schema_version: 2` and describes
+only its own movable package: variant path `.`, `size_bytes` excluding the root
+manifest, and package-relative inventory paths. `validate_coreml_bundle` retains v1/v2 segmenter checks. Consumers
+must distinguish the package manifest from the all-variant v1 conversion report.
+
+Sibling `<model>_coreml_manifest.json` remains v1 with timestamps, latency,
+residency and parity; residency display paths are relative. Observation paths,
+including custom paths, must stay outside every package. Sibling
+`<model>_id2label.json` files stay outside and unbound by package inventory.
+Retain/distribute these siblings separately; publishing one package omits them.
+
+### MLX and ONNX observations
+
+Runtime layouts and certification fields remain, except ONNX
+`validation.latency` moves to sibling `<output-directory>_onnx_observations.json`;
+stable validation stays canonical. Bundled `recall_delta.json` is a stable
+projection; timestamps live in sibling
+`<output-directory>_mlx_observations.json` or
+`<output-directory>_onnx_observations.json`. The report API still returns
+observations. MLX artifact paths become `.` and evaluation suites become
+content digests.
+
+External reports retain an in-artifact projection at the referenced relative
+filename. Runtime/control-file collisions reject; complete certification reports
+can be updated. Standalone certification rechecks an available original local
+reference before/after evaluation; a custom runner without it owns source
+matching. Certification and Transformers.js updates refresh inventories. With
+provenance and `update_manifest=True`, JS bundles must be strict subdirectories
+of the source export root; `False` permits separate external bundles without
+changing the parent. Legacy exports retain prior behavior.
+
+Identical source bytes, options, toolchain and generated payload bytes yield
+identical canonical manifests; numerical backends/serializers need not be
+deterministic. Tiny synthetic/mock conversions exercise real writers, not
+real-model parity or clinical performance.
