@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reject duplicate object keys and the non-finite `NaN`/`Infinity` literals in
+  the Maple ONNX bundle manifest instead of letting the last value win, and keep
+  the manifest error messages from echoing manifest paths or values (#5083).
 - Keep exact container runtime packages available through a signed Debian
   snapshot, and recover release image SBOMs by verifying and scanning the
   published image's immutable digest.

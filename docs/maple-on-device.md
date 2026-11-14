@@ -199,6 +199,10 @@ validated = validate_maple_onnx_bundle("maple-android.ommaple.zip")
 print(validated.manifest["source_revision"])
 ```
 
+The validator reads the manifest strictly. A manifest that repeats a JSON object
+key, or that uses the non-finite `NaN` or `Infinity` literals, is rejected with
+`MapleBundleError` rather than resolved to one of the values.
+
 No converted Android weights are distributed in the source repository. The
 full BF16 snapshot is roughly 40 GB, so conversion is a high-memory release
 operation rather than a unit-test job. See the
