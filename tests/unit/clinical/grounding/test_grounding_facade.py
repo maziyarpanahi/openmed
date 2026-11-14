@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import socket
 from pathlib import Path
 
 import pytest
@@ -132,3 +133,32 @@ def test_user_key_loader_activates_only_local_normalized_aliases(
 def test_cpt_remains_out_of_process() -> None:
     with pytest.raises(RestrictedVocabularyError, match="out of process"):
         ground(["synthetic procedure"], systems=["cpt"])
+
+
+@pytest.mark.parametrize(
+    "system",
+    [
+        "http://snomed.info/sct",
+        "http://snomed.info/sct/",
+        "http://terminology.hl7.org/CodeSystem/umls",
+        "urn:openmed:restricted:cpt",
+        "http://www.ama-assn.org/go/cpt",
+    ],
+)
+def test_restricted_system_uri_requires_configuration_without_network(
+    system: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempted: list[str] = []
+
+    def fail_network(*_: object, **__: object) -> None:
+        attempted.append(system)
+        raise AssertionError("grounding attempted network access")
+
+    monkeypatch.setattr(socket.socket, "connect", fail_network)
+    monkeypatch.setattr(socket.socket, "connect_ex", fail_network)
+    monkeypatch.setattr(socket, "create_connection", fail_network)
+
+    with pytest.raises(RestrictedVocabularyError):
+        ground(["synthetic finding"], systems=[system])
+    assert attempted == []

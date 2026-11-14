@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python 3.11.5 or newer, matching its supported Python patch level.
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
+- Resolve FHIR terminology system URIs, with or without a trailing slash, and
+  the HL7 CPT URI to their grounding system keys. Restricted systems requested
+  by URI now raise `RestrictedVocabularyError`, and `POST /ground` returns
+  `restricted_terminology_unconfigured` instead of a validation error. Emitted
+  system URIs are unchanged (#4574).
 
 ## [3.3.0] - 2026-11-08
 

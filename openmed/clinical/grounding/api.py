@@ -78,7 +78,7 @@ class _SnapshotLoader:
 
     def __init__(self, snapshots: Mapping[str, Any]) -> None:
         self._snapshots = {
-            _snapshot_system_key(key): value for key, value in snapshots.items()
+            canonical_system(key): value for key, value in snapshots.items()
         }
         self._indexes: dict[str, VocabularyIndex] = {}
 
@@ -162,16 +162,6 @@ class _SnapshotLoader:
                 ),
             }
         return result
-
-
-def _snapshot_system_key(value: object) -> str:
-    """Normalize a snapshot mapping key or canonical system URI."""
-
-    key = canonical_system(value)
-    for system, uri in SYSTEM_URIS.items():
-        if key.rstrip("/") == uri.rstrip("/"):
-            return system
-    return key
 
 
 def _index_from_terms(system: str, terms: Mapping[str, Any]) -> VocabularyIndex:
@@ -314,7 +304,7 @@ def _snapshot_loader(snapshot: Any, *, offline: bool) -> Any:
             snapshot, "system", None
         )
         return _SnapshotLoader(
-            {_snapshot_system_key(system) if system is not None else "*": snapshot}
+            {canonical_system(system) if system is not None else "*": snapshot}
         )
     raise TypeError(
         "snapshot must be a VocabLoader, local cache path, VocabularyIndex, "

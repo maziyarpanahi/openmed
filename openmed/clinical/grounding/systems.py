@@ -53,14 +53,44 @@ SYSTEM_ALIASES: Mapping[str, str] = {
 
 RESTRICTED_SYSTEMS = frozenset({"umls", "snomed", "cpt"})
 
+# Input-only URIs that identify a known system but are never emitted. CPT output
+# keeps ``SYSTEM_URIS["cpt"]``.
+_INPUT_SYSTEM_URI_ALIASES: Mapping[str, str] = {
+    "http://www.ama-assn.org/go/cpt": "cpt",
+}
+
+_SYSTEM_URI_KEYS: Mapping[str, str] = {
+    **{uri.rstrip("/").casefold(): system for system, uri in SYSTEM_URIS.items()},
+    **{
+        uri.rstrip("/").casefold(): system
+        for uri, system in _INPUT_SYSTEM_URI_ALIASES.items()
+    },
+}
+
 
 def canonical_system(value: object) -> str:
-    """Return a normalized terminology system key."""
+    """Return a normalized terminology system key.
+
+    Short names and aliases resolve through ``SYSTEM_ALIASES``. A known system
+    URI, such as ``http://snomed.info/sct``, resolves to its key, ignoring case
+    and a trailing slash. Unknown values are returned normalized but unmapped.
+
+    Args:
+        value: A terminology system short name, alias, or system URI.
+
+    Returns:
+        The canonical system key, or the normalized input when it is unknown.
+
+    Raises:
+        TypeError: If ``value`` is not a string.
+    """
 
     if not isinstance(value, str):
         raise TypeError("terminology system must be a string")
     key = value.strip().casefold().replace(" ", "-")
-    return SYSTEM_ALIASES.get(key, key)
+    if key in SYSTEM_ALIASES:
+        return SYSTEM_ALIASES[key]
+    return _SYSTEM_URI_KEYS.get(key.rstrip("/"), key)
 
 
 def system_uri(value: object) -> str | None:

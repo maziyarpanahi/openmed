@@ -285,6 +285,22 @@ def test_language_routing_and_unknown_system_rejection(tmp_path: Path) -> None:
         ground("metformin", systems=["not-a-system"], snapshot=_loader(tmp_path))
 
 
+def test_free_system_uri_input_keeps_emitted_coding(tmp_path: Path) -> None:
+    by_name = ground("type 2 diabetes", systems=["icd10cm"], snapshot=_loader(tmp_path))
+    by_uri = ground(
+        "type 2 diabetes",
+        systems=["http://hl7.org/fhir/sid/icd-10-cm/"],
+        snapshot=_loader(tmp_path),
+    )
+
+    assert by_uri.systems == ("icd10cm",)
+    concept = by_uri.concepts[0]
+    assert concept.system == "icd10cm"
+    assert concept.code == "E11.9"
+    assert concept.system_uri == "http://hl7.org/fhir/sid/icd-10-cm"
+    assert by_uri.to_dict() == by_name.to_dict()
+
+
 def test_missing_snapshot_is_offline_and_does_not_open_a_socket(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

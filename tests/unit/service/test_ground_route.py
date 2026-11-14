@@ -108,6 +108,97 @@ def test_ground_route_returns_typed_restricted_configuration_error(
     assert "synthetic finding" not in json.dumps(body)
 
 
+@pytest.mark.parametrize(
+    "system",
+    [
+        "http://snomed.info/sct",
+        "http://snomed.info/sct/",
+        "http://terminology.hl7.org/CodeSystem/umls",
+        "urn:openmed:restricted:cpt",
+        "http://www.ama-assn.org/go/cpt",
+    ],
+)
+def test_ground_route_restricted_system_uri_matches_short_name_error(
+    system: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENMED_GROUNDING_CACHE_DIR", raising=False)
+    source_text = "Synthetic finding zeta for Juniper Example."
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        by_name = client.post(
+            "/ground",
+            json={"text": source_text, "systems": ["snomed"]},
+        )
+        by_uri = client.post(
+            "/ground",
+            json={"text": source_text, "systems": [system]},
+        )
+
+    assert by_name.status_code == 400
+    assert by_uri.status_code == 400
+    name_error = by_name.json()["error"]
+    uri_error = by_uri.json()["error"]
+    assert uri_error["code"] == "restricted_terminology_unconfigured"
+    for key in ("code", "message", "details"):
+        assert uri_error[key] == name_error[key]
+    rendered = json.dumps(by_uri.json())
+    assert source_text not in rendered
+    assert "Juniper Example" not in rendered
+
+
+def test_ground_route_free_system_uri_keeps_emitted_coding(
+    grounding_cache: Path,
+) -> None:
+    del grounding_cache
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/ground",
+            json={
+                "text": "Synthetic note: type 2 diabetes.",
+                "systems": ["http://hl7.org/fhir/sid/icd-10-cm/"],
+                "offline": True,
+            },
+        )
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["system"] == "icd10cm"
+    assert result["code"] == "E11.9"
+    assert result["system_uri"] == "http://hl7.org/fhir/sid/icd-10-cm"
+
+
+@pytest.mark.parametrize(
+    "system",
+    ["not-a-system", "http://example.invalid/fhir/CodeSystem/synthetic"],
+)
+def test_ground_route_unknown_system_uri_stays_a_validation_error(
+    system: str,
+) -> None:
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/ground",
+            json={"text": "synthetic finding", "systems": [system]},
+        )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["details"][0]["field"] == "body.systems"
+    assert "synthetic finding" not in json.dumps(payload)
+
+
 def test_ground_route_rejects_invalid_system_via_validation_handler() -> None:
     with TestClient(
         create_app(),
