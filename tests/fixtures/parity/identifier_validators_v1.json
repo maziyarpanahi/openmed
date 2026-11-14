@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "fixture": "identifier_validators_v1",
+  "synthetic": true,
+  "description": "Synthetic checksum vectors for the portable identifier-validator subset shared with the Android and Swift kits. Values are built from documented test ranges or the repository's seeded generate_* helpers; none are copied from a person or an external dataset. The reference implementation for every case is the named Python function.",
+  "reference_module": "openmed.core",
+  "cases": [
+    {
+      "validator": "Luhn",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_luhn",
+      "valid": [
+        "4992737877893288",
+        "4992737485260573",
+        "4992734423232210"
+      ],
+      "invalid": [
+        "0992737877893288",
+        "499273787789328",
+        "499273123456789",
+        "1234",
+        "not-a-number"
+      ]
+    },
+    {
+      "validator": "SSN",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_ssn",
+      "valid": [
+        "169-54-6850",
+        "144-32-0387",
+        "799-38-1369"
+      ],
+      "invalid": [
+        "969-54-6850",
+        "000-12-3456",
+        "666-12-3456",
+        "912-34-5678",
+        "123-00-4567",
+        "123-45-0000"
+      ]
+    },
+    {
+      "validator": "NPI",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_npi",
+      "valid": [
+        "0716202185",
+        "1324370018",
+        "9234788294"
+      ],
+      "invalid": [
+        "1716202185",
+        "071620218",
+        "123456789"
+      ]
+    },
+    {
+      "validator": "IBAN",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_iban",
+      "valid": [
+        "DE46YVOKYS9RYAPB2JJUKQ",
+        "DE66HBRPOIG8F1CBFNO6B9",
+        "DE53CSJ3XG35B61X91ZLDG"
+      ],
+      "invalid": [
+        "DE06YVOKYS9RYAPB2JJUKQ",
+        "DE00YVOKYS9RYAPB2JJUKQ",
+        "DE46YVOKYS9RYAPB2JJUK"
+      ]
+    },
+    {
+      "validator": "Aadhaar",
+      "reference": "openmed.core.pii_i18n.validate_aadhaar",
+      "valid": [
+        "588233846871",
+        "608756022628",
+        "578785700257"
+      ],
+      "invalid": [
+        "088233846871",
+        "188233846871",
+        "58823384687"
+      ]
+    },
+    {
+      "validator": "UK NHS number",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_uk_nhs_number",
+      "valid": [
+        "9990000018",
+        "7283545077",
+        "9213745281",
+        "7744716116"
+      ],
+      "invalid": [
+        "0990000018",
+        "999000001",
+        "99900000180",
+        "02835450A7"
+      ]
+    },
+    {
+      "validator": "Dutch BSN",
+      "reference": "openmed.core.pii_i18n.validate_dutch_bsn",
+      "valid": [
+        "712345681",
+        "823456791",
+        "934567906"
+      ],
+      "invalid": [
+        "012345681",
+        "000000000",
+        "71234568"
+      ]
+    },
+    {
+      "validator": "Spanish DNI",
+      "reference": "openmed.core.pii_i18n.validate_spanish_dni",
+      "valid": [
+        "12345678Z",
+        "23456789D",
+        "34567890V"
+      ],
+      "invalid": [
+        "02345678Z",
+        "12345678A",
+        "12345678"
+      ]
+    },
+    {
+      "validator": "French NIR",
+      "reference": "openmed.core.pii_i18n.validate_french_nir",
+      "valid": [
+        "185057500123475",
+        "290012345678910",
+        "175119912345611"
+      ],
+      "invalid": [
+        "085057500123475",
+        "385057500123475",
+        "1850575001234"
+      ]
+    },
+    {
+      "validator": "Chinese resident ID",
+      "reference": "openmed.core.pii_i18n.validate_chinese_resident_id",
+      "valid": [
+        "336680194105058423",
+        "13244520091012315X",
+        "311665200110064736"
+      ],
+      "invalid": [
+        "036680194105058423",
+        "33668019410505842",
+        "336680000000008423"
+      ]
+    },
+    {
+      "validator": "Canadian SIN",
+      "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_canadian_sin",
+      "valid": [
+        "975886706",
+        "378422422",
+        "871260030"
+      ],
+      "invalid": [
+        "075886706",
+        "97588670",
+        "9758867060",
+        "97588670A"
+      ]
+    }
+  ]
+}
