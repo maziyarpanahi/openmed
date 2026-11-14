@@ -23,7 +23,12 @@ from openmed.core.labels import (
     normalize_label,
 )
 from openmed.eval.datasets.licenses import DatasetLicense, license_for
-from openmed.eval.harness import BenchmarkFixture, ModelRunner, run_benchmark
+from openmed.eval.harness import (
+    BenchmarkFixture,
+    ModelRunner,
+    _shared_default_model_runner,
+    run_benchmark,
+)
 from openmed.eval.metrics import EvalSpan
 from openmed.eval.report import BenchmarkReport
 
@@ -390,21 +395,39 @@ def run_biomedical_ner_benchmark(
     )
     report_metadata = biomedical_ner_suite_metadata(split=split)
     report_metadata.update(dict(metadata or {}))
+    model_runner = runner or _shared_default_model_runner()
+    predictions: dict[str, list[Any]] = {}
+
+    def recording_runner(
+        fixture: BenchmarkFixture, model_name: str, device: str
+    ) -> list[Any]:
+        predictions[fixture.fixture_id] = list(
+            model_runner(fixture, model_name, device)
+        )
+        return list(predictions[fixture.fixture_id])
+
+    def replay_runner(
+        fixture: BenchmarkFixture, model_name: str, device: str
+    ) -> list[Any]:
+        return list(predictions[fixture.fixture_id])
+
     report = run_benchmark(
         suite_fixtures,
         suite=BIOMEDICAL_NER,
         model_name=model_name,
         device=device,
-        runner=runner,
+        runner=recording_runner,
         generated_at=generated_at,
         metadata=report_metadata,
     )
     metrics = dict(report.metrics)
+    # Score each corpus from the predictions recorded above, so every fixture
+    # is inferred once and the slices agree with the overall score.
     metrics["per_corpus"] = _per_corpus_metrics(
         suite_fixtures,
         model_name=model_name,
         device=device,
-        runner=runner,
+        runner=replay_runner,
         generated_at=generated_at,
     )
     return BenchmarkReport(
@@ -423,7 +446,7 @@ def _per_corpus_metrics(
     *,
     model_name: str,
     device: str,
-    runner: ModelRunner | None,
+    runner: ModelRunner,
     generated_at: str | None,
 ) -> dict[str, dict[str, Any]]:
     grouped: dict[str, list[BenchmarkFixture]] = defaultdict(list)
