@@ -147,7 +147,7 @@ def test_manifest_tracks_project_version_and_base_dependencies() -> None:
 
     assert manifest.version == version_match.group(1)
     assert manifest.python_requires == project["requires-python"]
-    assert manifest.license == project["license"]["text"]
+    assert manifest.license == project["license"]
     assert set(manifest.default_requirements()) == set(project["dependencies"])
 
 

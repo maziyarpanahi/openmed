@@ -739,6 +739,11 @@ jobs:
       run: |
         uv build
 
+    - name: Check distribution metadata
+      run: |
+        python scripts/release/check_dist_metadata.py --dist-dir dist
+        uvx --from 'twine==7.0.0' twine check --strict dist/*
+
     - name: Verify refreshed wheel-size baseline
       id: wheel_baseline
       shell: bash
