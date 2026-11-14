@@ -51,6 +51,7 @@ from openmed.training.private_training_schemas import (
     build_private_training_schemas,
     build_schema,
     render_private_training_schemas,
+    render_schema,
 )
 
 MODEL = "sha256:" + "a" * 64
@@ -221,10 +222,23 @@ def test_catalog_exposes_every_schema_name_exactly_once() -> None:
     }
     for name in catalog:
         assert catalog[name]["$schema"] == PRIVATE_TRAINING_SCHEMA_DIALECT
-    with pytest.raises(PrivateTrainingSchemaError):
-        build_schema("not_a_catalog_name")
-    with pytest.raises(PrivateTrainingSchemaError):
-        build_schema(3)
+    expected_message = (
+        "unknown private-training schema; expected one of: "
+        "federated_aggregate_metric, federated_round_lifecycle, "
+        "federated_round_schedule, federated_round_status, "
+        "federated_update_metadata"
+    )
+    sentinel = "private-customer-schema-name"
+    for invalid_name in (sentinel, 3):
+        with pytest.raises(PrivateTrainingSchemaError) as error:
+            build_schema(invalid_name)
+        assert str(error.value) == expected_message
+        assert sentinel not in str(error.value)
+
+        with pytest.raises(PrivateTrainingSchemaError) as render_error:
+            render_schema(invalid_name)
+        assert str(render_error.value) == expected_message
+        assert sentinel not in str(render_error.value)
 
 
 def test_schemas_are_bounded_and_closed() -> None:
