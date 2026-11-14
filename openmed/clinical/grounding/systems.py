@@ -85,12 +85,23 @@ def canonical_system(value: object) -> str:
         TypeError: If ``value`` is not a string.
     """
 
+    key = _record_system_key(value)
+    return _SYSTEM_URI_KEYS.get(key.rstrip("/"), key)
+
+
+def _record_system_key(value: object) -> str:
+    """Normalize the system stored on a grounding result record.
+
+    Result records resolve short names and aliases only and keep any other value,
+    including a URI, as supplied apart from case and spacing. Rebuilding a saved
+    record therefore keeps its serialized ``system`` and ``system_uri``. Requests
+    and snapshots use :func:`canonical_system`, which also maps known URIs.
+    """
+
     if not isinstance(value, str):
         raise TypeError("terminology system must be a string")
     key = value.strip().casefold().replace(" ", "-")
-    if key in SYSTEM_ALIASES:
-        return SYSTEM_ALIASES[key]
-    return _SYSTEM_URI_KEYS.get(key.rstrip("/"), key)
+    return SYSTEM_ALIASES.get(key, key)
 
 
 def system_uri(value: object) -> str | None:

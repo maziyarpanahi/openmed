@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from openmed.clinical.nli import ClaimVerification
 
-from .systems import canonical_system, system_uri
+from .systems import _record_system_key, system_uri
 from .types import Candidate, GroundedSpan
 from .vocab import GroundingConfigError
 
@@ -73,7 +73,7 @@ class GroundingCandidate:
     vocabulary_snapshot_version: str | None = None
 
     def __post_init__(self) -> None:
-        normalized_system = canonical_system(self.system)
+        normalized_system = _record_system_key(self.system)
         if not normalized_system:
             raise ValueError("candidate system must not be empty")
         if not isinstance(self.code, str) or not self.code.strip():
@@ -173,7 +173,7 @@ class GroundedConcept:
             raise TypeError("grounded concept span must be a ConceptSpan")
         if not isinstance(self.surface_text, str):
             raise TypeError("grounded concept surface_text must be a string")
-        normalized_system = canonical_system(self.system) if self.system else ""
+        normalized_system = _record_system_key(self.system) if self.system else ""
         confidence = float(self.confidence)
         if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
             raise ValueError("grounded concept confidence must be between 0.0 and 1.0")
@@ -321,11 +321,13 @@ class GroundedConcept:
         ranked = (*span.candidates, *span.alternatives)
         by_system: dict[str, list[Candidate]] = {}
         for candidate in ranked:
-            by_system.setdefault(canonical_system(candidate.system), []).append(
+            by_system.setdefault(_record_system_key(candidate.system), []).append(
                 candidate
             )
 
-        requested = tuple(dict.fromkeys(canonical_system(system) for system in systems))
+        requested = tuple(
+            dict.fromkeys(_record_system_key(system) for system in systems)
+        )
         ordered_systems = requested or tuple(by_system)
         concepts: list[GroundedConcept] = []
         for system in ordered_systems:
@@ -436,7 +438,7 @@ class GroundingResult(Sequence[GroundedSpan]):
         object.__setattr__(
             self,
             "systems",
-            tuple(dict.fromkeys(canonical_system(system) for system in self.systems)),
+            tuple(dict.fromkeys(_record_system_key(system) for system in self.systems)),
         )
 
     @classmethod

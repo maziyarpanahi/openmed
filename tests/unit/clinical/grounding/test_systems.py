@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from openmed.clinical.grounding import GroundingCandidate
+from openmed.clinical.grounding import (
+    ConceptSpan,
+    GroundedConcept,
+    GroundingCandidate,
+    GroundingResult,
+)
 from openmed.clinical.grounding.systems import (
     RESTRICTED_SYSTEMS,
     SYSTEM_ALIASES,
@@ -122,26 +127,107 @@ def test_system_uri_passes_uri_input_through_unchanged(value: str) -> None:
     assert system_uri(value) == value
 
 
-@pytest.mark.parametrize(
-    ("value", "system"),
-    [
-        ("http://snomed.info/sct/", "snomed"),
-        ("http://terminology.hl7.org/CodeSystem/umls", "umls"),
-        ("urn:openmed:restricted:cpt", "cpt"),
-        (HL7_CPT_URI, "cpt"),
-        ("http://loinc.org/", "loinc"),
-    ],
-)
-def test_uri_system_records_emit_the_canonical_system_identifier(
-    value: str, system: str
-) -> None:
-    candidate = GroundingCandidate(
-        system=value,
+# Serialized ``system`` and ``system_uri`` of result records at the PR base
+# (174fd485c). Records keep a URI system as supplied apart from case, so saving
+# and reloading a record must not move it to the short key or another URI.
+SAVED_RECORD_SYSTEMS = [
+    ("http://loinc.org/", "http://loinc.org/", "http://loinc.org/"),
+    (
+        "http://terminology.hl7.org/CodeSystem/umls",
+        "http://terminology.hl7.org/codesystem/umls",
+        "http://terminology.hl7.org/codesystem/umls",
+    ),
+    (HL7_CPT_URI, HL7_CPT_URI, HL7_CPT_URI),
+    ("http://snomed.info/sct", "http://snomed.info/sct", "http://snomed.info/sct"),
+    (
+        "urn:openmed:restricted:cpt",
+        "urn:openmed:restricted:cpt",
+        "urn:openmed:restricted:cpt",
+    ),
+    ("cpt", "cpt", "urn:openmed:restricted:cpt"),
+    ("sct", "snomed", "http://snomed.info/sct"),
+    ("Rx Norm", "rxnorm", "http://www.nlm.nih.gov/research/umls/rxnorm"),
+    (
+        "http://example.invalid/fhir/CodeSystem/Synthetic",
+        "http://example.invalid/fhir/codesystem/synthetic",
+        "http://example.invalid/fhir/codesystem/synthetic",
+    ),
+]
+
+
+def _saved_candidate(system: str) -> GroundingCandidate:
+    return GroundingCandidate(
+        system=system,
         code="SYN-0001",
         display="Synthetic concept",
         confidence=0.5,
     )
 
-    assert candidate.system == system
-    assert candidate.system_uri == EXPECTED_SYSTEM_URIS[system]
-    assert candidate.to_dict()["system_uri"] == EXPECTED_SYSTEM_URIS[system]
+
+def _saved_concept(system: str) -> GroundedConcept:
+    return GroundedConcept(
+        span=ConceptSpan(0, 17),
+        surface_text="synthetic finding",
+        system=system,
+        code="SYN-0001",
+        display="Synthetic concept",
+        confidence=0.5,
+        candidates=(_saved_candidate(system),),
+    )
+
+
+@pytest.mark.parametrize(("value", "system", "uri"), SAVED_RECORD_SYSTEMS)
+def test_saved_record_candidate_keeps_base_serialization(
+    value: str, system: str, uri: str
+) -> None:
+    saved = _saved_candidate(value).to_dict()
+    uri_only = GroundingCandidate.from_dict(
+        {"system_uri": value, "code": "SYN-0001", "display": "Synthetic concept"}
+    ).to_dict()
+
+    assert (saved["system"], saved["system_uri"]) == (system, uri)
+    assert GroundingCandidate.from_dict(saved).to_dict() == saved
+    assert (uri_only["system"], uri_only["system_uri"]) == (system, uri)
+
+
+@pytest.mark.parametrize(("value", "system", "uri"), SAVED_RECORD_SYSTEMS)
+def test_saved_record_concept_keeps_base_serialization(
+    value: str, system: str, uri: str
+) -> None:
+    saved = _saved_concept(value).to_dict()
+    uri_only_candidate = GroundedConcept.from_dict(
+        {
+            "start": 0,
+            "end": 17,
+            "surface": "synthetic finding",
+            "candidates": [
+                {"system_uri": value, "code": "SYN-0001", "display": "Synthetic"}
+            ],
+        }
+    ).to_dict()["candidates"][0]
+
+    assert (saved["system"], saved["system_uri"]) == (system, uri)
+    assert saved["candidates"][0]["system"] == system
+    assert saved["candidates"][0]["system_uri"] == uri
+    assert GroundedConcept.from_dict(saved).to_dict() == saved
+    assert uri_only_candidate["system"] == system
+    assert uri_only_candidate["system_uri"] == uri
+
+
+@pytest.mark.parametrize(("value", "system", "uri"), SAVED_RECORD_SYSTEMS)
+def test_saved_record_result_keeps_base_systems_and_codes(
+    value: str, system: str, uri: str
+) -> None:
+    saved = GroundingResult(
+        concepts=(_saved_concept(value),),
+        systems=(value,),
+    ).to_dict()
+    reloaded = GroundingResult.from_dict(saved).to_dict()
+
+    assert saved["systems"] == [system]
+    assert reloaded["systems"] == [system]
+    assert reloaded["concepts"] == saved["concepts"]
+    assert reloaded["concepts"][0]["system_uri"] == uri
+    assert reloaded["spans"][0]["codes"] == {system: "SYN-0001"}
+    assert reloaded["spans"][0]["cui"] is None
+    assert GroundingResult.from_dict(reloaded).to_dict() == reloaded

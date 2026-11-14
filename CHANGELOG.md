@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the HL7 CPT URI to their grounding system keys. Restricted systems requested
   by URI now raise `RestrictedVocabularyError`, and `POST /ground` returns
   `restricted_terminology_unconfigured` instead of a validation error. Emitted
-  system URIs are unchanged (#4574).
+  system URIs and the serialized `system` of saved result records are
+  unchanged (#4574).
 
 ## [3.3.0] - 2026-11-08
 
