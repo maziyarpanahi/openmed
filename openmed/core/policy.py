@@ -16,7 +16,7 @@ from .arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION
 from .detector_plugins import DetectorCapability, default_detector_capabilities
 from .errors import PolicyError, redact_detail
 from .labels import CANONICAL_LABELS, POLICY_LABELS, normalize_label, policy_label_for
-from .schemas.span import ACTION_VALUES
+from .schemas.span import ACTION_GENERALIZE, ACTION_VALUES
 
 CURRENT_POLICY_SCHEMA_VERSION = 1
 
@@ -849,6 +849,11 @@ def _detector_stage_order(stage: str) -> int:
 def _minimum_required_action(profile: PolicyProfile, label: str) -> str:
     canonical_label = normalize_label(label)
     explicit_action = profile.action_for(canonical_label)
+    if explicit_action == ACTION_GENERALIZE:
+        # ``generalize`` is a label-specific rule (Safe Harbor ages over 89),
+        # not a weaker form of the category action. It is its own requirement:
+        # a detector must cover the label and the plan must apply the rule.
+        return explicit_action
     category_floor = profile.policy_label_actions.get(
         policy_label_for(canonical_label),
         profile.default_action,

@@ -53,9 +53,24 @@ The version-one object contains five policy decisions:
 `by_label` overrides the applicable recall category. `actions` uses canonical
 OpenMed labels and falls back to `default_action`; policy-category action keys
 such as `DIRECT_IDENTIFIER` are also accepted for compatibility with existing
-policy profiles. Supported actions are `keep`, `redact`, `replace`, `mask`,
-`hash`, and `format_preserve`. Unknown actions fail validation before a policy
-can be used.
+policy profiles. Supported actions are `keep`, `generalize`, `redact`,
+`replace`, `mask`, `hash`, and `format_preserve`. Unknown actions fail
+validation before a policy can be used.
+
+`generalize` is label-aware and currently supports `AGE` only. It applies the
+HIPAA Safe Harbor age rule, 45 CFR 164.514(b)(2)(i)(C): an age of 89 or below
+stays in the text, and an age of 90 or above is rendered as the `90+` top band
+shared with the structured age hierarchy (`93-year-old` becomes
+`90+-year-old`). A span is generalized only when it contains exactly one
+number in `0..150`. Any other span, and any other label configured with
+`generalize`, is masked, so the action never keeps text it cannot read. The
+span record reports the applied action: `keep`, `generalize`, or `mask`.
+Generalized ages are never written to the re-identification mapping. The
+bundled `hipaa_safe_harbor` profile uses `generalize` for `AGE`.
+
+The rule acts only on spans the detectors report as `AGE`. An age or a birth
+year that no detector finds is not changed, so detector coverage still bounds
+what the profile can guarantee.
 
 The default policy is explicit and preserves the existing local behavior:
 

@@ -87,4 +87,9 @@ a tag does not turn an otherwise uncovered category into canonical detector
 coverage, so its residual-risk flag remains visible.
 
 The report also flags a covered category when any observed detection used the
-`keep` action.
+`keep` action. The one exception is a label whose configured policy action is
+`generalize`: `hipaa_safe_harbor` generalizes `AGE`, so an age of 89 or below
+is kept by rule and an age of 90 or above is rendered as `90+`. The "Date
+elements and ages over 89" row reports these under `applied_action_counts` as
+`keep` (ages kept), `generalize` (ages aggregated), and `mask` (ages that
+could not be read), and kept ages alone do not raise the residual-risk flag.

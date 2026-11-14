@@ -420,7 +420,8 @@
                         "replace",
                         "mask",
                         "hash",
-                        "format_preserve"
+                        "format_preserve",
+                        "generalize"
                       ],
                       "type": "string"
                     },
@@ -2479,7 +2480,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },
@@ -2847,7 +2849,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },
@@ -3486,7 +3489,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },
@@ -3868,7 +3872,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },
@@ -8178,7 +8183,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },
@@ -8542,7 +8548,8 @@
                     "replace",
                     "mask",
                     "hash",
-                    "format_preserve"
+                    "format_preserve",
+                    "generalize"
                   ],
                   "type": "string"
                 },

@@ -32,6 +32,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Final
 
+from openmed.core.age_generalization import (
+    AGE_TOP_BAND as _CORE_AGE_TOP_BAND,
+)
+from openmed.core.age_generalization import (
+    AGE_TOP_THRESHOLD as _CORE_AGE_TOP_THRESHOLD,
+)
 from openmed.core.date_shift import DEFAULT_DATE_SHIFT_MAX_DAYS, stable_offset_for
 
 HIERARCHY_SCHEMA_VERSION: Final = "1.1.0"
@@ -47,8 +53,9 @@ SUPPRESSED: Final = "*"
 #: No banded age output is narrower than this many years.
 AGE_MIN_BAND_WIDTH: Final = 5
 #: Ages at or above this threshold collapse into the single top band.
-AGE_TOP_THRESHOLD: Final = 90
-AGE_TOP_BAND: Final = "90+"
+#: Shared with the free-text ``generalize`` action so text and tables agree.
+AGE_TOP_THRESHOLD: Final = _CORE_AGE_TOP_THRESHOLD
+AGE_TOP_BAND: Final = _CORE_AGE_TOP_BAND
 #: Largest accepted age; values outside ``0..AGE_MAX`` are rejected.
 AGE_MAX: Final = 150
 #: Ordered band widths, finest first. Each is a multiple of the previous so the
