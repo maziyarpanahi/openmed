@@ -33,6 +33,21 @@ openmed redact-files \
 The input and output paths must be different. Output is written atomically
 after processing succeeds.
 
+## Check mode
+
+`--check` reports whether the file contains anything the selected policy would
+redact, without writing an output file. Omit the output path and pass `--check`;
+the command prints the same PHI-free counts and offsets and exits `1` when at
+least one span would be redacted, or `0` when the file is clean. Supplying an
+output path together with `--check` is a usage error.
+
+```bash
+openmed redact-files --input support-export.txt --check
+```
+
+Use it in pre-commit hooks or CI jobs that must fail before a redacted copy is
+produced. The input file is never modified.
+
 ## Line-delimited files
 
 Use `--format lines` for newline-delimited text or `--format jsonl` (also
