@@ -27,6 +27,7 @@ node_modules/
 sbom.cdx.json
 image-sbom.cdx.json
 image-sbom.cdx.json.sha256
+image-sbom-source.json
 pip-audit-report.json
 vulnerability-reports/
 

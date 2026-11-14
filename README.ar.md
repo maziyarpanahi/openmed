@@ -118,7 +118,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.3.0"),
 ]
 ```
 
@@ -470,7 +470,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 </div>
 
-[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,700+ GitHub stars · 11 Nov 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

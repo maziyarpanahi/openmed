@@ -7,7 +7,8 @@ summarizes what already exists so you can extend it confidently.
 
 The core SDK supports **CPython 3.11, 3.12 and 3.13** on Linux, Windows
 and macOS. These versions and OS families are declared in `pyproject.toml`'s
-classifiers. `requires-python >=3.11` is an installation floor, not a promise
+classifiers. CI selects current hosted-runner patch releases within each minor.
+`requires-python >=3.11.5` is an installation floor, not a promise
 that an unlisted future interpreter or alternative Python implementation is
 qualified. Adding one requires a reviewed metadata, CI and documentation change.
 Python 3.10 reached end of life in October 2026 and is no longer supported. Every
