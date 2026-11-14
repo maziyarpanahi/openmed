@@ -258,6 +258,13 @@ output/playwright/
 /docs/demo/web/models/
 /docs/demo/web/vendor/
 
+# CoreML weight blobs exceed GitHub's 100 MiB file limit. Keep the
+# .mlpackage metadata in tests/fixtures/coreml and regenerate weights with
+# python -m openmed.coreml.convert.
+tests/fixtures/coreml/**/weights/weight.bin
+tests/fixtures/coreml/**/naive.mlpackage/
+*.trace
+
 .pypirc
 
 PLANS/**
