@@ -126,6 +126,24 @@ provenance. Grounding suggestions are assistive and require qualified human
 review; they are not autonomous clinical coding, diagnosis, treatment, or
 billing decisions.
 
+### System names and URIs
+
+`systems` accepts OpenMed short names and aliases such as `icd10cm`, `loinc`,
+`snomed`, or `sct`, and the FHIR system URI for each known system, such as
+`http://hl7.org/fhir/sid/icd-10-cm` or `http://snomed.info/sct`. URI matching
+ignores case and a trailing slash. The HL7 CPT URI
+`http://www.ama-assn.org/go/cpt` is also accepted as input for `cpt`. Inputs
+resolve to the short name, so a restricted system requested by URI fails the
+same way as its short name. Unknown systems are still rejected.
+
+URI mapping applies to requested systems and snapshot keys only. Output is
+unchanged: `ground()` and `POST /ground` still emit the short name and the URI
+in `SYSTEM_URIS`, including `urn:openmed:restricted:cpt` for CPT. Result records
+that you build or reload directly (`GroundingCandidate`, `GroundedConcept`,
+`GroundingResult`, and their `from_dict()` methods) resolve short names and
+aliases as before but do not map URIs, so a saved record keeps its serialized
+`system` and `system_uri`.
+
 ## REST and CLI
 
 `POST /ground` accepts either `text` or an `entities` list. The response is the

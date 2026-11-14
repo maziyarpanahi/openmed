@@ -108,6 +108,184 @@ def test_ground_route_returns_typed_restricted_configuration_error(
     assert "synthetic finding" not in json.dumps(body)
 
 
+# Each restricted URI paired with the short name it must behave like.
+RESTRICTED_URI_PAIRS = [
+    ("snomed", "http://snomed.info/sct"),
+    ("snomed", "http://snomed.info/sct/"),
+    ("umls", "http://terminology.hl7.org/CodeSystem/umls"),
+    ("cpt", "urn:openmed:restricted:cpt"),
+    ("cpt", "http://www.ama-assn.org/go/cpt"),
+]
+
+# One synthetic alias per free system, matched by FIXTURE.
+FREE_SYSTEM_CASES = [
+    (
+        "rxnorm",
+        "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "renal disorder zeta001",
+        "RXNORM-0001",
+    ),
+    ("icd10cm", "http://hl7.org/fhir/sid/icd-10-cm", "type 2 diabetes", "E11.9"),
+    ("loinc", "http://loinc.org", "cardiac disorder zeta002", "LOINC-0002"),
+    (
+        "hpo",
+        "http://human-phenotype-ontology.org",
+        "pulmonary disorder zeta003",
+        "HPO-0003",
+    ),
+    ("mesh", "https://www.nlm.nih.gov/mesh", "gastric disorder zeta004", "MESH-0004"),
+]
+
+
+@pytest.fixture()
+def free_grounding_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    cache_dir = tmp_path / "free-grounding"
+    for system, *_ in FREE_SYSTEM_CASES:
+        VocabLoader(cache_dir=cache_dir, local_only=True).import_snapshot(
+            system,
+            FIXTURE,
+            version="synthetic-fixture-1",
+        )
+    monkeypatch.setenv("OPENMED_GROUNDING_CACHE_DIR", str(cache_dir))
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    return cache_dir
+
+
+@pytest.mark.parametrize(("short_name", "uri"), RESTRICTED_URI_PAIRS)
+def test_ground_route_restricted_system_uri_matches_short_name_error(
+    short_name: str,
+    uri: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempted: list[str] = []
+
+    def fail_connect(*_: object, **__: object) -> None:
+        attempted.append(uri)
+        raise AssertionError("grounding attempted network access")
+
+    monkeypatch.delenv("OPENMED_GROUNDING_CACHE_DIR", raising=False)
+    source_text = "Synthetic finding zeta for Juniper Example."
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        # Patch only the requests; TestClient startup opens a loopback pair.
+        with monkeypatch.context() as request_patch:
+            request_patch.setattr(socket.socket, "connect", fail_connect)
+            by_name = client.post(
+                "/ground",
+                json={"text": source_text, "systems": [short_name]},
+            )
+            by_uri = client.post(
+                "/ground",
+                json={"text": source_text, "systems": [uri]},
+            )
+
+    assert attempted == []
+    assert by_name.status_code == 400
+    assert by_uri.status_code == 400
+    name_error = by_name.json()["error"]
+    uri_error = by_uri.json()["error"]
+    assert uri_error["code"] == "restricted_terminology_unconfigured"
+    for key in ("code", "message", "details"):
+        assert uri_error[key] == name_error[key]
+    rendered = json.dumps(by_uri.json())
+    assert source_text not in rendered
+    assert "Juniper Example" not in rendered
+
+
+@pytest.mark.parametrize(("short_name", "uri", "surface", "code"), FREE_SYSTEM_CASES)
+def test_ground_route_free_system_uri_returns_the_short_name_coding(
+    short_name: str,
+    uri: str,
+    surface: str,
+    code: str,
+    free_grounding_cache: Path,
+) -> None:
+    del free_grounding_cache
+    text = f"Synthetic note: {surface}."
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        by_name = client.post(
+            "/ground",
+            json={"text": text, "systems": [short_name], "offline": True},
+        )
+        by_uri = client.post(
+            "/ground",
+            json={"text": text, "systems": [uri], "offline": True},
+        )
+
+    assert by_name.status_code == 200
+    assert by_uri.status_code == 200
+    name_results = by_name.json()["results"]
+    assert name_results
+    result = name_results[0]
+    assert (result["system"], result["code"], result["system_uri"]) == (
+        short_name,
+        code,
+        uri,
+    )
+    assert result["display"]
+    assert by_uri.json()["results"] == name_results
+
+
+def test_ground_route_cvx_short_name_and_uri_stay_unsupported() -> None:
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        by_name = client.post(
+            "/ground",
+            json={"text": "synthetic vaccine", "systems": ["cvx"]},
+        )
+        by_uri = client.post(
+            "/ground",
+            json={
+                "text": "synthetic vaccine",
+                "systems": ["http://hl7.org/fhir/sid/cvx"],
+            },
+        )
+
+    assert by_name.status_code == 400
+    assert by_uri.status_code == 400
+    name_error = by_name.json()["error"]
+    uri_error = by_uri.json()["error"]
+    assert name_error["code"] == "grounding_invalid_request"
+    for key in ("code", "message", "details"):
+        assert uri_error[key] == name_error[key]
+    assert "synthetic vaccine" not in json.dumps(by_uri.json())
+
+
+@pytest.mark.parametrize(
+    "system",
+    ["not-a-system", "http://example.invalid/fhir/CodeSystem/synthetic"],
+)
+def test_ground_route_unknown_system_uri_stays_a_validation_error(
+    system: str,
+) -> None:
+    with TestClient(
+        create_app(),
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/ground",
+            json={"text": "synthetic finding", "systems": [system]},
+        )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["details"][0]["field"] == "body.systems"
+    assert "synthetic finding" not in json.dumps(payload)
+
+
 def test_ground_route_rejects_invalid_system_via_validation_handler() -> None:
     with TestClient(
         create_app(),
