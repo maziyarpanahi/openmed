@@ -677,6 +677,7 @@ classification:
     - integrations-haystack.md
     - integrations/opensearch.md
     - integrations/llamaindex.md
+    - integrations/presidio-recognizer.md
     - integrations/columnar-redactor.md
     - integrations/notebook-redaction.md
     - reference/columnar-traces.md
