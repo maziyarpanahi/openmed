@@ -198,6 +198,17 @@ def test_reason_codes_are_stable_and_value_free() -> None:
         "adapter_version_mismatch",
         "span_integrity_failed",
         "multilingual_recall_failed",
+        "unsupported_task",
+        "unsupported_model_variant",
+        "unsupported_remote_code",
+        "unsupported_label_count",
+        "unsupported_label",
+        "unsupported_control_marker",
+        "unsupported_span_width",
+        "unsupported_word_count",
+        "unsupported_memory_budget",
+        "label_order_parity_failed",
+        "decision_parity_failed",
     }
     error = ExportQualificationError(ExportReason.UNSUPPORTED_PROVIDER)
     assert isinstance(error, ValueError)

@@ -666,6 +666,14 @@ def _check_qualified_artifact(
     if not report_path.is_file():
         return None
     report = load_qualification_report(report_path)
+    if report.get("task", "token-classification") != "token-classification":
+        # GLiNER and GLiClass bundles load through ZeroShotOnnxModel.
+        from openmed.eval.export_qualification import (
+            ExportQualificationError,
+            ExportReason,
+        )
+
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_TASK)
     # Only families with a reviewed adapter at the recorded version may load.
     require_registered_adapter(report.get("family"), report.get("adapter_version"))
     try:
