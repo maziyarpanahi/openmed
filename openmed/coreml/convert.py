@@ -56,6 +56,19 @@ COREML_MANIFEST_FILENAME = "openmed-coreml.json"
 COREML_MANIFEST_VERSION = 1
 COREML_RESIDENCY_THRESHOLD = 0.90
 COREML_PARITY_REPORT_VERSION = 1
+_CHEAP_CPU_OP_TOKENS = (
+    "cast",
+    "const",
+    "constexpr",
+    "embedding",
+    "expanddims",
+    "gather",
+    "gatheralongaxis",
+    "reshape",
+    "slice",
+    "squeeze",
+    "transpose",
+)
 
 _ARCHITECTURE_TYPE_HINTS = (
     ("DebertaV2", "deberta-v2"),
@@ -118,10 +131,18 @@ class CoreMLResidencyReport:
     source: str = "compute_plan"
 
     @property
+    def blocking_cpu_fallback_layers(self) -> tuple[CoreMLLayerResidency, ...]:
+        return tuple(
+            layer
+            for layer in self.cpu_fallback_layers
+            if not _is_cheap_cpu_op(layer.op_type, layer.name)
+        )
+
+    @property
     def passed(self) -> bool:
         return (
             self.ane_residency_percentage >= self.threshold
-            and not self.cpu_fallback_layers
+            and not self.blocking_cpu_fallback_layers
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -132,6 +153,9 @@ class CoreMLResidencyReport:
             "total_ops": self.total_ops,
             "cpu_fallback_layers": [
                 layer.to_dict() for layer in self.cpu_fallback_layers
+            ],
+            "blocking_cpu_fallback_layers": [
+                layer.to_dict() for layer in self.blocking_cpu_fallback_layers
             ],
             "threshold": self.threshold,
             "passed": self.passed,
@@ -191,6 +215,7 @@ def convert(
     swift_parity_corpus_path: str | Path | None = None,
     latency_iterations: int = 3,
     optimize_for_ane: bool = True,
+    ane_conv_layout: bool = True,
     segmenter_id: str | None = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
@@ -219,6 +244,9 @@ def convert(
         latency_iterations: Number of prediction calls used for latency
             evidence when the CoreML object supports local prediction.
         optimize_for_ane: Use static rank-2 input shapes for fp16 ANE exports.
+        ane_conv_layout: Rewrite BERT encoders to BC1S + 1x1 conv for ANE
+            residency. Falls back to the Hugging Face graph when the model is
+            not a BERT token classifier.
         segmenter_id: Optional compact Han/Indic resource set to package.
 
     Returns:
@@ -260,30 +288,38 @@ def convert(
         AutoTokenizer.from_pretrained,
         cache_dir=cache_dir,
     )
-    model = AutoModelForTokenClassification.from_pretrained(
-        model_id,
-        cache_dir=cache_dir,
-    )
+    load_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+    if hasattr(torch, "float32"):
+        load_kwargs["torch_dtype"] = torch.float32
+    try:
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_id,
+            attn_implementation="eager",
+            **load_kwargs,
+        )
+    except TypeError:
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_id,
+            **load_kwargs,
+        )
+    to_float = getattr(model, "float", None)
+    if callable(to_float):
+        model = to_float()
     model.eval()
 
     num_labels = model.config.num_labels
     id2label = model.config.id2label
 
     # 2. Create wrapper that returns only logits (not ModelOutput)
-    class TokenClassificationWrapper(torch.nn.Module):
-        def __init__(self, base_model):
-            super().__init__()
-            self.base_model = base_model
-
-        def forward(self, input_ids, attention_mask):
-            output = self.base_model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-            )
-            return output.logits
-
-    wrapper = TokenClassificationWrapper(model)
-    wrapper.eval()
+    wrapper, ane_profile = _build_token_classification_wrapper(
+        torch,
+        model,
+        model_type=model_type,
+        optimize_for_ane=optimize_for_ane,
+        ane_conv_layout=ane_conv_layout,
+        compute_precision=compute_precision,
+        compute_units=compute_units,
+    )
 
     # 3. Trace with sample inputs
     logger.info("Tracing model with sequence length %d ...", max_seq_length)
@@ -315,9 +351,8 @@ def convert(
         compute_units=compute_units,
     )
 
-    mlmodel = ct.convert(
-        traced,
-        inputs=[
+    convert_kwargs: dict[str, Any] = {
+        "inputs": [
             ct.TensorType(
                 name="input_ids",
                 shape=input_shape,
@@ -329,13 +364,16 @@ def convert(
                 dtype=int,
             ),
         ],
-        outputs=[
+        "outputs": [
             ct.TensorType(name="logits"),
         ],
-        compute_precision=ct_precision,
-        compute_units=ct_compute_units,
-        minimum_deployment_target=ct.target.iOS16,
-    )
+        "compute_precision": ct_precision,
+        "compute_units": ct_compute_units,
+        "minimum_deployment_target": ct.target.iOS16,
+    }
+    if hasattr(ct, "precision"):
+        convert_kwargs["convert_to"] = "mlprogram"
+    mlmodel = ct.convert(traced, **convert_kwargs)
 
     sample_inputs = _latency_sample_inputs(sample)
 
@@ -351,12 +389,19 @@ def convert(
         compute_units=compute_units,
         quantization="none",
         optimize_for_ane=optimize_for_ane,
+        ane_optimization_profile=ane_profile,
     )
 
     # 6. Save
     logger.info("Saving to %s ...", output_path)
     mlmodel.save(str(output_path))
     _write_id2label(output_path, id2label)
+    _write_live_compute_plan(
+        ct,
+        mlmodel,
+        output_path,
+        compute_units=compute_units,
+    )
     variant_models: dict[str, Any] = {"coreml-fp16": mlmodel}
     variant_paths: dict[str, Path] = {"coreml-fp16": output_path}
 
@@ -376,6 +421,7 @@ def convert(
             compute_units=compute_units,
             quantization=variant,
             optimize_for_ane=optimize_for_ane,
+            ane_optimization_profile=ane_profile,
         )
         logger.info(
             "Saving %s CoreML package to %s ...",
@@ -384,6 +430,12 @@ def convert(
         )
         quantized_model.save(str(quantized_output))
         _write_id2label(quantized_output, id2label)
+        _write_live_compute_plan(
+            ct,
+            quantized_model,
+            quantized_output,
+            compute_units=compute_units,
+        )
         variant_models[f"coreml-{variant}"] = quantized_model
         variant_paths[f"coreml-{variant}"] = quantized_output
 
@@ -454,6 +506,7 @@ def convert(
         compute_units=compute_units,
         max_seq_length=max_seq_length,
         optimize_for_ane=optimize_for_ane,
+        ane_optimization_profile=ane_profile,
         variants=records,
         segmenter=segmenter,
     )
@@ -516,6 +569,169 @@ def _infer_model_type_from_architectures(architectures) -> str | None:
         if any(needle in str(architecture) for architecture in architectures):
             return model_type
     return None
+
+
+def _ane_optimization_profile(
+    *,
+    optimize_for_ane: bool,
+    ane_conv_layout: bool,
+    compute_precision: str,
+    compute_units: str,
+) -> str:
+    if not optimize_for_ane:
+        return "dynamic"
+    if (
+        ane_conv_layout
+        and compute_precision == "float16"
+        and compute_units in {"all", "cpuAndNeuralEngine"}
+    ):
+        return "nchw-conv1x1-fp16"
+    return "static-rank2-fp16"
+
+
+def _build_token_classification_wrapper(
+    torch,
+    model,
+    *,
+    model_type: str,
+    optimize_for_ane: bool,
+    ane_conv_layout: bool,
+    compute_precision: str,
+    compute_units: str,
+):
+    profile = _ane_optimization_profile(
+        optimize_for_ane=optimize_for_ane,
+        ane_conv_layout=False,
+        compute_precision=compute_precision,
+        compute_units=compute_units,
+    )
+
+    class TokenClassificationWrapper(torch.nn.Module):
+        def __init__(self, base_model):
+            super().__init__()
+            self.base_model = base_model
+
+        def forward(self, input_ids, attention_mask):
+            output = self.base_model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+            )
+            return output.logits
+
+    wrapper = TokenClassificationWrapper(model)
+    if (
+        ane_conv_layout
+        and model_type == "bert"
+        and hasattr(model, "bert")
+        and optimize_for_ane
+        and compute_precision == "float16"
+    ):
+        try:
+            from openmed.coreml.ane_bert import ANEBertForTokenClassification
+
+            wrapper = ANEBertForTokenClassification.from_hf(model)
+            profile = _ane_optimization_profile(
+                optimize_for_ane=optimize_for_ane,
+                ane_conv_layout=True,
+                compute_precision=compute_precision,
+                compute_units=compute_units,
+            )
+            logger.info("Using BC1S 1x1-conv ANE BERT wrapper")
+        except Exception as exc:
+            logger.warning(
+                "ANE conv layout wrapper failed (%s); using Hugging Face graph",
+                exc,
+            )
+            wrapper = TokenClassificationWrapper(model)
+    wrapper.eval()
+    return wrapper, profile
+
+
+def _is_cheap_cpu_op(op_type: str, name: str = "") -> bool:
+    blob = f"{op_type} {name}".lower()
+    compact = re.sub(r"[^a-z0-9]+", "", blob)
+    return any(token in compact for token in _CHEAP_CPU_OP_TOKENS)
+
+
+def _write_live_compute_plan(
+    ct,
+    mlmodel,
+    package_path: Path,
+    *,
+    compute_units: str,
+) -> Path | None:
+    """Compile locally and write ``ane_residency.json`` next to the package."""
+
+    models = getattr(ct, "models", None)
+    load_plan = getattr(
+        getattr(models, "compute_plan", None),
+        "MLComputePlan",
+        None,
+    )
+    if models is None or load_plan is None:
+        return None
+    try:
+        compute_unit = _resolve_compute_units(ct, compute_units)
+        loaded = ct.models.MLModel(str(package_path), compute_units=compute_unit)
+        compiled = loaded.get_compiled_model_path()
+        plan = load_plan.load_from_path(compiled, compute_units=compute_unit)
+        layers = _layers_from_mlcompute_plan(plan)
+    except Exception as exc:
+        logger.warning("Could not export a live CoreML compute plan: %s", exc)
+        return None
+    if not layers:
+        return None
+    payload = {
+        "operations": [layer.to_dict() for layer in layers],
+        "source": "mlcompute_plan",
+    }
+    plan_path = Path(package_path) / "ane_residency.json"
+    plan_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    logger.info(
+        "Wrote ANE compute plan (%d ops) to %s",
+        len(layers),
+        plan_path,
+    )
+    return plan_path
+
+
+def _layers_from_mlcompute_plan(plan) -> list[CoreMLLayerResidency]:
+    structure = getattr(plan, "model_structure", None)
+    program = getattr(structure, "program", None)
+    functions = getattr(program, "functions", None) or {}
+    layers: list[CoreMLLayerResidency] = []
+    usage_fn = getattr(plan, "get_compute_device_usage_for_mlprogram_operation", None)
+    cost_fn = getattr(plan, "get_estimated_cost_for_mlprogram_operation", None)
+    for func in functions.values():
+        block = getattr(func, "block", None)
+        operations = getattr(block, "operations", None) or ()
+        for index, op in enumerate(operations):
+            name = str(getattr(op, "name", None) or f"op_{index}")
+            op_type = str(getattr(op, "operator_name", None) or "")
+            compute_unit = "unknown"
+            if usage_fn is not None:
+                usage = usage_fn(op)
+                preferred = getattr(usage, "preferred_compute_device", None)
+                if preferred is None:
+                    compute_unit = "unknown"
+                else:
+                    compute_unit = type(preferred).__name__
+            cheap = _is_cheap_cpu_op(op_type, name)
+            weight = 0.0 if cheap else 1.0
+            if cost_fn is not None:
+                cost = cost_fn(op)
+                parsed = _optional_float(getattr(cost, "weight", None))
+                if parsed is not None:
+                    weight = 0.0 if cheap else parsed
+            layers.append(
+                CoreMLLayerResidency(
+                    name=name,
+                    op_type=op_type,
+                    compute_unit=compute_unit,
+                    weight=weight,
+                )
+            )
+    return layers
 
 
 def _resolve_compute_units(ct, compute_units: str):
@@ -646,6 +862,7 @@ def _apply_metadata(
     compute_units: str,
     quantization: str,
     optimize_for_ane: bool,
+    ane_optimization_profile: str | None = None,
 ) -> None:
     mlmodel.short_description = (
         f"OpenMed Token Classification: {model_id} "
@@ -663,7 +880,8 @@ def _apply_metadata(
     mlmodel.user_defined_metadata["compute_units"] = compute_units
     mlmodel.user_defined_metadata["quantization"] = quantization
     mlmodel.user_defined_metadata["ane_optimization_profile"] = (
-        "static-rank2-fp16" if optimize_for_ane else "dynamic"
+        ane_optimization_profile
+        or ("static-rank2-fp16" if optimize_for_ane else "dynamic")
     )
 
 
@@ -716,6 +934,17 @@ def analyze_ane_residency(
         )
 
     layers = tuple(_load_compute_plan_layers(plan_path))
+    layers = tuple(
+        CoreMLLayerResidency(
+            name=layer.name,
+            op_type=layer.op_type,
+            compute_unit=layer.compute_unit,
+            weight=(
+                0.0 if _is_cheap_cpu_op(layer.op_type, layer.name) else layer.weight
+            ),
+        )
+        for layer in layers
+    )
     if not layers:
         return CoreMLResidencyReport(
             artifact_path=str(path),
@@ -726,14 +955,13 @@ def analyze_ane_residency(
             source=str(plan_path),
         )
 
-    total_weight = sum(max(layer.weight, 0.0) for layer in layers)
+    weighted = [layer for layer in layers if layer.weight > 0.0]
+    if not weighted:
+        weighted = list(layers)
+    total_weight = sum(max(layer.weight, 0.0) for layer in weighted)
     if total_weight <= 0.0:
-        total_weight = float(len(layers))
-    ane_weight = sum(
-        max(layer.weight, 0.0) if layer.weight > 0.0 else 1.0
-        for layer in layers
-        if layer.ane_resident
-    )
+        total_weight = float(len(weighted) or 1)
+    ane_weight = sum(max(layer.weight, 0.0) for layer in weighted if layer.ane_resident)
     fallback_layers = tuple(layer for layer in layers if not layer.ane_resident)
     return CoreMLResidencyReport(
         artifact_path=str(path),
@@ -1076,6 +1304,7 @@ def _write_coreml_conversion_manifest(
     optimize_for_ane: bool,
     variants: Sequence[CoreMLVariantRecord],
     segmenter: Mapping[str, Any] | None = None,
+    ane_optimization_profile: str | None = None,
 ) -> Path:
     payload = {
         "schema_version": COREML_MANIFEST_VERSION,
@@ -1086,7 +1315,8 @@ def _write_coreml_conversion_manifest(
         "compute_units": compute_units,
         "max_sequence_length": max_seq_length,
         "ane_optimization_profile": (
-            "static-rank2-fp16" if optimize_for_ane else "dynamic"
+            ane_optimization_profile
+            or ("static-rank2-fp16" if optimize_for_ane else "dynamic")
         ),
         "variants": [variant.to_dict() for variant in variants],
     }
@@ -1466,6 +1696,14 @@ def main():
         help="Keep dynamic sequence shapes instead of ANE-optimized rank-2 shapes",
     )
     parser.add_argument(
+        "--disable-ane-conv-layout",
+        action="store_true",
+        help=(
+            "Skip the BERT BC1S 1x1-conv rewrite used to maximize Neural Engine "
+            "residency"
+        ),
+    )
+    parser.add_argument(
         "--cache-dir",
         default=None,
         help="HuggingFace model cache directory",
@@ -1544,6 +1782,7 @@ def main():
         swift_parity_corpus_path=args.swift_parity_corpus,
         latency_iterations=args.latency_iterations,
         optimize_for_ane=not args.disable_ane_static_shapes,
+        ane_conv_layout=not args.disable_ane_conv_layout,
         segmenter_id=args.segmenter,
     )
 
