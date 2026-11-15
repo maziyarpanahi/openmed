@@ -16,10 +16,13 @@ Android-native ONNX/TFLite types:
 | Locate the cached directory | `ModelDownloadResult.directory` or `ModelCache.modelDirectory(repoId)` |
 | Check whether the cache is ready | `ModelCache.isAvailable(entry)` |
 | Inspect size or evict | `sizeBytes`, `totalSizeBytes`, and `evict` |
+| Acquire the format the backend opens | `ArtifactAcquisition.acquire(request)` |
 
-Use these catalog APIs for Android-runnable artifacts. The separately named
-`OpenMedModelStore` parity object mirrors Swift's MLX symbol shapes; its MLX
-download method is not the Android ONNX/TFLite download path.
+Use these catalog APIs, or the
+[format-aware artifact acquisition](#format-aware-artifact-acquisition) contract,
+for Android-runnable artifacts. Android never runs MLX artifacts: the MLX-named
+`OpenMedModelStore` members are deprecated and keep only source compatibility.
+See [Migrating from the MLX-named store](#migrating-from-the-mlx-named-store).
 
 ## List available models
 
@@ -151,6 +154,114 @@ private staging directory and are removed after a failed download, so callers
 normally see `MISSING` or `READY` rather than a usable partial state. Always
 check `isAvailable(entry)` before passing `modelDirectory(...)` to
 `OpenMedKit.fromDirectory(...)`.
+
+## Format-aware artifact acquisition
+
+`ArtifactAcquisition` resolves the artifact format the configured Android
+backend opens. It reuses `ModelDownloader` (manifest digest, per-file SHA-256,
+safe paths) and `ModelCache` (staging, atomic promotion, LRU budget) behind one
+request and result contract:
+
+- `ArtifactRef` names one immutable artifact: repository, `format` (`ONNX` or
+  `TFLITE` on Android), `runtime`, `revision`, `digest` (the catalog
+  reproducibility hash), optional `sizeBytes`, and `compatibility` requirements
+  such as a minimum runtime version, ONNX opset, or Android API level.
+- `ArtifactBackendCapability` describes what the backend can open. A
+  requirement the backend does not declare is treated as unsupported.
+- `networkConsent` defaults to `DENIED`. Nothing is downloaded unless the
+  request carries `ArtifactNetworkConsent.GRANTED`.
+
+```kotlin
+import android.content.Context
+import android.os.Build
+import com.openmed.openmedkit.OpenMedKit
+import com.openmed.openmedkit.artifact.ArtifactAcquisition
+import com.openmed.openmedkit.artifact.ArtifactAcquisitionRequest
+import com.openmed.openmedkit.artifact.ArtifactAcquisitionResult
+import com.openmed.openmedkit.artifact.ArtifactBackendCapability
+import com.openmed.openmedkit.artifact.ArtifactFormat
+import com.openmed.openmedkit.artifact.ArtifactNetworkConsent
+import com.openmed.openmedkit.artifact.ArtifactRef
+import com.openmed.openmedkit.artifact.ArtifactRuntime
+import com.openmed.openmedkit.catalog.ModelCatalogEntry
+
+suspend fun openPreparedModel(
+    context: Context,
+    entry: ModelCatalogEntry,
+    userApprovedDownload: Boolean,
+): OpenMedKit? {
+    val request = ArtifactAcquisitionRequest(
+        ref = ArtifactRef.fromCatalogEntry(
+            entry,
+            format = ArtifactFormat.ONNX,
+            runtime = ArtifactRuntime.ONNX_RUNTIME,
+        ),
+        backend = ArtifactBackendCapability.onnxRuntime(
+            androidSdkLevel = Build.VERSION.SDK_INT,
+        ),
+        networkConsent = if (userApprovedDownload) {
+            ArtifactNetworkConsent.GRANTED
+        } else {
+            ArtifactNetworkConsent.DENIED
+        },
+    )
+    return when (val result = ArtifactAcquisition(context).acquire(request)) {
+        is ArtifactAcquisitionResult.Ready ->
+            OpenMedKit.fromDirectory(result.artifact.directory)
+        // Inspect result.state and result.reason?.code; never log the request.
+        else -> null
+    }
+}
+```
+
+| State | Meaning |
+| --- | --- |
+| `CACHED` | Served offline after the recorded digest, file set, and sizes matched. |
+| `VERIFIED` | Served offline after every file was re-hashed (`cacheVerification = FULL`). |
+| `DOWNLOADED` | Fetched with consent, verified, and promoted atomically. |
+| `UNSUPPORTED` | The format, runtime, or declared requirements do not fit the backend, the repository does not publish the format, or the payload lacks its format signature. MLX and Core ML are always unsupported; signed portable bundles stay unsupported until their verifier ships. |
+| `CANCELLED` | Stopped by `cancel(ref)`; downloaded bytes are kept for resume. |
+| `FAILED` | Missing consent, digest or size mismatch, unsafe manifest path, HTTP status, or an interrupted transfer. |
+
+Every `Ready` artifact (`CACHED`, `VERIFIED`, `DOWNLOADED`) is verified,
+compatible with the backend, and safe to open; its payload files are read-only.
+Unsupported formats and incompatible requirements are rejected before any
+cache or network access, so an incompatible artifact is never fetched.
+
+Interrupted or cancelled transfers keep their bytes in the private staging
+area. The next acquisition resumes each file with an HTTP `Range` request and
+re-hashes the whole file before promotion; a resumed file that fails the
+re-check is discarded and fetched once from the start. Staged bytes are never
+reported as ready, and `cacheState(ref)` reports them as `PARTIAL`.
+
+Concurrent callers for the same artifact and cache root share one transfer.
+Cancelling one caller's coroutine leaves the transfer running for the others;
+it stops once no caller is waiting, or for everyone when `cancel(ref)` is
+called. Results, including the ones an `ArtifactAcquisitionLogger` receives,
+carry only states, formats, digests, sizes, and value-free reason codes:
+`toString()` never includes URLs, signed query values, tokens, cache paths, or
+file contents.
+
+### Migrating from the MLX-named store
+
+The Android `OpenMedModelStore` scaffold mirrored Swift's MLX symbol names but
+never downloaded anything. Its MLX-named members are now `@Deprecated` with IDE
+replacements, and the store gains format-aware entry points that delegate to
+`ArtifactAcquisition`:
+
+| Deprecated member | Replacement |
+| --- | --- |
+| `OpenMedModelStore.downloadMLXModel(repoID, revision, cacheDirectory)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` |
+| `OpenMedModelStore.cachedMLXModelDirectory(repoID, revision, cacheDirectory)` | `OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory` |
+| `OpenMedModelStore.isMLXModelCached(repoID, revision, cacheDirectory)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory) == ArtifactCacheState.READY` |
+| `OpenMedModelStore.mlxModelCacheState(repoID, revision, cacheDirectory)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` |
+| `OpenMedMLXModelCacheState` | `ArtifactCacheState` |
+
+The deprecated members keep compiling. `downloadMLXModel` still returns a
+directory that already carries the legacy ready marker and otherwise throws
+`UnsupportedOperationException`. Legacy scaffold directories that would resolve
+outside the cache root, including through a symlink, now raise
+`IllegalArgumentException`, and the state queries report them as `missing`.
 
 ## Offline-first deployment
 

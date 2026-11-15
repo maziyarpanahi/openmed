@@ -1,5 +1,14 @@
 package com.openmed.openmedkit
 
+import com.openmed.openmedkit.artifact.AcquiredArtifact
+import com.openmed.openmedkit.artifact.ArtifactAcquisition
+import com.openmed.openmedkit.artifact.ArtifactAcquisitionRequest
+import com.openmed.openmedkit.artifact.ArtifactAcquisitionResult
+import com.openmed.openmedkit.artifact.ArtifactCacheState
+import com.openmed.openmedkit.artifact.ArtifactRef
+import com.openmed.openmedkit.cache.ModelCache
+import com.openmed.openmedkit.download.HttpHuggingFaceModelClient
+import com.openmed.openmedkit.download.HuggingFaceModelClient
 import com.openmed.openmedkit.onnx.AcceleratorConfig
 import com.openmed.openmedkit.policy.PolicyProfiles
 import com.openmed.openmedkit.util.SafeLog
@@ -386,8 +395,12 @@ class OpenMed(
 }
 
 /**
- * Android cache state names aligned with Swift OpenMedMLXModelCacheState.
+ * Cache state names kept for source compatibility with the MLX-shaped scaffold.
  */
+@Deprecated(
+    "Android does not run MLX artifacts. Use the format-aware ArtifactCacheState.",
+    ReplaceWith("ArtifactCacheState", "com.openmed.openmedkit.artifact.ArtifactCacheState"),
+)
 enum class OpenMedMLXModelCacheState {
     missing,
     partial,
@@ -396,11 +409,48 @@ enum class OpenMedMLXModelCacheState {
 
 /**
  * Public Android counterpart to Swift OpenMedModelStore.
+ *
+ * Android resolves ONNX or TFLite artifacts for the configured backend through
+ * [acquireArtifact]. The MLX-named members remain only for source compatibility:
+ * they never download, and Android never runs MLX artifacts.
  */
 object OpenMedModelStore {
     private const val READY_MARKER_FILE_NAME = ".openmed-artifact-ready"
+    private const val MLX_UNSUPPORTED =
+        "Android does not run MLX artifacts; use OpenMedModelStore.acquireArtifact " +
+            "with an ONNX or TFLite ArtifactRef"
 
+    /**
+     * Acquire a format-aware artifact into [cacheDirectory].
+     *
+     * Delegates to [ArtifactAcquisition]: compatibility is checked first, the
+     * offline cache second, and the network is used only when the request
+     * grants consent.
+     */
     @JvmStatic
+    suspend fun acquireArtifact(
+        request: ArtifactAcquisitionRequest,
+        cacheDirectory: File,
+        client: HuggingFaceModelClient = HttpHuggingFaceModelClient(),
+    ): ArtifactAcquisitionResult =
+        ArtifactAcquisition(ModelCache(cacheDirectory), client).acquire(request)
+
+    /** Ready artifact for [ref] from the offline cache, or `null`. */
+    @JvmStatic
+    fun cachedArtifact(ref: ArtifactRef, cacheDirectory: File): AcquiredArtifact? =
+        ArtifactAcquisition(ModelCache(cacheDirectory)).cachedArtifact(ref)
+
+    /** Offline cache state of [ref]; never uses the network. */
+    @JvmStatic
+    fun artifactCacheState(ref: ArtifactRef, cacheDirectory: File): ArtifactCacheState =
+        ArtifactAcquisition(ModelCache(cacheDirectory)).cacheState(ref)
+
+    @Deprecated(
+        MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.acquireArtifact(request, cacheDirectory)"),
+    )
+    @JvmStatic
+    @Suppress("DEPRECATION")
     fun downloadMLXModel(
         repoID: String,
         revision: String = "main",
@@ -410,11 +460,19 @@ object OpenMedModelStore {
         if (isMLXModelCached(repoID, revision, cacheDirectory)) {
             return modelDirectory
         }
-        throw UnsupportedOperationException(
-            "Android MLX model downloads are not implemented in the scaffold",
-        )
+        throw UnsupportedOperationException(MLX_UNSUPPORTED)
     }
 
+    /**
+     * Legacy scaffold directory for `repoID` and `revision`.
+     *
+     * @throws IllegalArgumentException when the resolved directory would leave
+     *   the cache root, including through a symlinked component.
+     */
+    @Deprecated(
+        MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory"),
+    )
     @JvmStatic
     fun cachedMLXModelDirectory(
         repoID: String,
@@ -425,13 +483,26 @@ object OpenMedModelStore {
             System.getProperty("java.io.tmpdir"),
             "openmedkit-models",
         )
-        return File(
+        val modelDirectory = File(
             File(cacheRoot, repoID.sanitizedPathComponent()),
             revision.sanitizedPathComponent(),
         )
+        val canonicalRoot = cacheRoot.canonicalFile.path + File.separator
+        require(modelDirectory.canonicalFile.path.startsWith(canonicalRoot)) {
+            "model cache path escapes the cache directory"
+        }
+        return modelDirectory
     }
 
+    @Deprecated(
+        MLX_UNSUPPORTED,
+        ReplaceWith(
+            "OpenMedModelStore.artifactCacheState(ref, cacheDirectory) == ArtifactCacheState.READY",
+            "com.openmed.openmedkit.artifact.ArtifactCacheState",
+        ),
+    )
     @JvmStatic
+    @Suppress("DEPRECATION")
     fun isMLXModelCached(
         repoID: String,
         revision: String = "main",
@@ -444,13 +515,23 @@ object OpenMedModelStore {
         ) == OpenMedMLXModelCacheState.ready
     }
 
+    /** Legacy scaffold state; an unsafe path is reported as `missing`, never `ready`. */
+    @Deprecated(
+        MLX_UNSUPPORTED,
+        ReplaceWith("OpenMedModelStore.artifactCacheState(ref, cacheDirectory)"),
+    )
     @JvmStatic
+    @Suppress("DEPRECATION")
     fun mlxModelCacheState(
         repoID: String,
         revision: String = "main",
         cacheDirectory: File? = null,
     ): OpenMedMLXModelCacheState {
-        val modelDirectory = cachedMLXModelDirectory(repoID, revision, cacheDirectory)
+        val modelDirectory = try {
+            cachedMLXModelDirectory(repoID, revision, cacheDirectory)
+        } catch (_: IllegalArgumentException) {
+            return OpenMedMLXModelCacheState.missing
+        }
         if (!modelDirectory.exists()) {
             return OpenMedMLXModelCacheState.missing
         }
@@ -566,5 +647,8 @@ private fun String.normalizedLabelToken(): String =
         .filter { it.isLetterOrDigit() }
 
 private fun String.sanitizedPathComponent(): String {
-    return replace(Regex("""[^A-Za-z0-9._-]+"""), "_").trim('_').ifEmpty { "default" }
+    val sanitized = replace(Regex("""[^A-Za-z0-9._-]+"""), "_").trim('_')
+    // "." and ".." survive the character filter but would leave the cache root.
+    return sanitized.takeUnless { it.isEmpty() || it.all { character -> character == '.' } }
+        ?: "default"
 }
