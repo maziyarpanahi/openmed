@@ -299,8 +299,14 @@ public final class OpenMedBundleLease: CustomStringConvertible, @unchecked Senda
 }
 
 /// Thrown only by test checkpoints to simulate a process dying at a named point.
-struct OpenMedBundleCacheCrash: Error {
+///
+/// The checkpoint name selects the crash point and is never rendered.
+struct OpenMedBundleCacheCrash: Error, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     let checkpoint: String
+
+    var description: String { "OpenMedBundleCacheCrash" }
+    var debugDescription: String { "OpenMedBundleCacheCrash" }
+    var customMirror: Mirror { Mirror(self, children: [:]) }
 }
 
 /// Crash-safe, resumable, integrity-checked cache of signed portable bundles.
