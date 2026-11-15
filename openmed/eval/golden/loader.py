@@ -13,6 +13,7 @@ from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
@@ -143,7 +144,10 @@ class GoldenFixture:
 
         language = str(data.get("language") or data.get("lang") or "en")
         fixture_languages = (
-            SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+            SUPPORTED_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | INDIC_NER_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
         )
         if language not in fixture_languages:
             raise ValueError(f"unsupported golden fixture language: {language!r}")

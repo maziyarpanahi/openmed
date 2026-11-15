@@ -43,32 +43,28 @@ def test_non_integer_ratio_exact_conversion() -> None:
     assert plan.duration_error_seconds == 0.0
 
 
-@pytest.mark.parametrize(
-    "policy,frames_count,error",
-    [
+def test_rounded_policies_match_hand_calculations(subtests) -> None:
+    for policy, frames_count, error in [
         (RoundingPolicy.FLOOR, 3, -0.0000625),
         (RoundingPolicy.CEILING, 4, 4000 / 192_000_000),
         (RoundingPolicy.NEAREST_EVEN, 4, 4000 / 192_000_000),
-    ],
-)
-def test_rounded_policies_match_hand_calculations(policy, frames_count, error) -> None:
-    plan = plan_audio_resampling(16000, 12000, 5, rounding=policy)
-    assert plan.target_frames == frames_count
-    assert plan.status is ResampleStatus.ROUNDED
-    assert (plan.rate_ratio_numerator, plan.rate_ratio_denominator) == (4, 3)
-    assert plan.duration_error_seconds == pytest.approx(error)
-    assert plan.rounding is policy
+    ]:
+        with subtests.test(policy=policy, frames_count=frames_count, error=error):
+            plan = plan_audio_resampling(16000, 12000, 5, rounding=policy)
+            assert plan.target_frames == frames_count
+            assert plan.status is ResampleStatus.ROUNDED
+            assert (plan.rate_ratio_numerator, plan.rate_ratio_denominator) == (4, 3)
+            assert plan.duration_error_seconds == pytest.approx(error)
+            assert plan.rounding is policy
 
 
-@pytest.mark.parametrize(
-    "frames_count,expected",
-    [(5, 2), (7, 4), (6, 3)],
-)
-def test_nearest_even_resolves_ties_to_even(frames_count, expected) -> None:
-    plan = plan_audio_resampling(
-        2, 1, frames_count, rounding=RoundingPolicy.NEAREST_EVEN
-    )
-    assert plan.target_frames == expected
+def test_nearest_even_resolves_ties_to_even(subtests) -> None:
+    for frames_count, expected in [(5, 2), (7, 4), (6, 3)]:
+        with subtests.test(frames_count=frames_count, expected=expected):
+            plan = plan_audio_resampling(
+                2, 1, frames_count, rounding=RoundingPolicy.NEAREST_EVEN
+            )
+            assert plan.target_frames == expected
 
 
 def test_one_frame_plans_match_hand_calculations() -> None:
@@ -112,35 +108,38 @@ def test_rate_bound_is_inclusive() -> None:
     assert plan.target_frames == 10
 
 
-@pytest.mark.parametrize("field", ["source_rate", "target_rate", "frames"])
-@pytest.mark.parametrize(
-    "value,category_name",
-    [
-        (None, "missing"),
-        (True, "boolean"),
-        (False, "boolean"),
-        (float("nan"), "not_finite"),
-        (float("inf"), "not_finite"),
-        (16000.0, "not_integer"),
-        ("16000", "not_integer"),
-        ([], "not_integer"),
-        (-1, "not_positive"),
-        (_UINT32_MAX + 1, "overflow"),
-    ],
-)
-def test_invalid_counts_fail_closed(field, value, category_name) -> None:
-    kwargs = {"source_rate_hz": 16000, "target_rate_hz": 8000, "source_frames": 10}
-    kwargs[
-        {
-            "source_rate": "source_rate_hz",
-            "target_rate": "target_rate_hz",
-            "frames": "source_frames",
-        }[field]
-    ] = value
-    with pytest.raises(
-        AudioResamplePlanError, match=f"^audio_resample_{field}_{category_name}$"
-    ):
-        plan_audio_resampling(**kwargs)
+def test_invalid_counts_fail_closed(subtests) -> None:
+    for field in ["source_rate", "target_rate", "frames"]:
+        for value, category_name in [
+            (None, "missing"),
+            (True, "boolean"),
+            (False, "boolean"),
+            (float("nan"), "not_finite"),
+            (float("inf"), "not_finite"),
+            (16000.0, "not_integer"),
+            ("16000", "not_integer"),
+            ([], "not_integer"),
+            (-1, "not_positive"),
+            (_UINT32_MAX + 1, "overflow"),
+        ]:
+            with subtests.test(field=field, value=value, category_name=category_name):
+                kwargs = {
+                    "source_rate_hz": 16000,
+                    "target_rate_hz": 8000,
+                    "source_frames": 10,
+                }
+                kwargs[
+                    {
+                        "source_rate": "source_rate_hz",
+                        "target_rate": "target_rate_hz",
+                        "frames": "source_frames",
+                    }[field]
+                ] = value
+                with pytest.raises(
+                    AudioResamplePlanError,
+                    match=f"^audio_resample_{field}_{category_name}$",
+                ):
+                    plan_audio_resampling(**kwargs)
 
 
 def test_zero_rates_fail_closed() -> None:
@@ -161,10 +160,11 @@ def test_frames_overflow_fails_closed() -> None:
         plan_audio_resampling(16000, 8000, MAX_AUDIO_FRAMES + 1)
 
 
-@pytest.mark.parametrize("rounding", [None, "floor", 3, RoundingPolicy])
-def test_invalid_rounding_policy_fails_with_constant_message(rounding) -> None:
-    with pytest.raises(ValueError, match="^rounding must be a RoundingPolicy$"):
-        plan_audio_resampling(16000, 8000, 10, rounding=rounding)
+def test_invalid_rounding_policy_fails_with_constant_message(subtests) -> None:
+    for rounding in [None, "floor", 3, RoundingPolicy]:
+        with subtests.test(rounding=rounding):
+            with pytest.raises(ValueError, match="^rounding must be a RoundingPolicy$"):
+                plan_audio_resampling(16000, 8000, 10, rounding=rounding)
 
 
 def test_tolerance_rejects_excessive_error() -> None:
@@ -179,10 +179,13 @@ def test_tolerance_accepts_exact_plans() -> None:
     assert plan.status is ResampleStatus.EXACT
 
 
-@pytest.mark.parametrize("tolerance", [-1, float("nan"), "0.5", []])
-def test_invalid_tolerance_fails_with_constant_message(tolerance) -> None:
-    with pytest.raises(ValueError, match="^max_duration_error_seconds"):
-        plan_audio_resampling(16000, 8000, 10, max_duration_error_seconds=tolerance)
+def test_invalid_tolerance_fails_with_constant_message(subtests) -> None:
+    for tolerance in [-1, float("nan"), "0.5", []]:
+        with subtests.test(tolerance=tolerance):
+            with pytest.raises(ValueError, match="^max_duration_error_seconds"):
+                plan_audio_resampling(
+                    16000, 8000, 10, max_duration_error_seconds=tolerance
+                )
 
 
 def test_error_is_a_value_error_without_values() -> None:

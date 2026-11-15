@@ -372,9 +372,8 @@ def test_unknown_column_type_is_rejected():
         anonymize_table(_mixed_table(), {"age": "salary"})
 
 
-@pytest.mark.parametrize(
-    ("rows", "quasi_identifiers", "canary"),
-    [
+def test_invalid_qi_errors_do_not_echo_source_values(subtests):
+    for rows, quasi_identifiers, canary in [
         (
             [{"age": "synthetic-age-canary"}],
             {"age": "age"},
@@ -385,12 +384,13 @@ def test_unknown_column_type_is_rejected():
             {"zip": "zip"},
             "synthetic-zip-canary!",
         ),
-    ],
-)
-def test_invalid_qi_errors_do_not_echo_source_values(rows, quasi_identifiers, canary):
-    with pytest.raises(AnonymizationError) as raised:
-        anonymize_table(rows, quasi_identifiers, k=1)
-    assert canary not in str(raised.value)
+    ]:
+        with subtests.test(
+            rows=rows, quasi_identifiers=quasi_identifiers, canary=canary
+        ):
+            with pytest.raises(AnonymizationError) as raised:
+                anonymize_table(rows, quasi_identifiers, k=1)
+            assert canary not in str(raised.value)
 
 
 def test_non_string_column_type_is_rejected_as_anonymization_error():
@@ -424,10 +424,11 @@ def test_empty_quasi_identifiers_is_rejected():
         anonymize_table(_mixed_table(), {})
 
 
-@pytest.mark.parametrize("bad_k", [0, -1])
-def test_invalid_target_k_is_rejected(bad_k):
-    with pytest.raises(AnonymizationError):
-        anonymize_table(_mixed_table(), {"age": "age"}, target_k=bad_k)
+def test_invalid_target_k_is_rejected(subtests):
+    for bad_k in [0, -1]:
+        with subtests.test(bad_k=bad_k):
+            with pytest.raises(AnonymizationError):
+                anonymize_table(_mixed_table(), {"age": "age"}, target_k=bad_k)
 
 
 def test_invalid_suppression_rate_is_rejected():

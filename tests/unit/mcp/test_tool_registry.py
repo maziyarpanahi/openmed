@@ -259,27 +259,29 @@ def test_valid_plugin_tool_is_lazily_registered_with_stable_metadata() -> None:
     assert invoke_tool(spec, registry.handler(spec.name)) == {"status": "synthetic-ok"}
 
 
-@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
-def test_clinical_tool_contracts_are_versioned(tool_name: str) -> None:
-    spec = TOOL_REGISTRY.get(tool_name)
+def test_clinical_tool_contracts_are_versioned(subtests) -> None:
+    for tool_name in sorted(CLINICAL_TOOL_NAMES):
+        with subtests.test(tool_name=tool_name):
+            spec = TOOL_REGISTRY.get(tool_name)
 
-    assert spec.version == "1.0.0"
-    assert spec.document()["input_schema"] == spec.input_schema
-    assert spec.document()["output_schema"] == spec.output_schema
-    assert spec.input_schema["required"]
-    assert spec.output_schema["required"]
+            assert spec.version == "1.0.0"
+            assert spec.document()["input_schema"] == spec.input_schema
+            assert spec.document()["output_schema"] == spec.output_schema
+            assert spec.input_schema["required"]
+            assert spec.output_schema["required"]
 
 
-@pytest.mark.parametrize("tool_name", sorted(CLINICAL_TOOL_NAMES))
-def test_clinical_tool_contracts_use_compatibility_gate(tool_name: str) -> None:
-    spec = TOOL_REGISTRY.get(tool_name)
-    input_schema = deepcopy(dict(spec.input_schema))
-    required_parameter = input_schema["required"][0]
-    input_schema["properties"][required_parameter]["type"] = "string"
-    broken = _replace_spec(spec, input_schema=input_schema)
+def test_clinical_tool_contracts_use_compatibility_gate(subtests) -> None:
+    for tool_name in sorted(CLINICAL_TOOL_NAMES):
+        with subtests.test(tool_name=tool_name):
+            spec = TOOL_REGISTRY.get(tool_name)
+            input_schema = deepcopy(dict(spec.input_schema))
+            required_parameter = input_schema["required"][0]
+            input_schema["properties"][required_parameter]["type"] = "string"
+            broken = _replace_spec(spec, input_schema=input_schema)
 
-    with pytest.raises(ToolCompatibilityError, match="without version bump"):
-        check_tool_registry_compatibility([spec], [broken])
+            with pytest.raises(ToolCompatibilityError, match="without version bump"):
+                check_tool_registry_compatibility([spec], [broken])
 
 
 def test_clinical_contract_handlers_return_registered_output_shapes() -> None:

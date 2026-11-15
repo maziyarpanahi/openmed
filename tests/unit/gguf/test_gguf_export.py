@@ -93,9 +93,11 @@ def test_convert_accepts_embedding_stub_and_records_gguf_metadata(
     )
 
 
-@pytest.mark.parametrize(
-    "config",
-    [
+def test_convert_rejects_token_classification_before_running_converter(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for config in [
         {
             "architectures": ["BertForTokenClassification"],
             "model_type": "bert",
@@ -105,26 +107,26 @@ def test_convert_accepts_embedding_stub_and_records_gguf_metadata(
             "model_type": "bert",
             "pipeline_tag": "token-classification",
         },
-    ],
-)
-def test_convert_rejects_token_classification_before_running_converter(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    config: dict[str, object],
-) -> None:
-    model = _write_model_config(tmp_path / "token-classifier", config)
-    converter = _write_converter_stub(tmp_path)
+    ]:
+        with subtests.test(config=config):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                model = _write_model_config(tmp_path / "token-classifier", config)
+                converter = _write_converter_stub(tmp_path)
 
-    def fail_if_called(*args: object, **kwargs: object) -> None:
-        raise AssertionError("converter must not run for token-classification")
+                def fail_if_called(*args: object, **kwargs: object) -> None:
+                    raise AssertionError(
+                        "converter must not run for token-classification"
+                    )
 
-    monkeypatch.setattr(convert_module.subprocess, "run", fail_if_called)
+                monkeypatch.setattr(convert_module.subprocess, "run", fail_if_called)
 
-    with pytest.raises(
-        UnsupportedGgufModelError,
-        match="does not support token-classification heads.*classifier head",
-    ):
-        convert(model, tmp_path / "export", converter_path=converter)
+                with pytest.raises(
+                    UnsupportedGgufModelError,
+                    match="does not support token-classification heads.*classifier head",
+                ):
+                    convert(model, tmp_path / "export", converter_path=converter)
 
 
 def test_convert_requires_both_outputs_before_publishing_manifest(

@@ -1,6 +1,7 @@
 /* OpenMed.life progressive enhancement.
-   No analytics or clinical-text network requests. Public repository metadata
-   is refreshed from GitHub and cached for six hours. */
+   No clinical-text network requests. Public repository metadata is refreshed
+   from GitHub and cached for six hours. Marketing-page analytics are installed
+   separately in index.html. */
 
 document.documentElement.classList.add("js");
 

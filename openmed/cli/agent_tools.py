@@ -12,6 +12,7 @@ from openmed.agent.tool_inventory import (
     render_tool_inventory_json,
     render_tool_inventory_markdown,
 )
+from openmed.cli.agent_admission import add_admission_commands
 
 MAX_TOOL_INVENTORY_INPUT_BYTES: Final = 10 * 1024 * 1024
 _OUTPUT_FORMATS: Final = frozenset({"json", "text"})
@@ -85,10 +86,17 @@ def write_tool_inventory(rendered: str, output: Path) -> None:
         raise AgentToolsCliError("write_failed", "output") from None
 
 
-def add_agent_tools_command(app: Any, typer_module: Any) -> None:
+def add_agent_tools_command(
+    app: Any, typer_module: Any, *, governance_service: Any = None
+) -> None:
     """Register the ``openmed agents tools`` Typer command group."""
 
     agents_app = typer_module.Typer(help="Local-agent governance commands.")
+    from .governed_workflows import add_governed_workflow_typer_command
+
+    add_governed_workflow_typer_command(
+        agents_app, typer_module, service=governance_service
+    )
 
     @agents_app.command("tools")
     def agent_tools(
@@ -125,6 +133,7 @@ def add_agent_tools_command(app: Any, typer_module: Any) -> None:
             )
             raise typer_module.Exit(code=1) from None
 
+    add_admission_commands(agents_app, typer_module)
     app.add_typer(agents_app, name="agents")
 
 

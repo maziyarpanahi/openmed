@@ -19,9 +19,8 @@ from openmed.clinical import (
 from openmed.clinical.relations.candidate import build_relation_candidates
 
 
-@pytest.mark.parametrize(
-    ("text", "source_text", "target_text", "expected_type"),
-    [
+def test_extract_tlink_candidates_supports_all_relation_types(subtests) -> None:
+    for text, source_text, target_text, expected_type in [
         ("Chest pain before dyspnea.", "Chest pain", "dyspnea", "BEFORE"),
         ("Dyspnea after chest pain.", "Dyspnea", "chest pain", "AFTER"),
         ("Cough overlapped with fever.", "Cough", "fever", "OVERLAP"),
@@ -38,25 +37,26 @@ from openmed.clinical.relations.candidate import build_relation_candidates
             "2026-06-05",
             "ENDS_ON",
         ),
-    ],
-)
-def test_extract_tlink_candidates_supports_all_relation_types(
-    text: str,
-    source_text: str,
-    target_text: str,
-    expected_type: str,
-) -> None:
-    candidates = extract_tlink_candidates(text, _spans(text, source_text, target_text))
+    ]:
+        with subtests.test(
+            text=text,
+            source_text=source_text,
+            target_text=target_text,
+            expected_type=expected_type,
+        ):
+            candidates = extract_tlink_candidates(
+                text, _spans(text, source_text, target_text)
+            )
 
-    assert len(candidates) == 1
-    candidate = candidates[0]
-    assert candidate.relation_type == expected_type
-    assert text[candidate.source.start : candidate.source.end] == source_text
-    assert text[candidate.target.start : candidate.target.end] == target_text
-    assert candidate.confidence >= 0.5
-    assert candidate.cue.start < candidate.cue.end
-    assert candidate.source.role == "EVENT"
-    assert candidate.target.role in {"EVENT", "TIMEX"}
+            assert len(candidates) == 1
+            candidate = candidates[0]
+            assert candidate.relation_type == expected_type
+            assert text[candidate.source.start : candidate.source.end] == source_text
+            assert text[candidate.target.start : candidate.target.end] == target_text
+            assert candidate.confidence >= 0.5
+            assert candidate.cue.start < candidate.cue.end
+            assert candidate.source.role == "EVENT"
+            assert candidate.target.role in {"EVENT", "TIMEX"}
 
 
 def test_during_cue_directs_contains_from_timex_to_event() -> None:

@@ -31,7 +31,10 @@ namespace = ObjectStoreNamespace(
 )
 artifacts = FsspecArtifactStore(namespace)
 metadata = PostgresJourneyStore(
-    psycopg.connect("postgresql://application@localhost/journey"),
+    psycopg.connect(
+        "postgresql://application@db.internal.example/journey"
+        "?sslmode=verify-full&sslrootcert=/run/openmed/postgres-tls/ca.crt"
+    ),
     schema="openmed_journey",
 )
 store = ComposedJourneyStore(artifacts, metadata)
@@ -61,10 +64,56 @@ The connection or DSN must use TLS, authentication, routing, and access controls
 appropriate to the deployment. OpenMed neither weakens those controls nor puts
 connection details into result representations. `PostgresJourneyStore.connect()`
 is an optional convenience that lazily imports the BSD-licensed `pg8000` driver
-from the `journey` extra. It accepts a PostgreSQL URL with an optional
-`sslmode=verify-full` query (using the system trust store); other URL options
-fail closed. Direct construction accepts a compatible dedicated DB-API
-connection when deployment-specific TLS or routing is required.
+from the `journey` extra. Direct construction accepts a compatible dedicated
+DB-API connection when deployment-specific routing is required.
+
+### Verified TLS for `connect()`
+
+`connect()` builds a standard-library `ssl` context with certificate
+verification, host-name checking, and TLS 1.2 or newer. Supply a private CA
+bundle, and optionally a client certificate and key, through
+`connect_options`:
+
+```python
+from openmed.structured.store import PostgresJourneyStore
+
+result = PostgresJourneyStore.connect(
+    "postgresql://application@db.internal.example:5432/journey"
+    "?sslmode=verify-full",
+    connect_options={
+        "connect_timeout": 3,
+        "sslrootcert": "/run/openmed/postgres-tls/ca.crt",
+        "sslcert": "/run/openmed/postgres-tls/client.crt",  # optional
+        "sslkey": "/run/openmed/postgres-tls/client.key",  # optional
+    },
+)
+```
+
+`sslmode=verify-full` without `sslrootcert` verifies against the system trust
+store. Supplying any TLS file option selects verified TLS even when the URL has
+no `sslmode`. `sslkey` requires `sslcert`, and `sslmode=disable` cannot be
+combined with TLS files. Other URL options fail closed with `invalid_dsn`.
+
+The transport policy follows `OPENMED_PROFILE` (or the `profile=` argument),
+which defaults to `prod` as in the REST service:
+
+| Profile | Plaintext or `sslmode=disable` | `allow`, `prefer`, `require`, `verify-ca` | `verify-full` or TLS files |
+| --- | --- | --- | --- |
+| `dev`, `test` | allowed | `invalid_dsn` | verified TLS |
+| any other, including unset | `denied` / `postgres_tls_required` | `denied` / `postgres_tls_required` | verified TLS |
+
+Every refusal happens before the driver is imported or a socket is opened.
+An unreadable or malformed CA bundle, certificate, or key returns
+`failure` / `postgres_tls_config_invalid`. Results, errors, and health reports
+never include the DSN, host name, user name, password, file paths, or
+certificate contents. Development plaintext must be selected explicitly with
+`OPENMED_PROFILE=dev` or `OPENMED_PROFILE=test`.
+
+`postgres_transport_posture()` evaluates the same policy without loading
+files or connecting and returns a value-free `PostgresTransportPosture`
+(`production`, `tls`, `trust_anchor`, `client_certificate`, `code`, `ok`) for
+deployment self-checks. Server-side `pg_hba.conf` enforcement, role
+management, and encryption at rest remain operator responsibilities.
 
 ## Migration state and recovery
 
@@ -166,12 +215,70 @@ Do not put database dumps, object copies, credentials, raw clinical content, or
 restricted datasets in source control. Encryption, object versioning, deletion
 holds, disaster-recovery testing, and retention remain operator responsibilities.
 
+## Bounded waits and cancellation
+
+Every Journey-store read and write runs under one deadline: the earliest of an
+explicit `deadline=` argument to `transaction()`, the ambient
+`store_deadline(...)` scope, and the store's server cap. A caller can shorten
+the cap but never extend it.
+
+```python
+from openmed.core.budget import RequestBudget
+from openmed.structured.store import StoreTimeouts, store_deadline
+
+metadata = PostgresJourneyStore(
+    connection,
+    timeouts=StoreTimeouts(operation_seconds=10, lock_wait_seconds=2),
+)
+budget = RequestBudget(max_wall_time=5).start()
+
+with store_deadline(budget):  # or seconds, or a StoreDeadline
+    result = metadata.put_fact(fact, committed_at="2026-01-02T03:04:05Z")
+```
+
+| Setting | Environment variable | Default | Bounds |
+| --- | --- | --- | --- |
+| `operation_seconds` | `OPENMED_JOURNEY_STORE_TIMEOUT_SECONDS` | 30 | one operation; caps `statement_timeout` |
+| `lock_wait_seconds` | `OPENMED_JOURNEY_STORE_LOCK_WAIT_SECONDS` | 5 | connection checkout and `lock_timeout` |
+
+When `timeouts` is omitted, the store reads these variables. An invalid value
+fails `open()` and `connect()` with `store_timeouts_invalid` before a
+connection is opened; the error names the variable, never its value.
+
+For each operation the store:
+
+1. Checks out its dedicated connection with a bounded wait. If another
+   operation still holds it, the result is `failure` with code `store_busy`
+   instead of an indefinite block.
+2. Opens a transaction (`READ ONLY` for reads) and sets transaction-local
+   `statement_timeout` and `lock_timeout` (`SET LOCAL` semantics) from the time
+   left, lowering `statement_timeout` again as the deadline approaches.
+3. Refuses to start a statement, or to commit, after the deadline. A statement
+   cancelled by `statement_timeout` returns `store_deadline_exceeded`; a lock
+   wait ended by `lock_timeout` returns `store_busy`.
+4. On any failure, timeout, or cancellation, rolls back, runs `RESET ALL`
+   (clearing any session policy context), restores the schema search path, and
+   drops driver-retained notices before the connection is reused. A connection
+   that cannot be reset is closed, so it is never reused in an unknown state.
+
+A rollback is provable whenever the commit was never sent. If the commit
+acknowledgement is lost, the result is `unknown` with `commit_status_unknown`.
+Every put is idempotent, so replaying the same records reconciles it: the
+replay returns `created=False` when the earlier commit landed.
+
+`transaction()` raises `StoreBusyError`, `StoreDeadlineExceededError`, or
+`CommitStatusUnknown` for the same states; auto-committed puts, reads, and
+`ComposedJourneyStore.ingest_graph()` return the typed codes. Store errors are
+raised without the driver's exception context, so SQL parameters and server
+diagnostics do not travel with them. Migrations on `open()` are not bounded by
+these caps; `connect()` keeps its separate `connect_timeout`.
+
 ## Conformance testing
 
 The integration suite exercises the same synthetic graph against SQLite and a
 caller-provided ephemeral PostgreSQL database, including idempotency, rollback,
-historical canonical reads, restart, integrity verification, and interrupted
-migration recovery:
+historical canonical reads, restart, integrity verification, interrupted
+migration recovery, and bounded lock waits with session reset:
 
 ```bash
 OPENMED_TEST_POSTGRES_DSN='postgresql://...' \

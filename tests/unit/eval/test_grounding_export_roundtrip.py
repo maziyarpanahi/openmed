@@ -73,53 +73,61 @@ def test_medmentions_grounded_span_scores_ranked_alternatives_at_requested_depth
     assert "SYNTHETIC-GOLD" not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    "abstained, selected", [(True, False), (True, True), (False, False)]
-)
 def test_medmentions_never_credits_withheld_or_unselected_alternatives(
-    tmp_path: Path, abstained: bool, selected: bool
+    subtests, tmp_path
 ) -> None:
-    gold = _synthetic_linking_candidate("SYNTHETIC-GOLD")
-    span = GroundedSpan(
-        "synthetic mention",
-        0,
-        17,
-        (gold,) if selected else (),
-        alternatives=(gold,),
-        abstained=abstained,
-    )
-    report = evaluate_medmentions_st21pv(
-        _synthetic_linking_projection(tmp_path),
-        provider=lambda *_: span,
-        top_k=2,
-    )
-    assert report.metrics["top1_accuracy"] == 0.0
-    assert report.metrics["top2_accuracy"] == 0.0
-    assert report.metrics["abstention_rate"] == 1.0
+    case_root = tmp_path
+    for abstained, selected in [(True, False), (True, True), (False, False)]:
+        with subtests.test(abstained=abstained, selected=selected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            gold = _synthetic_linking_candidate("SYNTHETIC-GOLD")
+            span = GroundedSpan(
+                "synthetic mention",
+                0,
+                17,
+                (gold,) if selected else (),
+                alternatives=(gold,),
+                abstained=abstained,
+            )
+            report = evaluate_medmentions_st21pv(
+                _synthetic_linking_projection(tmp_path),
+                provider=lambda *_: span,
+                top_k=2,
+            )
+            assert report.metrics["top1_accuracy"] == 0.0
+            assert report.metrics["top2_accuracy"] == 0.0
+            assert report.metrics["abstention_rate"] == 1.0
 
 
-@pytest.mark.parametrize("as_span", [True, False])
 def test_medmentions_filters_non_umls_before_top_k_for_both_provider_shapes(
-    tmp_path: Path, as_span: bool
+    subtests, tmp_path
 ) -> None:
-    selected = _synthetic_linking_candidate("SYNTHETIC-WRONG", "UMLS")
-    alternatives = (
-        _synthetic_linking_candidate("SYNTHETIC-OTHER", "icd10cm"),
-        _synthetic_linking_candidate("SYNTHETIC-GOLD", "UmLs"),
-    )
-    output = (
-        GroundedSpan("synthetic mention", 0, 17, (selected,), alternatives=alternatives)
-        if as_span
-        else (selected, *alternatives)
-    )
-    report = evaluate_medmentions_st21pv(
-        _synthetic_linking_projection(tmp_path),
-        provider=lambda *_: output,
-        top_k=2,
-    )
-    assert report.metrics["top1_accuracy"] == 0.0
-    assert report.metrics["top2_accuracy"] == 1.0
-    assert report.metrics["abstention_rate"] == 0.0
+    case_root = tmp_path
+    for as_span in [True, False]:
+        with subtests.test(as_span=as_span):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            selected = _synthetic_linking_candidate("SYNTHETIC-WRONG", "UMLS")
+            alternatives = (
+                _synthetic_linking_candidate("SYNTHETIC-OTHER", "icd10cm"),
+                _synthetic_linking_candidate("SYNTHETIC-GOLD", "UmLs"),
+            )
+            output = (
+                GroundedSpan(
+                    "synthetic mention", 0, 17, (selected,), alternatives=alternatives
+                )
+                if as_span
+                else (selected, *alternatives)
+            )
+            report = evaluate_medmentions_st21pv(
+                _synthetic_linking_projection(tmp_path),
+                provider=lambda *_: output,
+                top_k=2,
+            )
+            assert report.metrics["top1_accuracy"] == 0.0
+            assert report.metrics["top2_accuracy"] == 1.0
+            assert report.metrics["abstention_rate"] == 0.0
 
 
 def test_grounding_export_fixture_is_not_generic_deidentification_gold() -> None:

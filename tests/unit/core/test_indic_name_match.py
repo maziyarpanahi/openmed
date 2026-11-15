@@ -21,21 +21,16 @@ from openmed.core.surrogate_vault import SurrogateVault
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
-@pytest.mark.parametrize(
-    ("variants", "expected_suffix"),
-    [
+def test_stdlib_normalizer_folds_script_and_romanization_variants(subtests):
+    for variants, expected_suffix in [
         (("संजय", "Sanjay", "Sanjai"), "sanjay"),
         (("कृष्णा", "Krishna", "Krishnaa"), "krishna"),
         (("लक्ष्मी", "Lakshmi", "Laxmi"), "lakshmi"),
-    ],
-)
-def test_stdlib_normalizer_folds_script_and_romanization_variants(
-    variants,
-    expected_suffix,
-):
-    keys = {canonical_indic_name_key(surface) for surface in variants}
+    ]:
+        with subtests.test(variants=variants, expected_suffix=expected_suffix):
+            keys = {canonical_indic_name_key(surface) for surface in variants}
 
-    assert keys == {f"indic-name-v1:{expected_suffix}"}
+            assert keys == {f"indic-name-v1:{expected_suffix}"}
 
 
 def test_collision_gate_keeps_distinct_names_separate():
@@ -110,9 +105,8 @@ def test_stdlib_rendering_never_leaves_latin_letters_in_indic_output():
     assert all(unicodedata.name(char, "").startswith("DEVANAGARI ") for char in letters)
 
 
-@pytest.mark.parametrize(
-    ("surface", "lang", "script", "unicode_prefix"),
-    [
+def test_vault_renders_supported_brahmic_scripts_without_mixed_letters(subtests):
+    for surface, lang, script, unicode_prefix in [
         ("रवि", "hi", "devanagari", "DEVANAGARI "),
         ("রবি", "bn", "bengali", "BENGALI "),
         ("ਰਵੀ", "pa", "gurmukhi", "GURMUKHI "),
@@ -122,33 +116,30 @@ def test_stdlib_rendering_never_leaves_latin_letters_in_indic_output():
         ("రవి", "te", "telugu", "TELUGU "),
         ("ರವಿ", "kn", "kannada", "KANNADA "),
         ("രവി", "ml", "malayalam", "MALAYALAM "),
-    ],
-)
-def test_vault_renders_supported_brahmic_scripts_without_mixed_letters(
-    surface,
-    lang,
-    script,
-    unicode_prefix,
-):
-    vault = SurrogateVault.in_memory(
-        "synthetic-test-secret",
-        transliteration_aware_name_matching=True,
-    )
+    ]:
+        with subtests.test(
+            surface=surface, lang=lang, script=script, unicode_prefix=unicode_prefix
+        ):
+            vault = SurrogateVault.in_memory(
+                "synthetic-test-secret",
+                transliteration_aware_name_matching=True,
+            )
 
-    rendered = vault.get_or_create(
-        surface,
-        label="PERSON",
-        lang=lang,
-        create_surrogate=lambda attempt: "Victor Xavier C. Fox",
-    )
+            rendered = vault.get_or_create(
+                surface,
+                label="PERSON",
+                lang=lang,
+                create_surrogate=lambda attempt: "Victor Xavier C. Fox",
+            )
 
-    assert vault.key_for(surface, label="PERSON", lang=lang).lang == "indic"
-    assert detect_name_script(rendered) == script
-    letters = [char for char in rendered if char.isalpha()]
-    assert letters
-    assert all(
-        unicodedata.name(char, "").startswith(unicode_prefix) for char in letters
-    )
+            assert vault.key_for(surface, label="PERSON", lang=lang).lang == "indic"
+            assert detect_name_script(rendered) == script
+            letters = [char for char in rendered if char.isalpha()]
+            assert letters
+            assert all(
+                unicodedata.name(char, "").startswith(unicode_prefix)
+                for char in letters
+            )
 
 
 def test_vault_rejects_mixed_script_renderer_output():

@@ -155,22 +155,23 @@ def test_unverified_range_provenance_is_explicitly_unknown() -> None:
     assert "synthetic-instrument-secret" not in json.dumps(record)
 
 
-@pytest.mark.parametrize("unit", ["mystery-unit", "units", None])
-def test_unknown_or_missing_unit_fails_closed_without_guessing(unit: object) -> None:
-    record = normalize_lab_measurement(
-        {
-            "value": 7.5,
-            "unit": unit,
-            "reference_range": "4-11",
-            "source_offsets": [4, 7],
-        }
-    )
+def test_unknown_or_missing_unit_fails_closed_without_guessing(subtests) -> None:
+    for unit in ["mystery-unit", "units", None]:
+        with subtests.test(unit=unit):
+            record = normalize_lab_measurement(
+                {
+                    "value": 7.5,
+                    "unit": unit,
+                    "reference_range": "4-11",
+                    "source_offsets": [4, 7],
+                }
+            )
 
-    assert record["status"] == "unknown_unit"
-    assert record["unit_status"] in {"missing", "unknown", "ambiguous"}
-    assert record["canonical_value"] is None
-    assert record["canonical_unit"] is None
-    assert record["interpretation"] == "unknown"
+            assert record["status"] == "unknown_unit"
+            assert record["unit_status"] in {"missing", "unknown", "ambiguous"}
+            assert record["canonical_value"] is None
+            assert record["canonical_unit"] is None
+            assert record["interpretation"] == "unknown"
 
 
 def test_unknown_reference_unit_is_explicit_and_does_not_leak_source_text() -> None:
@@ -226,17 +227,15 @@ def test_arbitrary_flag_is_not_copied_into_provenance():
     assert record["interpretation"] == "unknown"
 
 
-@pytest.mark.parametrize(
-    "row",
-    [
+def test_conflicting_measurement_declarations_are_rejected(subtests):
+    for row in [
         {"value": "5 mg/dL", "unit": "mmol/L"},
         {"value": 5, "unit": "mg/dL", "units": "mmol/L"},
         {"value": 5, "result": 10, "unit": "mg/dL"},
-    ],
-)
-def test_conflicting_measurement_declarations_are_rejected(row):
-    with pytest.raises(ValueError):
-        normalize_lab_measurement(row)
+    ]:
+        with subtests.test(row=row):
+            with pytest.raises(ValueError):
+                normalize_lab_measurement(row)
 
 
 def test_range_provenance_cannot_claim_another_unit():

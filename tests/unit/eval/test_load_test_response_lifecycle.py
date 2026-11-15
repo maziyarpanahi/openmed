@@ -66,18 +66,22 @@ def test_real_streaming_response_finishes_and_timing_includes_generation(monkeyp
     assert failed is False
 
 
-@pytest.mark.parametrize(
-    "body_event",
-    [None, {"type": "http.response.body", "body": b"partial", "more_body": True}],
-)
-def test_unfinished_response_is_counted_as_failure(body_event):
-    async def app(scope, receive, send):
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        if body_event is not None:
-            await send(body_event)
+def test_unfinished_response_is_counted_as_failure(subtests):
+    for body_event in [
+        None,
+        {"type": "http.response.body", "body": b"partial", "more_body": True},
+    ]:
+        with subtests.test(body_event=body_event):
 
-    _, failed = _run(load_test._timed_request(app, "/synthetic", {}))
-    assert failed is True
+            async def app(scope, receive, send):
+                await send(
+                    {"type": "http.response.start", "status": 200, "headers": []}
+                )
+                if body_event is not None:
+                    await send(body_event)
+
+            _, failed = _run(load_test._timed_request(app, "/synthetic", {}))
+            assert failed is True
 
 
 def test_final_body_without_more_body_flag_is_complete():
@@ -106,11 +110,15 @@ def test_full_load_report_waits_for_all_streamed_requests():
     assert report.requests_per_second > 0
 
 
-@pytest.mark.parametrize("status", [400, 500])
-def test_complete_error_response_remains_an_error(status):
-    async def app(scope, receive, send):
-        await send({"type": "http.response.start", "status": status, "headers": []})
-        await send({"type": "http.response.body", "body": b"{}"})
+def test_complete_error_response_remains_an_error(subtests):
+    for status in [400, 500]:
+        with subtests.test(status=status):
 
-    _, failed = _run(load_test._timed_request(app, "/synthetic", {}))
-    assert failed is True
+            async def app(scope, receive, send):
+                await send(
+                    {"type": "http.response.start", "status": status, "headers": []}
+                )
+                await send({"type": "http.response.body", "body": b"{}"})
+
+            _, failed = _run(load_test._timed_request(app, "/synthetic", {}))
+            assert failed is True

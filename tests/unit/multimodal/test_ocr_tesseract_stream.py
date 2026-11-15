@@ -73,9 +73,8 @@ def test_native_lines_keep_pages_unicode_and_custom_separator_offsets():
     )
 
 
-@pytest.mark.parametrize(
-    "line_ids",
-    [
+def test_line_preservation_requires_valid_contiguous_native_ids(subtests):
+    for line_ids in [
         None,
         [],
         [(1, 1, 1)],
@@ -83,16 +82,15 @@ def test_native_lines_keep_pages_unicode_and_custom_separator_offsets():
         [(True, 1, 1)] * 3,
         [(1, 1, "private")] * 3,
         [(1, 1, 1), (1, 1, 2), (1, 1, 1)],
-    ],
-)
-def test_line_preservation_requires_valid_contiguous_native_ids(line_ids):
-    result = replace(parse(), metadata={"line_ids": line_ids})
-    with pytest.raises(
-        ValueError,
-        match="^ocr_(line_ids_required|invalid_line_ids|noncontiguous_line_ids)$",
-    ):
-        result.to_document(preserve_lines=True)
-    assert result.to_document().text == result.text
+    ]:
+        with subtests.test(line_ids=line_ids):
+            result = replace(parse(), metadata={"line_ids": line_ids})
+            with pytest.raises(
+                ValueError,
+                match="^ocr_(line_ids_required|invalid_line_ids|noncontiguous_line_ids)$",
+            ):
+                result.to_document(preserve_lines=True)
+            assert result.to_document().text == result.text
 
 
 def test_empty_native_result_preserves_explicit_empty_lines():
@@ -107,9 +105,8 @@ def test_duplicate_native_word_ids_fail():
         parse([ROWS[1], ROWS[1]])
 
 
-@pytest.mark.parametrize(
-    "column,value",
-    [
+def test_tsv_rejects_invalid_word_records_without_echoing_text(subtests):
+    for column, value in [
         (0, "6"),
         (1, "2"),
         (2, "0"),
@@ -129,27 +126,26 @@ def test_duplicate_native_word_ids_fail():
         (11, "private\tvalue"),
         (11, "private\t"),
         (11, "private\x7f"),
-    ],
-)
-def test_tsv_rejects_invalid_word_records_without_echoing_text(column, value):
-    row = ROWS[1].split("\t")
-    row[column] = value
-    with pytest.raises(ValueError, match="^ocr_invalid_output$"):
-        parse(["\t".join(row)])
+    ]:
+        with subtests.test(column=column, value=value):
+            row = ROWS[1].split("\t")
+            row[column] = value
+            with pytest.raises(ValueError, match="^ocr_invalid_output$"):
+                parse(["\t".join(row)])
 
 
-@pytest.mark.parametrize(
-    "data",
-    [
+def test_malformed_native_output_is_rejected(subtests):
+    for data in [
         b"",
         b"bad header\npatient secret",
         HEADER.encode() + b"\xff",
         HEADER.encode() + b"5\t1",
-    ],
-)
-def test_malformed_native_output_is_rejected(data):
-    with pytest.raises(ValueError, match="^ocr_invalid_output$"):
-        stream._parse_tsv(data, width=200, height=150, max_words=10, max_text_chars=100)
+    ]:
+        with subtests.test(data=data):
+            with pytest.raises(ValueError, match="^ocr_invalid_output$"):
+                stream._parse_tsv(
+                    data, width=200, height=150, max_words=10, max_text_chars=100
+                )
 
 
 def test_word_and_text_budgets_are_enforced():
@@ -336,9 +332,8 @@ def test_image_limits_are_checked_before_ocr_and_failures_are_safe(monkeypatch):
         stream.StreamingTesseractEngine().recognize(b"", languages=["../../private"])
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
+def test_invalid_runtime_limits_fail_before_work(subtests):
+    for options in [
         {"timeout_seconds": True},
         {"timeout_seconds": float("nan")},
         {"timeout_seconds": 121},
@@ -346,8 +341,7 @@ def test_image_limits_are_checked_before_ocr_and_failures_are_safe(monkeypatch):
         {"max_words": 0},
         {"max_output_bytes": -1},
         {"cancel_check": "invalid"},
-    ],
-)
-def test_invalid_runtime_limits_fail_before_work(options):
-    with pytest.raises(ValueError):
-        stream.StreamingTesseractEngine(**options)
+    ]:
+        with subtests.test(options=options):
+            with pytest.raises(ValueError):
+                stream.StreamingTesseractEngine(**options)

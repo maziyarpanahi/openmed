@@ -165,9 +165,8 @@ def test_empty_artifact_has_a_stable_shape() -> None:
     assert artifact.to_json() == '{"citations":[],"schema_version":1}\n'
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_metadata_fails_without_echoing_values(subtests) -> None:
+    for kwargs in [
         {"document_id": ""},
         {"document_id": "/srv/charts/123"},
         {"section": "assessment and plan"},
@@ -177,27 +176,24 @@ def test_empty_artifact_has_a_stable_shape() -> None:
         {"source_end": 10},
         {"source_end": 9},
         {"primary": 1},
-    ],
-)
-def test_invalid_metadata_fails_without_echoing_values(
-    kwargs: dict[str, object],
-) -> None:
-    values: dict[str, object] = {
-        "document_id": _opaque("doc-01"),
-        "section": _opaque("assessment"),
-        "source_start": 10,
-        "source_end": 20,
-        "evidence_id": _opaque("evidence-01"),
-        "primary": False,
-    }
-    values.update(kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            values: dict[str, object] = {
+                "document_id": _opaque("doc-01"),
+                "section": _opaque("assessment"),
+                "source_start": 10,
+                "source_end": 20,
+                "evidence_id": _opaque("evidence-01"),
+                "primary": False,
+            }
+            values.update(kwargs)
 
-    with pytest.raises(CitationOrderingError) as error:
-        Citation(**values)  # type: ignore[arg-type]
-    assert all(
-        not isinstance(value, str) or not value or value not in str(error.value)
-        for value in kwargs.values()
-    )
+            with pytest.raises(CitationOrderingError) as error:
+                Citation(**values)  # type: ignore[arg-type]
+            assert all(
+                not isinstance(value, str) or not value or value not in str(error.value)
+                for value in kwargs.values()
+            )
 
 
 def test_artifact_schema_cannot_carry_sensitive_values() -> None:
@@ -224,30 +220,25 @@ def test_artifact_schema_cannot_carry_sensitive_values() -> None:
         assert forbidden not in serialized
 
 
-@pytest.mark.parametrize(
-    ("field", "sentinel"),
-    [
+def test_token_shaped_sensitive_identifiers_are_rejected(subtests) -> None:
+    for field, sentinel in [
         ("document_id", "Patient_Jane_Doe"),
         ("section", "diagnosis_HIV"),
         ("evidence_id", "MRN_123456"),
-    ],
-)
-def test_token_shaped_sensitive_identifiers_are_rejected(
-    field: str,
-    sentinel: str,
-) -> None:
-    values = {
-        "document_id": _opaque("doc-01"),
-        "section": _opaque("assessment"),
-        "source_start": 10,
-        "source_end": 20,
-        "evidence_id": _opaque("evidence-01"),
-    }
-    values[field] = sentinel
+    ]:
+        with subtests.test(field=field, sentinel=sentinel):
+            values = {
+                "document_id": _opaque("doc-01"),
+                "section": _opaque("assessment"),
+                "source_start": 10,
+                "source_end": 20,
+                "evidence_id": _opaque("evidence-01"),
+            }
+            values[field] = sentinel
 
-    with pytest.raises(CitationOrderingError) as error:
-        Citation(**values)  # type: ignore[arg-type]
-    assert sentinel not in str(error.value)
+            with pytest.raises(CitationOrderingError) as error:
+                Citation(**values)  # type: ignore[arg-type]
+            assert sentinel not in str(error.value)
 
 
 def test_invalid_collections_and_schema_versions_fail_closed() -> None:

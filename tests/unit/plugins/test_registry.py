@@ -394,6 +394,7 @@ def test_registry_snapshot_does_not_trigger_discovery(monkeypatch):
     assert calls() == 0
 
 
+@pytest.mark.slow
 def test_bare_import_does_not_import_or_discover_plugins():
     code = """
     import importlib.metadata

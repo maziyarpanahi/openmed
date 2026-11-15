@@ -104,31 +104,30 @@ def test_unimplemented_assertion_language_never_falls_back_to_english():
     assert result["status"] == "partial"
 
 
-@pytest.mark.parametrize("mixed", [False, True])
-def test_uncertain_or_mixed_language_requires_an_explicit_context_override(
-    monkeypatch, mixed
-):
-    monkeypatch.setattr(
-        "openmed.clinical.analysis.resolve_clinical_language",
-        lambda *a, **kw: SimpleNamespace(
-            language="en",
-            locale="en_US",
-            source="auto",
-            confidence=0.5,
-            needs_review=True,
-            mixed=mixed,
-        ),
-    )
-    result = analyze_clinical_context(
-        "Diabetes.", [{"start": 0, "end": 8, "label": "Disease"}]
-    )
-    assert result["tasks"]["assertions"]["status"] == "unsupported"
-    assert result["language"]["needs_review"]
+def test_uncertain_or_mixed_language_requires_an_explicit_context_override(subtests):
+    for mixed in [False, True]:
+        with subtests.test(mixed=mixed):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(
+                    "openmed.clinical.analysis.resolve_clinical_language",
+                    lambda *a, **kw: SimpleNamespace(
+                        language="en",
+                        locale="en_US",
+                        source="auto",
+                        confidence=0.5,
+                        needs_review=True,
+                        mixed=mixed,
+                    ),
+                )
+                result = analyze_clinical_context(
+                    "Diabetes.", [{"start": 0, "end": 8, "label": "Disease"}]
+                )
+                assert result["tasks"]["assertions"]["status"] == "unsupported"
+                assert result["language"]["needs_review"]
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_invalid_entities_fail_without_raw_error_echo(subtests):
+    for changes in [
         {"start": True},
         {"end": 99},
         {"label": "private-label-marker"},
@@ -137,16 +136,15 @@ def test_uncertain_or_mixed_language_requires_an_explicit_context_override(
         {"score": True},
         {"score": 1.1},
         {"text": "private-text-marker"},
-    ],
-)
-def test_invalid_entities_fail_without_raw_error_echo(changes):
-    with pytest.raises(ClinicalAnalysisError) as failure:
-        analyze_clinical_context(
-            "Diabetes.",
-            [dict({"start": 0, "end": 8, "label": "Disease"}, **changes)],
-            language="en",
-        )
-    assert "private" not in str(failure.value)
+    ]:
+        with subtests.test(changes=changes):
+            with pytest.raises(ClinicalAnalysisError) as failure:
+                analyze_clinical_context(
+                    "Diabetes.",
+                    [dict({"start": 0, "end": 8, "label": "Disease"}, **changes)],
+                    language="en",
+                )
+            assert "private" not in str(failure.value)
 
 
 def test_deduplication_prefers_measured_confidence_and_keeps_stable_source_ids():

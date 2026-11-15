@@ -75,9 +75,10 @@ def test_matching_pair_returns_one_guarded_flag_with_required_fields() -> None:
     assert flag.provenance["interaction_data"] == "caller_supplied"
 
 
-@pytest.mark.parametrize("empty_table", [None, {}, {"interactions": []}])
-def test_empty_user_supplied_table_returns_no_interaction_flags(empty_table) -> None:
-    assert find_interactions(_normalized_medications(), empty_table) == []
+def test_empty_user_supplied_table_returns_no_interaction_flags(subtests) -> None:
+    for empty_table in [None, {}, {"interactions": []}]:
+        with subtests.test(empty_table=empty_table):
+            assert find_interactions(_normalized_medications(), empty_table) == []
 
 
 def test_unnormalizable_medication_surfaces_not_checked_note() -> None:
@@ -188,32 +189,30 @@ def test_existing_grounded_span_rxnorm_output_is_accepted() -> None:
     assert len(find_interactions(grounded, FIXTURE)) == 1
 
 
-@pytest.mark.parametrize(
-    "system",
-    [
+def test_rxnorm_system_code_records_are_accepted(subtests) -> None:
+    for system in [
         "RXNORM",
         "http://www.nlm.nih.gov/research/umls/rxnorm",
         "http://purl.bioontology.org/ontology/RXNORM",
-    ],
-)
-def test_rxnorm_system_code_records_are_accepted(system: str) -> None:
-    medications = [
-        {
-            "name": "Synthetic Drug Alpha",
-            "codes": [{"system": system, "code": "900000000001"}],
-            "start": 0,
-            "end": 20,
-        },
-        {
-            "name": "Synthetic Drug Beta",
-            "system": system,
-            "code": "900000000002",
-            "start": 25,
-            "end": 44,
-        },
-    ]
+    ]:
+        with subtests.test(system=system):
+            medications = [
+                {
+                    "name": "Synthetic Drug Alpha",
+                    "codes": [{"system": system, "code": "900000000001"}],
+                    "start": 0,
+                    "end": 20,
+                },
+                {
+                    "name": "Synthetic Drug Beta",
+                    "system": system,
+                    "code": "900000000002",
+                    "start": 25,
+                    "end": 44,
+                },
+            ]
 
-    assert len(find_interactions(medications, FIXTURE)) == 1
+            assert len(find_interactions(medications, FIXTURE)) == 1
 
 
 def test_bare_rxcuis_are_order_independent_and_duplicate_safe() -> None:

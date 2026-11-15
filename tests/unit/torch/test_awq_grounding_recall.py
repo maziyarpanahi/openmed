@@ -142,25 +142,28 @@ def test_top_k_overlap_certificate_fails_closed_on_rank_drift(
     assert certification.gate.recall_delta == 1.0
 
 
-@pytest.mark.parametrize(
-    "vectors, message",
-    [
+def test_certificate_rejects_invalid_embedding_evidence(subtests) -> None:
+    for vectors, message in [
         ([[1.0, 0.0]], "output count"),
         ([[1.0, 0.0]] * 5 + [[float("nan"), 0.0]], "finite"),
         ([[0.0, 0.0]] * 6, "non-zero norm"),
-    ],
-)
-def test_certificate_rejects_invalid_embedding_evidence(vectors, message) -> None:
-    module = _module()
+    ]:
+        with subtests.test(vectors=vectors, message=message):
+            module = _module()
 
-    with pytest.raises(ValueError, match=message):
-        module.certify_grounding_recall(
-            lambda texts: vectors,
-            lambda texts: [[1.0, 0.0]] * len(texts),
-            queries=["query one", "query two"],
-            passages=["passage one", "passage two", "passage three", "passage four"],
-            clock=_clock(0.0, 0.0),
-        )
+            with pytest.raises(ValueError, match=message):
+                module.certify_grounding_recall(
+                    lambda texts: vectors,
+                    lambda texts: [[1.0, 0.0]] * len(texts),
+                    queries=["query one", "query two"],
+                    passages=[
+                        "passage one",
+                        "passage two",
+                        "passage three",
+                        "passage four",
+                    ],
+                    clock=_clock(0.0, 0.0),
+                )
 
 
 def test_certificate_rejects_mismatched_fp16_and_awq_dimensions() -> None:

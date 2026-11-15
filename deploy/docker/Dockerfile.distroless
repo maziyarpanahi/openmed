@@ -46,7 +46,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TRANSFORMERS_CACHE=/cache/huggingface/transformers \
     OPENMED_CACHE_DIR=/cache/openmed \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+    OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+    OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30
 
 WORKDIR /app
 
@@ -62,5 +65,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD ["/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3).read()"]
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "uvicorn"]
-CMD ["openmed.service.app:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "openmed.service.logging"]
+CMD ["--host", "0.0.0.0", "--port", "8080"]

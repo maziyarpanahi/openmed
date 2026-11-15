@@ -851,13 +851,14 @@ def test_reconcile_rejects_digest_divergence_and_shard_mismatch() -> None:
         reconcile_shard_attempts(first, _record(3, document_count=5))
 
 
-@pytest.mark.parametrize("multiplier", [float("nan"), float("inf"), float("-inf")])
-def test_straggler_multiplier_must_be_finite(multiplier: float) -> None:
-    with pytest.raises(ResumeError, match="finite positive"):
-        classify_stragglers(
-            build_run_manifest(_plan(), run_id=RUN_ID, created_at=0.0),
-            multiplier=multiplier,
-        )
+def test_straggler_multiplier_must_be_finite(subtests) -> None:
+    for multiplier in [float("nan"), float("inf"), float("-inf")]:
+        with subtests.test(multiplier=multiplier):
+            with pytest.raises(ResumeError, match="finite positive"):
+                classify_stragglers(
+                    build_run_manifest(_plan(), run_id=RUN_ID, created_at=0.0),
+                    multiplier=multiplier,
+                )
 
 
 def test_resume_report_is_phi_free(tmp_path: Path) -> None:

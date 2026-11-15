@@ -55,6 +55,7 @@ def test_importing_openmed_does_not_load_heavy_multimodal_deps():
     assert _import_then_check("import openmed") == set()
 
 
+@pytest.mark.slow
 def test_importing_openmed_multimodal_does_not_load_heavy_deps():
     # The foundation module itself must defer heavy imports to the ingesters.
     assert _import_then_check("import openmed.multimodal") == set()

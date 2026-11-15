@@ -180,10 +180,11 @@ def test_invalid_offsets_raise():
         build_review_queue(result, confidence_threshold=0.7)
 
 
-@pytest.mark.parametrize("threshold", [-0.1, 1.1, float("nan")])
-def test_invalid_confidence_threshold_raises(threshold):
-    with pytest.raises(ValueError, match="confidence_threshold"):
-        build_review_queue(_deid_result(), confidence_threshold=threshold)
+def test_invalid_confidence_threshold_raises(subtests):
+    for threshold in [-0.1, 1.1, float("nan")]:
+        with subtests.test(threshold=threshold):
+            with pytest.raises(ValueError, match="confidence_threshold"):
+                build_review_queue(_deid_result(), confidence_threshold=threshold)
 
 
 def test_unknown_source_label_cannot_leak_span_text():

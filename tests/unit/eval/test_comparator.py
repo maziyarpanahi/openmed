@@ -202,33 +202,31 @@ def test_unavailable_exception_is_not_a_failed_benchmark() -> None:
     assert report.result("optional").metrics is None
 
 
-@pytest.mark.parametrize(
-    "flags",
-    [
+def test_mapping_fixtures_require_explicit_boolean_safety_flags(subtests) -> None:
+    for flags in [
         {},
         {"synthetic": True},
         {"phi_free": True},
         {"synthetic": "true", "phi_free": True},
-    ],
-)
-def test_mapping_fixtures_require_explicit_boolean_safety_flags(flags) -> None:
-    payload = {
-        "fixture_id": "synthetic-mapping",
-        "text": "Synthetic text only.",
-        **flags,
-    }
+    ]:
+        with subtests.test(flags=flags):
+            payload = {
+                "fixture_id": "synthetic-mapping",
+                "text": "Synthetic text only.",
+                **flags,
+            }
 
-    with pytest.raises(ComparatorFixtureError):
-        ComparatorFixture.from_mapping(payload)
+            with pytest.raises(ComparatorFixtureError):
+                ComparatorFixture.from_mapping(payload)
 
-    payload.update(synthetic=True, phi_free=True)
-    assert ComparatorFixture.from_mapping(payload).synthetic is True
+            payload.update(synthetic=True, phi_free=True)
+            assert ComparatorFixture.from_mapping(payload).synthetic is True
 
-    with pytest.raises(ComparatorFixtureError):
-        ComparatorFixture(
-            fixture_id="synthetic-defaults",
-            text="Synthetic text only.",
-        )
+            with pytest.raises(ComparatorFixtureError):
+                ComparatorFixture(
+                    fixture_id="synthetic-defaults",
+                    text="Synthetic text only.",
+                )
 
 
 def test_existing_benchmark_fixture_requires_explicit_safety_metadata() -> None:

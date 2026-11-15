@@ -181,15 +181,13 @@ def test_invalid_policy_and_collection_errors_do_not_echo_sensitive_values() -> 
     assert _RAW_MARKER not in str(collection_error.value)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_invalid_policy_values_fail_closed(subtests) -> None:
+    for value in [
         {"current_window_days": -1},
         {"current_window_seconds": float("inf")},
         {"future_tolerance": timedelta(days=-1)},
         {"schema_version": 2},
-    ],
-)
-def test_invalid_policy_values_fail_closed(value: object) -> None:
-    with pytest.raises(EvidenceRecencyError):
-        EvidenceRecencyPolicy.from_value(value)
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(EvidenceRecencyError):
+                EvidenceRecencyPolicy.from_value(value)

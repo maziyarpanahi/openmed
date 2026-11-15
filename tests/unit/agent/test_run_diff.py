@@ -138,9 +138,8 @@ def test_reversing_inputs_negates_deltas_and_swaps_sets(
     assert backward.duration_seconds_delta == -forward.duration_seconds_delta
 
 
-@pytest.mark.parametrize(
-    ("before_event", "after_event", "field_name", "expected"),
-    [
+def test_single_field_changes_are_isolated(subtests) -> None:
+    for before_event, after_event, field_name, expected in [
         (
             _event("wf"),
             _event("wf-next"),
@@ -171,24 +170,23 @@ def test_reversing_inputs_negates_deltas_and_swaps_sets(
             "artifact_digests_added",
             (_DIGEST_C,),
         ),
-    ],
-)
-def test_single_field_changes_are_isolated(
-    before_event: RunEvent,
-    after_event: RunEvent,
-    field_name: str,
-    expected: Any,
-) -> None:
-    diff = diff_run_summaries(
-        RunSummary.from_events([before_event]),
-        RunSummary.from_events([after_event]),
-    )
+    ]:
+        with subtests.test(
+            before_event=before_event,
+            after_event=after_event,
+            field_name=field_name,
+            expected=expected,
+        ):
+            diff = diff_run_summaries(
+                RunSummary.from_events([before_event]),
+                RunSummary.from_events([after_event]),
+            )
 
-    value = getattr(diff, field_name)
-    if field_name == "outcome_count_deltas":
-        value = dict(value)
-    assert value == expected
-    assert diff.changed is True
+            value = getattr(diff, field_name)
+            if field_name == "outcome_count_deltas":
+                value = dict(value)
+            assert value == expected
+            assert diff.changed is True
 
 
 def test_equal_durations_serialize_without_negative_zero() -> None:
@@ -317,9 +315,10 @@ def _diff_fields(**updates: Any) -> dict[str, Any]:
     return fields
 
 
-@pytest.mark.parametrize(
-    ("updates", "message"),
-    [
+def test_direct_construction_rejects_unsafe_values_without_echoing_them(
+    subtests,
+) -> None:
+    for updates, message in [
         (
             {"workflow_ids_added": (f"{_SENTINEL} prompt text",)},
             "workflow_ids_added: invalid_item",
@@ -370,17 +369,14 @@ def _diff_fields(**updates: Any) -> dict[str, Any]:
             "duration_seconds_delta: invalid_number",
         ),
         ({"schema_version": _SENTINEL}, "schema_version: unsupported_version"),
-    ],
-)
-def test_direct_construction_rejects_unsafe_values_without_echoing_them(
-    updates: dict[str, Any], message: str
-) -> None:
-    with pytest.raises(RunDiffError) as exc_info:
-        RunSummaryDiff(**_diff_fields(**updates))
+    ]:
+        with subtests.test(updates=updates, message=message):
+            with pytest.raises(RunDiffError) as exc_info:
+                RunSummaryDiff(**_diff_fields(**updates))
 
-    assert str(exc_info.value) == message
-    assert _SENTINEL not in str(exc_info.value)
-    assert exc_info.value.__cause__ is None
+            assert str(exc_info.value) == message
+            assert _SENTINEL not in str(exc_info.value)
+            assert exc_info.value.__cause__ is None
 
 
 def test_sentinel_payloads_cannot_enter_output(before: RunSummary) -> None:

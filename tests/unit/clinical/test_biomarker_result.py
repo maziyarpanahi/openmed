@@ -163,84 +163,83 @@ def test_committed_clinical_and_eval_fixtures_stay_identical() -> None:
     assert _CLINICAL_FIXTURE.read_bytes() == _EVAL_FIXTURE.read_bytes()
 
 
-@pytest.mark.parametrize(
-    ("mentions", "error", "match"),
-    [
+def test_invalid_mentions_are_rejected(subtests) -> None:
+    for mentions, error, match in [
         ([{"label": "gene", "start": -1, "end": 4}], ValueError, "offsets"),
         ([{"label": "therapy", "start": 0, "end": 4}], ValueError, "unknown"),
         ([{"label": "gene", "start": 0, "end": 4, "text": "KRAS"}], ValueError, "text"),
-    ],
-)
-def test_invalid_mentions_are_rejected(
-    mentions: list[dict[str, object]],
-    error: type[Exception],
-    match: str,
-) -> None:
-    with pytest.raises(error, match=match):
-        assemble_biomarker_results("EGFR detected", mentions)
+    ]:
+        with subtests.test(mentions=mentions, error=error, match=match):
+            with pytest.raises(error, match=match):
+                assemble_biomarker_results("EGFR detected", mentions)
 
 
-@pytest.mark.parametrize(
-    "score",
-    [True, -0.1, 1.1, float("nan"), float("inf"), 10**1000, "private-confidence"],
-)
-def test_malformed_confidence_is_rejected_before_conversion(score: object) -> None:
-    with pytest.raises(ValueError, match="confidence"):
-        assemble_biomarker_results(
-            "EGFR detected",
-            [{"label": "gene", "start": 0, "end": 4, "score": score}],
-        )
+def test_malformed_confidence_is_rejected_before_conversion(subtests) -> None:
+    for score in [
+        True,
+        -0.1,
+        1.1,
+        float("nan"),
+        float("inf"),
+        10**1000,
+        "private-confidence",
+    ]:
+        with subtests.test(score=score):
+            with pytest.raises(ValueError, match="confidence"):
+                assemble_biomarker_results(
+                    "EGFR detected",
+                    [{"label": "gene", "start": 0, "end": 4, "score": score}],
+                )
 
 
-@pytest.mark.parametrize("distance", [True, 1.5, "120", None])
-def test_distance_requires_an_integer(distance: object) -> None:
-    with pytest.raises(TypeError, match="max_distance"):
-        assemble_biomarker_results("EGFR detected", [], max_distance=distance)
+def test_distance_requires_an_integer(subtests) -> None:
+    for distance in [True, 1.5, "120", None]:
+        with subtests.test(distance=distance):
+            with pytest.raises(TypeError, match="max_distance"):
+                assemble_biomarker_results("EGFR detected", [], max_distance=distance)
 
 
-@pytest.mark.parametrize("explicit", [["detected"], {"detected": True}, True])
-def test_invalid_explicit_polarity_fails_with_a_controlled_error(
-    explicit: object,
-) -> None:
-    with pytest.raises(ValueError, match="result polarity"):
-        normalize_result_polarity("detected", explicit=explicit)
+def test_invalid_explicit_polarity_fails_with_a_controlled_error(subtests) -> None:
+    for explicit in [["detected"], {"detected": True}, True]:
+        with subtests.test(explicit=explicit):
+            with pytest.raises(ValueError, match="result polarity"):
+                normalize_result_polarity("detected", explicit=explicit)
 
 
-@pytest.mark.parametrize("failure", ["role", "polarity", "duplicate_id"])
 def test_invalid_mentions_do_not_expose_supplied_content_in_tracebacks(
-    failure: str,
+    subtests,
 ) -> None:
-    import traceback
+    for failure in ["role", "polarity", "duplicate_id"]:
+        with subtests.test(failure=failure):
+            import traceback
 
-    private = "synthetic-private-marker-831"
-    text = f"EGFR {private}"
-    mentions = [
-        {"label": "gene", "start": 0, "end": 4},
-        {"label": "result", "start": 5, "end": len(text)},
-    ]
-    if failure == "role":
-        mentions[0]["label"] = private
-    elif failure == "duplicate_id":
-        for mention in mentions:
-            mention["id"] = private
-    with pytest.raises(ValueError) as caught:
-        assemble_biomarker_results(text, mentions)
-    rendered = "".join(traceback.format_exception(caught.value))
-    assert private not in rendered
+            private = "synthetic-private-marker-831"
+            text = f"EGFR {private}"
+            mentions = [
+                {"label": "gene", "start": 0, "end": 4},
+                {"label": "result", "start": 5, "end": len(text)},
+            ]
+            if failure == "role":
+                mentions[0]["label"] = private
+            elif failure == "duplicate_id":
+                for mention in mentions:
+                    mention["id"] = private
+            with pytest.raises(ValueError) as caught:
+                assemble_biomarker_results(text, mentions)
+            rendered = "".join(traceback.format_exception(caught.value))
+            assert private not in rendered
 
 
-@pytest.mark.parametrize(
-    "item",
-    [
+def test_tuple_metric_rejects_malformed_records_instead_of_scoring_them(
+    subtests,
+) -> None:
+    for item in [
         {},
         {"gene": "EGFR", "result_value": "detected"},
         {"gene": "EGFR", "result_value": "detected", "result_polarity": "unsupported"},
         {"gene": ["EGFR"], "result_value": "detected", "result_polarity": "detected"},
         {"result_value": "detected", "result_polarity": "detected"},
-    ],
-)
-def test_tuple_metric_rejects_malformed_records_instead_of_scoring_them(
-    item: dict[str, object],
-) -> None:
-    with pytest.raises(ValueError, match="biomarker result"):
-        biomarker_result_tuple_f1([item], [item])
+    ]:
+        with subtests.test(item=item):
+            with pytest.raises(ValueError, match="biomarker result"):
+                biomarker_result_tuple_f1([item], [item])

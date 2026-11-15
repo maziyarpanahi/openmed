@@ -61,22 +61,25 @@ def test_promote_and_rollback_are_reproducible_from_local_state(
     assert restored.lineage("PII")[-1]["to"] == _V1
 
 
-@pytest.mark.parametrize("decision", [None, "QUARANTINED"])
 def test_pointer_flip_requires_releasable_gate_without_mutating_state(
-    tmp_path: Path,
-    decision: str | None,
+    subtests, tmp_path
 ) -> None:
-    manifest = _write_manifest(tmp_path)
-    state = _write_state(tmp_path)
-    before = state.read_bytes()
-    service = RegistryService(manifest_path=manifest, state_path=state)
-    report = None if decision is None else _gate(_V2, decision=decision)
+    case_root = tmp_path
+    for decision in [None, "QUARANTINED"]:
+        with subtests.test(decision=decision):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            manifest = _write_manifest(tmp_path)
+            state = _write_state(tmp_path)
+            before = state.read_bytes()
+            service = RegistryService(manifest_path=manifest, state_path=state)
+            report = None if decision is None else _gate(_V2, decision=decision)
 
-    with pytest.raises(RegistryGateError, match="RELEASABLE"):
-        service.flip_pointer("PII", "canary", _V2, gate_report=report)
+            with pytest.raises(RegistryGateError, match="RELEASABLE"):
+                service.flip_pointer("PII", "canary", _V2, gate_report=report)
 
-    assert state.read_bytes() == before
-    assert service.pointers("PII")["canary"] is None
+            assert state.read_bytes() == before
+            assert service.pointers("PII")["canary"] is None
 
 
 def test_registry_coherence_reports_dangling_pointer_and_lineage() -> None:

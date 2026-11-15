@@ -164,29 +164,44 @@ def test_repository_actions_remain_pinned():
     ]
 
 
-@pytest.mark.parametrize(
-    "step",
-    [
+def test_sha_policy_parses_equivalent_yaml_forms(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for step in [
         '- "uses": actions/checkout@v7',
         "- {uses: actions/checkout@v7}",
         "- uses: >-\n        actions/checkout@v7",
         "- &checkout {uses: actions/checkout@v7}\n    - *checkout",
-    ],
-)
-def test_sha_policy_parses_equivalent_yaml_forms(tmp_path, capsys, step):
-    (tmp_path / "ci.yml").write_text(f"jobs:\n  test:\n    steps:\n    {step}\n")
+    ]:
+        with subtests.test(step=step):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            (tmp_path / "ci.yml").write_text(
+                f"jobs:\n  test:\n    steps:\n    {step}\n"
+            )
 
-    refs = list(actions_refs.iter_action_refs(tmp_path))
-    assert refs and all(ref.spec == "actions/checkout@v7" for ref in refs)
-    assert actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"]) == 1
-    assert "full commit SHA" in capsys.readouterr().err
+            refs = list(actions_refs.iter_action_refs(tmp_path))
+            assert refs and all(ref.spec == "actions/checkout@v7" for ref in refs)
+            assert (
+                actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"])
+                == 1
+            )
+            assert "full commit SHA" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("value", ["[broken", "null", "[actions/checkout@v7]"])
 def test_sha_policy_fails_closed_on_invalid_yaml_or_uses_values(
-    tmp_path, capsys, value
+    subtests, tmp_path, capsys
 ):
-    (tmp_path / "ci.yml").write_text(f"jobs:\n  test:\n    uses: {value}\n")
+    case_root = tmp_path
+    for value in ["[broken", "null", "[actions/checkout@v7]"]:
+        with subtests.test(value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            (tmp_path / "ci.yml").write_text(f"jobs:\n  test:\n    uses: {value}\n")
 
-    assert actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"]) == 1
-    assert "policy failed" in capsys.readouterr().err
+            assert (
+                actions_refs.main(["--workflows-dir", str(tmp_path), "--require-sha"])
+                == 1
+            )
+            assert "policy failed" in capsys.readouterr().err

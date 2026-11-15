@@ -41,15 +41,14 @@ def test_scan_context_cues_does_not_cross_sentence_boundary() -> None:
     assert hits["Effusion"] == ()
 
 
-@pytest.mark.parametrize("connector", ["but", "however", "although"])
-def test_scan_context_cues_does_not_cross_conjunction_boundary(
-    connector: str,
-) -> None:
-    text = f"Pneumonia {connector} it was ruled out."
+def test_scan_context_cues_does_not_cross_conjunction_boundary(subtests) -> None:
+    for connector in ["but", "however", "although"]:
+        with subtests.test(connector=connector):
+            text = f"Pneumonia {connector} it was ruled out."
 
-    hits = scan_context_cues(text, ["Pneumonia"])
+            hits = scan_context_cues(text, ["Pneumonia"])
 
-    assert hits["Pneumonia"] == ()
+            assert hits["Pneumonia"] == ()
 
 
 def test_resolve_uncertainty_consumes_scanner_hits() -> None:

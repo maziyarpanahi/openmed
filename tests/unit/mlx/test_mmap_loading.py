@@ -28,25 +28,31 @@ def test_mmap_enabled_by_default(monkeypatch):
     assert _mlx_mmap_enabled() is True
 
 
-@pytest.mark.parametrize("value", ["", "   "])
-def test_mmap_empty_value_falls_back_to_default(monkeypatch, value):
-    monkeypatch.setenv("OPENMED_MLX_MMAP", value)
+def test_mmap_empty_value_falls_back_to_default(subtests):
+    for value in ["", "   "]:
+        with subtests.test(value=value):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_MLX_MMAP", value)
 
-    assert _mlx_mmap_enabled() is True
-
-
-@pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", " off "])
-def test_mmap_disabled_for_falsey_values(monkeypatch, value):
-    monkeypatch.setenv("OPENMED_MLX_MMAP", value)
-
-    assert _mlx_mmap_enabled() is False
+                assert _mlx_mmap_enabled() is True
 
 
-@pytest.mark.parametrize("value", ["1", "true", "yes", "on"])
-def test_mmap_enabled_for_truthy_values(monkeypatch, value):
-    monkeypatch.setenv("OPENMED_MLX_MMAP", value)
+def test_mmap_disabled_for_falsey_values(subtests):
+    for value in ["0", "false", "FALSE", "no", "off", " off "]:
+        with subtests.test(value=value):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_MLX_MMAP", value)
 
-    assert _mlx_mmap_enabled() is True
+                assert _mlx_mmap_enabled() is False
+
+
+def test_mmap_enabled_for_truthy_values(subtests):
+    for value in ["1", "true", "yes", "on"]:
+        with subtests.test(value=value):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_MLX_MMAP", value)
+
+                assert _mlx_mmap_enabled() is True
 
 
 def test_load_mlx_weights_lazy_path_does_not_eval(monkeypatch):
@@ -82,20 +88,25 @@ def test_load_mlx_weights_eager_path_handles_empty_weights(monkeypatch):
 
 
 @pytest.mark.skipif(not _MLX_AVAILABLE, reason="requires mlx")
-@pytest.mark.parametrize("mmap_flag", ["1", "0"])
-def test_load_mlx_weights_roundtrip_matches(tmp_path, monkeypatch, mmap_flag):
-    import mlx.core as mx
+def test_load_mlx_weights_roundtrip_matches(subtests, tmp_path):
+    case_root = tmp_path
+    for mmap_flag in ["1", "0"]:
+        with subtests.test(mmap_flag=mmap_flag):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import mlx.core as mx
 
-    monkeypatch.setenv("OPENMED_MLX_MMAP", mmap_flag)
-    expected = {
-        "layer.weight": mx.array([[1.0, 2.0], [3.0, 4.0]]),
-        "layer.scales": mx.array([0.5, 0.25]),  # quantized-style aux tensor
-    }
-    weights_path = tmp_path / "weights.safetensors"
-    mx.save_safetensors(str(weights_path), expected)
+                monkeypatch.setenv("OPENMED_MLX_MMAP", mmap_flag)
+                expected = {
+                    "layer.weight": mx.array([[1.0, 2.0], [3.0, 4.0]]),
+                    "layer.scales": mx.array([0.5, 0.25]),  # quantized-style aux tensor
+                }
+                weights_path = tmp_path / "weights.safetensors"
+                mx.save_safetensors(str(weights_path), expected)
 
-    loaded = _load_mlx_weights(mx, weights_path)
+                loaded = _load_mlx_weights(mx, weights_path)
 
-    assert set(loaded) == set(expected)
-    for key, value in expected.items():
-        assert bool(mx.all(loaded[key] == value)), key
+                assert set(loaded) == set(expected)
+                for key, value in expected.items():
+                    assert bool(mx.all(loaded[key] == value)), key

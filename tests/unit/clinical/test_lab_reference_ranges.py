@@ -164,13 +164,12 @@ def test_incomplete_provenance_is_rejected_without_echoing_values() -> None:
     assert "instrument" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "target", [{"unit": "mg/dL"}, {"locale": "fr-FR"}, {"precision": 2}]
-)
-def test_partial_target_provenance_never_falls_back_to_single_range(target):
-    result = resolve_reference_range([_range()], **target)
-    assert result.status is ReferenceRangeStatus.UNKNOWN
-    assert result.reference_range is None
+def test_partial_target_provenance_never_falls_back_to_single_range(subtests):
+    for target in [{"unit": "mg/dL"}, {"locale": "fr-FR"}, {"precision": 2}]:
+        with subtests.test(target=target):
+            result = resolve_reference_range([_range()], **target)
+            assert result.status is ReferenceRangeStatus.UNKNOWN
+            assert result.reference_range is None
 
 
 def test_optional_locale_and_bounds_have_total_deterministic_order():
@@ -207,22 +206,22 @@ def test_mapping_source_can_be_fingerprinted_without_existing_digest():
     )
 
 
-@pytest.mark.parametrize(
-    "update",
-    [
+def test_mapping_rejects_invalid_or_conflicting_contract_fields(subtests):
+    for update in [
         {"low_inclusive": "false"},
         {"schema_version": True},
         {"unit": "mg/dL"},
         {"analyte": 123},
-    ],
-)
-def test_mapping_rejects_invalid_or_conflicting_contract_fields(update):
-    from openmed.clinical.lab_reference_ranges import reference_range_from_mapping
+    ]:
+        with subtests.test(update=update):
+            from openmed.clinical.lab_reference_ranges import (
+                reference_range_from_mapping,
+            )
 
-    payload = _range().to_dict()
-    payload.update(update)
-    with pytest.raises(ValueError):
-        reference_range_from_mapping(payload)
+            payload = _range().to_dict()
+            payload.update(update)
+            with pytest.raises(ValueError):
+                reference_range_from_mapping(payload)
 
 
 def test_numeric_errors_do_not_retain_private_cause_or_context():

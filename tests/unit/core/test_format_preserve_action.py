@@ -148,7 +148,7 @@ def test_deidentify_format_preserve_masks_unsupported_labels(monkeypatch):
     assert replacement is not None
     assert _same_format(original_id, replacement)
     assert replacement != original_id
-    assert result.deidentified_text == f"MRN {replacement} belongs to [NAME]"
+    assert result.deidentified_text == f"MRN {replacement} belongs to [PERSON]"
     assert [entity.action for entity in result.pii_entities] == [
         "format_preserve",
         "mask",

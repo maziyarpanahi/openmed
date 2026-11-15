@@ -186,54 +186,58 @@ def test_unknown_validator_fails_validation(tmp_path: Path) -> None:
     assert "is not registered in VALIDATOR_REGISTRY" in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "invalid_threshold",
-    [0.0, -0.5, 1.2, float("nan"), float("inf"), True],
-)
-def test_out_of_range_threshold_fails(tmp_path: Path, invalid_threshold: float) -> None:
+def test_out_of_range_threshold_fails(subtests, tmp_path) -> None:
     """Test that agreement_threshold <= 0, > 1.0, or NaN raises EnsembleConfigError."""
-    yaml_path = tmp_path / "bad_threshold.yaml"
-    data = {
-        "schema_version": "openmed.training.teacher_ensemble.v1",
-        "families": {
-            "ClinicalPrivacy": {
-                "family": "ClinicalPrivacy",
-                "agreement_threshold": invalid_threshold,
-                "members": [{"id": "f1", "type": "filter", "weight": 1.0}],
-                "validators": [],
+    case_root = tmp_path
+    for invalid_threshold in [0.0, -0.5, 1.2, float("nan"), float("inf"), True]:
+        with subtests.test(invalid_threshold=invalid_threshold):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            yaml_path = tmp_path / "bad_threshold.yaml"
+            data = {
+                "schema_version": "openmed.training.teacher_ensemble.v1",
+                "families": {
+                    "ClinicalPrivacy": {
+                        "family": "ClinicalPrivacy",
+                        "agreement_threshold": invalid_threshold,
+                        "members": [{"id": "f1", "type": "filter", "weight": 1.0}],
+                        "validators": [],
+                    }
+                },
             }
-        },
-    }
-    yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+            yaml_path.write_text(yaml.dump(data), encoding="utf-8")
 
-    with pytest.raises(
-        EnsembleConfigError, match="agreement_threshold|Agreement threshold"
-    ):
-        load_teacher_ensemble_config(yaml_path)
+            with pytest.raises(
+                EnsembleConfigError, match="agreement_threshold|Agreement threshold"
+            ):
+                load_teacher_ensemble_config(yaml_path)
 
 
-@pytest.mark.parametrize(
-    "invalid_weight",
-    [0.0, -1.0, 1.1, float("nan"), float("inf"), True],
-)
-def test_invalid_weight_fails(tmp_path: Path, invalid_weight: float) -> None:
+def test_invalid_weight_fails(subtests, tmp_path) -> None:
     """Test that non-finite or out-of-range weights fail closed."""
-    yaml_path = tmp_path / "bad_weight.yaml"
-    data = {
-        "schema_version": "openmed.training.teacher_ensemble.v1",
-        "families": {
-            "ClinicalPrivacy": {
-                "family": "ClinicalPrivacy",
-                "agreement_threshold": 0.5,
-                "members": [{"id": "f1", "type": "filter", "weight": invalid_weight}],
-                "validators": [],
+    case_root = tmp_path
+    for invalid_weight in [0.0, -1.0, 1.1, float("nan"), float("inf"), True]:
+        with subtests.test(invalid_weight=invalid_weight):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            yaml_path = tmp_path / "bad_weight.yaml"
+            data = {
+                "schema_version": "openmed.training.teacher_ensemble.v1",
+                "families": {
+                    "ClinicalPrivacy": {
+                        "family": "ClinicalPrivacy",
+                        "agreement_threshold": 0.5,
+                        "members": [
+                            {"id": "f1", "type": "filter", "weight": invalid_weight}
+                        ],
+                        "validators": [],
+                    }
+                },
             }
-        },
-    }
-    yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+            yaml_path.write_text(yaml.dump(data), encoding="utf-8")
 
-    with pytest.raises(EnsembleConfigError, match="weight|Weight"):
-        load_teacher_ensemble_config(yaml_path)
+            with pytest.raises(EnsembleConfigError, match="weight|Weight"):
+                load_teacher_ensemble_config(yaml_path)
 
 
 def test_invalid_member_type_or_missing_id_fails() -> None:
@@ -472,9 +476,10 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
     assert invalid_nhs in rejected_texts
 
 
-@pytest.mark.parametrize(
-    ("num_generators", "threshold", "expected_k"),
-    [
+def test_agreement_policy_k_threshold_calculation(subtests, tmp_path) -> None:
+    """Test mathematical mapping of continuous threshold to integer min_agreeing_models."""
+    case_root = tmp_path
+    for num_generators, threshold, expected_k in [
         (2, 0.50, 2),
         (2, 0.60, 2),
         (3, 0.60, 2),
@@ -484,33 +489,33 @@ def test_directid_agreement_policy_integration(custom_yaml_fixture: Path) -> Non
         (5, 0.66, 4),
         (10, 0.20, 2),
         (10, 0.85, 9),
-    ],
-)
-def test_agreement_policy_k_threshold_calculation(
-    tmp_path: Path, num_generators: int, threshold: float, expected_k: int
-) -> None:
-    """Test mathematical mapping of continuous threshold to integer min_agreeing_models."""
-    members = [
-        {"id": f"gen_{i}", "type": "model", "weight": 1.0}
-        for i in range(num_generators)
-    ]
-    data = {
-        "schema_version": "openmed.training.teacher_ensemble.v1",
-        "families": {
-            "TestFamily": {
-                "family": "TestFamily",
-                "agreement_threshold": threshold,
-                "members": members,
-                "validators": [],
+    ]:
+        with subtests.test(
+            num_generators=num_generators, threshold=threshold, expected_k=expected_k
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            members = [
+                {"id": f"gen_{i}", "type": "model", "weight": 1.0}
+                for i in range(num_generators)
+            ]
+            data = {
+                "schema_version": "openmed.training.teacher_ensemble.v1",
+                "families": {
+                    "TestFamily": {
+                        "family": "TestFamily",
+                        "agreement_threshold": threshold,
+                        "members": members,
+                        "validators": [],
+                    }
+                },
             }
-        },
-    }
-    yaml_path = tmp_path / "k_calc.yaml"
-    yaml_path.write_text(yaml.dump(data), encoding="utf-8")
+            yaml_path = tmp_path / "k_calc.yaml"
+            yaml_path.write_text(yaml.dump(data), encoding="utf-8")
 
-    config = load_teacher_ensemble_config(yaml_path)
-    policy = resolve_family_agreement_policy(config, "TestFamily")
-    assert policy.min_agreeing_models == expected_k
+            config = load_teacher_ensemble_config(yaml_path)
+            policy = resolve_family_agreement_policy(config, "TestFamily")
+            assert policy.min_agreeing_models == expected_k
 
 
 def test_single_generator_member_fails_agreement_policy(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ runtime logging.
 
 ## Using the action
 
-Set up Python 3.10 or newer, check out the repository, and pass the paths to
+Set up Python 3.11 or newer, check out the repository, and pass the paths to
 scan explicitly. Paths and glob patterns are newline-delimited. The action
 fails when it finds a likely value, emits annotations that contain counts only,
 and uploads `privacy-scan-report.json` as a machine-readable artifact.
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - uses: ./.github/actions/privacy-scan
         with:
           paths: |

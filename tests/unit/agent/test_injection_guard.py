@@ -32,27 +32,27 @@ SYNTHETIC_INJECTIONS = (
 )
 
 
-@pytest.mark.parametrize("text, expected_pattern_ids", SYNTHETIC_INJECTIONS)
-def test_synthetic_injection_corpus_reports_safe_findings(
-    text: str,
-    expected_pattern_ids: set[str],
-) -> None:
-    result = scan_text(text)
+def test_synthetic_injection_corpus_reports_safe_findings(subtests) -> None:
+    for text, expected_pattern_ids in SYNTHETIC_INJECTIONS:
+        with subtests.test(text=text, expected_pattern_ids=expected_pattern_ids):
+            result = scan_text(text)
 
-    assert {finding.pattern_id for finding in result.findings} >= expected_pattern_ids
-    assert result.flagged is True
-    for finding in result.findings:
-        assert 0 <= finding.start < finding.end <= len(text)
-        assert text[finding.start : finding.end]
-        assert set(finding.to_dict()) == {
-            "pattern_id",
-            "start",
-            "end",
-            "severity",
-        }
-    serialized = json.dumps(result.to_dict(), sort_keys=True)
-    assert text not in serialized
-    assert "raw PHI" not in serialized
+            assert {
+                finding.pattern_id for finding in result.findings
+            } >= expected_pattern_ids
+            assert result.flagged is True
+            for finding in result.findings:
+                assert 0 <= finding.start < finding.end <= len(text)
+                assert text[finding.start : finding.end]
+                assert set(finding.to_dict()) == {
+                    "pattern_id",
+                    "start",
+                    "end",
+                    "severity",
+                }
+            serialized = json.dumps(result.to_dict(), sort_keys=True)
+            assert text not in serialized
+            assert "raw PHI" not in serialized
 
 
 def test_benign_clinical_text_passes_untouched() -> None:

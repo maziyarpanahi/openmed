@@ -74,26 +74,28 @@ class _OffsetRows(Mapping):
         return len(self.rows)
 
 
-@pytest.mark.parametrize("container", [dict, UserDict, MappingProxyType, _OffsetRows])
-@pytest.mark.parametrize(
-    "scheme,labels", [("BIO", ["B-TEST", "I-TEST"]), ("BILOU", ["B-TEST", "L-TEST"])]
-)
-def test_mapping_outputs_preserve_subwords_labels_and_exact_offsets(
-    container, scheme, labels
-):
-    text = "synthetic"
-    encoded = container({"offset_mapping": [(0, 3), (3, 9)]})
-    result = to_token_classification(
-        [make_entity(text, 0, len(text), "TEST")],
-        text,
-        tokenizer=lambda *_args, **_kwargs: encoded,
-        scheme=scheme,
-    )
-    assert [(token.token, token.start, token.end) for token in result.tokens] == [
-        ("syn", 0, 3),
-        ("thetic", 3, 9),
-    ]
-    assert result.labels() == labels
+def test_mapping_outputs_preserve_subwords_labels_and_exact_offsets(subtests):
+    for container in [dict, UserDict, MappingProxyType, _OffsetRows]:
+        for scheme, labels in [
+            ("BIO", ["B-TEST", "I-TEST"]),
+            ("BILOU", ["B-TEST", "L-TEST"]),
+        ]:
+            with subtests.test(container=container, scheme=scheme, labels=labels):
+                text = "synthetic"
+                encoded = container({"offset_mapping": [(0, 3), (3, 9)]})
+                result = to_token_classification(
+                    [make_entity(text, 0, len(text), "TEST")],
+                    text,
+                    tokenizer=lambda *_args, **_kwargs: encoded,
+                    scheme=scheme,
+                )
+                assert [
+                    (token.token, token.start, token.end) for token in result.tokens
+                ] == [
+                    ("syn", 0, 3),
+                    ("thetic", 3, 9),
+                ]
+                assert result.labels() == labels
 
 
 @pytest.mark.parametrize("wrapped", [False, True])
@@ -114,22 +116,24 @@ def test_mapping_offsets_work_with_positional_tokenizers_and_wrappers(wrapped):
     assert result.labels() == ["O", "O"]
 
 
-@pytest.mark.parametrize(
-    "encoded",
-    [
+def test_missing_mapping_offsets_retain_whitespace_fallback(subtests):
+    for encoded in [
         None,
         {},
         UserDict(),
         UserDict({"offset_mapping": []}),
         MappingProxyType({"offset_mapping": None}),
-    ],
-)
-def test_missing_mapping_offsets_retain_whitespace_fallback(encoded):
-    result = to_token_classification([], "ab cd", tokenizer=lambda *_a, **_k: encoded)
-    assert [(token.token, token.start, token.end) for token in result.tokens] == [
-        ("ab", 0, 2),
-        ("cd", 3, 5),
-    ]
+    ]:
+        with subtests.test(encoded=encoded):
+            result = to_token_classification(
+                [], "ab cd", tokenizer=lambda *_a, **_k: encoded
+            )
+            assert [
+                (token.token, token.start, token.end) for token in result.tokens
+            ] == [
+                ("ab", 0, 2),
+                ("cd", 3, 5),
+            ]
 
 
 def test_non_mapping_output_and_no_tokenizer_retain_fallback():

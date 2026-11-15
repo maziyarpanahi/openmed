@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare synthetic workflow needs with declared SMART v2 scopes offline."""
+"""Compare synthetic workflow needs with declared SMART v1/v2 scopes offline."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ _WORKFLOW_CASES = (
         "workflow_id": "patient-read-summary",
         "description": "Patient context read-only summary workflow.",
         "required_scopes": (
-            "patient/SyntheticCondition.r",
-            "patient/SyntheticObservation.r",
+            "patient/SyntheticCondition.read",
+            "patient/SyntheticObservation.rs",
         ),
         "declared_scopes": (
-            "patient/SyntheticCondition.r",
-            "patient/SyntheticObservation.r",
+            "patient/SyntheticCondition.read",
+            "patient/SyntheticObservation.rs",
         ),
     },
     {
@@ -32,13 +32,13 @@ _WORKFLOW_CASES = (
     },
     {
         "workflow_id": "user-write-overbroad",
-        "description": "User context write workflow with search over-claimed.",
+        "description": "User context v1 write workflow also grants delete.",
         "required_scopes": (
             "user/SyntheticCarePlan.cu",
             "user/SyntheticCondition.r",
         ),
         "declared_scopes": (
-            "user/SyntheticCarePlan.cus",
+            "user/SyntheticCarePlan.write",
             "user/SyntheticCondition.rs",
         ),
     },

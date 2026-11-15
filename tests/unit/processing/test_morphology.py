@@ -165,10 +165,11 @@ def test_both_confidence_and_allowlist_gates_are_required() -> None:
     assert not missing_allowlist.applied
 
 
-@pytest.mark.parametrize("language", ["bn", "pa", "or"])
-def test_out_of_scope_languages_fail_closed(language: str) -> None:
-    with pytest.raises(ValueError, match="unsupported morphology language"):
-        stem_token("example", language, confidence=1.0, allowed_stems={"exam"})
+def test_out_of_scope_languages_fail_closed(subtests) -> None:
+    for language in ["bn", "pa", "or"]:
+        with subtests.test(language=language):
+            with pytest.raises(ValueError, match="unsupported morphology language"):
+                stem_token("example", language, confidence=1.0, allowed_stems={"exam"})
 
 
 def test_rule_registries_are_runtime_immutable() -> None:
@@ -177,28 +178,27 @@ def test_rule_registries_are_runtime_immutable() -> None:
         INDIC_SUFFIX_TABLES["hi"] = ()  # type: ignore[index]
 
 
-@pytest.mark.parametrize(
-    "kwargs,match",
-    [
+def test_ambiguous_threshold_types_are_rejected(subtests) -> None:
+    for kwargs, match in [
         ({"confidence": True}, "confidence"),
         ({"minimum_confidence": False}, "minimum_confidence"),
         ({"minimum_stem_graphemes": True}, "minimum_stem_graphemes"),
         ({"minimum_stem_graphemes": 1.5}, "minimum_stem_graphemes"),
-    ],
-)
-def test_ambiguous_threshold_types_are_rejected(kwargs, match) -> None:
-    arguments = {
-        "confidence": 1.0,
-        "minimum_confidence": 0.9,
-        "minimum_stem_graphemes": 2,
-    }
-    arguments.update(kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, match=match):
+            arguments = {
+                "confidence": 1.0,
+                "minimum_confidence": 0.9,
+                "minimum_stem_graphemes": 2,
+            }
+            arguments.update(kwargs)
 
-    with pytest.raises(ValueError, match=match):
-        stem_token("रामको", "hi", allowed_stems={"राम"}, **arguments)
+            with pytest.raises(ValueError, match=match):
+                stem_token("रामको", "hi", allowed_stems={"राम"}, **arguments)
 
 
-@pytest.mark.parametrize("allowlist", ["राम", {"राम", 3}])
-def test_allowlist_requires_an_iterable_of_strings(allowlist) -> None:
-    with pytest.raises(TypeError, match="allowed_stems"):
-        stem_token("रामको", "hi", confidence=1.0, allowed_stems=allowlist)
+def test_allowlist_requires_an_iterable_of_strings(subtests) -> None:
+    for allowlist in ["राम", {"राम", 3}]:
+        with subtests.test(allowlist=allowlist):
+            with pytest.raises(TypeError, match="allowed_stems"):
+                stem_token("रामको", "hi", confidence=1.0, allowed_stems=allowlist)

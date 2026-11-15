@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Final
 
 from .dsl import Criterion, Expression, PhenotypeDefinition
 
-COHORT_RESULT_SCHEMA_VERSION: Final = "openmed.cohort.result.v1"
-COHORT_PROVENANCE_SCHEMA_VERSION: Final = "openmed.cohort.provenance.v1"
+COHORT_RESULT_SCHEMA_VERSION: Final = "openmed.cohort.result.v1.1"
+COHORT_PROVENANCE_SCHEMA_VERSION: Final = "openmed.cohort.provenance.v1.1"
+COHORT_RESULT_COMPATIBILITY_POLICY: Final = "same_major"
 COHORT_ADVISORY: Final = (
     "Cohort matches are analytical candidates for review and must not "
     "automatically trigger clinical decisions."
@@ -55,6 +57,181 @@ _DOMAIN_TABLES: tuple[tuple[str, str, str, str], ...] = (
 _REQUIRED_TABLES = frozenset(
     {"concept", "person", "note_nlp", *(item[0] for item in _DOMAIN_TABLES)}
 )
+
+
+def _coverage_count(value: Any) -> None:
+    if value is not None and (type(value) is not int or value < 0):
+        raise ValueError("cohort coverage counts must be non-negative or unknown")
+
+
+@dataclass(frozen=True, slots=True)
+class ConceptSetCoverage:
+    """Source-wide concept counts keyed by a digest, without concept text."""
+
+    concept_set_ref: str
+    expanded_count: int | None = None
+    matched_count: int | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.concept_set_ref, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", self.concept_set_ref) is None
+        ):
+            raise ValueError("cohort coverage requires a concept-set digest")
+        _coverage_count(self.expanded_count)
+        _coverage_count(self.matched_count)
+        if (
+            self.expanded_count is not None
+            and self.matched_count is not None
+            and self.matched_count > self.expanded_count
+        ):
+            raise ValueError("matched concept count exceeds expanded count")
+
+    @classmethod
+    def for_concept_set(
+        cls,
+        concept_set_id: str,
+        *,
+        expanded_count: int | None,
+        matched_count: int | None,
+    ) -> "ConceptSetCoverage":
+        """Bind counts to a logical set without retaining its source label."""
+
+        return cls(
+            "sha256:" + hashlib.sha256(concept_set_id.encode("utf-8")).hexdigest(),
+            expanded_count,
+            matched_count,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return only a digest and optional counts."""
+
+        return {
+            "concept_set_ref": self.concept_set_ref,
+            "expanded_count": self.expanded_count,
+            "matched_count": self.matched_count,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CohortCoverage:
+    """Snapshot coverage; None means unmeasured, including concept-set coverage."""
+
+    source_patient_count: int | None = None
+    concept_sets: tuple[ConceptSetCoverage, ...] | None = None
+    unmapped_source_count: int | None = None
+
+    def __post_init__(self) -> None:
+        _coverage_count(self.source_patient_count)
+        _coverage_count(self.unmapped_source_count)
+        if self.concept_sets is not None:
+            items = tuple(self.concept_sets)
+            if any(not isinstance(item, ConceptSetCoverage) for item in items):
+                raise ValueError("cohort concept coverage is invalid")
+            items = tuple(sorted(items, key=lambda item: item.concept_set_ref))
+            if len({item.concept_set_ref for item in items}) != len(items):
+                raise ValueError("cohort concept coverage must be unique")
+            object.__setattr__(self, "concept_sets", items)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return counts and explicit nulls for unknown coverage."""
+
+        return {
+            "source_patient_count": self.source_patient_count,
+            "concept_sets": None
+            if self.concept_sets is None
+            else [item.to_dict() for item in self.concept_sets],
+            "unmapped_source_count": self.unmapped_source_count,
+        }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "CohortCoverage":
+        """Parse the closed, value-free coverage contract."""
+
+        if not isinstance(value, Mapping) or set(value) != {
+            "source_patient_count",
+            "concept_sets",
+            "unmapped_source_count",
+        }:
+            raise ValueError("cohort coverage fields are invalid")
+        sets = value["concept_sets"]
+        if sets is not None:
+            if not isinstance(sets, (list, tuple)):
+                raise ValueError("cohort concept coverage is invalid")
+            for item in sets:
+                if not isinstance(item, Mapping) or set(item) != {
+                    "concept_set_ref",
+                    "expanded_count",
+                    "matched_count",
+                }:
+                    raise ValueError("cohort concept coverage fields are invalid")
+            sets = tuple(ConceptSetCoverage(**item) for item in sets)
+        return cls(value["source_patient_count"], sets, value["unmapped_source_count"])
+
+
+@dataclass(frozen=True, slots=True)
+class EmptyPopulationWarning:
+    """Derived warning containing controlled reasons only."""
+
+    sub_reasons: tuple[str, ...] = ()
+    code: str = field(default="empty_population", init=False)
+    review_required: bool = field(default=True, init=False)
+
+    def __post_init__(self) -> None:
+        reasons = tuple(self.sub_reasons)
+        if any(
+            reason
+            not in {
+                "no_source_patients",
+                "concept_set_unmatched",
+                "unmapped_sources_present",
+                "coverage_unknown",
+            }
+            for reason in reasons
+        ):
+            raise ValueError("empty population warning reason is unsupported")
+        object.__setattr__(self, "sub_reasons", tuple(sorted(set(reasons))))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a typed advisory without source identifiers or values."""
+
+        return {
+            "code": self.code,
+            "review_required": self.review_required,
+            "sub_reasons": list(self.sub_reasons),
+        }
+
+
+def empty_population_warnings(
+    member_count: int,
+    coverage: CohortCoverage,
+) -> tuple[EmptyPopulationWarning, ...]:
+    """Explain an empty population using only measured coverage facts."""
+
+    if type(member_count) is not int or member_count < 0:
+        raise ValueError("cohort member count must be non-negative")
+    if member_count:
+        return ()
+    reasons = []
+    if coverage.source_patient_count == 0:
+        reasons.append("no_source_patients")
+    if coverage.concept_sets is not None and any(
+        item.matched_count == 0 for item in coverage.concept_sets
+    ):
+        reasons.append("concept_set_unmatched")
+    if coverage.unmapped_source_count:
+        reasons.append("unmapped_sources_present")
+    if (
+        coverage.source_patient_count is None
+        or coverage.unmapped_source_count is None
+        or coverage.concept_sets is None
+        or any(
+            item.expanded_count is None or item.matched_count is None
+            for item in coverage.concept_sets
+        )
+    ):
+        reasons.append("coverage_unknown")
+    return (EmptyPopulationWarning(tuple(reasons)),)
 
 
 @dataclass(frozen=True)
@@ -271,17 +448,20 @@ class PhenotypeProvenance:
     evidence_pointer_count: int
     concept_sets: tuple[ConceptSetProvenance, ...]
     schema_version: str = COHORT_PROVENANCE_SCHEMA_VERSION
+    coverage: CohortCoverage = field(default_factory=CohortCoverage)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a stable, PHI-free provenance report."""
 
         return {
             "schema_version": self.schema_version,
+            "compatibility_policy": COHORT_RESULT_COMPATIBILITY_POLICY,
             "definition_sha256": self.definition_sha256,
             "hierarchy_sha256": self.hierarchy_sha256,
             "matched_patient_count": self.matched_patient_count,
             "evidence_pointer_count": self.evidence_pointer_count,
             "concept_sets": [item.to_dict() for item in self.concept_sets],
+            "coverage": self.coverage.to_dict(),
         }
 
 
@@ -300,12 +480,34 @@ class CohortResult:
 
         return frozenset(self.patient_ids)
 
+    @property
+    def coverage(self) -> CohortCoverage:
+        """Return source-wide coverage independently of qualifying patients."""
+
+        return self.provenance.coverage
+
+    @property
+    def warnings(self) -> tuple[EmptyPopulationWarning, ...]:
+        """Return controlled review warnings for an empty resolved population."""
+
+        return empty_population_warnings(len(self.patient_ids), self.coverage)
+
+    @property
+    def review_required(self) -> bool:
+        """Return whether the empty result requires human interpretation."""
+
+        return bool(self.warnings)
+
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-compatible response."""
 
         return {
             "schema_version": self.schema_version,
+            "compatibility_policy": COHORT_RESULT_COMPATIBILITY_POLICY,
             "advisory": COHORT_ADVISORY,
+            "coverage": self.coverage.to_dict(),
+            "review_required": self.review_required,
+            "warnings": [item.to_dict() for item in self.warnings],
             "patient_ids": list(self.patient_ids),
             "evidence": [
                 {
@@ -629,6 +831,7 @@ def _provenance(
     compiled: CompiledPhenotypeQuery,
     patient_ids: tuple[int, ...],
     evidence: Mapping[int, tuple[EvidencePointer, ...]],
+    coverage: CohortCoverage,
 ) -> PhenotypeProvenance:
     pointers = [item for patient in patient_ids for item in evidence[patient]]
     concept_sets = []
@@ -671,6 +874,7 @@ def _provenance(
         matched_patient_count=len(patient_ids),
         evidence_pointer_count=len(pointers),
         concept_sets=tuple(concept_sets),
+        coverage=coverage,
     )
 
 
@@ -732,12 +936,65 @@ class CohortResolver:
             compiled,
             patient_ids,
             evidence,
+            self._coverage(definition, compiled),
         )
         return CohortResult(
             patient_ids=patient_ids,
             evidence=evidence,
             provenance=provenance,
         )
+
+    def _count(self, sql: str, parameters: Sequence[Any] = ()) -> int | None:
+        try:
+            row = self.connection.execute(sql, parameters).fetchone()
+            value = row[0] if row is not None else None
+            _coverage_count(value)
+            return value
+        except Exception:  # noqa: BLE001 - unavailable diagnostics remain unknown.
+            return None
+
+    def _coverage(
+        self,
+        definition: PhenotypeDefinition,
+        compiled: CompiledPhenotypeQuery,
+    ) -> CohortCoverage:
+        # Count distinct concepts in the source universe, before phenotype
+        # assertion, occurrence, temporal, and expression eligibility filters.
+        events = "\nUNION ALL\n".join(
+            f"SELECT person_id, {concept_id} AS concept_id FROM {table}"
+            for table, _, concept_id, _ in _DOMAIN_TABLES
+        )
+        prefix = f"WITH source_events AS ({events})\n"
+        source_count = self._count("SELECT COUNT(DISTINCT person_id) FROM person")
+        unmapped = self._count(
+            prefix + "SELECT COUNT(*) FROM source_events AS event "
+            "JOIN (SELECT DISTINCT person_id FROM person) AS source "
+            "ON source.person_id = event.person_id "
+            "LEFT JOIN concept ON concept.concept_id = event.concept_id "
+            "WHERE event.concept_id IS NULL OR event.concept_id <= 0 "
+            "OR concept.concept_id IS NULL "
+            "OR NULLIF(trim(concept.vocabulary_id), '') IS NULL"
+        )
+        sets = []
+        for concept_set in definition.concept_sets:
+            expanded = compiled.expanded_concept_sets[concept_set.id]
+            matched = self._count(
+                prefix + "SELECT COUNT(DISTINCT event.concept_id) "
+                "FROM source_events AS event "
+                "JOIN person ON person.person_id = event.person_id "
+                "JOIN concept ON concept.concept_id = event.concept_id "
+                f"WHERE event.concept_id IN ({_placeholders(len(expanded))}) "
+                "AND upper(concept.vocabulary_id) = upper(?)",
+                (*expanded, concept_set.vocabulary),
+            )
+            sets.append(
+                ConceptSetCoverage.for_concept_set(
+                    concept_set.id,
+                    expanded_count=len(expanded),
+                    matched_count=matched,
+                )
+            )
+        return CohortCoverage(source_count, tuple(sets), unmapped)
 
     def _validate_tables(self) -> None:
         rows = self.connection.execute(
@@ -835,6 +1092,11 @@ __all__ = [
     "COHORT_ADVISORY",
     "COHORT_PROVENANCE_SCHEMA_VERSION",
     "COHORT_RESULT_SCHEMA_VERSION",
+    "COHORT_RESULT_COMPATIBILITY_POLICY",
+    "CohortCoverage",
+    "ConceptSetCoverage",
+    "EmptyPopulationWarning",
+    "empty_population_warnings",
     "CohortResolver",
     "CohortResult",
     "CompiledPhenotypeQuery",

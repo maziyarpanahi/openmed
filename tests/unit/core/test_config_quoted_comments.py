@@ -5,9 +5,9 @@ import pytest
 from openmed.core import config
 
 
-@pytest.mark.parametrize(
-    "line,expected",
-    [
+def test_hashes_inside_quoted_values_are_preserved(subtests, tmp_path):
+    case_root = tmp_path
+    for line, expected in [
         ('cache_dir = "cache#synthetic"', "cache#synthetic"),
         ("cache_dir = 'cache#synthetic'", "cache#synthetic"),
         ('cache_dir = "cache#synthetic" # trailing', "cache#synthetic"),
@@ -17,31 +17,31 @@ from openmed.core import config
         (r'cache_dir = "a\"#b" # trailing', r"a\"#b"),
         (r'cache_dir = "a\\" # trailing', r"a\\"),
         (r"cache_dir = 'a\' # trailing", "a\\"),
-    ],
-)
-def test_hashes_inside_quoted_values_are_preserved(tmp_path, line, expected):
-    path = tmp_path / "synthetic.toml"
-    path.write_text(line + "\n", encoding="utf-8")
-    assert config._load_toml(path) == {"cache_dir": expected}
+    ]:
+        with subtests.test(line=line, expected=expected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "synthetic.toml"
+            path.write_text(line + "\n", encoding="utf-8")
+            assert config._load_toml(path) == {"cache_dir": expected}
 
 
-@pytest.mark.parametrize(
-    "value,expected",
-    [
+def test_existing_scalars_and_unquoted_comments_are_preserved(subtests, tmp_path):
+    case_root = tmp_path
+    for value, expected in [
         ("10 # comment", 10),
         ("0.5 # comment", 0.5),
         ("true # comment", True),
         ("false # comment", False),
         ("null # comment", None),
         ('"plain" # comment', "plain"),
-    ],
-)
-def test_existing_scalars_and_unquoted_comments_are_preserved(
-    tmp_path, value, expected
-):
-    path = tmp_path / "synthetic.toml"
-    path.write_text("# heading\n\nkey = " + value + "\n", encoding="utf-8")
-    assert config._load_toml(path) == {"key": expected}
+    ]:
+        with subtests.test(value=value, expected=expected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "synthetic.toml"
+            path.write_text("# heading\n\nkey = " + value + "\n", encoding="utf-8")
+            assert config._load_toml(path) == {"key": expected}
 
 
 def test_generated_scalar_config_roundtrips_hashes(tmp_path):

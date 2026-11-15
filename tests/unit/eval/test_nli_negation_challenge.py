@@ -286,27 +286,29 @@ def test_report_rendering_and_file_writes_are_stable(tmp_path: Path) -> None:
     assert "False-entailment gate" in report.to_markdown()
 
 
-@pytest.mark.parametrize("value", [10**400, -(10**400)])
-def test_oversized_gate_thresholds_fail_cleanly(value: int) -> None:
-    with pytest.raises(NliNegationChallengeError):
-        run_nli_negation_challenge(
-            predictions=_gold_predictions(default_nli_negation_cases()),
-            max_false_entailment_rate=value,
-        )
+def test_oversized_gate_thresholds_fail_cleanly(subtests) -> None:
+    for value in [10**400, -(10**400)]:
+        with subtests.test(value=value):
+            with pytest.raises(NliNegationChallengeError):
+                run_nli_negation_challenge(
+                    predictions=_gold_predictions(default_nli_negation_cases()),
+                    max_false_entailment_rate=value,
+                )
 
 
-@pytest.mark.parametrize("error_type", [RuntimeError, NliNegationChallengeError])
-def test_predictor_tracebacks_suppress_all_source_exceptions(error_type) -> None:
-    import traceback
+def test_predictor_tracebacks_suppress_all_source_exceptions(subtests) -> None:
+    for error_type in [RuntimeError, NliNegationChallengeError]:
+        with subtests.test(error_type=error_type):
+            import traceback
 
-    def runner(case):
-        raise error_type("synthetic-private-5550199")
+            def runner(case):
+                raise error_type("synthetic-private-5550199")
 
-    with pytest.raises(NliNegationChallengeError) as caught:
-        run_nli_negation_challenge(runner=runner)
-    assert "synthetic-private-5550199" not in "".join(
-        traceback.format_exception(caught.value)
-    )
+            with pytest.raises(NliNegationChallengeError) as caught:
+                run_nli_negation_challenge(runner=runner)
+            assert "synthetic-private-5550199" not in "".join(
+                traceback.format_exception(caught.value)
+            )
 
 
 def test_public_negation_labels_are_qualified() -> None:
@@ -320,18 +322,19 @@ def test_public_negation_labels_are_qualified() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "field", ["fixture_set_hash", "case_count", "aggregate_accuracy"]
-)
-def test_report_rejects_uncontrolled_or_inconsistent_evidence(field: str) -> None:
-    from dataclasses import replace
+def test_report_rejects_uncontrolled_or_inconsistent_evidence(subtests) -> None:
+    for field in ["fixture_set_hash", "case_count", "aggregate_accuracy"]:
+        with subtests.test(field=field):
+            from dataclasses import replace
 
-    report = run_nli_negation_challenge(
-        predictions=_gold_predictions(default_nli_negation_cases())
-    )
-    value = 0.0 if field == "aggregate_accuracy" else "synthetic-private-5550199"
-    with pytest.raises(NliNegationChallengeError):
-        replace(report, **{field: value})
+            report = run_nli_negation_challenge(
+                predictions=_gold_predictions(default_nli_negation_cases())
+            )
+            value = (
+                0.0 if field == "aggregate_accuracy" else "synthetic-private-5550199"
+            )
+            with pytest.raises(NliNegationChallengeError):
+                replace(report, **{field: value})
 
 
 def test_report_rejects_misattributed_pattern() -> None:

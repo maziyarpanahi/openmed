@@ -59,18 +59,16 @@ def test_unknown_and_refused_are_explicit_non_affirmative_states() -> None:
     assert refused.to_dict()["source_span"] == [4, 9]
 
 
-@pytest.mark.parametrize(
-    "source_span",
-    [None, (2, 2), (-1, 4), ("2", 4), (True, 4)],
-)
-def test_source_span_is_required_and_non_empty(source_span) -> None:
-    with pytest.raises((TypeError, ValueError), match="source span"):
-        SDOHEvidence(
-            evidence_type="inferred",
-            assertion="unknown",
-            source_section="social_history",
-            source_span=source_span,
-        )
+def test_source_span_is_required_and_non_empty(subtests) -> None:
+    for source_span in [None, (2, 2), (-1, 4), ("2", 4), (True, 4)]:
+        with subtests.test(source_span=source_span):
+            with pytest.raises((TypeError, ValueError), match="source span"):
+                SDOHEvidence(
+                    evidence_type="inferred",
+                    assertion="unknown",
+                    source_section="social_history",
+                    source_span=source_span,
+                )
 
 
 def test_mapping_requires_explicit_assertion_and_source_span() -> None:

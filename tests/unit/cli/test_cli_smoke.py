@@ -27,6 +27,7 @@ def _run_module(module: str, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.slow
 def test_argparse_cli_imports_and_prints_help() -> None:
     assert callable(cli_entry)
     assert callable(main_module.main)
@@ -37,6 +38,7 @@ def test_argparse_cli_imports_and_prints_help() -> None:
     assert "Command-line utilities for OpenMed" in result.stdout
 
 
+@pytest.mark.slow
 def test_argparse_cli_prints_version() -> None:
     result = _run_module("openmed.cli.main", "--version")
 
@@ -112,6 +114,7 @@ def test_typer_surface_is_importable() -> None:
     assert callable(typer_app.main)
 
 
+@pytest.mark.slow
 def test_mcp_package_imports_and_prints_help() -> None:
     from openmed.mcp import server
 

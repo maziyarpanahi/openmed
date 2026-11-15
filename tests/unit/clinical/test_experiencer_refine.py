@@ -32,9 +32,8 @@ def _span(text: str, sub: str, label: str = "CONDITION") -> dict:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("text", "sub", "cue"),
-    [
+def test_family_cue_yields_family_experiencer(subtests):
+    for text, sub, cue in [
         ("Patient's mother has diabetes", "diabetes", "mother"),
         ("His brother was diagnosed with asthma", "asthma", "brother"),
         (
@@ -43,35 +42,32 @@ def _span(text: str, sub: str, label: str = "CONDITION") -> dict:
             "family history",
         ),
         ("FHx: diabetes", "diabetes", "fhx"),
-    ],
-)
-def test_family_cue_yields_family_experiencer(text, sub, cue):
-    span = _span(text, sub)
+    ]:
+        with subtests.test(text=text, sub=sub, cue=cue):
+            span = _span(text, sub)
 
-    result = resolve_experiencer(text, span)
+            result = resolve_experiencer(text, span)
 
-    assert isinstance(result, ExperiencerAssignment)
-    assert result.experiencer == FAMILY_EXPERIENCER
-    assert result.cue == cue
-    assert result.source == "cue"
-    assert text[result.cue_offset[0] : result.cue_offset[1]].lower() == cue
+            assert isinstance(result, ExperiencerAssignment)
+            assert result.experiencer == FAMILY_EXPERIENCER
+            assert result.cue == cue
+            assert result.source == "cue"
+            assert text[result.cue_offset[0] : result.cue_offset[1]].lower() == cue
 
 
-@pytest.mark.parametrize(
-    ("text", "sub", "cue"),
-    [
+def test_other_cue_yields_other_experiencer(subtests):
+    for text, sub, cue in [
         ("The donor was CMV-positive", "CMV-positive", "donor"),
         ("Her roommate had a similar rash", "rash", "roommate"),
-    ],
-)
-def test_other_cue_yields_other_experiencer(text, sub, cue):
-    span = _span(text, sub)
+    ]:
+        with subtests.test(text=text, sub=sub, cue=cue):
+            span = _span(text, sub)
 
-    result = resolve_experiencer(text, span)
+            result = resolve_experiencer(text, span)
 
-    assert result.experiencer == OTHER_EXPERIENCER
-    assert result.cue == cue
-    assert result.source == "cue"
+            assert result.experiencer == OTHER_EXPERIENCER
+            assert result.cue == cue
+            assert result.source == "cue"
 
 
 def test_no_cue_defaults_to_patient():

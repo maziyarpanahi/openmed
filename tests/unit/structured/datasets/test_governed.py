@@ -240,25 +240,26 @@ def test_token_vault_material_is_rejected_even_when_values_are_not_exported() ->
         _record("a", values={"token_vault": {"entry": "forbidden"}})
 
 
-@pytest.mark.parametrize("reference", ["patient", "fact", "evidence"])
-def test_split_overlap_fails_closed(reference: str) -> None:
-    first = _record("a", split="train")
-    if reference == "patient":
-        second = _record("b", split="test", patient_suffix="a")
-    elif reference == "fact":
-        second = replace(
-            _record("b", split="test"),
-            source_fact_ids=first.source_fact_ids,
-        )
-    else:
-        second = replace(
-            _record("b", split="test"),
-            evidence_ids=first.evidence_ids,
-        )
+def test_split_overlap_fails_closed(subtests) -> None:
+    for reference in ["patient", "fact", "evidence"]:
+        with subtests.test(reference=reference):
+            first = _record("a", split="train")
+            if reference == "patient":
+                second = _record("b", split="test", patient_suffix="a")
+            elif reference == "fact":
+                second = replace(
+                    _record("b", split="test"),
+                    source_fact_ids=first.source_fact_ids,
+                )
+            else:
+                second = replace(
+                    _record("b", split="test"),
+                    evidence_ids=first.evidence_ids,
+                )
 
-    result = build_dataset_snapshot(_spec(), (first, second))
-    assert result.state is StoreState.CONFLICT
-    assert result.code == "dataset_split_or_digest_conflict"
+            result = build_dataset_snapshot(_spec(), (first, second))
+            assert result.state is StoreState.CONFLICT
+            assert result.code == "dataset_split_or_digest_conflict"
 
 
 def test_changed_policy_or_source_snapshot_changes_manifest_identity() -> None:
@@ -286,45 +287,52 @@ def test_changed_policy_or_source_snapshot_changes_manifest_identity() -> None:
     )
 
 
-@pytest.mark.parametrize("fchmod_available", [True, False])
 def test_local_export_is_idempotent_and_distribution_is_license_gated(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    fchmod_available: bool,
+    subtests, tmp_path
 ) -> None:
-    if not fchmod_available:
-        monkeypatch.delattr(os, "fchmod", raising=False)
-    dataset = _dataset()
-    exporter = LocalDatasetExporter(tmp_path / "permitted")
-    first = exporter.export(dataset, distribution=True)
-    second = exporter.export(dataset, distribution=True)
+    case_root = tmp_path
+    for fchmod_available in [True, False]:
+        with subtests.test(fchmod_available=fchmod_available):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                if not fchmod_available:
+                    monkeypatch.delattr(os, "fchmod", raising=False)
+                dataset = _dataset()
+                exporter = LocalDatasetExporter(tmp_path / "permitted")
+                first = exporter.export(dataset, distribution=True)
+                second = exporter.export(dataset, distribution=True)
 
-    assert first.state is StoreState.SUCCESS and first.created
-    assert second.state is StoreState.SUCCESS and not second.created
-    assert first.value is not None
-    assert set(first.value.created_files) == {
-        "annotations.jsonl",
-        "manifest.json",
-        "records.jsonl",
-        "records.parquet",
-    }
+                assert first.state is StoreState.SUCCESS and first.created
+                assert second.state is StoreState.SUCCESS and not second.created
+                assert first.value is not None
+                assert set(first.value.created_files) == {
+                    "annotations.jsonl",
+                    "manifest.json",
+                    "records.jsonl",
+                    "records.parquet",
+                }
 
-    changed = _dataset(
-        (_record("a", values={"clinical_code": "changed-synthetic-code"}),)
-    )
-    conflict = exporter.export(changed)
-    assert conflict.state is StoreState.CONFLICT
-    assert conflict.code == "immutable_export_conflict"
+                changed = _dataset(
+                    (_record("a", values={"clinical_code": "changed-synthetic-code"}),)
+                )
+                conflict = exporter.export(changed)
+                assert conflict.state is StoreState.CONFLICT
+                assert conflict.code == "immutable_export_conflict"
 
-    restricted = _dataset(spec=_spec(redistribution=RedistributionPolicy.RESTRICTED))
-    denied = LocalDatasetExporter(tmp_path / "restricted").export(
-        restricted,
-        distribution=True,
-    )
-    local_only = LocalDatasetExporter(tmp_path / "local-only").export(restricted)
-    assert denied.state is StoreState.DENIED
-    assert denied.code == "license_distribution_denied"
-    assert local_only.state is StoreState.SUCCESS
+                restricted = _dataset(
+                    spec=_spec(redistribution=RedistributionPolicy.RESTRICTED)
+                )
+                denied = LocalDatasetExporter(tmp_path / "restricted").export(
+                    restricted,
+                    distribution=True,
+                )
+                local_only = LocalDatasetExporter(tmp_path / "local-only").export(
+                    restricted
+                )
+                assert denied.state is StoreState.DENIED
+                assert denied.code == "license_distribution_denied"
+                assert local_only.state is StoreState.SUCCESS
 
 
 def test_identified_export_requires_bound_approval_and_two_phase_audit(

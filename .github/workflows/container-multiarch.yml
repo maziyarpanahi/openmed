@@ -23,18 +23,19 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   smoke:
     name: Build and smoke (${{ matrix.platform }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            arch: amd64
-          - platform: linux/arm64
-            arch: arm64
+      # Pull requests smoke-test the native amd64 image; the emulated arm64
+      # build runs on pushes, tags and manual runs.
+      matrix: ${{ fromJSON(github.event_name == 'pull_request' && '{"include":[{"platform":"linux/amd64","arch":"amd64"}]}' || '{"include":[{"platform":"linux/amd64","arch":"amd64"},{"platform":"linux/arm64","arch":"arm64"}]}') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -95,7 +96,8 @@ jobs:
           with patch("openmed.core.pii.extract_pii", return_value=prediction):
               result = openmed.deidentify(text, method="mask", keep_mapping=True)
 
-          assert result.deidentified_text == "Patient [NAME] called [PHONE]."
+          # Placeholders use the canonical taxonomy label: NAME becomes PERSON.
+          assert result.deidentified_text == "Patient [PERSON] called [PHONE]."
           assert len(result.pii_entities) == 2
           print(f"OpenMed {openmed.__version__} synthetic de-identification passed")
           PY

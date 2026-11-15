@@ -65,18 +65,16 @@ def test_nukta_and_virama_sequences_are_logically_ordered_and_lossless():
     assert unicode_to_iscii(converted.text) == source
 
 
-@pytest.mark.parametrize(
-    ("source", "join_control"),
-    [
+def test_contextual_virama_controls_round_trip(subtests):
+    for source, join_control in [
         (bytes.fromhex("b3 e8 e8"), "\u200c"),
         (bytes.fromhex("b3 e8 e9"), "\u200d"),
-    ],
-)
-def test_contextual_virama_controls_round_trip(source, join_control):
-    converted = iscii_to_unicode(source)
+    ]:
+        with subtests.test(source=source, join_control=join_control):
+            converted = iscii_to_unicode(source)
 
-    assert converted.text == f"क्{join_control}"
-    assert unicode_to_iscii(converted.text) == source
+            assert converted.text == f"क्{join_control}"
+            assert unicode_to_iscii(converted.text) == source
 
 
 def test_visual_order_legacy_font_run_becomes_idempotent_unicode():
@@ -158,13 +156,11 @@ def test_c1_control_bytes_prevent_false_iscii_detection():
     assert convert_legacy_encoding(text).text == text
 
 
-@pytest.mark.parametrize(
-    "text",
-    ["À côté", "ÀÉÎ", "Crème brûlée", "José", "Patient naïB cell"],
-)
-def test_latin1_clinical_text_is_not_misdetected_as_iscii(text):
-    assert detect_legacy_encoding(text) == "unicode"
-    assert convert_legacy_encoding(text).text == text
+def test_latin1_clinical_text_is_not_misdetected_as_iscii(subtests):
+    for text in ["À côté", "ÀÉÎ", "Crème brûlée", "José", "Patient naïB cell"]:
+        with subtests.test(text=text):
+            assert detect_legacy_encoding(text) == "unicode"
+            assert convert_legacy_encoding(text).text == text
 
 
 @pytest.mark.parametrize("prefix", [b"", b"\xef\x42"])
@@ -211,13 +207,14 @@ def test_explicit_iscii_replacement_remains_opt_in():
     assert converted.to_original_span(4, 5) == (4, 5)
 
 
-@pytest.mark.parametrize("prefix", [b"", b"\xef\x42"])
-@pytest.mark.parametrize("suffix", [b"\xef\x42", b"\xf0\xb8", b"\xe8\xe8", b"\xe8\xe9"])
-def test_valid_iscii_sequences_remain_auto_detected(prefix, suffix):
-    source = prefix + b"\xb3" * 4 + suffix
+def test_valid_iscii_sequences_remain_auto_detected(subtests):
+    for prefix in [b"", b"\xef\x42"]:
+        for suffix in [b"\xef\x42", b"\xf0\xb8", b"\xe8\xe8", b"\xe8\xe9"]:
+            with subtests.test(prefix=prefix, suffix=suffix):
+                source = prefix + b"\xb3" * 4 + suffix
 
-    assert detect_legacy_encoding(source) == "iscii"
-    assert convert_legacy_encoding(source) == iscii_to_unicode(source)
+                assert detect_legacy_encoding(source) == "iscii"
+                assert convert_legacy_encoding(source) == iscii_to_unicode(source)
 
 
 def test_malformed_iscii_uses_existing_pipeline_and_pii_unicode_normalization():

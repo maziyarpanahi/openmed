@@ -2,17 +2,46 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
+import functools
+import ipaddress
+import logging
+import math
 import os
 import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
 from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
+from .admission import (
+    ADMISSION_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_MAX_QUEUE_ENV_VAR,
+    ADMISSION_NAMESPACE_CLAIM_ENV_VAR,
+    ADMISSION_NAMESPACE_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_NAMESPACE_MAX_QUEUE_ENV_VAR,
+    ADMISSION_PRINCIPAL_MAX_CONCURRENCY_ENV_VAR,
+    ADMISSION_PRINCIPAL_MAX_QUEUE_ENV_VAR,
+    ADMISSION_QUEUE_TIMEOUT_ENV_VAR,
+    ADMISSION_RETRY_AFTER_ENV_VAR,
+    DEFAULT_ADMISSION_QUEUE_TIMEOUT_SECONDS,
+    DEFAULT_ADMISSION_RETRY_AFTER_SECONDS,
+    AdmissionConfig,
+    AdmissionController,
+)
+from .drain import (
+    DEFAULT_RELEASE_SECONDS,
+    AcceleratorDrainParticipant,
+    DrainBudget,
+    DrainCoordinator,
+    WarmPoolDrainParticipant,
+    detect_accelerator_devices,
+)
 from .keep_alive import parse_keep_alive
 from .resilience import ResilienceManager, ServiceResilienceConfig
 from .warm_pool import (
@@ -25,7 +54,14 @@ from .warm_pool import (
     parse_model_memory_budget_bytes,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
+SERVICE_SERVED_MODELS_ENV_VAR = "OPENMED_SERVICE_SERVED_MODELS"
+DEFAULT_SERVED_MODELS = (
+    "disease_detection_superclinical",
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+)
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
@@ -42,11 +78,17 @@ SERVICE_BATCH_LOW_WATERMARK_ENV_VAR = "OPENMED_SERVICE_BATCH_LOW_WATERMARK"
 SERVICE_BATCH_MAX_QUEUE_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"
 SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
+SERVICE_STREAM_WRITE_IDLE_ENV_VAR = "OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS"
+SERVICE_STREAM_MAX_EVENTS_ENV_VAR = "OPENMED_SERVICE_STREAM_MAX_EVENTS"
+SERVICE_SHUTDOWN_RELEASE_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
 SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
 SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
 SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
+SERVICE_TRUSTED_PROXIES_ENV_VAR = "OPENMED_SERVICE_TRUSTED_PROXIES"
+SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR = "OPENMED_SERVICE_TRUSTED_PROXY_HOPS"
+SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR = "OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS"
 SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR = "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET"
 SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR = (
     "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS"
@@ -79,7 +121,13 @@ DEFAULT_SERVICE_BATCH_HIGH_WATERMARK = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
 DEFAULT_SERVICE_BATCH_LOW_WATERMARK = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK // 2
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS = 1000.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
+DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS = 30.0
+DEFAULT_SERVICE_STREAM_MAX_EVENTS = 100_000
+MAX_SERVICE_STREAM_MAX_EVENTS = 10_000_000
+DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS = DEFAULT_RELEASE_SECONDS
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
+DEFAULT_SERVICE_TRUSTED_PROXY_HOPS = 1
+DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS = 10_000
 DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
 DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS = 512
 DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN = 65_536
@@ -114,6 +162,7 @@ _MEMORY_MULTIPLIERS = {
     "gi": 1024**3,
     "gib": 1024**3,
 }
+_ADMISSION_CLAIM_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 _THROTTLE_KEY_ALIASES = {
     "global": "global",
     "process": "global",
@@ -123,6 +172,29 @@ _THROTTLE_KEY_ALIASES = {
     "client": "peer",
     "remote": "peer",
 }
+
+
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+@dataclass(frozen=True)
+class TrustedProxyConfig:
+    """Reverse proxies whose ``X-Forwarded-For`` entries may identify clients.
+
+    Attributes:
+        networks: Proxy addresses or CIDR networks. When empty, forwarding
+            headers are ignored and the direct peer identifies the client.
+        hops: Maximum number of trusted proxies, counting the direct peer,
+            skipped while reading ``X-Forwarded-For`` from right to left.
+    """
+
+    networks: tuple[IPNetwork, ...] = ()
+    hops: int = DEFAULT_SERVICE_TRUSTED_PROXY_HOPS
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether any forwarding header may be honored."""
+        return bool(self.networks)
 
 
 @dataclass(frozen=True)
@@ -154,6 +226,8 @@ class ServiceThrottleConfig:
     max_concurrency: int = 0
     concurrency_wait_seconds: float = DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS
     key_by: str = "global"
+    proxies: TrustedProxyConfig = TrustedProxyConfig()
+    max_tracked_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS
 
     @property
     def rate_limit_enabled(self) -> bool:
@@ -205,6 +279,16 @@ def _parse_non_negative_int(
     if parsed < 0:
         raise ValueError(f"{env_var} must be greater than or equal to 0")
     return parsed
+
+
+def _parse_positive_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int,
+) -> int:
+    parsed = _parse_optional_positive_int(raw_value, env_var=env_var, default=None)
+    return default if parsed is None else parsed
 
 
 def _parse_optional_positive_int(
@@ -438,6 +522,87 @@ def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
         raise ValueError(
             f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be greater than or equal to 0"
         )
+    if not math.isfinite(parsed):
+        raise ValueError(f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be a finite number")
+    return parsed
+
+
+def parse_shutdown_release_seconds(raw_value: Optional[str]) -> float:
+    """Parse the flush-and-release window that follows the in-flight drain.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS`` value.
+
+    Returns:
+        Finite, non-negative seconds; defaults to 5.
+    """
+    parsed = _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_SHUTDOWN_RELEASE_ENV_VAR,
+        default=DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS,
+    )
+    if not math.isfinite(parsed):
+        raise ValueError(f"{SERVICE_SHUTDOWN_RELEASE_ENV_VAR} must be a finite number")
+    return parsed
+
+
+def parse_stream_write_idle_seconds(raw_value: Optional[str]) -> float:
+    """Parse how long an NDJSON stream may stay blocked on one client write.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS`` value.
+
+    Returns:
+        A positive, finite number of seconds. Blank values use the default.
+
+    Raises:
+        ValueError: If the value is not a positive, finite number. The bound
+            cannot be disabled.
+    """
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_STREAM_WRITE_IDLE_ENV_VAR} must be a positive number"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_STREAM_WRITE_IDLE_ENV_VAR} must be a positive, finite number"
+        )
+    return parsed
+
+
+def parse_stream_max_events(raw_value: Optional[str]) -> int:
+    """Parse the maximum number of NDJSON events one stream may emit.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_STREAM_MAX_EVENTS`` value.
+
+    Returns:
+        An event count between 1 and ``MAX_SERVICE_STREAM_MAX_EVENTS``. Blank
+        values use the default.
+
+    Raises:
+        ValueError: If the value is not an integer inside that range. The cap
+            cannot be disabled.
+    """
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_STREAM_MAX_EVENTS
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_STREAM_MAX_EVENTS_ENV_VAR} must be a positive integer"
+        ) from exc
+    if not 1 <= parsed <= MAX_SERVICE_STREAM_MAX_EVENTS:
+        raise ValueError(
+            f"{SERVICE_STREAM_MAX_EVENTS_ENV_VAR} must be between 1 and "
+            f"{MAX_SERVICE_STREAM_MAX_EVENTS}"
+        )
     return parsed
 
 
@@ -548,6 +713,56 @@ def parse_service_throttle_key(raw_value: Optional[str]) -> str:
         ) from exc
 
 
+def parse_service_trusted_proxies(raw_value: Optional[str]) -> tuple[IPNetwork, ...]:
+    """Parse trusted reverse-proxy addresses and CIDR networks."""
+    if raw_value is None or not raw_value.strip():
+        return ()
+    # Imported lazily: mtls imports auth, which imports this module indirectly.
+    from .mtls import parse_trusted_proxies
+
+    return parse_trusted_proxies(raw_value, env_var=SERVICE_TRUSTED_PROXIES_ENV_VAR)
+
+
+def parse_service_trusted_proxy_hops(raw_value: Optional[str]) -> int:
+    """Parse the maximum number of trusted proxy hops to skip."""
+    return _parse_positive_int(
+        raw_value,
+        env_var=SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR,
+        default=DEFAULT_SERVICE_TRUSTED_PROXY_HOPS,
+    )
+
+
+def parse_service_throttle_max_tracked_keys(raw_value: Optional[str]) -> int:
+    """Parse the per-limiter bound on tracked client identities."""
+    return _parse_positive_int(
+        raw_value,
+        env_var=SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR,
+        default=DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    )
+
+
+def parse_service_trusted_proxy_config() -> TrustedProxyConfig:
+    """Read trusted reverse-proxy settings from the current process environment.
+
+    The request throttle and the authentication-failure limiter both use this
+    configuration, so a client resolves to the same identity in each.
+
+    Returns:
+        Trusted proxy networks and the hop bound; empty networks by default.
+
+    Raises:
+        ValueError: If a network or the hop count is invalid.
+    """
+    return TrustedProxyConfig(
+        networks=parse_service_trusted_proxies(
+            os.getenv(SERVICE_TRUSTED_PROXIES_ENV_VAR)
+        ),
+        hops=parse_service_trusted_proxy_hops(
+            os.getenv(SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR)
+        ),
+    )
+
+
 def parse_service_throttle_config() -> ServiceThrottleConfig:
     """Read throttling settings from the current process environment."""
     return ServiceThrottleConfig(
@@ -564,6 +779,10 @@ def parse_service_throttle_config() -> ServiceThrottleConfig:
             os.getenv(SERVICE_CONCURRENCY_WAIT_ENV_VAR)
         ),
         key_by=parse_service_throttle_key(os.getenv(SERVICE_THROTTLE_KEY_ENV_VAR)),
+        proxies=parse_service_trusted_proxy_config(),
+        max_tracked_keys=parse_service_throttle_max_tracked_keys(
+            os.getenv(SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR)
+        ),
     )
 
 
@@ -605,6 +824,51 @@ def parse_service_coalescing_config() -> ServiceCoalescingConfig:
             os.getenv(SERVICE_COALESCING_ENABLED_ENV_VAR)
         )
     )
+
+
+def parse_service_admission_config() -> AdmissionConfig:
+    """Read fair request-admission ceilings from the current environment."""
+    ceilings = {
+        name: _parse_non_negative_int(
+            os.getenv(env_var),
+            env_var=env_var,
+            default=0,
+        )
+        for name, env_var in (
+            ("max_concurrency", ADMISSION_MAX_CONCURRENCY_ENV_VAR),
+            ("max_queue", ADMISSION_MAX_QUEUE_ENV_VAR),
+            ("principal_max_concurrency", ADMISSION_PRINCIPAL_MAX_CONCURRENCY_ENV_VAR),
+            ("principal_max_queue", ADMISSION_PRINCIPAL_MAX_QUEUE_ENV_VAR),
+            ("namespace_max_concurrency", ADMISSION_NAMESPACE_MAX_CONCURRENCY_ENV_VAR),
+            ("namespace_max_queue", ADMISSION_NAMESPACE_MAX_QUEUE_ENV_VAR),
+        )
+    }
+    waits = {}
+    for name, env_var, default in (
+        (
+            "queue_timeout_seconds",
+            ADMISSION_QUEUE_TIMEOUT_ENV_VAR,
+            DEFAULT_ADMISSION_QUEUE_TIMEOUT_SECONDS,
+        ),
+        (
+            "retry_after_seconds",
+            ADMISSION_RETRY_AFTER_ENV_VAR,
+            DEFAULT_ADMISSION_RETRY_AFTER_SECONDS,
+        ),
+    ):
+        value = _parse_non_negative_float(
+            os.getenv(env_var), env_var=env_var, default=default
+        )
+        if not 0 < value < float("inf"):
+            raise ValueError(f"{env_var} must be a positive finite number")
+        waits[name] = value
+    claim = (os.getenv(ADMISSION_NAMESPACE_CLAIM_ENV_VAR) or "").strip() or None
+    if claim is not None and _ADMISSION_CLAIM_PATTERN.fullmatch(claim) is None:
+        raise ValueError(
+            f"{ADMISSION_NAMESPACE_CLAIM_ENV_VAR} must be a claim name of at most "
+            "64 letters, digits, '_', '-', '.' or ':'"
+        )
+    return AdmissionConfig(**ceilings, namespace_claim=claim, **waits)
 
 
 def parse_service_mlx_paged_kv_cache_config() -> PagedKVCacheConfig | None:
@@ -705,6 +969,38 @@ def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
     return tuple(models)
 
 
+class ModelNotServedError(ValueError):
+    """A network request selected a model outside the operator's served set."""
+
+    def __init__(self) -> None:
+        super().__init__("model_not_served")
+
+
+class StreamDeadlineExceeded(TimeoutError):
+    """A streaming request ran past its one request-wide deadline.
+
+    Attributes:
+        timeout_seconds: The configured deadline, in seconds. The exception
+            carries no request content.
+    """
+
+    def __init__(self, timeout_seconds: float) -> None:
+        self.timeout_seconds = float(timeout_seconds)
+        super().__init__("stream_deadline_exceeded")
+
+
+def _is_served_identifier(value: str) -> bool:
+    # Deliberately pure: never expand a home directory or probe the filesystem.
+    return (
+        bool(
+            re.fullmatch(
+                r"[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)?", value
+            )
+        )
+        and ".." not in value
+    )
+
+
 @dataclass
 class ServiceRuntime:
     """Shared runtime state for the REST service."""
@@ -712,15 +1008,22 @@ class ServiceRuntime:
     profile: str
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
+    served_models: Optional[Tuple[str, ...]] = field(default=None, kw_only=True)
     max_resident_models: Optional[int] = None
     model_memory_budget_bytes: Optional[int] = None
     default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
     model_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
+    stream_write_idle_seconds: float = DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS
+    stream_max_events: int = DEFAULT_SERVICE_STREAM_MAX_EVENTS
+    shutdown_release_seconds: float = field(
+        default=DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS, kw_only=True
+    )
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
+    admission: AdmissionConfig = field(default_factory=AdmissionConfig, kw_only=True)
     paged_kv_cache: PagedKVCacheConfig | None = None
     resilience_config: ServiceResilienceConfig = field(
         default_factory=ServiceResilienceConfig
@@ -736,8 +1039,22 @@ class ServiceRuntime:
         init=False,
         repr=False,
     )
+    _admission_controller: Optional[AdmissionController] = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+    _drain: Optional[DrainCoordinator] = field(default=None, init=False, repr=False)
 
     metrics: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        if self.served_models is not None and any(
+            not _is_served_identifier(item) for item in self.served_models
+        ):
+            raise ValueError(
+                "Served model configuration must contain public identifiers only"
+            )
 
     @classmethod
     def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
@@ -761,12 +1078,22 @@ class ServiceRuntime:
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
         throttle = parse_service_throttle_config()
+        admission = parse_service_admission_config()
         paged_kv_cache = parse_service_mlx_paged_kv_cache_config()
         resilience_config = parse_service_resilience_config()
         return cls(
             profile=profile,
             config=config,
             preload_models=preload_models,
+            served_models=(
+                tuple(
+                    item.strip()
+                    for item in os.environ[SERVICE_SERVED_MODELS_ENV_VAR].split(",")
+                    if item.strip()
+                )
+                if SERVICE_SERVED_MODELS_ENV_VAR in os.environ
+                else None
+            ),
             max_resident_models=max_resident_models,
             model_memory_budget_bytes=memory_budget_bytes,
             default_model_footprint_bytes=default_model_footprint_bytes,
@@ -775,9 +1102,19 @@ class ServiceRuntime:
             shutdown_drain_seconds=parse_shutdown_drain_seconds(
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
             ),
+            stream_write_idle_seconds=parse_stream_write_idle_seconds(
+                os.getenv(SERVICE_STREAM_WRITE_IDLE_ENV_VAR)
+            ),
+            stream_max_events=parse_stream_max_events(
+                os.getenv(SERVICE_STREAM_MAX_EVENTS_ENV_VAR)
+            ),
+            shutdown_release_seconds=parse_shutdown_release_seconds(
+                os.getenv(SERVICE_SHUTDOWN_RELEASE_ENV_VAR)
+            ),
             batching=batching,
             coalescing=coalescing,
             throttle=throttle,
+            admission=admission,
             paged_kv_cache=paged_kv_cache,
             resilience_config=resilience_config,
             _loader_factory=ModelLoader,
@@ -814,6 +1151,22 @@ class ServiceRuntime:
                     )
         return self._warm_pool
 
+    @property
+    def admission_controller(self) -> AdmissionController:
+        """Return the fair-admission controller shared by every transport.
+
+        REST, GraphQL and any other transport given this runtime draw on one
+        principal, namespace and global budget.
+        """
+        if self._admission_controller is None:
+            with self._loader_lock:
+                if self._admission_controller is None:
+                    self._admission_controller = AdmissionController(
+                        self.admission,
+                        metrics=self.metrics,
+                    )
+        return self._admission_controller
+
     def get_resilience(self) -> ResilienceManager:
         """Return the shared retry and circuit-breaker manager."""
         if self._resilience is None:
@@ -821,6 +1174,37 @@ class ServiceRuntime:
                 if self._resilience is None:
                     self._resilience = ResilienceManager(self.resilience_config)
         return self._resilience
+
+    def get_drain_coordinator(self) -> DrainCoordinator:
+        """Return this runtime's single-shot drain coordinator.
+
+        The coordinator is created on first use with the configured drain and
+        release windows. The runtime registers the resources it owns: the warm
+        pool (fenced and released) and accelerators already in use (released
+        back to the baseline captured here). REST, GraphQL, gRPC, jobs, and
+        other surfaces built on this runtime register their own participants.
+
+        Returns:
+            The shared coordinator.
+        """
+        if self._drain is None:
+            with self._loader_lock:
+                if self._drain is None:
+                    coordinator = DrainCoordinator(
+                        DrainBudget(
+                            drain_seconds=self.shutdown_drain_seconds,
+                            release_seconds=self.shutdown_release_seconds,
+                        ),
+                        metrics=self.metrics,
+                    )
+                    coordinator.register(
+                        WarmPoolDrainParticipant(lambda: self._warm_pool)
+                    )
+                    coordinator.register(
+                        AcceleratorDrainParticipant(detect_accelerator_devices())
+                    )
+                    self._drain = coordinator
+        return self._drain
 
     def preload(self) -> None:
         """Warm configured model pipelines during service startup."""
@@ -870,13 +1254,53 @@ class ServiceRuntime:
         window_chars: int,
         tokenizer_context_chars: int,
         max_entity_chars: int,
-    ) -> AsyncIterator[Any]:
-        """Yield incremental PII extraction events for a service request."""
-        import asyncio
+        timeout_seconds: Optional[float] = None,
+        retain_abandoned_work: Optional[Callable[["asyncio.Future[Any]"], None]] = None,
+    ) -> AsyncGenerator[Any, None]:
+        """Yield incremental PII extraction events for a service request.
 
+        One deadline spans every ``append`` and ``finish`` window. The deadline
+        is checked before a window starts, so an expired request never starts
+        new model work, and each window wait is bounded by the time left. A
+        worker thread cannot be interrupted, so when the stream ends while a
+        window is still running (deadline, cancellation, or the consumer
+        closing the stream) the model reference is released only after that
+        window returns.
+
+        Args:
+            text: Source text to classify. It never reaches logs or errors.
+            model_name: Served model identifier.
+            confidence_threshold: Minimum span confidence.
+            use_smart_merging: Whether to merge adjacent subword spans.
+            lang: PII language code.
+            normalize_accents: Optional accent normalization override.
+            keep_alive: Request-level keep-alive override.
+            chunk_size: Characters appended per window.
+            window_chars: Model input window size.
+            tokenizer_context_chars: Recomputed tokenizer context.
+            max_entity_chars: Longest entity the tail must keep open.
+            timeout_seconds: Request-wide deadline in seconds. ``None`` uses
+                the active profile timeout; ``0`` disables the deadline.
+            retain_abandoned_work: Optional callback that receives a window
+                future the stream stopped waiting for while it still runs, so
+                admission capacity can stay held until it settles.
+
+        Yields:
+            Streaming token-classification events.
+
+        Raises:
+            StreamDeadlineExceeded: If the deadline passes before every window
+                completes. Events already yielded remain valid; no later events
+                follow.
+        """
         import openmed
         from openmed.processing.advanced_ner import StreamingTokenClassifier
 
+        loop = asyncio.get_running_loop()
+        if timeout_seconds is None:
+            timeout_seconds = float(getattr(self.config, "timeout", 0) or 0)
+        timeout_seconds = float(timeout_seconds)
+        deadline = loop.time() + timeout_seconds if timeout_seconds > 0 else None
         model_key = self.begin_model_request(model_name)
 
         def classify(window_text: str) -> Any:
@@ -899,17 +1323,62 @@ class ServiceRuntime:
             confidence_threshold=confidence_threshold,
         )
 
+        window: Optional[asyncio.Future[Any]] = None
         try:
             for chunk in _iter_text_chunks(text, chunk_size):
-                events = await asyncio.to_thread(streamer.append, chunk)
+                window = _start_stream_window(
+                    loop, deadline, timeout_seconds, streamer.append, chunk
+                )
+                events = await _await_stream_window(window, deadline, timeout_seconds)
                 for event in events:
                     yield event
                 await asyncio.sleep(0)
-            events = await asyncio.to_thread(streamer.finish)
+            window = _start_stream_window(
+                loop, deadline, timeout_seconds, streamer.finish
+            )
+            events = await _await_stream_window(window, deadline, timeout_seconds)
             for event in events:
                 yield event
         finally:
-            self.finish_model_request(model_key, keep_alive)
+            self._release_stream_model(
+                model_key, keep_alive, window, retain_abandoned_work
+            )
+
+    def _release_stream_model(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        window: Optional["asyncio.Future[Any]"],
+        retain_abandoned_work: Optional[Callable[["asyncio.Future[Any]"], None]],
+    ) -> None:
+        """Release a stream's model reference once its last window has settled.
+
+        The recorded resilience outcome is the worker's own result, so stream
+        control (deadline, disconnect, slow consumer) never counts as a model
+        failure, matching the shielded single-shot timeout path.
+        """
+        if window is None or window.done():
+            self.finish_model_request(
+                model_key, keep_alive, _stream_window_outcome(window)
+            )
+            return
+
+        def settled(done: "asyncio.Future[Any]") -> None:
+            try:
+                self.finish_model_request(
+                    model_key, keep_alive, _stream_window_outcome(done)
+                )
+            except Exception as exc:
+                # A loop callback has no caller; report only the type name.
+                _LOGGER.warning(
+                    "Deferred stream model release failed (%s)", type(exc).__name__
+                )
+
+        # Callbacks run on the event loop in registration order: the model
+        # reference is released before any retained admission is returned.
+        window.add_done_callback(settled)
+        if retain_abandoned_work is not None:
+            retain_abandoned_work(window)
 
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
@@ -949,6 +1418,7 @@ class ServiceRuntime:
 
     def unload_model(self, model_name: str) -> Dict[str, Any]:
         """Unload one inactive model from the shared loader cache."""
+        self.validate_served_model(model_name)
         return self.get_loader().unload_model(model_name)
 
     def unload_all_models(self) -> Dict[str, Any]:
@@ -958,7 +1428,7 @@ class ServiceRuntime:
     def loaded_models(self) -> Dict[str, Any]:
         """Return cache and keep-alive status for the service runtime."""
         if self._warm_pool is None and self._loader is None:
-            return {
+            result: Dict[str, Any] = {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
                 "memory_budget_bytes": self.model_memory_budget_bytes,
@@ -968,7 +1438,40 @@ class ServiceRuntime:
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
-        return self.get_loader().loaded_models()
+        else:
+            result = dict(self.get_loader().loaded_models())
+        result["served_models"] = list(self.served_model_ids())
+        result["model_policy"] = self.model_policy_report()
+        return result
+
+    def served_model_ids(self) -> tuple[str, ...]:
+        """Return the operator-selected public ids without filesystem inspection."""
+        candidates = self.served_models
+        if candidates is None:
+            candidates = (*DEFAULT_SERVED_MODELS, *self.preload_models)
+            if self.config.pii_model:
+                candidates += (self.config.pii_model,)
+        return tuple(
+            sorted({item for item in candidates if _is_served_identifier(item)})
+        )
+
+    def validate_served_model(self, model_name: str) -> str:
+        """Reject undeclared identifiers before logging, loading, or path probing."""
+        if (
+            not _is_served_identifier(model_name)
+            or model_name not in self.served_model_ids()
+        ):
+            raise ModelNotServedError()
+        return model_name
+
+    def model_policy_report(self) -> dict[str, Any]:
+        """Expose value-free production findings for deployment self-checks."""
+        return {
+            "explicit": self.served_models is not None,
+            "findings": ["served_models_not_explicit"]
+            if self.profile == "prod" and self.served_models is None
+            else [],
+        }
 
     def get_workflow_store(self) -> Any:
         """Return the in-process MCP workflow state store."""
@@ -994,7 +1497,7 @@ class ServiceRuntime:
         return parse_keep_alive(keep_alive)
 
     def _resolve_model_name(self, model_name: str) -> str:
-        validated = validate_model_name(model_name)
+        validated = self.validate_served_model(model_name)
         loader = self.get_model_loader()
         resolver = getattr(loader, "resolve_model_name", None)
         if callable(resolver):
@@ -1006,3 +1509,47 @@ def _iter_text_chunks(text: str, chunk_size: int):
     chunk_size = max(1, int(chunk_size))
     for index in range(0, len(text), chunk_size):
         yield text[index : index + chunk_size]
+
+
+def _start_stream_window(
+    loop: asyncio.AbstractEventLoop,
+    deadline: Optional[float],
+    timeout_seconds: float,
+    func: Callable[..., Any],
+    *args: Any,
+) -> "asyncio.Future[Any]":
+    """Start one blocking stream window in a worker thread, or refuse late.
+
+    The returned future settles only when the worker thread returns, so it is
+    the handle for deferring cleanup of a window the caller stopped awaiting.
+    """
+    if deadline is not None and deadline - loop.time() <= 0:
+        raise StreamDeadlineExceeded(timeout_seconds)
+    context = contextvars.copy_context()
+    return loop.run_in_executor(None, functools.partial(context.run, func, *args))
+
+
+async def _await_stream_window(
+    window: "asyncio.Future[Any]",
+    deadline: Optional[float],
+    timeout_seconds: float,
+) -> Any:
+    """Wait for a window without cancelling it, bounded by the time left."""
+    if deadline is None:
+        return await asyncio.shield(window)
+    remaining = deadline - asyncio.get_running_loop().time()
+    try:
+        return await asyncio.wait_for(asyncio.shield(window), max(remaining, 0.0))
+    except TimeoutError:
+        if window.done():
+            # The worker itself raised TimeoutError; surface its own outcome.
+            return window.result()
+        raise StreamDeadlineExceeded(timeout_seconds) from None
+
+
+def _stream_window_outcome(
+    window: Optional["asyncio.Future[Any]"],
+) -> Optional[BaseException]:
+    if window is None or window.cancelled():
+        return None
+    return window.exception()

@@ -156,14 +156,15 @@ def test_generated_span_may_supplement_but_not_replace_clinical_source() -> None
     assert report.clinical_source_count == 1
 
 
-@pytest.mark.parametrize("state", [ReviewerState.PENDING, ReviewerState.REJECTED])
-def test_nonapproved_review_state_rejects_finalization(state: ReviewerState) -> None:
-    evidence = ChartAbstractionEvidence((_chain(reviewer_state=state),))
+def test_nonapproved_review_state_rejects_finalization(subtests) -> None:
+    for state in [ReviewerState.PENDING, ReviewerState.REJECTED]:
+        with subtests.test(state=state):
+            evidence = ChartAbstractionEvidence((_chain(reviewer_state=state),))
 
-    report = evidence.evaluate(("registry.primary_diagnosis",))
+            report = evidence.evaluate(("registry.primary_diagnosis",))
 
-    assert [issue.code for issue in report.issues] == ["review_not_approved"]
-    assert report.approved_field_count == 0
+            assert [issue.code for issue in report.issues] == ["review_not_approved"]
+            assert report.approved_field_count == 0
 
 
 def test_report_contains_only_digests_offsets_counts_and_closed_metadata() -> None:
@@ -180,35 +181,34 @@ def test_report_contains_only_digests_offsets_counts_and_closed_metadata() -> No
     assert report.report_digest.startswith("sha256:")
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "code"),
-    [
+def test_source_location_fails_closed(subtests) -> None:
+    for kwargs, code in [
         ({"source_digest": "not-a-digest"}, "invalid_digest"),
         ({"start_offset": -1}, "invalid_offset"),
         ({"start_offset": 20, "end_offset": 20}, "invalid_span"),
         ({"kind": "clinical_record"}, "invalid_source_kind"),
-    ],
-)
-def test_source_location_fails_closed(kwargs: dict[str, Any], code: str) -> None:
-    values: dict[str, Any] = {
-        "source_digest": SOURCE_A,
-        "start_offset": 10,
-        "end_offset": 20,
-        "kind": SourceKind.CLINICAL_RECORD,
-    }
-    values.update(kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, code=code):
+            values: dict[str, Any] = {
+                "source_digest": SOURCE_A,
+                "start_offset": 10,
+                "end_offset": 20,
+                "kind": SourceKind.CLINICAL_RECORD,
+            }
+            values.update(kwargs)
 
-    with pytest.raises(AbstractionEvidenceError) as caught:
-        SourceLocation(**values)
+            with pytest.raises(AbstractionEvidenceError) as caught:
+                SourceLocation(**values)
 
-    assert caught.value.code == code
-    assert all(str(value) not in str(caught.value) for value in kwargs.values())
+            assert caught.value.code == code
+            assert all(str(value) not in str(caught.value) for value in kwargs.values())
 
 
-@pytest.mark.parametrize("uncertainty", [-0.1, 1.1, math.inf, math.nan, True])
-def test_uncertainty_is_bounded_and_finite(uncertainty: Any) -> None:
-    with pytest.raises(AbstractionEvidenceError, match="invalid_uncertainty"):
-        _chain(uncertainty=uncertainty)
+def test_uncertainty_is_bounded_and_finite(subtests) -> None:
+    for uncertainty in [-0.1, 1.1, math.inf, math.nan, True]:
+        with subtests.test(uncertainty=uncertainty):
+            with pytest.raises(AbstractionEvidenceError, match="invalid_uncertainty"):
+                _chain(uncertainty=uncertainty)
 
 
 def test_duplicate_fields_and_source_spans_fail_closed() -> None:

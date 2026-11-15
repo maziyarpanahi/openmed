@@ -19,9 +19,8 @@ from openmed.clinical.nli_medication_status import (
 )
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
+def test_status_normalization_is_explicit_and_deterministic(subtests) -> None:
+    for raw, expected in [
         ("initiated", MedicationClaimStatus.STARTED),
         ("active", MedicationClaimStatus.CONTINUED),
         ("on hold", MedicationClaimStatus.HELD),
@@ -29,13 +28,9 @@ from openmed.clinical.nli_medication_status import (
         ("past", MedicationClaimStatus.HISTORICAL),
         ("possible", MedicationClaimStatus.UNCERTAIN),
         (None, MedicationClaimStatus.UNCERTAIN),
-    ],
-)
-def test_status_normalization_is_explicit_and_deterministic(
-    raw: object,
-    expected: MedicationClaimStatus,
-) -> None:
-    assert normalize_nli_medication_status(raw) is expected
+    ]:
+        with subtests.test(raw=raw, expected=expected):
+            assert normalize_nli_medication_status(raw) is expected
 
 
 def test_same_status_and_time_are_compatible() -> None:
@@ -57,28 +52,27 @@ def test_same_status_and_time_are_compatible() -> None:
     assert result.evidence == ()
 
 
-@pytest.mark.parametrize(
-    ("premise_status", "hypothesis_status"),
-    [
+def test_same_time_active_inactive_states_are_contradictions(subtests) -> None:
+    for premise_status, hypothesis_status in [
         ("started", "stopped"),
         ("continued", "held"),
         ("historical", "active"),
-    ],
-)
-def test_same_time_active_inactive_states_are_contradictions(
-    premise_status: str,
-    hypothesis_status: str,
-) -> None:
-    result = medication_status_contradiction_precheck(
-        {"status": premise_status, "event_time": "2026-01-02"},
-        {"status": hypothesis_status, "event_time": "2026-01-02"},
-    )
+    ]:
+        with subtests.test(
+            premise_status=premise_status, hypothesis_status=hypothesis_status
+        ):
+            result = medication_status_contradiction_precheck(
+                {"status": premise_status, "event_time": "2026-01-02"},
+                {"status": hypothesis_status, "event_time": "2026-01-02"},
+            )
 
-    assert result.status is MedicationStatusPrecheckStatus.CONTRADICTION
-    assert result.contradiction is True
-    assert result.inference_allowed is False
-    assert result.evidence[0].reason is MedicationStatusReason.STATUS_CONTRADICTION
-    assert result.evidence[0].time_relation is EventTimeRelation.SAME
+            assert result.status is MedicationStatusPrecheckStatus.CONTRADICTION
+            assert result.contradiction is True
+            assert result.inference_allowed is False
+            assert (
+                result.evidence[0].reason is MedicationStatusReason.STATUS_CONTRADICTION
+            )
+            assert result.evidence[0].time_relation is EventTimeRelation.SAME
 
 
 def test_ordered_status_change_is_escalated_not_inferred() -> None:
@@ -256,26 +250,25 @@ def test_result_and_claim_are_immutable() -> None:
         result.status = MedicationStatusPrecheckStatus.CONTRADICTION  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
-def test_event_time_callback_errors_do_not_echo_values(
-    error_type: type[Exception],
-) -> None:
-    sentinel = "SYNTHETIC_PRIVATE_TIMESTAMP"
+def test_event_time_callback_errors_do_not_echo_values(subtests) -> None:
+    for error_type in [ValueError, RuntimeError]:
+        with subtests.test(error_type=error_type):
+            sentinel = "SYNTHETIC_PRIVATE_TIMESTAMP"
 
-    class InvalidTimestamp:
-        @property
-        def value(self) -> object:
-            raise error_type(sentinel)
+            class InvalidTimestamp:
+                @property
+                def value(self) -> object:
+                    raise error_type(sentinel)
 
-    with pytest.raises(
-        MedicationStatusPrecheckError, match="invalid medication event time"
-    ) as caught:
-        medication_status_contradiction_precheck(
-            {"status": "continued", "event_time": InvalidTimestamp()},
-            {"status": "stopped", "event_time": "2026-01-02"},
-        )
+            with pytest.raises(
+                MedicationStatusPrecheckError, match="invalid medication event time"
+            ) as caught:
+                medication_status_contradiction_precheck(
+                    {"status": "continued", "event_time": InvalidTimestamp()},
+                    {"status": "stopped", "event_time": "2026-01-02"},
+                )
 
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
 
 
 def test_out_of_range_utc_event_time_has_controlled_error() -> None:

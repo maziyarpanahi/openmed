@@ -13,22 +13,36 @@ from openmed.core.clinical_policy import resolve_clinical_policy
 from openmed.core.language_router import LanguagePrediction, LanguageRouter
 
 
-@pytest.mark.parametrize(
-    "label", ["PERSON", "date_of_birth", "email", "city", "postcode", "MRN", "PHONE"]
-)
-def test_default_profile_masks_requested_direct_identifiers(label):
-    policy = resolve_clinical_policy()
-    assert policy.profile.action_for(label) == "mask"
-    assert policy.profile.safety_sweep_mandatory
-    assert not policy.narrowed
+def test_default_profile_masks_requested_direct_identifiers(subtests):
+    for label in [
+        "PERSON",
+        "date_of_birth",
+        "email",
+        "city",
+        "postcode",
+        "MRN",
+        "PHONE",
+    ]:
+        with subtests.test(label=label):
+            policy = resolve_clinical_policy()
+            assert policy.profile.action_for(label) == "mask"
+            assert policy.profile.safety_sweep_mandatory
+            assert not policy.narrowed
 
 
-@pytest.mark.parametrize(
-    "label",
-    ["DATE", "AGE", "GENDER", "DISEASE", "DRUG", "DOSAGE", "LAB_VALUE", "OCCUPATION"],
-)
-def test_clinical_content_and_treatment_dates_remain_kept(label):
-    assert resolve_clinical_policy().profile.action_for(label) == "keep"
+def test_clinical_content_and_treatment_dates_remain_kept(subtests):
+    for label in [
+        "DATE",
+        "AGE",
+        "GENDER",
+        "DISEASE",
+        "DRUG",
+        "DOSAGE",
+        "LAB_VALUE",
+        "OCCUPATION",
+    ]:
+        with subtests.test(label=label):
+            assert resolve_clinical_policy().profile.action_for(label) == "keep"
 
 
 def test_explicit_date_category_changes_treatment_date_policy():
@@ -37,9 +51,8 @@ def test_explicit_date_category_changes_treatment_date_policy():
     assert policy.narrowed
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_unknown_or_conflicting_controls_are_rejected(subtests):
+    for kwargs in [
         {"redact_categories": ["invented"]},
         {"redact_categories": []},
         {"redact_categories": "email"},
@@ -48,11 +61,10 @@ def test_explicit_date_category_changes_treatment_date_policy():
         {"keep_labels": ["invented"]},
         {"keep_labels": ["DATE_OF_BIRTH"]},
         {"keep_labels": ["FIRST_NAME"]},
-    ],
-)
-def test_unknown_or_conflicting_controls_are_rejected(kwargs):
-    with pytest.raises(ValueError):
-        resolve_clinical_policy(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError):
+                resolve_clinical_policy(**kwargs)
 
 
 def test_role_selection_requires_evidence_and_marks_unknown_names_for_review():
@@ -71,33 +83,29 @@ def test_role_selection_requires_evidence_and_marks_unknown_names_for_review():
     assert policy.metadata()["policy_narrowed"]
 
 
-@pytest.mark.parametrize(
-    "value, expected",
-    [
+def test_language_aliases_keep_locale(subtests):
+    for value, expected in [
         ("DE", ("de", None)),
         ("de-DE", ("de", "de_DE")),
         ("de_AT", ("de", "de_AT")),
         (" en-GB ", ("en", "en_GB")),
         ("AUTO", ("auto", None)),
-    ],
-)
-def test_language_aliases_keep_locale(value, expected):
-    assert normalize_clinical_language(value) == expected
+    ]:
+        with subtests.test(value=value, expected=expected):
+            assert normalize_clinical_language(value) == expected
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_language_and_locale_conflicts_are_rejected(subtests):
+    for kwargs in [
         {"language": "unknown"},
         {"language": "de-ZZ"},
         {"language": "de-DE", "locale": "de_AT"},
         {"language": "de", "locale": "en_US"},
         {"locale": "de"},
-    ],
-)
-def test_invalid_language_and_locale_conflicts_are_rejected(kwargs):
-    with pytest.raises(ValueError):
-        resolve_clinical_language("synthetic text", **kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError):
+                resolve_clinical_language("synthetic text", **kwargs)
 
 
 def test_explicit_german_route_does_not_require_lid_dependency():

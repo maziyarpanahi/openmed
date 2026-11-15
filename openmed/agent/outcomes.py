@@ -9,14 +9,103 @@ fields or stable error codes rather than submitted values.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 OUTCOME_SCHEMA_VERSION = "openmed.agent.outcome.v1"
 
 _ALLOWED_FIELDS = frozenset({"schema_version", "outcome_class", "reason_code"})
 _ORDERED_FIELDS = ("schema_version", "outcome_class", "reason_code")
+
+_GOVERNANCE_JSON_MAX_BYTES = 64 * 1024 * 1024
+_GOVERNANCE_JSON_MAX_DEPTH = 64
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("invalid_json")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_: str) -> Any:
+    raise ValueError("invalid_json")
+
+
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("invalid_json")
+    return number
+
+
+def _bounded_governance_json(
+    payload: str | bytes | bytearray,
+    *,
+    object_pairs_hook: Callable[[list[tuple[str, Any]]], Any] | None = None,
+) -> Any:
+    """Bound raw input and nesting before decoding a strict governance record.
+
+    Callers must translate failures into a fresh domain error outside their
+    exception handler, so decoder exceptions cannot retain submitted data.
+    """
+    if not isinstance(payload, (str, bytes, bytearray)):
+        raise TypeError("invalid_json")
+    if isinstance(payload, str):
+        length = str.__len__(payload)
+        if length > _GOVERNANCE_JSON_MAX_BYTES:
+            raise ValueError("invalid_json")
+        # Count UTF-8 bytes in bounded chunks rather than allocate a second
+        # potentially large copy. Builtin methods prevent a string subtype
+        # from supplying a false length or executing foreign accessors.
+        size = 0
+        for start in range(0, length, 65536):
+            chunk = str.__getitem__(payload, slice(start, start + 65536))
+            size += len(chunk.encode("utf-8"))
+            if size > _GOVERNANCE_JSON_MAX_BYTES:
+                raise ValueError("invalid_json")
+        text = str.__str__(payload)
+    else:
+        view = memoryview(payload)
+        if view.nbytes > _GOVERNANCE_JSON_MAX_BYTES:
+            raise ValueError("invalid_json")
+        raw = payload if type(payload) is bytes else view.tobytes()
+        # Keep the standard decoder's supported UTF-8/16/32 byte encodings.
+        text = raw.decode(json.detect_encoding(raw))
+
+    stack: list[str] = []
+    quoted = False
+    escaped = False
+    for character in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in "[{":
+            if len(stack) == _GOVERNANCE_JSON_MAX_DEPTH:
+                raise ValueError("invalid_json")
+            stack.append(character)
+        elif character in "]}":
+            if not stack or stack.pop() != ("[" if character == "]" else "{"):
+                raise ValueError("invalid_json")
+    if stack:
+        raise ValueError("invalid_json")
+    return json.loads(
+        text,
+        object_pairs_hook=object_pairs_hook or _unique_json_object,
+        parse_constant=_reject_json_constant,
+        parse_float=_finite_json_float,
+    )
+
 
 _REASON_CODES: dict[str, frozenset[str]] = {
     "success": frozenset({"completed"}),
@@ -120,8 +209,10 @@ class WorkflowOutcome:
     def from_json(cls, payload: str | bytes | bytearray) -> "WorkflowOutcome":
         """Build and validate an outcome from a JSON object."""
         try:
-            data = json.loads(payload, object_pairs_hook=_strict_json_object)
-        except (json.JSONDecodeError, OutcomeError, TypeError, UnicodeDecodeError):
+            data = _bounded_governance_json(
+                payload, object_pairs_hook=_strict_json_object
+            )
+        except (ValueError, TypeError, UnicodeError, RecursionError):
             pass
         else:
             return cls.from_dict(data)

@@ -5,9 +5,8 @@ import pytest
 from openmed.risk import AnonymityPolicy, assess_release
 
 
-@pytest.mark.parametrize(
-    "field",
-    (
+def test_incidental_id_substrings_are_not_direct_identifiers(subtests) -> None:
+    for field in (
         "validity_score",
         "fluid_balance",
         "grid_cell",
@@ -28,29 +27,27 @@ from openmed.risk import AnonymityPolicy, assess_release
         "procedure_name",
         "medication_name",
         "facility_name",
-    ),
-)
-def test_incidental_id_substrings_are_not_direct_identifiers(field: str) -> None:
-    rows = [
-        {"age": 40, field: "low"},
-        {"age": 40, field: "high"},
-    ]
+    ):
+        with subtests.test(field=field):
+            rows = [
+                {"age": 40, field: "low"},
+                {"age": 40, field: "high"},
+            ]
 
-    assessment = assess_release(
-        rows,
-        AnonymityPolicy(
-            quasi_identifiers=("age",),
-            non_sensitive_attributes=(field,),
-            target_k=2,
-        ),
-    )
+            assessment = assess_release(
+                rows,
+                AnonymityPolicy(
+                    quasi_identifiers=("age",),
+                    non_sensitive_attributes=(field,),
+                    target_k=2,
+                ),
+            )
 
-    assert assessment.meets_policy is True
+            assert assessment.meets_policy is True
 
 
-@pytest.mark.parametrize(
-    "field",
-    (
+def test_true_identifier_names_still_fail_without_a_removal_role(subtests) -> None:
+    for field in (
         "patient_id",
         "patientId",
         "medical_record_number",
@@ -126,20 +123,19 @@ def test_incidental_id_substrings_are_not_direct_identifiers(field: str) -> None
         "profile_photo",
         "patient_photo",
         "full_face_photo",
-    ),
-)
-def test_true_identifier_names_still_fail_without_a_removal_role(field: str) -> None:
-    rows = [
-        {"age": 40, field: "canary-a"},
-        {"age": 40, field: "canary-b"},
-    ]
+    ):
+        with subtests.test(field=field):
+            rows = [
+                {"age": 40, field: "canary-a"},
+                {"age": 40, field: "canary-b"},
+            ]
 
-    with pytest.raises(ValueError, match="direct identifiers"):
-        assess_release(
-            rows,
-            AnonymityPolicy(
-                quasi_identifiers=("age",),
-                non_sensitive_attributes=(field,),
-                target_k=2,
-            ),
-        )
+            with pytest.raises(ValueError, match="direct identifiers"):
+                assess_release(
+                    rows,
+                    AnonymityPolicy(
+                        quasi_identifiers=("age",),
+                        non_sensitive_attributes=(field,),
+                        target_k=2,
+                    ),
+                )

@@ -1,5 +1,14 @@
 """Declarative, local-first cohort phenotyping over grounded OMOP tables."""
 
+from .circe import (
+    CIRCE_DOMAINS,
+    CIRCE_MAPPING_VERSION,
+    CirceConversion,
+    CirceInputError,
+    CirceLimitError,
+    export_circe_expression,
+    import_circe_expression,
+)
 from .dsl import (
     PHENOTYPE_SCHEMA_VERSION,
     AssertionFilter,
@@ -31,12 +40,16 @@ from .exchange import (
 from .resolver import (
     COHORT_ADVISORY,
     COHORT_PROVENANCE_SCHEMA_VERSION,
+    COHORT_RESULT_COMPATIBILITY_POLICY,
     COHORT_RESULT_SCHEMA_VERSION,
+    CohortCoverage,
     CohortResolver,
     CohortResult,
     CompiledPhenotypeQuery,
     ConceptHierarchy,
+    ConceptSetCoverage,
     ConceptSetProvenance,
+    EmptyPopulationWarning,
     EvidencePointer,
     MatchedConceptProvenance,
     PhenotypeProvenance,
@@ -69,12 +82,23 @@ from .saved import (
 )
 
 __all__ = [
+    "CIRCE_DOMAINS",
+    "CIRCE_MAPPING_VERSION",
+    "CirceConversion",
+    "CirceInputError",
+    "CirceLimitError",
+    "export_circe_expression",
+    "import_circe_expression",
     "COHORT_ADVISORY",
     "COHORT_EXCHANGE_COMPATIBILITY_POLICY",
     "COHORT_EXCHANGE_SCHEMA_NAME",
     "COHORT_EXCHANGE_SCHEMA_VERSION",
     "COHORT_PROVENANCE_SCHEMA_VERSION",
     "COHORT_RESULT_SCHEMA_VERSION",
+    "EmptyPopulationWarning",
+    "ConceptSetCoverage",
+    "CohortCoverage",
+    "COHORT_RESULT_COMPATIBILITY_POLICY",
     "PHENOTYPE_SCHEMA_VERSION",
     "SAVED_COHORT_ADVISORY",
     "SAVED_COHORT_COMPATIBILITY_POLICY",

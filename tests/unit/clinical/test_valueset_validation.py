@@ -123,7 +123,8 @@ def test_validate_codeable_concept_supports_drop_and_downgrade_policies():
     assert downgraded["coding"][0]["extension"]
 
 
-@pytest.mark.parametrize("policy", ["unknown", "", None])
-def test_validate_codeable_concept_rejects_unknown_policy(policy):
-    with pytest.raises(ValueError, match="policy must be"):
-        validate_codeable_concept({}, FINDINGS_PATH, policy=policy)  # type: ignore[arg-type]
+def test_validate_codeable_concept_rejects_unknown_policy(subtests):
+    for policy in ["unknown", "", None]:
+        with subtests.test(policy=policy):
+            with pytest.raises(ValueError, match="policy must be"):
+                validate_codeable_concept({}, FINDINGS_PATH, policy=policy)  # type: ignore[arg-type]

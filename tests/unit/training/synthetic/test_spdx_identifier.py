@@ -24,19 +24,19 @@ def outcome(value):
     )
 
 
-@pytest.mark.parametrize("identifier", sorted(PERMISSIVE_SPDX_IDENTIFIERS))
-def test_every_allowlisted_identifier_is_canonical_and_permissive(identifier) -> None:
-    assert outcome(identifier) == (
-        SpdxIdentifierStatus.CANONICAL,
-        identifier,
-        True,
-        "spdx_identifier_canonical",
-    )
+def test_every_allowlisted_identifier_is_canonical_and_permissive(subtests) -> None:
+    for identifier in sorted(PERMISSIVE_SPDX_IDENTIFIERS):
+        with subtests.test(identifier=identifier):
+            assert outcome(identifier) == (
+                SpdxIdentifierStatus.CANONICAL,
+                identifier,
+                True,
+                "spdx_identifier_canonical",
+            )
 
 
-@pytest.mark.parametrize(
-    "value,expected",
-    [
+def test_case_variants_normalize_to_allowlist_members(subtests) -> None:
+    for value, expected in [
         ("mit", "MIT"),
         ("apache-2.0", "Apache-2.0"),
         ("bsd-2-clause", "BSD-2-Clause"),
@@ -49,15 +49,14 @@ def test_every_allowlisted_identifier_is_canonical_and_permissive(identifier) ->
         ("mpl-2.0", "MPL-2.0"),
         ("python-2.0", "Python-2.0"),
         ("blueoak-1.0.0", "BlueOak-1.0.0"),
-    ],
-)
-def test_case_variants_normalize_to_allowlist_members(value, expected) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.NORMALIZED,
-        expected,
-        True,
-        "spdx_identifier_normalized_case",
-    )
+    ]:
+        with subtests.test(value=value, expected=expected):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.NORMALIZED,
+                expected,
+                True,
+                "spdx_identifier_normalized_case",
+            )
 
 
 def test_surrounding_whitespace_normalizes() -> None:
@@ -98,9 +97,8 @@ def test_alias_successors_are_allowlisted() -> None:
     assert result.normalized in PERMISSIVE_SPDX_IDENTIFIERS
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_unknown_values_stay_unknown_and_never_permissive(subtests) -> None:
+    for value in [
         "GPL-3.0-only",
         "GPL-2.0",
         "Proprietary",
@@ -108,63 +106,63 @@ def test_alias_successors_are_allowlisted() -> None:
         "AGPL-1.0-only",
         " gpl-3.0 ",
         "licenseref-synthetic",
-    ],
-)
-def test_unknown_values_stay_unknown_and_never_permissive(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.UNKNOWN,
-        None,
-        False,
-        "spdx_identifier_unknown",
-    )
+    ]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.UNKNOWN,
+                None,
+                False,
+                "spdx_identifier_unknown",
+            )
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_expression_like_values_are_malformed(subtests) -> None:
+    for value in [
         "MIT OR Apache-2.0",
         "Apache-2.0 AND ISC",
         "GPL-3.0-only WITH Classpath-exception-2.0",
         "MIT+",
-    ],
-)
-def test_expression_like_values_are_malformed(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.MALFORMED,
-        None,
-        False,
-        "spdx_identifier_malformed_expression",
-    )
+    ]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.MALFORMED,
+                None,
+                False,
+                "spdx_identifier_malformed_expression",
+            )
 
 
-@pytest.mark.parametrize("value", ["", "   ", "\t\n"])
-def test_empty_values_are_malformed(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.MALFORMED,
-        None,
-        False,
-        "spdx_identifier_malformed_empty",
-    )
+def test_empty_values_are_malformed(subtests) -> None:
+    for value in ["", "   ", "\t\n"]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.MALFORMED,
+                None,
+                False,
+                "spdx_identifier_malformed_empty",
+            )
 
 
-@pytest.mark.parametrize("value", [None, 42, True, [], 2.5])
-def test_non_string_values_are_malformed(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.MALFORMED,
-        None,
-        False,
-        "spdx_identifier_malformed_type",
-    )
+def test_non_string_values_are_malformed(subtests) -> None:
+    for value in [None, 42, True, [], 2.5]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.MALFORMED,
+                None,
+                False,
+                "spdx_identifier_malformed_type",
+            )
 
 
-@pytest.mark.parametrize("value", ["MIT!", "BSD 2-Clause", "Apache 2.0", "MIT/MIT"])
-def test_invalid_characters_are_malformed(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.MALFORMED,
-        None,
-        False,
-        "spdx_identifier_malformed_characters",
-    )
+def test_invalid_characters_are_malformed(subtests) -> None:
+    for value in ["MIT!", "BSD 2-Clause", "Apache 2.0", "MIT/MIT"]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.MALFORMED,
+                None,
+                False,
+                "spdx_identifier_malformed_characters",
+            )
 
 
 def test_licenseref_values_are_valid_but_never_permissive() -> None:
@@ -188,16 +186,15 @@ def test_licenseref_values_are_valid_but_never_permissive() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "value", ["LicenseRef-", "LicenseRef-Synthetic Clinical", "LicenseRef-MIT*"]
-)
-def test_malformed_licenseref_values_fail_closed(value) -> None:
-    assert outcome(value) == (
-        SpdxIdentifierStatus.MALFORMED,
-        None,
-        False,
-        "spdx_identifier_malformed_characters",
-    )
+def test_malformed_licenseref_values_fail_closed(subtests) -> None:
+    for value in ["LicenseRef-", "LicenseRef-Synthetic Clinical", "LicenseRef-MIT*"]:
+        with subtests.test(value=value):
+            assert outcome(value) == (
+                SpdxIdentifierStatus.MALFORMED,
+                None,
+                False,
+                "spdx_identifier_malformed_characters",
+            )
 
 
 def test_licenseref_prefix_is_case_sensitive() -> None:

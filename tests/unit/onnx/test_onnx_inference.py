@@ -192,18 +192,19 @@ def test_local_artifact_does_not_load_hub_downloader(
     assert model.variant == "int8"
 
 
-@pytest.mark.parametrize("threshold", [-0.01, 1.01])
-def test_predict_rejects_invalid_threshold(
-    tmp_path: Path,
-    monkeypatch,
-    threshold: float,
-) -> None:
-    artifact_dir = _write_artifact(tmp_path)
-    _install_dependencies(monkeypatch, lambda **kwargs: str(artifact_dir))
-    model = inference.OnnxModel.from_pretrained(artifact_dir)
+def test_predict_rejects_invalid_threshold(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for threshold in [-0.01, 1.01]:
+        with subtests.test(threshold=threshold):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                artifact_dir = _write_artifact(tmp_path)
+                _install_dependencies(monkeypatch, lambda **kwargs: str(artifact_dir))
+                model = inference.OnnxModel.from_pretrained(artifact_dir)
 
-    with pytest.raises(ValueError, match="threshold"):
-        model.predict("Alice Nguyen", threshold=threshold)
+                with pytest.raises(ValueError, match="threshold"):
+                    model.predict("Alice Nguyen", threshold=threshold)
 
 
 def test_explicit_missing_variant_is_actionable(tmp_path: Path, monkeypatch) -> None:

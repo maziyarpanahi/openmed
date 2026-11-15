@@ -23,7 +23,8 @@ seed set is common-knowledge cultural vocabulary.
 
 Scope note (OM-291): this is honorific + family/given separation only. Western
 honorifics (``Mr``/``Dr``/``Mrs``) and full morphological name parsing are out
-of scope and intentionally left to the generic path.
+of scope and intentionally left to the generic path. Honorifics, gender cues and
+name order for other languages live in :mod:`openmed.core.person_honorifics`.
 """
 
 from __future__ import annotations

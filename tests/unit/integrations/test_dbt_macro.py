@@ -75,11 +75,12 @@ def test_redact_accepts_a_qualified_explicit_identifier() -> None:
     )
 
 
-@pytest.mark.parametrize("policy", _CANONICAL_POLICIES)
-def test_redact_accepts_each_canonical_policy(policy: str) -> None:
-    rendered = _render(f"redact('clinical_note', '{policy}')")
+def test_redact_accepts_each_canonical_policy(subtests) -> None:
+    for policy in _CANONICAL_POLICIES:
+        with subtests.test(policy=policy):
+            rendered = _render(f"redact('clinical_note', '{policy}')")
 
-    assert rendered == f"openmed_deidentify(clinical_note, '{policy}')"
+            assert rendered == f"openmed_deidentify(clinical_note, '{policy}')"
 
 
 def test_redact_uses_adapter_dispatch_when_available() -> None:
@@ -116,9 +117,8 @@ def test_invalid_policy_fails_without_echoing_the_supplied_value() -> None:
     assert "not_a_policy" not in error
 
 
-@pytest.mark.parametrize(
-    "column",
-    (
+def test_sql_fragments_fail_closed_without_echoing_the_supplied_value(subtests) -> None:
+    for column in (
         "clinical note",
         "clinical-note",
         "clinical_note || 'synthetic-sensitive-value'",
@@ -128,31 +128,26 @@ def test_invalid_policy_fails_without_echoing_the_supplied_value() -> None:
         ".clinical_note",
         "clinical_note.",
         "1clinical_note",
-    ),
-)
-def test_sql_fragments_fail_closed_without_echoing_the_supplied_value(
-    column: str,
-) -> None:
-    error = _render_compiler_error("redact(candidate)", candidate=column)
+    ):
+        with subtests.test(column=column):
+            error = _render_compiler_error("redact(candidate)", candidate=column)
 
-    assert "explicit column" in error
-    assert column not in error
+            assert "explicit column" in error
+            assert column not in error
 
 
-@pytest.mark.parametrize(
-    "call",
-    (
+def test_wildcards_and_implicit_full_table_projections_fail_closed(subtests) -> None:
+    for call in (
         "redact('*')",
         "redact('clinical_note.*')",
         "redact_columns('*')",
         "redact_columns([])",
         "redact_columns(['clinical_note', '*'])",
-    ),
-)
-def test_wildcards_and_implicit_full_table_projections_fail_closed(call: str) -> None:
-    error = _render_compiler_error(call)
+    ):
+        with subtests.test(call=call):
+            error = _render_compiler_error(call)
 
-    assert "full-table" in error or "wildcard" in error
+            assert "full-table" in error or "wildcard" in error
 
 
 def test_macro_source_contains_no_sensitive_fixture_values() -> None:

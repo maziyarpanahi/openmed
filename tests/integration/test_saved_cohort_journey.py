@@ -95,5 +95,5 @@ def test_synthetic_snapshot_to_saved_membership_is_reproducible(
         "sha256:a47dcaee8fdd33c18463d81b309576026c5d54721ef4794c83925c1f28646fc9"
     )
     assert built.value.execution_digest == (
-        "sha256:b2190591099483bd059137b6ed08421069e63ededc98dcf72fc6f73781bab15f"
+        "sha256:b4d6223f5a17a3d7c96d8ea50d00548405b0d4f6fab11a93a22bec390358757c"
     )

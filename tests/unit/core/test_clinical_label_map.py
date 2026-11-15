@@ -6,9 +6,8 @@ from openmed.core.clinical_label_map import clinical_label, clinical_label_map
 from openmed.core.clinical_policy import resolve_clinical_policy
 
 
-@pytest.mark.parametrize(
-    "label",
-    [
+def test_direct_identifiers_have_explicit_redacting_projection(subtests):
+    for label in [
         "biometric_identifier",
         "certificate_license_number",
         "customer_id",
@@ -25,13 +24,12 @@ from openmed.core.clinical_policy import resolve_clinical_policy
         "swift_bic",
         "vehicle_identifier",
         "coordinate",
-    ],
-)
-@pytest.mark.parametrize("prefix", ["", "B-", "I-"])
-def test_direct_identifiers_have_explicit_redacting_projection(label, prefix):
-    canonical = clinical_label(prefix + label)
-    assert canonical != "OTHER"
-    assert resolve_clinical_policy().profile.action_for(canonical) == "mask"
+    ]:
+        for prefix in ["", "B-", "I-"]:
+            with subtests.test(label=label, prefix=prefix):
+                canonical = clinical_label(prefix + label)
+                assert canonical != "OTHER"
+                assert resolve_clinical_policy().profile.action_for(canonical) == "mask"
 
 
 def test_clinical_context_mapping_is_explicit_and_unknown_labels_are_rejected():

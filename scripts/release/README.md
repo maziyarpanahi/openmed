@@ -33,30 +33,39 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 7,036,059 bytes. Its maximum is 7,739,665
-bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
+The committed wheel baseline is 8,687,399 bytes. Its maximum is 9,729,887
+bytes, which provides 12% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
 
 The baseline records `master` commit
-`a88fe2feb699fd1945d053859998e54e00237825`. An Ubuntu 24.04 x86-64 rebuild
-with uv 0.11.28, Python 3.11.15 and Hatchling 1.32.4 produced a 7,036,059-byte
-wheel with SHA-256
-`670169af4a50f40db81b05eab20272fe3f1946dbdf95dbe25fb80c1ad09bd5e4`,
-identical to the macOS rebuild. The PR build job also rebuilds the frozen base
-on `ubuntu-latest` and requires its measured size to equal the proposed baseline
-before accepting a budget refresh; the local reproduction is not a substitute
-for that hosted check.
+`174fd485c1539119d6dccebdca9a9526a0f0e7e1`. A clean archived rebuild with uv
+0.11.28 and Hatchling 1.33.0 measured 8,687,399 bytes, 1,772 wheel members,
+SHA-256 `a486d783dc0689e05e3f2b73d0e68baaba91e6cd58e6eb7ba57279118a312179`.
+The refresh PR's build job independently rebuilds the frozen base on
+`ubuntu-latest` and requires its measured size to equal the proposed baseline;
+the local reproduction is not a substitute for that hosted check.
 
-The previous 6,319,377-byte baseline predates already-merged clinical brief,
-SDOH, local NLI, language, evaluation and agent capabilities. Unchanged master
-exceeded the old 6,951,315-byte maximum by 84,744 bytes. The installed-SDK
-candidate at `88b12440f2a05a2f982e1ff98f364db88dc117e2` added only 238 bytes,
-measured at 7,036,297 bytes in
-[CI run 37135994309](https://github.com/maziyarpanahi/openmed/actions/runs/37135994309).
-Both wheels have the same 1,495 members, with every source/resource payload
-matching its Git revision. This refresh records accepted source growth; it
-does not change package contents, compression, 10% headroom or import limits.
+Headroom is normally 10%. This refresh uses 12% once, for the v4.0
+integration: it merges a whole release of changes at once, and its wheel
+measures 9,702,254 bytes (1,881 members), 11.7% above the baseline. The growth
+is first-party Python source for the v4.0 service, export qualification,
+recovery, migration rehearsal and kit release features; the wheel gains no
+model weights, fixtures or build caches. The next refresh returns to 10%.
+
+The previous baseline, 7,848,985 bytes, recorded `master` commit
+`ac3b2df82fa547a395d6b24722e556d32b2b6c2e`.
+
+The prior baseline, `a88fe2feb699fd1945d053859998e54e00237825`, rebuilds with
+its documented Hatchling 1.32.4 at 7,036,059 bytes and 1,495 wheel members.
+Current master has 1,637 members and 812,926 bytes of accepted growth,
+principally synthetic generators, FHIR adapters, anonymization and language
+bundles, clinical exporters, agent workflows, schemas and evaluation code.
+Every packaged source/resource payload matches its frozen Git revision,
+including the explicitly remapped adversarial corpus. The remaining members
+are generated distribution metadata. There are no bundled model weights or
+build-cache files. This refresh changes no wheel payload, compression, 10%
+headroom policy or import limit.
 
 The JSON size report records the wheel size plus total site-packages bytes for
 `openmed`, `openmed[zh]`, and `openmed[indic]`. Each language profile includes
@@ -105,6 +114,55 @@ download, or mutate release inputs. See
 `docs/release/v3.0-journey-release-gate.md` for the complete manifest,
 performance, licensing, exception, signing, and verification contracts.
 
+## V4.0 OpenMedKit release packet
+
+The portable-kit gate (planned as v3.5, folded into v4.0) binds one candidate
+commit to the kit artifacts, the frozen support matrix, the device
+qualification report, bundle, parity, license and threat-model digests,
+test-lane results and moved P1/P2 items, then writes a signed value-free
+packet with the Journey gate's canonicalization and HMAC signing. Set
+`OPENMED_KIT_RELEASE_KEY` from a secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/kit_release_gate.py \
+  --manifest kit-release-manifest.json \
+  --output kit-release-packet.json
+python scripts/release/kit_release_gate.py \
+  --verify kit-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Neither mode tags, publishes or promotes. See
+`docs/release/v4.0-kit-release-gate.md` for evidence kinds and reason codes.
+
+## V4.0 secure-service release packet
+
+The service gate (planned as v3.4, folded into v4.0) binds one candidate
+commit to the security-profile report, no-egress attestation, recovery-drill
+report, migration rehearsal matrix, protocol map, synthetic fixtures, the
+controlled failure-code inventory, the P0 status and the service threat
+model. It fails while any P0 in `openmed/eval/data/service_release_p0.json`
+is open, moved or missing evidence. Set `OPENMED_SERVICE_RELEASE_KEY` from a
+secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/service_recovery_drill.py --output drill.json
+python scripts/release/service_release_gate.py \
+  --write-failure-codes failure-codes.json --candidate "$(git rev-parse HEAD)"
+python scripts/release/service_release_gate.py \
+  --manifest service-release-manifest.json \
+  --output service-release-packet.json
+python scripts/release/service_release_gate.py \
+  --verify service-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Nothing is tagged, published or deployed. See
+`docs/release/v4.0-service-release-gate.md` for evidence kinds and reason
+codes.
+
 ## Retraining recipe proposals
 
 `retrain_queue.py` consumes the committed aggregate-only input contract at
@@ -123,3 +181,13 @@ The scheduled workflow uploads queue and decision evidence as workflow
 artifacts. It opens a configuration-only pull request when a recipe actually
 changes. The workflow never trains, converts, or publishes model artifacts;
 the normal downstream release gates remain mandatory before promotion.
+
+## v3.1 agent candidate decision
+
+`python scripts/release/agent_release_gate.py` shares the exact-source runner
+with `openmed gates agent-release`. Supply a full source SHA, local wheel/sdist,
+tool catalog, policy, source-bound aggregate evidence, private signing-key file
+and a new output path outside the checkout. See the [candidate input and
+verification contract](../../docs/evaluation/v3.1-agent-gates.md#exact-source-candidate-runner).
+The command never builds, tags, publishes or creates a release; its exit codes
+are 0 for READY, 1 for signed NOT_READY, and 2 for configuration/output errors.

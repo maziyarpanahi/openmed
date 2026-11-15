@@ -18,21 +18,18 @@ from openmed.clinical.context import (
 )
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_asserted_findings_are_affirmed(subtests):
+    for text in [
         "pneumonia",
         "pneumonia confirmed on CT",
         "acute renal failure",
-    ],
-)
-def test_asserted_findings_are_affirmed(text):
-    assert resolve_negation(text) == AFFIRMED
+    ]:
+        with subtests.test(text=text):
+            assert resolve_negation(text) == AFFIRMED
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_true_negation_cues_negate_span_text(subtests):
+    for text in [
         "no evidence of pneumonia",
         "no signs of pneumonia",
         "negative for pneumonia",
@@ -40,37 +37,32 @@ def test_asserted_findings_are_affirmed(text):
         "without edema",
         "pneumonia ruled out",
         "absent breath sounds",
-    ],
-)
-def test_true_negation_cues_negate_span_text(text):
-    assert resolve_negation(text) == NEGATED
+    ]:
+        with subtests.test(text=text):
+            assert resolve_negation(text) == NEGATED
 
 
-@pytest.mark.parametrize(
-    "modifier",
-    [
+def test_modifier_hits_carry_negation_cues(subtests):
+    for modifier in [
         "no evidence of",
         "negative for",
         "denies",
         "without",
         "ruled out",
-    ],
-)
-def test_modifier_hits_carry_negation_cues(modifier):
-    assert resolve_negation("pneumonia", [modifier]) == NEGATED
+    ]:
+        with subtests.test(modifier=modifier):
+            assert resolve_negation("pneumonia", [modifier]) == NEGATED
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_pseudo_negation_cues_do_not_negate(subtests):
+    for text in [
         "not ruled out pneumonia",
         "pneumonia cannot be excluded",
         "no increase in pulmonary edema",
         "no significant increase in pneumonia",
-    ],
-)
-def test_pseudo_negation_cues_do_not_negate(text):
-    assert resolve_negation(text) == AFFIRMED
+    ]:
+        with subtests.test(text=text):
+            assert resolve_negation(text) == AFFIRMED
 
 
 def test_double_negation_is_deterministic():
@@ -110,17 +102,15 @@ def test_modifier_hits_do_not_create_cues_across_fragments():
     assert resolve_negation("n", ["o evidence of pneumonia"]) == AFFIRMED
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_short_negation_cues_respect_word_boundaries(subtests):
+    for text in [
         "notable pneumonia",
         "nonelective surgery",
         "deniesing typo",
         "nose pain",
-    ],
-)
-def test_short_negation_cues_respect_word_boundaries(text):
-    assert resolve_negation(text) == AFFIRMED
+    ]:
+        with subtests.test(text=text):
+            assert resolve_negation(text) == AFFIRMED
 
 
 def test_span_context_result_exposes_negation_field():

@@ -462,7 +462,10 @@ def test_load_fixtures_via_registry_and_direct(tmp_path) -> None:
 
     metadata = suite_metadata(MULTIMODAL_DICOM, seed=88, corpus_size=2)
     assert metadata["suite"] == MULTIMODAL_DICOM
-    assert metadata == multimodal_dicom_metadata(seed=88, corpus_size=2)
+    assert metadata == {
+        **multimodal_dicom_metadata(seed=88, corpus_size=2),
+        "task": "dicom_deidentification",
+    }
 
 
 def test_default_fixture_temp_directory_is_cleaned(monkeypatch, tmp_path) -> None:

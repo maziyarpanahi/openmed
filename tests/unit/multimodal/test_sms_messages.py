@@ -8,6 +8,8 @@ import json
 import math
 from pathlib import Path
 
+import pytest
+
 import openmed
 from openmed.core.pipeline import Pipeline
 from openmed.interop import assert_redacted
@@ -123,6 +125,7 @@ def test_default_pipeline_clinical_note_behavior_remains_unchanged():
     assert result.redacted_text == note
 
 
+@pytest.mark.slow
 def test_short_text_corpus_has_higher_recall_and_no_seeded_phi_leaks(monkeypatch):
     rows, seeded = _synthetic_corpus()
     monkeypatch.setattr(openmed, "analyze_text", _empty_detector)

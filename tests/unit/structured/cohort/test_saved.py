@@ -12,16 +12,23 @@ from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema.validators import validator_for
 
+from openmed.clinical.journey_contracts import canonical_digest
 from openmed.structured.cohort import (
+    CohortCoverage,
+    CohortDefinitionVersion,
     CohortExecution,
+    CohortExecutionManifest,
     CohortMembership,
     CohortSourceSnapshot,
+    ConceptSetCoverage,
     CriterionMembership,
     LocalSavedCohortStore,
     MembershipEvidence,
     MembershipState,
     PhenotypeDefinition,
     SavedCohortConflictError,
+    SavedCohortError,
+    SavedCohortUnsupportedError,
     build_cohort_execution,
     load_saved_cohort_schema,
     save_cohort_definition,
@@ -135,6 +142,215 @@ def test_versions_and_executions_are_byte_stable_and_schema_valid() -> None:
     assert not tuple(validator(schema).iter_errors(execution.to_dict()))
 
 
+def test_empty_execution_warns_with_unknown_coverage() -> None:
+    execution = replace(_execution(), memberships=())
+    assert execution.member_count == 0
+    assert execution.review_required is True
+    assert execution.warnings[0].sub_reasons == ("coverage_unknown",)
+    assert execution.coverage.to_dict() == {
+        "source_patient_count": None,
+        "concept_sets": None,
+        "unmapped_source_count": None,
+    }
+    assert CohortExecution.from_json(execution.to_json_bytes()) == execution
+    schema = load_saved_cohort_schema()
+    assert not list(validator_for(schema)(schema).iter_errors(execution.to_dict()))
+
+
+def test_all_not_met_is_an_empty_population_and_nonempty_remains_unwarned() -> None:
+    empty = _execution((_membership(first=MembershipState.NOT_MET),))
+    assert empty.member_count == 0
+    assert empty.review_required is True
+    assert empty.warnings[0].to_dict()["code"] == "empty_population"
+    nonempty = _execution()
+    assert nonempty.member_count == 1
+    assert nonempty.review_required is False
+    assert nonempty.warnings == ()
+
+
+def test_measured_coverage_is_bound_to_digest_and_warning_is_verified() -> None:
+    context = CohortCoverage(
+        source_patient_count=4,
+        unmapped_source_count=2,
+        concept_sets=(
+            ConceptSetCoverage.for_concept_set(
+                "synthetic-private-concept",
+                expanded_count=3,
+                matched_count=0,
+            ),
+        ),
+    )
+    execution = replace(_execution(), memberships=(), coverage=context)
+    assert execution.warnings[0].sub_reasons == (
+        "concept_set_unmatched",
+        "unmapped_sources_present",
+    )
+    diagnostic = json.dumps(execution.coverage.to_dict())
+    assert "synthetic-private-concept" not in diagnostic
+    changed = replace(execution, coverage=replace(context, source_patient_count=5))
+    assert execution.execution_digest != changed.execution_digest
+    tampered = execution.to_dict()
+    tampered["coverage"]["source_patient_count"] = 5
+    with pytest.raises(SavedCohortConflictError, match="execution digest differs"):
+        CohortExecution.from_dict(tampered)
+    tampered = execution.to_dict()
+    tampered["warnings"] = []
+    with pytest.raises(SavedCohortConflictError, match="execution warnings differ"):
+        CohortExecution.from_dict(tampered)
+    tampered = execution.to_dict()
+    tampered["review_required"] = False
+    with pytest.raises(
+        SavedCohortConflictError, match="execution review state differs"
+    ):
+        CohortExecution.from_dict(tampered)
+
+
+def test_coverage_rejects_invalid_counts_without_echoing_values(subtests) -> None:
+    for invalid in [-1, True, 1.2, "synthetic-private-count"]:
+        with subtests.test(invalid=invalid):
+            with pytest.raises(ValueError) as caught:
+                CohortCoverage(source_patient_count=invalid)
+            assert "synthetic-private-count" not in str(caught.value)
+
+
+def test_coverage_rejects_unknown_fields_duplicate_sets_and_false_zero() -> None:
+    with pytest.raises(ValueError, match="fields are invalid"):
+        CohortCoverage.from_dict(
+            {**CohortCoverage().to_dict(), "patient_key": "sentinel"}
+        )
+    item = ConceptSetCoverage("sha256:" + "a" * 64, 1, 0)
+    with pytest.raises(ValueError, match="unique"):
+        CohortCoverage(concept_sets=(item, item))
+    with pytest.raises(ValueError, match="exceeds"):
+        replace(item, matched_count=2)
+    with pytest.raises(
+        SavedCohortConflictError, match="coverage patient count differs"
+    ):
+        replace(_execution(), coverage=CohortCoverage(source_patient_count=0))
+
+
+def _legacy_execution(memberships):
+    version = CohortDefinitionVersion(_definition(), schema_version="1.0.0")
+    manifest = CohortExecutionManifest(
+        definition_version_id=version.version_id,
+        definition_digest=version.definition_digest,
+        criterion_ids=version.criterion_ids,
+        expression=version.definition.expression,
+        source_snapshot=_snapshot(),
+        vocabulary_digest="sha256:" + "b" * 64,
+        policy_digest="sha256:" + "c" * 64,
+        evaluator_version="cohort-evaluator-1.0",
+        schema_version="1.0.0",
+    )
+    current = CohortExecution(manifest, memberships)
+    payload = current.to_dict()
+    del payload["coverage"], payload["warnings"]
+    payload["schema_version"] = "1.0.0"
+    payload["review_required"] = any(item.review_required for item in memberships)
+    payload["execution_digest"] = canonical_digest(
+        {
+            "manifest": manifest.to_dict(),
+            "membership_digest": current.membership_digest,
+        }
+    )
+    return version, payload
+
+
+def test_legacy_execution_parses_into_current_view_without_rewriting_store(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for memberships in [
+        (),
+        (_membership(),),
+        (_membership(first=MembershipState.UNKNOWN),),
+    ]:
+        with subtests.test(memberships=memberships):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            version, payload = _legacy_execution(memberships)
+            original = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+            schema = load_saved_cohort_schema()
+            assert not list(validator_for(schema)(schema).iter_errors(payload))
+            loaded = CohortExecution.from_json(original)
+            assert loaded.schema_version == "1.1.0"
+            assert loaded.manifest.schema_version == "1.0.0"
+            assert loaded.manifest.execution_id == payload["manifest"]["execution_id"]
+            assert loaded.coverage.source_patient_count is None
+            assert loaded.review_required is (
+                not memberships or any(item.review_required for item in memberships)
+            )
+            assert loaded.execution_digest != payload["execution_digest"]
+            assert CohortExecution.from_json(loaded.to_json_bytes()) == loaded
+            assert not list(validator_for(schema)(schema).iter_errors(loaded.to_dict()))
+            store = LocalSavedCohortStore(tmp_path)
+            assert store.put_definition(version).ok
+            path = tmp_path / "executions" / f"{loaded.manifest.execution_id}.json"
+            path.write_bytes(original)
+            result = store.get_execution(loaded.manifest.execution_id)
+            assert result.ok
+            repeated = store.put_execution(result.value)
+            assert repeated.ok and repeated.created is False
+            assert path.read_bytes() == original
+            rerun = store.rerun(
+                loaded.manifest.execution_id, lambda _context: memberships
+            )
+            assert rerun.ok and rerun.value == result.value
+            assert store.put_execution(rerun.value).ok
+            assert path.read_bytes() == original
+            changed = replace(
+                result.value, coverage=CohortCoverage(source_patient_count=10)
+            )
+            assert store.put_execution(changed).state is StoreState.CONFLICT
+            assert path.read_bytes() == original
+
+
+def test_legacy_integrity_and_same_major_policy_are_retained() -> None:
+    _, payload = _legacy_execution(())
+    tampered = {**payload, "review_required": True}
+    with pytest.raises(SavedCohortConflictError, match="review state differs"):
+        CohortExecution.from_dict(tampered)
+    with pytest.raises(SavedCohortUnsupportedError):
+        CohortExecution.from_dict({**payload, "schema_version": "2.0.0"})
+    future = replace(_execution(), schema_version="1.2.0")
+    assert CohortExecution.from_dict(future.to_dict()) == future
+
+
+def test_legacy_byte_retention_rejects_ambiguous_json(subtests) -> None:
+    for hidden in ['"synthetic-private-sentinel"', "NaN"]:
+        with subtests.test(hidden=hidden):
+            _, payload = _legacy_execution(())
+            original = json.dumps(payload)
+            ambiguous = original.replace("{", '{"review_required": ' + hidden + ", ", 1)
+            with pytest.raises(SavedCohortError) as caught:
+                CohortExecution.from_json(ambiguous)
+            assert "synthetic-private-sentinel" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "parser", [CohortExecution.from_json, CohortDefinitionVersion.from_json]
+)
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"synthetic-private-sentinel":',
+        b'{"synthetic-private-sentinel":"\xff"}',
+        "[" * 2000 + "]" * 2000,
+    ],
+    ids=["malformed", "encoding", "deep"],
+)
+def test_saved_json_refusals_do_not_retain_private_decoder_context(
+    parser, payload, force_json_recursion_error
+):
+    if isinstance(payload, str) and payload.startswith("["):
+        force_json_recursion_error("synthetic-private-sentinel")
+    with pytest.raises(SavedCohortError, match="is not valid JSON") as caught:
+        parser(payload)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "synthetic-private-sentinel" not in str(caught.value)
+
+
 @given(st.permutations(("p", "q", "r")))
 def test_membership_order_cannot_change_run_digest(order: list[str]) -> None:
     memberships = tuple(_membership(item) for item in order)
@@ -189,66 +405,72 @@ def test_definition_expression_not_flat_criterion_order_determines_membership() 
     assert result.value.memberships[0].eligible
 
 
-@pytest.mark.parametrize(
-    ("state", "reason"),
-    [
+def test_unresolved_memberships_require_review_and_cannot_be_eligible(subtests) -> None:
+    for state, reason in [
         (MembershipState.UNKNOWN, "evidence_missing"),
         (MembershipState.CONFLICT, "evidence_conflict"),
-    ],
-)
-def test_unresolved_memberships_require_review_and_cannot_be_eligible(
-    state: MembershipState,
-    reason: str,
-) -> None:
-    membership = _membership(second=state)
-    execution = _execution((membership,))
+    ]:
+        with subtests.test(state=state, reason=reason):
+            membership = _membership(second=state)
+            execution = _execution((membership,))
 
-    assert execution.review_required
-    assert membership.review_required
-    assert not membership.eligible
-    assert membership.criteria[1].reason_codes == (reason,)
+            assert execution.review_required
+            assert membership.review_required
+            assert not membership.eligible
+            assert membership.criteria[1].reason_codes == (reason,)
 
-    with pytest.raises(
-        SavedCohortConflictError,
-        match="unresolved criterion cannot produce eligible membership",
-    ):
-        replace(membership, state=MembershipState.MET)
+            with pytest.raises(
+                SavedCohortConflictError,
+                match="unresolved criterion cannot produce eligible membership",
+            ):
+                replace(membership, state=MembershipState.MET)
 
 
-@pytest.mark.parametrize("fchmod_available", [True, False])
 def test_local_store_is_immutable_idempotent_and_referential(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fchmod_available: bool
+    subtests, tmp_path
 ) -> None:
-    if not fchmod_available:
-        monkeypatch.delattr(os, "fchmod", raising=False)
-    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
-    version = save_cohort_definition(_definition())
-    execution = _execution()
+    case_root = tmp_path
+    for fchmod_available in [True, False]:
+        with subtests.test(fchmod_available=fchmod_available):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                if not fchmod_available:
+                    monkeypatch.delattr(os, "fchmod", raising=False)
+                store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+                version = save_cohort_definition(_definition())
+                execution = _execution()
 
-    first = store.put_definition(version)
-    second = store.put_definition(version)
-    saved = store.put_execution(execution)
+                first = store.put_definition(version)
+                second = store.put_definition(version)
+                saved = store.put_execution(execution)
 
-    assert first.ok and first.created
-    assert second.ok and not second.created
-    assert saved.ok and saved.created
-    assert store.get_definition(version.version_id or "").value == version
-    assert store.get_execution(execution.manifest.execution_id or "").value == execution
-    if os.name == "posix":
-        assert oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777) == "0o700"
+                assert first.ok and first.created
+                assert second.ok and not second.created
+                assert saved.ok and saved.created
+                assert store.get_definition(version.version_id or "").value == version
+                assert (
+                    store.get_execution(execution.manifest.execution_id or "").value
+                    == execution
+                )
+                if os.name == "posix":
+                    assert (
+                        oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777)
+                        == "0o700"
+                    )
 
-    drifted = CohortExecution(
-        manifest=execution.manifest,
-        memberships=(_membership(second=MembershipState.NOT_MET),),
-    )
-    conflict = store.put_execution(drifted)
-    assert conflict.state is StoreState.CONFLICT
-    assert conflict.code == "immutable_record_conflict"
+                drifted = CohortExecution(
+                    manifest=execution.manifest,
+                    memberships=(_membership(second=MembershipState.NOT_MET),),
+                )
+                conflict = store.put_execution(drifted)
+                assert conflict.state is StoreState.CONFLICT
+                assert conflict.code == "immutable_record_conflict"
 
-    missing_store = LocalSavedCohortStore(tmp_path / "missing-definition")
-    missing = missing_store.put_execution(execution)
-    assert missing.state is StoreState.UNKNOWN
-    assert missing.code == "definition_not_available"
+                missing_store = LocalSavedCohortStore(tmp_path / "missing-definition")
+                missing = missing_store.put_execution(execution)
+                assert missing.state is StoreState.UNKNOWN
+                assert missing.code == "definition_not_available"
 
 
 def test_store_rejects_valid_definition_under_a_different_id(tmp_path: Path) -> None:
@@ -276,29 +498,35 @@ def test_store_rejects_valid_execution_under_a_different_id(tmp_path: Path) -> N
     assert result.code == "execution_integrity_failed"
 
 
-@pytest.mark.parametrize("operation", ["write", "read"])
 def test_execution_expression_must_match_the_named_definition(
-    tmp_path: Path, operation: str
+    subtests, tmp_path
 ) -> None:
-    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
-    assert store.put_definition(save_cohort_definition(_definition())).ok
-    execution = _execution()
-    changed = replace(
-        execution,
-        manifest=replace(
-            execution.manifest,
-            expression=replace(execution.manifest.expression, operator="or"),
-            execution_id=None,
-        ),
-    )
-    if operation == "write":
-        result = store.put_execution(changed)
-    else:
-        path = store.root / "executions" / f"{changed.manifest.execution_id}.json"
-        path.write_bytes(changed.to_json_bytes())
-        result = store.get_execution(changed.manifest.execution_id or "")
-    assert result.state is StoreState.CONFLICT
-    assert result.code == "definition_digest_conflict"
+    case_root = tmp_path
+    for operation in ["write", "read"]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+            assert store.put_definition(save_cohort_definition(_definition())).ok
+            execution = _execution()
+            changed = replace(
+                execution,
+                manifest=replace(
+                    execution.manifest,
+                    expression=replace(execution.manifest.expression, operator="or"),
+                    execution_id=None,
+                ),
+            )
+            if operation == "write":
+                result = store.put_execution(changed)
+            else:
+                path = (
+                    store.root / "executions" / f"{changed.manifest.execution_id}.json"
+                )
+                path.write_bytes(changed.to_json_bytes())
+                result = store.get_execution(changed.manifest.execution_id or "")
+            assert result.state is StoreState.CONFLICT
+            assert result.code == "definition_digest_conflict"
 
 
 def test_rerun_proves_reproducibility_and_reports_drift(tmp_path: Path) -> None:

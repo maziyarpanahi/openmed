@@ -14,26 +14,41 @@ from openmed.eval.annotation import (
 HMAC_SEED = "x"
 
 
-@pytest.mark.parametrize("separator", [" ", "  ", "\t", " \t "])
-@pytest.mark.parametrize("extra_columns", [False, True])
-def test_literal_hash_rows_accept_all_column_separators(separator, extra_columns):
-    text = "Synthetic #42."
-    rows = [("Synthetic", "O"), ("#", "B-ID_NUM"), ("42", "I-ID_NUM"), (".", "O")]
-    columns = "\n".join(
-        separator.join((token, "SYM", "B-NP", tag) if extra_columns else (token, tag))
-        for token, tag in rows
-    )
-    spans = parse_conll(text, columns, doc_id="synthetic", hash_secret=HMAC_SEED)
-    assert [(s.start, s.end, s.canonical_label) for s in spans] == [(10, 13, "ID_NUM")]
-    assert spans[0].text_hash == hmac_text_hash("#42", HMAC_SEED)
+def test_literal_hash_rows_accept_all_column_separators(subtests):
+    for separator in [" ", "  ", "\t", " \t "]:
+        for extra_columns in [False, True]:
+            with subtests.test(separator=separator, extra_columns=extra_columns):
+                text = "Synthetic #42."
+                rows = [
+                    ("Synthetic", "O"),
+                    ("#", "B-ID_NUM"),
+                    ("42", "I-ID_NUM"),
+                    (".", "O"),
+                ]
+                columns = "\n".join(
+                    separator.join(
+                        (token, "SYM", "B-NP", tag) if extra_columns else (token, tag)
+                    )
+                    for token, tag in rows
+                )
+                spans = parse_conll(
+                    text, columns, doc_id="synthetic", hash_secret=HMAC_SEED
+                )
+                assert [(s.start, s.end, s.canonical_label) for s in spans] == [
+                    (10, 13, "ID_NUM")
+                ]
+                assert spans[0].text_hash == hmac_text_hash("#42", HMAC_SEED)
 
 
-@pytest.mark.parametrize("tag", ["O", "B-ID_NUM", "S-ID_NUM", "U-ID_NUM"])
-def test_space_delimited_hash_alone_is_a_token(tag):
-    spans = parse_conll("#", f"# {tag}\n", doc_id="synthetic", hash_secret=HMAC_SEED)
-    assert len(spans) == (0 if tag == "O" else 1)
-    if spans:
-        assert (spans[0].start, spans[0].end) == (0, 1)
+def test_space_delimited_hash_alone_is_a_token(subtests):
+    for tag in ["O", "B-ID_NUM", "S-ID_NUM", "U-ID_NUM"]:
+        with subtests.test(tag=tag):
+            spans = parse_conll(
+                "#", f"# {tag}\n", doc_id="synthetic", hash_secret=HMAC_SEED
+            )
+            assert len(spans) == (0 if tag == "O" else 1)
+            if spans:
+                assert (spans[0].start, spans[0].end) == (0, 1)
 
 
 def test_hash_comments_and_sentence_breaks_still_work():

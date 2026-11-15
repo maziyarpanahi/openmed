@@ -934,6 +934,64 @@ class BangladeshNIDProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Sri Lanka National Identity Card (9 digits + V/X, or 12 digits; structural)
+# ---------------------------------------------------------------------------
+_SRI_LANKA_NIC_OLD_SURROGATE_RE = re.compile(r"[0-9]{9}[VvXx]")
+
+
+def generate_sri_lanka_nic(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid synthetic Sri Lanka NIC.
+
+    A valid source keeps its layout (nine digits and ``V``/``X``, or twelve
+    digits) and the letter case of the older layout. The birth year, day field,
+    +500 day-field range, serial, check digit and letter are all drawn at
+    random, independently of the source, so the surrogate carries no
+    attribute of the original. Without a valid source the twelve-digit layout
+    is used. Every result passes
+    :func:`openmed.core.pii_i18n.validate_sri_lanka_nic`.
+    """
+
+    from openmed.core.pii_i18n import validate_sri_lanka_nic
+
+    source = rng or random.Random()
+    normalized = original.strip() if isinstance(original, str) else ""
+    if not validate_sri_lanka_nic(normalized):
+        normalized = ""
+    old_layout = _SRI_LANKA_NIC_OLD_SURROGATE_RE.fullmatch(normalized) is not None
+    candidate = ""
+
+    for _ in range(20):
+        day = source.randint(1, 366) + source.choice((0, 500))
+        if old_layout:
+            letter = source.choice("VX")
+            if normalized[-1].islower():
+                letter = letter.lower()
+            candidate = (
+                f"{source.randint(40, 99):02d}{day:03d}"
+                f"{source.randint(0, 9999):04d}{letter}"
+            )
+        else:
+            candidate = (
+                f"{source.randint(1940, 2005)}{day:03d}{source.randint(0, 99999):05d}"
+            )
+        if candidate != normalized and validate_sri_lanka_nic(candidate):
+            return candidate
+
+    return candidate
+
+
+class SriLankaNICProvider(BaseProvider):
+    """Generate structural Sri Lanka National Identity Card surrogates."""
+
+    def sri_lanka_nic(self, original: str | None = None) -> str:
+        return generate_sri_lanka_nic(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Iranian National ID (10 digits with a mod-11 checksum)
 # ---------------------------------------------------------------------------
 def generate_iran_national_id(
@@ -4281,6 +4339,7 @@ __all__ = [
     "RodneCisloProvider",
     "SerbianJmbgProvider",
     "SouthAfricanIdProvider",
+    "SriLankaNICProvider",
     "SYNTHETIC_CHINESE_COMPOUND_SURNAMES",
     "SYNTHETIC_CHINESE_GIVEN_NAME_CHARACTERS",
     "SYNTHETIC_CHINESE_SURNAMES",
@@ -4363,6 +4422,7 @@ __all__ = [
     "generate_portuguese_nif",
     "generate_south_african_id",
     "generate_spanish_nie",
+    "generate_sri_lanka_nic",
     "generate_ssn",
     "generate_swiss_ahv",
     "generate_za_id_number",

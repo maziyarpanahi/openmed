@@ -46,9 +46,8 @@ def _wav(*chunks: bytes, riff_size: int | None = None) -> bytes:
     return b"RIFF" + struct.pack("<I", declared_size) + body
 
 
-@pytest.mark.parametrize(
-    ("fmt", "samples", "expected"),
-    [
+def test_reads_hand_checked_pcm_and_float_metadata(subtests):
+    for fmt, samples, expected in [
         (
             _fmt(channels=1, sample_rate=8000, bit_depth=16),
             b"\x00" * 8,
@@ -69,20 +68,21 @@ def _wav(*chunks: bytes, riff_size: int | None = None) -> bytes:
             b"\x00" * 8,
             (WAVE_FORMAT_IEEE_FLOAT, 1, 48000, 32, 8, 2, 2 / 48000),
         ),
-    ],
-)
-def test_reads_hand_checked_pcm_and_float_metadata(fmt, samples, expected):
-    result = read_wav_metadata(_wav(_chunk(b"fmt ", fmt), _chunk(b"data", samples)))
+    ]:
+        with subtests.test(fmt=fmt, samples=samples, expected=expected):
+            result = read_wav_metadata(
+                _wav(_chunk(b"fmt ", fmt), _chunk(b"data", samples))
+            )
 
-    assert (
-        result.format_code,
-        result.channels,
-        result.sample_rate_hz,
-        result.bit_depth,
-        result.data_byte_count,
-        result.frame_count,
-        result.duration_seconds,
-    ) == expected
+            assert (
+                result.format_code,
+                result.channels,
+                result.sample_rate_hz,
+                result.bit_depth,
+                result.data_byte_count,
+                result.frame_count,
+                result.duration_seconds,
+            ) == expected
 
 
 def test_skips_extra_chunks_and_their_odd_byte_padding() -> None:
@@ -143,9 +143,8 @@ def test_seekable_stream_is_restored_and_never_closed() -> None:
     assert not stream.closed
 
 
-@pytest.mark.parametrize(
-    ("payload", "category"),
-    [
+def test_malformed_or_unsupported_headers_fail_closed(subtests):
+    for payload, category in [
         (b"RIFX\x00\x00\x00\x04WAVE", "wav_endianness_unsupported"),
         (b"not a wave!!", "wav_signature_invalid"),
         (b"RIFF\x03\x00\x00\x00WAVE", "wav_riff_size_invalid"),
@@ -192,14 +191,13 @@ def test_seekable_stream_is_restored_and_never_closed() -> None:
             _wav(_chunk(b"fmt ", _fmt()), _chunk(b"data", b"\x00")),
             "wav_data_size_invalid",
         ),
-    ],
-)
-def test_malformed_or_unsupported_headers_fail_closed(payload, category):
-    with pytest.raises(WavMetadataError) as raised:
-        read_wav_metadata(payload)
+    ]:
+        with subtests.test(payload=payload, category=category):
+            with pytest.raises(WavMetadataError) as raised:
+                read_wav_metadata(payload)
 
-    assert raised.value.category == category
-    assert str(raised.value) == category
+            assert raised.value.category == category
+            assert str(raised.value) == category
 
 
 def test_truncated_header_fails_closed() -> None:
@@ -244,13 +242,14 @@ def test_stream_errors_are_value_free_and_do_not_close_the_stream() -> None:
     assert not stream.closed
 
 
-@pytest.mark.parametrize("max_header_bytes", [0, -1, True, 1.5, None])
-def test_invalid_header_limits_are_rejected(max_header_bytes) -> None:
-    with pytest.raises(ValueError, match="max_header_bytes"):
-        read_wav_metadata(
-            b"RIFF\x04\x00\x00\x00WAVE",
-            max_header_bytes=max_header_bytes,
-        )
+def test_invalid_header_limits_are_rejected(subtests) -> None:
+    for max_header_bytes in [0, -1, True, 1.5, None]:
+        with subtests.test(max_header_bytes=max_header_bytes):
+            with pytest.raises(ValueError, match="max_header_bytes"):
+                read_wav_metadata(
+                    b"RIFF\x04\x00\x00\x00WAVE",
+                    max_header_bytes=max_header_bytes,
+                )
 
 
 def test_default_header_limit_is_bounded() -> None:
@@ -315,16 +314,18 @@ def test_rf64_real_file_end_to_end(tmp_path, name, payload) -> None:
         assert not stream.closed
 
 
-@pytest.mark.parametrize("cut", range(12))
-def test_rf64_incomplete_envelope_retains_truncated_reason(cut) -> None:
-    with pytest.raises(WavMetadataError, match="^wav_header_truncated$"):
-        read_wav_metadata(RF64_CASES[0][1][:cut])
+def test_rf64_incomplete_envelope_retains_truncated_reason(subtests) -> None:
+    for cut in range(12):
+        with subtests.test(cut=cut):
+            with pytest.raises(WavMetadataError, match="^wav_header_truncated$"):
+                read_wav_metadata(RF64_CASES[0][1][:cut])
 
 
-@pytest.mark.parametrize("limit", [1, 11])
-def test_rf64_header_limit_is_checked_before_signature(limit) -> None:
-    with pytest.raises(WavMetadataError, match="^wav_header_limit_exceeded$"):
-        read_wav_metadata(RF64_CASES[0][1], max_header_bytes=limit)
+def test_rf64_header_limit_is_checked_before_signature(subtests) -> None:
+    for limit in [1, 11]:
+        with subtests.test(limit=limit):
+            with pytest.raises(WavMetadataError, match="^wav_header_limit_exceeded$"):
+                read_wav_metadata(RF64_CASES[0][1], max_header_bytes=limit)
 
 
 @pytest.mark.integration

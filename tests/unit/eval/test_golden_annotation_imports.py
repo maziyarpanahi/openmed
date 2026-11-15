@@ -126,9 +126,8 @@ def test_imports_accept_raw_brat_content_and_validate_relation_order() -> None:
     assert document.spans[0].metadata["document_id"] == "synthetic-raw"
 
 
-@pytest.mark.parametrize(
-    ("annotation_text", "message"),
-    [
+def test_brat_import_rejects_invalid_spans_and_relations(subtests) -> None:
+    for annotation_text, message in [
         (
             "T1\tPERSON 8 999\tAlex Rivera\n",
             "invalid offsets",
@@ -141,18 +140,14 @@ def test_imports_accept_raw_brat_content_and_validate_relation_order() -> None:
             "T1\tPERSON 8 19\tAlex Rivera\nR1\tKNOWS Arg1:T1 Arg2:T9\n",
             "missing brat relation endpoint",
         ),
-    ],
-)
-def test_brat_import_rejects_invalid_spans_and_relations(
-    annotation_text: str,
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        parse_brat_multi_annotator(
-            "Patient Alex Rivera takes Metformin.",
-            {"annotator-a": annotation_text},
-            document_id="synthetic-invalid",
-        )
+    ]:
+        with subtests.test(annotation_text=annotation_text, message=message):
+            with pytest.raises(ValueError, match=message):
+                parse_brat_multi_annotator(
+                    "Patient Alex Rivera takes Metformin.",
+                    {"annotator-a": annotation_text},
+                    document_id="synthetic-invalid",
+                )
 
 
 def _label_studio_fixture() -> list[dict]:
@@ -161,9 +156,8 @@ def _label_studio_fixture() -> list[dict]:
     )
 
 
-@pytest.mark.parametrize(
-    ("mutate", "message"),
-    [
+def test_label_studio_import_rejects_invalid_offsets_and_endpoints(subtests) -> None:
+    for mutate, message in [
         (
             lambda payload: payload[0]["annotations"][0]["result"][0]["value"].update(
                 {"end": 999}
@@ -176,18 +170,14 @@ def _label_studio_fixture() -> list[dict]:
             ),
             "missing label_studio relation endpoint",
         ),
-    ],
-)
-def test_label_studio_import_rejects_invalid_offsets_and_endpoints(
-    mutate,
-    message: str,
-) -> None:
-    payload = _label_studio_fixture()
-    malformed = copy.deepcopy(payload)
-    mutate(malformed)
+    ]:
+        with subtests.test(mutate=mutate, message=message):
+            payload = _label_studio_fixture()
+            malformed = copy.deepcopy(payload)
+            mutate(malformed)
 
-    with pytest.raises(ValueError, match=message):
-        parse_label_studio_multi_annotator_export(malformed)
+            with pytest.raises(ValueError, match=message):
+                parse_label_studio_multi_annotator_export(malformed)
 
 
 def test_committed_annotation_samples_are_synthetic_only() -> None:

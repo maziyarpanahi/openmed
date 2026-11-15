@@ -71,19 +71,18 @@ def test_g12_missing_evidence_is_deterministic_not_applicable() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "value", (None, True, "0.9", float("nan"), -1.01, 1.01, 10**400)
-)
-def test_g12_fails_closed_for_malformed_supplied_evidence(value: object) -> None:
-    check = release_gates.evaluate_gold_corpus_agreement_gate(
-        {"gold_quality_report": {"overall_agreement": value}}
-    )
+def test_g12_fails_closed_for_malformed_supplied_evidence(subtests) -> None:
+    for value in (None, True, "0.9", float("nan"), -1.01, 1.01, 10**400):
+        with subtests.test(value=value):
+            check = release_gates.evaluate_gold_corpus_agreement_gate(
+                {"gold_quality_report": {"overall_agreement": value}}
+            )
 
-    assert check.passed is False
-    assert check.details["evidence_present"] is True
-    assert check.details["metric_source"] == (
-        "candidate.gold_quality_report.overall_agreement"
-    )
+            assert check.passed is False
+            assert check.details["evidence_present"] is True
+            assert check.details["metric_source"] == (
+                "candidate.gold_quality_report.overall_agreement"
+            )
 
 
 def test_release_gate_emits_g12_from_nested_candidate_metrics(tmp_path) -> None:

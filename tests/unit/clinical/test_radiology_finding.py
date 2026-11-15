@@ -42,9 +42,10 @@ def test_fixture_rows_are_synthetic():
     assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
-@pytest.mark.parametrize("row", _load_fixture())
-def test_extractor_matches_gold_row(row):
-    assert extract_radiology_findings(row["text"]) == row["gold"]
+def test_extractor_matches_gold_row(subtests):
+    for row in _load_fixture():
+        with subtests.test(row=row):
+            assert extract_radiology_findings(row["text"]) == row["gold"]
 
 
 def test_single_finding_binds_size_laterality_and_location():
@@ -108,12 +109,13 @@ def test_bilateral_and_unknown_laterality_are_explicit():
     )
 
 
-@pytest.mark.parametrize(
-    "text,laterality",
-    [("Left breast mass.", "left"), ("Right breast mass.", "right")],
-)
-def test_left_and_right_laterality(text, laterality):
-    assert extract_radiology_findings(text)[0]["laterality"] == laterality
+def test_left_and_right_laterality(subtests):
+    for text, laterality in [
+        ("Left breast mass.", "left"),
+        ("Right breast mass.", "right"),
+    ]:
+        with subtests.test(text=text, laterality=laterality):
+            assert extract_radiology_findings(text)[0]["laterality"] == laterality
 
 
 def test_missing_size_and_location_are_none():

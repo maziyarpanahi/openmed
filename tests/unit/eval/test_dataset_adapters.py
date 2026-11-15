@@ -219,13 +219,17 @@ def test_dua_stub_accepts_existing_credentialed_path_as_eval_only(tmp_path):
     assert result.reason.startswith("eval-only gated corpus stub")
 
 
-@pytest.mark.parametrize("marker", ["UMLS", "snomed", "cPt", "n2C2", "made"])
-def test_guard_rejects_gated_payload_markers(tmp_path, marker):
-    data_file = tmp_path / "payload.jsonl"
-    data_file.write_text(json.dumps({"label": marker}) + "\n", encoding="utf-8")
+def test_guard_rejects_gated_payload_markers(subtests, tmp_path):
+    case_root = tmp_path
+    for marker in ["UMLS", "snomed", "cPt", "n2C2", "made"]:
+        with subtests.test(marker=marker):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            data_file = tmp_path / "payload.jsonl"
+            data_file.write_text(json.dumps({"label": marker}) + "\n", encoding="utf-8")
 
-    with pytest.raises(AssertionError, match="gated dataset content"):
-        assert_no_gated_content_committed(tmp_path)
+            with pytest.raises(AssertionError, match="gated dataset content"):
+                assert_no_gated_content_committed(tmp_path)
 
 
 def test_guard_ignores_python_source_and_clean_payloads(tmp_path):

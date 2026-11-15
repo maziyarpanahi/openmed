@@ -309,8 +309,11 @@ public enum OpenMedMaplePrompt {
 
 /// Parses Maple text while enforcing OpenMedKit's span-integrity contract.
 public enum OpenMedMapleOutputParser {
+    /// Parser failures. Generated text never enters the error.
     public enum Error: LocalizedError {
         case missingJSONObject
+        /// Payload is a fixed decoding reason code: `type_mismatch`,
+        /// `value_not_found`, `key_not_found` or `data_corrupted`.
         case invalidJSONObject(String)
 
         public var errorDescription: String? {
@@ -388,7 +391,23 @@ public enum OpenMedMapleOutputParser {
                 )
             }
         } catch let error as DecodingError {
-            throw Error.invalidJSONObject(error.localizedDescription)
+            throw Error.invalidJSONObject(decodingReasonCode(error))
+        }
+    }
+
+    /// Maps a decoding failure to a fixed code; its context can quote output.
+    private static func decodingReasonCode(_ error: DecodingError) -> String {
+        switch error {
+        case .typeMismatch:
+            return "type_mismatch"
+        case .valueNotFound:
+            return "value_not_found"
+        case .keyNotFound:
+            return "key_not_found"
+        case .dataCorrupted:
+            return "data_corrupted"
+        @unknown default:
+            return "data_corrupted"
         }
     }
 

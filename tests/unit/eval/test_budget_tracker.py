@@ -49,17 +49,18 @@ def test_invalid_budget_field_names_are_not_echoed() -> None:
     assert "synthetic-sensitive-field" not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "operation", [rolling_weekly_totals, compute_fleet_budget_metrics]
-)
-def test_invalid_budget_timestamps_do_not_leak_through_exception_causes(operation):
-    sensitive = "synthetic-sensitive-timestamp"
-    with pytest.raises(ValueError) as error:
-        operation((), as_of=sensitive)
-    assert sensitive not in str(error.value)
-    assert sensitive not in "".join(traceback.format_exception_only(error.value))
-    assert error.value.__suppress_context__
-    assert error.value.__cause__ is None
+def test_invalid_budget_timestamps_do_not_leak_through_exception_causes(subtests):
+    for operation in [rolling_weekly_totals, compute_fleet_budget_metrics]:
+        with subtests.test(operation=operation):
+            sensitive = "synthetic-sensitive-timestamp"
+            with pytest.raises(ValueError) as error:
+                operation((), as_of=sensitive)
+            assert sensitive not in str(error.value)
+            assert sensitive not in "".join(
+                traceback.format_exception_only(error.value)
+            )
+            assert error.value.__suppress_context__
+            assert error.value.__cause__ is None
 
 
 def _threshold(cost: float) -> BudgetThresholds:
@@ -180,33 +181,28 @@ def test_aggregation_order_includes_numeric_stage_measurements() -> None:
     assert first.record_hash == replay.record_hash
 
 
-@pytest.mark.parametrize("window_days", [1.9, "7", True, 0])
-def test_budget_policy_mapping_rejects_coerced_window_days(window_days: object) -> None:
-    payload = BudgetPolicy().to_dict()
-    payload["window_days"] = window_days
+def test_budget_policy_mapping_rejects_coerced_window_days(subtests) -> None:
+    for window_days in [1.9, "7", True, 0]:
+        with subtests.test(window_days=window_days):
+            payload = BudgetPolicy().to_dict()
+            payload["window_days"] = window_days
 
-    with pytest.raises(BudgetTrackingError, match="positive integer"):
-        BudgetPolicy.from_mapping(payload)
+            with pytest.raises(BudgetTrackingError, match="positive integer"):
+                BudgetPolicy.from_mapping(payload)
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
+def test_budget_decision_mapping_rejects_coerced_types(subtests) -> None:
+    for field, value, message in [
         ("gating", "false", "boolean"),
         ("exceeded_metrics", "estimated_cost_usd", "array of strings"),
         ("warned_metrics", [1], "array of strings"),
-    ],
-)
-def test_budget_decision_mapping_rejects_coerced_types(
-    field: str,
-    value: object,
-    message: str,
-) -> None:
-    payload = BudgetDecision(verdict="WITHIN").to_dict()
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value, message=message):
+            payload = BudgetDecision(verdict="WITHIN").to_dict()
+            payload[field] = value
 
-    with pytest.raises(BudgetTrackingError, match=message):
-        BudgetDecision.from_mapping(payload)
+            with pytest.raises(BudgetTrackingError, match=message):
+                BudgetDecision.from_mapping(payload)
 
 
 def test_per_run_budget_excess_has_advisory_over_verdict() -> None:

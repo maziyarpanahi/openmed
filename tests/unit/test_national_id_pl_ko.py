@@ -275,19 +275,15 @@ class TestNationalIdPatternReachability:
         assert len(patterns) == 1
         assert isinstance(patterns[0], PIIPattern)
 
-    @pytest.mark.parametrize(
-        ("lang", "locale", "method"),
-        [
+    def test_locale_coherence_report_includes_registered_provider(self, subtests):
+        for lang, locale, method in [
             ("pl", "pl_PL", "pesel"),
             ("ko", "ko_KR", "korean_rrn"),
             ("lv", "lv_LV", "personas_kods"),
-        ],
-    )
-    def test_locale_coherence_report_includes_registered_provider(
-        self, lang, locale, method
-    ):
-        rows = {row["language"]: row for row in locale_coherence_report()}
+        ]:
+            with subtests.test(lang=lang, locale=locale, method=method):
+                rows = {row["language"]: row for row in locale_coherence_report()}
 
-        assert rows[lang]["locale"] == locale
-        assert rows[lang]["id_locale"] == locale
-        assert rows[lang]["id_providers"] == [method]
+                assert rows[lang]["locale"] == locale
+                assert rows[lang]["id_locale"] == locale
+                assert rows[lang]["id_providers"] == [method]

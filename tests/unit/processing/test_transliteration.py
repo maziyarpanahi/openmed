@@ -29,14 +29,12 @@ _RAMA_BY_SCRIPT = {
 }
 
 
-@pytest.mark.parametrize(
-    "name",
-    ("राम", "अनिता", "किरण", "लक्ष्मी", "अर्जुन", "सीता", "अक्का"),
-)
-def test_devanagari_lossless_subset_round_trips_through_iso15919(name):
-    pivot = to_latin(name, "Devanagari").text
+def test_devanagari_lossless_subset_round_trips_through_iso15919(subtests):
+    for name in ("राम", "अनिता", "किरण", "लक्ष्मी", "अर्जुन", "सीता", "अक्का"):
+        with subtests.test(name=name):
+            pivot = to_latin(name, "Devanagari").text
 
-    assert from_latin(pivot, "Devanagari") == unicodedata.normalize("NFC", name)
+            assert from_latin(pivot, "Devanagari") == unicodedata.normalize("NFC", name)
 
 
 def test_all_nine_scripts_share_the_iso15919_pivot():
@@ -57,24 +55,24 @@ def test_cross_script_and_romanized_names_share_one_key():
     assert transliteration_key("rAma", "Harvard-Kyoto") == expected
 
 
-@pytest.mark.parametrize(
-    ("itrans_source", "harvard_kyoto_source", "expected"),
-    (
+def test_itrans_and_harvard_kyoto_normalize_to_the_same_pivot(subtests):
+    for itrans_source, harvard_kyoto_source, expected in (
         ("rAma", "rAma", "rāma"),
         ("lakShmI", "lakSmI", "lakṣmī"),
         ("kR^iShNa", "kRSNa", "kr̥ṣṇa"),
         ("chandra", "candra", "candra"),
-    ),
-)
-def test_itrans_and_harvard_kyoto_normalize_to_the_same_pivot(
-    itrans_source,
-    harvard_kyoto_source,
-    expected,
-):
-    itrans = romanized_to_iso15919(itrans_source, scheme="itrans")
-    harvard_kyoto = romanized_to_iso15919(harvard_kyoto_source, scheme="harvard-kyoto")
+    ):
+        with subtests.test(
+            itrans_source=itrans_source,
+            harvard_kyoto_source=harvard_kyoto_source,
+            expected=expected,
+        ):
+            itrans = romanized_to_iso15919(itrans_source, scheme="itrans")
+            harvard_kyoto = romanized_to_iso15919(
+                harvard_kyoto_source, scheme="harvard-kyoto"
+            )
 
-    assert itrans == harvard_kyoto == expected
+            assert itrans == harvard_kyoto == expected
 
 
 def test_fixed_romanization_inputs_decode_to_the_same_devanagari_text():

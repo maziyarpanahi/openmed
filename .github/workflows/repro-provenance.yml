@@ -2,7 +2,7 @@ name: Reproducibility Provenance Gate
 
 on:
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/repro-provenance.yml"
       - ".github/workflows/reproducible-lock.yml"
@@ -36,6 +36,10 @@ on:
         description: "Repo id to select from the manifest"
         required: false
         type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   training-provenance:

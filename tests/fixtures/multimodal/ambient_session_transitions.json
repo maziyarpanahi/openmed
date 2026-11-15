@@ -1,0 +1,60 @@
+{
+  "schema": "openmed.ambient.session.parity.v1",
+  "session_ref": "00000000000000000000000000000001",
+  "policy_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "participants": ["00000000000000000000000000000002", "00000000000000000000000000000003"],
+  "scenarios": [
+    {
+      "name": "unanimous_consent_interruption_and_withdrawal",
+      "steps": [
+        {"action": "start", "error": "invalid_transition", "expect": {}},
+        {"action": "consent", "participant": 0, "expect": {"consents": 1}},
+        {"action": "start", "error": "invalid_transition", "expect": {}},
+        {"action": "consent", "participant": 1, "expect": {"state": "ready", "consents": 2}},
+        {"action": "start", "expect": {"state": "capturing"}},
+        {"action": "retain", "kind": "audio", "expect": {"owned_artifacts": 1, "owned_bytes": 3}},
+        {"action": "retain", "kind": "transcript", "expect": {"owned_artifacts": 2, "owned_bytes": 6}},
+        {"action": "retain", "kind": "cache", "expect": {"owned_artifacts": 3, "owned_bytes": 9}},
+        {"action": "retain", "kind": "draft", "expect": {"owned_artifacts": 4, "owned_bytes": 12}},
+        {"action": "pause", "expect": {"state": "paused"}},
+        {"action": "retain", "kind": "audio", "error": "capture_not_admitted", "expect": {}},
+        {"action": "interrupt", "expect": {"state": "interrupted"}},
+        {"action": "use", "error": "capture_not_admitted", "expect": {}},
+        {"action": "resume", "expect": {"state": "capturing"}},
+        {"action": "withdraw", "expect": {"state": "withdrawn", "generation": 1, "consents": 0, "owned_artifacts": 0, "owned_bytes": 0, "deletion_verified": true, "reason": "consent_withdrawn"}},
+        {"action": "use", "error": "session_closed", "expect": {}},
+        {"action": "resume", "error": "session_closed", "expect": {}}
+      ]
+    },
+    {
+      "name": "participant_change_invalidates_previous_cohort",
+      "steps": [
+        {"action": "consent", "participant": 0, "expect": {"consents": 1}},
+        {"action": "consent", "participant": 1, "expect": {"state": "ready", "consents": 2}},
+        {"action": "start", "expect": {"state": "capturing"}},
+        {"action": "retain", "kind": "draft", "expect": {"owned_artifacts": 1, "owned_bytes": 3}},
+        {"action": "participants", "expect": {"state": "awaiting_consent", "generation": 1, "participants": 1, "consents": 0, "owned_artifacts": 0, "owned_bytes": 0, "reason": "participants_changed"}},
+        {"action": "use", "error": "stale_reference", "expect": {}},
+        {"action": "start", "error": "invalid_transition", "expect": {}},
+        {"action": "consent", "participant": 0, "expect": {"state": "ready", "consents": 1}},
+        {"action": "start", "expect": {"state": "capturing"}},
+        {"action": "expire", "expect": {"state": "expired", "generation": 2, "consents": 0, "deletion_verified": true, "reason": "expired"}}
+      ]
+    },
+    {
+      "name": "review_export_remains_external_and_draft_only",
+      "steps": [
+        {"action": "consent", "participant": 0, "expect": {"consents": 1}},
+        {"action": "consent", "participant": 1, "expect": {"state": "ready", "consents": 2}},
+        {"action": "start", "expect": {"state": "capturing"}},
+        {"action": "retain", "kind": "draft", "expect": {"owned_artifacts": 1, "owned_bytes": 3}},
+        {"action": "export", "error": "invalid_transition", "expect": {}},
+        {"action": "stop", "expect": {"state": "stopped"}},
+        {"action": "resume", "error": "invalid_transition", "expect": {}},
+        {"action": "export", "expect": {"unaccounted_external_copies": 1}},
+        {"action": "delete", "expect": {"state": "deletion_incomplete", "generation": 1, "consents": 0, "owned_artifacts": 0, "owned_bytes": 0, "reason": "deleted"}},
+        {"action": "delete", "expect": {}}
+      ]
+    }
+  ]
+}

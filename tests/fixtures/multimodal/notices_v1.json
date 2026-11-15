@@ -1,0 +1,63 @@
+[
+  {
+    "kind": "measurement_for_review",
+    "result": {
+      "schema_version": "openmed.multimodal.review_result.v1",
+      "requires_reviewer_confirmation": true,
+      "is_diagnostic": false,
+      "output_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "notice": {
+        "identifier": "openmed.multimodal.measurement_for_review.v1",
+        "text": "Measurement candidate for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision."
+      }
+    }
+  },
+  {
+    "kind": "visual_description",
+    "result": {
+      "schema_version": "openmed.multimodal.review_result.v1",
+      "requires_reviewer_confirmation": true,
+      "is_diagnostic": false,
+      "output_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "notice": {
+        "identifier": "openmed.multimodal.visual_description.v1",
+        "text": "Visual description for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision."
+      }
+    }
+  },
+  {
+    "kind": "draft_for_review",
+    "result": {
+      "schema_version": "openmed.multimodal.review_result.v1",
+      "requires_reviewer_confirmation": true,
+      "is_diagnostic": false,
+      "output_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "notice": {
+        "identifier": "openmed.multimodal.draft_for_review.v1",
+        "text": "Draft for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision."
+      }
+    }
+  },
+  {
+    "kind": "vision_generation",
+    "result": {
+      "schema_version": "openmed.multimodal.vision_generation.v1",
+      "requires_reviewer_confirmation": true,
+      "is_diagnostic": false,
+      "text": "Synthetic image contains three geometric shapes.",
+      "token_ids": [
+        1,
+        2
+      ],
+      "prompt_tokens": 3,
+      "generation_tokens": 2,
+      "prompt_seconds": 0.125,
+      "generation_seconds": 0.25,
+      "peak_memory_gb": 0.5,
+      "notice": {
+        "identifier": "openmed.multimodal.visual_description.v1",
+        "text": "Visual description for clinician review only. This output is not a diagnosis. A qualified clinician must independently review the source and explicitly confirm before any consequential use. This output must never automatically trigger a clinical decision."
+      }
+    }
+  }
+]

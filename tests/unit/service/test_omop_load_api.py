@@ -18,6 +18,13 @@ LOOPBACK_BASE_URL = "http://127.0.0.1"
 _NOTE_TEXT_MARKERS = ("Patient reports", "diabetes", "aspirin", "Glucose")
 
 
+@pytest.fixture(autouse=True)
+def development_security_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Route behavior under the dev profile; fail-closed prod startup is covered
+    # by tests/unit/service/test_security_profile.py.
+    monkeypatch.setenv("OPENMED_SERVICE_SECURITY_PROFILE", "dev")
+
+
 @pytest.fixture()
 def client() -> TestClient:
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as test_client:

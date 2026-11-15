@@ -181,10 +181,11 @@ def test_categorical_profile_keeps_boolean_and_integer_values_distinct() -> None
     assert column.probabilities == (0.25, 0.25, 0.25, 0.25)
 
 
-@pytest.mark.parametrize("records", [[], [{"value": float("inf")}], [1, 2]])
-def test_invalid_source_tables_are_rejected(records) -> None:
-    with pytest.raises((TypeError, ValueError)):
-        fit_tabular_profile(records)
+def test_invalid_source_tables_are_rejected(subtests) -> None:
+    for records in [[], [{"value": float("inf")}], [1, 2]]:
+        with subtests.test(records=records):
+            with pytest.raises((TypeError, ValueError)):
+                fit_tabular_profile(records)
 
 
 def test_invalid_row_count_and_schema_are_rejected() -> None:

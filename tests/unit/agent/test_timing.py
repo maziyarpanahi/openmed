@@ -78,27 +78,21 @@ def test_agent_timing_accepts_nested_and_sequential_actions() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "kwargs, field, hidden_value",
-    [
+def test_invalid_run_boundaries_fail_with_field_only_errors(subtests) -> None:
+    for kwargs, field, hidden_value in [
         ({"start_ns": -1, "end_ns": 2}, "run.start_ns", "-1"),
         ({"start_ns": 5, "end_ns": 4}, "run.end_ns", "5"),
         ({"start_ns": True, "end_ns": 2}, "run.start_ns", "True"),
         ({"start_ns": 1.25, "end_ns": 2}, "run.start_ns", "1.25"),
         ({"start_ns": 0, "end_ns": 3, "max_duration_ns": 2}, "run.duration_ns", "3"),
-    ],
-)
-def test_invalid_run_boundaries_fail_with_field_only_errors(
-    kwargs: dict[str, object],
-    field: str,
-    hidden_value: str,
-) -> None:
-    with pytest.raises(TimingValidationError) as caught:
-        RunTiming(**kwargs)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(kwargs=kwargs, field=field, hidden_value=hidden_value):
+            with pytest.raises(TimingValidationError) as caught:
+                RunTiming(**kwargs)  # type: ignore[arg-type]
 
-    message = str(caught.value)
-    assert field in message
-    assert hidden_value not in message
+            message = str(caught.value)
+            assert field in message
+            assert hidden_value not in message
 
 
 def test_overlapping_actions_fail_when_disallowed_without_echoing_values() -> None:
@@ -166,9 +160,10 @@ def test_serialization_stays_relative_and_payload_free() -> None:
     assert "event" not in serialized
 
 
-@pytest.mark.parametrize(
-    ("constructor", "kwargs"),
-    (
+def test_identifiers_reject_paths_urls_and_unbounded_text_without_echo(
+    subtests,
+) -> None:
+    for constructor, kwargs in (
         (RunTiming, {"start_ns": 0, "end_ns": 1, "correlation_id": "/phi/run"}),
         (
             ActionTiming,
@@ -183,18 +178,15 @@ def test_serialization_stays_relative_and_payload_free() -> None:
                 "correlation_id": "x" * 129,
             },
         ),
-    ),
-)
-def test_identifiers_reject_paths_urls_and_unbounded_text_without_echo(
-    constructor, kwargs
-) -> None:
-    with pytest.raises(TimingValidationError) as caught:
-        constructor(**kwargs)
+    ):
+        with subtests.test(constructor=constructor, kwargs=kwargs):
+            with pytest.raises(TimingValidationError) as caught:
+                constructor(**kwargs)
 
-    message = str(caught.value)
-    assert "/phi/run" not in message
-    assert "phi.example" not in message
-    assert "x" * 129 not in message
+            message = str(caught.value)
+            assert "/phi/run" not in message
+            assert "phi.example" not in message
+            assert "x" * 129 not in message
 
 
 def test_parent_action_graph_rejects_cycles() -> None:

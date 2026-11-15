@@ -255,9 +255,9 @@ def test_duplicate_live_codes_rejected(tmp_path: Path):
         load_oncotree(path, version="dup-v1")
 
 
-@pytest.mark.parametrize(
-    "payload,match",
-    [
+def test_malformed_string_list_fields_rejected(subtests, tmp_path):
+    case_root = tmp_path
+    for payload, match in [
         (
             [
                 {
@@ -306,15 +306,14 @@ def test_duplicate_live_codes_rejected(tmp_path: Path):
             [{"code": "X1", "name": "Example Tumor", "synonyms": [42]}],
             r"'synonyms' entries must be strings",
         ),
-    ],
-)
-def test_malformed_string_list_fields_rejected(
-    tmp_path: Path, payload: list, match: str
-):
-    path = tmp_path / "malformed_list.json"
-    path.write_text(json.dumps(payload), encoding="utf-8")
-    with pytest.raises(ValueError, match=match):
-        load_oncotree(path, version="malformed-v1")
+    ]:
+        with subtests.test(payload=payload, match=match):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "malformed_list.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with pytest.raises(ValueError, match=match):
+                load_oncotree(path, version="malformed-v1")
 
 
 def test_release_must_be_a_list(tmp_path: Path):

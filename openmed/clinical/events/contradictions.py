@@ -16,6 +16,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 
 from openmed.core.audit import hash_text
+from openmed.core.iso_temporal import parse_iso_date
 
 from ..temporal_intervals import TemporalInterval
 
@@ -1003,7 +1004,7 @@ def _coerce_date(value: DateLike) -> date:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", candidate) is None:
             raise ValueError("interval values must be ISO dates")
         try:
-            return date.fromisoformat(candidate)
+            return parse_iso_date(candidate)
         except ValueError:
             pass
         raise ValueError("interval values must be ISO dates")

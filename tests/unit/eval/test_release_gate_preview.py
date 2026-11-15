@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.cli import main_module
 from openmed.eval import release_gates
 
@@ -152,6 +154,7 @@ def test_preview_includes_abstention_advisory_details(tmp_path: Path) -> None:
     assert advisory.details["residual_risk"]["bootstrap"]["max"] == 0.0
 
 
+@pytest.mark.slow
 def test_preview_checks_adversarial_recall_under_attack(tmp_path: Path) -> None:
     candidate = _candidate()
     candidate["metrics"]["adversarial_robustness"] = {

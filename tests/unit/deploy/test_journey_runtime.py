@@ -217,3 +217,212 @@ def test_golden_journey_verifies_metadata_and_object_readback(
     }
     assert store.closed is True
     assert "must-not-appear" not in json.dumps(result)
+
+
+_TLS_SENTINELS = (
+    "sentineluser3915",
+    "sentinelpassword3915",
+    "sentinel-host-3915.invalid",
+    "sentineldb3915",
+    "sentinel-ca-path-3915",
+)
+_PLAINTEXT_DSN = (
+    "postgresql://sentineluser3915:sentinelpassword3915@"
+    "sentinel-host-3915.invalid:5432/sentineldb3915"
+)
+
+
+def _fail_on_driver_import(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    imports: list[str] = []
+
+    def fake_import(name: str) -> None:
+        imports.append(name)
+        raise AssertionError("the PostgreSQL driver must not be loaded")
+
+    monkeypatch.setattr(
+        "openmed.structured.store.postgres.import_module",
+        fake_import,
+    )
+    return imports
+
+
+def test_transport_settings_read_ca_bundle_and_client_certificate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_JOURNEY_POSTGRES_SSLROOTCERT", "/tls/ca.crt")
+    monkeypatch.setenv("OPENMED_JOURNEY_POSTGRES_SSLCERT", "/tls/tls.crt")
+    monkeypatch.setenv("OPENMED_JOURNEY_POSTGRES_SSLKEY", "/tls/tls.key")
+
+    settings = journey.PostgresTransportSettings.from_env()
+
+    assert settings.connect_options() == {
+        "connect_timeout": 3,
+        "sslrootcert": "/tls/ca.crt",
+        "sslcert": "/tls/tls.crt",
+        "sslkey": "/tls/tls.key",
+    }
+    assert "/tls/" not in repr(settings)
+
+
+def test_transport_settings_omit_unset_tls_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in (
+        "OPENMED_JOURNEY_POSTGRES_SSLROOTCERT",
+        "OPENMED_JOURNEY_POSTGRES_SSLCERT",
+        "OPENMED_JOURNEY_POSTGRES_SSLKEY",
+    ):
+        monkeypatch.setenv(name, " ")
+
+    assert journey.PostgresTransportSettings.from_env().connect_options() == {
+        "connect_timeout": 3
+    }
+
+
+def test_entrypoints_pass_operator_ca_bundle_to_store(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[dict] = []
+
+    def fake_connect(*args, **kwargs):
+        observed.append(kwargs)
+        return StoreResult.success(_HealthyStore())
+
+    monkeypatch.setattr(journey.PostgresJourneyStore, "connect", fake_connect)
+    monkeypatch.setenv("OPENMED_JOURNEY_POSTGRES_SSLROOTCERT", "/tls/ca.crt")
+
+    journey.run_migrations("postgresql://not-emitted")
+
+    assert observed[0]["connect_options"] == {
+        "connect_timeout": 3,
+        "sslrootcert": "/tls/ca.crt",
+    }
+
+
+@pytest.mark.parametrize("command", ("migrate", "probe"))
+def test_production_cli_refuses_plaintext_dsn_without_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    command: str,
+) -> None:
+    imports = _fail_on_driver_import(monkeypatch)
+    monkeypatch.setenv("OPENMED_PROFILE", "prod")
+    monkeypatch.setenv("OPENMED_JOURNEY_POSTGRES_DSN", _PLAINTEXT_DSN)
+    monkeypatch.delenv("OPENMED_JOURNEY_POSTGRES_SSLROOTCERT", raising=False)
+
+    status = journey.main(
+        ["--artifact-root", str(tmp_path / "artifacts"), command],
+    )
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    jsonschema.validate(payload, json.loads(SCHEMA.read_text(encoding="utf-8")))
+    assert status == 1
+    assert imports == []
+    assert payload["components"]["store"] == {
+        "state": "incompatible",
+        "code": "postgres_tls_required",
+    }
+    assert payload["components"]["migration"]["code"] == "postgres_tls_required"
+    for sentinel in _TLS_SENTINELS:
+        assert sentinel not in captured.out
+        assert sentinel not in captured.err
+
+
+def test_golden_journey_refuses_plaintext_dsn_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    imports = _fail_on_driver_import(monkeypatch)
+    monkeypatch.setenv("OPENMED_PROFILE", "prod")
+
+    result = journey.run_golden_journey(
+        _PLAINTEXT_DSN,
+        artifact_root="/synthetic/artifacts",
+    )
+
+    assert imports == []
+    assert result["state"] == "failed"
+    assert result["code"] == "postgres_tls_required"
+    for sentinel in _TLS_SENTINELS:
+        assert sentinel not in json.dumps(result)
+
+
+def test_unusable_ca_bundle_is_reported_without_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    imports = _fail_on_driver_import(monkeypatch)
+    missing = tmp_path / "sentinel-ca-path-3915.pem"
+
+    report = journey.run_migrations(
+        f"{_PLAINTEXT_DSN}?sslmode=verify-full",
+        transport=journey.PostgresTransportSettings(
+            sslrootcert=str(missing),
+            profile="prod",
+        ),
+    ).to_dict()
+
+    assert imports == []
+    assert report["components"]["store"] == {
+        "state": "unavailable",
+        "code": "postgres_tls_config_invalid",
+    }
+    for sentinel in _TLS_SENTINELS:
+        assert sentinel not in json.dumps(report)
+
+
+def test_development_profile_keeps_explicit_plaintext_store_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[dict] = []
+
+    def fake_connect(**kwargs):
+        observed.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        "openmed.structured.store.postgres.import_module",
+        lambda name: type("Driver", (), {"connect": staticmethod(fake_connect)}),
+    )
+    monkeypatch.setattr(
+        journey.PostgresJourneyStore,
+        "open",
+        classmethod(lambda cls, raw, **kwargs: StoreResult.success(_HealthyStore())),
+    )
+    monkeypatch.setenv("OPENMED_PROFILE", "dev")
+
+    report = journey.run_migrations(_PLAINTEXT_DSN)
+
+    assert report.ready
+    assert observed[0]["ssl_context"] is None
+
+
+def test_transport_posture_export_is_value_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fail_on_driver_import(monkeypatch)
+    monkeypatch.setenv("OPENMED_PROFILE", "prod")
+
+    refused = journey.journey_transport_posture(_PLAINTEXT_DSN)
+    verified = journey.journey_transport_posture(
+        f"{_PLAINTEXT_DSN}?sslmode=verify-full",
+        transport=journey.PostgresTransportSettings(
+            sslrootcert="/tls/sentinel-ca-path-3915.pem",
+        ),
+    )
+
+    assert refused.to_dict()["code"] == "postgres_tls_required"
+    assert refused.ok is False
+    assert verified.to_dict() == {
+        "production": True,
+        "tls": "verify_full",
+        "trust_anchor": "operator_ca_bundle",
+        "client_certificate": False,
+        "code": "postgres_tls_verified",
+        "ok": True,
+    }
+    for sentinel in _TLS_SENTINELS:
+        assert sentinel not in json.dumps(refused.to_dict())
+        assert sentinel not in json.dumps(verified.to_dict())
+        assert sentinel not in repr(verified)

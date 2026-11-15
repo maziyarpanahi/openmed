@@ -167,18 +167,14 @@ def test_model_span_inside_a_grapheme_is_rejected() -> None:
     assert (result.start, result.end) == (1, len(text))
 
 
-@pytest.mark.parametrize(
-    "label,expected",
-    [
+def test_label_allowlist_is_restricted_to_person_names(subtests) -> None:
+    for label, expected in [
         ("PERSON", True),
         ("B-NAME", True),
         ("FIRST_NAME", True),
         ("PREFIX", False),
         ("USERNAME", False),
         ("LOCATION", False),
-    ],
-)
-def test_label_allowlist_is_restricted_to_person_names(
-    label: str, expected: bool
-) -> None:
-    assert supports_name_boundary_refinement(label) is expected
+    ]:
+        with subtests.test(label=label, expected=expected):
+            assert supports_name_boundary_refinement(label) is expected

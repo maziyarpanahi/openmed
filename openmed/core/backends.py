@@ -226,7 +226,11 @@ class OnnxBackend:
         model = load_onnx_model(
             model_name,
             variant=variant,
-            revision=getattr(self._config, "pii_model_revision", None) or "main",
+            revision=(
+                kwargs.pop("revision", None)
+                or getattr(self._config, "pii_model_revision", None)
+                or "main"
+            ),
             cache_dir=getattr(self._config, "cache_dir", None),
             token=getattr(self._config, "hf_token", None),
             local_files_only=is_local_only(self._config),

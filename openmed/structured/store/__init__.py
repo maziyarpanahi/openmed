@@ -1,6 +1,29 @@
 """Durable local persistence for longitudinal Journey records."""
 
 from .composed import ComposedJourneyStore, StoredJourneyGraph
+from .deadlines import (
+    STORE_BUSY_CODE,
+    STORE_DEADLINE_EXCEEDED_CODE,
+    STORE_LOCK_WAIT_ENV_VAR,
+    STORE_TIMEOUT_ENV_VAR,
+    STORE_TIMEOUTS_INVALID_CODE,
+    StoreBusyError,
+    StoreDeadline,
+    StoreDeadlineExceededError,
+    StoreTimeouts,
+    StoreTimeoutsError,
+    StoreWaitError,
+    current_store_deadline,
+    store_deadline,
+)
+from .encryption import (
+    JOURNEY_KEY_PURPOSE,
+    JourneyEncryptionError,
+    JourneyStoreEncryption,
+    LocalJourneyReencryptionReport,
+    ReencryptionReport,
+    resolve_journey_profile,
+)
 from .local import (
     IngestedGraph,
     LocalArtifactStore,
@@ -23,6 +46,8 @@ from .postgres import (
     PostgresMigration,
     PostgresMigrationReport,
     PostgresStoreError,
+    PostgresTransportPosture,
+    postgres_transport_posture,
 )
 from .protocols import (
     LOCAL_STORE_SCHEMA_VERSION,
@@ -51,11 +76,17 @@ from .protocols import (
 )
 
 __all__ = [
+    "JOURNEY_KEY_PURPOSE",
     "LOCAL_STORE_SCHEMA_VERSION",
     "LATEST_MIGRATION_VERSION",
     "LATEST_POSTGRES_MIGRATION_VERSION",
     "MIGRATIONS",
     "POSTGRES_MIGRATIONS",
+    "STORE_BUSY_CODE",
+    "STORE_DEADLINE_EXCEEDED_CODE",
+    "STORE_LOCK_WAIT_ENV_VAR",
+    "STORE_TIMEOUT_ENV_VAR",
+    "STORE_TIMEOUTS_INVALID_CODE",
     "AllowAllStoragePolicy",
     "ArtifactStore",
     "CanonicalRecord",
@@ -73,9 +104,12 @@ __all__ = [
     "IngestedGraph",
     "JobMetadata",
     "JobMetadataStore",
+    "JourneyEncryptionError",
     "JourneyQueryStore",
+    "JourneyStoreEncryption",
     "JourneyStoreTransaction",
     "LocalArtifactStore",
+    "LocalJourneyReencryptionReport",
     "LocalJourneyStore",
     "LocalStoreError",
     "MigrationHealth",
@@ -86,16 +120,28 @@ __all__ = [
     "PostgresMigration",
     "PostgresMigrationReport",
     "PostgresStoreError",
+    "PostgresTransportPosture",
+    "ReencryptionReport",
     "ResolutionStore",
     "SQLiteJourneyStore",
     "SQLiteJourneyTransaction",
     "StoragePolicy",
+    "StoreBusyError",
     "StoreCompatibilityError",
+    "StoreDeadline",
+    "StoreDeadlineExceededError",
     "StoreMigration",
     "StoreMigrationError",
     "StorePoint",
     "StoreResult",
     "StoreState",
+    "StoreTimeouts",
+    "StoreTimeoutsError",
+    "StoreWaitError",
     "StoredJourneyGraph",
     "TransactionalJourneyStore",
+    "postgres_transport_posture",
+    "resolve_journey_profile",
+    "current_store_deadline",
+    "store_deadline",
 ]

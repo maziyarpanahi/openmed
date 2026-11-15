@@ -7,52 +7,184 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
 import os
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Request
 from starlette.responses import Response
+from starlette.routing import Match
 
+from .runtime import (
+    DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR,
+    TrustedProxyConfig,
+    parse_service_throttle_max_tracked_keys,
+    parse_service_trusted_proxy_config,
+)
+from .secret_files import is_production_profile, read_secret_setting, resolve_secret
+from .security_profile import resolve_security_profile
 from .throttle import TokenBucketRateLimiter, client_identity, format_retry_after
 
 SERVICE_AUTH_ENABLED_ENV_VAR = "OPENMED_SERVICE_AUTH_ENABLED"
 SERVICE_AUTH_DENY_BY_DEFAULT_ENV_VAR = "OPENMED_SERVICE_AUTH_DENY_BY_DEFAULT"
 SERVICE_AUTH_API_KEYS_ENV_VAR = "OPENMED_SERVICE_AUTH_API_KEYS"
+SERVICE_AUTH_API_KEYS_FILE_ENV_VAR = "OPENMED_SERVICE_AUTH_API_KEYS_FILE"
 SERVICE_AUTH_JWKS_ENV_VAR = "OPENMED_SERVICE_AUTH_JWKS"
 SERVICE_AUTH_JWKS_FILE_ENV_VAR = "OPENMED_SERVICE_AUTH_JWKS_FILE"
 SERVICE_AUTH_JWT_ISSUER_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_ISSUER"
 SERVICE_AUTH_JWT_AUDIENCE_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_AUDIENCE"
 SERVICE_AUTH_JWT_LEEWAY_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_LEEWAY_SECONDS"
+SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_MAX_LIFETIME_SECONDS"
 SERVICE_AUTH_ROUTE_SCOPES_ENV_VAR = "OPENMED_SERVICE_AUTH_ROUTE_SCOPES"
 SERVICE_AUTH_FAILURE_RPS_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS"
 SERVICE_AUTH_FAILURE_BURST_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST"
 SERVICE_AUTH_FAILURE_KEY_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY"
+SERVICE_OPENAPI_ENABLED_ENV_VAR = "OPENMED_SERVICE_OPENAPI_ENABLED"
+DEVELOPMENT_PROFILE = "dev"
 
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_RPS = 5.0
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST = 10
+# Upper bound for API-key and JWKS secret files.
+MAX_AUTH_SECRET_FILE_BYTES = 1024 * 1024
 DEFAULT_AUTH_EXEMPT_PATHS = frozenset(
     {
         "/health",
         "/livez",
         "/readyz",
         "/metrics",
-        "/openapi.json",
-        "/docs",
-        "/redoc",
     }
 )
-DEFAULT_ROUTE_SCOPES = {
-    ("GET", "/models/loaded"): ("models:read",),
-    ("POST", "/models/unload"): ("models:write",),
-    ("POST", "/analyze"): ("analyze:write",),
-    ("POST", "/pii/extract"): ("pii:read",),
-    ("POST", "/pii/deidentify"): ("pii:write",),
-    ("POST", "/pii/deidentify/stream"): ("pii:write",),
+# Live API docs are public only in the development profile; see
+# ``parse_api_docs_config``.
+DEVELOPMENT_DOCS_EXEMPT_PATHS = frozenset({"/openapi.json", "/docs", "/redoc"})
+SERVICE_METADATA_PATH = "/service/metadata"
+
+
+@dataclass(frozen=True)
+class RoutePolicy:
+    """One route's authorization and request-admission contract."""
+
+    scopes: tuple[str, ...]
+    admission: str
+
+
+ROUTE_POLICIES = {
+    ("POST", "/experimental/multimodal/preflight"): RoutePolicy(
+        ("pii:read",), "control"
+    ),
+    ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
+    ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
+    ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),
+    ("POST", "/pii/extract"): RoutePolicy(("pii:read",), "model"),
+    ("POST", "/pii/extract/stream"): RoutePolicy(("pii:read",), "model"),
+    ("POST", "/pii/deidentify"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/pii/deidentify/stream"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/privacy-gateway/complete"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/openhim/deidentify"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/omop/load"): RoutePolicy(("omop:write",), "heavy"),
+    ("POST", "/profile"): RoutePolicy(("profile:write",), "heavy"),
+    ("POST", "/cohort/resolve"): RoutePolicy(("cohort:read",), "heavy"),
+    ("GET", "/v1/journey/resources"): RoutePolicy(("journey:read",), "heavy"),
+    ("GET", "/v1/compatibility"): RoutePolicy(("compatibility:read",), "control"),
+    ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
+    ("POST", "/v1/systemone"): RoutePolicy(("decisions:write", "pii:write"), "model"),
+    ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
+    ("POST", "/ground"): RoutePolicy(("ground:write",), "model"),
+    ("POST", "/v1/workflows/preflight"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/preview"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/status"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/review-receipts"): RoutePolicy(
+        ("workflow:review",), "control"
+    ),
+    ("POST", "/v1/workflows/cancel"): RoutePolicy(("workflow:cancel",), "control"),
+    ("POST", "/jobs"): RoutePolicy(("jobs:write",), "model"),
+    ("GET", "/jobs/{job_id}"): RoutePolicy(("jobs:read",), "control"),
+    # Any authenticated principal may read version and profile metadata.
+    ("GET", SERVICE_METADATA_PATH): RoutePolicy((), "control"),
+    # GraphQL authorizes the selected operation's fields before execution.
+    ("GET", "/graphql"): RoutePolicy((), "model"),
+    ("POST", "/graphql"): RoutePolicy((), "model"),
+    ("WEBSOCKET", "/graphql"): RoutePolicy((), "control"),
 }
+for _path in (
+    *DEFAULT_AUTH_EXEMPT_PATHS,
+    *DEVELOPMENT_DOCS_EXEMPT_PATHS,
+    "/docs/oauth2-redirect",
+    "/openhim/heartbeat",
+):
+    for _method in ("GET", "HEAD"):
+        ROUTE_POLICIES[(_method, _path)] = RoutePolicy((), "probe")
+for _path in (
+    "/fhir/bulk/exports",
+    "/fhir/bulk/imports",
+    "/fhir/smart-backend/ingestions",
+):
+    ROUTE_POLICIES[("POST", _path)] = RoutePolicy(("bulk:write",), "heavy")
+    ROUTE_POLICIES[("DELETE", _path + "/{job_id}")] = RoutePolicy(
+        ("bulk:write",), "control"
+    )
+    for _suffix in (
+        "/{job_id}",
+        "/{job_id}/manifest",
+        "/{job_id}/report",
+        "/{job_id}/summary",
+    ):
+        ROUTE_POLICIES[("GET", _path + _suffix)] = RoutePolicy(
+            ("bulk:read",), "control"
+        )
+DEFAULT_ROUTE_SCOPES = {key: policy.scopes for key, policy in ROUTE_POLICIES.items()}
+
+
+def _policy_routes(app: Any) -> Any:
+    """Use effective route contexts when FastAPI stores included routers lazily."""
+    from fastapi import routing
+
+    iterator = getattr(routing, "iter_route_contexts", None)
+    return iterator(app.routes) if callable(iterator) else iter(app.routes)
+
+
+def _policy_path(route: Any) -> str:
+    """Read the effective template, including included WebSocket prefixes."""
+    path = getattr(route, "path", None)
+    if not path:
+        # Some FastAPI contexts keep WebSocket paths on their compiled
+        # Starlette route; the original route would lose include-time prefixes.
+        path = getattr(getattr(route, "starlette_route", None), "path", None)
+    return path if type(path) is str else ""
+
+
+def route_key_for_request(request: Request) -> tuple[str, str]:
+    """Resolve a route template with the application's own router matcher."""
+    partial = None
+    for route in _policy_routes(request.app):
+        match, _ = route.matches(request.scope)
+        if match == Match.FULL:
+            return request.method.upper(), _policy_path(route)
+        if match == Match.PARTIAL and partial is None:
+            partial = _policy_path(route)
+    return request.method.upper(), partial or ""
+
+
+def request_needs_admission(request: Request) -> bool:
+    """Return whether the matched route needs heavy/model admission controls."""
+    policy = ROUTE_POLICIES.get(route_key_for_request(request))
+    return policy is not None and policy.admission in {"model", "heavy"}
+
+
+def validate_route_policies(app: Any) -> None:
+    """Fail closed when a registered HTTP or WebSocket route is undeclared."""
+    for route in _policy_routes(app):
+        path = _policy_path(route)
+        if not path:
+            raise ValueError("Service route has no declared security policy")
+        for method in getattr(route, "methods", None) or ("WEBSOCKET",):
+            if (method, path) not in ROUTE_POLICIES:
+                raise ValueError("Service route has no declared security policy")
+
 
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BOOLEAN_FALSE_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -95,13 +227,16 @@ class ServiceAuthConfig:
     jwt_issuer: Optional[str] = None
     jwt_audiences: tuple[str, ...] = ()
     jwt_leeway_seconds: float = 0.0
+    jwt_max_lifetime_seconds: Optional[float] = field(default=None, kw_only=True)
     route_scopes: Mapping[tuple[str, str], tuple[str, ...]] = field(
         default_factory=lambda: dict(DEFAULT_ROUTE_SCOPES)
     )
     exempt_paths: frozenset[str] = DEFAULT_AUTH_EXEMPT_PATHS
     failure_rate_limit_rps: float = DEFAULT_AUTH_FAILURE_RATE_LIMIT_RPS
     failure_rate_limit_burst: int = DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST
-    failure_rate_limit_key_by: str = "peer"
+    failure_rate_limit_key_by: str = "x-forwarded-for"
+    failure_rate_limit_max_tracked_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS
+    proxies: TrustedProxyConfig = TrustedProxyConfig()
 
     @property
     def failure_rate_limit_enabled(self) -> bool:
@@ -131,6 +266,40 @@ def hash_api_key(api_key: str) -> str:
     return f"sha256:{digest}"
 
 
+PRINCIPAL_DIGEST_MIN_KEY_BYTES = 32
+
+
+def principal_digest(principal: AuthPrincipal, *, key: bytes) -> str:
+    """Return a keyed, opaque digest of one authenticated principal.
+
+    The digest binds the credential type and subject so audit records can
+    correlate decisions for the same caller without storing the raw identity.
+    The deployment key prevents dictionary reversal of low-entropy subjects.
+
+    Args:
+        principal: Authenticated principal attached by the auth or mTLS layer.
+        key: Secret digest key of at least 32 bytes.
+
+    Returns:
+        A ``hmac-sha256:<hex>`` digest that never contains the subject.
+
+    Raises:
+        ValueError: If the key is too short or the principal is malformed.
+    """
+    if type(key) is not bytes or len(key) < PRINCIPAL_DIGEST_MIN_KEY_BYTES:
+        raise ValueError("principal digest key must be at least 32 bytes")
+    if not isinstance(principal.subject, str) or not isinstance(
+        principal.credential_type, str
+    ):
+        raise ValueError("principal digest requires a typed principal")
+    material = json.dumps(
+        [principal.credential_type, principal.subject],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    return "hmac-sha256:" + hmac.new(key, material, hashlib.sha256).hexdigest()
+
+
 def parse_service_auth_config() -> ServiceAuthConfig:
     """Read authentication settings from the current process environment."""
     enabled = parse_bool(
@@ -147,6 +316,10 @@ def parse_service_auth_config() -> ServiceAuthConfig:
     failure_key_by = parse_failure_rate_limit_key(
         os.getenv(SERVICE_AUTH_FAILURE_KEY_ENV_VAR)
     )
+    failure_max_tracked_keys = parse_service_throttle_max_tracked_keys(
+        os.getenv(SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR)
+    )
+    proxies = parse_service_trusted_proxy_config()
 
     if not enabled:
         return ServiceAuthConfig(
@@ -154,12 +327,19 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             deny_by_default=deny_by_default,
             route_scopes=route_scopes,
             failure_rate_limit_key_by=failure_key_by,
+            failure_rate_limit_max_tracked_keys=failure_max_tracked_keys,
+            proxies=proxies,
         )
 
     return ServiceAuthConfig(
         enabled=True,
         deny_by_default=deny_by_default,
-        api_keys=parse_api_key_credentials(os.getenv(SERVICE_AUTH_API_KEYS_ENV_VAR)),
+        api_keys=parse_api_key_credentials(
+            read_secret_setting(
+                SERVICE_AUTH_API_KEYS_ENV_VAR,
+                max_bytes=MAX_AUTH_SECRET_FILE_BYTES,
+            )
+        ),
         jwks=parse_jwks(
             os.getenv(SERVICE_AUTH_JWKS_ENV_VAR),
             os.getenv(SERVICE_AUTH_JWKS_FILE_ENV_VAR),
@@ -170,6 +350,16 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             os.getenv(SERVICE_AUTH_JWT_LEEWAY_ENV_VAR),
             env_var=SERVICE_AUTH_JWT_LEEWAY_ENV_VAR,
             default=0.0,
+        ),
+        jwt_max_lifetime_seconds=(
+            parse_non_negative_float(
+                os.getenv(SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR),
+                env_var=SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR,
+                default=3600.0,
+            )
+            if os.getenv(SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR) is not None
+            or resolve_security_profile().is_production
+            else None
         ),
         route_scopes=route_scopes,
         failure_rate_limit_rps=parse_non_negative_float(
@@ -183,7 +373,69 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             default=DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST,
         ),
         failure_rate_limit_key_by=failure_key_by,
+        failure_rate_limit_max_tracked_keys=failure_max_tracked_keys,
+        proxies=proxies,
     )
+
+
+@dataclass(frozen=True)
+class APIDocsConfig:
+    """Live API documentation routes for the REST service.
+
+    A ``None`` URL means FastAPI does not register that route, so it returns
+    ``404``. ``public`` marks the development-only mode in which the docs
+    routes are exempt from authentication.
+    """
+
+    openapi_url: Optional[str] = None
+    docs_url: Optional[str] = None
+    redoc_url: Optional[str] = None
+    public: bool = False
+
+
+def is_development_profile(profile: Optional[str]) -> bool:
+    """Return whether ``profile`` is the explicit development profile.
+
+    Args:
+        profile: Active ``OPENMED_PROFILE`` value; unset means ``prod``.
+
+    Returns:
+        True only for the ``dev`` profile.
+    """
+    return profile == DEVELOPMENT_PROFILE
+
+
+def parse_api_docs_config() -> APIDocsConfig:
+    """Read live API documentation exposure from the process environment.
+
+    The development profile keeps Swagger UI, ReDoc, and ``/openapi.json``
+    public. Every other profile, including an unset profile, disables them.
+    Outside development, ``OPENMED_SERVICE_OPENAPI_ENABLED=true`` serves only
+    ``/openapi.json`` behind authentication; the HTML docs UIs load assets from
+    a public CDN and stay disabled.
+
+    Returns:
+        The docs routes to register and whether they skip authentication.
+
+    Raises:
+        ValueError: If ``OPENMED_SERVICE_OPENAPI_ENABLED`` is not a boolean.
+    """
+    development = is_development_profile(os.getenv("OPENMED_PROFILE", "prod"))
+    enabled = parse_bool(
+        os.getenv(SERVICE_OPENAPI_ENABLED_ENV_VAR),
+        env_var=SERVICE_OPENAPI_ENABLED_ENV_VAR,
+        default=development,
+    )
+    if not enabled:
+        return APIDocsConfig()
+    if development:
+        return APIDocsConfig(
+            openapi_url="/openapi.json",
+            docs_url="/docs",
+            redoc_url="/redoc",
+            public=True,
+        )
+    return APIDocsConfig(openapi_url="/openapi.json")
 
 
 def parse_bool(raw_value: Optional[str], *, env_var: str, default: bool) -> bool:
@@ -213,7 +465,7 @@ def parse_non_negative_float(
         parsed = float(raw_value)
     except ValueError as exc:
         raise ValueError(f"{env_var} must be a non-negative number") from exc
-    if parsed < 0:
+    if not math.isfinite(parsed) or parsed < 0:
         raise ValueError(f"{env_var} must be greater than or equal to 0")
     return parsed
 
@@ -273,19 +525,36 @@ def parse_api_key_credentials(raw_value: Optional[str]) -> tuple[APIKeyCredentia
 
 def parse_jwks(
     inline_jwks: Optional[str],
-    jwks_file: Optional[str],
+    jwks_file: Optional[str] = None,
 ) -> tuple[Mapping[str, Any], ...]:
-    """Parse JWT verification keys from inline JSON and optional JWKS file."""
-    keys: list[Mapping[str, Any]] = []
-    for raw_value, env_var in (
-        (_read_optional_file(jwks_file), SERVICE_AUTH_JWKS_FILE_ENV_VAR),
-        (inline_jwks, SERVICE_AUTH_JWKS_ENV_VAR),
-    ):
-        if raw_value is None or not raw_value.strip():
-            continue
-        payload = _load_json(raw_value, env_var=env_var)
-        keys.extend(_extract_jwks_keys(payload, env_var=env_var))
-    return tuple(keys)
+    """Parse JWT verification keys from inline JSON or a JWKS file.
+
+    Args:
+        inline_jwks: Value of ``OPENMED_SERVICE_AUTH_JWKS``.
+        jwks_file: Value of ``OPENMED_SERVICE_AUTH_JWKS_FILE``. It is read with
+            the shared secret-file rules and is mutually exclusive with
+            ``inline_jwks``.
+
+    Returns:
+        The configured verification keys.
+
+    Raises:
+        SecretSourceError: Both sources are set or the file cannot be used.
+        ValueError: The JWKS JSON is invalid.
+    """
+    from_file = jwks_file is not None and bool(jwks_file.strip())
+    raw_value = resolve_secret(
+        SERVICE_AUTH_JWKS_ENV_VAR,
+        inline=inline_jwks,
+        file_path=jwks_file,
+        max_bytes=MAX_AUTH_SECRET_FILE_BYTES,
+        enforce_permissions=is_production_profile(),
+    )
+    if raw_value is None or not raw_value.strip():
+        return ()
+    env_var = SERVICE_AUTH_JWKS_FILE_ENV_VAR if from_file else SERVICE_AUTH_JWKS_ENV_VAR
+    payload = _load_json(raw_value, env_var=env_var)
+    return tuple(_extract_jwks_keys(payload, env_var=env_var))
 
 
 def parse_audiences(raw_value: Optional[str]) -> tuple[str, ...]:
@@ -307,14 +576,21 @@ def parse_route_scopes(
 
     for route, scopes in payload.items():
         method, path = _parse_route_key(str(route))
+        if (method, path) not in ROUTE_POLICIES:
+            raise ValueError("Unknown service route scope override")
         route_scopes[(method, path)] = _normalize_scopes(scopes)
     return route_scopes
 
 
 def parse_failure_rate_limit_key(raw_value: Optional[str]) -> str:
-    """Parse the client identity source for auth failure rate limits."""
+    """Parse the client identity source for auth failure rate limits.
+
+    The default, ``x-forwarded-for``, resolves the client exactly like the
+    request throttle: through ``OPENMED_SERVICE_TRUSTED_PROXIES`` when they
+    are configured, otherwise by the direct peer.
+    """
     if raw_value is None or not raw_value.strip():
-        return "peer"
+        return "x-forwarded-for"
 
     normalized = raw_value.strip().lower()
     aliases = {
@@ -375,7 +651,7 @@ def authenticate_jwt(
     else:
         raise invalid_credentials()
 
-    _validate_jwt_claims(payload, config, now=time.time() if now is None else now)
+    validate_jwt_claims(payload, config, now=time.time() if now is None else now)
     subject = payload.get("sub") or payload.get("client_id") or "jwt"
     return AuthPrincipal(
         subject=str(subject),
@@ -400,6 +676,7 @@ class ServiceAuth:
         self._failure_limiter = TokenBucketRateLimiter(
             requests_per_second=config.failure_rate_limit_rps,
             burst_size=config.failure_rate_limit_burst,
+            max_keys=config.failure_rate_limit_max_tracked_keys,
         )
 
     @property
@@ -431,7 +708,7 @@ class ServiceAuth:
         path = request.url.path
         if path in self.config.exempt_paths:
             return None
-        route_key = (request.method.upper(), path)
+        route_key = route_key_for_request(request)
         if route_key in self.config.route_scopes:
             return self.config.route_scopes[route_key]
         if self.config.deny_by_default:
@@ -466,7 +743,11 @@ class ServiceAuth:
         exc: AuthError,
     ) -> Response:
         if self.config.failure_rate_limit_enabled:
-            key = client_identity(request, self.config.failure_rate_limit_key_by)
+            key = client_identity(
+                request,
+                self.config.failure_rate_limit_key_by,
+                self.config.proxies,
+            )
             decision = await self._failure_limiter.consume(key)
             if not decision.allowed:
                 response = self._error_response(
@@ -587,12 +868,6 @@ def _load_json(raw_value: str, *, env_var: str) -> Any:
         raise ValueError(f"{env_var} must contain valid JSON") from exc
 
 
-def _read_optional_file(raw_path: Optional[str]) -> Optional[str]:
-    if raw_path is None or not raw_path.strip():
-        return None
-    return Path(raw_path).read_text(encoding="utf-8")
-
-
 def _extract_jwks_keys(payload: Any, *, env_var: str) -> list[Mapping[str, Any]]:
     if isinstance(payload, Mapping):
         keys = payload.get("keys", ())
@@ -642,13 +917,21 @@ def _decode_jwt(
 
 
 def _decode_json_segment(segment: str) -> Mapping[str, Any]:
+    payload = None
     try:
-        payload = json.loads(_b64url_decode(segment).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        raise invalid_credentials() from None
+        payload = json.loads(
+            _b64url_decode(segment).decode("utf-8"),
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, ValueError):
+        pass
     if not isinstance(payload, Mapping):
         raise invalid_credentials()
     return payload
+
+
+def _reject_json_constant(_: str) -> None:
+    raise invalid_credentials()
 
 
 def _b64url_decode(value: str) -> bytes:
@@ -741,16 +1024,26 @@ def _verify_pkcs1v15_sha256(encoded: bytes, digest: bytes) -> bool:
     return hmac.compare_digest(encoded[separator_index + 1 :], expected)
 
 
-def _validate_jwt_claims(
+def validate_jwt_claims(
     payload: Mapping[str, Any],
     config: ServiceAuthConfig,
     *,
     now: float,
 ) -> None:
+    """Validate finite JWT NumericDates and configured issuer/audience bounds."""
+    numeric_now = None
+    if type(now) in {int, float}:
+        try:
+            numeric_now = float(now)
+        except (OverflowError, ValueError):
+            pass
+    if numeric_now is None or not math.isfinite(numeric_now):
+        raise invalid_credentials()
+    now = numeric_now
     exp = _numeric_claim(payload, "exp", required=True)
     if exp is None:
         raise invalid_credentials()
-    if now > exp + config.jwt_leeway_seconds:
+    if now >= exp + config.jwt_leeway_seconds:
         raise invalid_credentials()
 
     nbf = _numeric_claim(payload, "nbf", required=False)
@@ -759,6 +1052,10 @@ def _validate_jwt_claims(
 
     iat = _numeric_claim(payload, "iat", required=False)
     if iat is not None and now + config.jwt_leeway_seconds < iat:
+        raise invalid_credentials()
+    if config.jwt_max_lifetime_seconds is not None and (
+        iat is None or exp < iat or exp - iat > config.jwt_max_lifetime_seconds
+    ):
         raise invalid_credentials()
 
     if config.jwt_issuer is not None and payload.get("iss") != config.jwt_issuer:
@@ -776,15 +1073,21 @@ def _numeric_claim(
     *,
     required: bool,
 ) -> Optional[float]:
-    value = payload.get(name)
-    if value is None:
+    if name not in payload:
         if required:
             raise invalid_credentials()
         return None
+    value = payload[name]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise invalid_credentials()
+    numeric = None
     try:
-        return float(value)
-    except (TypeError, ValueError):
-        raise invalid_credentials() from None
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError):
+        pass
+    if numeric is None or not math.isfinite(numeric):
+        raise invalid_credentials()
+    return numeric
 
 
 def _claim_audiences(raw_value: Any) -> set[str]:

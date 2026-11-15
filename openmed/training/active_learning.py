@@ -150,12 +150,16 @@ class ActiveLearningQueue:
         return frozenset(self._labeled)
 
     def add(self, candidate: ActiveLearningCandidate) -> bool:
-        """Queue *candidate* if it has not already been queued or labeled."""
+        """Queue *candidate* if it has not already been queued or labeled.
+
+        When an event log is configured, persist the event before changing memory.
+        If appending raises, the candidate remains eligible for a retry.
+        """
 
         if candidate.span_hash in self._labeled or candidate.span_hash in self._pending:
             return False
-        self._pending[candidate.span_hash] = candidate
         self._append_event({"event": "queued", "candidate": candidate.to_dict()})
+        self._pending[candidate.span_hash] = candidate
         return True
 
     def ingest_gate_report(self, report: Any) -> tuple[str, ...]:
@@ -248,7 +252,11 @@ class ActiveLearningQueue:
         label: str | None = None,
         labels: Iterable[str] | None = None,
     ) -> str:
-        """Mark a candidate as labeled and return its span hash."""
+        """Mark a candidate as labeled and return its span hash.
+
+        If persisting the event raises, both pending and labeled memory state
+        remain unchanged. This does not guarantee recovery from partial writes.
+        """
 
         resolved_hash = _resolve_labeled_hash(
             candidate,
@@ -258,9 +266,9 @@ class ActiveLearningQueue:
             label=label,
             labels=labels,
         )
+        self._append_event({"event": "labeled", "span_hash": resolved_hash})
         self._labeled.add(resolved_hash)
         self._pending.pop(resolved_hash, None)
-        self._append_event({"event": "labeled", "span_hash": resolved_hash})
         return resolved_hash
 
     def next_batch(self, size: int) -> tuple[ActiveLearningCandidate, ...]:

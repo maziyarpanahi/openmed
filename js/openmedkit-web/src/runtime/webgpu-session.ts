@@ -8,11 +8,13 @@ import {
 import { CLASSIFY_WGSL_SOURCE } from "./classify-wgsl";
 import {
   assertOfflineAssetPath,
+  assertOfflineExternalData,
   loadOrtWebSession,
   type OrtFeeds,
   type OrtResults,
   type OrtSessionCreateOptions,
   type OrtTensorLike,
+  type OrtWebExternalDataOptions,
   type OrtWebLoadedSession,
   type OrtWebRuntimeProvider,
   type OrtWebSessionCache,
@@ -76,6 +78,7 @@ export interface WebGpuTokenClassificationSessionOptions {
   capabilities?: Partial<OrtWebCapabilityProfile>;
   globalScope?: CapabilityDetectionOptions["globalScope"];
   sessionOptions?: OrtSessionCreateOptions;
+  externalData?: OrtWebExternalDataOptions;
   cache?: OrtWebSessionCache;
   inputNames?: Partial<WebGpuInputNames>;
   outputName?: string;
@@ -496,6 +499,7 @@ export class WebGpuTokenClassificationSession {
     const clock = options.clock ?? defaultClock;
     const modelPaths = validateModelPaths(options.modelPath);
     assertOfflineAssetPath(options.assetPath, "wasm asset path");
+    assertOfflineExternalData(options);
     const probeOptions: Parameters<typeof probeOrtWebCapabilities>[0] = {};
     if (options.globalScope !== undefined) {
       probeOptions.globalScope = options.globalScope;
@@ -964,6 +968,9 @@ async function loadSessionForProfile(
   }
   if (options.sessionOptions !== undefined) {
     loaderOptions.sessionOptions = options.sessionOptions;
+  }
+  if (options.externalData !== undefined) {
+    loaderOptions.externalData = options.externalData;
   }
   return loadOrtWebSession(loaderOptions);
 }

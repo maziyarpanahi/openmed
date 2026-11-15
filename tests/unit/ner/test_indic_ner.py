@@ -162,9 +162,8 @@ def test_adapter_accepts_label2id_bilou_layout_and_subword_offsets():
     ]
 
 
-@pytest.mark.parametrize(
-    "config",
-    [
+def test_adapter_rejects_malformed_label_maps(subtests):
+    for config in [
         SimpleNamespace(),
         SimpleNamespace(id2label={0: "O", 1: "B-PER"}),
         SimpleNamespace(label2id={"O": 0, "B-PER": 1, "B-LOC": 3, "B-ORG": 4}),
@@ -172,15 +171,14 @@ def test_adapter_accepts_label2id_bilou_layout_and_subword_offsets():
             id2label={0: "O", 1: "B-PER", 2: "B-LOC", 3: "B-ORG"},
             num_labels=5,
         ),
-    ],
-)
-def test_adapter_rejects_malformed_label_maps(config):
-    with pytest.raises(IndicNerCompatibilityError):
-        IndicNerAdapter(
-            model_id="/models/indic",
-            tokenizer=_Tokenizer([(0, 0)]),
-            model=_Model([0], config=config, label_count=4),
-        )
+    ]:
+        with subtests.test(config=config):
+            with pytest.raises(IndicNerCompatibilityError):
+                IndicNerAdapter(
+                    model_id="/models/indic",
+                    tokenizer=_Tokenizer([(0, 0)]),
+                    model=_Model([0], config=config, label_count=4),
+                )
 
 
 def test_adapter_rejects_conflicting_compatible_label_maps():
@@ -201,30 +199,28 @@ def test_adapter_rejects_conflicting_compatible_label_maps():
         )
 
 
-@pytest.mark.parametrize(
-    "offsets",
-    [
+def test_adapter_rejects_unsafe_offsets_without_exposing_input(subtests):
+    for offsets in [
         [(0, 0), (-1, 1), (0, 0)],
         [(0, 0), (1, 1), (0, 0)],
         [(0, 0), (0, 100), (0, 0)],
         [(0, 0), (0, 2), (1, 3), (0, 0)],
         [(0, 0), ("0", 2), (0, 0)],
         [(0, 0), (0, 1, 2), (0, 0)],
-    ],
-)
-def test_adapter_rejects_unsafe_offsets_without_exposing_input(offsets):
-    text = "गोपनीय"
-    label_ids = [0] * len(offsets)
-    adapter = IndicNerAdapter(
-        model_id="/models/indic",
-        tokenizer=_Tokenizer(offsets),
-        model=_Model(label_ids),
-    )
+    ]:
+        with subtests.test(offsets=offsets):
+            text = "गोपनीय"
+            label_ids = [0] * len(offsets)
+            adapter = IndicNerAdapter(
+                model_id="/models/indic",
+                tokenizer=_Tokenizer(offsets),
+                model=_Model(label_ids),
+            )
 
-    with pytest.raises(IndicNerCompatibilityError) as exc_info:
-        adapter.predict(text)
+            with pytest.raises(IndicNerCompatibilityError) as exc_info:
+                adapter.predict(text)
 
-    assert text not in str(exc_info.value)
+            assert text not in str(exc_info.value)
 
 
 def test_adapter_rejects_logit_width_mismatch():
@@ -238,28 +234,29 @@ def test_adapter_rejects_logit_width_mismatch():
         adapter.predict("आर")
 
 
-@pytest.mark.parametrize("component", ["tokenizer", "model"])
-def test_checkpoint_failures_do_not_expose_input_text(component):
-    text = "गोपनीय इनपुट"
-    tokenizer = _Tokenizer(
-        [(0, len(text))],
-        error_text=text if component == "tokenizer" else None,
-    )
-    model = _Model(
-        [1],
-        error_text=text if component == "model" else None,
-    )
-    adapter = IndicNerAdapter(
-        model_id="/models/indic",
-        tokenizer=tokenizer,
-        model=model,
-    )
+def test_checkpoint_failures_do_not_expose_input_text(subtests):
+    for component in ["tokenizer", "model"]:
+        with subtests.test(component=component):
+            text = "गोपनीय इनपुट"
+            tokenizer = _Tokenizer(
+                [(0, len(text))],
+                error_text=text if component == "tokenizer" else None,
+            )
+            model = _Model(
+                [1],
+                error_text=text if component == "model" else None,
+            )
+            adapter = IndicNerAdapter(
+                model_id="/models/indic",
+                tokenizer=tokenizer,
+                model=model,
+            )
 
-    with pytest.raises(IndicNerCompatibilityError) as exc_info:
-        adapter.predict(text)
+            with pytest.raises(IndicNerCompatibilityError) as exc_info:
+                adapter.predict(text)
 
-    assert text not in str(exc_info.value)
-    assert exc_info.value.__context__ is None
+            assert text not in str(exc_info.value)
+            assert exc_info.value.__context__ is None
 
 
 def test_loader_requires_explicit_weights_before_importing_dependencies(monkeypatch):

@@ -111,9 +111,8 @@ def test_yoruba_pack_reuses_nigeria_nin_and_phone_constants():
     assert any(pattern.pattern == NIGERIA_PHONE_PATTERN for pattern in patterns)
 
 
-@pytest.mark.parametrize(
-    ("marked_context", "value", "entity_types", "minimum_confidence"),
-    (
+def test_tone_marked_decomposed_and_unmarked_contexts_trigger_patterns(subtests):
+    for marked_context, value, entity_types, minimum_confidence in (
         ("nọ́mbà ìdánimọ̀ NIN", "12345678901", {"national_id", "NG_NIN"}, 0.95),
         (
             "nọ́ńbà tẹlifóònù",
@@ -121,30 +120,29 @@ def test_yoruba_pack_reuses_nigeria_nin_and_phone_constants():
             {"phone_number", "NG_PHONE"},
             0.9,
         ),
-    ),
-)
-@pytest.mark.parametrize("normalization", ("NFC", "NFD", "unmarked"))
-def test_tone_marked_decomposed_and_unmarked_contexts_trigger_patterns(
-    marked_context,
-    value,
-    entity_types,
-    minimum_confidence,
-    normalization,
-):
-    if normalization == "unmarked":
-        context = _without_marks(marked_context)
-    else:
-        context = unicodedata.normalize(normalization, marked_context)
-    text = f"{context}: {value}."
+    ):
+        for normalization in ("NFC", "NFD", "unmarked"):
+            with subtests.test(
+                marked_context=marked_context,
+                value=value,
+                entity_types=entity_types,
+                minimum_confidence=minimum_confidence,
+                normalization=normalization,
+            ):
+                if normalization == "unmarked":
+                    context = _without_marks(marked_context)
+                else:
+                    context = unicodedata.normalize(normalization, marked_context)
+                text = f"{context}: {value}."
 
-    matches = [
-        entity
-        for entity in safety_sweep(text, [], lang="yo")
-        if entity.text == value and entity.label in entity_types
-    ]
+                matches = [
+                    entity
+                    for entity in safety_sweep(text, [], lang="yo")
+                    if entity.text == value and entity.label in entity_types
+                ]
 
-    assert len(matches) == 1
-    assert matches[0].confidence >= minimum_confidence - 1e-12
+                assert len(matches) == 1
+                assert matches[0].confidence >= minimum_confidence - 1e-12
 
 
 def test_yoruba_fixtures_recover_every_gold_span_at_exact_offsets():

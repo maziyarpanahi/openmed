@@ -131,9 +131,8 @@ def test_free_text_and_distinctive_values_are_quasi_identifier_aware():
     )
 
 
-@pytest.mark.parametrize(
-    ("alias", "expected"),
-    [
+def test_common_surface_forms_normalize(subtests):
+    for alias, expected in [
         ("dx", PROBLEM),
         ("diagnosis", PROBLEM),
         ("problem", PROBLEM),
@@ -155,10 +154,9 @@ def test_free_text_and_distinctive_values_are_quasi_identifier_aware():
         ("abnormal flag", ABNORMAL_FLAG),
         ("body site", BODY_SITE),
         ("severity", SEVERITY),
-    ],
-)
-def test_common_surface_forms_normalize(alias, expected):
-    assert normalize_label(alias) == expected
+    ]:
+        with subtests.test(alias=alias, expected=expected):
+            assert normalize_label(alias) == expected
 
 
 def test_original_pii_vocabulary_and_normalization_remain_stable():

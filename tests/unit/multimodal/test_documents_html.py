@@ -59,28 +59,26 @@ def test_extracts_exact_fixture_with_total_safe_source_map() -> None:
     assert "display:none" not in flattened
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_suppression_and_malformed_inputs(subtests) -> None:
+    for source, expected in [
         ("<head><title>x</title><body><p>Jane</p>", "Jane"),
         ("<head><script>Hidden Jane<body><p>Jane</p>", ""),
         ("<head><style>Hidden Jane<body><p>Jane</p>", ""),
         ("<p>Patient Jane", "Patient Jane"),
         ("<!-- x --><!doctype html><head>x</head><script>x</script>", ""),
         ("", ""),
-    ],
-)
-def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
-    document = extract_html(source)
-    assert document.text == expected
-    assert all(
-        document.location_at(index) is not None for index in range(len(document.text))
-    )
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
+            assert document.text == expected
+            assert all(
+                document.location_at(index) is not None
+                for index in range(len(document.text))
+            )
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_title_contents_are_always_suppressed(subtests) -> None:
+    for source, expected in [
         ("<title>Hidden Jane</title><p>Visible text</p>", "Visible text"),
         (
             "<html><title>Hidden Jane</title><body><p>Visible text</p></body></html>",
@@ -97,15 +95,11 @@ def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
             "Visible text",
         ),
         ("<title>Hidden Jane<body><p>Still hidden</p></body>", ""),
-    ],
-)
-def test_title_contents_are_always_suppressed(
-    source: str,
-    expected: str,
-) -> None:
-    document = extract_html(source)
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
 
-    assert document.text == expected
+            assert document.text == expected
 
 
 @pytest.mark.parametrize(
@@ -162,9 +156,8 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
     assert output.read_text(encoding="utf-8") == expected
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_template_contents_are_always_suppressed(subtests) -> None:
+    for source, expected in [
         ("<template>Hidden Jane</template><p>Visible</p>", "Visible"),
         (
             "<template><p>Hidden Jane &amp; Roe</p>"
@@ -179,15 +172,11 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
         ),
         ("<body><template>Hidden Jane</template><p>Visible</p></body>", "Visible"),
         ("<template>Hidden Jane<body><p>Still hidden</p></body>", ""),
-    ],
-)
-def test_template_contents_are_always_suppressed(
-    source: str,
-    expected: str,
-) -> None:
-    document = extract_html(source)
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
 
-    assert document.text == expected
+            assert document.text == expected
 
 
 @pytest.mark.parametrize(
@@ -425,24 +414,23 @@ def test_writer_projects_linear_suffix_atomic_entity_and_cross_tag_ranges(
     assert cross_output.read_text(encoding="utf-8") == "<p>[PERSON]<em></em></p>"
 
 
-@pytest.mark.parametrize(
-    "replacements",
-    [
+def test_writer_rejects_invalid_ranges_before_output(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for replacements in [
         [(-1, 1, "x")],
         [(0, 0, "x")],
         [(0, 99, "x")],
         [(0, 2, "x"), (1, 3, "y")],
-    ],
-)
-def test_writer_rejects_invalid_ranges_before_output(
-    tmp_path: Path, replacements: list[tuple[int, int, str]]
-) -> None:
-    source = tmp_path / "source.html"
-    output = tmp_path / "output.html"
-    source.write_text("<p>Jane</p>", encoding="utf-8")
-    with pytest.raises(ValueError):
-        write_redacted_html(source, output, replacements)
-    assert not output.exists()
+    ]:
+        with subtests.test(replacements=replacements):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "source.html"
+            output = tmp_path / "output.html"
+            source.write_text("<p>Jane</p>", encoding="utf-8")
+            with pytest.raises(ValueError):
+                write_redacted_html(source, output, replacements)
+            assert not output.exists()
 
 
 def test_writer_deduplicates_exact_requests_and_rejects_atomic_collisions(
@@ -832,6 +820,7 @@ def test_handler_rejects_malformed_offsets_without_exposing_detector_values(
     assert not output.exists()
 
 
+@pytest.mark.slow
 def test_clean_package_import_activates_handlers_without_optional_extra() -> None:
     command = (
         "import openmed.multimodal as m; "

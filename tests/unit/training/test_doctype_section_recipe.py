@@ -63,9 +63,8 @@ def test_doctype_section_recipe_v1_resolves_dual_head_and_tier_contract() -> Non
     assert config.quantization.allow_fp32_fallback is True
 
 
-@pytest.mark.parametrize(
-    ("mutation", "message"),
-    [
+def test_malformed_doctype_section_contract_fails_fast(subtests) -> None:
+    for mutation, message in [
         (lambda raw: raw.pop("head_contract"), "requires a head_contract mapping"),
         (
             lambda raw: raw["head_contract"]["section_bio"].update(
@@ -81,14 +80,13 @@ def test_doctype_section_recipe_v1_resolves_dual_head_and_tier_contract() -> Non
             lambda raw: raw.update({"label_set_ref": "missing:labels@v1"}),
             "doctype_section_lora label_set_ref must be",
         ),
-    ],
-)
-def test_malformed_doctype_section_contract_fails_fast(mutation, message: str) -> None:
-    raw = copy.deepcopy(_raw_config())
-    mutation(raw)
+    ]:
+        with subtests.test(mutation=mutation, message=message):
+            raw = copy.deepcopy(_raw_config())
+            mutation(raw)
 
-    with pytest.raises(RecipeConfigError, match=message):
-        TrainingRecipeConfig.from_mapping(raw)
+            with pytest.raises(RecipeConfigError, match=message):
+                TrainingRecipeConfig.from_mapping(raw)
 
 
 def test_missing_label_set_ref_is_actionable() -> None:

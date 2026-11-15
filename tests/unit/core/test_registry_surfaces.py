@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.core.language_pack_catalog import DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
 from openmed.core.manifest_diff import build_registry_surfaces, registry_surface_errors
 from openmed.core.model_registry import OPENMED_MODELS, load_manifest_rows
@@ -42,6 +44,7 @@ def test_registry_cards_have_unique_pointer_metadata() -> None:
         descriptions.add(fields["description"])
 
 
+@pytest.mark.slow
 def test_generated_catalog_tables_cover_every_manifest_row() -> None:
     snapshot = build_registry_surfaces()
     rows = load_manifest_rows()

@@ -1,4 +1,5 @@
 schema_version: 1
+languages: [en]
 provenance:
   task: OM-214
   source: OpenMed curated deterministic social-determinant cue table.

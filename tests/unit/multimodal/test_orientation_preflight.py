@@ -58,50 +58,51 @@ def _apply(transform: ImageTransform, grid: Grid) -> Grid:
     return result
 
 
-@pytest.mark.parametrize("orientation", range(1, 9))
-def test_each_exif_transform_displays_stored_pixels_upright(orientation: int) -> None:
-    upright = _upright()
-    stored = _stored_for(orientation, upright)
-    transform = ImageTransform.from_exif_orientation(orientation)
+def test_each_exif_transform_displays_stored_pixels_upright(subtests) -> None:
+    for orientation in range(1, 9):
+        with subtests.test(orientation=orientation):
+            upright = _upright()
+            stored = _stored_for(orientation, upright)
+            transform = ImageTransform.from_exif_orientation(orientation)
 
-    assert _apply(transform, stored) == upright
-    assert transform.exif_orientation == orientation
-    assert transform.swaps_dimensions is (orientation >= 5)
-    assert transform.is_identity is (orientation == 1)
-
-
-@pytest.mark.parametrize("orientation", range(1, 9))
-def test_matching_declarations_are_aligned_for_all_eight_orientations(
-    orientation: int,
-) -> None:
-    transform = ImageTransform.from_exif_orientation(orientation)
-
-    report = check_image_orientation(
-        [orientation],
-        declared_transform=transform,
-        stored_size=(40, 30),
-        declared_size=(30, 40) if orientation >= 5 else (40, 30),
-    )
-
-    assert report.status is OrientationStatus.ALIGNED
-    assert report.reason_codes == ()
-    assert report.orientation == orientation
-    assert report.required_transform == transform
-    assert (report.oriented_width, report.oriented_height) == (
-        (30, 40) if orientation >= 5 else (40, 30)
-    )
+            assert _apply(transform, stored) == upright
+            assert transform.exif_orientation == orientation
+            assert transform.swaps_dimensions is (orientation >= 5)
+            assert transform.is_identity is (orientation == 1)
 
 
-@pytest.mark.parametrize("orientation", range(2, 9))
-def test_undeclared_transforms_are_required(orientation: int) -> None:
-    report = check_image_orientation([orientation])
+def test_matching_declarations_are_aligned_for_all_eight_orientations(subtests) -> None:
+    for orientation in range(1, 9):
+        with subtests.test(orientation=orientation):
+            transform = ImageTransform.from_exif_orientation(orientation)
 
-    assert report.status is OrientationStatus.TRANSFORM_REQUIRED
-    assert report.reason_codes == ("transform_required",)
-    assert report.required_transform == ImageTransform.from_exif_orientation(
-        orientation
-    )
-    assert report.declared_transform is None
+            report = check_image_orientation(
+                [orientation],
+                declared_transform=transform,
+                stored_size=(40, 30),
+                declared_size=(30, 40) if orientation >= 5 else (40, 30),
+            )
+
+            assert report.status is OrientationStatus.ALIGNED
+            assert report.reason_codes == ()
+            assert report.orientation == orientation
+            assert report.required_transform == transform
+            assert (report.oriented_width, report.oriented_height) == (
+                (30, 40) if orientation >= 5 else (40, 30)
+            )
+
+
+def test_undeclared_transforms_are_required(subtests) -> None:
+    for orientation in range(2, 9):
+        with subtests.test(orientation=orientation):
+            report = check_image_orientation([orientation])
+
+            assert report.status is OrientationStatus.TRANSFORM_REQUIRED
+            assert report.reason_codes == ("transform_required",)
+            assert report.required_transform == ImageTransform.from_exif_orientation(
+                orientation
+            )
+            assert report.declared_transform is None
 
 
 def test_upright_orientation_without_declaration_is_aligned() -> None:
@@ -119,22 +120,18 @@ def test_identity_declaration_over_rotated_metadata_was_not_applied() -> None:
     assert report.reason_codes == ("transform_not_applied",)
 
 
-@pytest.mark.parametrize(
-    ("orientation", "declared"),
-    [
+def test_contradicting_declarations_are_ambiguous(subtests) -> None:
+    for orientation, declared in [
         (6, ImageTransform(rotation_degrees=270)),
         (1, ImageTransform(rotation_degrees=90)),
         (3, ImageTransform(rotation_degrees=180, mirrored=True)),
-    ],
-)
-def test_contradicting_declarations_are_ambiguous(
-    orientation: int, declared: ImageTransform
-) -> None:
-    report = check_image_orientation([orientation], declared_transform=declared)
+    ]:
+        with subtests.test(orientation=orientation, declared=declared):
+            report = check_image_orientation([orientation], declared_transform=declared)
 
-    assert report.status is OrientationStatus.AMBIGUOUS
-    assert report.reason_codes == ("transform_conflict",)
-    assert report.orientation == orientation
+            assert report.status is OrientationStatus.AMBIGUOUS
+            assert report.reason_codes == ("transform_conflict",)
+            assert report.orientation == orientation
 
 
 def test_missing_orientation_without_declaration_is_aligned() -> None:
@@ -194,13 +191,14 @@ def test_conflicting_values_are_ambiguous_without_an_orientation() -> None:
     assert report.required_transform is None
 
 
-@pytest.mark.parametrize("values", [[0], [9], [-1], [1, 65535], [2**31]])
-def test_out_of_range_values_are_invalid(values: list[int]) -> None:
-    report = check_image_orientation(values)
+def test_out_of_range_values_are_invalid(subtests) -> None:
+    for values in [[0], [9], [-1], [1, 65535], [2**31]]:
+        with subtests.test(values=values):
+            report = check_image_orientation(values)
 
-    assert report.status is OrientationStatus.INVALID
-    assert report.reason_codes == ("orientation_value_invalid",)
-    assert report.orientation is None
+            assert report.status is OrientationStatus.INVALID
+            assert report.reason_codes == ("orientation_value_invalid",)
+            assert report.orientation is None
 
 
 def test_value_count_limit_is_invalid() -> None:
@@ -234,21 +232,17 @@ def test_required_transform_is_used_for_dimensions_when_undeclared() -> None:
     assert (report.oriented_width, report.oriented_height) == (3000, 4000)
 
 
-@pytest.mark.parametrize(
-    "sizes",
-    [
+def test_non_positive_or_oversized_dimensions_are_invalid(subtests) -> None:
+    for sizes in [
         {"stored_size": (0, 10)},
         {"stored_size": (10, 1_000_001)},
         {"stored_size": (10, 10), "declared_size": (-1, 10)},
-    ],
-)
-def test_non_positive_or_oversized_dimensions_are_invalid(
-    sizes: dict[str, Any],
-) -> None:
-    report = check_image_orientation([1], **sizes)
+    ]:
+        with subtests.test(sizes=sizes):
+            report = check_image_orientation([1], **sizes)
 
-    assert report.status is OrientationStatus.INVALID
-    assert "dimensions_invalid" in report.reason_codes
+            assert report.status is OrientationStatus.INVALID
+            assert "dimensions_invalid" in report.reason_codes
 
 
 def test_most_severe_status_wins_and_reasons_follow_declared_order() -> None:
@@ -268,9 +262,8 @@ def test_most_severe_status_wins_and_reasons_follow_declared_order() -> None:
     assert positions == sorted(positions)
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "category"),
-    [
+def test_argument_type_errors_are_value_free(subtests) -> None:
+    for kwargs, category in [
         ({"orientation_values": 6}, "orientation_values_invalid"),
         ({"orientation_values": "6"}, "orientation_values_invalid"),
         ({"orientation_values": [True]}, "orientation_values_invalid"),
@@ -288,40 +281,38 @@ def test_most_severe_status_wins_and_reasons_follow_declared_order() -> None:
             {"orientation_values": [6], "declared_size": (10, "10")},
             "declared_size_invalid",
         ),
-    ],
-)
-def test_argument_type_errors_are_value_free(
-    kwargs: dict[str, Any], category: str
-) -> None:
-    with pytest.raises(OrientationPreflightError) as exc_info:
-        check_image_orientation(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, category=category):
+            with pytest.raises(OrientationPreflightError) as exc_info:
+                check_image_orientation(**kwargs)
 
-    assert exc_info.value.category == category
-    assert str(exc_info.value) == category
-    assert "Synthetic Patient" not in str(exc_info.value)
-    assert exc_info.value.__cause__ is None
+            assert exc_info.value.category == category
+            assert str(exc_info.value) == category
+            assert "Synthetic Patient" not in str(exc_info.value)
+            assert exc_info.value.__cause__ is None
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "category"),
-    [
+def test_transform_validation(subtests) -> None:
+    for kwargs, category in [
         ({"rotation_degrees": 45}, "transform_rotation_invalid"),
         ({"rotation_degrees": 360}, "transform_rotation_invalid"),
         ({"rotation_degrees": True}, "transform_rotation_invalid"),
         ({"mirrored": 1}, "transform_mirror_invalid"),
-    ],
-)
-def test_transform_validation(kwargs: dict[str, Any], category: str) -> None:
-    with pytest.raises(OrientationPreflightError) as exc_info:
-        ImageTransform(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, category=category):
+            with pytest.raises(OrientationPreflightError) as exc_info:
+                ImageTransform(**kwargs)
 
-    assert exc_info.value.category == category
+            assert exc_info.value.category == category
 
 
-@pytest.mark.parametrize("value", [0, 9, True, "6"])
-def test_from_exif_orientation_rejects_invalid_values(value: Any) -> None:
-    with pytest.raises(OrientationPreflightError, match="orientation_value_invalid"):
-        ImageTransform.from_exif_orientation(value)
+def test_from_exif_orientation_rejects_invalid_values(subtests) -> None:
+    for value in [0, 9, True, "6"]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                OrientationPreflightError, match="orientation_value_invalid"
+            ):
+                ImageTransform.from_exif_orientation(value)
 
 
 def test_report_serialization_is_deterministic() -> None:

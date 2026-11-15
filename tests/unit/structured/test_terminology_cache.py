@@ -148,33 +148,29 @@ def test_cache_has_no_network_side_effects(monkeypatch: pytest.MonkeyPatch) -> N
     assert cache.get_response("synthetic-vocabulary", "2026.01") == entry.response
 
 
-@pytest.mark.parametrize(
-    ("replacement", "source"),
-    [
+def test_exact_key_refuses_conflicting_provenance(subtests) -> None:
+    for replacement, source in [
         ({"codes": ["SYN-002"]}, "local-fixture"),
         ({"codes": ["SYN-001"]}, "other-fixture"),
-    ],
-)
-def test_exact_key_refuses_conflicting_provenance(
-    replacement: dict[str, list[str]], source: str
-) -> None:
-    cache = TerminologyCache()
-    original = cache.put(
-        "synthetic-vocabulary",
-        "2026.01",
-        {"codes": ["SYN-001"]},
-        source="local-fixture",
-    )
+    ]:
+        with subtests.test(replacement=replacement, source=source):
+            cache = TerminologyCache()
+            original = cache.put(
+                "synthetic-vocabulary",
+                "2026.01",
+                {"codes": ["SYN-001"]},
+                source="local-fixture",
+            )
 
-    with pytest.raises(TerminologyProvenanceError):
-        cache.put(
-            "synthetic-vocabulary",
-            "2026.01",
-            replacement,
-            source=source,
-        )
+            with pytest.raises(TerminologyProvenanceError):
+                cache.put(
+                    "synthetic-vocabulary",
+                    "2026.01",
+                    replacement,
+                    source=source,
+                )
 
-    assert cache.get("synthetic-vocabulary", "2026.01") == original
+            assert cache.get("synthetic-vocabulary", "2026.01") == original
 
 
 def test_exact_duplicate_put_is_idempotent() -> None:

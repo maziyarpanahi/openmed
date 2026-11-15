@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -44,6 +45,152 @@ def test_committed_baseline_exists_and_is_wellformed():
     assert document["modules"]["openmed"]
 
 
+GOVERNANCE_NAMESPACES = (
+    "openmed.agent",
+    "openmed.agent.permissions",
+    "openmed.agent.approvals",
+    "openmed.agent.workflows",
+    "openmed.agent.security",
+    "openmed.agent.tools",
+    "openmed.interop.fhir",
+    "openmed.interop.omop",
+    "openmed.interop.lineage",
+    "openmed.mcp",
+)
+
+
+def test_governance_and_writeback_namespaces_are_in_scope_and_baseline():
+    document = json.loads(BASELINE.read_text(encoding="utf-8"))
+    assert set(GOVERNANCE_NAMESPACES).issubset(api.PUBLIC_SUBPACKAGES)
+    for namespace in GOVERNANCE_NAMESPACES:
+        assert document["modules"][namespace]
+
+
+def test_cli_names_governance_break_and_requires_announcement(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for namespace, symbol, old_signature, current_members in [
+        ("openmed.agent.approvals", "ApprovalToken", "(workflow_id, digest=...)", ()),
+        (
+            "openmed.interop.omop",
+            "write_omop_duckdb",
+            "(tables, path=...)",
+            (_member("write_omop_duckdb", signature="(tables, path)"),),
+        ),
+    ]:
+        for announced in [False, True]:
+            with subtests.test(
+                namespace=namespace,
+                symbol=symbol,
+                old_signature=old_signature,
+                current_members=current_members,
+                announced=announced,
+            ):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                capsys.readouterr()
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    baseline_path = tmp_path / "baseline.json"
+                    allowlist_path = tmp_path / "allowlist.json"
+                    api.write_baseline(
+                        baseline_path,
+                        [_surface(namespace, _member(symbol, signature=old_signature))],
+                    )
+                    location = f"{namespace}.{symbol}"
+                    allowlist_path.write_text(
+                        json.dumps(
+                            {
+                                "announced_breaks": {
+                                    location: "Synthetic announced major-release removal after deprecation."
+                                }
+                                if announced
+                                else {}
+                            }
+                        )
+                    )
+                    monkeypatch.setattr(
+                        api,
+                        "capture_surface",
+                        lambda: [_surface(namespace, *current_members)],
+                    )
+                    result = api.main(
+                        [
+                            "--baseline",
+                            str(baseline_path),
+                            "--allowlist",
+                            str(allowlist_path),
+                        ]
+                    )
+                    captured = capsys.readouterr()
+                    assert result == (0 if announced else 1)
+                    assert location in (captured.out if announced else captured.err)
+                    assert (
+                        "Allowlisted breaking changes" in captured.out
+                        if announced
+                        else "BREAKING" in captured.err
+                    )
+
+
+def test_agent_namespace_addition_passes_cli_without_allowlisting(
+    tmp_path, monkeypatch, capsys
+):
+    namespace = "openmed.agent.approvals"
+    baseline_path = tmp_path / "baseline.json"
+    allowlist_path = tmp_path / "allowlist.json"
+    api.write_baseline(baseline_path, [_surface(namespace, _member("existing"))])
+    allowlist_path.write_text(json.dumps({"announced_breaks": {}}))
+    monkeypatch.setattr(
+        api,
+        "capture_surface",
+        lambda: [
+            _surface(namespace, _member("existing"), _member("new_review_contract"))
+        ],
+    )
+    assert (
+        api.main(["--baseline", str(baseline_path), "--allowlist", str(allowlist_path)])
+        == 0
+    )
+    assert f"{namespace}.new_review_contract" in capsys.readouterr().out
+
+
+@pytest.mark.slow
+def test_gate_captures_governance_without_optional_mcp_hf_or_service_extras():
+    script = f"""
+import importlib.abc
+import importlib.util
+import sys
+
+blocked = {{"mcp", "huggingface_hub", "datasets", "fastapi", "starlette", "uvicorn"}}
+class MissingExtras(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".", 1)[0] in blocked:
+            raise ModuleNotFoundError("optional extra unavailable", name=fullname)
+
+sys.meta_path.insert(0, MissingExtras())
+spec = importlib.util.spec_from_file_location("api_without_extras", {str(SCRIPT)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+snapshots = module.capture_surface()
+captured = {{snapshot.module: snapshot for snapshot in snapshots}}
+for namespace in {GOVERNANCE_NAMESPACES!r}:
+    assert namespace in captured, namespace
+    assert captured[namespace].members, namespace
+assert module.run_check() == 0
+assert not blocked.intersection(sys.modules)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_current_surface_matches_committed_baseline():
     """The committed baseline must pass against today's surface (green CI)."""
 
@@ -53,6 +200,141 @@ def test_current_surface_matches_committed_baseline():
     allowlist = api.load_allowlist(ALLOWLIST)
     failures = api.unannounced_breaks(changes, allowlist)
     assert failures == [], [change.detail for change in failures]
+
+
+def _assert_multimodal_baseline_coverage(baseline, current):
+    baseline_modules = {snapshot.module for snapshot in baseline}
+    missing = {
+        snapshot.module
+        for snapshot in current
+        if snapshot.module.startswith(api.MULTIMODAL_PACKAGE + ".")
+        and snapshot.module not in baseline_modules
+    }
+    assert not missing, (
+        f"Missing multimodal baseline packages: {sorted(missing)}; "
+        "run scripts/release/check_public_api.py --update"
+    )
+
+
+def test_public_multimodal_subpackages_are_in_committed_baseline():
+    _assert_multimodal_baseline_coverage(
+        api.load_baseline(BASELINE), api.capture_surface()
+    )
+
+
+@pytest.fixture
+def nested_public_package(tmp_path, monkeypatch):
+    sources = {
+        "__init__.py": "__all__ = []\n",
+        "multimodal/__init__.py": "__all__ = []\n",
+        "multimodal/streaming/__init__.py": "__all__ = []\n",
+        "multimodal/streaming/speech/__init__.py": (
+            "def transcribe(audio, *, language='en'):\n    return None\n"
+            "__all__: tuple[str, ...] = ('transcribe',)\n"
+        ),
+        "multimodal/vision/__init__.py": "# Namespace without exports.\n",
+        "multimodal/vision/runtime/__init__.py": (
+            "Plan = 1\n__all__ = list(('Plan',))\n"
+        ),
+        "multimodal/_private/__init__.py": (
+            "raise AssertionError('private package imported')\n__all__ = ['hidden']\n"
+        ),
+        "multimodal/_private/child/__init__.py": "__all__ = ['hidden']\n",
+        "multimodal/no_exports/__init__.py": (
+            "raise AssertionError('internal package imported')\n"
+        ),
+        "multimodal/optional/__init__.py": (
+            "raise ModuleNotFoundError('synthetic missing extra')\n__all__ = ['Extra']\n"
+        ),
+        "multimodal/optional/child/__init__.py": "__all__ = ['Extra']\n",
+        "multimodal/invalid/__init__.py": "not valid Python!\n",
+        "multimodal/helper.py": (
+            "raise AssertionError('non-package imported')\n__all__ = ['helper']\n"
+        ),
+    }
+    package = tmp_path / "api_fixture"
+    for relative, source in sources.items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    monkeypatch.setattr(api, "MULTIMODAL_PACKAGE", "api_fixture.multimodal")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        yield package
+    finally:
+        for name in list(sys.modules):
+            if name == "api_fixture" or name.startswith("api_fixture."):
+                sys.modules.pop(name)
+
+
+def _capture_fixture():
+    return api.capture_surface(
+        top_level="api_fixture",
+        subpackages=("api_fixture.multimodal", "api_fixture.multimodal.streaming"),
+    )
+
+
+def test_nested_public_packages_are_captured_without_optional_or_private_modules(
+    nested_public_package,
+):
+    expected = {
+        "api_fixture",
+        "api_fixture.multimodal",
+        "api_fixture.multimodal.streaming",
+        "api_fixture.multimodal.streaming.speech",
+        "api_fixture.multimodal.vision.runtime",
+    }
+    first = _capture_fixture()
+    assert {snapshot.module for snapshot in first} == expected
+    assert len(first) == len(expected)  # Explicit/discovered packages are deduplicated.
+    assert api.surface_to_document(first) == api.surface_to_document(_capture_fixture())
+    document = api.surface_to_document(first)["modules"]
+    assert document["api_fixture.multimodal.streaming.speech"]["transcribe"] == {
+        "kind": "function",
+        "signature": "(audio, kw:language=...)",
+    }
+    assert (
+        document["api_fixture.multimodal.vision.runtime"]["Plan"]["kind"] == "constant"
+    )
+    assert "api_fixture.multimodal.no_exports" not in sys.modules
+    assert "api_fixture.multimodal._private" not in sys.modules
+
+
+def test_discovery_does_not_import_candidates(nested_public_package, monkeypatch):
+    def unexpected_import(name):
+        pytest.fail(f"Discovery imported {name}")
+
+    monkeypatch.setattr(api.importlib, "import_module", unexpected_import)
+    candidates = api.discover_public_subpackages(api.MULTIMODAL_PACKAGE)
+    assert candidates == tuple(sorted(candidates))
+    assert "api_fixture.multimodal.streaming.speech" in candidates
+    assert "api_fixture.multimodal.optional" in candidates
+    assert not any("._private" in name or ".no_exports" in name for name in candidates)
+
+
+def test_nested_export_removal_is_breaking(nested_public_package):
+    baseline = _capture_fixture()
+    module_name = "api_fixture.multimodal.streaming.speech"
+    sys.modules[module_name].__all__ = []
+    # Static exports take precedence, so mutate the synthetic declaration too.
+    path = nested_public_package / "multimodal/streaming/speech/__init__.py"
+    path.write_text("__all__ = []\n", encoding="utf-8")
+    failures = api.unannounced_breaks(
+        api.diff_surface(baseline, _capture_fixture()), set()
+    )
+    assert [(change.location, change.kind) for change in failures] == [
+        (module_name + ".transcribe", "removed")
+    ]
+
+
+def test_baseline_coverage_rejects_missing_nested_packages(nested_public_package):
+    current = _capture_fixture()
+    # Even an empty public package needs coverage, before its first export lands.
+    baseline = [s for s in current if s.module != "api_fixture.multimodal.streaming"]
+    with pytest.raises(AssertionError, match="api_fixture.multimodal.streaming"):
+        _assert_multimodal_baseline_coverage(baseline, current)
+    _assert_multimodal_baseline_coverage(current, current)
 
 
 def test_run_check_passes_against_committed_baseline():
@@ -86,10 +368,11 @@ def test_enum_signature_uses_stable_lookup_contract():
     assert api._member_signature(Status, "class") == "(value)"
 
 
-@pytest.mark.parametrize("alias", [tuple[int, int], Callable[[str], int]])
-def test_type_alias_kind_is_stable(alias):
-    assert api._member_kind(alias) == "type_alias"
-    assert api._member_signature(alias, "type_alias") is None
+def test_type_alias_kind_is_stable(subtests):
+    for alias in [api.Any, tuple[int, int], Callable[[str], int]]:
+        with subtests.test(alias=alias):
+            assert api._member_kind(alias) == "type_alias"
+            assert api._member_signature(alias, "type_alias") is None
 
 
 def test_static_exports_capture_top_level_public_names():
@@ -156,14 +439,21 @@ def test_removal_can_be_announced_via_allowlist():
     assert allowlisted == []
 
 
-def test_kind_change_is_breaking():
-    baseline = [_surface("openmed", _member("thing", kind="function"))]
-    current = [_surface("openmed", _member("thing", kind="class"))]
+def test_kind_change_is_breaking(subtests):
+    for before, after in [
+        ("function", "class"),
+        ("type_alias", "class"),
+        ("type_alias", "callable"),
+        ("type_alias", "constant"),
+    ]:
+        with subtests.test(before=before, after=after):
+            baseline = [_surface("openmed", _member("thing", kind=before))]
+            current = [_surface("openmed", _member("thing", kind=after))]
 
-    changes = api.diff_surface(baseline, current)
-    assert len(changes) == 1
-    assert changes[0].kind == "kind_changed"
-    assert changes[0].breaking is True
+            changes = api.diff_surface(baseline, current)
+            assert len(changes) == 1
+            assert changes[0].kind == "kind_changed"
+            assert changes[0].breaking is True
 
 
 # --- Additions are NOT breaking --------------------------------------------
@@ -324,6 +614,7 @@ def test_unavailable_current_export_is_not_reported_changed():
 # --- CLI behaviour ----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_update_writes_baseline_then_check_passes(tmp_path):
     baseline_path = tmp_path / "baseline.json"
     allowlist_path = tmp_path / "allowlist.json"
@@ -358,9 +649,22 @@ def test_allowlist_accepts_bare_mapping(tmp_path):
 
 
 def test_committed_allowlist_loads():
-    # The committed allowlist must be parseable and currently empty of stale
-    # entries (nothing announced yet on a fresh baseline).
-    assert api.load_allowlist(ALLOWLIST) == set()
+    # Every announcement must explain an actual break against the baseline;
+    # future or stale exemptions must not silently suppress the gate.
+    announced = api.load_allowlist(ALLOWLIST)
+    current_breaks = {
+        change.location
+        for change in api.diff_surface(
+            api.load_baseline(BASELINE), api.capture_surface()
+        )
+        if change.breaking
+    }
+    assert announced <= current_breaks
+    document = json.loads(ALLOWLIST.read_text(encoding="utf-8"))
+    assert all(
+        isinstance(reason, str) and reason.strip()
+        for reason in document["announced_breaks"].values()
+    )
 
 
 # --- Policy documentation ---------------------------------------------------

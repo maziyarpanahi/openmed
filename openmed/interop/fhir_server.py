@@ -20,6 +20,8 @@ from html.parser import HTMLParser
 from typing import Any, Final
 from urllib.parse import quote, urljoin, urlsplit
 
+from openmed.interop.fhir_screening import NarrativeText, extract_narrative_text
+
 _DEFAULT_POLICY = "hipaa_safe_harbor"
 _DEFAULT_METHOD = "replace"
 
@@ -720,11 +722,18 @@ def _deidentify_narrative(
     return (result, parser.changed) if parser.changed else (div, False)
 
 
-class _NarrativeRedactor(HTMLParser):
+class _NarrativeParser(HTMLParser):
+    """Non-fetching XHTML parser for local FHIR redaction."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+
+
+class _NarrativeRedactor(_NarrativeParser):
     """Rebuild XHTML while de-identifying visible text and safe attributes."""
 
     def __init__(self, deid: Callable[[str], str]) -> None:
-        super().__init__(convert_charrefs=False)
+        super().__init__()
         self._deid = deid
         self._parts: list[str] = []
         self._text_parts: list[tuple[int, str]] = []
@@ -821,8 +830,10 @@ __all__ = [
     "FHIRServerClient",
     "FHIRServerConfig",
     "FHIRWriteResult",
+    "NarrativeText",
     "de_identify_bundle",
     "de_identify_resource",
     "deidentify_bundle",
     "deidentify_resource",
+    "extract_narrative_text",
 ]

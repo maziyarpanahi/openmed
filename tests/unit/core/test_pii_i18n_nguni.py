@@ -51,95 +51,92 @@ def _fixtures() -> list[GoldenFixture]:
     return [GoldenFixture.from_mapping(row) for row in rows]
 
 
-@pytest.mark.parametrize(
-    ("lang", "name", "locale"),
-    (("zu", "isiZulu", "zu_ZA"), ("xh", "isiXhosa", "xh_ZA")),
-)
-def test_nguni_language_pack_registries_and_surrogate_data(
-    lang: str,
-    name: str,
-    locale: str,
-):
-    assert lang in SUPPORTED_LANGUAGES
-    assert LANGUAGE_NAMES[lang] == name
-    assert LANGUAGE_MODEL_PREFIX[lang] == f"{name}-"
-    assert DEFAULT_PII_MODELS[lang] == "OpenMed/privacy-filter-multilingual"
-    assert LANGUAGE_PII_PATTERNS[lang]
-    assert LANG_TO_LOCALE[lang] == locale
+def test_nguni_language_pack_registries_and_surrogate_data(subtests):
+    for lang, name, locale in (("zu", "isiZulu", "zu_ZA"), ("xh", "isiXhosa", "xh_ZA")):
+        with subtests.test(lang=lang, name=name, locale=locale):
+            assert lang in SUPPORTED_LANGUAGES
+            assert LANGUAGE_NAMES[lang] == name
+            assert LANGUAGE_MODEL_PREFIX[lang] == f"{name}-"
+            assert DEFAULT_PII_MODELS[lang] == "OpenMed/privacy-filter-multilingual"
+            assert LANGUAGE_PII_PATTERNS[lang]
+            assert LANG_TO_LOCALE[lang] == locale
 
-    fake_data = LANGUAGE_FAKE_DATA[lang]
-    assert {"Nomcebo", "Xolani", "Qhawe"} <= set(fake_data["FIRST_NAME"])
-    assert {"Durban", "Umlazi", "East London", "Gqeberha"} <= set(fake_data["LOCATION"])
-    assert all(
-        len(postcode) == 4 and postcode.isdigit() for postcode in fake_data["ZIPCODE"]
-    )
+            fake_data = LANGUAGE_FAKE_DATA[lang]
+            assert {"Nomcebo", "Xolani", "Qhawe"} <= set(fake_data["FIRST_NAME"])
+            assert {"Durban", "Umlazi", "East London", "Gqeberha"} <= set(
+                fake_data["LOCATION"]
+            )
+            assert all(
+                len(postcode) == 4 and postcode.isdigit()
+                for postcode in fake_data["ZIPCODE"]
+            )
 
 
-@pytest.mark.parametrize(
-    "valid_id",
-    ("8001015009087", "9003030123082", "7903116001080", "0102034000186"),
-)
-def test_validate_za_id_number_accepts_valid_shape_date_citizenship_and_luhn(
-    valid_id: str,
-):
-    assert validate_za_id_number(valid_id)
+def test_validate_za_id_number_accepts_valid_shape_date_citizenship_and_luhn(subtests):
+    for valid_id in (
+        "8001015009087",
+        "9003030123082",
+        "7903116001080",
+        "0102034000186",
+    ):
+        with subtests.test(valid_id=valid_id):
+            assert validate_za_id_number(valid_id)
 
 
-@pytest.mark.parametrize(
-    "invalid_id",
-    (
+def test_validate_za_id_number_rejects_invalid_candidates(subtests):
+    for invalid_id in (
         "8001015009086",  # invalid Luhn check digit
         "8013015009085",  # invalid month
         "8001325009083",  # invalid day
         "8001015009285",  # invalid citizenship digit
         "80010150090870",  # wrong length
         "８００１０１５００９０８７",  # non-ASCII digits
-    ),
-)
-def test_validate_za_id_number_rejects_invalid_candidates(invalid_id: str):
-    assert not validate_za_id_number(invalid_id)
+    ):
+        with subtests.test(invalid_id=invalid_id):
+            assert not validate_za_id_number(invalid_id)
 
 
-@pytest.mark.parametrize("lang", ("zu", "xh"))
-def test_generated_sa_id_surrogates_round_trip_for_both_languages(lang: str):
-    locale, method = NATIONAL_ID_PROVIDERS[lang]
-    assert method == "south_african_id"
-    if lang == "xh":
-        assert FAKER_BACKEND_LOCALE[locale] == "zu_ZA"
+def test_generated_sa_id_surrogates_round_trip_for_both_languages(subtests):
+    for lang in ("zu", "xh"):
+        with subtests.test(lang=lang):
+            locale, method = NATIONAL_ID_PROVIDERS[lang]
+            assert method == "south_african_id"
+            if lang == "xh":
+                assert FAKER_BACKEND_LOCALE[locale] == "zu_ZA"
 
-    spec = get_national_id(lang, "sa_id_number")
-    assert spec is not None
-    assert spec.faker_method == method
+            spec = get_national_id(lang, "sa_id_number")
+            assert spec is not None
+            assert spec.faker_method == method
 
-    for seed in range(40):
-        direct = generate_za_id_number()
-        assert validate_za_id_number(direct)
+            for seed in range(40):
+                direct = generate_za_id_number()
+                assert validate_za_id_number(direct)
 
-        anonymizer = Anonymizer(lang=lang, consistent=True, seed=seed)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            surrogate = anonymizer.surrogate(
-                "8001015009087",
-                "national_id",
-                locale=locale,
-            )
-        assert spec.validate(surrogate)
-
-
-@pytest.mark.parametrize("lang", ("zu", "xh"))
-def test_validator_gates_sa_id_detection_both_ways(lang: str):
-    valid = safety_sweep("Inombolo kamazisi 8001015009087.", [], lang=lang)
-    invalid = safety_sweep("Inombolo kamazisi 8001015009086.", [], lang=lang)
-
-    assert [(entity.label, entity.text) for entity in valid] == [
-        ("national_id", "8001015009087")
-    ]
-    assert [entity for entity in invalid if entity.label == "national_id"] == []
+                anonymizer = Anonymizer(lang=lang, consistent=True, seed=seed)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    surrogate = anonymizer.surrogate(
+                        "8001015009087",
+                        "national_id",
+                        locale=locale,
+                    )
+                assert spec.validate(surrogate)
 
 
-@pytest.mark.parametrize(
-    ("lang", "text", "expected_label", "expected_text"),
-    (
+def test_validator_gates_sa_id_detection_both_ways(subtests):
+    for lang in ("zu", "xh"):
+        with subtests.test(lang=lang):
+            valid = safety_sweep("Inombolo kamazisi 8001015009087.", [], lang=lang)
+            invalid = safety_sweep("Inombolo kamazisi 8001015009086.", [], lang=lang)
+
+            assert [(entity.label, entity.text) for entity in valid] == [
+                ("national_id", "8001015009087")
+            ]
+            assert [entity for entity in invalid if entity.label == "national_id"] == []
+
+
+def test_bilingual_context_detects_nguni_structured_pii(subtests):
+    for lang, text, expected_label, expected_text in (
         ("zu", "Igama lesiguli: Nomcebo Dlamini.", "name", "Nomcebo Dlamini"),
         ("xh", "Igama lesigulane: Xolani Qwabe.", "name", "Xolani Qwabe"),
         (
@@ -162,18 +159,17 @@ def test_validator_gates_sa_id_detection_both_ways(lang: str):
         ("xh", "Idilesi: 18 Oxford Street", "street_address", "18 Oxford Street"),
         ("zu", "ikhodi yeposi 4001", "postcode", "4001"),
         ("xh", "ikhowudi yeposi 5201", "postcode", "5201"),
-    ),
-)
-def test_bilingual_context_detects_nguni_structured_pii(
-    lang: str,
-    text: str,
-    expected_label: str,
-    expected_text: str,
-):
-    detected = safety_sweep(text, [], lang=lang)
-    assert [(entity.label, entity.text) for entity in detected] == [
-        (expected_label, expected_text)
-    ]
+    ):
+        with subtests.test(
+            lang=lang,
+            text=text,
+            expected_label=expected_label,
+            expected_text=expected_text,
+        ):
+            detected = safety_sweep(text, [], lang=lang)
+            assert [(entity.label, entity.text) for entity in detected] == [
+                (expected_label, expected_text)
+            ]
 
 
 def test_medical_aid_membership_format_requires_explicit_context():
@@ -297,8 +293,9 @@ def test_nguni_fixtures_deidentify_offline_with_no_residuals():
             assert span.text not in result.deidentified_text
 
 
-@pytest.mark.parametrize("lang", ("zu", "xh"))
-def test_nguni_pattern_lookup_keeps_universal_patterns(lang: str):
-    patterns = get_patterns_for_language(lang)
-    assert all(pattern in patterns for pattern in LANGUAGE_PII_PATTERNS[lang])
-    assert any(pattern.entity_type == "email" for pattern in patterns)
+def test_nguni_pattern_lookup_keeps_universal_patterns(subtests):
+    for lang in ("zu", "xh"):
+        with subtests.test(lang=lang):
+            patterns = get_patterns_for_language(lang)
+            assert all(pattern in patterns for pattern in LANGUAGE_PII_PATTERNS[lang])
+            assert any(pattern.entity_type == "email" for pattern in patterns)

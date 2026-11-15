@@ -15,6 +15,7 @@ from openmed.agent.permissions import (
 from openmed.agent.security import (
     ADVERSARIAL_CAPABILITY,
     ADVERSARIAL_POLICY_PROFILE,
+    DEFAULT_ADVERSARIAL_FIXTURES,
     AdversarialAttempt,
     AdversarialReasonCode,
     AttackClass,
@@ -100,6 +101,12 @@ def test_hostile_boundaries_fail_before_host_effects_while_control_runs(
         assert projection.field_paths == ("/summary",)
         policy_checks.append(attempt.case_id)
 
+        if "resource" in attempt.payload:
+            try:
+                injection_guard.guard_fhir_input(attempt.payload["resource"])
+            except PromptInjectionDetected:
+                return BoundaryVerdict.deny(AdversarialReasonCode.UNTRUSTED_INSTRUCTION)
+
         if attempt.attack_class in {
             AttackClass.INSTRUCTION_INJECTION,
             AttackClass.HOSTILE_TOOL_RESULT,
@@ -164,7 +171,10 @@ def test_hostile_boundaries_fail_before_host_effects_while_control_runs(
     assert report.passed is True
     assert len(policy_checks) == len(report.cases)
     assert set(policy_checks) == {case.case_id for case in report.cases}
-    assert host_effects == ["local-control-write"]
+    control_count = sum(
+        fixture.expect_dispatch for fixture in DEFAULT_ADVERSARIAL_FIXTURES
+    )
+    assert host_effects == ["local-control-write"] * control_count
     assert allowed_output.read_text(encoding="utf-8") == "synthetic-control-ok"
     assert all(
         case.dispatch_count

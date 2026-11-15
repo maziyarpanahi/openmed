@@ -8,32 +8,42 @@ ARG BUILDPLATFORM
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
+ARG DEBIAN_SNAPSHOT=20261108T000000Z
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+    OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+    OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30
 
 WORKDIR /app
 
 # Keep the immutable base's Python runtime while using Debian's fixed SQLite
-# release. Runtime libraries stay exact and come from one Debian suite.
-RUN apt-get update \
+# release. The signed snapshot retains exact pins after live mirrors replace them.
+# Snapshot metadata expires; its signatures and package hashes stay required.
+RUN sed -i \
+        -e "s|http://deb.debian.org/debian-security|http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}/|g" \
+        -e "s|http://deb.debian.org/debian|http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}/|g" \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        "ca-certificates=20260816" \
+        "ca-certificates=20260816+nmu1" \
         "libbz2-1.0=1.0.8-6+b2" \
         "libffi8=3.8.0-2" \
         "libgdbm6t64=1.26-1+b2" \
-        "liblzma5=5.8.3-1" \
+        "liblzma5=5.8.4-1" \
         "libncursesw6=6.6+20260608-2" \
         "libreadline8t64=8.3-4" \
         "libsqlite3-0=3.53.4-2" \
-        "libssl3t64=3.6.4-1" \
+        "libssl3t64=3.6.5-1" \
         "libuuid1=2.42.4-1" \
         "netbase=6.6" \
-        "openssl=3.6.4-1" \
-        "openssl-provider-legacy=3.6.4-1" \
+        "openssl=3.6.5-1" \
+        "openssl-provider-legacy=3.6.5-1" \
         "readline-common=8.3-4" \
-        "tzdata=2026c-1" \
+        "tzdata=2026f-1" \
         "zlib1g=1:1.3.dfsg+really1.3.2-3" \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,19 +54,34 @@ COPY openmed /app/openmed
 COPY gates/baseline.json gates/registry_state.json /app/gates/
 COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/
 
+# The PyTorch CPU index mirrors filelock only up to an unpatched 3.x release.
+# Install the patched PyPI release first so Torch's requirement is satisfied.
 RUN python -m pip install --no-cache-dir --upgrade \
         "pip==26.2.0" \
-        "setuptools==83.0.0" \
+        "setuptools==84.1.0" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
+        "filelock==4.2.4" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0,<3" \
     && pip install --no-cache-dir ".[hf,journey,mcp,service]" \
     && python -m pip check \
     && python -m pip uninstall --yes pip
+
+# Run as the fixed non-root UID/GID 65532 shared with the distroless image,
+# the Compose profile and the Helm chart. Its cache directory is where the
+# Helm chart and Compose mount the persistent model cache.
+RUN groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-log-init --create-home \
+        --home-dir /home/nonroot --shell /usr/sbin/nologin nonroot \
+    && install -d -o 65532 -g 65532 -m 0755 /home/nonroot/.cache
+
+ENV HOME=/home/nonroot
+
+USER 65532:65532
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import sys,urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3); sys.exit(0)"
 
-CMD ["uvicorn", "openmed.service.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "openmed.service.logging", "--host", "0.0.0.0", "--port", "8080"]

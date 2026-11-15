@@ -24,7 +24,7 @@ from typing import Any, Final, cast, overload
 from urllib.parse import urlsplit
 
 SCHEMA_VERSION: Final[int] = 1
-SUPPORTED_PYTHON: Final[str] = ">=3.10"
+SUPPORTED_PYTHON: Final[str] = ">=3.11"
 MATRIX_DOCUMENTATION_PATH: Final[str] = "docs/integrations/matrix.md"
 MAX_CAPABILITIES: Final[int] = 256
 

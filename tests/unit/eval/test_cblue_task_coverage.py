@@ -110,28 +110,36 @@ def test_cmeie_is_not_registered() -> None:
         load_cblue_task(CMEIE, allow_repo_path=True)
 
 
-@pytest.mark.parametrize("task", CBLUE_TASKS)
-def test_each_task_requires_an_explicit_external_path(
-    task: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(CBLUE_PATH_ENV, raising=False)
-    monkeypatch.delenv(cblue_task_shape(task).path_env, raising=False)
+def test_each_task_requires_an_explicit_external_path(subtests) -> None:
+    for task in CBLUE_TASKS:
+        with subtests.test(task=task):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(CBLUE_PATH_ENV, raising=False)
+                monkeypatch.delenv(cblue_task_shape(task).path_env, raising=False)
 
-    with pytest.raises(MultilingualNerCorpusRequired, match="explicit local"):
-        load_cblue_task(task)
-
-
-@pytest.mark.parametrize("task", CBLUE_TASKS)
-def test_each_task_rejects_a_repository_internal_path(task: str) -> None:
-    with pytest.raises(MultilingualNerCorpusRequired, match="inside the repository"):
-        load_cblue_task(task, synthetic_cblue_fixture_path(task))
+                with pytest.raises(
+                    MultilingualNerCorpusRequired, match="explicit local"
+                ):
+                    load_cblue_task(task)
 
 
-@pytest.mark.parametrize("task", CBLUE_TASKS)
-def test_each_task_rejects_a_missing_path(task: str, tmp_path: Path) -> None:
-    with pytest.raises(MultilingualNerCorpusRequired, match="does not exist"):
-        load_cblue_task(task, tmp_path / "absent.jsonl")
+def test_each_task_rejects_a_repository_internal_path(subtests) -> None:
+    for task in CBLUE_TASKS:
+        with subtests.test(task=task):
+            with pytest.raises(
+                MultilingualNerCorpusRequired, match="inside the repository"
+            ):
+                load_cblue_task(task, synthetic_cblue_fixture_path(task))
+
+
+def test_each_task_rejects_a_missing_path(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for task in CBLUE_TASKS:
+        with subtests.test(task=task):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.raises(MultilingualNerCorpusRequired, match="does not exist"):
+                load_cblue_task(task, tmp_path / "absent.jsonl")
 
 
 def test_chip_cdn_fixtures_round_trip_offsets_and_standard_terms() -> None:
@@ -245,25 +253,28 @@ def test_chip_cdn_validation_error_omits_the_source_mention(tmp_path: Path) -> N
     assert "甲区敏感诊断" not in str(caught.value)
 
 
-@pytest.mark.parametrize("task", CBLUE_TASKS)
 def test_task_metadata_reports_availability_without_reading_content(
-    task: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    subtests, tmp_path
 ) -> None:
-    monkeypatch.delenv(CBLUE_PATH_ENV, raising=False)
-    monkeypatch.delenv(cblue_task_shape(task).path_env, raising=False)
-    skipped = cblue_task_metadata(task)
+    case_root = tmp_path
+    for task in CBLUE_TASKS:
+        with subtests.test(task=task):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(CBLUE_PATH_ENV, raising=False)
+                monkeypatch.delenv(cblue_task_shape(task).path_env, raising=False)
+                skipped = cblue_task_metadata(task)
 
-    assert skipped["availability"]["status"] == "skipped"
-    assert skipped["license"]["license_id"] == "CBLUE-access-controlled"
-    assert skipped["license"]["redistribution"] == "user-supplied"
+                assert skipped["availability"]["status"] == "skipped"
+                assert skipped["license"]["license_id"] == "CBLUE-access-controlled"
+                assert skipped["license"]["redistribution"] == "user-supplied"
 
-    monkeypatch.setenv(CBLUE_PATH_ENV, str(tmp_path))
-    configured = cblue_task_metadata(task)
+                monkeypatch.setenv(CBLUE_PATH_ENV, str(tmp_path))
+                configured = cblue_task_metadata(task)
 
-    assert configured["availability"]["status"] == "configured"
-    assert configured_cblue_task_path(task) == tmp_path / task
+                assert configured["availability"]["status"] == "configured"
+                assert configured_cblue_task_path(task) == tmp_path / task
 
 
 def test_registry_exposes_the_cblue_suite_and_runs_it_offline() -> None:
@@ -500,9 +511,8 @@ def _corrupt_first(task: str, **metadata: Any) -> list[BenchmarkFixture]:
     return fixtures
 
 
-@pytest.mark.parametrize(
-    ("reason", "task", "metadata"),
-    [
+def test_each_documented_gate_reason_code_is_reachable(subtests) -> None:
+    for reason, task, metadata in [
         ("unknown_task", CHIP_CDN, {"cblue_task": CMEIE}),
         (
             "incomplete_license_block",
@@ -529,14 +539,9 @@ def _corrupt_first(task: str, **metadata: Any) -> list[BenchmarkFixture]:
             {"corpus_file": "/data/cblue/chip_cdn_test.jsonl"},
         ),
         ("missing_normalized_terms", CHIP_CDN, {"normalized_terms": []}),
-    ],
-)
-def test_each_documented_gate_reason_code_is_reachable(
-    reason: str,
-    task: str,
-    metadata: dict[str, Any],
-) -> None:
-    assert reason in _reasons(_corrupt_first(task, **metadata))
+    ]:
+        with subtests.test(reason=reason, task=task, metadata=metadata):
+            assert reason in _reasons(_corrupt_first(task, **metadata))
 
 
 def test_unexpected_language_is_reachable() -> None:

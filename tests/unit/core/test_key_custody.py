@@ -106,9 +106,8 @@ def test_explicit_lifecycle_timestamps_must_match_transition_history():
     )
 
 
-@pytest.mark.parametrize(
-    ("overrides", "code"),
-    [
+def test_invalid_lifecycle_transitions_are_rejected(subtests):
+    for overrides, code in [
         (
             {"state": "active", "retired_at": "2026-08-02T10:00:00Z"},
             "invalid_transition",
@@ -133,13 +132,12 @@ def test_explicit_lifecycle_timestamps_must_match_transition_history():
             },
             "invalid_transition",
         ),
-    ],
-)
-def test_invalid_lifecycle_transitions_are_rejected(overrides, code):
-    result = validate_key_custody_metadata(_metadata(**overrides))
+    ]:
+        with subtests.test(overrides=overrides, code=code):
+            result = validate_key_custody_metadata(_metadata(**overrides))
 
-    assert not result.valid
-    assert code in {violation.code for violation in result.violations}
+            assert not result.valid
+            assert code in {violation.code for violation in result.violations}
 
 
 def test_only_one_active_key_may_hold_a_purpose():
@@ -233,17 +231,22 @@ def test_core_package_reexports_validator_api():
     assert core.KeyCustodyValidator().validate(_metadata()).valid
 
 
-@pytest.mark.parametrize("nested", [False, True])
-def test_unknown_field_names_cannot_leak_into_reports(nested):
-    marker = "SYNTHETIC-PRIVATE-FIELD"
-    payload = _metadata()
-    if nested:
-        payload["transitions"] = [
-            {"state": "active", "at": payload["created_at"], marker: b"synthetic"}
-        ]
-    else:
-        payload[marker] = b"synthetic"
-    result = validate_key_custody_metadata(payload)
-    assert not result.valid
-    assert marker not in result.to_json()
-    assert marker not in str(result.violations)
+def test_unknown_field_names_cannot_leak_into_reports(subtests):
+    for nested in [False, True]:
+        with subtests.test(nested=nested):
+            marker = "SYNTHETIC-PRIVATE-FIELD"
+            payload = _metadata()
+            if nested:
+                payload["transitions"] = [
+                    {
+                        "state": "active",
+                        "at": payload["created_at"],
+                        marker: b"synthetic",
+                    }
+                ]
+            else:
+                payload[marker] = b"synthetic"
+            result = validate_key_custody_metadata(payload)
+            assert not result.valid
+            assert marker not in result.to_json()
+            assert marker not in str(result.violations)

@@ -113,8 +113,8 @@
     "entities": [
       {
         "text": "type 2 diabetes",
-        "start": 195,
-        "end": 210,
+        "start": 173,
+        "end": 188,
         "label": "CONDITION",
         "negation": "affirmed",
         "temporality": "historical",
@@ -127,8 +127,8 @@
       },
       {
         "text": "hypertension",
-        "start": 215,
-        "end": 227,
+        "start": 193,
+        "end": 205,
         "label": "CONDITION",
         "negation": "affirmed",
         "temporality": "recent",
@@ -141,8 +141,8 @@
       },
       {
         "text": "metformin",
-        "start": 241,
-        "end": 250,
+        "start": 219,
+        "end": 228,
         "label": "MEDICATION",
         "negation": "affirmed",
         "temporality": "recent",
@@ -155,8 +155,8 @@
       },
       {
         "text": "lisinopril",
-        "start": 274,
-        "end": 284,
+        "start": 252,
+        "end": 262,
         "label": "MEDICATION",
         "negation": "affirmed",
         "temporality": "recent",
@@ -169,8 +169,8 @@
       },
       {
         "text": "pneumonia",
-        "start": 317,
-        "end": 326,
+        "start": 295,
+        "end": 304,
         "label": "CONDITION",
         "negation": "negated",
         "temporality": "recent",
@@ -183,8 +183,8 @@
       },
       {
         "text": "headache",
-        "start": 336,
-        "end": 344,
+        "start": 314,
+        "end": 322,
         "label": "CONDITION",
         "negation": "affirmed",
         "temporality": "recent",
@@ -197,8 +197,8 @@
       },
       {
         "text": "fever",
-        "start": 349,
-        "end": 354,
+        "start": 327,
+        "end": 332,
         "label": "CONDITION",
         "negation": "affirmed",
         "temporality": "recent",
@@ -211,8 +211,8 @@
       },
       {
         "text": "seizure",
-        "start": 374,
-        "end": 381,
+        "start": 352,
+        "end": 359,
         "label": "CONDITION",
         "negation": "affirmed",
         "temporality": "historical",

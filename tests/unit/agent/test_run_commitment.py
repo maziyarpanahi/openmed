@@ -102,11 +102,14 @@ def _golden_summaries() -> dict[str, RunSummary]:
     }
 
 
-@pytest.mark.parametrize("case_id", ["empty", "success", "abstained", "mixed"])
-def test_commitment_matches_golden_vector(case_id: str) -> None:
-    summary = _golden_summaries()[case_id]
+def test_commitment_matches_golden_vector(subtests) -> None:
+    for case_id in ["empty", "success", "abstained", "mixed"]:
+        with subtests.test(case_id=case_id):
+            summary = _golden_summaries()[case_id]
 
-    assert compute_run_summary_commitment(summary) == _GOLDEN_COMMITMENTS[case_id]
+            assert (
+                compute_run_summary_commitment(summary) == _GOLDEN_COMMITMENTS[case_id]
+            )
 
 
 def test_identical_summaries_have_identical_commitments() -> None:
@@ -172,9 +175,8 @@ def test_well_formed_nonmatching_commitment_is_categorical() -> None:
     assert result.value == "mismatch"
 
 
-@pytest.mark.parametrize(
-    "commitment",
-    [
+def test_malformed_commitments_return_one_value_free_category(subtests) -> None:
+    for commitment in [
         None,
         123,
         b"sha256:" + b"0" * 64,
@@ -185,32 +187,29 @@ def test_well_formed_nonmatching_commitment_is_categorical() -> None:
         "sha512:" + "0" * 64,
         "sha256:" + "0" * 65,
         "sha256:" + "g" * 64,
-    ],
-)
-def test_malformed_commitments_return_one_value_free_category(
-    commitment: Any,
-) -> None:
-    result = verify_run_summary_commitment(_golden_summaries()["empty"], commitment)
+    ]:
+        with subtests.test(commitment=commitment):
+            result = verify_run_summary_commitment(
+                _golden_summaries()["empty"], commitment
+            )
 
-    assert result is RunCommitmentVerificationResult.MALFORMED
-    assert result.value == "malformed_commitment"
+            assert result is RunCommitmentVerificationResult.MALFORMED
+            assert result.value == "malformed_commitment"
 
 
-@pytest.mark.parametrize(
-    "summary",
-    [
+def test_only_validated_summary_objects_can_be_hashed(subtests) -> None:
+    for summary in [
         None,
         {},
         _golden_summaries()["empty"].to_dict(),
         _golden_summaries()["empty"].to_json(),
-    ],
-)
-def test_only_validated_summary_objects_can_be_hashed(summary: Any) -> None:
-    with pytest.raises(RunCommitmentError) as exc_info:
-        compute_run_summary_commitment(summary)
+    ]:
+        with subtests.test(summary=summary):
+            with pytest.raises(RunCommitmentError) as exc_info:
+                compute_run_summary_commitment(summary)
 
-    assert str(exc_info.value) == "summary: invalid_type"
-    assert exc_info.value.__cause__ is None
+            assert str(exc_info.value) == "summary: invalid_type"
+            assert exc_info.value.__cause__ is None
 
 
 def test_verification_uses_compare_digest_for_all_commitment_categories(

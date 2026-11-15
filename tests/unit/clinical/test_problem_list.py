@@ -89,9 +89,8 @@ def test_text_fallback_merges_normalized_text_and_keeps_distinct_problems():
     assert deduplicated[1].source_offsets == ((10, 28), (90, 107))
 
 
-@pytest.mark.parametrize(
-    ("mentions", "expected_status"),
-    [
+def test_status_precedence_rules(subtests):
+    for mentions, expected_status in [
         (
             [
                 ProblemMention(
@@ -126,10 +125,11 @@ def test_text_fallback_merges_normalized_text_and_keeps_distinct_problems():
             ],
             "refuted",
         ),
-    ],
-)
-def test_status_precedence_rules(mentions, expected_status):
-    assert deduplicate_problem_list(mentions)[0].clinical_status == expected_status
+    ]:
+        with subtests.test(mentions=mentions, expected_status=expected_status):
+            assert (
+                deduplicate_problem_list(mentions)[0].clinical_status == expected_status
+            )
 
 
 def test_mappings_are_supported_for_pipeline_entries():
@@ -162,9 +162,8 @@ def test_advisory_constant_documents_heuristic_scope():
     assert "not an automated clinical decision" in PROBLEM_LIST_RECONCILIATION_ADVISORY
 
 
-@pytest.mark.parametrize(
-    ("assertion", "expected_status"),
-    [
+def test_clinical_status_derives_from_reconciled_assertion_axes(subtests):
+    for assertion, expected_status in [
         (
             ClinicalAssertion(
                 negation="affirmed",
@@ -190,13 +189,9 @@ def test_advisory_constant_documents_heuristic_scope():
             },
             "unconfirmed",
         ),
-    ],
-)
-def test_clinical_status_derives_from_reconciled_assertion_axes(
-    assertion,
-    expected_status,
-):
-    assert clinical_status_from_assertion(assertion) == expected_status
+    ]:
+        with subtests.test(assertion=assertion, expected_status=expected_status):
+            assert clinical_status_from_assertion(assertion) == expected_status
 
 
 def test_uncertain_problem_mentions_reconcile_to_unconfirmed():
@@ -214,16 +209,14 @@ def test_uncertain_problem_mentions_reconcile_to_unconfirmed():
     assert deduplicated[0].clinical_status == "unconfirmed"
 
 
-@pytest.mark.parametrize(
-    ("mention", "error"),
-    [
+def test_invalid_mentions_raise_clear_errors(subtests):
+    for mention, error in [
         (ProblemMention(text=""), ValueError),
         (ProblemMention(text="sepsis", offset=(8, 4)), ValueError),
         (ProblemMention(text="sepsis", negation="unknown"), ValueError),
         (ProblemMention(text="sepsis", temporality="remote"), ValueError),
         (ProblemMention(text="sepsis", certainty="maybe"), ValueError),
-    ],
-)
-def test_invalid_mentions_raise_clear_errors(mention, error):
-    with pytest.raises(error):
-        deduplicate_problem_list([mention])
+    ]:
+        with subtests.test(mention=mention, error=error):
+            with pytest.raises(error):
+                deduplicate_problem_list([mention])

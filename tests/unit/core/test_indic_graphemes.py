@@ -87,18 +87,16 @@ def test_fixture_round_trip_preserves_non_phi_aksharas(
     assert is_grapheme_boundary(expected_end, text)
 
 
-@pytest.mark.parametrize(
-    "akshara",
-    [
+def test_iterator_keeps_reph_and_consonant_conjuncts_together(subtests) -> None:
+    for akshara in [
         "र्क्षा",  # Reph followed by a conjunct and dependent vowel.
         "र्\u200dका",  # Explicit joiner after the Reph virama.
         "ক্ষ",  # Bengali conjunct.
         "க்ஷ",  # Tamil conjunct.
         "ക്ഷ",  # Malayalam conjunct.
-    ],
-)
-def test_iterator_keeps_reph_and_consonant_conjuncts_together(akshara: str) -> None:
-    assert list(iter_grapheme_clusters(akshara)) == [(0, len(akshara))]
+    ]:
+        with subtests.test(akshara=akshara):
+            assert list(iter_grapheme_clusters(akshara)) == [(0, len(akshara))]
 
 
 def test_iterator_covers_core_extended_grapheme_rules() -> None:

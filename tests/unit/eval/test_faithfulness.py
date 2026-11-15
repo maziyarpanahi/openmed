@@ -50,37 +50,32 @@ def test_grounded_facts_have_zero_ungrounded_rate() -> None:
     assert result.by_fact_type["diagnosis"]["rate"] == 0.0
 
 
-@pytest.mark.parametrize(
-    ("support", "reason"),
-    [
+def test_missing_or_invalid_supporting_spans_are_ungrounded(subtests) -> None:
+    for support, reason in [
         (None, "missing_supporting_span"),
         ({"start": 12, "end": 12}, "supporting_span_out_of_bounds"),
         ({"start": 12, "end": 99}, "supporting_span_out_of_bounds"),
-    ],
-)
-def test_missing_or_invalid_supporting_spans_are_ungrounded(
-    support: dict[str, int] | None,
-    reason: str,
-) -> None:
-    fact: dict[str, object] = {
-        "fact_type": "diagnosis",
-        "value": "hypertension",
-    }
-    if support is not None:
-        fact["supporting_span"] = support
+    ]:
+        with subtests.test(support=support, reason=reason):
+            fact: dict[str, object] = {
+                "fact_type": "diagnosis",
+                "value": "hypertension",
+            }
+            if support is not None:
+                fact["supporting_span"] = support
 
-    result = compute_span_grounded_faithfulness(
-        [fact],
-        source_text="Patient has hypertension.",
-    )
+            result = compute_span_grounded_faithfulness(
+                [fact],
+                source_text="Patient has hypertension.",
+            )
 
-    assert result.ungrounded_fact_rate == 1.0
-    assert result.by_fact_type["diagnosis"] == {
-        "rate": 1.0,
-        "total": 1,
-        "ungrounded": 1,
-    }
-    assert result.findings[0].reason == reason
+            assert result.ungrounded_fact_rate == 1.0
+            assert result.by_fact_type["diagnosis"] == {
+                "rate": 1.0,
+                "total": 1,
+                "ungrounded": 1,
+            }
+            assert result.findings[0].reason == reason
 
 
 def test_normalized_contiguous_span_reconstructs_fact_value() -> None:

@@ -30,6 +30,7 @@ from openmed.clinical.context import (
     ClinicalAssertion,
 )
 from openmed.core.audit import hash_text
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 TimelineRelationKind = Literal["before", "after", "overlap"]
 
@@ -883,8 +884,8 @@ def _timestamp_sort_key(value: str | None) -> tuple[int, str]:
     candidate = value.split("/", 1)[0]
     try:
         if len(candidate) == 10:
-            return (0, date.fromisoformat(candidate).isoformat())
-        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+            return (0, parse_iso_date(candidate).isoformat())
+        parsed = parse_iso_datetime(candidate.replace("Z", "+00:00"))
         if parsed.tzinfo is not None:
             parsed = parsed.astimezone(timezone.utc)
         return (0, parsed.isoformat())
@@ -919,9 +920,9 @@ def _normalize_temporal_value(value: Any) -> str | None:
         valid = True
         try:
             if "T" in part:
-                datetime.fromisoformat(part.replace("Z", "+00:00"))
+                parse_iso_datetime(part.replace("Z", "+00:00"))
             elif len(part) == 10:
-                date.fromisoformat(part)
+                parse_iso_date(part)
             elif len(part) == 7:
                 if int(part[:4]) < 1 or not 1 <= int(part[5:]) <= 12:
                     raise ValueError

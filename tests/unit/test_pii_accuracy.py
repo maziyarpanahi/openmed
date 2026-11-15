@@ -190,9 +190,8 @@ class TestPatternTightening:
 
 
 class TestNormalizeLabelExpansion:
-    @pytest.mark.parametrize(
-        "label,expected",
-        [
+    def test_new_normalizations(self, subtests):
+        for label, expected in [
             ("bsn", "national_id"),
             ("dni", "national_id"),
             ("nie", "national_id"),
@@ -206,14 +205,12 @@ class TestNormalizeLabelExpansion:
             ("credit_debit_card", "payment_card"),
             ("credit_card", "payment_card"),
             ("debit_card", "payment_card"),
-        ],
-    )
-    def test_new_normalizations(self, label, expected):
-        assert normalize_label(label) == expected
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label) == expected
 
-    @pytest.mark.parametrize(
-        "label",
-        [
+    def test_new_labels_idempotent(self, subtests):
+        for label in [
             "bsn",
             "dni",
             "nie",
@@ -230,12 +227,11 @@ class TestNormalizeLabelExpansion:
             "credit_card",
             "debit_card",
             "payment_card",
-        ],
-    )
-    def test_new_labels_idempotent(self, label):
-        once = normalize_label(label)
-        twice = normalize_label(once)
-        assert once == twice
+        ]:
+            with subtests.test(label=label):
+                once = normalize_label(label)
+                twice = normalize_label(once)
+                assert once == twice
 
 
 # ---------------------------------------------------------------------------

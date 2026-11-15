@@ -49,16 +49,14 @@ def _artifact(directory: Path, *, model_type: str = "cohere_compass") -> Path:
     return directory
 
 
-@pytest.mark.parametrize(
-    ("height", "width", "expected"),
-    [
+def test_smart_resize_matches_compass_patch_grid(subtests):
+    for height, width, expected in [
         (900, 1280, (896, 1280)),
         (850, 1200, (864, 1216)),
         (10, 10, (128, 128)),
-    ],
-)
-def test_smart_resize_matches_compass_patch_grid(height, width, expected):
-    assert smart_resize(height, width) == expected
+    ]:
+        with subtests.test(height=height, width=width, expected=expected):
+            assert smart_resize(height, width) == expected
 
 
 def test_smart_resize_rejects_pathological_aspect_ratio():

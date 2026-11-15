@@ -453,9 +453,8 @@ def test_multi_valued_qi_fingerprint_cannot_collide_with_a_literal() -> None:
     assert assessment.meets_policy is False
 
 
-@pytest.mark.parametrize(
-    ("rows", "missing_count"),
-    [
+def test_exact_level_preserves_missing_state_utility(subtests) -> None:
+    for rows, missing_count in [
         (
             [
                 {"patient_id": "a"},
@@ -477,24 +476,20 @@ def test_multi_valued_qi_fingerprint_cannot_collide_with_a_literal() -> None:
             ],
             2,
         ),
-    ],
-)
-def test_exact_level_preserves_missing_state_utility(
-    rows: list[dict[str, object]],
-    missing_count: int,
-) -> None:
-    policy = AnonymityPolicy(
-        quasi_identifiers=("value",),
-        privacy_unit="patient_id",
-        target_k=1,
-    )
+    ]:
+        with subtests.test(rows=rows, missing_count=missing_count):
+            policy = AnonymityPolicy(
+                quasi_identifiers=("value",),
+                privacy_unit="patient_id",
+                target_k=1,
+            )
 
-    result = anonymize_release(rows, policy)
+            result = anonymize_release(rows, policy)
 
-    assert result.generalization.levels[0][1] == 0
-    assert result.utility.quasi_identifier_cells_changed == 0
-    assert result.utility.missing_qi_cells_before == missing_count
-    assert result.utility.missing_qi_cells_after == missing_count
+            assert result.generalization.levels[0][1] == 0
+            assert result.utility.quasi_identifier_cells_changed == 0
+            assert result.utility.missing_qi_cells_before == missing_count
+            assert result.utility.missing_qi_cells_after == missing_count
 
 
 def test_output_validation_detects_tampering_and_identifier_survival() -> None:
@@ -869,29 +864,30 @@ def test_anonymization_result_rejects_high_precision_decimal_tampering() -> None
         replace(result, records=tuple(tampered))
 
 
-@pytest.mark.parametrize(
-    ("source_value", "replacement_value"),
-    [
+def test_anonymization_result_digest_binds_exact_qi_representation(subtests) -> None:
+    for source_value, replacement_value in [
         (0.0, -0.0),
         (Decimal("1.0"), Decimal("1.00")),
-    ],
-)
-def test_anonymization_result_digest_binds_exact_qi_representation(
-    source_value: object,
-    replacement_value: object,
-) -> None:
-    result = anonymize_release(
-        [{"measurement": source_value}, {"measurement": source_value}],
-        AnonymityPolicy(
-            quasi_identifiers=("measurement",),
-            target_k=2,
-        ),
-    )
-    tampered = tuple({"measurement": replacement_value} for _row in result.records)
+    ]:
+        with subtests.test(
+            source_value=source_value, replacement_value=replacement_value
+        ):
+            result = anonymize_release(
+                [{"measurement": source_value}, {"measurement": source_value}],
+                AnonymityPolicy(
+                    quasi_identifiers=("measurement",),
+                    target_k=2,
+                ),
+            )
+            tampered = tuple(
+                {"measurement": replacement_value} for _row in result.records
+            )
 
-    assert release_dataset_digest(tampered) != result.released_dataset_digest
-    with pytest.raises(ValueError, match="released_dataset_digest does not match"):
-        replace(result, records=tampered)
+            assert release_dataset_digest(tampered) != result.released_dataset_digest
+            with pytest.raises(
+                ValueError, match="released_dataset_digest does not match"
+            ):
+                replace(result, records=tampered)
 
 
 def test_exported_release_digests_reject_non_string_column_names() -> None:
@@ -1179,25 +1175,24 @@ def test_missing_sensitive_values_cannot_inflate_l_diversity() -> None:
         )
 
 
-@pytest.mark.parametrize("ambiguous_value", [" flu ", b""])
-def test_ambiguous_sensitive_values_cannot_inflate_l_diversity(
-    ambiguous_value: object,
-) -> None:
-    policy = AnonymityPolicy(
-        quasi_identifiers=("age",),
-        sensitive_attributes=("disease",),
-        target_k=2,
-        target_l=2,
-    )
+def test_ambiguous_sensitive_values_cannot_inflate_l_diversity(subtests) -> None:
+    for ambiguous_value in [" flu ", b""]:
+        with subtests.test(ambiguous_value=ambiguous_value):
+            policy = AnonymityPolicy(
+                quasi_identifiers=("age",),
+                sensitive_attributes=("disease",),
+                target_k=2,
+                target_l=2,
+            )
 
-    with pytest.raises(ValueError, match="cannot count toward l-diversity"):
-        assess_release(
-            [
-                {"age": 40, "disease": "flu"},
-                {"age": 40, "disease": ambiguous_value},
-            ],
-            policy,
-        )
+            with pytest.raises(ValueError, match="cannot count toward l-diversity"):
+                assess_release(
+                    [
+                        {"age": 40, "disease": "flu"},
+                        {"age": 40, "disease": ambiguous_value},
+                    ],
+                    policy,
+                )
 
 
 def test_nonfinite_qi_and_privacy_unit_values_fail_closed() -> None:
@@ -1217,9 +1212,8 @@ def test_nonfinite_qi_and_privacy_unit_values_fail_closed() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
+def test_policy_rejects_ambiguous_or_unsafe_configuration(subtests) -> None:
+    for kwargs, message in [
         ({"target_k": 0}, "target_k"),
         ({"target_l": 2, "sensitive_attributes": ()}, "sensitive"),
         ({"target_t": 0.2, "sensitive_attributes": ()}, "sensitive"),
@@ -1228,17 +1222,13 @@ def test_nonfinite_qi_and_privacy_unit_values_fail_closed() -> None:
         ({"max_suppression_subsets": 0}, "max_suppression_subsets"),
         ({"quasi_identifiers": (" Alice Canary",)}, "column names"),
         ({"privacy_unit": "patient\nidentifier"}, "column names"),
-    ],
-)
-def test_policy_rejects_ambiguous_or_unsafe_configuration(
-    kwargs: dict[str, object],
-    message: str,
-) -> None:
-    values: dict[str, object] = {
-        "quasi_identifiers": ("age",),
-        "target_k": 2,
-    }
-    values.update(kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, message=message):
+            values: dict[str, object] = {
+                "quasi_identifiers": ("age",),
+                "target_k": 2,
+            }
+            values.update(kwargs)
 
-    with pytest.raises(ValueError, match=message):
-        AnonymityPolicy(**values)
+            with pytest.raises(ValueError, match=message):
+                AnonymityPolicy(**values)

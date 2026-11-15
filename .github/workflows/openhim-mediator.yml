@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -21,11 +25,43 @@ jobs:
       OPENMED_OPENHIM_USERNAME: openhim@example.org
       OPENMED_OPENHIM_PASSWORD: synthetic-password
       OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: "true"
+      OPENMED_EGRESS_RULES: '[{"purposes":["openhim"],"destination":"http://openhim-fixture:8081","cidrs":["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"],"allow_credentials":true}]'
     defaults:
       run:
         working-directory: examples/openhim-mediator
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The prod security profile requires authentication, and authentication
+      # outside dev/test requires a digest key. Generate throwaway values per
+      # run so no credential is committed. The heartbeat route requires an
+      # authenticated principal once authentication is on.
+      - name: Generate synthetic service credentials
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import secrets
+
+          api_key = secrets.token_urlsafe(32)
+          digest_key = secrets.token_hex(32)
+          key_hash = "sha256:" + hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+          api_keys = [
+              {
+                  "id": "openhim-smoke",
+                  "key_hash": key_hash,
+                  "principal": "openhim-smoke",
+                  "scopes": ["pii:write"],
+              }
+          ]
+          print(f"::add-mask::{api_key}")
+          print(f"::add-mask::{digest_key}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"OPENMED_SMOKE_API_KEY={api_key}\n")
+              env.write(f"OPENMED_SERVICE_AUTH_API_KEYS={json.dumps(api_keys)}\n")
+              env.write(f"OPENMED_SERVICE_DIGEST_KEY={digest_key}\n")
+          PY
 
       - name: Start recorded core fixture
         run: docker compose --profile fixture up -d openhim-fixture
@@ -47,7 +83,8 @@ jobs:
       - name: Verify registration and heartbeat
         run: |
           for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:8080/openhim/heartbeat > mediator.json; then
+            if curl --fail --silent --header "X-API-Key: ${OPENMED_SMOKE_API_KEY}" \
+              http://127.0.0.1:8080/openhim/heartbeat > mediator.json; then
               break
             fi
             sleep 2

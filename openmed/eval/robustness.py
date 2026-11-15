@@ -679,6 +679,44 @@ def bidi_control_wrapping_perturbation(
     return Perturbation(name=name, apply=apply)
 
 
+def bidi_in_value_perturbation(*, name: str = "bidi_in_value") -> Perturbation:
+    """Insert seeded directional marks inside gold identifiers, not around them."""
+
+    def apply(fixture: BenchmarkFixture, rng: random.Random) -> BenchmarkFixture:
+        edits: list[Edit] = []
+        for span in fixture.gold_spans:
+            if span.end - span.start < 2:
+                continue
+            index = rng.randrange(span.start + 1, span.end)
+            prefix, suffix = rng.choice(
+                (("\u200e", ""), ("\u200f", ""), ("\u061c", ""), *_BIDI_WRAPPERS)
+            )
+            edits.append((index, index + 1, prefix + fixture.text[index] + suffix))
+        return _perturb_fixture(fixture, edits)
+
+    return Perturbation(name=name, apply=apply)
+
+
+def native_digit_substitution_perturbation(
+    *, name: str = "native_digit_substitution"
+) -> Perturbation:
+    """Replace ASCII digits in gold spans with a seed-selected decimal block."""
+
+    def apply(fixture: BenchmarkFixture, rng: random.Random) -> BenchmarkFixture:
+        edits: list[Edit] = []
+        for span in fixture.gold_spans:
+            zero = rng.choice(
+                (0x0660, 0x06F0, 0x0966, 0x0C66, 0x0E50, 0x0ED0, 0x1040, 0x17E0)
+            )
+            for index in range(span.start, span.end):
+                char = fixture.text[index]
+                if "0" <= char <= "9":
+                    edits.append((index, index + 1, chr(zero + int(char))))
+        return _perturb_fixture(fixture, edits)
+
+    return Perturbation(name=name, apply=apply)
+
+
 DEFAULT_ADVERSARIAL_PERTURBATIONS: tuple[Perturbation, ...] = (
     homoglyph_substitution_perturbation(),
     zero_width_injection_perturbation(),
@@ -1910,7 +1948,11 @@ def _coerce_adversarial_perturbation(
         "zerowidth": "zero_width_injection",
     }
     key = aliases.get(key, key)
-    for candidate in DEFAULT_ADVERSARIAL_PERTURBATIONS:
+    for candidate in (
+        *DEFAULT_ADVERSARIAL_PERTURBATIONS,
+        bidi_in_value_perturbation(),
+        native_digit_substitution_perturbation(),
+    ):
         if candidate.name == key:
             if name is not None and name != candidate.name:
                 return Perturbation(name=name, apply=candidate.apply)
@@ -1956,7 +1998,12 @@ def _coerce_perturbation(
         "whitespace": "whitespace_noise",
     }
     key = aliases.get(key, key)
-    for candidate in (*DEFAULT_PERTURBATIONS, identity_perturbation()):
+    for candidate in (
+        *DEFAULT_PERTURBATIONS,
+        identity_perturbation(),
+        bidi_in_value_perturbation(),
+        native_digit_substitution_perturbation(),
+    ):
         if candidate.name == key:
             if name is not None and name != candidate.name:
                 return Perturbation(name=name, apply=candidate.apply)
@@ -2012,6 +2059,8 @@ __all__ = [
     "adversarial_perturbation_report",
     "adversarial_robustness_report",
     "bidi_control_wrapping_perturbation",
+    "bidi_in_value_perturbation",
+    "native_digit_substitution_perturbation",
     "case_flip_perturbation",
     "character_typo_perturbation",
     "combining_mark_injection_perturbation",

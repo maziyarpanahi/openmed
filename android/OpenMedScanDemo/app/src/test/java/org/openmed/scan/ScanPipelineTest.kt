@@ -1,9 +1,8 @@
 package org.openmed.scan
 
 import android.graphics.Bitmap
-import com.google.mlkit.common.MlKit
-import com.google.mlkit.vision.common.InputImage
 import com.openmed.openmedkit.ocr.FakeOcrAdapter
+import com.openmed.openmedkit.ocr.OcrImage
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,7 +10,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -19,13 +17,12 @@ import org.robolectric.annotation.Config
 class ScanPipelineTest {
     @Test
     fun sampleOcrTextFeedsDeIdentificationAndRedactsExpectedSpans() = runTest {
-        MlKit.initialize(RuntimeEnvironment.getApplication())
         val adapter = FakeOcrAdapter(SampleClinicalDocument.ocrResult())
         val pipeline = ScanPipeline(
             ocrAdapter = adapter,
             deidentifier = OnDeviceDeidentifier(),
         )
-        val image = InputImage.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), 0)
+        val image = OcrImage.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888))
 
         val result = pipeline.run(image)
 

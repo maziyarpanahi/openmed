@@ -137,17 +137,25 @@ def test_result_serialization_is_deterministic_and_round_trips():
     assert ClinicalNliResult.from_dict(payload) == result
 
 
-@pytest.mark.parametrize(
-    "bad_score",
-    [-0.01, 1.01, math.nan, math.inf, -math.inf, True, "0.5", 10**400, -(10**400)],
-)
-def test_scores_reject_non_finite_or_out_of_range_values(bad_score):
-    with pytest.raises((TypeError, NliScoreValidationError)):
-        ClinicalNliResult.from_backend(
-            "class_0",
-            mapping=_backend_mapping(),
-            score=bad_score,
-        )
+def test_scores_reject_non_finite_or_out_of_range_values(subtests):
+    for bad_score in [
+        -0.01,
+        1.01,
+        math.nan,
+        math.inf,
+        -math.inf,
+        True,
+        "0.5",
+        10**400,
+        -(10**400),
+    ]:
+        with subtests.test(bad_score=bad_score):
+            with pytest.raises((TypeError, NliScoreValidationError)):
+                ClinicalNliResult.from_backend(
+                    "class_0",
+                    mapping=_backend_mapping(),
+                    score=bad_score,
+                )
 
 
 def test_result_rejects_unknown_score_labels_and_conflicting_aliases():

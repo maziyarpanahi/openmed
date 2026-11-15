@@ -3,6 +3,7 @@ package org.openmed.scan
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.ImageFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -52,7 +53,7 @@ import androidx.compose.ui.tooling.preview.Preview as ComposePreview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.google.mlkit.vision.common.InputImage
+import com.openmed.openmedkit.ocr.OcrImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -162,22 +163,17 @@ fun CameraCaptureScreen(viewModel: ScanFlowViewModel) {
                                 context = context,
                                 imageCapture = capture,
                                 onImage = { imageProxy ->
-                                    val mediaImage = imageProxy.image
-                                    if (mediaImage == null) {
+                                    val image = try {
+                                        imageProxy.toOcrImage()
+                                    } finally {
                                         imageProxy.close()
+                                    }
+                                    if (image == null) {
                                         viewModel.showError("Camera frame was unavailable. Use the sample image fallback.")
                                         return@captureStill
                                     }
-                                    val image = InputImage.fromMediaImage(
-                                        mediaImage,
-                                        imageProxy.imageInfo.rotationDegrees,
-                                    )
                                     scope.launch {
-                                        try {
-                                            viewModel.processImage(image, ScanSource.CAMERA)
-                                        } finally {
-                                            imageProxy.close()
-                                        }
+                                        viewModel.processImage(image, ScanSource.CAMERA)
                                     }
                                 },
                                 onError = {
@@ -251,6 +247,21 @@ private fun CameraPreview(
             )
         },
     )
+}
+
+/**
+ * Copies a CameraX JPEG capture into the engine-neutral OpenMedKit image type.
+ */
+private fun ImageProxy.toOcrImage(): OcrImage? {
+    if (format != ImageFormat.JPEG || planes.isEmpty()) {
+        return null
+    }
+    val buffer = planes[0].buffer.duplicate()
+    val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
+    if (bytes.isEmpty()) {
+        return null
+    }
+    return OcrImage.fromEncodedBytes(bytes, imageInfo.rotationDegrees)
 }
 
 private fun captureStill(

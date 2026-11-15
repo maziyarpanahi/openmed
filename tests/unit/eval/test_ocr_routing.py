@@ -257,15 +257,19 @@ def test_detector_internal_typeerror_does_not_retry_without_language():
     assert report.cases[0].detector_error == "detector_error"
 
 
-@pytest.mark.parametrize("confidence", [10**1000, 2.0, -1.0])
-def test_invalid_classifier_confidence_fails_to_generic(confidence):
-    fixture = default_ocr_routing_fixtures()[0]
-    report = run_ocr_routing_eval(
-        [fixture],
-        classifier=lambda text: {"type": "radiology_report", "confidence": confidence},
-    )
-    assert report.cases[0].classifier_confidence == 0
-    assert report.cases[0].predicted_profile == "generic"
+def test_invalid_classifier_confidence_fails_to_generic(subtests):
+    for confidence in [10**1000, 2.0, -1.0]:
+        with subtests.test(confidence=confidence):
+            fixture = default_ocr_routing_fixtures()[0]
+            report = run_ocr_routing_eval(
+                [fixture],
+                classifier=lambda text: {
+                    "type": "radiology_report",
+                    "confidence": confidence,
+                },
+            )
+            assert report.cases[0].classifier_confidence == 0
+            assert report.cases[0].predicted_profile == "generic"
 
 
 def test_fixture_repr_does_not_include_text():

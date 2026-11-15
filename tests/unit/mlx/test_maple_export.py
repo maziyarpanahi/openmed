@@ -31,10 +31,14 @@ def test_plan_directs_2bit_callers_to_published_artifact(tmp_path):
         plan_maple_mlx_variants(tmp_path, bits=[2])
 
 
-@pytest.mark.parametrize("group_size", [0, 16, 256])
-def test_plan_rejects_unsupported_group_size(tmp_path, group_size):
-    with pytest.raises(ValueError, match="group_size"):
-        plan_maple_mlx_variants(tmp_path, group_size=group_size)
+def test_plan_rejects_unsupported_group_size(subtests, tmp_path):
+    case_root = tmp_path
+    for group_size in [0, 16, 256]:
+        with subtests.test(group_size=group_size):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.raises(ValueError, match="group_size"):
+                plan_maple_mlx_variants(tmp_path, group_size=group_size)
 
 
 def test_dry_run_cli_emits_plan_without_importing_mlx(tmp_path, capsys):

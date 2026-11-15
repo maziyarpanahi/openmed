@@ -79,28 +79,22 @@ def _fixture_analyzer(fixture: dict, called_models: list[str]):
     return analyze
 
 
-@pytest.mark.parametrize(
-    ("lang", "text", "native_script"),
-    [
+def test_india_script_windows_activate_with_context(subtests) -> None:
+    for lang, text, native_script in [
         ("hi", "Patient राहुल Sharma", "Devanagari"),
         ("te", "Patient కావ్య Rao", "Telugu"),
         ("te", "Patient राहुल Rao", "Devanagari"),
-    ],
-)
-def test_india_script_windows_activate_with_context(
-    lang: str,
-    text: str,
-    native_script: str,
-) -> None:
-    windows = india_clinical_script_windows(text, lang)
+    ]:
+        with subtests.test(lang=lang, text=text, native_script=native_script):
+            windows = india_clinical_script_windows(text, lang)
 
-    assert {window.script for window in windows} == {"Latin", native_script}
-    assert all(window.extract(text) for window in windows)
-    assert all(
-        window.start <= window.core_start < window.core_end <= window.end
-        for window in windows
-    )
-    assert india_clinical_route_active(text, lang) is True
+            assert {window.script for window in windows} == {"Latin", native_script}
+            assert all(window.extract(text) for window in windows)
+            assert all(
+                window.start <= window.core_start < window.core_end <= window.end
+                for window in windows
+            )
+            assert india_clinical_route_active(text, lang) is True
 
 
 def test_india_route_does_not_activate_for_single_script_or_other_languages() -> None:
@@ -117,21 +111,22 @@ def test_detection_normalization_preserves_indic_combining_marks() -> None:
     assert normalized.stripped_combining_marks == 0
 
 
-@pytest.mark.parametrize("lang", ["hi", "te"])
-def test_india_model_route_uses_registered_first_party_models(lang: str) -> None:
-    route = get_india_clinical_model_route(lang)
+def test_india_model_route_uses_registered_first_party_models(subtests) -> None:
+    for lang in ["hi", "te"]:
+        with subtests.test(lang=lang):
+            route = get_india_clinical_model_route(lang)
 
-    assert route.latin_model == DEFAULT_PII_MODELS["en"]
-    assert route.native_model == DEFAULT_PII_MODELS[lang]
-    assert route.fallback_model == INDIA_CLINICAL_MULTILINGUAL_FALLBACK
-    assert route.latin_prefix == LANGUAGE_MODEL_PREFIX["en"]
-    assert route.native_prefix == LANGUAGE_MODEL_PREFIX[lang]
-    assert route.model_for_script("Latin") == DEFAULT_PII_MODELS["en"]
-    assert route.model_for_script("Devanagari") == DEFAULT_PII_MODELS[lang]
-    assert (
-        route.model_for_script("Latin", user_model="/models/india-clinical")
-        == "/models/india-clinical"
-    )
+            assert route.latin_model == DEFAULT_PII_MODELS["en"]
+            assert route.native_model == DEFAULT_PII_MODELS[lang]
+            assert route.fallback_model == INDIA_CLINICAL_MULTILINGUAL_FALLBACK
+            assert route.latin_prefix == LANGUAGE_MODEL_PREFIX["en"]
+            assert route.native_prefix == LANGUAGE_MODEL_PREFIX[lang]
+            assert route.model_for_script("Latin") == DEFAULT_PII_MODELS["en"]
+            assert route.model_for_script("Devanagari") == DEFAULT_PII_MODELS[lang]
+            assert (
+                route.model_for_script("Latin", user_model="/models/india-clinical")
+                == "/models/india-clinical"
+            )
 
 
 def test_user_supplied_model_is_run_for_both_script_routes(

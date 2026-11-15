@@ -83,6 +83,13 @@ modelPath: {
 }
 ```
 
+Graphs whose weights live in external-data shards pass them through the typed
+`externalData` option described in the
+[ONNX Runtime Web loader guide](onnxruntime-web.md#sharded-external-data). As
+with `sessionOptions`, the same shards are passed to the WebGPU graph and to
+the WASM fallback graph. Invalid shard locations, oversized shards, and
+`sessionOptions.externalData` are rejected before any session is created.
+
 ## Capability and fallback behavior
 
 `probeOrtWebCapabilities()` distinguishes API exposure from an adapter that can
@@ -107,6 +114,15 @@ threaded WASM:
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
+
+## Content-Security-Policy
+
+A synthetic WebAssembly fixture exercises a strict CSP (`script-src 'self'
+'wasm-unsafe-eval'`, `connect-src 'self' blob:`, `worker-src 'self' blob:`) plus
+COOP/COEP. See [Content-Security-Policy profile](https://github.com/maziyarpanahi/openmed/blob/master/js/openmedkit-web/README.md#content-security-policy-profile)
+for the full header set and what each directive is for. Removing
+`'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
+rather than falling back silently.
 
 ## Direct WGSL classification head
 
@@ -237,7 +253,9 @@ tokens, note text, browser user agents, and adapter fingerprints.
 - The package enables no telemetry, remote model fallback, console logging, or
   raw-PHI benchmark fields.
 - Model licensing remains the deployer's responsibility. OpenMed bundles no
-  restricted model weights or clinical datasets.
+  restricted model weights or clinical datasets. See
+  [Export Toolchains, Artifact Licenses and Redistribution](../security/export-redistribution.md)
+  for runtime library licenses and model-license propagation.
 
 ## Validation
 
@@ -255,6 +273,86 @@ cd ../../tests/browser/brand
 npm ci
 npx playwright test webgpu-token-classification.spec.ts --project chromium
 ```
+
+## Browser execution lane for exported graphs
+
+The WGSL gate above checks only the classification head. The ONNX Runtime Web
+lane in `tests/browser/ort-lane` loads complete exported graphs:
+
+1. `python -m openmed.onnx.browser_lane prepare` builds a tiny, randomly
+   initialised BERT token classifier offline (seed 3940, no downloads),
+   exports `model.onnx` (fp32, with its `model.onnx.data` sidecar) and
+   `model.webgpu.onnx` (fp16) with the repository exporter, and derives a
+   negative-control graph that appends `Mod(logits, 65504, fmod=1)`, an
+   identity operator the WebGPU provider does not implement. Python ONNX
+   Runtime computes the fp32 reference logits for synthetic token feeds, and
+   everything lands in `output/playwright/ort-lane/fixture/`.
+2. A local server serves the graphs, ONNX Runtime Web from the pinned
+   `onnxruntime-web` package (never a CDN), and the built OpenMed runtime from
+   one loopback origin. Pages that need threads are cross-origin isolated with
+   COOP and COEP.
+3. Headless Chromium runs each case through
+   `loadWebGpuTokenClassificationSession()` and compares the logits and
+   decoded spans with the reference. Browser context routing aborts and
+   counts any request to another origin; a negative-control test proves that
+   a CDN fetch is blocked and counted.
+
+| Case | Provider | Graph | Logit tolerance |
+| --- | --- | --- | --- |
+| `wasm-threaded-fp32` | threaded WASM, cross-origin isolated | fp32 | 1e-4 |
+| `wasm-single-fp32` | single-thread WASM, not isolated | fp32 | 1e-4 |
+| `webgpu-fp32` | WebGPU with WASM fallback | fp32 | 1e-3 |
+| `webgpu-fp16` | WebGPU with WASM fallback | fp16 | 5e-2 |
+| `webgpu-fallback-control` | WebGPU with WASM fallback | fp32 + `Mod` | 1e-3 |
+
+Every case also requires identical decoded spans (zero token-offset
+tolerance) and no recall loss. The synthetic feeds are redrawn until every
+active token's top logit leads the runner-up by more than twice the loosest
+tolerance, so a candidate inside its tolerance cannot flip a label.
+
+The lane captures ONNX Runtime's session log inside the page and keeps only
+operator types and node counts. A node without a WebGPU kernel (`webgpu kernel
+not found in registries`) is fallback evidence: the case reports
+`webgpu_support: "partial"` with the operator types, otherwise `"full"`. The
+negative control must report `partial` and name `Mod`. With
+`onnxruntime-web` 1.31.1 the exported BERT graphs report `partial` as well:
+their int64 shape subgraph, `IsNaN` and `Max` run on the WASM CPU provider
+while the matrix multiplications, attention softmax and layer norms run on
+WebGPU.
+
+Each case writes `output/playwright/ort-lane/records/<case>.json` with the
+provider, browser name and version, ONNX Runtime Web version, SHA-256 digests
+of the graph, sidecar, feeds and reference, the declared tolerances, and the
+outcomes: `status` (`passed`, `failed` or `unavailable`), a controlled
+`reason_code`, the support level, fallback operator types, node placement
+counts, the maximum logit delta, span counts, recall, and request counts.
+Records never contain logits, token ids, text, URLs, paths or log lines.
+
+A missing WebGPU adapter or a missing `shader-f16` feature for the fp16 graph
+is recorded as `unavailable` with that reason, never skipped or passed.
+`check` gates the records and fails closed on any `failed` record and on any
+`unavailable` reason that was not explicitly accepted:
+
+```bash
+make ort-browser-lane
+# or step by step
+uv run --extra dev --extra onnx python -m openmed.onnx.browser_lane prepare
+npm --prefix js/openmedkit-web ci && npm --prefix js/openmedkit-web run build
+npm --prefix tests/browser/ort-lane ci
+npm exec --prefix tests/browser/ort-lane -- playwright install chromium
+npm --prefix tests/browser/ort-lane test
+uv run python -m openmed.onnx.browser_lane check
+```
+
+`check --allow-unavailable <reason>` and `OPENMED_ORT_LANE_ALLOW_UNAVAILABLE`
+(comma-separated reason codes, for the Playwright run) accept named
+unavailable reasons; `OPENMED_ORT_LANE_CHANNEL=chrome` uses an installed
+Chrome instead of Playwright's Chromium. The Pages workflow runs the lane in
+the pinned Playwright container, where SwiftShader provides WebGPU without
+`shader-f16`, so it accepts only `webgpu_shader_f16_unavailable` and every
+other case must pass. `prepare --checkpoint <dir>` exports a local
+token-classification checkpoint instead of the synthetic one; it must still
+meet the margin and span gate on the synthetic feeds.
 
 Training, the demo UI, OCR, and other multimodal workloads remain outside this
 runtime.

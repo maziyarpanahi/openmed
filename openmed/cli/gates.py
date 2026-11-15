@@ -30,6 +30,31 @@ def add_gates_command(subparsers: argparse._SubParsersAction) -> None:
     _add_preview_command(gates_sub)
     _add_bundle_command(gates_sub)
     _add_grounding_command(gates_sub)
+    _add_agent_release_command(gates_sub)
+
+
+def _add_agent_release_command(subparsers: argparse._SubParsersAction) -> None:
+    from openmed.eval.agent_release_candidate import add_candidate_arguments
+
+    parser = subparsers.add_parser(
+        "agent-release", help="Build and sign an exact-source v3.1 candidate decision."
+    )
+    add_candidate_arguments(parser)
+    parser.set_defaults(handler=_handle_agent_release)
+
+
+def _handle_agent_release(args: argparse.Namespace) -> int:
+    from openmed.eval.agent_release_candidate import (
+        AgentCandidateError,
+        candidate_from_arguments,
+    )
+
+    try:
+        result = candidate_from_arguments(args)
+    except AgentCandidateError as exc:
+        raise CliError(str(exc), code=str(exc), exit_code=EXIT_USAGE) from exc
+    emit(args, result.to_dict(), human=result.packet.to_json())
+    return 0 if result.packet.decision == "READY" else 1
 
 
 def _add_preview_command(subparsers: argparse._SubParsersAction) -> None:

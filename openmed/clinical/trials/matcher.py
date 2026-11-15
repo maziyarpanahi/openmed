@@ -15,6 +15,7 @@ from typing import Any, Final
 
 from openmed.clinical.journey import JourneySnapshot
 from openmed.clinical.journey_contracts import canonical_digest, derived_opaque_id
+from openmed.core.iso_temporal import parse_iso_datetime
 
 from .contracts import TrialContractError, TrialStudyRecord
 from .criteria import (
@@ -993,7 +994,7 @@ def _timestamp(value: Any, name: str) -> str:
 
 def _time(value: str) -> datetime:
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise TrialContractError("timestamp must be ISO 8601") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:

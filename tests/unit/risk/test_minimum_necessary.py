@@ -142,38 +142,36 @@ def test_selection_requires_no_network_call(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.allowed is True
 
 
-@pytest.mark.parametrize(
-    ("purpose", "policy_profile", "reason"),
-    [
+def test_unknown_purpose_or_profile_fails_closed_with_safe_explanation(
+    subtests,
+) -> None:
+    for purpose, policy_profile, reason in [
         ("unknown-purpose", "research_limited", "unknown_purpose_mapping"),
         ("cohort_review", "unknown-profile", "unknown_policy_profile"),
-    ],
-)
-def test_unknown_purpose_or_profile_fails_closed_with_safe_explanation(
-    purpose: str,
-    policy_profile: str,
-    reason: str,
-) -> None:
-    record = {
-        "condition_code": "SYNTHETIC-CODE",
-        "raw_sensitive_value": "SYNTHETIC-SECRET",
-    }
-    selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
+    ]:
+        with subtests.test(
+            purpose=purpose, policy_profile=policy_profile, reason=reason
+        ):
+            record = {
+                "condition_code": "SYNTHETIC-CODE",
+                "raw_sensitive_value": "SYNTHETIC-SECRET",
+            }
+            selector = MinimumNecessarySelector(PURPOSE_MAPPINGS, POLICY_PROFILES)
 
-    result = selector.select(
-        record,
-        purpose=purpose,
-        policy_profile=policy_profile,
-    )
+            result = selector.select(
+                record,
+                purpose=purpose,
+                policy_profile=policy_profile,
+            )
 
-    assert result.allowed is False
-    assert result.fields == ()
-    assert result.project(record) == {}
-    assert result.reason == reason
-    report = result.to_json()
-    assert "SYNTHETIC-SECRET" not in report
-    assert "raw_sensitive_value" not in report
-    assert json.loads(report)["allowed"] is False
+            assert result.allowed is False
+            assert result.fields == ()
+            assert result.project(record) == {}
+            assert result.reason == reason
+            report = result.to_json()
+            assert "SYNTHETIC-SECRET" not in report
+            assert "raw_sensitive_value" not in report
+            assert json.loads(report)["allowed"] is False
 
 
 def test_missing_or_policy_blocked_required_field_denies_the_whole_selection() -> None:

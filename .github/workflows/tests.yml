@@ -2,12 +2,16 @@ name: V2.2 conformance
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   v22-conformance:

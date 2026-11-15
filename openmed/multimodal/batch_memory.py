@@ -26,6 +26,8 @@ from typing import Any, Final
 
 from .asset_batch import MAX_BATCH_ASSETS
 from .asset_manifest import MAX_MANIFEST_BYTE_SIZE, AssetManifest
+from .manifest_profiles import WAVEFORM_V1, validate_manifest_metadata
+from .preflight import _modality_for
 
 __all__ = [
     "BATCH_MEMORY_PLAN_VERSION",
@@ -57,7 +59,12 @@ MAX_AUDIO_CHANNELS: Final = 1024
 MAX_AUDIO_SAMPLE_RATE_HZ: Final = (1 << 32) - 1
 
 BATCH_MEMORY_REASON_CODES: Final = frozenset(
-    {"insufficient_metadata", "estimate_saturated", "budget_exceeded"}
+    {
+        "insufficient_metadata",
+        "estimate_saturated",
+        "budget_exceeded",
+        "invalid_metadata",
+    }
 )
 
 
@@ -92,6 +99,7 @@ class MemoryEstimationPolicy:
     - ``audio_sample_rate_hz``: decoded waveform sample rate.
     - ``audio_channels``: decoded waveform channel count.
     - ``audio_bytes_per_sample``: decoded bytes per sample, per channel.
+    - ``waveform_bytes_per_sample``: decoded bytes per waveform sample, per channel.
     """
 
     image_bytes_per_pixel: int | None = None
@@ -99,6 +107,7 @@ class MemoryEstimationPolicy:
     audio_sample_rate_hz: int | None = None
     audio_channels: int | None = None
     audio_bytes_per_sample: int | None = None
+    waveform_bytes_per_sample: int | None = None
 
     def __post_init__(self) -> None:
         bounds = {
@@ -107,6 +116,7 @@ class MemoryEstimationPolicy:
             "audio_sample_rate_hz": MAX_AUDIO_SAMPLE_RATE_HZ,
             "audio_channels": MAX_AUDIO_CHANNELS,
             "audio_bytes_per_sample": MAX_BYTES_PER_UNIT,
+            "waveform_bytes_per_sample": MAX_BYTES_PER_UNIT,
         }
         for name, maximum in bounds.items():
             value = getattr(self, name)
@@ -115,13 +125,16 @@ class MemoryEstimationPolicy:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the policy as a JSON-ready mapping with a fixed key order."""
-        return {
+        data = {
             "image_bytes_per_pixel": self.image_bytes_per_pixel,
             "dicom_bytes_per_pixel": self.dicom_bytes_per_pixel,
             "audio_sample_rate_hz": self.audio_sample_rate_hz,
             "audio_channels": self.audio_channels,
             "audio_bytes_per_sample": self.audio_bytes_per_sample,
         }
+        if self.waveform_bytes_per_sample is not None:
+            data["waveform_bytes_per_sample"] = self.waveform_bytes_per_sample
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,13 +272,16 @@ def _estimate(
     budget_bytes: int,
     overhead_bytes: int,
 ) -> AssetMemoryEstimate:
-    modality = _modality_for(manifest.media_type)
+    modality = _modality_for(manifest)
     if modality is None:
         return _unevaluable(position, None, "media_type")
     if modality == "pdf":
         # PDF_V1 carries no raster geometry, and a page count alone cannot
         # stand in for it, so a PDF is always unevaluable here.
         return _unevaluable(position, modality, "width")
+    if modality == "dicom_non_pixel":
+        # Encoded byte size is not a bound on decoded SR/encapsulated content.
+        return _unevaluable(position, modality, "decoded_bytes")
 
     inputs: tuple[tuple[str, Any], ...]
     if modality == "image":
@@ -281,6 +297,14 @@ def _estimate(
             ("height", manifest.height),
             ("frames", manifest.frames),
             ("dicom_bytes_per_pixel", policy.dicom_bytes_per_pixel),
+        )
+    elif modality == "waveform":
+        inputs = (
+            ("channel_count", manifest.channel_count),
+            ("samples_per_channel", manifest.samples_per_channel),
+            ("sample_rate_hz", manifest.sample_rate_hz),
+            ("duration_seconds", manifest.duration_seconds),
+            ("waveform_bytes_per_sample", policy.waveform_bytes_per_sample),
         )
     else:
         inputs = (
@@ -299,10 +323,23 @@ def _estimate(
         # exact binary fraction, so no float product decides the frame count.
         duration, rate = factors[0], factors[1]
         factors[:2] = [math.ceil(Fraction(duration) * rate)]
+    elif modality == "waveform":
+        channels, samples, rate, duration, bytes_per_sample = factors
+        factors = [
+            channels,
+            max(samples, math.ceil(Fraction(duration) * Fraction(rate))),
+            bytes_per_sample,
+        ]
 
     size = _saturating_product(factors)
     if size is None:
         return AssetMemoryEstimate(position, modality, None, "estimate_saturated")
+    if modality == "waveform":
+        findings = validate_manifest_metadata(WAVEFORM_V1, manifest)
+        if findings:
+            return AssetMemoryEstimate(
+                position, modality, None, "invalid_metadata", findings[0].field_name
+            )
     if size > budget_bytes - overhead_bytes:
         return AssetMemoryEstimate(position, modality, size, "budget_exceeded")
     return AssetMemoryEstimate(position, modality, size)
@@ -319,21 +356,7 @@ def _unevaluable(
 def _saturating_product(factors: Sequence[int]) -> int | None:
     product = 1
     for factor in factors:
-        product *= factor
-        if product > SATURATION_CEILING:
+        if factor > SATURATION_CEILING // product:
             return None
+        product *= factor
     return product
-
-
-def _modality_for(media_type: str) -> str | None:
-    # Mirrors ``preflight._modality_for``; application/dicom+json has no
-    # geometry profile, so it is unevaluable.
-    if media_type == "application/pdf":
-        return "pdf"
-    if media_type == "application/dicom":
-        return "dicom"
-    if media_type.startswith("image/"):
-        return "image"
-    if media_type.startswith("audio/"):
-        return "audio"
-    return None

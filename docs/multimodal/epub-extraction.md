@@ -40,3 +40,8 @@ offsets, and source character ranges, but it does not store raw XHTML content.
 DRM-protected or encrypted EPUB entries are unsupported. Repackaging a redacted
 EPUB is also out of scope; callers can use source offsets to project findings
 back to XHTML content documents when they need custom write-back behavior.
+
+
+ZIP input admission enforces entry, size, ratio and path limits before parsing.
+See [ZIP document admission](asset-limits.md#zip-document-admission) for defaults,
+configurable tighter limits, content-free errors and allocation-test scope.

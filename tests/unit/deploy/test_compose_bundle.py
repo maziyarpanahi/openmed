@@ -4,6 +4,8 @@ from pathlib import Path
 
 import yaml
 
+from openmed.service.secret_files import CREDENTIAL_SETTINGS
+
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "deploy" / "openmed-compose.yaml"
 DOCS_FILE = ROOT / "docs" / "deploy" / "self-hosted-compose.md"
@@ -122,7 +124,27 @@ def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() ->
     assert "network_mode" not in service
     assert "extra_hosts" not in service
     assert "env_file" not in service
-    assert "secrets" not in service
+    assert [secret["source"] for secret in service["secrets"]] == [
+        "openmed_journey_postgres_dsn"
+    ]
+
+
+def test_bundle_bounds_every_openmed_service_without_dev_overrides() -> None:
+    services = _load_compose()["services"]
+
+    for name in (
+        "journey-migrate",
+        "journey-worker",
+        "openmed",
+        "journey-golden",
+        "mcp",
+    ):
+        service = services[name]
+        assert service["cpus"] and service["mem_limit"]
+        assert service["pids_limit"] == 512
+        assert "OPENMED_MCP_ALLOW_INSECURE_LOCALHOST" not in service["environment"]
+    assert services["openmed"]["cpus"] == "${OPENMED_CPU_LIMIT:-2}"
+    assert services["openmed"]["mem_limit"] == "${OPENMED_MEMORY_LIMIT:-4g}"
 
 
 def test_bundle_healthcheck_probes_readiness_with_bounded_timeout() -> None:
@@ -158,9 +180,98 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> Non
         "three 10 MiB files",
         "synthetic",
         "OPENMED_POSTGRES_PASSWORD",
+        "OPENMED_JOURNEY_POSTGRES_DSN",
+        "/run/secrets/openmed_journey_postgres_dsn",
+        "secret_file_permissions_too_open",
         "journey-golden",
         "backup",
         "restore",
         "secret rotation",
     ):
         assert required_text in docs
+
+
+def test_bundle_requires_verified_postgres_tls_with_operator_ca() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+    ca_mount = (
+        "${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/ca.crt:"
+        "/run/openmed/postgres-tls/ca.crt:ro"
+    )
+
+    for name in ("journey-migrate", "journey-worker", "openmed", "journey-golden"):
+        environment = services[name]["environment"]
+        assert environment["OPENMED_PROFILE"] == "${OPENMED_PROFILE:-prod}"
+        # The operator DSN reaches the container only as a secret file; the
+        # production Journey store refuses it unless it uses verify-full TLS.
+        assert "OPENMED_JOURNEY_POSTGRES_DSN" not in environment
+        assert environment["OPENMED_JOURNEY_POSTGRES_DSN_FILE"] == (
+            "/run/secrets/openmed_journey_postgres_dsn"
+        )
+        assert environment["OPENMED_JOURNEY_POSTGRES_SSLROOTCERT"] == (
+            "/run/openmed/postgres-tls/ca.crt"
+        )
+        assert ca_mount in services[name]["volumes"]
+
+    postgres = services["postgres"]
+    assert "ssl=on" in postgres["command"]
+    assert "ssl_min_protocol_version=TLSv1.2" in postgres["command"]
+    assert all(
+        volume.endswith(":ro")
+        for volume in postgres["volumes"]
+        if "/run/openmed/postgres-tls/" in volume
+    )
+    docs = DOCS_FILE.read_text(encoding="utf-8")
+    assert "OPENMED_POSTGRES_TLS_DIR" in docs
+    assert "postgres_tls_required" in docs
+
+
+def test_bundle_delivers_credentials_as_secret_files_not_environment() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+    forbidden = {*CREDENTIAL_SETTINGS, "POSTGRES_PASSWORD"}
+
+    for name, service in services.items():
+        environment = service.get("environment", {})
+        assert forbidden.isdisjoint(environment), name
+        for value in environment.values():
+            assert "PASSWORD}" not in str(value), name
+            assert "postgresql://" not in str(value), name
+
+    assert compose["secrets"] == {
+        "openmed_postgres_password": {"environment": "OPENMED_POSTGRES_PASSWORD"},
+        "openmed_journey_postgres_dsn": {"environment": "OPENMED_JOURNEY_POSTGRES_DSN"},
+    }
+    postgres = services["postgres"]
+    assert postgres["environment"]["POSTGRES_PASSWORD_FILE"] == (
+        "/run/secrets/openmed_postgres_password"
+    )
+    assert postgres["secrets"] == [
+        {"source": "openmed_postgres_password", "mode": 0o400}
+    ]
+
+    dsn_consumers = {"journey-migrate", "journey-worker", "openmed", "journey-golden"}
+    for name in dsn_consumers:
+        service = services[name]
+        assert service["environment"]["OPENMED_JOURNEY_POSTGRES_DSN_FILE"] == (
+            "/run/secrets/openmed_journey_postgres_dsn"
+        )
+        assert service["secrets"] == [
+            {
+                "source": "openmed_journey_postgres_dsn",
+                "uid": "65532",
+                "gid": "65532",
+                "mode": 0o400,
+            }
+        ]
+        assert service["user"] == "65532:65532"
+    assert "secrets" not in services["mcp"]
+    assert "OPENMED_JOURNEY_POSTGRES_DSN_FILE" not in services["mcp"]["environment"]
+
+
+def test_bundle_declares_single_replica_mode_for_its_one_api_container() -> None:
+    service = _service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service
+    assert len(service["ports"]) == 1

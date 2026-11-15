@@ -132,33 +132,34 @@ def test_supported_column_types_are_registered():
     }
 
 
-@pytest.mark.parametrize("column_type", sorted(SUPPORTED_COLUMN_TYPES))
-def test_hierarchy_exposes_ordered_versioned_levels(column_type):
-    hierarchy = get_hierarchy(column_type)
-    assert isinstance(hierarchy, Hierarchy)
-    assert hierarchy.column_type == column_type
-    assert hierarchy.version == HIERARCHY_SCHEMA_VERSION
-    assert hierarchy.max_level == max_level(column_type)
-    assert len(hierarchy.levels) == hierarchy.max_level + 1
-    # Levels are index-aligned and describe_level round-trips.
-    for index, level in enumerate(hierarchy.levels):
-        assert isinstance(level, GeneralizationLevel)
-        assert level.level == index
-        assert describe_level(column_type, index) == level
-        assert level.key and level.description
-    # The coarsest rung is full suppression.
-    assert (
-        hierarchy.apply(
-            next(iter(COLUMN_GRIDS[column_type])),
-            hierarchy.max_level,
-            patient_key="k",
-            secret=SECRET,
-        )
-        == SUPPRESSED
-    )
-    # Machine keys are unique per hierarchy.
-    keys = [level.key for level in hierarchy.levels]
-    assert len(keys) == len(set(keys))
+def test_hierarchy_exposes_ordered_versioned_levels(subtests):
+    for column_type in sorted(SUPPORTED_COLUMN_TYPES):
+        with subtests.test(column_type=column_type):
+            hierarchy = get_hierarchy(column_type)
+            assert isinstance(hierarchy, Hierarchy)
+            assert hierarchy.column_type == column_type
+            assert hierarchy.version == HIERARCHY_SCHEMA_VERSION
+            assert hierarchy.max_level == max_level(column_type)
+            assert len(hierarchy.levels) == hierarchy.max_level + 1
+            # Levels are index-aligned and describe_level round-trips.
+            for index, level in enumerate(hierarchy.levels):
+                assert isinstance(level, GeneralizationLevel)
+                assert level.level == index
+                assert describe_level(column_type, index) == level
+                assert level.key and level.description
+            # The coarsest rung is full suppression.
+            assert (
+                hierarchy.apply(
+                    next(iter(COLUMN_GRIDS[column_type])),
+                    hierarchy.max_level,
+                    patient_key="k",
+                    secret=SECRET,
+                )
+                == SUPPRESSED
+            )
+            # Machine keys are unique per hierarchy.
+            keys = [level.key for level in hierarchy.levels]
+            assert len(keys) == len(set(keys))
 
 
 def test_hierarchy_apply_matches_module_function():
@@ -309,17 +310,15 @@ def test_date_shift_requires_patient_key_and_secret():
         generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, patient_key="k")
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_date_shift_parameters_raise_typed_error(subtests):
+    for kwargs in [
         {"patient_key": "", "secret": SECRET},
         {"patient_key": "patient-1", "secret": ""},
         {"patient_key": "patient-1", "secret": SECRET, "max_days": 0},
-    ],
-)
-def test_invalid_date_shift_parameters_raise_typed_error(kwargs):
-    with pytest.raises(HierarchyError, match="parameters are invalid"):
-        generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, **kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(HierarchyError, match="parameters are invalid"):
+                generalize_value(COLUMN_TYPE_DATE, "2025-01-01", 0, **kwargs)
 
 
 def test_date_shift_range_overflow_raises_typed_error():
@@ -358,20 +357,18 @@ def test_date_shift_preserves_canonical_iso_format_at_year_boundary():
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", shifted)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_date_requires_canonical_iso_string(subtests):
+    for value in [
         "2024-2-9",
         "2024-02-9",
         "20240209",
         " 2024-02-09 ",
         "\t2024-02-09",
         "2024-02-09\n",
-    ],
-)
-def test_date_requires_canonical_iso_string(value):
-    with pytest.raises(HierarchyError, match="ISO YYYY-MM-DD"):
-        generalize_value(COLUMN_TYPE_DATE, value, 1)
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(HierarchyError, match="ISO YYYY-MM-DD"):
+                generalize_value(COLUMN_TYPE_DATE, value, 1)
 
 
 # --------------------------------------------------------------------------- #
@@ -386,16 +383,17 @@ def test_unknown_column_type_raises_typed_error():
         max_level(None)
 
 
-@pytest.mark.parametrize("column_type", sorted(SUPPORTED_COLUMN_TYPES))
-def test_out_of_range_level_raises_typed_error(column_type):
-    top = max_level(column_type)
-    value = next(iter(COLUMN_GRIDS[column_type]))
-    with pytest.raises(HierarchyError):
-        _generalize(column_type, value, -1)
-    with pytest.raises(HierarchyError):
-        _generalize(column_type, value, top + 1)
-    with pytest.raises(HierarchyError):
-        describe_level(column_type, True)  # bool rejected as a level
+def test_out_of_range_level_raises_typed_error(subtests):
+    for column_type in sorted(SUPPORTED_COLUMN_TYPES):
+        with subtests.test(column_type=column_type):
+            top = max_level(column_type)
+            value = next(iter(COLUMN_GRIDS[column_type]))
+            with pytest.raises(HierarchyError):
+                _generalize(column_type, value, -1)
+            with pytest.raises(HierarchyError):
+                _generalize(column_type, value, top + 1)
+            with pytest.raises(HierarchyError):
+                describe_level(column_type, True)  # bool rejected as a level
 
 
 def test_invalid_values_raise_typed_error():

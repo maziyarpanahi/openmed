@@ -44,57 +44,61 @@ def test_nli_experiencer_vocabulary_has_four_explicit_classes() -> None:
     )
 
 
-@pytest.mark.parametrize("experiencer", NLI_EXPERIENCER_VALUES[:-1])
-def test_matching_known_experiencers_allow_entailment(experiencer: str) -> None:
-    pair = build_experiencer_nli_pair(
-        _side("synthetic premise", experiencer),
-        _side("synthetic hypothesis", experiencer),
-        predicted_label="entailment",
-    )
+def test_matching_known_experiencers_allow_entailment(subtests) -> None:
+    for experiencer in NLI_EXPERIENCER_VALUES[:-1]:
+        with subtests.test(experiencer=experiencer):
+            pair = build_experiencer_nli_pair(
+                _side("synthetic premise", experiencer),
+                _side("synthetic hypothesis", experiencer),
+                predicted_label="entailment",
+            )
 
-    assert isinstance(pair, NliExperiencerPair)
-    assert pair.premise_experiencer_class == experiencer
-    assert pair.hypothesis_experiencer_class == experiencer
-    assert pair.experiencer_compatibility == "compatible"
-    assert pair.experiencer_comparison.status is ExperiencerCompatibility.COMPATIBLE
-    assert pair.entailment_allowed is True
-    assert pair.entailment_blocked is False
-    assert pair.review_required is False
-    assert pair.label == "entailment"
+            assert isinstance(pair, NliExperiencerPair)
+            assert pair.premise_experiencer_class == experiencer
+            assert pair.hypothesis_experiencer_class == experiencer
+            assert pair.experiencer_compatibility == "compatible"
+            assert (
+                pair.experiencer_comparison.status
+                is ExperiencerCompatibility.COMPATIBLE
+            )
+            assert pair.entailment_allowed is True
+            assert pair.entailment_blocked is False
+            assert pair.review_required is False
+            assert pair.label == "entailment"
 
 
-@pytest.mark.parametrize(
-    ("premise_experiencer", "hypothesis_experiencer"),
-    [
+def test_conflicting_known_experiencers_block_entailment(subtests) -> None:
+    for premise_experiencer, hypothesis_experiencer in [
         ("family", "patient"),
         ("caregiver", "patient"),
         ("family", "caregiver"),
-    ],
-)
-def test_conflicting_known_experiencers_block_entailment(
-    premise_experiencer: str,
-    hypothesis_experiencer: str,
-) -> None:
-    pair = build_experiencer_nli_pair(
-        _side("synthetic premise", premise_experiencer),
-        _side("synthetic hypothesis", hypothesis_experiencer),
-        predicted_label="entailment",
-    )
+    ]:
+        with subtests.test(
+            premise_experiencer=premise_experiencer,
+            hypothesis_experiencer=hypothesis_experiencer,
+        ):
+            pair = build_experiencer_nli_pair(
+                _side("synthetic premise", premise_experiencer),
+                _side("synthetic hypothesis", hypothesis_experiencer),
+                predicted_label="entailment",
+            )
 
-    assert pair.experiencer_compatibility == "incompatible"
-    assert pair.experiencer_comparison.reason == "experiencer_conflict"
-    assert pair.experiencer_comparison.status is ExperiencerCompatibility.INCOMPATIBLE
-    assert pair.entailment_allowed is False
-    assert pair.entailment_blocked is True
-    assert pair.review_required is True
-    assert pair.label == "review_required"
-    assert pair.predicted_label == "entailment"
-    assert pair.experiencer_reason == "experiencer_conflict"
+            assert pair.experiencer_compatibility == "incompatible"
+            assert pair.experiencer_comparison.reason == "experiencer_conflict"
+            assert (
+                pair.experiencer_comparison.status
+                is ExperiencerCompatibility.INCOMPATIBLE
+            )
+            assert pair.entailment_allowed is False
+            assert pair.entailment_blocked is True
+            assert pair.review_required is True
+            assert pair.label == "review_required"
+            assert pair.predicted_label == "entailment"
+            assert pair.experiencer_reason == "experiencer_conflict"
 
 
-@pytest.mark.parametrize(
-    ("premise", "hypothesis"),
-    [
+def test_missing_or_unknown_experiencers_are_unresolved(subtests) -> None:
+    for premise, hypothesis in [
         (_side("synthetic premise"), _side("synthetic hypothesis", "patient")),
         (
             _side("synthetic premise", "unknown"),
@@ -105,23 +109,19 @@ def test_conflicting_known_experiencers_block_entailment(
             _side("synthetic hypothesis", "unknown"),
         ),
         (_side("synthetic premise"), _side("synthetic hypothesis")),
-    ],
-)
-def test_missing_or_unknown_experiencers_are_unresolved(
-    premise: dict[str, object],
-    hypothesis: dict[str, object],
-) -> None:
-    pair = build_experiencer_nli_pair(
-        premise,
-        hypothesis,
-        predicted_label="entailment",
-    )
+    ]:
+        with subtests.test(premise=premise, hypothesis=hypothesis):
+            pair = build_experiencer_nli_pair(
+                premise,
+                hypothesis,
+                predicted_label="entailment",
+            )
 
-    assert pair.experiencer_compatibility == "unresolved"
-    assert pair.experiencer_comparison.reason == "experiencer_unresolved"
-    assert pair.entailment_allowed is False
-    assert pair.label == "review_required"
-    assert pair.review_required is True
+            assert pair.experiencer_compatibility == "unresolved"
+            assert pair.experiencer_comparison.reason == "experiencer_unresolved"
+            assert pair.entailment_allowed is False
+            assert pair.label == "review_required"
+            assert pair.review_required is True
 
 
 def test_caregiver_and_unknown_are_preserved_in_nested_metadata() -> None:
@@ -296,29 +296,26 @@ def test_advisory_requires_human_review() -> None:
     assert "autonomous clinical decision" in NLI_EXPERIENCER_PAIR_ADVISORY
 
 
-@pytest.mark.parametrize(
-    "metadata",
-    [
+def test_conflicting_direct_aliases_cannot_pass_entailment_gate(subtests) -> None:
+    for metadata in [
         {"experiencer": "patient", "subject": "family"},
         {"experiencer": "patient", "resolved": True, "is_resolved": False},
-    ],
-)
-def test_conflicting_direct_aliases_cannot_pass_entailment_gate(
-    metadata: dict[str, object],
-) -> None:
-    with pytest.raises(ValueError, match="inconsistent"):
-        build_experiencer_nli_pair(
-            "synthetic premise",
-            "synthetic hypothesis",
-            premise_experiencer=metadata,
-            hypothesis_experiencer="patient",
-            predicted_label="entailment",
-        )
+    ]:
+        with subtests.test(metadata=metadata):
+            with pytest.raises(ValueError, match="inconsistent"):
+                build_experiencer_nli_pair(
+                    "synthetic premise",
+                    "synthetic hypothesis",
+                    premise_experiencer=metadata,
+                    hypothesis_experiencer="patient",
+                    predicted_label="entailment",
+                )
 
 
-@pytest.mark.parametrize("score", [10**400, -(10**400)])
-def test_oversized_scores_have_controlled_error(score: int) -> None:
-    with pytest.raises(ValueError, match="NLI score is invalid"):
-        build_experiencer_nli_pair(
-            "synthetic premise", "synthetic hypothesis", predicted_score=score
-        )
+def test_oversized_scores_have_controlled_error(subtests) -> None:
+    for score in [10**400, -(10**400)]:
+        with subtests.test(score=score):
+            with pytest.raises(ValueError, match="NLI score is invalid"):
+                build_experiencer_nli_pair(
+                    "synthetic premise", "synthetic hypothesis", predicted_score=score
+                )

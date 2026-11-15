@@ -618,10 +618,11 @@ def test_report_rejects_a_resume_plan_for_another_manifest() -> None:
         build_run_report(manifest, generated_at=3000.0, resume=foreign_plan)
 
 
-@pytest.mark.parametrize("generated_at", [math.nan, math.inf, -math.inf, -1.0])
-def test_generated_at_must_be_finite_and_non_negative(generated_at: float) -> None:
-    with pytest.raises(RunReportError, match="finite non-negative"):
-        build_run_report(_finished_manifest(), generated_at=generated_at)
+def test_generated_at_must_be_finite_and_non_negative(subtests) -> None:
+    for generated_at in [math.nan, math.inf, -math.inf, -1.0]:
+        with subtests.test(generated_at=generated_at):
+            with pytest.raises(RunReportError, match="finite non-negative"):
+                build_run_report(_finished_manifest(), generated_at=generated_at)
 
 
 # ---------------------------------------------------------------------------

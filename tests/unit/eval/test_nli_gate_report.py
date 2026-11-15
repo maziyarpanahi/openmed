@@ -81,12 +81,8 @@ def test_mismatched_calibration_revision_is_rejected() -> None:
         build_nli_preparation_report(**evidence)
 
 
-@pytest.mark.parametrize(
-    "count,correct,digest",
-    [(0, 0, DIGEST), (1, 2, DIGEST), (1, 1, "raw text")],
-)
-def test_invalid_aggregate_evidence_is_rejected(
-    count: int, correct: int, digest: str
-) -> None:
-    with pytest.raises(ValueError, match="bounded aggregates"):
-        NLIEvaluationCounts(count, correct, digest)
+def test_invalid_aggregate_evidence_is_rejected(subtests) -> None:
+    for count, correct, digest in [(0, 0, DIGEST), (1, 2, DIGEST), (1, 1, "raw text")]:
+        with subtests.test(count=count, correct=correct, digest=digest):
+            with pytest.raises(ValueError, match="bounded aggregates"):
+                NLIEvaluationCounts(count, correct, digest)

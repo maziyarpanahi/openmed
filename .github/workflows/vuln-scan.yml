@@ -2,7 +2,7 @@ name: Vulnerability Scan
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -11,9 +11,21 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
+      - ".github/actions/setup-trivy/**"
+      - "Package.resolved"
+      - "swift/**/Package.resolved"
+      - "js/**/package-lock.json"
+      - "js/**/Cargo.lock"
+      - "clients/**/package-lock.json"
+      - "android/**/gradle.lockfile"
+      - "scripts/security/gradle_lockfile_view.py"
+      - "tests/fixtures/security/kit-lockfiles/**"
+      - "tests/unit/security/test_kit_lockfile_scan.py"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -22,7 +34,19 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
+      - ".github/actions/setup-trivy/**"
+      - "Package.resolved"
+      - "swift/**/Package.resolved"
+      - "js/**/package-lock.json"
+      - "js/**/Cargo.lock"
+      - "clients/**/package-lock.json"
+      - "android/**/gradle.lockfile"
+      - "scripts/security/gradle_lockfile_view.py"
+      - "tests/fixtures/security/kit-lockfiles/**"
+      - "tests/unit/security/test_kit_lockfile_scan.py"
   workflow_dispatch:
     inputs:
       severity-threshold:
@@ -36,6 +60,10 @@ permissions:
 env:
   IMAGE_NAME: openmed:ci
   VULN_SCAN_SEVERITY_THRESHOLD: ${{ github.event.inputs.severity-threshold || 'HIGH' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   vulnerability-scan:
@@ -63,7 +91,7 @@ jobs:
           uv sync --frozen --python 3.11
 
       - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        uses: ./.github/actions/setup-trivy
 
       - name: Build service image
         run: |
@@ -73,7 +101,7 @@ jobs:
         run: |
           mkdir -p vulnerability-reports
           set +e
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report tests/fixtures/security/trivy-high-vulnerability.json \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/seeded-high-summary.json
@@ -99,7 +127,7 @@ jobs:
               expires: 2099-12-31
               reason: Synthetic waiver used only to prove active waivers suppress matching seeded findings.
           YAML
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report "$RUNNER_TEMP/trivy-high-without-fix.json" \
             --allowlist "$RUNNER_TEMP/cve-allowlist-seeded.yaml" \
             --output vulnerability-reports/seeded-allowlisted-summary.json
@@ -124,15 +152,19 @@ jobs:
 
       - name: Enforce vulnerability gate
         run: |
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report vulnerability-reports/trivy-image.json \
             --report vulnerability-reports/trivy-lockfile.json \
+            --lock-report vulnerability-reports/trivy-lockfile.json \
+            --lockfile uv.lock \
+            --review-extra-only nltk=nltk \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/vulnerability-scan-summary.json
 
       - name: Generate SARIF reports
         if: always()
         run: |
+          mkdir -p vulnerability-reports
           trivy image \
             --scanners vuln \
             --pkg-types os,library \
@@ -152,3 +184,135 @@ jobs:
         with:
           name: vulnerability-scan-reports
           path: vulnerability-reports/
+
+  kit-lockfile-scan:
+    name: Scan OpenMedKit lockfiles
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install runtime dependencies for gate
+        run: |
+          uv sync --frozen --python 3.11
+
+      - name: Set up Trivy
+        uses: ./.github/actions/setup-trivy
+
+      - name: Verify kit scan rejects seeded vulnerable lockfiles
+        run: |
+          # The seeded lockfiles live outside every real scan path under names
+          # no scanner recognizes; they get lockfile names only in a temp copy.
+          seeded="$RUNNER_TEMP/seeded-kit-lockfiles"
+          mkdir -p "$seeded/npm" "$seeded/gradle-source/app" kit-lockfile-reports
+          cp tests/fixtures/security/kit-lockfiles/seeded-npm-package-lock.json \
+            "$seeded/npm/package-lock.json"
+          cp tests/fixtures/security/kit-lockfiles/seeded-gradle-lockfile.txt \
+            "$seeded/gradle-source/app/gradle.lockfile"
+          uv run --no-sync python scripts/security/gradle_lockfile_view.py \
+            --source "$seeded/gradle-source" \
+            --output "$seeded/gradle"
+          for surface in npm gradle; do
+            trivy fs \
+              --scanners vuln \
+              --pkg-types library \
+              --format json \
+              --output "$seeded/trivy-$surface.json" \
+              "$seeded/$surface"
+          done
+          summary=kit-lockfile-reports/seeded-kit-lockfile-summary.json
+          set +e
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
+            --report "$seeded/trivy-npm.json" \
+            --report "$seeded/trivy-gradle.json" \
+            --allowlist deploy/security/cve-allowlist.yaml \
+            --output "$summary"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "::error title=Seeded kit lockfile did not fail::Expected the gate to reject the seeded npm and Gradle lockfiles."
+            exit 1
+          fi
+          for package in lodash org.apache.logging.log4j:log4j-core; do
+            if ! jq -e --arg package "$package" \
+              'any(.blocking_findings[]; .package == $package and .source_kind == "filesystem")' \
+              "$summary" > /dev/null; then
+              echo "::error title=Seeded kit finding missing::The gate did not block the seeded $package entry."
+              exit 1
+            fi
+          done
+          if jq -e 'any(.findings[]; .package == "com.google.guava:guava")' "$summary" > /dev/null; then
+            echo "::error title=Test-only entry scanned::The release runtime view kept a test-only Gradle entry."
+            exit 1
+          fi
+
+      - name: Scan OpenMedKit lockfiles
+        run: |
+          # Raw Trivy reports stay in the runner temp directory. Only the gate
+          # summary (package names, versions and advisory identifiers) is uploaded.
+          raw="$RUNNER_TEMP/kit-lockfile-scans"
+          mkdir -p "$raw" kit-lockfile-reports
+          uv run --no-sync python scripts/security/gradle_lockfile_view.py \
+            --source android \
+            --output "$raw/android-release-runtime"
+          scan() {
+            local name="$1" target="$2"
+            shift 2
+            trivy fs \
+              --scanners vuln \
+              --pkg-types library \
+              --format json \
+              --output "$raw/trivy-$name.json" \
+              "$@" \
+              "$target"
+          }
+          scan swiftpm-root Package.resolved
+          scan swiftpm-demos swift
+          # The React Native parity example is a private test app that never
+          # ships in a kit artifact; see docs/supply-chain/vulnerability-scanning.md.
+          scan js js --skip-dirs "**/openmedkit-react-native/example"
+          scan clients clients
+          scan android "$raw/android-release-runtime"
+          {
+            echo "### OpenMedKit lockfiles scanned"
+            echo
+            echo "| Surface | Lockfiles parsed |"
+            echo "| --- | ---: |"
+            for report in "$raw"/trivy-*.json; do
+              surface="$(basename "$report" .json)"
+              count="$(jq '[.Results[]? | select(.Class == "lang-pkgs")] | length' "$report")"
+              echo "| ${surface#trivy-} | $count |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce OpenMedKit lockfile gate
+        run: |
+          raw="$RUNNER_TEMP/kit-lockfile-scans"
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
+            --report "$raw/trivy-swiftpm-root.json" \
+            --report "$raw/trivy-swiftpm-demos.json" \
+            --report "$raw/trivy-js.json" \
+            --report "$raw/trivy-clients.json" \
+            --report "$raw/trivy-android.json" \
+            --allowlist deploy/security/cve-allowlist.yaml \
+            --output kit-lockfile-reports/kit-lockfile-scan-summary.json
+
+      - name: Upload OpenMedKit lockfile scan summaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: kit-lockfile-scan-summaries
+          path: kit-lockfile-reports/

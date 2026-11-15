@@ -25,6 +25,7 @@ from openmed.clinical.context import (
     ClinicalAssertion,
 )
 from openmed.clinical.timeline.resolver import Timeline as ResolvedTimeline
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 SpanOffset = tuple[int, int]
 
@@ -857,10 +858,10 @@ def _anchor_key(value: str | None) -> tuple[int, int, str] | None:
     match = _DATE_PREFIX_RE.fullmatch(candidate)
     if match is None:
         try:
-            parsed_datetime = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+            parsed_datetime = parse_iso_datetime(candidate.replace("Z", "+00:00"))
         except ValueError:
             try:
-                parsed_date = date.fromisoformat(candidate)
+                parsed_date = parse_iso_date(candidate)
             except ValueError:
                 return None
             return parsed_date.toordinal(), 0, value

@@ -9,9 +9,8 @@ from openmed.clinical.normalization import (
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
 
 
-@pytest.mark.parametrize(
-    ("surface", "canonical"),
-    [
+def test_indian_clinical_abbreviation_map(subtests) -> None:
+    for surface, canonical in [
         ("Tab.", "tablet"),
         ("Cap", "capsule"),
         ("OD", "once daily"),
@@ -20,10 +19,9 @@ from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
         ("HS", "at bedtime"),
         ("SOS", "as needed"),
         ("1-0-1", "morning and evening"),
-    ],
-)
-def test_indian_clinical_abbreviation_map(surface: str, canonical: str) -> None:
-    assert normalize_indian_clinical_abbreviation(surface) == canonical
+    ]:
+        with subtests.test(surface=surface, canonical=canonical):
+            assert normalize_indian_clinical_abbreviation(surface) == canonical
 
 
 def test_indian_clinical_surface_normalizes_multiple_prescription_tokens() -> None:

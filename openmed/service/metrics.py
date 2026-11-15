@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import threading
-from typing import Mapping
+from typing import Any, Mapping
 
 from .operational import OperationalEvent
 
@@ -15,6 +16,9 @@ PROMETHEUS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 REQUEST_TOTAL_NAME = "openmed_service_request_total"
 REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
+ORPHANED_WORK_NAME = "openmed_service_orphaned_work"
+JOB_QUEUE_DEPTH_NAME = "openmed_service_job_queue_depth"
+JOB_QUEUE_TEXT_BYTES_NAME = "openmed_service_job_queue_text_bytes"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
 PAGED_KV_CACHE_OCCUPANCY_NAME = "openmed_service_mlx_paged_kv_cache_occupancy_pages"
@@ -31,6 +35,39 @@ ADMISSION_QUEUE_WAIT_NAME = "openmed_service_admission_queue_wait_seconds"
 ADMISSION_SHED_NAME = "openmed_service_admission_shed_total"
 ADMISSION_QUEUE_LABELS = frozenset({"analyze", "batch", "pii_extract"})
 UNKNOWN_ADMISSION_QUEUE_LABEL = "other"
+GRAPHQL_REJECTION_NAME = "openmed_service_graphql_rejection_total"
+# Mirrors ``openmed.service.graphql_limits.GraphQLLimitCategory`` so this module
+# stays dependency-free; a unit test keeps the two vocabularies identical.
+GRAPHQL_REJECTION_REASONS = frozenset(
+    {
+        "aliases",
+        "batch",
+        "deadline",
+        "depth",
+        "document_bytes",
+        "fragment_cycles",
+        "fragments",
+        "nesting",
+        "nodes",
+        "operations",
+        "selected_fields",
+        "tokens",
+        "variable_bytes",
+        "variable_depth",
+        "variables",
+    }
+)
+UNKNOWN_GRAPHQL_REJECTION_REASON = "other"
+PRINCIPAL_ADMISSION_INFLIGHT_NAME = "openmed_service_principal_admission_inflight"
+PRINCIPAL_ADMISSION_QUEUED_NAME = "openmed_service_principal_admission_queued"
+PRINCIPAL_ADMISSION_ACTIVE_NAME = (
+    "openmed_service_principal_admission_active_principals"
+)
+PRINCIPAL_ADMISSION_REJECTED_NAME = "openmed_service_principal_admission_rejected_total"
+PRINCIPAL_ADMISSION_REASON_LABELS = frozenset(
+    {"global_limit", "namespace_limit", "principal_limit"}
+)
+PRINCIPAL_ADMISSION_TRANSPORT_LABELS = frozenset({"graphql", "grpc", "rest"})
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -48,6 +85,14 @@ SPECULATIVE_ACCEPTANCE_RATE_NAME = "openmed_mlx_speculative_acceptance_rate"
 SPECULATIVE_AVERAGE_DEPTH_NAME = "openmed_mlx_speculative_average_depth"
 OPERATIONAL_TOTAL_NAME = "openmed_service_operational_total"
 OPERATIONAL_DURATION_NAME = "openmed_service_operational_duration_seconds"
+REQUEST_BODY_TIMEOUT_NAME = "openmed_service_request_body_timeout_total"
+REQUEST_BODY_TIMEOUT_REASONS = frozenset({"deadline", "min_rate"})
+UNKNOWN_REQUEST_BODY_TIMEOUT_REASON = "other"
+CONNECTION_REJECTED_NAME = "openmed_service_connection_rejected_total"
+DRAINING_NAME = "openmed_service_draining"
+DRAIN_PARTICIPANT_TOTAL_NAME = "openmed_service_drain_participant_total"
+DRAIN_UNFINISHED_NAME = "openmed_service_drain_unfinished"
+_DRAIN_LABEL_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -110,6 +155,9 @@ class PrometheusMetricsRegistry:
         self._duration_count: dict[str, int] = {}
         self._duration_sum: dict[str, float] = {}
         self._inflight_requests = 0
+        self._orphaned_work = 0
+        self._job_queue_depth = 0
+        self._job_queue_text_bytes = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
         self._paged_kv_cache_occupancy_pages = 0
@@ -126,6 +174,11 @@ class PrometheusMetricsRegistry:
         self._admission_queue_shedding: dict[str, int] = {}
         self._admission_queue_wait: dict[str, float] = {}
         self._admission_shed_total: dict[str, int] = {}
+        self._graphql_rejection_total: dict[str, int] = {}
+        self._principal_admission_inflight = 0
+        self._principal_admission_queued = 0
+        self._principal_admission_active = 0
+        self._principal_admission_rejected: dict[tuple[str, str], int] = {}
         self._circuit_breaker_state_counts = {
             "closed": 0,
             "open": 0,
@@ -145,12 +198,44 @@ class PrometheusMetricsRegistry:
         self._operational_total: dict[tuple[str, str, str], int] = {}
         self._operational_duration_count: dict[tuple[str, str, str], int] = {}
         self._operational_duration_sum: dict[tuple[str, str, str], float] = {}
+        self._request_body_timeout_total = dict.fromkeys(
+            sorted(REQUEST_BODY_TIMEOUT_REASONS), 0
+        )
+        self._connection_rejected_total = 0
+        self._draining = 0
+        self._drain_participant_total: dict[tuple[str, str, str], int] = {}
+        self._drain_unfinished: dict[str, int] = {}
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
         """Increment the active request gauge."""
         with self._lock:
             self._inflight_requests += 1
+
+    def orphaned_work_started(self) -> None:
+        """Count one admitted request whose work outlives its HTTP wait."""
+        with self._lock:
+            self._orphaned_work += 1
+
+    def orphaned_work_finished(self) -> None:
+        """Release an orphaned request's work gauge after actual completion."""
+        with self._lock:
+            self._orphaned_work -= 1
+
+    def job_queue_admitted(self, *, text_bytes: int) -> None:
+        """Count one admitted async job and the document text bytes it holds."""
+        with self._lock:
+            self._job_queue_depth += 1
+            self._job_queue_text_bytes += max(int(text_bytes), 0)
+
+    def job_queue_released(self, *, text_bytes: int) -> None:
+        """Release one finished, failed or cancelled async job from the gauges."""
+        with self._lock:
+            self._job_queue_depth = max(self._job_queue_depth - 1, 0)
+            self._job_queue_text_bytes = max(
+                self._job_queue_text_bytes - max(int(text_bytes), 0),
+                0,
+            )
 
     def request_finished(
         self,
@@ -303,6 +388,48 @@ class PrometheusMetricsRegistry:
                 queue_label, 0
             ) + int(count)
 
+    def record_graphql_rejection(self, *, reason: str, count: int = 1) -> None:
+        """Record GraphQL requests rejected by a document or execution budget."""
+        if count <= 0:
+            return
+        reason_label = _graphql_rejection_label(reason)
+        with self._lock:
+            self._graphql_rejection_total[reason_label] = (
+                self._graphql_rejection_total.get(reason_label, 0) + int(count)
+            )
+
+    def record_principal_admission_state(
+        self,
+        *,
+        in_flight: int,
+        queued: int,
+        active_principals: int,
+    ) -> None:
+        """Set aggregate fair-admission gauges without principal identifiers."""
+        with self._lock:
+            self._principal_admission_inflight = _non_negative_int(in_flight)
+            self._principal_admission_queued = _non_negative_int(queued)
+            self._principal_admission_active = _non_negative_int(active_principals)
+
+    def record_principal_admission_rejection(
+        self,
+        *,
+        reason: str,
+        transport: str,
+        count: int = 1,
+    ) -> None:
+        """Count fair-admission rejections by static reason and transport."""
+        if count <= 0:
+            return
+        key = (
+            _closed_label(reason, PRINCIPAL_ADMISSION_REASON_LABELS),
+            _closed_label(transport, PRINCIPAL_ADMISSION_TRANSPORT_LABELS),
+        )
+        with self._lock:
+            self._principal_admission_rejected[key] = (
+                self._principal_admission_rejected.get(key, 0) + int(count)
+            )
+
     def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
         """Replace aggregate circuit-breaker state gauges."""
         with self._lock:
@@ -381,6 +508,89 @@ class PrometheusMetricsRegistry:
                 self._operational_duration_sum.get(key, 0.0) + event.duration_seconds
             )
 
+    def record_request_body_timeout(self, *, reason: str) -> None:
+        """Count one request body rejected for a receive-time bound.
+
+        Args:
+            reason: ``"deadline"`` or ``"min_rate"``; any other value is
+                counted as ``"other"`` so labels stay bounded.
+        """
+        label = str(reason)
+        if label not in REQUEST_BODY_TIMEOUT_REASONS:
+            label = UNKNOWN_REQUEST_BODY_TIMEOUT_REASON
+        with self._lock:
+            self._request_body_timeout_total[label] = (
+                self._request_body_timeout_total.get(label, 0) + 1
+            )
+
+    def set_connection_rejected_total(self, count: int) -> None:
+        """Set the process-wide count of connection-limit rejections."""
+        with self._lock:
+            self._connection_rejected_total = _non_negative_int(count)
+
+    def set_draining(self, draining: bool) -> None:
+        """Set the gauge reporting whether a service drain is running."""
+        with self._lock:
+            self._draining = 1 if draining else 0
+
+    def record_drain_event(self, event: object) -> None:
+        """Record one value-free drain progress event.
+
+        Only the controlled phase, participant category, outcome, and the
+        unfinished count are kept; anything outside that vocabulary is dropped.
+        """
+        phase = _drain_label(getattr(event, "phase", None))
+        participant = _drain_label(getattr(event, "participant", None))
+        outcome = _drain_label(getattr(event, "outcome", None))
+        if phase is None or participant is None or outcome is None:
+            return
+        unfinished = _non_negative_int(getattr(event, "unfinished", 0))
+        key = (phase, participant, outcome)
+        with self._lock:
+            self._drain_participant_total[key] = (
+                self._drain_participant_total.get(key, 0) + 1
+            )
+            self._drain_unfinished[participant] = unfinished
+
+    def diagnostic_snapshot(self) -> dict[str, Any]:
+        """Return value-free aggregates for a diagnostic bundle.
+
+        Route labels are collapsed into HTTP status classes, so the snapshot
+        carries only closed-vocabulary keys and integer counts.
+
+        Returns:
+            A mapping with request status-class counts, operational event
+            counts by category, operation and state, circuit-breaker state
+            counts, and shedding, rejection and in-flight counters.
+        """
+        with self._lock:
+            status_classes: dict[str, int] = {}
+            for (_route, status), count in self._request_total.items():
+                if len(status) == 3 and status[0] in "12345" and status.isdigit():
+                    key = f"status_{status[0]}xx"
+                else:
+                    key = "status_other"
+                status_classes[key] = status_classes.get(key, 0) + count
+            operational: dict[str, dict[str, dict[str, int]]] = {}
+            for (category, operation, state), count in sorted(
+                self._operational_total.items()
+            ):
+                operational.setdefault(category, {}).setdefault(operation, {})[
+                    state
+                ] = count
+            return {
+                "request_status_classes": dict(sorted(status_classes.items())),
+                "operational": operational,
+                "circuit_breaker": dict(self._circuit_breaker_state_counts),
+                "inflight_requests": int(self._inflight_requests),
+                "orphaned_work": int(self._orphaned_work),
+                "batch_shed_total": int(sum(self._batch_shed_total.values())),
+                "admission_shed_total": int(sum(self._admission_shed_total.values())),
+                "model_rejection_total": int(self._model_rejection_total),
+                "model_load_total": int(self._model_load_total),
+                "model_eviction_total": int(self._model_eviction_total),
+            }
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -392,6 +602,9 @@ class PrometheusMetricsRegistry:
             duration_count = dict(self._duration_count)
             duration_sum = dict(self._duration_sum)
             inflight_requests = self._inflight_requests
+            orphaned_work = self._orphaned_work
+            job_queue_depth = self._job_queue_depth
+            job_queue_text_bytes = self._job_queue_text_bytes
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
             paged_kv_cache_occupancy_pages = self._paged_kv_cache_occupancy_pages
@@ -411,6 +624,11 @@ class PrometheusMetricsRegistry:
             admission_queue_shedding = dict(self._admission_queue_shedding)
             admission_queue_wait = dict(self._admission_queue_wait)
             admission_shed_total = dict(self._admission_shed_total)
+            graphql_rejection_total = dict(self._graphql_rejection_total)
+            principal_admission_inflight = self._principal_admission_inflight
+            principal_admission_queued = self._principal_admission_queued
+            principal_admission_active = self._principal_admission_active
+            principal_admission_rejected = dict(self._principal_admission_rejected)
             circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
             model_resident_total = self._model_resident_total
             model_resident_bytes = self._model_resident_bytes
@@ -426,6 +644,11 @@ class PrometheusMetricsRegistry:
             operational_total = dict(self._operational_total)
             operational_duration_count = dict(self._operational_duration_count)
             operational_duration_sum = dict(self._operational_duration_sum)
+            request_body_timeout_total = dict(self._request_body_timeout_total)
+            connection_rejected_total = self._connection_rejected_total
+            draining = self._draining
+            drain_participant_total = dict(self._drain_participant_total)
+            drain_unfinished = dict(self._drain_unfinished)
 
         lines: list[str] = []
         _append_family_header(
@@ -472,6 +695,30 @@ class PrometheusMetricsRegistry:
             "gauge",
         )
         lines.append(f"{INFLIGHT_NAME} {inflight_requests}")
+
+        _append_family_header(
+            lines,
+            ORPHANED_WORK_NAME,
+            "Requests with outstanding work after their HTTP wait has ended.",
+            "gauge",
+        )
+        lines.append(f"{ORPHANED_WORK_NAME} {orphaned_work}")
+
+        _append_family_header(
+            lines,
+            JOB_QUEUE_DEPTH_NAME,
+            "Async de-identification jobs admitted and not yet finished.",
+            "gauge",
+        )
+        lines.append(f"{JOB_QUEUE_DEPTH_NAME} {job_queue_depth}")
+
+        _append_family_header(
+            lines,
+            JOB_QUEUE_TEXT_BYTES_NAME,
+            "UTF-8 bytes of document text held by pending async jobs.",
+            "gauge",
+        )
+        lines.append(f"{JOB_QUEUE_TEXT_BYTES_NAME} {job_queue_text_bytes}")
 
         _append_family_header(
             lines,
@@ -580,6 +827,53 @@ class PrometheusMetricsRegistry:
         for queue, value in sorted(admission_shed_total.items()):
             labels = _label_suffix({"queue": queue})
             lines.append(f"{ADMISSION_SHED_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            GRAPHQL_REJECTION_NAME,
+            "GraphQL requests rejected by a document, variable, batch, or "
+            "deadline budget.",
+            "counter",
+        )
+        for reason, value in sorted(graphql_rejection_total.items()):
+            labels = _label_suffix({"reason": reason})
+            lines.append(f"{GRAPHQL_REJECTION_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_INFLIGHT_NAME,
+            "Requests holding a fair-admission permit across all principals.",
+            "gauge",
+        )
+        lines.append(
+            f"{PRINCIPAL_ADMISSION_INFLIGHT_NAME} {principal_admission_inflight}"
+        )
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_QUEUED_NAME,
+            "Requests waiting for a fair-admission permit across all principals.",
+            "gauge",
+        )
+        lines.append(f"{PRINCIPAL_ADMISSION_QUEUED_NAME} {principal_admission_queued}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_ACTIVE_NAME,
+            "Principals with admitted or waiting requests.",
+            "gauge",
+        )
+        lines.append(f"{PRINCIPAL_ADMISSION_ACTIVE_NAME} {principal_admission_active}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_REJECTED_NAME,
+            "Requests rejected by fair admission, by static reason and transport.",
+            "counter",
+        )
+        for (reason, transport), value in sorted(principal_admission_rejected.items()):
+            labels = _label_suffix({"reason": reason, "transport": transport})
+            lines.append(f"{PRINCIPAL_ADMISSION_REJECTED_NAME}{labels} {value}")
 
         _append_family_header(
             lines,
@@ -810,6 +1104,56 @@ class PrometheusMetricsRegistry:
                 f"{_format_sample_value(operational_duration_sum[key])}"
             )
 
+        _append_family_header(
+            lines,
+            REQUEST_BODY_TIMEOUT_NAME,
+            "Request bodies rejected for missing a receive deadline, by reason.",
+            "counter",
+        )
+        for reason, value in sorted(request_body_timeout_total.items()):
+            labels = _label_suffix({"reason": reason})
+            lines.append(f"{REQUEST_BODY_TIMEOUT_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            CONNECTION_REJECTED_NAME,
+            "Requests the server rejected at its connection concurrency limit.",
+            "counter",
+        )
+        lines.append(f"{CONNECTION_REJECTED_NAME} {connection_rejected_total}")
+
+        _append_family_header(
+            lines,
+            DRAINING_NAME,
+            "Whether a bounded service drain is running (1) or not (0).",
+            "gauge",
+        )
+        lines.append(f"{DRAINING_NAME} {draining}")
+
+        _append_family_header(
+            lines,
+            DRAIN_PARTICIPANT_TOTAL_NAME,
+            "Drain phase results by controlled phase, participant, and outcome.",
+            "counter",
+        )
+        for (phase, participant, outcome), value in sorted(
+            drain_participant_total.items()
+        ):
+            labels = _label_suffix(
+                {"phase": phase, "participant": participant, "outcome": outcome}
+            )
+            lines.append(f"{DRAIN_PARTICIPANT_TOTAL_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            DRAIN_UNFINISHED_NAME,
+            "Work units still outstanding after a participant's last drain phase.",
+            "gauge",
+        )
+        for participant, value in sorted(drain_unfinished.items()):
+            labels = _label_suffix({"participant": participant})
+            lines.append(f"{DRAIN_UNFINISHED_NAME}{labels} {value}")
+
         return "\n".join(lines) + "\n"
 
 
@@ -836,9 +1180,30 @@ def _escape_label_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
+def _drain_label(value: object) -> str | None:
+    label = getattr(value, "value", value)
+    if isinstance(label, str) and _DRAIN_LABEL_PATTERN.fullmatch(label):
+        return label
+    return None
+
+
 def _admission_queue_label(value: object) -> str:
     normalized = str(value).strip().casefold()
     if normalized in ADMISSION_QUEUE_LABELS:
+        return normalized
+    return UNKNOWN_ADMISSION_QUEUE_LABEL
+
+
+def _graphql_rejection_label(value: object) -> str:
+    normalized = str(value).strip().casefold()
+    if normalized in GRAPHQL_REJECTION_REASONS:
+        return normalized
+    return UNKNOWN_GRAPHQL_REJECTION_REASON
+
+
+def _closed_label(value: object, allowed: frozenset[str]) -> str:
+    normalized = str(value).strip().casefold()
+    if normalized in allowed:
         return normalized
     return UNKNOWN_ADMISSION_QUEUE_LABEL
 

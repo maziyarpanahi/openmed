@@ -9,13 +9,14 @@ import time
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .request_id import REQUEST_ID_HEADER, request_id_or_generated
+
 ACCESS_LOGGER_NAME = "openmed.service.access"
-REQUEST_ID_HEADER = "X-Request-ID"
 SERVICE_LOG_LEVEL_ENV_VAR = "OPENMED_SERVICE_LOG_LEVEL"
 SERVICE_LOG_FORMAT_ENV_VAR = "OPENMED_SERVICE_LOG_FORMAT"
 _MODEL_NAME_SCOPE_KEY = "openmed.access_log_model_name"
@@ -77,6 +78,9 @@ def current_request_id() -> Optional[str]:
 def set_access_log_model_name(request: Any, model_name: Optional[str]) -> None:
     """Attach the parsed model name to the current request scope for logging."""
     if model_name:
+        from .app import _get_service_runtime
+
+        _get_service_runtime(request).validate_served_model(model_name)
         request.scope[_MODEL_NAME_SCOPE_KEY] = str(model_name)
 
 
@@ -126,26 +130,46 @@ def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
     }
 
 
+def request_scope_path(scope: Scope) -> str:
+    """Return the request path relative to the app that handles it."""
+    path = scope.get("path", "")
+    root = scope.get("root_path", "")
+    if root and path.startswith(root + "/"):
+        return path[len(root) :]
+    return path
+
+
 class CorrelationIdMiddleware:
-    """Add request IDs and emit PHI-free structured access logs."""
+    """Add request IDs and emit PHI-free structured access logs.
+
+    An inbound ``X-Request-ID`` is kept only when it matches the shared grammar
+    in :mod:`openmed.service.request_id`; any other value is replaced with a
+    generated id rather than rejected.
+    """
 
     def __init__(
         self,
         app: ASGIApp,
         *,
         log_config: Optional[ServiceLogConfig] = None,
+        minimal_log_paths: Sequence[str] = (),
     ) -> None:
         self.app = app
         self.log_config = log_config or service_log_config_from_env()
         self.logger = logging.getLogger(ACCESS_LOGGER_NAME)
         self.logger.setLevel(self.log_config.level)
+        self.minimal_log_paths = frozenset(minimal_log_paths)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        request_id = _request_id_from_scope(scope)
+        path = request_scope_path(scope).rstrip("/")
+        minimal_log = path in self.minimal_log_paths
+        # Experimental binary intake must not echo/log caller metadata carried
+        # in a request ID, even if an ingress supplied it.
+        request_id = str(uuid.uuid4()) if minimal_log else _request_id_from_scope(scope)
         request_token = _REQUEST_ID.set(request_id)
         start_time = time.perf_counter()
         status_code = 500
@@ -162,30 +186,41 @@ class CorrelationIdMiddleware:
         finally:
             duration_ms = (time.perf_counter() - start_time) * 1000
             try:
-                payload = {
-                    "method": str(scope.get("method", "")),
-                    "route": _route_template(scope),
-                    "status_code": status_code,
-                    "duration_ms": round(duration_ms, 3),
-                    "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
-                    "identity": scope.get(_IDENTITY_SCOPE_KEY),
-                    "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
-                    "request_id": request_id,
-                }
-                if _GROUNDING_INPUT_COUNT_SCOPE_KEY in scope:
-                    payload.update(
-                        {
-                            "grounding_input_count": scope[
-                                _GROUNDING_INPUT_COUNT_SCOPE_KEY
-                            ],
-                            "grounding_result_count": scope.get(
-                                _GROUNDING_RESULT_COUNT_SCOPE_KEY
-                            ),
-                            "grounding_systems": scope[_GROUNDING_SYSTEMS_SCOPE_KEY],
-                            "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
-                        }
-                    )
-                payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
+                if minimal_log:
+                    payload = {
+                        "route": path,
+                        "outcome": scope.get("openmed.preflight_outcome", "rejected"),
+                        "reason_codes": scope.get(
+                            "openmed.preflight_reason_codes", (f"http_{status_code}",)
+                        ),
+                    }
+                else:
+                    payload = {
+                        "method": str(scope.get("method", "")),
+                        "route": _route_template(scope),
+                        "status_code": status_code,
+                        "duration_ms": round(duration_ms, 3),
+                        "model_name": scope.get(_MODEL_NAME_SCOPE_KEY),
+                        "identity": scope.get(_IDENTITY_SCOPE_KEY),
+                        "credential_type": scope.get(_CREDENTIAL_TYPE_SCOPE_KEY),
+                        "request_id": request_id,
+                    }
+                    if _GROUNDING_INPUT_COUNT_SCOPE_KEY in scope:
+                        payload.update(
+                            {
+                                "grounding_input_count": scope[
+                                    _GROUNDING_INPUT_COUNT_SCOPE_KEY
+                                ],
+                                "grounding_result_count": scope.get(
+                                    _GROUNDING_RESULT_COUNT_SCOPE_KEY
+                                ),
+                                "grounding_systems": scope[
+                                    _GROUNDING_SYSTEMS_SCOPE_KEY
+                                ],
+                                "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
+                            }
+                        )
+                    payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 emit_access_log(
                     self.logger,
                     self.log_config,
@@ -214,10 +249,8 @@ def emit_access_log(
 
 
 def _request_id_from_scope(scope: Scope) -> str:
-    inbound = Headers(scope=scope).get(REQUEST_ID_HEADER)
-    if inbound:
-        return inbound
-    return str(uuid.uuid4())
+    # Replace, never repair, non-conforming ids so no part of them is echoed.
+    return request_id_or_generated(Headers(scope=scope).get(REQUEST_ID_HEADER))
 
 
 def _route_template(scope: Scope) -> str:
@@ -225,11 +258,28 @@ def _route_template(scope: Scope) -> str:
     route_path = getattr(route, "path", None)
     if isinstance(route_path, str) and route_path:
         return route_path
+    if scope.get("app") is not None:
+        # Lazy included routers may leave the request's route path empty.
+        # Resolve only a registered effective template; never log raw targets.
+        from starlette.requests import Request
+
+        from .auth import route_key_for_request
+
+        try:
+            _, template = route_key_for_request(Request(scope))
+            return template or "unknown"
+        except Exception:
+            return "unknown"
     return "unknown"
 
 
 def _format_access_log(payload: Mapping[str, Any], config: ServiceLogConfig) -> str:
     if config.fmt == "plain":
+        if "outcome" in payload:
+            return (
+                f"{payload['route']} outcome={payload['outcome']} "
+                f"reason_codes={','.join(payload['reason_codes'])}"
+            )
         rendered = (
             f"{payload.get('method', '')} {payload.get('route', 'unknown')} "
             f"{payload.get('status_code', 0)} "
@@ -297,3 +347,128 @@ __all__ = [
     "set_access_log_identity",
     "set_access_log_model_name",
 ]
+
+
+def _launcher_log_config() -> dict[str, Any]:
+    """Return the reference launcher's logging configuration.
+
+    Access records go through :class:`StructuredJsonLogFormatter`; raw
+    ``uvicorn.access`` lines are dropped. ``uvicorn.error`` keeps its records and
+    gains :class:`~openmed.service.request_limits.ConnectionLimitLogFilter`, which
+    counts connection-limit rejections for ``/metrics``.
+    """
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "filters": {
+            "connection_limit": {
+                "()": "openmed.service.request_limits.ConnectionLimitLogFilter"
+            }
+        },
+        "formatters": {
+            "access": {"()": "openmed.service.logging.StructuredJsonLogFormatter"}
+        },
+        "handlers": {
+            "access": {
+                "class": "logging.StreamHandler",
+                "formatter": "access",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "loggers": {
+            ACCESS_LOGGER_NAME: {
+                "handlers": ["access"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+            "uvicorn.error": {"filters": ["connection_limit"]},
+        },
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    """Launch the REST service with structured access logs and transport bounds.
+
+    The launcher never logs raw request targets. It also bounds concurrent
+    connections, idle keep-alive time and graceful shutdown. Those bounds
+    default to ``OPENMED_SERVICE_LIMIT_CONCURRENCY``,
+    ``OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE`` and
+    ``OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN`` (or the built-in defaults of
+    128 connections, 5 seconds and 30 seconds), and the matching command-line
+    flags override them.
+
+    Args:
+        argv: Command-line arguments; defaults to ``sys.argv[1:]``.
+    """
+    import argparse
+
+    import uvicorn
+
+    from .request_limits import (
+        ServerConnectionLimits,
+        server_connection_limits_from_env,
+    )
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    try:
+        defaults = server_connection_limits_from_env()
+    except ValueError as exc:
+        parser.error(str(exc))
+    parser.add_argument("app", nargs="?", default="openmed.service.app:app")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--workers", default=1, type=int)
+    parser.add_argument("--ssl-keyfile")
+    parser.add_argument("--ssl-certfile")
+    parser.add_argument("--ssl-ca-certs")
+    parser.add_argument("--ssl-cert-reqs", type=int, default=0)
+    parser.add_argument(
+        "--no-proxy-headers", dest="proxy_headers", action="store_false"
+    )
+    parser.add_argument("--forwarded-allow-ips")
+    parser.add_argument(
+        "--limit-concurrency",
+        type=int,
+        default=defaults.limit_concurrency,
+        help="Connections or tasks per worker before answering 503.",
+    )
+    parser.add_argument(
+        "--timeout-keep-alive",
+        type=int,
+        default=defaults.timeout_keep_alive,
+        help="Seconds an idle HTTP keep-alive connection stays open.",
+    )
+    parser.add_argument(
+        "--timeout-graceful-shutdown",
+        type=int,
+        default=defaults.timeout_graceful_shutdown,
+        help="Seconds shutdown waits for open connections before cancelling.",
+    )
+    options = vars(parser.parse_args(argv))
+    try:
+        connection_limits = ServerConnectionLimits(
+            limit_concurrency=options.pop("limit_concurrency"),
+            timeout_keep_alive=options.pop("timeout_keep_alive"),
+            timeout_graceful_shutdown=options.pop("timeout_graceful_shutdown"),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    from .security_profile import LISTEN_HOST_ENV_VAR, LISTEN_TLS_ENV_VAR
+
+    # The security-profile self-check reads the real bind address and
+    # transport from here; worker processes inherit the environment.
+    os.environ[LISTEN_HOST_ENV_VAR] = str(options["host"])
+    os.environ[LISTEN_TLS_ENV_VAR] = "true" if options["ssl_certfile"] else "false"
+    # ``server_header=False`` keeps uvicorn from announcing itself.
+    uvicorn.run(
+        **options,
+        **connection_limits.uvicorn_options(),
+        access_log=False,
+        log_config=_launcher_log_config(),
+        server_header=False,
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised by process-level tests
+    main()

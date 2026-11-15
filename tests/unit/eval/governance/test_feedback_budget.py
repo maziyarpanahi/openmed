@@ -257,29 +257,25 @@ def test_invalid_input_and_reports_do_not_echo_sensitive_values() -> None:
     assert sensitive_value not in rendered
 
 
-@pytest.mark.parametrize(
-    ("detail_limit", "rerun_limit", "boundaries"),
-    (
+def test_policy_rejects_invalid_limits_and_boundaries(subtests) -> None:
+    for detail_limit, rerun_limit, boundaries in (
         (-1, 0, (0.5,)),
         (0, -1, (0.5,)),
         (0, 0, ()),
         (0, 0, (0.8, 0.5)),
         (0, 0, (0.0, 0.5)),
         (0, 0, (0.5, float("nan"))),
-    ),
-)
-def test_policy_rejects_invalid_limits_and_boundaries(
-    detail_limit: int,
-    rerun_limit: int,
-    boundaries: tuple[float, ...],
-) -> None:
-    with pytest.raises(FeedbackBudgetError):
-        FeedbackBudgetPolicy(
-            epoch_digest=_digest("epoch"),
-            detailed_feedback_limit=detail_limit,
-            rerun_limit=rerun_limit,
-            coarse_score_boundaries=boundaries,
-        )
+    ):
+        with subtests.test(
+            detail_limit=detail_limit, rerun_limit=rerun_limit, boundaries=boundaries
+        ):
+            with pytest.raises(FeedbackBudgetError):
+                FeedbackBudgetPolicy(
+                    epoch_digest=_digest("epoch"),
+                    detailed_feedback_limit=detail_limit,
+                    rerun_limit=rerun_limit,
+                    coarse_score_boundaries=boundaries,
+                )
 
 
 def test_policy_and_report_objects_are_immutable() -> None:

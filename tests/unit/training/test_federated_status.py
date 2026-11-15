@@ -208,18 +208,17 @@ None.
 }
 
 
-@pytest.mark.parametrize("scenario", GOLDEN_SCENARIOS)
-def test_round_summaries_have_stable_json_and_markdown_golden_outputs(
-    scenario: str,
-) -> None:
-    golden = GOLDEN_SCENARIOS[scenario]
-    summary = build_federated_round_status(**golden["arguments"])
+def test_round_summaries_have_stable_json_and_markdown_golden_outputs(subtests) -> None:
+    for scenario in GOLDEN_SCENARIOS:
+        with subtests.test(scenario=scenario):
+            golden = GOLDEN_SCENARIOS[scenario]
+            summary = build_federated_round_status(**golden["arguments"])
 
-    assert summary.to_dict() == golden["payload"]
-    assert summary.to_json() == (
-        json.dumps(golden["payload"], indent=2, sort_keys=True) + "\n"
-    )
-    assert summary.to_markdown() == golden["markdown"]
+            assert summary.to_dict() == golden["payload"]
+            assert summary.to_json() == (
+                json.dumps(golden["payload"], indent=2, sort_keys=True) + "\n"
+            )
+            assert summary.to_markdown() == golden["markdown"]
 
 
 def test_sub_threshold_count_is_suppressed_while_quorum_remains_correct() -> None:
@@ -281,35 +280,30 @@ def test_suppressed_values_are_not_retained_by_the_returned_object() -> None:
     assert "completed_participant_count=1" not in repr(summary)
 
 
-@pytest.mark.parametrize(
-    ("participants", "completed", "expected"),
-    [
+def test_completion_band_boundaries_are_stable(subtests) -> None:
+    for participants, completed, expected in [
         (8, 0, FederatedCompletionBand.NOT_STARTED),
         (8, 1, FederatedCompletionBand.UNDER_HALF),
         (8, 3, FederatedCompletionBand.UNDER_HALF),
         (8, 4, FederatedCompletionBand.HALF_OR_MORE),
         (8, 7, FederatedCompletionBand.HALF_OR_MORE),
         (8, 8, FederatedCompletionBand.COMPLETE),
-    ],
-)
-def test_completion_band_boundaries_are_stable(
-    participants: int,
-    completed: int,
-    expected: FederatedCompletionBand,
-) -> None:
-    summary = build_federated_round_status(
-        state=S.COLLECTING,
-        participant_count=participants,
-        completed_participant_count=completed,
-        required_quorum=2,
-    )
+    ]:
+        with subtests.test(
+            participants=participants, completed=completed, expected=expected
+        ):
+            summary = build_federated_round_status(
+                state=S.COLLECTING,
+                participant_count=participants,
+                completed_participant_count=completed,
+                required_quorum=2,
+            )
 
-    assert summary.completion_band is expected
+            assert summary.completion_band is expected
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
+def test_invalid_aggregate_inputs_fail_closed(subtests) -> None:
+    for overrides in [
         {"participant_count": -1},
         {"participant_count": True},
         {"completed_participant_count": -1},
@@ -319,43 +313,37 @@ def test_completion_band_boundaries_are_stable(
         {"minimum_group_size": 1},
         {"minimum_group_size": True},
         {"state": "planned"},
-    ],
-)
-def test_invalid_aggregate_inputs_fail_closed(overrides: dict[str, object]) -> None:
-    arguments: dict[str, object] = {
-        "state": S.PLANNED,
-        "participant_count": 3,
-        "completed_participant_count": 1,
-        "required_quorum": 2,
-    }
-    arguments.update(overrides)
+    ]:
+        with subtests.test(overrides=overrides):
+            arguments: dict[str, object] = {
+                "state": S.PLANNED,
+                "participant_count": 3,
+                "completed_participant_count": 1,
+                "required_quorum": 2,
+            }
+            arguments.update(overrides)
 
-    with pytest.raises(FederatedRoundStatusError):
-        build_federated_round_status(**arguments)
+            with pytest.raises(FederatedRoundStatusError):
+                build_federated_round_status(**arguments)
 
 
-@pytest.mark.parametrize(
-    ("state", "reason"),
-    [
+def test_reason_codes_are_required_and_state_specific(subtests) -> None:
+    for state, reason in [
         (S.HELD, None),
         (S.HELD, R.ROUND_ERROR),
         (S.ABORTED, None),
         (S.ABORTED, R.QUALITY_REVIEW_REQUIRED),
         (S.COLLECTING, R.QUALITY_REVIEW_REQUIRED),
-    ],
-)
-def test_reason_codes_are_required_and_state_specific(
-    state: FederatedRoundState,
-    reason: FederatedRoundReasonCode | None,
-) -> None:
-    with pytest.raises(FederatedRoundStatusError):
-        build_federated_round_status(
-            state=state,
-            participant_count=8,
-            completed_participant_count=4,
-            required_quorum=5,
-            reason_code=reason,
-        )
+    ]:
+        with subtests.test(state=state, reason=reason):
+            with pytest.raises(FederatedRoundStatusError):
+                build_federated_round_status(
+                    state=state,
+                    participant_count=8,
+                    completed_participant_count=4,
+                    required_quorum=5,
+                    reason_code=reason,
+                )
 
 
 def test_digest_references_are_validated_sorted_and_unique() -> None:

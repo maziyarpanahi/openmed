@@ -6,32 +6,6 @@
     import MLXLMCommon
     import Tokenizers
 
-    /// Generation result returned by ``OpenMedVisionLanguageModel``.
-    public struct OpenMedVisionLanguageGeneration: Sendable {
-        public let text: String
-        public let tokenIDs: [Int]
-        public let promptTokenCount: Int
-        public let generationTokenCount: Int
-        public let promptTime: TimeInterval
-        public let generationTime: TimeInterval
-
-        public init(
-            text: String,
-            tokenIDs: [Int] = [],
-            promptTokenCount: Int,
-            generationTokenCount: Int,
-            promptTime: TimeInterval,
-            generationTime: TimeInterval
-        ) {
-            self.text = text
-            self.tokenIDs = tokenIDs
-            self.promptTokenCount = promptTokenCount
-            self.generationTokenCount = generationTokenCount
-            self.promptTime = promptTime
-            self.generationTime = generationTime
-        }
-    }
-
     /// First-class OpenMedKit runtime for OpenMed MLX vision-language models.
     ///
     /// Model weights are downloaded once and all inference remains on-device.
@@ -48,11 +22,15 @@
         }
 
         /// Load a public or authenticated OpenMed model from Hugging Face Hub.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any download or MLX access.
         public static func load(
             modelID: String = defaultModelID,
             revision: String = "main",
             progressHandler: @Sendable @escaping (Progress) -> Void = { _ in }
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let modelDirectory = try await OpenMedHubDownloader().download(
                 id: modelID,
                 revision: revision,
@@ -67,26 +45,65 @@
         }
 
         /// Strictly load an already downloaded OpenMed model directory.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any file or MLX access.
         public static func load(
             modelDirectory: URL
         ) async throws -> OpenMedVisionLanguageModel {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let container = try await OpenMedCompassLoader.loadContainer(
                 from: modelDirectory
             )
             return OpenMedVisionLanguageModel(container: container)
         }
 
+        /// Gate generation on an already loaded local model before inference and
+        /// before releasing its output. Remote image references are refused before
+        /// opening them. Enqueue time uses the thermal session's monotonic clock.
+        /// Pass the same source-bound privacy context as for direct generation.
+        /// Missing guard or asset context keeps generated text withheld.
+        public func generateIfAdmitted(
+            _ prompt: String, localImageURL: URL? = nil, maxTokens: Int = 256,
+            temperature: Float = 0, releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil, identifiers: [GeneratedIdentifierDigest] = [],
+            queuedAtMilliseconds: UInt64, in session: MultimodalThermalSession
+        ) async -> MultimodalAdmissionOutcome<OpenMedVisionLanguageGeneration> {
+            let work = ThermalVisionWork(
+                imageURL: localImageURL, releaseGuard: releaseGuard,
+                assetDigest: assetDigest, identifiers: identifiers
+            ) { guardInstance, sourceDigest, sourceIdentifiers in
+                if let localImageURL {
+                    return try await self.generate(
+                        prompt, imageURL: localImageURL, maxTokens: maxTokens,
+                        temperature: temperature, releaseGuard: guardInstance,
+                        assetDigest: sourceDigest, identifiers: sourceIdentifiers)
+                }
+                return try await self.generate(
+                    prompt, maxTokens: maxTokens, temperature: temperature,
+                    releaseGuard: guardInstance, assetDigest: sourceDigest,
+                    identifiers: sourceIdentifiers)
+            }
+            return await session.run(work, queuedAtMilliseconds: queuedAtMilliseconds)
+        }
+
         /// Generate from text only.
         public func generate(
             _ prompt: String,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -95,13 +112,19 @@
             _ prompt: String,
             imageURL: URL,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.url(imageURL)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -110,22 +133,34 @@
             _ prompt: String,
             image: CIImage,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.ciImage(image)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
         /// Generate from text and zero or more images.
+        ///
+        /// The images are handed to the model container's isolation domain, so
+        /// the caller must not keep using them concurrently (`sending`).
         public func generate(
             _ prompt: String,
-            images: [UserInput.Image],
+            images: sending [UserInput.Image],
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             guard maxTokens > 0 else {
                 throw OpenMedCompassError.invalidGenerationLimit(maxTokens)
@@ -135,21 +170,27 @@
             return try await generate(
                 prepared: prepared,
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
         private func generate(
             prepared: consuming sending LMInput,
             maxTokens: Int,
-            temperature: Float
+            temperature: Float,
+            releaseGuard: GeneratedTextGuard?,
+            assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest]
         ) async throws -> OpenMedVisionLanguageGeneration {
             let parameters = GenerateParameters(
                 maxTokens: maxTokens,
                 temperature: temperature,
                 topP: temperature == 0 ? 1 : 0.8,
                 topK: temperature == 0 ? 0 : 20,
-                prefillStepSize: 2_048
+                prefill: PrefillParameters(stepSize: 2_048, chunking: .remainder)
             )
             let stream = try await container.perform(nonSendable: prepared) {
                 context,
@@ -171,16 +212,43 @@
                 }
             }
             let text = await container.decode(tokenIds: tokenIDs)
-            return OpenMedVisionLanguageGeneration(
-                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                tokenIDs: tokenIDs,
+            let guardInstance = assetDigest == nil ? nil : releaseGuard
+            let guarded = (guardInstance ?? GeneratedTextGuard(detector: nil)).release(
+                text.trimmingCharacters(in: .whitespacesAndNewlines),
+                assetDigest: assetDigest ?? String(repeating: "0", count: 64),
+                identifiers: identifiers
+            )
+            return try OpenMedVisionLanguageGeneration(
+                text: guarded.text ?? "",
+                tokenIDs: [],
                 promptTokenCount: completion?.promptTokenCount ?? 0,
                 generationTokenCount: completion?.generationTokenCount ?? 0,
                 promptTime: completion?.promptTime ?? 0,
-                generationTime: completion?.generateTime ?? 0
+                generationTime: completion?.generateTime ?? 0,
+                notice: MultimodalNoticeKind.visualDescription.notice,
+                releaseEnvelope: guarded.envelope
             )
         }
 
+    }
+
+    struct ThermalVisionWork: LocalMultimodalWork {
+        let requiresNetwork: Bool
+        let generate: @Sendable () async throws -> OpenMedVisionLanguageGeneration
+        init(imageURL: URL?, generate: @escaping @Sendable () async throws -> OpenMedVisionLanguageGeneration) {
+            requiresNetwork = imageURL.map { !$0.isFileURL || ![nil, "", "localhost"].contains($0.host?.lowercased()) } ?? false
+            self.generate = generate
+        }
+        init(
+            imageURL: URL?, releaseGuard: GeneratedTextGuard?, assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest],
+            generate: @escaping @Sendable (GeneratedTextGuard?, String?, [GeneratedIdentifierDigest]) async throws -> OpenMedVisionLanguageGeneration
+        ) {
+            self.init(imageURL: imageURL) {
+                try await generate(releaseGuard, assetDigest, identifiers)
+            }
+        }
+        func run(profile: MultimodalWorkProfile) async throws -> OpenMedVisionLanguageGeneration { try await generate() }
     }
 
     enum OpenMedCompassError: LocalizedError {
@@ -252,7 +320,7 @@
         }
     }
 
-    struct OpenMedCompassProcessor: UserInputProcessor, @unchecked Sendable {
+    struct OpenMedCompassProcessor: UserInputProcessor, Sendable {
         private let configuration: OpenMedCompassProcessorConfiguration
         private let tokenizer: any MLXLMCommon.Tokenizer
 
@@ -549,7 +617,7 @@
             try compassConfiguration.validate()
 
             let model = OpenMedCompassModel(compassConfiguration)
-            try loadWeights(
+            try await loadWeights(
                 modelDirectory: directory,
                 model: model,
                 perLayerQuantization: baseConfiguration.perLayerQuantization
@@ -610,7 +678,7 @@
         }
     }
 
-    private struct OpenMedHubDownloader: Downloader, @unchecked Sendable {
+    private struct OpenMedHubDownloader: Downloader, Sendable {
         private let hub = HubApi.shared
 
         func download(
@@ -639,7 +707,7 @@
         }
     }
 
-    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, @unchecked Sendable {
+    private struct OpenMedTokenizerBridge: MLXLMCommon.Tokenizer, Sendable {
         private let tokenizer: any Tokenizers.Tokenizer
 
         init(_ tokenizer: any Tokenizers.Tokenizer) {

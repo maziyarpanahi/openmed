@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ELECTRON_PACKAGE_DIR = ROOT / "js" / "openmedkit-electron"
 
 
+@pytest.mark.slow
 def test_openmedkit_electron_package_checks() -> None:
     node = shutil.which("node")
     npm = shutil.which("npm")

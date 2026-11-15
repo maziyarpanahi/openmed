@@ -17,6 +17,7 @@ from openmed.eval.citation_support_metrics import compute_citation_support_metri
 from openmed.eval.metrics import fact_recall
 from openmed.eval.release_gates import GateCheck
 from openmed.eval.summary_coverage import compute_summary_fact_coverage
+from openmed.eval.summary_review import ImportedSummaryReview
 from openmed.eval.summary_unsupported_claims import score_summary_claims
 
 THRESHOLD_KEYS = frozenset(
@@ -41,6 +42,7 @@ def evaluate_summary_gate(
     support_evidence: Sequence[Mapping[str, Any]],
     thresholds: Mapping[str, float],
     adjudications: Sequence[Mapping[str, Any]] | None = None,
+    review_import: ImportedSummaryReview | None = None,
 ) -> tuple[GateCheck, ...]:
     """Compose existing metrics into value-free, blocking release checks.
 
@@ -48,6 +50,8 @@ def evaluate_summary_gate(
     be copied from a model's self-assessment. A missing source set, empty output,
     invalid threshold, malformed metric input or absent adjudication fails
     closed. Source-identifier leakage is always required to be zero.
+    ``review_import`` adds separate machine and review checks. Synthetic or
+    incomplete imports cannot pass adjudication; current artifacts must match.
     """
     failed = False
     try:
@@ -75,13 +79,27 @@ def evaluate_summary_gate(
             [{k: v for k, v in claim.items() if k != "citations"} for claim in claims],
             support_evidence,
         )
+        citation_claims = [
+            {k: v for k, v in claim.items() if k != "evidence_ids"} for claim in claims
+        ]
+        if review_import is not None:
+            if (
+                type(review_import) is not ImportedSummaryReview
+                or adjudications is not None
+                or not review_import.matches(
+                    citation_claims,
+                    source_evidence,
+                    summary=summary,
+                    source=deidentified.deidentified_text,
+                )
+            ):
+                raise ValueError("review_import")
         support = compute_citation_support_metrics(
-            [
-                {k: v for k, v in claim.items() if k != "evidence_ids"}
-                for claim in claims
-            ],
+            citation_claims,
             source_evidence,
-            adjudications=adjudications,
+            adjudications=(
+                review_import.adjudications if review_import else adjudications
+            ),
         )
         leakage = _build_leakage_check(deidentified, summary)
         values = (
@@ -105,17 +123,28 @@ def evaluate_summary_gate(
             ),
             (
                 "citation_support",
-                support.adjudication.support_recall,
+                support.adjudication.support_recall
+                if review_import is None or review_import.reviewer_evidence_available
+                else None,
                 thresholds["citation_support_min"],
                 True,
             ),
+        )
+        review_reason = (
+            (
+                "synthetic_review"
+                if review_import.evidence_kind == "synthetic"
+                else "unevaluable_review"
+            )
+            if review_import is not None
+            else "missing_adjudication"
         )
         checks = [
             GateCheck(
                 "summary_" + name,
                 value is not None
                 and (value >= threshold if floor else value <= threshold),
-                "missing_adjudication"
+                review_reason
                 if value is None and name == "citation_support"
                 else "measured"
                 if value is not None
@@ -127,6 +156,27 @@ def evaluate_summary_gate(
         checks.append(
             GateCheck("summary_leakage", leakage.passed, "measured", leakage.to_dict())
         )
+        if review_import is not None:
+            checks.extend(
+                (
+                    GateCheck(
+                        "summary_machine_spans",
+                        support.deterministic.passed,
+                        "machine_span_checks",
+                        support.deterministic.to_dict(),
+                    ),
+                    GateCheck(
+                        "summary_review",
+                        review_import.reviewer_evidence_available,
+                        "reviewer_evidence"
+                        if review_import.reviewer_evidence_available
+                        else "synthetic_review"
+                        if review_import.evidence_kind == "synthetic"
+                        else "unevaluable_review",
+                        review_import.to_dict(),
+                    ),
+                )
+            )
         return tuple(checks)
     except Exception:
         failed = True

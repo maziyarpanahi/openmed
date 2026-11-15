@@ -155,22 +155,18 @@ def test_future_dated_artifact_fails_closed() -> None:
         scrub_audit_artifacts([artifact], _policy(), as_of=AS_OF)
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
+def test_unknown_and_duplicate_artifact_fields_fail_closed(subtests) -> None:
+    for extra in [
         {"note": "synthetic-sensitive-value"},
         {"id": "conflicting-alias"},
         {"event_count": 2},
-    ],
-)
-def test_unknown_and_duplicate_artifact_fields_fail_closed(
-    extra: dict[str, object],
-) -> None:
-    artifact = {**_artifacts()[0], **extra}
+    ]:
+        with subtests.test(extra=extra):
+            artifact = {**_artifacts()[0], **extra}
 
-    with pytest.raises(ValueError) as exc_info:
-        scrub_audit_artifacts([artifact], _policy(), as_of=AS_OF)
-    assert "synthetic-sensitive-value" not in str(exc_info.value)
+            with pytest.raises(ValueError) as exc_info:
+                scrub_audit_artifacts([artifact], _policy(), as_of=AS_OF)
+            assert "synthetic-sensitive-value" not in str(exc_info.value)
 
 
 def test_duplicate_artifact_ids_are_rejected() -> None:

@@ -53,6 +53,43 @@ openmed/processing/resources/segmenter/ICU.txt and is copied into every
 standalone Indic or combined segmenter bundle as a declared, digest-bound
 license resource.
 
+Name: hijridate Umm al-Qura month starts
+Source: https://github.com/dralshehri/hijridate (version 2.6.0,
+src/hijridate/ummalqura.py)
+License: MIT
+Copyright: Copyright (c) Mohammed Alshehri
+Usage: The 1356-1450 AH Umm al-Qura month starts are stored as month lengths
+in openmed/core/data/calendars/hijri_umm_al_qura.json for lunar Hijri date
+shifting. The table records its source, retrieval date, local modifications,
+verification references, the MIT permission notice and a SHA-256 digest that
+the loader verifies.
+
+Name: py-nepali Bikram Sambat month lengths
+Source: https://github.com/opensource-nepal/py-nepali (version 1.2.0,
+nepali/date_converter.py)
+License: MIT
+Copyright: Copyright (c) 2018 The Python Packaging Authority (as stated in the
+upstream LICENSE file)
+Usage: The 2000-2083 BS month lengths are stored in
+openmed/core/data/calendars/bikram_sambat.json for Bikram Sambat date
+shifting. The table records its source, retrieval date, local modifications,
+verification references, the MIT permission notice and a SHA-256 digest that
+the loader verifies.
+
+Name: LLVM libc++ shared runtime (libc++_shared.so)
+Source: Android NDK r28c (28.2.13676358), built from
+https://github.com/llvm/llvm-project/tree/main/libcxx
+License: Apache-2.0 WITH LLVM-exception; code contributed before the LLVM
+relicensing is also available under the University of Illinois/NCSA or MIT
+licenses (the NDK's NOTICE.toolchain carries the full texts)
+Usage: The OpenMedKit Android AAR packages the NDK's prebuilt libc++_shared.so,
+stripped, for arm64-v8a, armeabi-v7a, x86 and x86_64, because
+ai.djl.android:tokenizer-native links libdjl_tokenizer.so against it without
+shipping it. The Android build copies it from the NDK pinned in
+android/gradle/libs.versions.toml; no binary is committed. Apps that ship
+OpenMedKit Android redistribute it and should include its license in their
+open-source notices.
+
 Name: SHIELD clinical PHI corpus
 Source: https://github.com/susom/shield_dataset
 Paper: https://arxiv.org/abs/2605.03301

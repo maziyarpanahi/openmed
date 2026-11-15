@@ -18,11 +18,12 @@ def _item(start, end, level=0, parent=None):
     )
 
 
-@pytest.mark.parametrize("right_start", [2, 7, 11])
-def test_overlapping_children_are_rejected(right_start):
-    items = [_item(0, 20), _item(2, 12, 1, 0), _item(right_start, 16, 1, 0)]
-    with pytest.raises(ValueError, match="overlaps its sibling"):
-        validate_list_items(TEXT, items)
+def test_overlapping_children_are_rejected(subtests):
+    for right_start in [2, 7, 11]:
+        with subtests.test(right_start=right_start):
+            items = [_item(0, 20), _item(2, 12, 1, 0), _item(right_start, 16, 1, 0)]
+            with pytest.raises(ValueError, match="overlaps its sibling"):
+                validate_list_items(TEXT, items)
 
 
 def test_overlap_at_deeper_level_is_rejected():

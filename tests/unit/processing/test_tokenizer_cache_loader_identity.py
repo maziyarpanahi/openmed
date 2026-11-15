@@ -57,17 +57,18 @@ class EqualLoader:
         return self(name, **kwargs)
 
 
-@pytest.mark.parametrize("bound", [False, True])
-def test_equal_unhashable_owners_stay_separate(bound):
-    first, second = EqualLoader(), EqualLoader()
-    assert first == second
-    first_loader = first.from_pretrained if bound else first
-    second_loader = second.from_pretrained if bound else second
+def test_equal_unhashable_owners_stay_separate(subtests):
+    for bound in [False, True]:
+        with subtests.test(bound=bound):
+            first, second = EqualLoader(), EqualLoader()
+            assert first == second
+            first_loader = first.from_pretrained if bound else first
+            second_loader = second.from_pretrained if bound else second
 
-    assert load(first_loader) is first.tokenizer
-    assert load(second_loader) is second.tokenizer
-    assert load(first_loader) is first.tokenizer
-    assert (first.calls, second.calls) == (1, 1)
+            assert load(first_loader) is first.tokenizer
+            assert load(second_loader) is second.tokenizer
+            assert load(first_loader) is first.tokenizer
+            assert (first.calls, second.calls) == (1, 1)
 
 
 def test_repeated_bound_method_access_is_cached():
@@ -169,22 +170,25 @@ def test_loader_entries_respect_lru_capacity(monkeypatch):
     assert len(tokenizer_cache._TOKENIZER_CACHE) == 2
 
 
-@pytest.mark.parametrize("evict", [False, True])
-def test_loader_owner_is_released_with_its_cache_entry(monkeypatch, evict):
-    monkeypatch.setattr(tokenizer_cache, "DEFAULT_TOKENIZER_CACHE_SIZE", 1)
-    owner = EqualLoader()
-    reference = weakref.ref(owner)
-    load(owner.from_pretrained)
-    del owner
-    gc.collect()
-    assert reference() is not None  # Prevent object-id reuse while cached.
+@pytest.mark.slow
+def test_loader_owner_is_released_with_its_cache_entry(subtests):
+    for evict in [False, True]:
+        with subtests.test(evict=evict):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(tokenizer_cache, "DEFAULT_TOKENIZER_CACHE_SIZE", 1)
+                owner = EqualLoader()
+                reference = weakref.ref(owner)
+                load(owner.from_pretrained)
+                del owner
+                gc.collect()
+                assert reference() is not None  # Prevent object-id reuse while cached.
 
-    if evict:
-        load(EqualLoader())
-    else:
-        tokenizer_cache.clear_tokenizer_cache()
-    gc.collect()
-    assert reference() is None
+                if evict:
+                    load(EqualLoader())
+                else:
+                    tokenizer_cache.clear_tokenizer_cache()
+                gc.collect()
+                assert reference() is None
 
 
 def test_concurrent_bound_method_calls_still_load_once():

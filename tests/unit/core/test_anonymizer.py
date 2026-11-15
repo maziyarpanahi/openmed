@@ -42,13 +42,14 @@ class TestLocaleResolution:
 
 
 class TestDeterminism:
-    @pytest.mark.parametrize(
-        "label", ["FIRSTNAME", "LASTNAME", "EMAIL", "DATE", "PHONE"]
-    )
-    def test_same_seed_same_surrogate(self, label):
-        a1 = Anonymizer(lang="en", consistent=True, seed=42)
-        a2 = Anonymizer(lang="en", consistent=True, seed=42)
-        assert a1.surrogate("original", label) == a2.surrogate("original", label)
+    def test_same_seed_same_surrogate(self, subtests):
+        for label in ["FIRSTNAME", "LASTNAME", "EMAIL", "DATE", "PHONE"]:
+            with subtests.test(label=label):
+                a1 = Anonymizer(lang="en", consistent=True, seed=42)
+                a2 = Anonymizer(lang="en", consistent=True, seed=42)
+                assert a1.surrogate("original", label) == a2.surrogate(
+                    "original", label
+                )
 
     def test_different_seeds_likely_different_surrogates(self):
         a1 = Anonymizer(lang="en", consistent=True, seed=1)
@@ -87,97 +88,107 @@ class TestClinicalIDChecksums:
     custom providers (Aadhaar, German Steuer-ID, Teudat Zehut) must produce
     values that pass the corresponding validators."""
 
-    @pytest.mark.parametrize("seed", list(range(20)))
-    def test_pt_br_cpf_validates(self, seed):
-        from openmed.core.pii_i18n import validate_portuguese_cpf
+    def test_pt_br_cpf_validates(self, subtests):
+        for seed in list(range(20)):
+            with subtests.test(seed=seed):
+                from openmed.core.pii_i18n import validate_portuguese_cpf
 
-        a = Anonymizer(lang="pt", locale="pt_BR", consistent=True, seed=seed)
-        cpf = a.surrogate("123.456.789-09", "CPF")
-        assert validate_portuguese_cpf(cpf), f"Invalid CPF generated: {cpf!r}"
+                a = Anonymizer(lang="pt", locale="pt_BR", consistent=True, seed=seed)
+                cpf = a.surrogate("123.456.789-09", "CPF")
+                assert validate_portuguese_cpf(cpf), f"Invalid CPF generated: {cpf!r}"
 
-    @pytest.mark.parametrize("seed", list(range(20)))
-    def test_nl_bsn_validates(self, seed):
-        from openmed.core.pii_i18n import validate_dutch_bsn
+    def test_nl_bsn_validates(self, subtests):
+        for seed in list(range(20)):
+            with subtests.test(seed=seed):
+                from openmed.core.pii_i18n import validate_dutch_bsn
 
-        a = Anonymizer(lang="nl", consistent=True, seed=seed)
-        bsn = a.surrogate("123456789", "SSN")
-        assert validate_dutch_bsn(bsn), f"Invalid BSN: {bsn!r}"
+                a = Anonymizer(lang="nl", consistent=True, seed=seed)
+                bsn = a.surrogate("123456789", "SSN")
+                assert validate_dutch_bsn(bsn), f"Invalid BSN: {bsn!r}"
 
-    @pytest.mark.parametrize("seed", list(range(20)))
-    def test_fr_nir_validates(self, seed):
-        from openmed.core.pii_i18n import validate_french_nir
+    def test_fr_nir_validates(self, subtests):
+        for seed in list(range(20)):
+            with subtests.test(seed=seed):
+                from openmed.core.pii_i18n import validate_french_nir
 
-        a = Anonymizer(lang="fr", consistent=True, seed=seed)
-        nir = a.surrogate("1 85 05 78 006 084 36", "SSN")
-        assert validate_french_nir(nir), f"Invalid NIR: {nir!r}"
+                a = Anonymizer(lang="fr", consistent=True, seed=seed)
+                nir = a.surrogate("1 85 05 78 006 084 36", "SSN")
+                assert validate_french_nir(nir), f"Invalid NIR: {nir!r}"
 
-    @pytest.mark.parametrize("seed", list(range(20)))
-    def test_it_codice_fiscale_validates(self, seed):
-        from openmed.core.pii_i18n import validate_italian_codice_fiscale
+    def test_it_codice_fiscale_validates(self, subtests):
+        for seed in list(range(20)):
+            with subtests.test(seed=seed):
+                from openmed.core.pii_i18n import validate_italian_codice_fiscale
 
-        a = Anonymizer(lang="it", consistent=True, seed=seed)
-        cf = a.surrogate("RSSMRA85M01H501Z", "SSN")
-        assert validate_italian_codice_fiscale(cf), f"Invalid Codice Fiscale: {cf!r}"
+                a = Anonymizer(lang="it", consistent=True, seed=seed)
+                cf = a.surrogate("RSSMRA85M01H501Z", "SSN")
+                assert validate_italian_codice_fiscale(cf), (
+                    f"Invalid Codice Fiscale: {cf!r}"
+                )
 
-    @pytest.mark.parametrize("seed", list(range(20)))
-    def test_es_nie_validates(self, seed):
-        from openmed.core.pii_i18n import validate_spanish_nie
+    def test_es_nie_validates(self, subtests):
+        for seed in list(range(20)):
+            with subtests.test(seed=seed):
+                from openmed.core.pii_i18n import validate_spanish_nie
 
-        a = Anonymizer(lang="es", consistent=True, seed=seed)
-        nie = a.surrogate("X1234567L", "ID_NUM")
-        assert validate_spanish_nie(nie), f"Invalid NIE: {nie!r}"
+                a = Anonymizer(lang="es", consistent=True, seed=seed)
+                nie = a.surrogate("X1234567L", "ID_NUM")
+                assert validate_spanish_nie(nie), f"Invalid NIE: {nie!r}"
 
-    @pytest.mark.parametrize("seed", list(range(10)))
-    def test_aadhaar_provider_validates_via_verhoeff(self, seed):
+    def test_aadhaar_provider_validates_via_verhoeff(self, subtests):
         """Custom AadhaarProvider must produce Verhoeff-valid Aadhaar."""
-        # Use the underlying Faker provider directly
-        from faker import Faker
+        for seed in list(range(10)):
+            with subtests.test(seed=seed):
+                # Use the underlying Faker provider directly
+                from faker import Faker
 
-        from openmed.core.anonymizer.providers.clinical_ids import (
-            register_clinical_providers,
-        )
-        from openmed.core.pii_i18n import validate_aadhaar
+                from openmed.core.anonymizer.providers.clinical_ids import (
+                    register_clinical_providers,
+                )
+                from openmed.core.pii_i18n import validate_aadhaar
 
-        fk = Faker("en_IN")
-        register_clinical_providers(fk)
-        fk.seed_instance(seed)
-        for _ in range(20):
-            a = fk.aadhaar()
-            assert validate_aadhaar(a), f"Verhoeff failed for {a!r}"
+                fk = Faker("en_IN")
+                register_clinical_providers(fk)
+                fk.seed_instance(seed)
+                for _ in range(20):
+                    a = fk.aadhaar()
+                    assert validate_aadhaar(a), f"Verhoeff failed for {a!r}"
 
-    @pytest.mark.parametrize("seed", list(range(5)))
-    def test_german_steuer_id_provider_validates(self, seed):
-        from faker import Faker
+    def test_german_steuer_id_provider_validates(self, subtests):
+        for seed in list(range(5)):
+            with subtests.test(seed=seed):
+                from faker import Faker
 
-        from openmed.core.anonymizer.providers.clinical_ids import (
-            register_clinical_providers,
-        )
-        from openmed.core.pii_i18n import validate_german_steuer_id
+                from openmed.core.anonymizer.providers.clinical_ids import (
+                    register_clinical_providers,
+                )
+                from openmed.core.pii_i18n import validate_german_steuer_id
 
-        fk = Faker("de_DE")
-        register_clinical_providers(fk)
-        fk.seed_instance(seed)
-        for _ in range(5):
-            sid = fk.german_steuer_id()
-            assert validate_german_steuer_id(sid), f"Invalid Steuer-ID: {sid!r}"
+                fk = Faker("de_DE")
+                register_clinical_providers(fk)
+                fk.seed_instance(seed)
+                for _ in range(5):
+                    sid = fk.german_steuer_id()
+                    assert validate_german_steuer_id(sid), f"Invalid Steuer-ID: {sid!r}"
 
-    @pytest.mark.parametrize("seed", list(range(10)))
-    def test_teudat_zehut_provider_validates(self, seed):
-        from faker import Faker
+    def test_teudat_zehut_provider_validates(self, subtests):
+        for seed in list(range(10)):
+            with subtests.test(seed=seed):
+                from faker import Faker
 
-        from openmed.core.anonymizer.providers.clinical_ids import (
-            register_clinical_providers,
-        )
-        from openmed.core.pii_i18n import validate_israeli_teudat_zehut
+                from openmed.core.anonymizer.providers.clinical_ids import (
+                    register_clinical_providers,
+                )
+                from openmed.core.pii_i18n import validate_israeli_teudat_zehut
 
-        fk = Faker("he_IL")
-        register_clinical_providers(fk)
-        fk.seed_instance(seed)
-        for _ in range(20):
-            identifier = fk.teudat_zehut()
-            assert validate_israeli_teudat_zehut(identifier), (
-                f"Invalid Teudat Zehut: {identifier!r}"
-            )
+                fk = Faker("he_IL")
+                register_clinical_providers(fk)
+                fk.seed_instance(seed)
+                for _ in range(20):
+                    identifier = fk.teudat_zehut()
+                    assert validate_israeli_teudat_zehut(identifier), (
+                        f"Invalid Teudat Zehut: {identifier!r}"
+                    )
 
 
 class TestFormatPreservation:
@@ -220,9 +231,8 @@ class TestFormatPreservation:
 class TestLabelCoverage:
     """Every canonical label has a generator and produces a non-empty result."""
 
-    @pytest.mark.parametrize(
-        "label",
-        [
+    def test_every_label_yields_non_empty_surrogate(self, subtests):
+        for label in [
             "FIRSTNAME",
             "LASTNAME",
             "name",
@@ -254,13 +264,12 @@ class TestLabelCoverage:
             "ZIPCODE",
             "PASSWORD",
             "PIN",
-        ],
-    )
-    def test_every_label_yields_non_empty_surrogate(self, label):
-        a = Anonymizer(lang="en", consistent=True, seed=42)
-        out = a.surrogate("seed_value", label)
-        assert isinstance(out, str)
-        assert out
+        ]:
+            with subtests.test(label=label):
+                a = Anonymizer(lang="en", consistent=True, seed=42)
+                out = a.surrogate("seed_value", label)
+                assert isinstance(out, str)
+                assert out
 
 
 class TestCustomGenerator:

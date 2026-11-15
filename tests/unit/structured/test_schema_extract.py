@@ -110,20 +110,21 @@ def test_coercion_failure_is_reported_and_slot_left_unfilled():
     assert text[issue["start"] : issue["end"]] == "unknown"
 
 
-@pytest.mark.parametrize("raw", ["3.9", "3,5"])
-def test_integer_coercion_rejects_fractional_values_instead_of_truncating(raw):
-    text = f"Stage: {raw}\n"
-    schema = {
-        "required": ["stage"],
-        "properties": {"stage": {"type": "integer"}},
-    }
+def test_integer_coercion_rejects_fractional_values_instead_of_truncating(subtests):
+    for raw in ["3.9", "3,5"]:
+        with subtests.test(raw=raw):
+            text = f"Stage: {raw}\n"
+            schema = {
+                "required": ["stage"],
+                "properties": {"stage": {"type": "integer"}},
+            }
 
-    result = extract_to_schema(text, schema)
+            result = extract_to_schema(text, schema)
 
-    assert "stage" not in result["data"]
-    assert result["missing_required"] == ["stage"]
-    assert result["errors"][0]["reason"] == "expected an integer value"
-    assert result["errors"][0]["raw"] == raw
+            assert "stage" not in result["data"]
+            assert result["missing_required"] == ["stage"]
+            assert result["errors"][0]["reason"] == "expected an integer value"
+            assert result["errors"][0]["raw"] == raw
 
 
 def test_pattern_violation_is_reported():
@@ -353,30 +354,29 @@ def test_advisory_exposed():
     assert isinstance(SCHEMA_EXTRACT_ADVISORY, str) and SCHEMA_EXTRACT_ADVISORY
 
 
-@pytest.mark.parametrize(
-    "raw", ["1e3", "10-20", "2 and 3", "1/2", "3,5 and 8", "1.2.3 and 8"]
-)
-def test_ambiguous_numeric_value_is_not_silently_truncated(raw):
-    result = extract_to_schema(
-        "Dose: " + raw, {"properties": {"dose": {"type": "number"}}}
-    )
-    assert result["data"] == {}
-    assert result["errors"]
+def test_ambiguous_numeric_value_is_not_silently_truncated(subtests):
+    for raw in ["1e3", "10-20", "2 and 3", "1/2", "3,5 and 8", "1.2.3 and 8"]:
+        with subtests.test(raw=raw):
+            result = extract_to_schema(
+                "Dose: " + raw, {"properties": {"dose": {"type": "number"}}}
+            )
+            assert result["data"] == {}
+            assert result["errors"]
 
 
-@pytest.mark.parametrize(
-    "definition",
-    [
+def test_malformed_or_unsafe_schema_is_a_definition_error(subtests):
+    for definition in [
         {"type": []},
         {"type": "string", "aliases": 0},
         {"type": "string", "pattern": "(a+)+$"},
-    ],
-)
-def test_malformed_or_unsafe_schema_is_a_definition_error(definition):
-    with pytest.raises(SchemaDefinitionError) as caught:
-        extract_to_schema("", {"properties": {"synthetic-sensitive-value": definition}})
-    assert "synthetic-sensitive-value" not in str(caught.value)
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(definition=definition):
+            with pytest.raises(SchemaDefinitionError) as caught:
+                extract_to_schema(
+                    "", {"properties": {"synthetic-sensitive-value": definition}}
+                )
+            assert "synthetic-sensitive-value" not in str(caught.value)
+            assert caught.value.__context__ is None
 
 
 def test_bad_source_iterator_returns_partial_extraction():

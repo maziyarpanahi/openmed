@@ -13,8 +13,11 @@ model from the catalog, and redact a synthetic clinical note.
 | Requirement | Value |
 | --- | --- |
 | Minimum Android API | 26 (Android 8.0) |
-| Compile / target SDK | 33 |
-| Build JDK | 11 |
+| Compile SDK | 35 |
+| Demo target SDK | 35 |
+| Build JDK | 17 |
+| Android Gradle Plugin | 8.7.3 (8.5.1 or newer for 16 KB zip alignment) |
+| Consumer Kotlin | 1.9 or newer |
 | Language | Kotlin (coroutines) |
 
 The library performs inference on device via ONNX Runtime Mobile. See
@@ -43,18 +46,75 @@ dependencyResolutionManagement {
 }
 ```
 
-After v3.0.0 is published, add this release coordinate in the module
+After v3.3.0 is published, add this release coordinate in the module
 `build.gradle.kts`. The candidate's coordinate is not yet a published artifact:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.3.0")
 }
 ```
 
-After tag publication, JitPack resolves the immutable `v3.0.0` tag and builds the `openmedkit`
+After tag publication, JitPack resolves the immutable `v3.3.0` tag and builds the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials.
+
+## Release Builds (R8 and APK Size)
+
+The AAR packages the R8 keep rules OpenMedKit needs, so a release build with
+`isMinifyEnabled = true` (R8 full mode, the AGP 8 default) needs no
+OpenMedKit-specific rules. The repository verifies this with an R8-minified
+consumer app on every Android CI run; see the
+[Android build notes](https://github.com/maziyarpanahi/openmed/blob/master/android/README.md#minified-consumer-verification).
+
+DJL's tokenizers and JNA jars ship desktop JNI binaries as Java resources that
+Android never loads. Exclude them, or every APK grows by about 9.6 MB:
+
+```kotlin
+android {
+    packaging {
+        resources {
+            excludes += listOf(
+                "native/lib/**",
+                "com/sun/jna/*/*jnidispatch*",
+            )
+        }
+    }
+}
+```
+
+With those excludes, OpenMedKit adds about 37 MB to an arm64-v8a APK, 26 MB to
+armeabi-v7a and 44 MB to x86 or x86_64, almost all of it native libraries (ONNX
+Runtime, the DJL tokenizer and the C++ runtime it links against). Ship ABI
+splits or an Android App Bundle so each device downloads one ABI.
+
+### Apps that already ship libc++_shared.so
+
+The AAR packages the NDK r28c `libc++_shared.so` for every ABI, because the DJL
+tokenizer library links against it and no other dependency ships it. If
+another dependency also ships `libc++_shared.so` (React Native does), the
+build fails in `mergeNativeLibs` with
+`2 files found with path 'lib/<abi>/libc++_shared.so'`. Keep one copy:
+
+```kotlin
+android {
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
+}
+```
+
+Keep the copy from the newest NDK that built any native library in the app;
+the DJL tokenizer needs one from NDK r27c or newer. See
+[Shared C++ runtime](android-integration.md#shared-c-runtime-libc_sharedso)
+for which copy AGP keeps and the license notice your app needs.
+
+The core artifact has no OCR engine and requests no network permission. Add
+the optional ML Kit OCR adapter only if you need it; see
+[Optional ML Kit OCR module](android-integration.md#optional-ml-kit-ocr-module)
+for the license and network permissions it adds.
 
 ## Quick Start: Kotlin
 

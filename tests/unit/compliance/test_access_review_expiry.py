@@ -133,9 +133,8 @@ def test_structured_round_trip_rejects_unknown_fields() -> None:
         AccessReview.from_dict({**review.to_dict(), "request": "RAW-CONTENT"})
 
 
-@pytest.mark.parametrize(
-    ("factory", "value", "message"),
-    [
+def test_invalid_metadata_errors_do_not_echo_sensitive_values(subtests) -> None:
+    for factory, value, message in [
         (
             lambda value: AccessReview(
                 issued_at=value,
@@ -163,15 +162,12 @@ def test_structured_round_trip_rejects_unknown_fields() -> None:
             "RAW POLICY CONTENT",
             "policy fingerprint",
         ),
-    ],
-)
-def test_invalid_metadata_errors_do_not_echo_sensitive_values(
-    factory, value, message
-) -> None:
-    with pytest.raises(AccessReviewValidationError, match=message) as error:
-        factory(value)
+    ]:
+        with subtests.test(factory=factory, value=value, message=message):
+            with pytest.raises(AccessReviewValidationError, match=message) as error:
+                factory(value)
 
-    assert str(value) not in str(error.value)
+            assert str(value) not in str(error.value)
 
 
 def test_clock_is_required_and_no_implicit_wall_clock_is_used() -> None:

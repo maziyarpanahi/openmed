@@ -19,11 +19,13 @@ from pathlib import Path
 from typing import Any, Mapping
 from xml.etree import ElementTree as ET
 
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
-from .exceptions import UnsupportedDocumentError
+from .exceptions import ArchiveDocumentError, UnsupportedDocumentError
 
 _CONTENT_PATH = "content.xml"
-_ALLOWED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _ODT_MIMETYPE = "application/vnd.oasis.opendocument.text"
 _MAX_REPEAT = 10_000
 _UNSAFE_XML_DECLARATION = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
@@ -311,7 +313,9 @@ class _OdtReader:
         return fragments
 
 
-def extract_odt(path: str | Path) -> ExtractedDocument:
+def extract_odt(
+    path: str | Path, *, archive_policy: ArchiveSafetyPolicy | None = None
+) -> ExtractedDocument:
     """Extract normalized ODT text plus char-offset source spans.
 
     Paragraphs and list items retain XML reading order. Table cells are joined
@@ -321,6 +325,7 @@ def extract_odt(path: str | Path) -> ExtractedDocument:
 
     Args:
         path: OpenDocument Text (``.odt``) file path.
+        archive_policy: Optional tighter ZIP admission policy.
 
     Returns:
         An :class:`ExtractedDocument` containing normalized text and structural
@@ -332,7 +337,7 @@ def extract_odt(path: str | Path) -> ExtractedDocument:
     """
     source_path = Path(path)
     try:
-        with zipfile.ZipFile(source_path) as archive:
+        with admitted_zip(source_path, archive_policy) as archive:
             _ensure_supported_archive(archive)
             content = _read_required(archive, _CONTENT_PATH)
     except (OSError, zipfile.BadZipFile, zlib.error) as exc:
@@ -345,30 +350,21 @@ def extract_odt(path: str | Path) -> ExtractedDocument:
 
 
 def _ensure_supported_archive(archive: zipfile.ZipFile) -> None:
-    for info in archive.infolist():
-        if info.flag_bits & 0x1:
-            raise UnsupportedDocumentError("Encrypted ODT ZIP entries are unsupported")
-        if info.compress_type not in _ALLOWED_COMPRESSION:
-            raise UnsupportedDocumentError(
-                "ODT ZIP entries must be stored or deflate-compressed"
-            )
     try:
         mimetype = archive.read("mimetype").decode("ascii").strip()
     except KeyError:
         return
-    except UnicodeDecodeError as exc:
-        raise UnsupportedDocumentError("ODT mimetype entry must be ASCII") from exc
+    except UnicodeDecodeError:
+        raise ArchiveDocumentError("archive_mimetype") from None
     if mimetype != _ODT_MIMETYPE:
-        raise UnsupportedDocumentError(
-            f"ODT mimetype must be {_ODT_MIMETYPE!r}, got {mimetype!r}"
-        )
+        raise ArchiveDocumentError("archive_mimetype")
 
 
 def _read_required(archive: zipfile.ZipFile, path: str) -> bytes:
     try:
         return archive.read(path)
-    except KeyError as exc:
-        raise UnsupportedDocumentError(f"ODT archive is missing {path}") from exc
+    except KeyError:
+        raise ArchiveDocumentError("archive_member_missing") from None
 
 
 def _parse_content_xml(data: bytes) -> ET.Element:

@@ -424,48 +424,50 @@ def test_hash_accepts_windows_path_and_descriptor_creation_times(
         deletion_verify.os.close(descriptor)
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_windows_hash_rejects_changed_identity_or_content(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field in [
         "st_dev",
         "st_ino",
         "st_size",
         "st_mtime_ns",
         "st_nlink",
         "st_birthtime_ns",
-    ],
-)
-def test_windows_hash_rejects_changed_identity_or_content(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
-) -> None:
-    from types import SimpleNamespace
+    ]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from types import SimpleNamespace
 
-    artifact = tmp_path / "synthetic.bin"
-    artifact.write_bytes(b"SYNTHETIC")
-    descriptor = deletion_verify._open_for_hash(artifact)
-    state = deletion_verify.os.fstat(descriptor)
-    fields = {
-        name: getattr(state, name)
-        for name in (
-            "st_mode",
-            "st_dev",
-            "st_ino",
-            "st_size",
-            "st_mtime_ns",
-            "st_ctime_ns",
-            "st_nlink",
-        )
-    }
-    fields["st_birthtime_ns"] = 123
-    expected = SimpleNamespace(**fields)
-    opened = SimpleNamespace(**{**fields, field: fields[field] + 1})
-    monkeypatch.setattr(deletion_verify, "_WINDOWS_STAT", True, raising=False)
-    monkeypatch.setattr(deletion_verify.os, "fstat", lambda fd: opened)
-    try:
-        with pytest.raises(DeletionTransactionError):
-            deletion_verify._hash_descriptor(descriptor, expected)
-    finally:
-        deletion_verify.os.close(descriptor)
+                artifact = tmp_path / "synthetic.bin"
+                artifact.write_bytes(b"SYNTHETIC")
+                descriptor = deletion_verify._open_for_hash(artifact)
+                state = deletion_verify.os.fstat(descriptor)
+                fields = {
+                    name: getattr(state, name)
+                    for name in (
+                        "st_mode",
+                        "st_dev",
+                        "st_ino",
+                        "st_size",
+                        "st_mtime_ns",
+                        "st_ctime_ns",
+                        "st_nlink",
+                    )
+                }
+                fields["st_birthtime_ns"] = 123
+                expected = SimpleNamespace(**fields)
+                opened = SimpleNamespace(**{**fields, field: fields[field] + 1})
+                monkeypatch.setattr(
+                    deletion_verify, "_WINDOWS_STAT", True, raising=False
+                )
+                monkeypatch.setattr(deletion_verify.os, "fstat", lambda fd: opened)
+                try:
+                    with pytest.raises(DeletionTransactionError):
+                        deletion_verify._hash_descriptor(descriptor, expected)
+                finally:
+                    deletion_verify.os.close(descriptor)
 
 
 def test_windows_hash_rejects_descriptor_metadata_change_during_read(

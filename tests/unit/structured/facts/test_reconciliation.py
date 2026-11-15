@@ -27,7 +27,15 @@ from openmed.structured.facts import (
     load_fact_reconciliation_schema,
     persist_fact_reconciliation,
 )
-from openmed.structured.store import LocalJourneyStore, StorePoint, StoreState
+from openmed.structured.store import (
+    JourneyStoreEncryption,
+    LocalJourneyStore,
+    StorePoint,
+    StoreState,
+)
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 T0 = "2026-09-21T10:00:00Z"
 T1 = "2026-09-21T11:00:00Z"
@@ -202,29 +210,27 @@ def test_identity_conflict_cannot_be_auto_resolved() -> None:
     assert result.value is not None and not result.value.current_fact_ids
 
 
-@pytest.mark.parametrize(
-    ("field", "first_value", "second_value"),
-    (
+def test_semantic_attribute_disagreement_is_a_value_conflict(subtests) -> None:
+    for field, first_value, second_value in (
         ("assertion", "affirmed", "negated"),
         ("certainty", "certain", "uncertain"),
         ("relation_participants", ["fact_a"], ["fact_b"]),
         ("mapping", {"code": "A"}, {"code": "B"}),
-    ),
-)
-def test_semantic_attribute_disagreement_is_a_value_conflict(
-    field: str, first_value: object, second_value: object
-) -> None:
-    first = _fact("semantic-a", attributes={field: first_value})
-    second = _fact("semantic-b", attributes={field: second_value})
+    ):
+        with subtests.test(
+            field=field, first_value=first_value, second_value=second_value
+        ):
+            first = _fact("semantic-a", attributes={field: first_value})
+            second = _fact("semantic-b", attributes={field: second_value})
 
-    result = FactReconciler().reconcile(
-        SUBJECT_ID,
-        (_input(first, source="source.a"), _input(second, source="source.a")),
-        occurred_at=T0,
-    )
+            result = FactReconciler().reconcile(
+                SUBJECT_ID,
+                (_input(first, source="source.a"), _input(second, source="source.a")),
+                occurred_at=T0,
+            )
 
-    assert result.state is StoreState.CONFLICT
-    assert _conflict_types(result) == {"value"}
+            assert result.state is StoreState.CONFLICT
+            assert _conflict_types(result) == {"value"}
 
 
 def test_valid_correction_is_new_fact_and_resolution_event() -> None:
@@ -472,7 +478,8 @@ def test_completed_review_builds_append_only_human_resolution() -> None:
 
 def _store_with_facts(tmp_path: Path, *facts: ClinicalFact) -> LocalJourneyStore:
     store = LocalJourneyStore(
-        tmp_path / derived_opaque_id("store", *(f.fact_id for f in facts))
+        tmp_path / derived_opaque_id("store", *(f.fact_id for f in facts)),
+        encryption=PLAINTEXT_DEV,
     )
     content = b"synthetic reconciliation artifact"
     artifact = ClinicalArtifact(

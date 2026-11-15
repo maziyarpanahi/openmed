@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 TimexType = Literal["DATE", "TIME", "DURATION", "SET"]
 
 _MONTHS = {
@@ -369,7 +371,7 @@ def _normalize_phrase(
     if _ISO_DATETIME_RE.fullmatch(stripped):
         granularity = _iso_datetime_granularity(stripped)
         try:
-            parsed_datetime = datetime.fromisoformat(_replace_z(stripped))
+            parsed_datetime = parse_iso_datetime(_replace_z(stripped))
         except ValueError:
             return _ambiguous_date(stripped, start, end, granularity)
         return _result(
@@ -384,7 +386,7 @@ def _normalize_phrase(
 
     if _ISO_DATE_RE.fullmatch(stripped):
         try:
-            parsed_date = date.fromisoformat(stripped)
+            parsed_date = parse_iso_date(stripped)
         except ValueError:
             return _ambiguous_date(stripped, start, end, "day")
         return _result(
@@ -783,7 +785,7 @@ def _coerce_reference_time(
         raise ValueError("reference_time must not be empty")
     if _ISO_DATE_RE.fullmatch(normalized):
         try:
-            parsed_date = date.fromisoformat(normalized)
+            parsed_date = parse_iso_date(normalized)
         except ValueError as exc:
             raise ValueError(
                 "reference_time must be a valid ISO date or datetime"
@@ -793,10 +795,10 @@ def _coerce_reference_time(
             iso_value=parsed_date.isoformat(),
         )
     try:
-        parsed_datetime = datetime.fromisoformat(_replace_z(normalized))
+        parsed_datetime = parse_iso_datetime(_replace_z(normalized))
     except ValueError:
         try:
-            parsed_date = date.fromisoformat(normalized)
+            parsed_date = parse_iso_date(normalized)
         except ValueError as exc:
             raise ValueError(
                 "reference_time must be a valid ISO date or datetime"

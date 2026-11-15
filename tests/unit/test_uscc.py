@@ -48,9 +48,10 @@ VALID_0 = _synthetic_code_with_check_char("0")
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("code", [VALID_Y, VALID_0])
-def test_accepts_valid_codes_including_edge_cases(code):
-    assert validate_unified_social_credit_code(code) is True
+def test_accepts_valid_codes_including_edge_cases(subtests):
+    for code in [VALID_Y, VALID_0]:
+        with subtests.test(code=code):
+            assert validate_unified_social_credit_code(code) is True
 
 
 def test_rejects_wrong_checksum():
@@ -58,11 +59,12 @@ def test_rejects_wrong_checksum():
     assert validate_unified_social_credit_code(tampered) is False
 
 
-@pytest.mark.parametrize("bad", list(EXCLUDED))
-def test_rejects_excluded_letters(bad):
-    # Place an excluded letter in the organization segment (position 11).
-    code = VALID_Y[:10] + bad + VALID_Y[11:]
-    assert validate_unified_social_credit_code(code) is False
+def test_rejects_excluded_letters(subtests):
+    for bad in list(EXCLUDED):
+        with subtests.test(bad=bad):
+            # Place an excluded letter in the organization segment (position 11).
+            code = VALID_Y[:10] + bad + VALID_Y[11:]
+            assert validate_unified_social_credit_code(code) is False
 
 
 def test_rejects_bad_length_and_non_alphabet():
@@ -77,11 +79,12 @@ def test_region_segment_must_be_digits():
     assert validate_unified_social_credit_code(code) is False
 
 
-@pytest.mark.parametrize("prefix", ["01", "9A", "B1"])
-def test_rejects_invalid_department_category_pair(prefix):
-    body = prefix + "123456ABCDEFGH0"
-    code = body + uscc_check_char(body)
-    assert validate_unified_social_credit_code(code) is False
+def test_rejects_invalid_department_category_pair(subtests):
+    for prefix in ["01", "9A", "B1"]:
+        with subtests.test(prefix=prefix):
+            body = prefix + "123456ABCDEFGH0"
+            code = body + uscc_check_char(body)
+            assert validate_unified_social_credit_code(code) is False
 
 
 def test_check_char_rejects_malformed_body():

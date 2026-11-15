@@ -163,6 +163,7 @@ def test_union_variant_field_is_not_treated_as_unconditionally_required() -> Non
     )
 
 
+@pytest.mark.slow
 def test_check_gate_reads_baseline_and_uses_an_offline_app(tmp_path: Path) -> None:
     baseline_path = tmp_path / "openapi.json"
     baseline = _contract()
@@ -190,6 +191,7 @@ def test_invalid_error_categories_are_rejected_without_echoing_values() -> None:
     assert "SYNTHETIC_INPUT_SENTINEL" not in str(raised.value)
 
 
+@pytest.mark.slow
 def test_checked_in_contract_matches_live_service_surface() -> None:
     report = check_api_compatibility()
 

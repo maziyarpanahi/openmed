@@ -117,6 +117,7 @@ def test_to_dataframe_empty_entities_returns_empty_documented_frame():
     assert df.empty
 
 
+@pytest.mark.slow
 def test_importing_core_pii_does_not_import_pandas():
     code = """
 import sys

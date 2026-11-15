@@ -17,42 +17,40 @@ ROWS = [
 ]
 
 
-@pytest.mark.parametrize("suffix", [".csv", ".tsv", ".jsonl", ".ndjson"])
-def test_table_io_round_trip_supported_text_formats(
-    tmp_path: Path,
-    suffix: str,
-) -> None:
-    path = tmp_path / f"release{suffix}"
+def test_table_io_round_trip_supported_text_formats(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for suffix in [".csv", ".tsv", ".jsonl", ".ndjson"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"release{suffix}"
 
-    written = write_table(path, ROWS)
-    restored = read_table(written)
+            written = write_table(path, ROWS)
+            restored = read_table(written)
 
-    assert written == path
-    if suffix in {".csv", ".tsv"}:
-        assert restored == [
-            {"age": "30", "zip": "10001", "condition": "a"},
-            {"age": "40", "zip": "20001", "condition": "b"},
-        ]
-    else:
-        assert restored == ROWS
+            assert written == path
+            if suffix in {".csv", ".tsv"}:
+                assert restored == [
+                    {"age": "30", "zip": "10001", "condition": "a"},
+                    {"age": "40", "zip": "20001", "condition": "b"},
+                ]
+            else:
+                assert restored == ROWS
 
 
-@pytest.mark.parametrize(
-    ("suffix", "delimiter"),
-    [(".csv", ","), (".tsv", "\t")],
-)
-def test_delimited_reader_strips_utf8_byte_order_mark(
-    tmp_path: Path,
-    suffix: str,
-    delimiter: str,
-) -> None:
-    path = tmp_path / f"bom{suffix}"
-    path.write_text(
-        f"\ufeffpatient_id{delimiter}age\npatient-1{delimiter}30\n",
-        encoding="utf-8",
-    )
+def test_delimited_reader_strips_utf8_byte_order_mark(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for suffix, delimiter in [(".csv", ","), (".tsv", "\t")]:
+        with subtests.test(suffix=suffix, delimiter=delimiter):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"bom{suffix}"
+            path.write_text(
+                f"\ufeffpatient_id{delimiter}age\npatient-1{delimiter}30\n",
+                encoding="utf-8",
+            )
 
-    assert read_table(path) == [{"patient_id": "patient-1", "age": "30"}]
+            assert read_table(path) == [{"patient_id": "patient-1", "age": "30"}]
 
 
 def test_table_writer_refuses_overwrite_by_default(tmp_path: Path) -> None:
@@ -125,97 +123,92 @@ def test_delimited_reader_rejects_duplicate_and_empty_headers(
         read_table(empty)
 
 
-@pytest.mark.parametrize(
-    ("suffix", "delimiter"),
-    [(".csv", ","), (".tsv", "\t")],
-)
 def test_delimited_reader_rejects_overflow_cells_without_echoing_values(
-    tmp_path: Path,
-    suffix: str,
-    delimiter: str,
+    subtests, tmp_path
 ) -> None:
-    path = tmp_path / f"overflow{suffix}"
-    canary = "sensitive-overflow-canary"
-    path.write_text(
-        f"age{delimiter}condition\n30{delimiter}example{delimiter}{canary}\n",
-        encoding="utf-8",
-    )
+    case_root = tmp_path
+    for suffix, delimiter in [(".csv", ","), (".tsv", "\t")]:
+        with subtests.test(suffix=suffix, delimiter=delimiter):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"overflow{suffix}"
+            canary = "sensitive-overflow-canary"
+            path.write_text(
+                f"age{delimiter}condition\n30{delimiter}example{delimiter}{canary}\n",
+                encoding="utf-8",
+            )
 
-    with pytest.raises(ValueError, match="more cells") as raised:
-        read_table(path)
+            with pytest.raises(ValueError, match="more cells") as raised:
+                read_table(path)
 
-    assert canary not in str(raised.value)
+            assert canary not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    ("suffix", "delimiter"),
-    [(".csv", ","), (".tsv", "\t")],
-)
-def test_delimited_reader_rejects_underflow_cells(
-    tmp_path: Path,
-    suffix: str,
-    delimiter: str,
+def test_delimited_reader_rejects_underflow_cells(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for suffix, delimiter in [(".csv", ","), (".tsv", "\t")]:
+        with subtests.test(suffix=suffix, delimiter=delimiter):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"underflow{suffix}"
+            path.write_text(
+                f"age{delimiter}condition\n30\n",
+                encoding="utf-8",
+            )
+
+            with pytest.raises(ValueError, match="fewer cells"):
+                read_table(path)
+
+
+def test_jsonl_reader_rejects_duplicate_object_keys_without_echoing_them(
+    subtests, tmp_path
 ) -> None:
-    path = tmp_path / f"underflow{suffix}"
-    path.write_text(
-        f"age{delimiter}condition\n30\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="fewer cells"):
-        read_table(path)
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
+    case_root = tmp_path
+    for payload in [
         '{"age":30,"age":40}\n',
         '{"profile":{"condition":"a","condition":"b"}}\n',
-    ],
-)
-def test_jsonl_reader_rejects_duplicate_object_keys_without_echoing_them(
-    tmp_path: Path,
-    payload: str,
-) -> None:
-    path = tmp_path / "duplicate.jsonl"
-    path.write_text(payload, encoding="utf-8")
+    ]:
+        with subtests.test(payload=payload):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "duplicate.jsonl"
+            path.write_text(payload, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="duplicate object keys") as raised:
-        read_table(path)
+            with pytest.raises(ValueError, match="duplicate object keys") as raised:
+                read_table(path)
 
-    assert "condition" not in str(raised.value)
+            assert "condition" not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_jsonl_reader_rejects_non_finite_numbers(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for payload in [
         '{"score":NaN}\n',
         '{"score":Infinity}\n',
         '{"score":1e9999}\n',
-    ],
-)
-def test_jsonl_reader_rejects_non_finite_numbers(
-    tmp_path: Path,
-    payload: str,
-) -> None:
-    path = tmp_path / "non-finite.jsonl"
-    path.write_text(payload, encoding="utf-8")
+    ]:
+        with subtests.test(payload=payload):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "non-finite.jsonl"
+            path.write_text(payload, encoding="utf-8")
 
-    with pytest.raises(ValueError, match="row 1"):
-        read_table(path)
+            with pytest.raises(ValueError, match="row 1"):
+                read_table(path)
 
 
-@pytest.mark.parametrize("suffix", [".csv", ".tsv", ".jsonl", ".ndjson"])
-def test_text_writers_reject_non_finite_numbers_atomically(
-    tmp_path: Path,
-    suffix: str,
-) -> None:
-    path = tmp_path / f"release{suffix}"
+def test_text_writers_reject_non_finite_numbers_atomically(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for suffix in [".csv", ".tsv", ".jsonl", ".ndjson"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"release{suffix}"
 
-    with pytest.raises(ValueError, match="non-finite"):
-        write_table(path, [{"score": float("nan")}])
+            with pytest.raises(ValueError, match="non-finite"):
+                write_table(path, [{"score": float("nan")}])
 
-    assert not path.exists()
+            assert not path.exists()
 
 
 def test_jsonl_writer_rejects_nested_values_without_echoing_them(

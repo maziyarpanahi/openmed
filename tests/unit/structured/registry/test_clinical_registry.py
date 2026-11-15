@@ -576,35 +576,33 @@ def test_correction_retains_review_for_other_unresolved_fields() -> None:
     assert corrected.value.state is RegistryCaseState.REVIEW_REQUIRED
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_export_recording_rejects_foreign_manifest_context(subtests) -> None:
+    for field, value in [
         ("definition_version_id", "registryversion_aaaaaaaaaaaaaaaa"),
         ("definition_digest", "sha256:" + "a" * 64),
         ("registry_id", "registry_different00000001"),
         ("privacy_policy_digest", "sha256:" + "b" * 64),
         ("export_policy_digest", "sha256:" + "c" * 64),
         ("source_snapshot_ids", ("snapshot_aaaaaaaaaaaaaaaa",)),
-    ],
-)
-def test_export_recording_rejects_foreign_manifest_context(field, value) -> None:
-    definition, materialized = _materialize(
-        _fact("a", fact_type="condition"), _fact("b", fact_type="medication")
-    )
-    assert materialized.value is not None
-    case = materialized.value.cases[0]
-    exported = build_registry_export(
-        definition,
-        (case,),
-        authorization=_export_authorization(definition),
-        created_at="2026-01-02T03:05:00Z",
-    )
-    assert exported.value is not None
-    marked = mark_registry_case_exported(
-        case,
-        definition,
-        envelope=replace(exported.value, **{field: value}),
-        occurred_at="2026-01-02T03:06:00Z",
-    )
-    assert marked.state is StoreState.CONFLICT
-    assert marked.code == "registry_export_context_conflict"
+    ]:
+        with subtests.test(field=field, value=value):
+            definition, materialized = _materialize(
+                _fact("a", fact_type="condition"), _fact("b", fact_type="medication")
+            )
+            assert materialized.value is not None
+            case = materialized.value.cases[0]
+            exported = build_registry_export(
+                definition,
+                (case,),
+                authorization=_export_authorization(definition),
+                created_at="2026-01-02T03:05:00Z",
+            )
+            assert exported.value is not None
+            marked = mark_registry_case_exported(
+                case,
+                definition,
+                envelope=replace(exported.value, **{field: value}),
+                occurred_at="2026-01-02T03:06:00Z",
+            )
+            assert marked.state is StoreState.CONFLICT
+            assert marked.code == "registry_export_context_conflict"

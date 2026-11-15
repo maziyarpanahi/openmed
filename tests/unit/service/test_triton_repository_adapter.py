@@ -36,6 +36,7 @@ from openmed.service.backends.triton_repository import (
     validate_triton_model_repository,
     write_triton_model_repository,
 )
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 
 ID2LABEL = {0: "O", 1: "B-PERSON", 2: "E-PERSON"}
 SYNTHETIC_TEXT = "Alice Nguyen"
@@ -474,6 +475,27 @@ def test_mocked_remote_response_matches_local_onnx_pipeline_spans(
     }
 
 
+@pytest.fixture
+def allow_synthetic_kserve(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Remote inference egress is deny-by-default; allow the synthetic origins.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["remote_inference"],
+                    "destination": "https://example.test",
+                },
+                {
+                    "purposes": ["remote_inference"],
+                    "destination": "grpcs://triton.example:8001",
+                },
+            ]
+        ),
+    )
+
+
+@pytest.mark.usefixtures("allow_synthetic_kserve")
 def test_kserve_http_transport_uses_v2_json_tensor_schema() -> None:
     class Response:
         status_code = 200
@@ -530,6 +552,7 @@ def test_kserve_http_transport_uses_v2_json_tensor_schema() -> None:
     assert result.tolist() == [[[0.0, 1.0], [2.0, 3.0]]]
 
 
+@pytest.mark.usefixtures("allow_synthetic_kserve")
 def test_http_errors_expose_status_without_response_body() -> None:
     class Response:
         status_code = 503
@@ -560,6 +583,7 @@ def test_http_errors_expose_status_without_response_body() -> None:
     assert "synthetic-sensitive-value" not in str(exc_info.value)
 
 
+@pytest.mark.usefixtures("allow_synthetic_kserve")
 def test_triton_grpc_transport_uses_wire_compatible_raw_tensors() -> None:
     from openmed.service.proto.generated import kserve_v2_pb2
 
@@ -700,10 +724,11 @@ def test_remote_config_round_trips_and_normalizes_protocol() -> None:
     assert OpenMedConfig.from_dict(config.to_dict()).to_dict() == config.to_dict()
 
 
-@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
-def test_remote_timeout_must_be_positive_and_finite(timeout: float) -> None:
-    with pytest.raises(ValueError, match="positive and finite"):
-        OpenMedConfig(remote_inference_timeout_seconds=timeout)
+def test_remote_timeout_must_be_positive_and_finite(subtests) -> None:
+    for timeout in [0, -1, float("nan"), float("inf")]:
+        with subtests.test(timeout=timeout):
+            with pytest.raises(ValueError, match="positive and finite"):
+                OpenMedConfig(remote_inference_timeout_seconds=timeout)
 
 
 def test_remote_config_round_trips_through_toml(tmp_path: Path) -> None:

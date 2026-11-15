@@ -236,7 +236,8 @@ def test_assistant_uses_injected_runner_for_structured_task_and_chat():
     assert runner.calls[1]["messages"][0]["role"] == "system"
 
 
-@pytest.mark.parametrize("task", ["pii", "entities", "relations"])
-def test_non_reasoning_tasks_reject_question(task):
-    with pytest.raises(ValueError, match="only accepted"):
-        build_maple_task_messages(task, "synthetic note", question="Why?")
+def test_non_reasoning_tasks_reject_question(subtests):
+    for task in ["pii", "entities", "relations"]:
+        with subtests.test(task=task):
+            with pytest.raises(ValueError, match="only accepted"):
+                build_maple_task_messages(task, "synthetic note", question="Why?")

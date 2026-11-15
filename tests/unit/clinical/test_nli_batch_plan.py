@@ -155,9 +155,8 @@ def test_representations_and_audit_report_hide_pair_identifiers() -> None:
     assert plan.planned_pair_ids == (sentinel,)
 
 
-@pytest.mark.parametrize(
-    ("profile", "message"),
-    [
+def test_invalid_profiles_fail_with_value_free_errors(subtests) -> None:
+    for profile, message in [
         ({"max_tokens_per_batch": 0, "max_pairs_per_batch": 1}, "token ceiling"),
         ({"max_tokens_per_batch": 1, "max_pairs_per_batch": True}, "pair ceiling"),
         (
@@ -168,13 +167,10 @@ def test_representations_and_audit_report_hide_pair_identifiers() -> None:
             },
             "total token budget",
         ),
-    ],
-)
-def test_invalid_profiles_fail_with_value_free_errors(
-    profile: dict[str, object], message: str
-) -> None:
-    with pytest.raises(NliBatchPlanningError, match=message):
-        plan_nli_batches([], profile)
+    ]:
+        with subtests.test(profile=profile, message=message):
+            with pytest.raises(NliBatchPlanningError, match=message):
+                plan_nli_batches([], profile)
 
 
 def test_invalid_pair_does_not_echo_identifier() -> None:

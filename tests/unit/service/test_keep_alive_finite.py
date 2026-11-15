@@ -47,9 +47,8 @@ def test_nonfinite_durations_are_rejected(value):
         parse_keep_alive(value)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_explicit_opt_out_values_are_preserved(subtests):
+    for value in [
         None,
         "",
         "  ",
@@ -60,15 +59,13 @@ def test_nonfinite_durations_are_rejected(value):
         "infinite",
         "infinity",
         " INFINITY ",
-    ],
-)
-def test_explicit_opt_out_values_are_preserved(value):
-    assert parse_keep_alive(value) is None
+    ]:
+        with subtests.test(value=value):
+            assert parse_keep_alive(value) is None
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
+def test_valid_finite_durations_are_unchanged(subtests):
+    for value, expected in [
         (0, 0.0),
         (-0.0, 0.0),
         (2.5, 2.5),
@@ -77,15 +74,15 @@ def test_explicit_opt_out_values_are_preserved(value):
         ("1h30m", 5400),
         ("2d", 172800),
         (" 30S ", 30),
-    ],
-)
-def test_valid_finite_durations_are_unchanged(value, expected):
-    result = parse_keep_alive(value)
-    assert math.isfinite(result)
-    assert result == expected
+    ]:
+        with subtests.test(value=value, expected=expected):
+            result = parse_keep_alive(value)
+            assert math.isfinite(result)
+            assert result == expected
 
 
-@pytest.mark.parametrize("value", [True, False, -1, "-0.1", [], "one hour", "1h 30m"])
-def test_invalid_durations_remain_rejected(value):
-    with pytest.raises(ValueError):
-        parse_keep_alive(value)
+def test_invalid_durations_remain_rejected(subtests):
+    for value in [True, False, -1, "-0.1", [], "one hour", "1h 30m"]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError):
+                parse_keep_alive(value)

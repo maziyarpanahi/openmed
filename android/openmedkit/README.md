@@ -4,7 +4,7 @@
 It is a Gradle `com.android.library` module under the top-level `android/`
 build and uses the Android namespace `org.openmed.openmedkit`.
 
-After publication, public applications can consume the immutable `v3.0.0`
+After publication, public applications can consume the immutable `v3.3.0`
 release through JitPack. This candidate does not yet have a published tag. See the
 [Android installation guide](../README.md#install-openmedkit-300) for the
 repository and dependency declarations.
@@ -15,14 +15,24 @@ repository and dependency declarations.
 - `src/main/AndroidManifest.xml` is intentionally minimal for the library.
 - `src/test/kotlin/com/openmed/openmedkit/` contains local JVM unit tests
   running with JUnit and Robolectric.
+- `src/androidTest/` contains the instrumented emulator lane, which runs a tiny
+  synthetic ONNX model through the real ONNX Runtime and DJL tokenizer native
+  libraries. See the
+  [emulator lane guide](../../docs/android-integration.md#emulator-lane).
+
+- `api/openmedkit.api` is the committed public API baseline. CI runs
+  `./gradlew :openmedkit:apiCheck`; after an intended API change run
+  `./gradlew :openmedkit:apiDump` and see the
+  [baseline policy](../../docs/swift-kotlin-parity.md#public-api-baselines).
 
 ## Platform Baseline
 
 The module sets `minSdk` to 26. Android 8.0 is a practical baseline for an
 on-device clinical utility library because it keeps support broad while
 allowing later work to rely on modern platform security, storage, and runtime
-behavior. The module currently compiles against Android API 33 for compatibility
-with the repository's Java 11 local development baseline.
+behavior. The module compiles against Android API 35 with JDK 17 and Android
+Gradle Plugin 8, and it still emits Java 11 bytecode for consumers. See the
+[toolchain requirements](../README.md#toolchain-requirements).
 
 ## Privacy And Safety
 
@@ -33,15 +43,27 @@ temporary files, analytics events, or audit artifacts.
 
 The `analyzeText`, `extractPii`, and `deidentify` inference paths operate only on
 caller-supplied on-device model assets and do not open sockets or invoke HTTP.
+Before loading a tokenizer, OpenMedKit sets DJL's `OPT_OUT_TRACKING` system
+property; otherwise DJL's usage telemetry would send HTTP requests to the cloud
+instance-metadata address whenever a tokenizer is created.
 The optional model downloader is a separate, explicit pre-inference operation;
 it is never called by inference. The library manifest intentionally requests no
-`android.permission.INTERNET` permission.
+`android.permission.INTERNET` permission, and no dependency adds one: OCR
+engines such as ML Kit live in the optional `:openmedkit-mlkit` module, and
+`./gradlew :openmedkit:verifyDependencyBoundary` fails if a vendor OCR,
+Play services, or telemetry artifact, a network permission, or a
+dependency-contributed provider, service, or receiver reaches consumers.
 
 Internal inference diagnostics are disabled by default. Library code may emit
 diagnostics only through the typed `SafeLog` boundary, which accepts labels,
 Unicode offsets, and SHA-256 span hashes—not arbitrary messages or detected
 surface text. De-identification action records likewise retain provenance and
 replacement metadata without retaining the original identifier.
+
+Hash keys and portable policy or bundle-trust secrets live in the Android
+Keystore through `AndroidKeystoreSecretProvider`, never in preferences, caches,
+or the AAR. See [Android Keystore Secrets](../../docs/android-keystore-secrets.md)
+for references, required protection, failure codes, and backup exclusion.
 
 This module is on-device only by design. It is not a medical device and does not
 provide diagnosis, treatment decisions, or emergency clinical guidance. Any

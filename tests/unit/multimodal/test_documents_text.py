@@ -179,15 +179,19 @@ def test_detector_cannot_supply_raw_replacement_or_untrusted_label(tmp_path: Pat
     assert rendered.rstrip() == "[PHI]"
 
 
-@pytest.mark.parametrize("offset", [True, 0.5])
-def test_detector_offsets_must_be_integral(tmp_path: Path, offset: object):
-    source = _write_text(tmp_path / "report.txt", "Jane Roe\n")
+def test_detector_offsets_must_be_integral(subtests, tmp_path):
+    case_root = tmp_path
+    for offset in [True, 0.5]:
+        with subtests.test(offset=offset):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = _write_text(tmp_path / "report.txt", "Jane Roe\n")
 
-    with pytest.raises(ValueError, match="invalid detector entity offsets"):
-        multimodal.redact_document(
-            source,
-            models=lambda text: [{"start": offset, "end": 8, "label": "NAME"}],
-        )
+            with pytest.raises(ValueError, match="invalid detector entity offsets"):
+                multimodal.redact_document(
+                    source,
+                    models=lambda text: [{"start": offset, "end": 8, "label": "NAME"}],
+                )
 
 
 def test_text_writer_rejects_line_crossings_and_source_aliases(tmp_path: Path):

@@ -7,9 +7,8 @@ import pytest
 from openmed.utils.logging import OpenMedLogger, get_logger
 
 
-@pytest.mark.parametrize(
-    ("name", "expected"),
-    [
+def test_get_logger_preserves_qualified_names_and_prefixes_short_names(subtests):
+    for name, expected in [
         ("worker", "openmed.worker"),
         ("core.models", "openmed.core.models"),
         ("openmed", "openmed"),
@@ -17,10 +16,9 @@ from openmed.utils.logging import OpenMedLogger, get_logger
         ("openmed_tools", "openmed.openmed_tools"),
         ("openmedicine", "openmed.openmedicine"),
         ("", "openmed."),
-    ],
-)
-def test_get_logger_preserves_qualified_names_and_prefixes_short_names(name, expected):
-    assert get_logger(name) is logging.getLogger(expected)
+    ]:
+        with subtests.test(name=name, expected=expected):
+            assert get_logger(name) is logging.getLogger(expected)
 
 
 def test_short_and_qualified_names_resolve_to_the_same_logger():

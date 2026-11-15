@@ -358,12 +358,13 @@ def test_invalid_point_values_are_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize("label", [None, "", "   ", 7, "line\nbreak"])
-def test_missing_or_invalid_labels_are_rejected(label: object) -> None:
-    with pytest.raises(ValueError, match="label"):
-        FrontierPoint.from_mapping(
-            {"label": label, "throughput": 1.0, "accuracy": 0.9, "leakage": 0.0}
-        )
+def test_missing_or_invalid_labels_are_rejected(subtests) -> None:
+    for label in [None, "", "   ", 7, "line\nbreak"]:
+        with subtests.test(label=label):
+            with pytest.raises(ValueError, match="label"):
+                FrontierPoint.from_mapping(
+                    {"label": label, "throughput": 1.0, "accuracy": 0.9, "leakage": 0.0}
+                )
 
 
 def test_duplicate_labels_are_rejected_after_normalization() -> None:
@@ -383,53 +384,47 @@ def test_mapping_requires_measured_leakage() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_non_finite_metrics_are_rejected(subtests) -> None:
+    for field, value in [
         ("throughput", float("nan")),
         ("throughput", float("inf")),
         ("accuracy", float("nan")),
         ("accuracy", float("inf")),
         ("leakage", float("nan")),
         ("leakage", float("inf")),
-    ],
-)
-def test_non_finite_metrics_are_rejected(field: str, value: float) -> None:
-    point: dict[str, object] = {
-        "label": "invalid",
-        "throughput": 1.0,
-        "accuracy": 0.9,
-        "leakage": 0.0,
-    }
-    point[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            point: dict[str, object] = {
+                "label": "invalid",
+                "throughput": 1.0,
+                "accuracy": 0.9,
+                "leakage": 0.0,
+            }
+            point[field] = value
 
-    with pytest.raises(ValueError, match=rf"{field} must be finite"):
-        FrontierPoint.from_mapping(point)
+            with pytest.raises(ValueError, match=rf"{field} must be finite"):
+                FrontierPoint.from_mapping(point)
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
+def test_out_of_range_metrics_are_rejected(subtests) -> None:
+    for field, value, message in [
         ("throughput", -0.01, "throughput must be greater than or equal to 0"),
         ("accuracy", -0.01, "accuracy must be between 0 and 1"),
         ("accuracy", 1.01, "accuracy must be between 0 and 1"),
         ("leakage", -0.01, "leakage must be between 0 and 1"),
         ("leakage", 1.01, "leakage must be between 0 and 1"),
-    ],
-)
-def test_out_of_range_metrics_are_rejected(
-    field: str, value: float, message: str
-) -> None:
-    point: dict[str, object] = {
-        "label": "invalid",
-        "throughput": 1.0,
-        "accuracy": 0.9,
-        "leakage": 0.0,
-    }
-    point[field] = value
+    ]:
+        with subtests.test(field=field, value=value, message=message):
+            point: dict[str, object] = {
+                "label": "invalid",
+                "throughput": 1.0,
+                "accuracy": 0.9,
+                "leakage": 0.0,
+            }
+            point[field] = value
 
-    with pytest.raises(ValueError, match=message):
-        FrontierPoint.from_mapping(point)
+            with pytest.raises(ValueError, match=message):
+                FrontierPoint.from_mapping(point)
 
 
 def test_direct_point_construction_uses_the_same_validation() -> None:
@@ -602,59 +597,52 @@ def test_frontier_point_from_reports_requires_a_leakage_metric() -> None:
         frontier_point_from_reports(perf, benchmark)
 
 
-@pytest.mark.parametrize(
-    ("docs_per_second", "f1", "leakage", "message"),
-    [
+def test_frontier_point_from_reports_rejects_invalid_metrics(subtests) -> None:
+    for docs_per_second, f1, leakage, message in [
         (float("nan"), 0.9, 0.0, "docs_per_second must be finite"),
         (10.0, 1.1, 0.0, "accuracy must be between 0 and 1"),
         (10.0, 0.9, -0.1, "leakage must be between 0 and 1"),
-    ],
-)
-def test_frontier_point_from_reports_rejects_invalid_metrics(
-    docs_per_second: float,
-    f1: float,
-    leakage: float,
-    message: str,
-) -> None:
-    perf = _FakePerfReport("m", docs_per_second=docs_per_second)
-    benchmark = _FakeBenchmarkReport("m", f1=f1, leakage=leakage)
+    ]:
+        with subtests.test(
+            docs_per_second=docs_per_second, f1=f1, leakage=leakage, message=message
+        ):
+            perf = _FakePerfReport("m", docs_per_second=docs_per_second)
+            benchmark = _FakeBenchmarkReport("m", f1=f1, leakage=leakage)
 
-    with pytest.raises(ValueError, match=message):
-        frontier_point_from_reports(perf, benchmark)
+            with pytest.raises(ValueError, match=message):
+                frontier_point_from_reports(perf, benchmark)
 
 
-@pytest.mark.parametrize("mismatch", ["model_name", "device", "configuration_id"])
-def test_frontier_point_from_reports_rejects_identity_mismatches(
-    mismatch: str,
-) -> None:
-    perf = _FakePerfReport("model-a", docs_per_second=10.0)
-    benchmark = _FakeBenchmarkReport("model-a", f1=0.9, leakage=0.0)
-    if mismatch == "model_name":
-        benchmark.model_name = "model-b"
-    elif mismatch == "device":
-        benchmark.device = "gpu"
-    else:
-        benchmark.metadata = {"configuration_id": "different-config"}
+def test_frontier_point_from_reports_rejects_identity_mismatches(subtests) -> None:
+    for mismatch in ["model_name", "device", "configuration_id"]:
+        with subtests.test(mismatch=mismatch):
+            perf = _FakePerfReport("model-a", docs_per_second=10.0)
+            benchmark = _FakeBenchmarkReport("model-a", f1=0.9, leakage=0.0)
+            if mismatch == "model_name":
+                benchmark.model_name = "model-b"
+            elif mismatch == "device":
+                benchmark.device = "gpu"
+            else:
+                benchmark.metadata = {"configuration_id": "different-config"}
 
-    with pytest.raises(ValueError, match=rf"identity mismatch for: {mismatch}"):
-        frontier_point_from_reports(perf, benchmark)
+            with pytest.raises(ValueError, match=rf"identity mismatch for: {mismatch}"):
+                frontier_point_from_reports(perf, benchmark)
 
 
-@pytest.mark.parametrize("missing_from", ["perf", "benchmark"])
-def test_frontier_point_from_reports_requires_configuration_identity(
-    missing_from: str,
-) -> None:
-    perf = _FakePerfReport("m", docs_per_second=10.0)
-    benchmark = _FakeBenchmarkReport("m", f1=0.9, leakage=0.0)
-    if missing_from == "perf":
-        perf.metadata = {}
-    else:
-        benchmark.metadata = {}
+def test_frontier_point_from_reports_requires_configuration_identity(subtests) -> None:
+    for missing_from in ["perf", "benchmark"]:
+        with subtests.test(missing_from=missing_from):
+            perf = _FakePerfReport("m", docs_per_second=10.0)
+            benchmark = _FakeBenchmarkReport("m", f1=0.9, leakage=0.0)
+            if missing_from == "perf":
+                perf.metadata = {}
+            else:
+                benchmark.metadata = {}
 
-    with pytest.raises(
-        ValueError, match=rf"{missing_from} report requires configuration"
-    ):
-        frontier_point_from_reports(perf, benchmark)
+            with pytest.raises(
+                ValueError, match=rf"{missing_from} report requires configuration"
+            ):
+                frontier_point_from_reports(perf, benchmark)
 
 
 def test_frontier_point_from_reports_requires_complete_report_identity() -> None:

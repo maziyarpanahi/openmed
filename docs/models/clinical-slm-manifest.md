@@ -129,3 +129,159 @@ immutable through verification **and subsequent runtime loading**: this gate
 does not lock files against another process or verify a later runtime's reads.
 A self-digest detects inconsistency, not authenticity; pin the expected manifest
 digest through a trusted distribution channel. Hashes are not anonymization.
+
+## Verifying a package from the command line
+
+Air-gapped operators can gate a package without writing Python:
+
+```console
+openmed models slm-verify /opt/openmed/clinical-slm \
+    --task bounded_summarization --memory-budget 8000000000 --json
+```
+
+`--task` and `--memory-budget` are required so every run states the capability
+and the device budget it checked; repeat `--task` to require several
+capabilities, and add `--headroom-bytes` to reserve memory that must stay free
+after loading. The command reads package metadata and declared component bytes
+only. It never imports an inference runtime, constructs a tokenizer or model,
+or opens a network connection, so it runs on a host with no runtime
+dependencies installed.
+
+`--json` prints a machine-readable report with an `ok` envelope; without it the
+same verdict is printed as one line. A completed run exits `0` when the verdict
+is `pass` and `1` when it is `fail`, and still prints the full report either
+way. Usage errors (a missing or malformed option) exit `2`.
+
+```json
+{
+  "command": "models slm-verify",
+  "ok": true,
+  "data": {
+    "verdict": "pass",
+    "manifest": {"component_count": 4, "manifest_digest": "sha256:6db7c4a9…"},
+    "verification": {"verified": true, "reason_codes": []},
+    "capabilities": {"decision": "supported", "reason_codes": []},
+    "memory": {"decision": "accepted", "reason_codes": []},
+    "reason_codes": [],
+    "network": {"mandatory": false}
+  }
+}
+```
+
+Each sub-report keeps the schema of the corresponding Python API, so the same
+reason codes appear in both. Failures are reported as `verdict: "fail"` with
+every contributing reason code collected in `reason_codes`; the command also
+reports reasons that a single-library check would hide, such as an unsupported
+capability next to a memory rejection. Capability and context metadata come from
+`clinical-slm-capabilities.json` when a package ships one, and otherwise from
+the artifact manifest, in which case the probe reports missing context limits.
+
+A run that cannot produce a report fails closed with a stable error code in the
+`error` envelope instead of a verdict:
+
+| `error.code` | Meaning |
+| --- | --- |
+| `unsupported_platform` | The platform cannot hash components (no POSIX no-follow directory descriptors), so verification is refused before any check. |
+| `slm_manifest_invalid` | The manifest was rejected while loading or validating; the message carries the manifest reason code, such as `unknown_license`, `manifest_missing`, or `manifest_digest_required`. |
+| `slm_package_invalid` | A declared component could not be read or hashed, or the memory artifact record is unusable. |
+| `slm_unknown_task` | A requested capability or task is outside the closed vocabulary (`bounded_summarization`, `nli`, and their documented aliases). |
+| `slm_capability_metadata_invalid` | Capability metadata could not be normalized into the closed vocabulary. |
+| `slm_memory_profile_invalid` | The runtime profile implied by the memory options was rejected. |
+
+Reported codes replace values: no package path, model identifier, component
+file name, license string, or file content appears in the report, in an error
+message, or in the one-line summary, so the output can be attached to a review
+ticket or an audit log without redaction. The verdict covers package integrity,
+declared capability coverage, and the explicit memory budget only. It is not a
+clinical validation, and human review remains required before any patient-facing
+use.
+
+## Provisioning the registered MLX summarizer
+
+The registered `mlx`, `maple` and `maple-preview` aliases now require an
+explicitly provisioned package and a trusted manifest digest. They select the
+same pinned Maple model and revision. OpenMed does not ship a reviewed package
+digest for this artifact: an unprovisioned alias raises
+`LocalSummarizerPackageError` with `code="package_unpinned"`. A cached Hub
+snapshot or its immutable revision alone cannot satisfy package admission.
+The deterministic `extractive` backend and caller-owned local callables keep
+their existing behavior.
+
+Provisioning belongs to the deploying application:
+
+1. Prepare a dedicated package directory from the reviewed, pinned model
+   revision. Copy files into regular files; do not pass a default Hugging Face
+   snapshot containing symlinks into a blob store. Keep the package read-only
+   to the runtime account, and immutable throughout verification and loading.
+2. Declare every file consumed by the MLX runtime in the manifest, including
+   all weights, tokenizer assets, indices and runtime configuration. Include
+   `config.json` as a `quantization` component and `templates.json` as a
+   `templates` component. The latter is the JSON serialization of
+   `build_maple_task_messages("summarize", "{source}")`. Include other files
+   only as declared, licensed components. The manifest file is the only
+   automatically allowed file; undeclared files, extra directories and all
+   symlinks are refused.
+3. Bind the manifest's `model_id` and `revision` to
+   `resolve_summarizer_model(alias)`. Declare `clinical-summarization`, explicit
+   `context_limits`, and `required_runtime_features=["mlx"]`. Quantization
+   must match the content-addressed model configuration. Obtain and review
+   the canonical manifest digest through a trusted distribution channel;
+   reading a self-digest from an untrusted package does not establish trust.
+4. Register the package and trusted pin at application startup, before using
+   the summarizer. Aliases for the same model and revision share this binding.
+   Registration is process-local and performs no file access or network call.
+
+For a caller's reviewed deployment metadata:
+
+```python
+from openmed.core.model_registry import register_summarizer_package
+from openmed.clinical.summarize import summarize_deidentified
+
+register_summarizer_package(
+    "mlx",
+    package_root=provisioned_package_directory,
+    manifest_digest=trusted_deployment_manifest_digest,
+)
+result = summarize_deidentified(safe_note, model="mlx")
+```
+
+The manifest's additional runtime metadata is digest-bound:
+
+```python
+context_limits = {
+    "max_context_tokens": 8192,
+    "max_input_tokens": 6144,
+    "max_output_tokens": 2048,
+}
+required_runtime_features = ("mlx",)
+```
+
+These fields are optional for generic legacy manifests. Omission preserves
+their original JSON and digest. Registered summarizer admission requires both
+fields and uses their verified values for the capability probe, input budget
+and output reservation; it does not assert task support on the model's behalf.
+The manifest's context cannot exceed the model configuration's native context,
+and OpenMed still caps runtime context at 8,192 tokens and generation at 2,048
+tokens. Input is bounded before construction and again after tokenization.
+
+Before `_load_model()`, admission calls `verify_clinical_slm_package()` with
+the independently pinned `expected_manifest_digest` and
+`reject_undeclared_files=True`. This verifies every declared component and the
+complete package inventory, with bounded no-follow traversal. Configuration
+and template reads additionally check their declared digest on the bytes
+actually read. POSIX `O_NOFOLLOW`, directory descriptors and no-follow stat
+and directory enumeration APIs are required; other platforms fail closed with
+`platform_unsupported` before reading package contents or constructing a model.
+There is no cache lookup, download, remote inference or automatic fallback.
+
+Package refusal messages contain only the controlled `code`, without paths,
+artifact contents, credentials or upstream exception context. Common codes
+include `package_unpinned`, `manifest_missing`, `manifest_digest_mismatch`,
+`component_digest_mismatch`, `component_missing_on_disk`,
+`undeclared_component`, `unsafe_component_path`, `model_identity_mismatch`,
+`task_unsupported`, `context_metadata_missing`, `runtime_metadata_missing`,
+`configuration_mismatch`, `template_mismatch` and `platform_unsupported`.
+Existing optional-runtime and inference errors retain their separate contracts.
+Use `clear_summarizer_package(alias)` to remove a binding without modifying
+package files. This admission gate is integrity evidence, not clinical
+validation, and it does not lock files against external changes after checking.

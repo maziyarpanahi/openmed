@@ -40,7 +40,9 @@ The default map includes common direct identifiers in these segments:
 
 | Segment | Fields |
 | --- | --- |
-| `PID` | `3`, `5`, `7`, `11`, `13`, `19` |
+| `PID` | `3`, `5`, `6`, `7`, `9`, `11`, `13`, `14`, `19`, `20`, `21` |
+| `MRG` | `1`–`7` |
+| `PV1` | `19` |
 | `PD1` | `3` |
 | `NK1` | `2`, `4`, `5`, `13` |
 | `GT1` | `3`, `5`, `6`, `12`, `13` |
@@ -51,6 +53,22 @@ The default map includes common direct identifiers in these segments:
 
 Unknown segments pass through unchanged unless you configure a rule for one of
 their fields.
+
+The defaults surrogate maternal names and aliases (`PID-6`, `PID-9`) and prior
+names (`MRG-7`); hash business phones, licenses and maternal identifiers
+(`PID-14`, `PID-20`, `PID-21`), prior identifiers/accounts (`MRG-1`–`MRG-6`),
+and visit identifiers (`PV1-19`). XAD addresses in `PID-11`, `NK1-4`, `GT1-5`
+and `IN1-19` use component-specific street, secondary address, city, state,
+postal-code and country surrogates. Postal-code punctuation and width, empty
+components, repeats, address-type and representation codes are retained.
+
+To make pass-through visible without logging message content, supply an empty
+`coverage_report={}` mapping to `redact_hl7v2`. The populated
+`unmapped_fields` rows contain only segment indexes/codes, field positions and
+lengths; `unmapped_field_count` is the total. The inventory includes text and
+coded fields, including unknown Z segments and OBX types not covered by the
+default text rule. It does **not** classify unmapped values as safe. Review
+local profiles and add rules before releasing a message.
 
 ## Extending Rules
 

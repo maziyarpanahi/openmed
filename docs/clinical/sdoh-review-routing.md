@@ -1,5 +1,8 @@
 # SDOH Review Routing
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `route_sdoh_review()` sends uncertain SDOH evidence to a typed human-review
 queue. Routing covers low confidence, conflict, and explicit `unknown`,
 `declined`, or `refused` outcomes.

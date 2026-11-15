@@ -31,21 +31,24 @@ def test_redirects_are_errors_even_when_the_body_is_valid_json(status, streaming
     assert len(requests) == 1
 
 
-@pytest.mark.parametrize("streaming", [False, True])
-def test_redirect_with_html_uses_typed_error_and_request_id_fallback(streaming):
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(
-            307, text="<p>Moved</p>", headers={"Location": "/other"}
-        )
-    )
-    with OpenMedClient(transport=transport, request_id="synthetic-client-id") as client:
-        with pytest.raises(OpenMedAPIError) as caught:
-            if streaming:
-                list(client.extract_pii_stream("synthetic"))
-            else:
-                client.analyze("synthetic")
-    assert caught.value.status_code == 307
-    assert caught.value.request_id == "synthetic-client-id"
+def test_redirect_with_html_uses_typed_error_and_request_id_fallback(subtests):
+    for streaming in [False, True]:
+        with subtests.test(streaming=streaming):
+            transport = httpx.MockTransport(
+                lambda request: httpx.Response(
+                    307, text="<p>Moved</p>", headers={"Location": "/other"}
+                )
+            )
+            with OpenMedClient(
+                transport=transport, request_id="synthetic-client-id"
+            ) as client:
+                with pytest.raises(OpenMedAPIError) as caught:
+                    if streaming:
+                        list(client.extract_pii_stream("synthetic"))
+                    else:
+                        client.analyze("synthetic")
+            assert caught.value.status_code == 307
+            assert caught.value.request_id == "synthetic-client-id"
 
 
 def test_redirect_stream_is_closed_when_rejected():
@@ -66,13 +69,14 @@ def test_redirect_stream_is_closed_when_rejected():
     assert body.closed
 
 
-@pytest.mark.parametrize("status", [200, 201, 202])
-def test_successful_json_responses_are_unchanged(status):
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(status, json={"synthetic": True})
-    )
-    with OpenMedClient(transport=transport) as client:
-        assert client.analyze("synthetic") == {"synthetic": True}
+def test_successful_json_responses_are_unchanged(subtests):
+    for status in [200, 201, 202]:
+        with subtests.test(status=status):
+            transport = httpx.MockTransport(
+                lambda request: httpx.Response(status, json={"synthetic": True})
+            )
+            with OpenMedClient(transport=transport) as client:
+                assert client.analyze("synthetic") == {"synthetic": True}
 
 
 def test_successful_ndjson_response_is_unchanged():

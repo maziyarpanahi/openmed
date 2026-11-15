@@ -107,22 +107,24 @@ def test_report_sign_verify_and_tamper_detection():
     assert not tampered.verify("release-key")
 
 
-@pytest.mark.parametrize("key", [None, "", b""])
-def test_report_sign_rejects_missing_or_empty_hmac_key(key):
-    with pytest.raises(ValueError, match="non-empty HMAC release key"):
-        _report().sign(key)
+def test_report_sign_rejects_missing_or_empty_hmac_key(subtests):
+    for key in [None, "", b""]:
+        with subtests.test(key=key):
+            with pytest.raises(ValueError, match="non-empty HMAC release key"):
+                _report().sign(key)
 
 
 def test_unsigned_report_verify_returns_false_with_valid_key():
     assert not _report().verify("release-key")
 
 
-@pytest.mark.parametrize("key", [None, "", b""])
-def test_report_verify_rejects_missing_or_empty_hmac_key(key):
-    report = _report().sign("release-key")
+def test_report_verify_rejects_missing_or_empty_hmac_key(subtests):
+    for key in [None, "", b""]:
+        with subtests.test(key=key):
+            report = _report().sign("release-key")
 
-    with pytest.raises(ValueError, match="non-empty HMAC release key"):
-        report.verify(key)
+            with pytest.raises(ValueError, match="non-empty HMAC release key"):
+                report.verify(key)
 
 
 def test_review_bundle_excludes_full_document_and_span_text():
@@ -517,9 +519,8 @@ def test_release_audit_sanitizer_rejects_forged_closed_vocabulary_strings():
     assert canary not in serialized
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_context_descriptor_validation_rejects_malformed_fields(subtests):
+    for field, value in [
         ("start", "0"),
         ("start", 0.0),
         ("start", False),
@@ -532,18 +533,17 @@ def test_release_audit_sanitizer_rejects_forged_closed_vocabulary_strings():
         ("length", False),
         ("length", 7),
         ("text_hash", "sha256:not-a-digest"),
-    ],
-)
-def test_context_descriptor_validation_rejects_malformed_fields(field, value):
-    report = _report()
-    span = report.spans[0]
-    descriptor = dict(span.context["before"])
-    descriptor[field] = value
-    span.context = {"before": descriptor}
+    ]:
+        with subtests.test(field=field, value=value):
+            report = _report()
+            span = report.spans[0]
+            descriptor = dict(span.context["before"])
+            descriptor[field] = value
+            span.context = {"before": descriptor}
 
-    assert span.to_dict()["context"] == {}
-    assert report.to_dict()["spans"][0]["context"] == {}
-    assert report.export_review_bundle()["spans"][0]["context"] == {}
+            assert span.to_dict()["context"] == {}
+            assert report.to_dict()["spans"][0]["context"] == {}
+            assert report.export_review_bundle()["spans"][0]["context"] == {}
 
 
 def test_context_descriptor_outside_document_is_dropped_by_report_sinks():
@@ -565,9 +565,8 @@ def test_context_descriptor_outside_document_is_dropped_by_report_sinks():
     assert report.export_review_bundle()["spans"][0]["context"] == {}
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "error"),
-    [
+def test_deserialized_span_offsets_must_be_non_negative_integers(subtests):
+    for field, value, error in [
         ("start", "8", "start"),
         ("start", 8.0, "start"),
         ("start", True, "start"),
@@ -576,37 +575,34 @@ def test_context_descriptor_outside_document_is_dropped_by_report_sinks():
         ("end", 16.0, "end"),
         ("end", True, "end"),
         ("end", -1, "end"),
-    ],
-)
-def test_deserialized_span_offsets_must_be_non_negative_integers(
-    field,
-    value,
-    error,
-):
-    payload = _report().to_dict()
-    payload["spans"][0][field] = value
+    ]:
+        with subtests.test(field=field, value=value, error=error):
+            payload = _report().to_dict()
+            payload["spans"][0][field] = value
 
-    with pytest.raises(ValueError, match=f"audit span {error}"):
-        AuditReport.from_dict(payload)
+            with pytest.raises(ValueError, match=f"audit span {error}"):
+                AuditReport.from_dict(payload)
 
 
-@pytest.mark.parametrize("value", ["33", 33.0, True, -1])
-def test_deserialized_document_length_must_be_a_non_negative_integer(value):
-    payload = _report().to_dict()
-    payload["document_length"] = value
+def test_deserialized_document_length_must_be_a_non_negative_integer(subtests):
+    for value in ["33", 33.0, True, -1]:
+        with subtests.test(value=value):
+            payload = _report().to_dict()
+            payload["document_length"] = value
 
-    with pytest.raises(ValueError, match="document_length"):
-        AuditReport.from_dict(payload)
+            with pytest.raises(ValueError, match="document_length"):
+                AuditReport.from_dict(payload)
 
 
-@pytest.mark.parametrize(("start", "end"), [(16, 8), (8, 34)])
-def test_deserialized_span_bounds_must_be_ordered_and_within_document(start, end):
-    payload = _report().to_dict()
-    payload["spans"][0]["start"] = start
-    payload["spans"][0]["end"] = end
+def test_deserialized_span_bounds_must_be_ordered_and_within_document(subtests):
+    for start, end in [(16, 8), (8, 34)]:
+        with subtests.test(start=start, end=end):
+            payload = _report().to_dict()
+            payload["spans"][0]["start"] = start
+            payload["spans"][0]["end"] = end
 
-    with pytest.raises(ValueError, match="audit span (end|offsets)"):
-        AuditReport.from_dict(payload)
+            with pytest.raises(ValueError, match="audit span (end|offsets)"):
+                AuditReport.from_dict(payload)
 
 
 def test_mutated_span_offsets_fail_closed_at_serialization_boundaries():

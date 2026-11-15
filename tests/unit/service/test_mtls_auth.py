@@ -114,6 +114,11 @@ class PeerScopeMiddleware:
 
 @pytest.fixture(autouse=True)
 def clean_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from openmed.service.auth import ROUTE_POLICIES, RoutePolicy
+
+    monkeypatch.setitem(
+        ROUTE_POLICIES, ("GET", "/whoami"), RoutePolicy(("identity:read",), "control")
+    )
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     for env_var in _SERVICE_ENV_VARS:
         monkeypatch.delenv(env_var, raising=False)

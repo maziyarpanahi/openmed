@@ -8,8 +8,8 @@ manual dispatch exists only to recover an existing immutable tag after a
 workflow-only failure.
 
 The current PyPI path uses the project-scoped `PYPI_API_TOKEN` GitHub secret.
-The npm path uses the short-lived `NPM_ACCESS_TOKEN` secret from the GitHub
-`npm` environment and publishes with Sigstore provenance.
+The npm path uses GitHub Actions OIDC Trusted Publishing in the `npm`
+environment, with Sigstore provenance and no stored publishing token.
 
 PyPI Trusted Publishing is the preferred future path, but it must not be used
 until the PyPI `openmed` project has a trusted publisher that exactly matches
@@ -73,13 +73,14 @@ under the existing unscoped npm name `openmed`.
 - PyPI and npm publication both depend on the Python provenance job and the npm
   verification job.
 - The `npm-publish` job attaches the `npm` GitHub environment, grants
-  `contents: read` and `id-token: write`, and reads only the environment-scoped
-  `NPM_ACCESS_TOKEN` secret.
-- The publish job builds before exposing the token, then
+  `contents: read` and `id-token: write`, and runs on a GitHub-hosted runner.
+  npm exchanges that job's identity for a short-lived publishing credential;
+  no `NPM_ACCESS_TOKEN` or `NODE_AUTH_TOKEN` is required.
+- The publish job builds first, then
   `npm publish --ignore-scripts --access public --provenance` uploads the package
   without running lifecycle hooks in the credential-bearing step. Provenance
   links the package to the tag workflow and source commit.
-- Recovery dispatches query an existing npm version before accessing the token.
+- Recovery dispatches query an existing npm version before publishing.
   An existing package is skipped only when its registry `gitHead` matches the
   immutable tag and its downloaded tarball contents match a fresh tag build;
   any mismatch fails closed.
@@ -88,6 +89,26 @@ under the existing unscoped npm name `openmed`.
 Do not publish `@openmed/openmedkit-web`; the public package name is `openmed`.
 Do not add another npm publishing workflow or place a plaintext npm token in an
 `.npmrc` file.
+
+### npm trusted publisher setup and recovery
+
+In the npm `openmed` package settings, configure a GitHub Actions trusted
+publisher for user `maziyarpanahi`, repository `openmed`, workflow filename
+`publish.yml` (without a directory), and environment `npm`. Enable direct
+`npm publish`; separate dist-tag management permission is not needed. Keep
+these values aligned with the workflow. npm requires Node.js 22.14.0+ and
+npm 11.5.1+; the workflow uses Node.js 24 with a compatible bundled npm CLI.
+
+If PyPI has already published and only npm failed, retry the failed npm job
+after correcting the trusted publisher. Use `gh run rerun RUN_ID --repo
+maziyarpanahi/openmed --job NPM_JOB_ID` so the successful PyPI job is not
+repeated. For an older tagged workflow that still checks a nonempty npm secret,
+retain that secret until recovery completes: compatible npm versions try OIDC
+before falling back to token authentication. Remove the obsolete secret only
+after a successful OIDC publication. Do not move the existing tag.
+
+See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) for
+the provider setup and supported runner requirements.
 
 ## v1.8.0 Incident Lessons
 
@@ -197,9 +218,7 @@ succeeds through the tokenless path, retire the token path:
   ever required, create a short-lived project-scoped token outside the normal CI
   path and revoke it immediately after use.
 
-Keep `NPM_ACCESS_TOKEN` scoped to the npm `openmed` package with publish access,
-store it only in the GitHub `npm` environment, and rotate it before its 90-day
-expiry. The package already exists, so npm Trusted Publishing can replace the
-token without a bootstrap release. When migrating, configure npm for owner
-`maziyarpanahi`, repository `openmed`, workflow `publish.yml`, and environment
-`npm`; then remove `NODE_AUTH_TOKEN` from the publish step and delete the secret.
+npm uses OIDC Trusted Publishing, so publishing-token rotation is unnecessary.
+After the first successful OIDC publication and any older tagged-run recovery,
+delete the obsolete `NPM_ACCESS_TOKEN` GitHub environment secret. Future tags
+use the workflow identity automatically; do not restore a stored npm token.

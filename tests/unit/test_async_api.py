@@ -146,11 +146,14 @@ def test_abatch_materializes_items_off_the_event_loop_thread():
     assert all(thread != caller_thread for thread in iterator_threads)
 
 
-@pytest.mark.parametrize("limit", [False, 0, -1, 1.5, "2"])
-def test_abatch_rejects_invalid_concurrency_limits(limit: object):
+def test_abatch_rejects_invalid_concurrency_limits(subtests):
     """Only positive, non-boolean integer limits are accepted."""
-    with pytest.raises(ValueError, match="must be positive"):
-        asyncio.run(openmed.abatch(lambda value: value, [1], max_concurrency=limit))
+    for limit in [False, 0, -1, 1.5, "2"]:
+        with subtests.test(limit=limit):
+            with pytest.raises(ValueError, match="must be positive"):
+                asyncio.run(
+                    openmed.abatch(lambda value: value, [1], max_concurrency=limit)
+                )
 
 
 def test_abatch_hides_values_from_iterator_failures():

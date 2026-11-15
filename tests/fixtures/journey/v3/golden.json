@@ -7,7 +7,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 1,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -53,7 +53,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 0,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [],
@@ -80,7 +80,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 0,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -113,7 +113,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 0,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -146,7 +146,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 1,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -192,7 +192,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 5,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -218,53 +218,15 @@
           "compatibility_policy": "same_major",
           "data": {
             "assertion": "affirmed",
-            "concept": "synthetic-glucose",
-            "evidence_ids": [
-              "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
-            ],
-            "subject_id": "subject_synthetic0000001"
-          },
-          "extensions": {},
-          "namespace": "default",
-          "resource_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
-          "resource_type": "fact",
-          "revision": 1,
-          "schema_version": "1.0.0",
-          "state": "success",
-          "version": 1
-        },
-        {
-          "compatibility_policy": "same_major",
-          "data": {
-            "assertion": "uncertain",
-            "concept": "imaging-finding",
-            "evidence_ids": [
-              "evidence_6a3095b499b92c98e1de6e7fad0ead22"
-            ],
-            "subject_id": "subject_synthetic0000001"
-          },
-          "extensions": {},
-          "namespace": "default",
-          "resource_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
-          "resource_type": "fact",
-          "revision": 1,
-          "schema_version": "1.0.0",
-          "state": "success",
-          "version": 1
-        },
-        {
-          "compatibility_policy": "same_major",
-          "data": {
-            "assertion": "affirmed",
             "concept": "condition-alpha",
             "evidence_ids": [
-              "evidence_a12577840b639e1246ebaf96e7ab08cc"
+              "evidence_083c8a505d9d3673346efd4a42e89950"
             ],
             "subject_id": "subject_synthetic0000001"
           },
           "extensions": {},
           "namespace": "default",
-          "resource_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+          "resource_id": "fact_00dbbfd7f06ddfb56f9f96d97d4d195a",
           "resource_type": "fact",
           "revision": 1,
           "schema_version": "1.0.0",
@@ -277,13 +239,13 @@
             "assertion": "negated",
             "concept": "condition-alpha",
             "evidence_ids": [
-              "evidence_097ce9264647d07536c882c9e77bff84"
+              "evidence_0ea8e5e908c345241b2357f5200038d3"
             ],
             "subject_id": "subject_synthetic0000001"
           },
           "extensions": {},
           "namespace": "default",
-          "resource_id": "fact_6d9fe8fcd5e673d357130333b801461b",
+          "resource_id": "fact_0465591f5e04b2a9aee22c6c061f8190",
           "resource_type": "fact",
           "revision": 1,
           "schema_version": "1.0.0",
@@ -296,13 +258,51 @@
             "assertion": "affirmed",
             "concept": "condition-alpha",
             "evidence_ids": [
-              "evidence_7425abd01c1fa62fc179fe0492b2f65b"
+              "evidence_8a9c907b51ba9c03e34173b118f7886d"
             ],
             "subject_id": "subject_synthetic0000001"
           },
           "extensions": {},
           "namespace": "default",
-          "resource_id": "fact_cfa5ebe5809affeef7fe941e3454366c",
+          "resource_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
+          "resource_type": "fact",
+          "revision": 1,
+          "schema_version": "1.0.0",
+          "state": "success",
+          "version": 1
+        },
+        {
+          "compatibility_policy": "same_major",
+          "data": {
+            "assertion": "uncertain",
+            "concept": "imaging-finding",
+            "evidence_ids": [
+              "evidence_b9ce359c31f59013a449669c1eb715c5"
+            ],
+            "subject_id": "subject_synthetic0000001"
+          },
+          "extensions": {},
+          "namespace": "default",
+          "resource_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
+          "resource_type": "fact",
+          "revision": 1,
+          "schema_version": "1.0.0",
+          "state": "success",
+          "version": 1
+        },
+        {
+          "compatibility_policy": "same_major",
+          "data": {
+            "assertion": "affirmed",
+            "concept": "synthetic-glucose",
+            "evidence_ids": [
+              "evidence_0453d9b00e8f278e72b6a8601ecb0573"
+            ],
+            "subject_id": "subject_synthetic0000001"
+          },
+          "extensions": {},
+          "namespace": "default",
+          "resource_id": "fact_fda7e740533cb5f859810d5070e55620",
           "resource_type": "fact",
           "revision": 1,
           "schema_version": "1.0.0",
@@ -320,7 +320,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 1,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -366,7 +366,7 @@
         "end_cursor": null,
         "has_next_page": false,
         "page_size": 0,
-        "snapshot_digest": "sha256:f439a94559da1215f6c4d9eff972ffb64e4445b70937e19c63d4143cca8c8609"
+        "snapshot_digest": "sha256:3be2887e6575f5ef702665d75c5eb092a166128a0a986e31931fe06a8b1be6c7"
       },
       "policy": {
         "allowed_fields": [
@@ -396,7 +396,12 @@
   "cohort": {
     "advisory": "Saved cohort membership is an analytical result for human review and must not automatically trigger enrollment, outreach, or clinical action.",
     "compatibility_policy": "same_major",
-    "execution_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
+    "coverage": {
+      "concept_sets": null,
+      "source_patient_count": null,
+      "unmapped_source_count": null
+    },
+    "execution_digest": "sha256:1044dfdbabd623bfbdfe19f9a77ca40cf1295fc65833ee7a5b28c196d6f87c93",
     "manifest": {
       "compatibility_policy": "same_major",
       "criterion_ids": [
@@ -404,9 +409,9 @@
         "corrected-lab-present"
       ],
       "definition_digest": "sha256:c446fe69401af65e31208e2119f184e63d3d5626f80456a322b75b66f489670e",
-      "definition_version_id": "cohortdef_6fdd7a02c1386300d337ac1810d21529",
+      "definition_version_id": "cohortdef_1774baccf702e79ecfb869b2f84b4ebf",
       "evaluator_version": "3.0.0",
-      "execution_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+      "execution_id": "cohortrun_c675d9d913e7a7775ffe09ac0f285bff",
       "expression": {
         "children": [
           {
@@ -442,12 +447,12 @@
         ],
         "operator": "and"
       },
-      "input_digest": "sha256:5e597fec3b2068311687478eb154a4d704161d412c8bc59147df5e2e4a7e9e08",
+      "input_digest": "sha256:7d704024da77c12a8070757583aa955dd7d7ce224ba4fb10b17c82c18b5983f1",
       "policy_digest": "sha256:6271c0b1c778cb53e792226a676ed58367441c097d9800f846c046c7aa4472a3",
-      "schema_version": "1.0.0",
+      "schema_version": "1.1.0",
       "source_snapshot": {
         "bundled_vocabulary": false,
-        "digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
+        "digest": "sha256:b9157a7dd1691369e6e0caf72e113f397de6f03322de0f5f5860f585575c1fd7",
         "license_tags": [
           "synthetic"
         ],
@@ -462,7 +467,7 @@
       "not_met": 0,
       "unknown": 0
     },
-    "membership_digest": "sha256:8536548248e6a85c3a20b23279dda6870844cc847e09d783a0bf2856fff17528",
+    "membership_digest": "sha256:801692e4c47cf77b6b08062c9f38e9f5ef778377c64611f3a0b325b88f4a18e5",
     "memberships": [
       {
         "criteria": [
@@ -470,8 +475,8 @@
             "criterion_id": "condition-present",
             "evidence": [
               {
-                "evidence_id": "evidence_a12577840b639e1246ebaf96e7ab08cc",
-                "fact_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+                "evidence_id": "evidence_8a9c907b51ba9c03e34173b118f7886d",
+                "fact_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
                 "role": "supporting",
                 "time_window_id": "window_condition0000001"
               }
@@ -484,8 +489,8 @@
             "criterion_id": "corrected-lab-present",
             "evidence": [
               {
-                "evidence_id": "evidence_0820a2d6d80d92ff2434dd0d0a29c431",
-                "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
+                "evidence_id": "evidence_0453d9b00e8f278e72b6a8601ecb0573",
+                "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
                 "role": "supporting",
                 "time_window_id": "window_laboratory0000001"
               }
@@ -502,7 +507,8 @@
       }
     ],
     "review_required": false,
-    "schema_version": "1.0.0"
+    "schema_version": "1.1.0",
+    "warnings": []
   },
   "compatibility_policy": "same_major",
   "conflicts": [
@@ -510,17 +516,17 @@
       "attributes": {
         "review_required": true
       },
-      "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
+      "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
       "conflict_type": "assertion_mismatch",
-      "derivation_hash": "sha256:bd6c59cd4ea3d931935ea8ce90816c52e5bef1cd038a16420878cc2f511bb641",
+      "derivation_hash": "sha256:4dc0de7a48afee03ec37d49e42f7a5192fa71292477e89efb6fc6f6c36d1ce2f",
       "detected_by": "openmed.golden.conflict_policy",
       "evidence_ids": [
-        "evidence_097ce9264647d07536c882c9e77bff84",
-        "evidence_a12577840b639e1246ebaf96e7ab08cc"
+        "evidence_0ea8e5e908c345241b2357f5200038d3",
+        "evidence_8a9c907b51ba9c03e34173b118f7886d"
       ],
       "fact_ids": [
-        "fact_689a66d4d87a91fbcca5fc1f28833938",
-        "fact_6d9fe8fcd5e673d357130333b801461b"
+        "fact_0465591f5e04b2a9aee22c6c061f8190",
+        "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
       ],
       "schema_version": "1.0.0",
       "status": "open",
@@ -542,7 +548,7 @@
         "terms_digest": "sha256:a2e2756f3df97610961cedb91f46044322c301560bc55fb7da29ac9226755597"
       }
     ],
-    "manifest_digest": "sha256:584f9254038976f6aed41c97ccad3b755360a054c2406068176312305b824d91",
+    "manifest_digest": "sha256:05547478addfe5929deacb4df95a7c532f672634244eecad6b58ab1c961c3343",
     "model_versions": {
       "assertion": "1.0.0",
       "document_routing": "1.0.0",
@@ -554,7 +560,7 @@
     },
     "policy_digest": "sha256:6271c0b1c778cb53e792226a676ed58367441c097d9800f846c046c7aa4472a3",
     "record_digests": {
-      "record_goldenjourney001": "sha256:0970101d98df3666a8b961f71d1dcc247e2b870b375380148181f3e4257de5fa"
+      "record_goldenjourney001": "sha256:bb71ee3f2903d1b4385313198a6534fe346cafc6bbd4671b9e5516e2ba1aab3d"
     },
     "schema_version": "1.0.0",
     "selection": {
@@ -562,10 +568,10 @@
         "subject_synthetic0000001"
       ],
       "review_excluded_count": 0,
-      "source_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
-      "source_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+      "source_digest": "sha256:1044dfdbabd623bfbdfe19f9a77ca40cf1295fc65833ee7a5b28c196d6f87c93",
+      "source_id": "cohortrun_c675d9d913e7a7775ffe09ac0f285bff",
       "source_kind": "cohort",
-      "source_snapshot_digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
+      "source_snapshot_digest": "sha256:b9157a7dd1691369e6e0caf72e113f397de6f03322de0f5f5860f585575c1fd7",
       "source_snapshot_id": "snapshot_goldenjourney001"
     },
     "snapshot": {
@@ -590,10 +596,10 @@
           "temporality": "1.0.0"
         },
         "policy_digest": "sha256:6271c0b1c778cb53e792226a676ed58367441c097d9800f846c046c7aa4472a3",
-        "source_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
-        "source_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+        "source_digest": "sha256:1044dfdbabd623bfbdfe19f9a77ca40cf1295fc65833ee7a5b28c196d6f87c93",
+        "source_id": "cohortrun_c675d9d913e7a7775ffe09ac0f285bff",
         "source_kind": "cohort",
-        "source_snapshot_digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
+        "source_snapshot_digest": "sha256:b9157a7dd1691369e6e0caf72e113f397de6f03322de0f5f5860f585575c1fd7",
         "vocabulary_digest": "sha256:7e93971e109facd9199df54d9e5cb0f7354de78cb814667665c9f5ee58803945"
       },
       "component_versions": {
@@ -603,12 +609,12 @@
       "dataset_id": "dataset_goldenjourney001",
       "file_hashes": {
         "annotations.jsonl": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "records.jsonl": "sha256:7fb2b1cd989d5c2fb87eb6efd1d470da5d9873621a4a20bacb59b453228c3d8a"
+        "records.jsonl": "sha256:867ab861e4da0710fd5f6764ff6c04385de69b4eb6fb5c504ae2df880a2ed4b9"
       },
       "license_tags": [
         "license.permitted"
       ],
-      "manifest_hash": "sha256:584f9254038976f6aed41c97ccad3b755360a054c2406068176312305b824d91",
+      "manifest_hash": "sha256:05547478addfe5929deacb4df95a7c532f672634244eecad6b58ab1c961c3343",
       "parent_snapshot_ids": [
         "snapshot_goldenjourney001"
       ],
@@ -616,14 +622,14 @@
       "record_count": 1,
       "schema_hash": "sha256:5965ebcbd7e02e2e8653c93ba3d32264451e6ec60cd70c0c3322dc1d25afe2b6",
       "schema_version": "1.0.0",
-      "snapshot_id": "datasetsnapshot_b0318b7b2699dad0cc92f15ebcea6423",
+      "snapshot_id": "datasetsnapshot_b004f6e8891ffbda9eacdfc1b56e2213",
       "source_artifact_ids": [],
       "source_fact_ids": [
-        "fact_45f8fd01d413602883ce7480a4a0aac2",
-        "fact_689a66d4d87a91fbcca5fc1f28833938"
+        "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
+        "fact_fda7e740533cb5f859810d5070e55620"
       ],
       "split_hashes": {
-        "holdout": "sha256:08df0eb49c91e17b1182e944fa894cf023c8fc32a7dc67f530173f804c089096"
+        "holdout": "sha256:03d332ee8dcb9c6171a8300fa76cad6a77331c292af7d5cfb746eaf5788112b0"
       }
     },
     "split_records": {
@@ -643,112 +649,7 @@
             "compatibility_policy": "same_major",
             "component": "openmed.golden.synthetic_extractor",
             "component_version": "1.0.0",
-            "output_digest": "sha256:462a5b733b70d6c2aac30057f85430f87de5547a2af717cb56cfd6b7ab763d1d",
-            "output_schema": "synthetic.golden.laboratory",
-            "output_schema_version": "1.0.0",
-            "schema_version": "1.0.0"
-          }
-        ],
-        "correction_reason": "unit_normalized",
-        "experiencer": "patient",
-        "field_states": {
-          "assertion": "known",
-          "certainty": "known",
-          "confidence": "known",
-          "effective_time": "known",
-          "experiencer": "known",
-          "status": "known",
-          "unit": "known",
-          "value": "known"
-        },
-        "normalizer_version": "1.0.0",
-        "relation_participants": []
-      },
-      "confidence": 0.96,
-      "derivation_hash": "sha256:b58e22f7cdf5c9a772c42815e9106f1cc885f31dbe01adac6567d0b107cc0e88",
-      "effective_time": {
-        "precision": "day",
-        "start": "2026-01-02"
-      },
-      "encounter_id": "encounter_synthetic0000001",
-      "evidence_ids": [
-        "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
-      ],
-      "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
-      "fact_type": "laboratory",
-      "parent_fact_ids": [
-        "fact_701dc65c43f54462bc7158aac3e00c64"
-      ],
-      "schema_version": "1.0.0",
-      "status": "corrected",
-      "subject_id": "subject_synthetic0000001",
-      "unit": "g/L",
-      "value": {
-        "code": "synthetic-glucose",
-        "numeric": 0.9,
-        "system": "synthetic"
-      }
-    },
-    {
-      "attributes": {
-        "assertion": "uncertain",
-        "certainty": "possible",
-        "component_outputs": [
-          {
-            "compatibility_policy": "same_major",
-            "component": "openmed.golden.synthetic_extractor",
-            "component_version": "1.0.0",
-            "output_digest": "sha256:1e6d900a29d8efcfbd53a01d42563e235a16caaaa09771c6ab7a2ee12c01cd91",
-            "output_schema": "synthetic.golden.observation",
-            "output_schema_version": "1.0.0",
-            "schema_version": "1.0.0"
-          }
-        ],
-        "experiencer": "patient",
-        "field_states": {
-          "assertion": "known",
-          "certainty": "known",
-          "confidence": "known",
-          "effective_time": "known",
-          "experiencer": "known",
-          "status": "known",
-          "value": "known"
-        },
-        "normalizer_version": "1.0.0",
-        "relation_participants": []
-      },
-      "confidence": 0.71,
-      "derivation_hash": "sha256:6f68788bbb9592b0e3795781fcd23702741cc1ac0f8b37f767bc242c8c36adbf",
-      "effective_time": {
-        "precision": "day",
-        "start": "2026-01-02"
-      },
-      "encounter_id": "encounter_synthetic0000001",
-      "evidence_ids": [
-        "evidence_6a3095b499b92c98e1de6e7fad0ead22"
-      ],
-      "fact_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
-      "fact_type": "observation",
-      "parent_fact_ids": [],
-      "schema_version": "1.0.0",
-      "status": "final",
-      "subject_id": "subject_synthetic0000001",
-      "unit": null,
-      "value": {
-        "category": "imaging-finding",
-        "system": "synthetic"
-      }
-    },
-    {
-      "attributes": {
-        "assertion": "affirmed",
-        "certainty": "certain",
-        "component_outputs": [
-          {
-            "compatibility_policy": "same_major",
-            "component": "openmed.golden.synthetic_extractor",
-            "component_version": "1.0.0",
-            "output_digest": "sha256:0cecc209d61a89583c87f47cef73348ebeedea1d4762377f1607eec08531a869",
+            "output_digest": "sha256:2e34cee3aa1d2614cb21351e1ac54deb46a03f205aedb3e7004e6e1d8b1505aa",
             "output_schema": "synthetic.golden.condition",
             "output_schema_version": "1.0.0",
             "schema_version": "1.0.0"
@@ -767,17 +668,17 @@
         "normalizer_version": "1.0.0",
         "relation_participants": []
       },
-      "confidence": 0.99,
-      "derivation_hash": "sha256:788c5ca95fbc9430e6f3c33724ce6bb2c008e65243befbf04685a765f2ab3d28",
+      "confidence": 0.98,
+      "derivation_hash": "sha256:e329d7fa2df77589072493bb17971cbfeeda8fc33c0d67b081106c440a27403c",
       "effective_time": {
-        "precision": "month",
-        "start": "2026-01"
+        "precision": "day",
+        "start": "2026-01-02"
       },
       "encounter_id": "encounter_synthetic0000001",
       "evidence_ids": [
-        "evidence_a12577840b639e1246ebaf96e7ab08cc"
+        "evidence_083c8a505d9d3673346efd4a42e89950"
       ],
-      "fact_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+      "fact_id": "fact_00dbbfd7f06ddfb56f9f96d97d4d195a",
       "fact_type": "condition",
       "parent_fact_ids": [],
       "schema_version": "1.0.0",
@@ -818,16 +719,16 @@
         "relation_participants": []
       },
       "confidence": 0.97,
-      "derivation_hash": "sha256:55cbc22565fb4dd8021b09b795b8a5cec83a3807220c0706ee34677009b5e271",
+      "derivation_hash": "sha256:c3e819f89fa9a59d3633d6828db7f81aa1d54314245120de03fa979deef8b6fd",
       "effective_time": {
         "precision": "day",
         "start": "2026-01-02"
       },
       "encounter_id": "encounter_synthetic0000001",
       "evidence_ids": [
-        "evidence_097ce9264647d07536c882c9e77bff84"
+        "evidence_0ea8e5e908c345241b2357f5200038d3"
       ],
-      "fact_id": "fact_6d9fe8fcd5e673d357130333b801461b",
+      "fact_id": "fact_0465591f5e04b2a9aee22c6c061f8190",
       "fact_type": "condition",
       "parent_fact_ids": [],
       "schema_version": "1.0.0",
@@ -836,6 +737,106 @@
       "unit": null,
       "value": {
         "code": "condition-alpha",
+        "system": "synthetic"
+      }
+    },
+    {
+      "attributes": {
+        "assertion": "affirmed",
+        "certainty": "certain",
+        "component_outputs": [
+          {
+            "compatibility_policy": "same_major",
+            "component": "openmed.golden.synthetic_extractor",
+            "component_version": "1.0.0",
+            "output_digest": "sha256:0cecc209d61a89583c87f47cef73348ebeedea1d4762377f1607eec08531a869",
+            "output_schema": "synthetic.golden.condition",
+            "output_schema_version": "1.0.0",
+            "schema_version": "1.0.0"
+          }
+        ],
+        "experiencer": "patient",
+        "field_states": {
+          "assertion": "known",
+          "certainty": "known",
+          "confidence": "known",
+          "effective_time": "known",
+          "experiencer": "known",
+          "status": "known",
+          "value": "known"
+        },
+        "normalizer_version": "1.0.0",
+        "relation_participants": []
+      },
+      "confidence": 0.99,
+      "derivation_hash": "sha256:578cc4e534d2cc748f185ba8bece06fdf696346b45925c875782560ca200a6e8",
+      "effective_time": {
+        "precision": "month",
+        "start": "2026-01"
+      },
+      "encounter_id": "encounter_synthetic0000001",
+      "evidence_ids": [
+        "evidence_8a9c907b51ba9c03e34173b118f7886d"
+      ],
+      "fact_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
+      "fact_type": "condition",
+      "parent_fact_ids": [],
+      "schema_version": "1.0.0",
+      "status": "active",
+      "subject_id": "subject_synthetic0000001",
+      "unit": null,
+      "value": {
+        "code": "condition-alpha",
+        "system": "synthetic"
+      }
+    },
+    {
+      "attributes": {
+        "assertion": "uncertain",
+        "certainty": "possible",
+        "component_outputs": [
+          {
+            "compatibility_policy": "same_major",
+            "component": "openmed.golden.synthetic_extractor",
+            "component_version": "1.0.0",
+            "output_digest": "sha256:1e6d900a29d8efcfbd53a01d42563e235a16caaaa09771c6ab7a2ee12c01cd91",
+            "output_schema": "synthetic.golden.observation",
+            "output_schema_version": "1.0.0",
+            "schema_version": "1.0.0"
+          }
+        ],
+        "experiencer": "patient",
+        "field_states": {
+          "assertion": "known",
+          "certainty": "known",
+          "confidence": "known",
+          "effective_time": "known",
+          "experiencer": "known",
+          "status": "known",
+          "value": "known"
+        },
+        "normalizer_version": "1.0.0",
+        "relation_participants": []
+      },
+      "confidence": 0.71,
+      "derivation_hash": "sha256:0da02fbe7738ca33e61363b633c9726bd9e3020c3e7a81d52d669a9ec0c95333",
+      "effective_time": {
+        "precision": "day",
+        "start": "2026-01-02"
+      },
+      "encounter_id": "encounter_synthetic0000001",
+      "evidence_ids": [
+        "evidence_b9ce359c31f59013a449669c1eb715c5"
+      ],
+      "fact_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
+      "fact_type": "observation",
+      "parent_fact_ids": [],
+      "schema_version": "1.0.0",
+      "status": "final",
+      "subject_id": "subject_synthetic0000001",
+      "unit": null,
+      "value": {
+        "category": "imaging-finding",
         "system": "synthetic"
       }
     },
@@ -869,16 +870,16 @@
         "relation_participants": []
       },
       "confidence": 0.96,
-      "derivation_hash": "sha256:d667142a57754ac19baff22c970307bdb24ea92b030439f3d3c721a802ec80c5",
+      "derivation_hash": "sha256:ead7fcc4de20089cea5434b51cca20e7186bdeb338c9ee2c090c87f5cc694a32",
       "effective_time": {
         "precision": "day",
         "start": "2026-01-02"
       },
       "encounter_id": "encounter_synthetic0000001",
       "evidence_ids": [
-        "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+        "evidence_0453d9b00e8f278e72b6a8601ecb0573"
       ],
-      "fact_id": "fact_701dc65c43f54462bc7158aac3e00c64",
+      "fact_id": "fact_e824241e43b84c7201881f96ead18e4c",
       "fact_type": "laboratory",
       "parent_fact_ids": [],
       "schema_version": "1.0.0",
@@ -900,12 +901,13 @@
             "compatibility_policy": "same_major",
             "component": "openmed.golden.synthetic_extractor",
             "component_version": "1.0.0",
-            "output_digest": "sha256:2e34cee3aa1d2614cb21351e1ac54deb46a03f205aedb3e7004e6e1d8b1505aa",
-            "output_schema": "synthetic.golden.condition",
+            "output_digest": "sha256:462a5b733b70d6c2aac30057f85430f87de5547a2af717cb56cfd6b7ab763d1d",
+            "output_schema": "synthetic.golden.laboratory",
             "output_schema_version": "1.0.0",
             "schema_version": "1.0.0"
           }
         ],
+        "correction_reason": "unit_normalized",
         "experiencer": "patient",
         "field_states": {
           "assertion": "known",
@@ -914,30 +916,34 @@
           "effective_time": "known",
           "experiencer": "known",
           "status": "known",
+          "unit": "known",
           "value": "known"
         },
         "normalizer_version": "1.0.0",
         "relation_participants": []
       },
-      "confidence": 0.98,
-      "derivation_hash": "sha256:bea395fb3dfc6901a2257c0d431a9641d3f8fb4e93c1494da76929e055fabb9e",
+      "confidence": 0.96,
+      "derivation_hash": "sha256:1d51f26badad3ce9225d5a529370f605743cde991f902eff9b83147abdecdcf2",
       "effective_time": {
         "precision": "day",
         "start": "2026-01-02"
       },
       "encounter_id": "encounter_synthetic0000001",
       "evidence_ids": [
-        "evidence_7425abd01c1fa62fc179fe0492b2f65b"
+        "evidence_0453d9b00e8f278e72b6a8601ecb0573"
       ],
-      "fact_id": "fact_cfa5ebe5809affeef7fe941e3454366c",
-      "fact_type": "condition",
-      "parent_fact_ids": [],
+      "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
+      "fact_type": "laboratory",
+      "parent_fact_ids": [
+        "fact_e824241e43b84c7201881f96ead18e4c"
+      ],
       "schema_version": "1.0.0",
-      "status": "active",
+      "status": "corrected",
       "subject_id": "subject_synthetic0000001",
-      "unit": null,
+      "unit": "g/L",
       "value": {
-        "code": "condition-alpha",
+        "code": "synthetic-glucose",
+        "numeric": 0.9,
         "system": "synthetic"
       }
     }
@@ -1003,17 +1009,17 @@
             "attributes": {
               "review_required": true
             },
-            "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
+            "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
             "conflict_type": "assertion_mismatch",
-            "derivation_hash": "sha256:bd6c59cd4ea3d931935ea8ce90816c52e5bef1cd038a16420878cc2f511bb641",
+            "derivation_hash": "sha256:4dc0de7a48afee03ec37d49e42f7a5192fa71292477e89efb6fc6f6c36d1ce2f",
             "detected_by": "openmed.golden.conflict_policy",
             "evidence_ids": [
-              "evidence_097ce9264647d07536c882c9e77bff84",
-              "evidence_a12577840b639e1246ebaf96e7ab08cc"
+              "evidence_0ea8e5e908c345241b2357f5200038d3",
+              "evidence_8a9c907b51ba9c03e34173b118f7886d"
             ],
             "fact_ids": [
-              "fact_689a66d4d87a91fbcca5fc1f28833938",
-              "fact_6d9fe8fcd5e673d357130333b801461b"
+              "fact_0465591f5e04b2a9aee22c6c061f8190",
+              "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
             ],
             "schema_version": "1.0.0",
             "status": "open",
@@ -1021,12 +1027,12 @@
           }
         ],
         "correction_state": "none",
-        "event_id": "journeyevent_50058f362736ac8e2cac1a81be628d14",
+        "event_id": "journeyevent_b1cb4c1114777253606500a451e5ddc2",
         "event_type": "condition",
         "evidence_paths": [
           {
             "artifact": {
-              "artifact_id": "artifact_6d7b960693524a604fa94552883ebbf1",
+              "artifact_id": "artifact_f34d211adb6806d76d4b8577b0a5eb39",
               "artifact_type": "text",
               "attributes": {
                 "coordinate_convention": "unicode_text_v1",
@@ -1039,12 +1045,12 @@
                 },
                 "parser_id": "openmed.evidence.text",
                 "parser_version": "1.0.0",
-                "source_digest": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3",
+                "source_digest": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f",
                 "source_format": "text",
                 "source_version": "plain"
               },
-              "byte_size": 53,
-              "content_hash": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3",
+              "byte_size": 107,
+              "content_hash": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f",
               "derivation_hash": null,
               "encounter_id": "encounter_synthetic0000001",
               "media_type": "text/plain",
@@ -1055,16 +1061,16 @@
               "subject_id": "subject_synthetic0000001"
             },
             "locator": {
-              "artifact_id": "artifact_6d7b960693524a604fa94552883ebbf1",
+              "artifact_id": "artifact_f34d211adb6806d76d4b8577b0a5eb39",
               "location": {
-                "end": 53,
+                "end": 107,
                 "start": 0
               },
               "location_type": "text_span",
-              "locator_id": "evidence_a12577840b639e1246ebaf96e7ab08cc",
+              "locator_id": "evidence_8a9c907b51ba9c03e34173b118f7886d",
               "schema_version": "1.0.0",
               "transform": {
-                "source_digest": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3"
+                "source_digest": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f"
               }
             }
           }
@@ -1098,16 +1104,16 @@
             "relation_participants": []
           },
           "confidence": 0.99,
-          "derivation_hash": "sha256:788c5ca95fbc9430e6f3c33724ce6bb2c008e65243befbf04685a765f2ab3d28",
+          "derivation_hash": "sha256:578cc4e534d2cc748f185ba8bece06fdf696346b45925c875782560ca200a6e8",
           "effective_time": {
             "precision": "month",
             "start": "2026-01"
           },
           "encounter_id": "encounter_synthetic0000001",
           "evidence_ids": [
-            "evidence_a12577840b639e1246ebaf96e7ab08cc"
+            "evidence_8a9c907b51ba9c03e34173b118f7886d"
           ],
-          "fact_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+          "fact_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
           "fact_type": "condition",
           "parent_fact_ids": [],
           "schema_version": "1.0.0",
@@ -1126,19 +1132,19 @@
             "action": "select",
             "actor_type": "policy",
             "attributes": {},
-            "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
-            "derivation_hash": "sha256:1fbe25be2ecd1fb7575a900cc079fe1ea4d77a03496488929aa0b6b417296ce9",
+            "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
+            "derivation_hash": "sha256:91491678f88abb426020327f81c8cd32775afcb7bb25cfe44b44bcc0b68015ad",
             "occurred_at": "2026-01-02T06:04:05Z",
             "policy_id": "openmed.golden.conflict_review",
             "policy_version": "1.0.0",
             "rationale_code": "source_reviewed",
             "rejected_fact_ids": [
-              "fact_6d9fe8fcd5e673d357130333b801461b"
+              "fact_0465591f5e04b2a9aee22c6c061f8190"
             ],
-            "resolution_id": "resolution_f7d9100f6cc111676f4f41e34be8f5b8",
+            "resolution_id": "resolution_c9f105ef68996b77b1438e2d562131c9",
             "schema_version": "1.0.0",
             "selected_fact_ids": [
-              "fact_689a66d4d87a91fbcca5fc1f28833938"
+              "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
             ],
             "supersedes_resolution_id": null
           }
@@ -1153,52 +1159,50 @@
         "canonical_records": [],
         "compatibility_policy": "same_major",
         "conflicts": [],
-        "correction_state": "amends",
-        "event_id": "journeyevent_f5d3bd2f4ce4b9f91160923a5e900697",
-        "event_type": "laboratory",
+        "correction_state": "none",
+        "event_id": "journeyevent_9d952b30d36c779c07397f3b7af2b67b",
+        "event_type": "condition",
         "evidence_paths": [
           {
             "artifact": {
-              "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
-              "artifact_type": "csv",
+              "artifact_id": "artifact_74357ef0f6c7f32776aaf075e85f073e",
+              "artifact_type": "fhir_r4",
               "attributes": {
-                "coordinate_convention": "table_cell_v1",
+                "coordinate_convention": "fhir_json_pointer_v1",
                 "normalization_transform": {
-                  "delimiter": "comma",
-                  "encoding": "utf8_sig",
-                  "index_base": 1,
+                  "encoding": "utf8",
                   "newline": "preserve",
-                  "operation": "logical_cell_parse",
+                  "operation": "parse_only",
+                  "unicode": "preserve",
                   "version": "1.0.0"
                 },
-                "parser_id": "openmed.evidence.csv",
+                "parser_id": "openmed.evidence.fhir_r4",
                 "parser_version": "1.0.0",
-                "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
-                "source_format": "csv",
-                "source_version": "rfc4180"
+                "source_digest": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620",
+                "source_format": "fhir_r4",
+                "source_version": "4.0.1"
               },
-              "byte_size": 56,
-              "content_hash": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+              "byte_size": 227,
+              "content_hash": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620",
               "derivation_hash": null,
               "encounter_id": "encounter_synthetic0000001",
-              "media_type": "text/csv",
+              "media_type": "application/fhir+json",
               "parent_artifact_ids": [],
               "recorded_at": "2026-01-02T03:04:05Z",
               "schema_version": "1.0.0",
-              "source_id": "source_tablesynthetic001",
+              "source_id": "source_fhirsynthetic001",
               "subject_id": "subject_synthetic0000001"
             },
             "locator": {
-              "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
+              "artifact_id": "artifact_74357ef0f6c7f32776aaf075e85f073e",
               "location": {
-                "column": 1,
-                "row": 2
+                "pointer": "/code/text"
               },
-              "location_type": "table_cell",
-              "locator_id": "evidence_0820a2d6d80d92ff2434dd0d0a29c431",
+              "location_type": "json_pointer",
+              "locator_id": "evidence_083c8a505d9d3673346efd4a42e89950",
               "schema_version": "1.0.0",
               "transform": {
-                "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d"
+                "source_digest": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620"
               }
             }
           }
@@ -1212,13 +1216,12 @@
                 "compatibility_policy": "same_major",
                 "component": "openmed.golden.synthetic_extractor",
                 "component_version": "1.0.0",
-                "output_digest": "sha256:462a5b733b70d6c2aac30057f85430f87de5547a2af717cb56cfd6b7ab763d1d",
-                "output_schema": "synthetic.golden.laboratory",
+                "output_digest": "sha256:2e34cee3aa1d2614cb21351e1ac54deb46a03f205aedb3e7004e6e1d8b1505aa",
+                "output_schema": "synthetic.golden.condition",
                 "output_schema_version": "1.0.0",
                 "schema_version": "1.0.0"
               }
             ],
-            "correction_reason": "unit_normalized",
             "experiencer": "patient",
             "field_states": {
               "assertion": "known",
@@ -1227,34 +1230,30 @@
               "effective_time": "known",
               "experiencer": "known",
               "status": "known",
-              "unit": "known",
               "value": "known"
             },
             "normalizer_version": "1.0.0",
             "relation_participants": []
           },
-          "confidence": 0.96,
-          "derivation_hash": "sha256:b58e22f7cdf5c9a772c42815e9106f1cc885f31dbe01adac6567d0b107cc0e88",
+          "confidence": 0.98,
+          "derivation_hash": "sha256:e329d7fa2df77589072493bb17971cbfeeda8fc33c0d67b081106c440a27403c",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
           "encounter_id": "encounter_synthetic0000001",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_083c8a505d9d3673346efd4a42e89950"
           ],
-          "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
-          "fact_type": "laboratory",
-          "parent_fact_ids": [
-            "fact_701dc65c43f54462bc7158aac3e00c64"
-          ],
+          "fact_id": "fact_00dbbfd7f06ddfb56f9f96d97d4d195a",
+          "fact_type": "condition",
+          "parent_fact_ids": [],
           "schema_version": "1.0.0",
-          "status": "corrected",
+          "status": "active",
           "subject_id": "subject_synthetic0000001",
-          "unit": "g/L",
+          "unit": null,
           "value": {
-            "code": "synthetic-glucose",
-            "numeric": 0.9,
+            "code": "condition-alpha",
             "system": "synthetic"
           }
         },
@@ -1264,7 +1263,160 @@
         "review_states": [],
         "schema_version": "1.0.0",
         "source_ids": [
-          "source_tablesynthetic001"
+          "source_fhirsynthetic001"
+        ]
+      },
+      {
+        "canonical_records": [],
+        "compatibility_policy": "same_major",
+        "conflicts": [
+          {
+            "attributes": {
+              "review_required": true
+            },
+            "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
+            "conflict_type": "assertion_mismatch",
+            "derivation_hash": "sha256:4dc0de7a48afee03ec37d49e42f7a5192fa71292477e89efb6fc6f6c36d1ce2f",
+            "detected_by": "openmed.golden.conflict_policy",
+            "evidence_ids": [
+              "evidence_0ea8e5e908c345241b2357f5200038d3",
+              "evidence_8a9c907b51ba9c03e34173b118f7886d"
+            ],
+            "fact_ids": [
+              "fact_0465591f5e04b2a9aee22c6c061f8190",
+              "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
+            ],
+            "schema_version": "1.0.0",
+            "status": "open",
+            "subject_id": "subject_synthetic0000001"
+          }
+        ],
+        "correction_state": "none",
+        "event_id": "journeyevent_ffe9d6fdeb0480364bf94a33ad9b12e0",
+        "event_type": "condition",
+        "evidence_paths": [
+          {
+            "artifact": {
+              "artifact_id": "artifact_534b815d7fae4cdee634c68d21d7c53f",
+              "artifact_type": "hl7v2",
+              "attributes": {
+                "coordinate_convention": "hl7v2_field_component_v1",
+                "normalization_transform": {
+                  "delimiter_mode": "message_native",
+                  "encoding": "utf8",
+                  "newline": "preserve",
+                  "operation": "parse_only",
+                  "version": "1.0.0"
+                },
+                "parser_id": "openmed.evidence.hl7v2",
+                "parser_version": "1.0.0",
+                "source_digest": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80",
+                "source_format": "hl7v2",
+                "source_version": "2.5.1"
+              },
+              "byte_size": 194,
+              "content_hash": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80",
+              "derivation_hash": null,
+              "encounter_id": "encounter_synthetic0000001",
+              "media_type": "application/hl7-v2",
+              "parent_artifact_ids": [],
+              "recorded_at": "2026-01-02T03:04:05Z",
+              "schema_version": "1.0.0",
+              "source_id": "source_hl7synthetic0001",
+              "subject_id": "subject_synthetic0000001"
+            },
+            "locator": {
+              "artifact_id": "artifact_534b815d7fae4cdee634c68d21d7c53f",
+              "location": {
+                "path": "PID.1.1[1]"
+              },
+              "location_type": "message_field",
+              "locator_id": "evidence_0ea8e5e908c345241b2357f5200038d3",
+              "schema_version": "1.0.0",
+              "transform": {
+                "source_digest": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80"
+              }
+            }
+          }
+        ],
+        "fact": {
+          "attributes": {
+            "assertion": "negated",
+            "certainty": "certain",
+            "component_outputs": [
+              {
+                "compatibility_policy": "same_major",
+                "component": "openmed.golden.synthetic_extractor",
+                "component_version": "1.0.0",
+                "output_digest": "sha256:9405d80638b95283e3e89b9f6197242a8faedf68dd6e2af4009799e5ca6ea6fb",
+                "output_schema": "synthetic.golden.condition",
+                "output_schema_version": "1.0.0",
+                "schema_version": "1.0.0"
+              }
+            ],
+            "experiencer": "patient",
+            "field_states": {
+              "assertion": "known",
+              "certainty": "known",
+              "confidence": "known",
+              "effective_time": "known",
+              "experiencer": "known",
+              "status": "known",
+              "value": "known"
+            },
+            "normalizer_version": "1.0.0",
+            "relation_participants": []
+          },
+          "confidence": 0.97,
+          "derivation_hash": "sha256:c3e819f89fa9a59d3633d6828db7f81aa1d54314245120de03fa979deef8b6fd",
+          "effective_time": {
+            "precision": "day",
+            "start": "2026-01-02"
+          },
+          "encounter_id": "encounter_synthetic0000001",
+          "evidence_ids": [
+            "evidence_0ea8e5e908c345241b2357f5200038d3"
+          ],
+          "fact_id": "fact_0465591f5e04b2a9aee22c6c061f8190",
+          "fact_type": "condition",
+          "parent_fact_ids": [],
+          "schema_version": "1.0.0",
+          "status": "inactive",
+          "subject_id": "subject_synthetic0000001",
+          "unit": null,
+          "value": {
+            "code": "condition-alpha",
+            "system": "synthetic"
+          }
+        },
+        "journey_state": "historical",
+        "position": 2,
+        "resolutions": [
+          {
+            "action": "select",
+            "actor_type": "policy",
+            "attributes": {},
+            "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
+            "derivation_hash": "sha256:91491678f88abb426020327f81c8cd32775afcb7bb25cfe44b44bcc0b68015ad",
+            "occurred_at": "2026-01-02T06:04:05Z",
+            "policy_id": "openmed.golden.conflict_review",
+            "policy_version": "1.0.0",
+            "rationale_code": "source_reviewed",
+            "rejected_fact_ids": [
+              "fact_0465591f5e04b2a9aee22c6c061f8190"
+            ],
+            "resolution_id": "resolution_c9f105ef68996b77b1438e2d562131c9",
+            "schema_version": "1.0.0",
+            "selected_fact_ids": [
+              "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
+            ],
+            "supersedes_resolution_id": null
+          }
+        ],
+        "review_states": [],
+        "schema_version": "1.0.0",
+        "source_ids": [
+          "source_hl7synthetic0001"
         ]
       },
       {
@@ -1272,7 +1424,7 @@
         "compatibility_policy": "same_major",
         "conflicts": [],
         "correction_state": "none",
-        "event_id": "journeyevent_60d9b82a41e25e3fc111ab99fbaf7c24",
+        "event_id": "journeyevent_ef3003fe8235f5bec0662e977ae4ccab",
         "event_type": "observation",
         "evidence_paths": [
           {
@@ -1312,7 +1464,7 @@
                 "tag": "0040,A730"
               },
               "location_type": "dicom_element",
-              "locator_id": "evidence_6a3095b499b92c98e1de6e7fad0ead22",
+              "locator_id": "evidence_b9ce359c31f59013a449669c1eb715c5",
               "schema_version": "1.0.0",
               "transform": {
                 "coordinate_record": {
@@ -1321,7 +1473,7 @@
                   "node_path": "1.1",
                   "normalized_span": [
                     0,
-                    39
+                    93
                   ],
                   "schema_version": "1.0.0"
                 },
@@ -1359,16 +1511,16 @@
             "relation_participants": []
           },
           "confidence": 0.71,
-          "derivation_hash": "sha256:6f68788bbb9592b0e3795781fcd23702741cc1ac0f8b37f767bc242c8c36adbf",
+          "derivation_hash": "sha256:0da02fbe7738ca33e61363b633c9726bd9e3020c3e7a81d52d669a9ec0c95333",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
           "encounter_id": "encounter_synthetic0000001",
           "evidence_ids": [
-            "evidence_6a3095b499b92c98e1de6e7fad0ead22"
+            "evidence_b9ce359c31f59013a449669c1eb715c5"
           ],
-          "fact_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
+          "fact_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
           "fact_type": "observation",
           "parent_fact_ids": [],
           "schema_version": "1.0.0",
@@ -1381,7 +1533,7 @@
           }
         },
         "journey_state": "current",
-        "position": 2,
+        "position": 3,
         "resolutions": [],
         "review_states": [],
         "schema_version": "1.0.0",
@@ -1392,167 +1544,14 @@
       {
         "canonical_records": [],
         "compatibility_policy": "same_major",
-        "conflicts": [
-          {
-            "attributes": {
-              "review_required": true
-            },
-            "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
-            "conflict_type": "assertion_mismatch",
-            "derivation_hash": "sha256:bd6c59cd4ea3d931935ea8ce90816c52e5bef1cd038a16420878cc2f511bb641",
-            "detected_by": "openmed.golden.conflict_policy",
-            "evidence_ids": [
-              "evidence_097ce9264647d07536c882c9e77bff84",
-              "evidence_a12577840b639e1246ebaf96e7ab08cc"
-            ],
-            "fact_ids": [
-              "fact_689a66d4d87a91fbcca5fc1f28833938",
-              "fact_6d9fe8fcd5e673d357130333b801461b"
-            ],
-            "schema_version": "1.0.0",
-            "status": "open",
-            "subject_id": "subject_synthetic0000001"
-          }
-        ],
-        "correction_state": "none",
-        "event_id": "journeyevent_40922ece8d9a08503c78924f8eb0e096",
-        "event_type": "condition",
-        "evidence_paths": [
-          {
-            "artifact": {
-              "artifact_id": "artifact_cb13f195e22f994caea518559b89d164",
-              "artifact_type": "hl7v2",
-              "attributes": {
-                "coordinate_convention": "hl7v2_field_component_v1",
-                "normalization_transform": {
-                  "delimiter_mode": "message_native",
-                  "encoding": "utf8",
-                  "newline": "preserve",
-                  "operation": "parse_only",
-                  "version": "1.0.0"
-                },
-                "parser_id": "openmed.evidence.hl7v2",
-                "parser_version": "1.0.0",
-                "source_digest": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d",
-                "source_format": "hl7v2",
-                "source_version": "2.5.1"
-              },
-              "byte_size": 138,
-              "content_hash": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d",
-              "derivation_hash": null,
-              "encounter_id": "encounter_synthetic0000001",
-              "media_type": "application/hl7-v2",
-              "parent_artifact_ids": [],
-              "recorded_at": "2026-01-02T03:04:05Z",
-              "schema_version": "1.0.0",
-              "source_id": "source_hl7synthetic0001",
-              "subject_id": "subject_synthetic0000001"
-            },
-            "locator": {
-              "artifact_id": "artifact_cb13f195e22f994caea518559b89d164",
-              "location": {
-                "path": "PID.3.1[1]"
-              },
-              "location_type": "message_field",
-              "locator_id": "evidence_097ce9264647d07536c882c9e77bff84",
-              "schema_version": "1.0.0",
-              "transform": {
-                "source_digest": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d"
-              }
-            }
-          }
-        ],
-        "fact": {
-          "attributes": {
-            "assertion": "negated",
-            "certainty": "certain",
-            "component_outputs": [
-              {
-                "compatibility_policy": "same_major",
-                "component": "openmed.golden.synthetic_extractor",
-                "component_version": "1.0.0",
-                "output_digest": "sha256:9405d80638b95283e3e89b9f6197242a8faedf68dd6e2af4009799e5ca6ea6fb",
-                "output_schema": "synthetic.golden.condition",
-                "output_schema_version": "1.0.0",
-                "schema_version": "1.0.0"
-              }
-            ],
-            "experiencer": "patient",
-            "field_states": {
-              "assertion": "known",
-              "certainty": "known",
-              "confidence": "known",
-              "effective_time": "known",
-              "experiencer": "known",
-              "status": "known",
-              "value": "known"
-            },
-            "normalizer_version": "1.0.0",
-            "relation_participants": []
-          },
-          "confidence": 0.97,
-          "derivation_hash": "sha256:55cbc22565fb4dd8021b09b795b8a5cec83a3807220c0706ee34677009b5e271",
-          "effective_time": {
-            "precision": "day",
-            "start": "2026-01-02"
-          },
-          "encounter_id": "encounter_synthetic0000001",
-          "evidence_ids": [
-            "evidence_097ce9264647d07536c882c9e77bff84"
-          ],
-          "fact_id": "fact_6d9fe8fcd5e673d357130333b801461b",
-          "fact_type": "condition",
-          "parent_fact_ids": [],
-          "schema_version": "1.0.0",
-          "status": "inactive",
-          "subject_id": "subject_synthetic0000001",
-          "unit": null,
-          "value": {
-            "code": "condition-alpha",
-            "system": "synthetic"
-          }
-        },
-        "journey_state": "historical",
-        "position": 3,
-        "resolutions": [
-          {
-            "action": "select",
-            "actor_type": "policy",
-            "attributes": {},
-            "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
-            "derivation_hash": "sha256:1fbe25be2ecd1fb7575a900cc079fe1ea4d77a03496488929aa0b6b417296ce9",
-            "occurred_at": "2026-01-02T06:04:05Z",
-            "policy_id": "openmed.golden.conflict_review",
-            "policy_version": "1.0.0",
-            "rationale_code": "source_reviewed",
-            "rejected_fact_ids": [
-              "fact_6d9fe8fcd5e673d357130333b801461b"
-            ],
-            "resolution_id": "resolution_f7d9100f6cc111676f4f41e34be8f5b8",
-            "schema_version": "1.0.0",
-            "selected_fact_ids": [
-              "fact_689a66d4d87a91fbcca5fc1f28833938"
-            ],
-            "supersedes_resolution_id": null
-          }
-        ],
-        "review_states": [],
-        "schema_version": "1.0.0",
-        "source_ids": [
-          "source_hl7synthetic0001"
-        ]
-      },
-      {
-        "canonical_records": [],
-        "compatibility_policy": "same_major",
         "conflicts": [],
         "correction_state": "superseded",
-        "event_id": "journeyevent_3b40ec24e63679a13a1b6ad88f5b2e3c",
+        "event_id": "journeyevent_ebc970dfb767c558bd33f1836be2e7bc",
         "event_type": "laboratory",
         "evidence_paths": [
           {
             "artifact": {
-              "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
+              "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
               "artifact_type": "csv",
               "attributes": {
                 "coordinate_convention": "table_cell_v1",
@@ -1566,12 +1565,12 @@
                 },
                 "parser_id": "openmed.evidence.csv",
                 "parser_version": "1.0.0",
-                "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+                "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
                 "source_format": "csv",
                 "source_version": "rfc4180"
               },
-              "byte_size": 56,
-              "content_hash": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+              "byte_size": 106,
+              "content_hash": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
               "derivation_hash": null,
               "encounter_id": "encounter_synthetic0000001",
               "media_type": "text/csv",
@@ -1582,16 +1581,16 @@
               "subject_id": "subject_synthetic0000001"
             },
             "locator": {
-              "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
+              "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
               "location": {
-                "column": 1,
-                "row": 2
+                "column": 4,
+                "row": 1
               },
               "location_type": "table_cell",
-              "locator_id": "evidence_0820a2d6d80d92ff2434dd0d0a29c431",
+              "locator_id": "evidence_0453d9b00e8f278e72b6a8601ecb0573",
               "schema_version": "1.0.0",
               "transform": {
-                "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d"
+                "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3"
               }
             }
           }
@@ -1626,16 +1625,16 @@
             "relation_participants": []
           },
           "confidence": 0.96,
-          "derivation_hash": "sha256:d667142a57754ac19baff22c970307bdb24ea92b030439f3d3c721a802ec80c5",
+          "derivation_hash": "sha256:ead7fcc4de20089cea5434b51cca20e7186bdeb338c9ee2c090c87f5cc694a32",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
           "encounter_id": "encounter_synthetic0000001",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
-          "fact_id": "fact_701dc65c43f54462bc7158aac3e00c64",
+          "fact_id": "fact_e824241e43b84c7201881f96ead18e4c",
           "fact_type": "laboratory",
           "parent_fact_ids": [],
           "schema_version": "1.0.0",
@@ -1661,50 +1660,52 @@
         "canonical_records": [],
         "compatibility_policy": "same_major",
         "conflicts": [],
-        "correction_state": "none",
-        "event_id": "journeyevent_208936cfbdd7202570f862415eaf1e6f",
-        "event_type": "condition",
+        "correction_state": "amends",
+        "event_id": "journeyevent_5cbdb759af8a649a771919747ba6938f",
+        "event_type": "laboratory",
         "evidence_paths": [
           {
             "artifact": {
-              "artifact_id": "artifact_3918521f8f5d8e6dcc1b76f9a7452b45",
-              "artifact_type": "fhir_r4",
+              "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
+              "artifact_type": "csv",
               "attributes": {
-                "coordinate_convention": "fhir_json_pointer_v1",
+                "coordinate_convention": "table_cell_v1",
                 "normalization_transform": {
-                  "encoding": "utf8",
+                  "delimiter": "comma",
+                  "encoding": "utf8_sig",
+                  "index_base": 1,
                   "newline": "preserve",
-                  "operation": "parse_only",
-                  "unicode": "preserve",
+                  "operation": "logical_cell_parse",
                   "version": "1.0.0"
                 },
-                "parser_id": "openmed.evidence.fhir_r4",
+                "parser_id": "openmed.evidence.csv",
                 "parser_version": "1.0.0",
-                "source_digest": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a",
-                "source_format": "fhir_r4",
-                "source_version": "4.0.1"
+                "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
+                "source_format": "csv",
+                "source_version": "rfc4180"
               },
-              "byte_size": 124,
-              "content_hash": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a",
+              "byte_size": 106,
+              "content_hash": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
               "derivation_hash": null,
               "encounter_id": "encounter_synthetic0000001",
-              "media_type": "application/fhir+json",
+              "media_type": "text/csv",
               "parent_artifact_ids": [],
               "recorded_at": "2026-01-02T03:04:05Z",
               "schema_version": "1.0.0",
-              "source_id": "source_fhirsynthetic001",
+              "source_id": "source_tablesynthetic001",
               "subject_id": "subject_synthetic0000001"
             },
             "locator": {
-              "artifact_id": "artifact_3918521f8f5d8e6dcc1b76f9a7452b45",
+              "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
               "location": {
-                "pointer": "/clinicalStatus/text"
+                "column": 4,
+                "row": 1
               },
-              "location_type": "json_pointer",
-              "locator_id": "evidence_7425abd01c1fa62fc179fe0492b2f65b",
+              "location_type": "table_cell",
+              "locator_id": "evidence_0453d9b00e8f278e72b6a8601ecb0573",
               "schema_version": "1.0.0",
               "transform": {
-                "source_digest": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a"
+                "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3"
               }
             }
           }
@@ -1718,12 +1719,13 @@
                 "compatibility_policy": "same_major",
                 "component": "openmed.golden.synthetic_extractor",
                 "component_version": "1.0.0",
-                "output_digest": "sha256:2e34cee3aa1d2614cb21351e1ac54deb46a03f205aedb3e7004e6e1d8b1505aa",
-                "output_schema": "synthetic.golden.condition",
+                "output_digest": "sha256:462a5b733b70d6c2aac30057f85430f87de5547a2af717cb56cfd6b7ab763d1d",
+                "output_schema": "synthetic.golden.laboratory",
                 "output_schema_version": "1.0.0",
                 "schema_version": "1.0.0"
               }
             ],
+            "correction_reason": "unit_normalized",
             "experiencer": "patient",
             "field_states": {
               "assertion": "known",
@@ -1732,30 +1734,34 @@
               "effective_time": "known",
               "experiencer": "known",
               "status": "known",
+              "unit": "known",
               "value": "known"
             },
             "normalizer_version": "1.0.0",
             "relation_participants": []
           },
-          "confidence": 0.98,
-          "derivation_hash": "sha256:bea395fb3dfc6901a2257c0d431a9641d3f8fb4e93c1494da76929e055fabb9e",
+          "confidence": 0.96,
+          "derivation_hash": "sha256:1d51f26badad3ce9225d5a529370f605743cde991f902eff9b83147abdecdcf2",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
           "encounter_id": "encounter_synthetic0000001",
           "evidence_ids": [
-            "evidence_7425abd01c1fa62fc179fe0492b2f65b"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
-          "fact_id": "fact_cfa5ebe5809affeef7fe941e3454366c",
-          "fact_type": "condition",
-          "parent_fact_ids": [],
+          "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
+          "fact_type": "laboratory",
+          "parent_fact_ids": [
+            "fact_e824241e43b84c7201881f96ead18e4c"
+          ],
           "schema_version": "1.0.0",
-          "status": "active",
+          "status": "corrected",
           "subject_id": "subject_synthetic0000001",
-          "unit": null,
+          "unit": "g/L",
           "value": {
-            "code": "condition-alpha",
+            "code": "synthetic-glucose",
+            "numeric": 0.9,
             "system": "synthetic"
           }
         },
@@ -1765,7 +1771,7 @@
         "review_states": [],
         "schema_version": "1.0.0",
         "source_ids": [
-          "source_fhirsynthetic001"
+          "source_tablesynthetic001"
         ]
       }
     ],
@@ -1773,15 +1779,15 @@
       "compatibility_policy": "same_major",
       "edges": [
         {
-          "derivation_hash": "sha256:95fa8f1e332a8bfc8afce266148fcc99f95d42e48971a3ac7521c75dd6c1b918",
-          "edge_id": "timelineedge_cf60cf49355dd16e8394712c17a829ef",
+          "derivation_hash": "sha256:afd9d37b6b1b6931ed6548cc29eeb6a67d0d36681d7ab9e4e91bacee88dca87b",
+          "edge_id": "timelineedge_3ecfcc9d6fb7ffc6f6d968632ae057c1",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
           "ordering_basis": "fact_parent_lineage",
           "relation_type": "corrects",
-          "source_event_id": "journeyevent_3b40ec24e63679a13a1b6ad88f5b2e3c",
-          "target_event_id": "journeyevent_f5d3bd2f4ce4b9f91160923a5e900697"
+          "source_event_id": "journeyevent_ebc970dfb767c558bd33f1836be2e7bc",
+          "target_event_id": "journeyevent_5cbdb759af8a649a771919747ba6938f"
         }
       ],
       "nodes": [
@@ -1789,113 +1795,113 @@
           "assertion_status": "affirmed",
           "certainty": "certain",
           "correction_state": "none",
-          "derivation_hash": "sha256:788c5ca95fbc9430e6f3c33724ce6bb2c008e65243befbf04685a765f2ab3d28",
+          "derivation_hash": "sha256:578cc4e534d2cc748f185ba8bece06fdf696346b45925c875782560ca200a6e8",
           "effective_time": {
             "precision": "month",
             "start": "2026-01"
           },
-          "event_id": "journeyevent_50058f362736ac8e2cac1a81be628d14",
+          "event_id": "journeyevent_b1cb4c1114777253606500a451e5ddc2",
           "event_type": "condition",
           "evidence_ids": [
-            "evidence_a12577840b639e1246ebaf96e7ab08cc"
+            "evidence_8a9c907b51ba9c03e34173b118f7886d"
           ],
           "experiencer": "patient",
-          "fact_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+          "fact_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
           "journey_state": "current",
           "position": 0
         },
         {
           "assertion_status": "affirmed",
           "certainty": "certain",
-          "correction_state": "amends",
-          "derivation_hash": "sha256:b58e22f7cdf5c9a772c42815e9106f1cc885f31dbe01adac6567d0b107cc0e88",
+          "correction_state": "none",
+          "derivation_hash": "sha256:e329d7fa2df77589072493bb17971cbfeeda8fc33c0d67b081106c440a27403c",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
-          "event_id": "journeyevent_f5d3bd2f4ce4b9f91160923a5e900697",
-          "event_type": "laboratory",
+          "event_id": "journeyevent_9d952b30d36c779c07397f3b7af2b67b",
+          "event_type": "condition",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_083c8a505d9d3673346efd4a42e89950"
           ],
           "experiencer": "patient",
-          "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
+          "fact_id": "fact_00dbbfd7f06ddfb56f9f96d97d4d195a",
           "journey_state": "current",
           "position": 1
-        },
-        {
-          "assertion_status": "uncertain",
-          "certainty": "possible",
-          "correction_state": "none",
-          "derivation_hash": "sha256:6f68788bbb9592b0e3795781fcd23702741cc1ac0f8b37f767bc242c8c36adbf",
-          "effective_time": {
-            "precision": "day",
-            "start": "2026-01-02"
-          },
-          "event_id": "journeyevent_60d9b82a41e25e3fc111ab99fbaf7c24",
-          "event_type": "observation",
-          "evidence_ids": [
-            "evidence_6a3095b499b92c98e1de6e7fad0ead22"
-          ],
-          "experiencer": "patient",
-          "fact_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
-          "journey_state": "current",
-          "position": 2
         },
         {
           "assertion_status": "negated",
           "certainty": "certain",
           "correction_state": "none",
-          "derivation_hash": "sha256:55cbc22565fb4dd8021b09b795b8a5cec83a3807220c0706ee34677009b5e271",
+          "derivation_hash": "sha256:c3e819f89fa9a59d3633d6828db7f81aa1d54314245120de03fa979deef8b6fd",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
-          "event_id": "journeyevent_40922ece8d9a08503c78924f8eb0e096",
+          "event_id": "journeyevent_ffe9d6fdeb0480364bf94a33ad9b12e0",
           "event_type": "condition",
           "evidence_ids": [
-            "evidence_097ce9264647d07536c882c9e77bff84"
+            "evidence_0ea8e5e908c345241b2357f5200038d3"
           ],
           "experiencer": "patient",
-          "fact_id": "fact_6d9fe8fcd5e673d357130333b801461b",
+          "fact_id": "fact_0465591f5e04b2a9aee22c6c061f8190",
           "journey_state": "historical",
+          "position": 2
+        },
+        {
+          "assertion_status": "uncertain",
+          "certainty": "possible",
+          "correction_state": "none",
+          "derivation_hash": "sha256:0da02fbe7738ca33e61363b633c9726bd9e3020c3e7a81d52d669a9ec0c95333",
+          "effective_time": {
+            "precision": "day",
+            "start": "2026-01-02"
+          },
+          "event_id": "journeyevent_ef3003fe8235f5bec0662e977ae4ccab",
+          "event_type": "observation",
+          "evidence_ids": [
+            "evidence_b9ce359c31f59013a449669c1eb715c5"
+          ],
+          "experiencer": "patient",
+          "fact_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
+          "journey_state": "current",
           "position": 3
         },
         {
           "assertion_status": "affirmed",
           "certainty": "certain",
           "correction_state": "superseded",
-          "derivation_hash": "sha256:d667142a57754ac19baff22c970307bdb24ea92b030439f3d3c721a802ec80c5",
+          "derivation_hash": "sha256:ead7fcc4de20089cea5434b51cca20e7186bdeb338c9ee2c090c87f5cc694a32",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
-          "event_id": "journeyevent_3b40ec24e63679a13a1b6ad88f5b2e3c",
+          "event_id": "journeyevent_ebc970dfb767c558bd33f1836be2e7bc",
           "event_type": "laboratory",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
           "experiencer": "patient",
-          "fact_id": "fact_701dc65c43f54462bc7158aac3e00c64",
+          "fact_id": "fact_e824241e43b84c7201881f96ead18e4c",
           "journey_state": "historical",
           "position": 4
         },
         {
           "assertion_status": "affirmed",
           "certainty": "certain",
-          "correction_state": "none",
-          "derivation_hash": "sha256:bea395fb3dfc6901a2257c0d431a9641d3f8fb4e93c1494da76929e055fabb9e",
+          "correction_state": "amends",
+          "derivation_hash": "sha256:1d51f26badad3ce9225d5a529370f605743cde991f902eff9b83147abdecdcf2",
           "effective_time": {
             "precision": "day",
             "start": "2026-01-02"
           },
-          "event_id": "journeyevent_208936cfbdd7202570f862415eaf1e6f",
-          "event_type": "condition",
+          "event_id": "journeyevent_5cbdb759af8a649a771919747ba6938f",
+          "event_type": "laboratory",
           "evidence_ids": [
-            "evidence_7425abd01c1fa62fc179fe0492b2f65b"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
           "experiencer": "patient",
-          "fact_id": "fact_cfa5ebe5809affeef7fe941e3454366c",
+          "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
           "journey_state": "current",
           "position": 5
         }
@@ -1923,15 +1929,15 @@
           "cdm_version": "5.4",
           "compatibility_policy": "same_major",
           "etl_version": "3.0.0",
-          "input_digest": "sha256:cc965b1c0776b313fbcf361fc90ce312eb75b19474fd212ab27588a743d98889",
+          "input_digest": "sha256:cf95f51f074e6c23752bccf9d7b20af7b64bc239ba068b36f006cf963cbd5c93",
           "input_fact_ids": [
-            "fact_45f8fd01d413602883ce7480a4a0aac2",
-            "fact_4feee35c3a22a8f57fe318d31f01980f",
-            "fact_689a66d4d87a91fbcca5fc1f28833938"
+            "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
+            "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
+            "fact_fda7e740533cb5f859810d5070e55620"
           ],
           "mode": "replace_by_source",
           "occurred_at": "2026-01-02T07:04:05Z",
-          "output_digest": "sha256:80b9be87f0a0f245c5cc35046c1c844425df399b96948d04b61de87ffedef9b8",
+          "output_digest": "sha256:4b2d85792c2913f85eb558bb9588b84d4687ddc28c4d321dde518451ef2a4d89",
           "row_counts": {
             "condition_occurrence": 0,
             "drug_exposure": 0,
@@ -1943,7 +1949,7 @@
             "source_to_concept_map": 2,
             "visit_occurrence": 1
           },
-          "run_id": "omoprun_2a8a8546d5538e7a87765d0ef8814c75",
+          "run_id": "omoprun_4d5cb99a0af817ebbad239d188178b7a",
           "schema_version": "1.0.0",
           "source_keys": [
             "source_dicomsynthetic001",
@@ -1956,7 +1962,7 @@
       ],
       "losses": [
         {
-          "fact_id": "fact_689a66d4d87a91fbcca5fc1f28833938",
+          "fact_id": "fact_4d9a601ec62d7a74a85069ef6b0bafa2",
           "fields": [
             "effective_time"
           ],
@@ -1966,7 +1972,7 @@
       ],
       "mapping_outcomes": [
         {
-          "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
+          "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
           "mapping": {
             "outcome_id": "sha256:c6cf42cb3de94f4d62c094e75d0a32fe27ac378c7dd92721473a3a2523205bd6",
             "reason_code": "mapped",
@@ -1982,12 +1988,12 @@
             "valid_end_date": "2099-12-31",
             "valid_start_date": "2026-01-01"
           },
-          "row_id": 3783283774532390554,
+          "row_id": 6251232650164129882,
           "source_key": "source_tablesynthetic001",
           "table": "measurement"
         },
         {
-          "fact_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
+          "fact_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
           "mapping": {
             "outcome_id": "sha256:3e8eec272c69e8ab5f9ebdf6c816c1775e4fcb42719360bbb965f1b170752507",
             "reason_code": "mapped",
@@ -2003,7 +2009,7 @@
             "valid_end_date": "2099-12-31",
             "valid_start_date": "2026-01-01"
           },
-          "row_id": 6412389506283344459,
+          "row_id": 5481417068819692142,
           "source_key": "source_dicomsynthetic001",
           "table": "observation"
         }
@@ -2012,21 +2018,21 @@
       "provenance": [
         {
           "correction_of": [
-            "fact_701dc65c43f54462bc7158aac3e00c64"
+            "fact_e824241e43b84c7201881f96ead18e4c"
           ],
           "dataset_split": "holdout",
           "encounter_id": "encounter_synthetic0000001",
-          "etl_run_id": "omoprun_2a8a8546d5538e7a87765d0ef8814c75",
+          "etl_run_id": "omoprun_4d5cb99a0af817ebbad239d188178b7a",
           "evidence_ids": [
-            "evidence_0820a2d6d80d92ff2434dd0d0a29c431"
+            "evidence_0453d9b00e8f278e72b6a8601ecb0573"
           ],
-          "fact_id": "fact_45f8fd01d413602883ce7480a4a0aac2",
+          "fact_id": "fact_fda7e740533cb5f859810d5070e55620",
           "mapping_outcome_id": "sha256:c6cf42cb3de94f4d62c094e75d0a32fe27ac378c7dd92721473a3a2523205bd6",
-          "provenance_id": "omopprov_787963224461d0382936e953d7dd038b",
-          "row_id": 3783283774532390554,
-          "source_evidence_key": "sha256:0c1c047ac3496c74d5514a4d5d1a1ee225e2abe5ff3d710399875c879e4ef965",
+          "provenance_id": "omopprov_5cb38b31dbce2d2c729adda07ca1deff",
+          "row_id": 6251232650164129882,
+          "source_evidence_key": "sha256:6efe73d94ac399b0396ca23ce129fede67d7586a5d0b07b802b2796af8273ed4",
           "source_key": "source_tablesynthetic001",
-          "source_revision": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+          "source_revision": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
           "subject_id": "subject_synthetic0000001",
           "table": "measurement"
         },
@@ -2034,15 +2040,15 @@
           "correction_of": [],
           "dataset_split": "holdout",
           "encounter_id": "encounter_synthetic0000001",
-          "etl_run_id": "omoprun_2a8a8546d5538e7a87765d0ef8814c75",
+          "etl_run_id": "omoprun_4d5cb99a0af817ebbad239d188178b7a",
           "evidence_ids": [
-            "evidence_6a3095b499b92c98e1de6e7fad0ead22"
+            "evidence_b9ce359c31f59013a449669c1eb715c5"
           ],
-          "fact_id": "fact_4feee35c3a22a8f57fe318d31f01980f",
+          "fact_id": "fact_c0cd4ac7c2602f951e4f04c6de6679a8",
           "mapping_outcome_id": "sha256:3e8eec272c69e8ab5f9ebdf6c816c1775e4fcb42719360bbb965f1b170752507",
-          "provenance_id": "omopprov_f4004762bd9a43cfceeea2aefb5bd7eb",
-          "row_id": 6412389506283344459,
-          "source_evidence_key": "sha256:152fd16dc55a1bc3a4cf41d96cb55a1969a034b2018c6e2546b59080824a57a6",
+          "provenance_id": "omopprov_eda9c2553537f6b7f125410f0ef8d3e1",
+          "row_id": 5481417068819692142,
+          "source_evidence_key": "sha256:094e0f6e36e3844668c2379f650fe98636f2690196bf84d0b9f5635bf561ed62",
           "source_key": "source_dicomsynthetic001",
           "source_revision": "sha256:433192557d0c50702a9171c688b03b38501d1936ad7af5e2a232e9ab997f3542",
           "subject_id": "subject_synthetic0000001",
@@ -2084,7 +2090,7 @@
             "measurement_date": "2026-01-02",
             "measurement_datetime": null,
             "measurement_event_id": null,
-            "measurement_id": 3783283774532390554,
+            "measurement_id": 6251232650164129882,
             "measurement_source_concept_id": 1102,
             "measurement_source_value": "synthetic-glucose",
             "measurement_time": null,
@@ -2149,7 +2155,7 @@
             "observation_date": "2026-01-02",
             "observation_datetime": null,
             "observation_event_id": null,
-            "observation_id": 6412389506283344459,
+            "observation_id": 5481417068819692142,
             "observation_source_concept_id": 1103,
             "observation_source_value": "imaging-finding",
             "observation_type_concept_id": 0,
@@ -2252,10 +2258,10 @@
   "pipeline": {
     "replay": {
       "fact_ids": [
-        "fact_689a66d4d87a91fbcca5fc1f28833938"
+        "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
       ],
-      "job_id": "job_d91c5ad0dd1a05d0a734f930a6211738",
-      "manifest_digest": "sha256:c41e4052a6846cf004dfac427698ed615f5cf3ae3840b57373747e7dabf733df",
+      "job_id": "job_77911b916f547d813f735e3b2982bf97",
+      "manifest_digest": "sha256:4eebb46c193c81a1761e59ce7da677fe3a49b59f7c1ad55706201f9314602e1b",
       "replayed": true,
       "stage_states": [
         {
@@ -2308,10 +2314,10 @@
     "runs": [
       {
         "fact_ids": [
-          "fact_689a66d4d87a91fbcca5fc1f28833938"
+          "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
         ],
-        "job_id": "job_d91c5ad0dd1a05d0a734f930a6211738",
-        "manifest_digest": "sha256:c41e4052a6846cf004dfac427698ed615f5cf3ae3840b57373747e7dabf733df",
+        "job_id": "job_77911b916f547d813f735e3b2982bf97",
+        "manifest_digest": "sha256:4eebb46c193c81a1761e59ce7da677fe3a49b59f7c1ad55706201f9314602e1b",
         "replayed": false,
         "stage_states": [
           {
@@ -2363,10 +2369,10 @@
       },
       {
         "fact_ids": [
-          "fact_cfa5ebe5809affeef7fe941e3454366c"
+          "fact_00dbbfd7f06ddfb56f9f96d97d4d195a"
         ],
-        "job_id": "job_df880032ef24dba449b38d2dccaada52",
-        "manifest_digest": "sha256:84e100fb3f4b2d5227544cb39fb47c74a0ba7373138b386997002b10eda2e6c3",
+        "job_id": "job_5fef70ed7e2f5eca2a852dee659eb150",
+        "manifest_digest": "sha256:c0527cf7f05684a202e34a8af5835abdc86af0b075d696f9c898a576cbde9bf0",
         "replayed": false,
         "stage_states": [
           {
@@ -2418,10 +2424,10 @@
       },
       {
         "fact_ids": [
-          "fact_6d9fe8fcd5e673d357130333b801461b"
+          "fact_0465591f5e04b2a9aee22c6c061f8190"
         ],
-        "job_id": "job_8cbb93b375076d3960299ff5e4b0833f",
-        "manifest_digest": "sha256:1f830a230092c3d39e12a0688a46fccbcce636af415ff458b96ca4c3ef90bb2c",
+        "job_id": "job_369f36192071e03d0c927bf8bd7ba577",
+        "manifest_digest": "sha256:69d78f75a9a91637b535a5e4199b0e1a425ad64dc694b4d5ac424cbe1434d482",
         "replayed": false,
         "stage_states": [
           {
@@ -2473,10 +2479,10 @@
       },
       {
         "fact_ids": [
-          "fact_701dc65c43f54462bc7158aac3e00c64"
+          "fact_e824241e43b84c7201881f96ead18e4c"
         ],
-        "job_id": "job_04967da71a7ef2a4a52731bc0217fda1",
-        "manifest_digest": "sha256:bce1afd83de5e46801d870d3916f768639e9ab70752dbab6a806647b476e5d5c",
+        "job_id": "job_c727a159134b594f796903a4de7eba10",
+        "manifest_digest": "sha256:ea2add9a615ff1aced259dcd9abee231a2f6fe6b0bcb1b24fbe834df766987c7",
         "replayed": false,
         "stage_states": [
           {
@@ -2528,7 +2534,7 @@
       },
       {
         "fact_ids": [
-          "fact_4feee35c3a22a8f57fe318d31f01980f"
+          "fact_c0cd4ac7c2602f951e4f04c6de6679a8"
         ],
         "job_id": "job_c6e076c774667ee5ff9a969d0d6db42a",
         "manifest_digest": "sha256:ad7cda251887271e952a0666e8af2fcaaac8e3f34342641845062dbd362f66cf",
@@ -2614,7 +2620,7 @@
       "identity": "1.0.0"
     },
     "regeneration_command": ".venv/bin/python scripts/regenerate_v3_golden_journey.py --write",
-    "scenario_digest": "sha256:993e20ce7db2e3b1d9f829987a701da80f785f7d14ce4e25a5b76628899bc5da",
+    "scenario_digest": "sha256:cd9edd9733efdf4ae4577689f534583f7f01ab67792950ed770a9a4aa48821c6",
     "vocabulary_versions": {
       "synthetic": "2026.01"
     }
@@ -2624,19 +2630,19 @@
       "action": "select",
       "actor_type": "policy",
       "attributes": {},
-      "conflict_id": "conflict_fcb386a68946f1634f2a16293f0a2a61",
-      "derivation_hash": "sha256:1fbe25be2ecd1fb7575a900cc079fe1ea4d77a03496488929aa0b6b417296ce9",
+      "conflict_id": "conflict_52c1866a69fbb0efbb97c539078dec8f",
+      "derivation_hash": "sha256:91491678f88abb426020327f81c8cd32775afcb7bb25cfe44b44bcc0b68015ad",
       "occurred_at": "2026-01-02T06:04:05Z",
       "policy_id": "openmed.golden.conflict_review",
       "policy_version": "1.0.0",
       "rationale_code": "source_reviewed",
       "rejected_fact_ids": [
-        "fact_6d9fe8fcd5e673d357130333b801461b"
+        "fact_0465591f5e04b2a9aee22c6c061f8190"
       ],
-      "resolution_id": "resolution_f7d9100f6cc111676f4f41e34be8f5b8",
+      "resolution_id": "resolution_c9f105ef68996b77b1438e2d562131c9",
       "schema_version": "1.0.0",
       "selected_fact_ids": [
-        "fact_689a66d4d87a91fbcca5fc1f28833938"
+        "fact_4d9a601ec62d7a74a85069ef6b0bafa2"
       ],
       "supersedes_resolution_id": null
     }
@@ -2646,7 +2652,7 @@
   "sources": [
     {
       "artifact": {
-        "artifact_id": "artifact_6d7b960693524a604fa94552883ebbf1",
+        "artifact_id": "artifact_f34d211adb6806d76d4b8577b0a5eb39",
         "artifact_type": "text",
         "attributes": {
           "coordinate_convention": "unicode_text_v1",
@@ -2659,12 +2665,12 @@
           },
           "parser_id": "openmed.evidence.text",
           "parser_version": "1.0.0",
-          "source_digest": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3",
+          "source_digest": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f",
           "source_format": "text",
           "source_version": "plain"
         },
-        "byte_size": 53,
-        "content_hash": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3",
+        "byte_size": 107,
+        "content_hash": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f",
         "derivation_hash": null,
         "encounter_id": "encounter_synthetic0000001",
         "media_type": "text/plain",
@@ -2676,28 +2682,28 @@
       },
       "evidence": [
         {
-          "artifact_id": "artifact_6d7b960693524a604fa94552883ebbf1",
+          "artifact_id": "artifact_f34d211adb6806d76d4b8577b0a5eb39",
           "location": {
-            "end": 53,
+            "end": 107,
             "start": 0
           },
           "location_type": "text_span",
-          "locator_id": "evidence_a12577840b639e1246ebaf96e7ab08cc",
+          "locator_id": "evidence_8a9c907b51ba9c03e34173b118f7886d",
           "schema_version": "1.0.0",
           "transform": {
-            "source_digest": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3"
+            "source_digest": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f"
           }
         }
       ],
       "format": "text",
       "name": "note",
-      "source_digest": "sha256:f28df7bb69de7e8b5967f578ef5129b218be465fc267591722f23fb0bcde0be3",
+      "source_digest": "sha256:3649828e34e344587b43b045fb4223e68d7b809ab0692aec680e9f7ddc47a58f",
       "source_id": "source_textsynthetic001",
-      "source_size": 53
+      "source_size": 107
     },
     {
       "artifact": {
-        "artifact_id": "artifact_3918521f8f5d8e6dcc1b76f9a7452b45",
+        "artifact_id": "artifact_74357ef0f6c7f32776aaf075e85f073e",
         "artifact_type": "fhir_r4",
         "attributes": {
           "coordinate_convention": "fhir_json_pointer_v1",
@@ -2710,12 +2716,12 @@
           },
           "parser_id": "openmed.evidence.fhir_r4",
           "parser_version": "1.0.0",
-          "source_digest": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a",
+          "source_digest": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620",
           "source_format": "fhir_r4",
           "source_version": "4.0.1"
         },
-        "byte_size": 124,
-        "content_hash": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a",
+        "byte_size": 227,
+        "content_hash": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620",
         "derivation_hash": null,
         "encounter_id": "encounter_synthetic0000001",
         "media_type": "application/fhir+json",
@@ -2727,27 +2733,27 @@
       },
       "evidence": [
         {
-          "artifact_id": "artifact_3918521f8f5d8e6dcc1b76f9a7452b45",
+          "artifact_id": "artifact_74357ef0f6c7f32776aaf075e85f073e",
           "location": {
-            "pointer": "/clinicalStatus/text"
+            "pointer": "/code/text"
           },
           "location_type": "json_pointer",
-          "locator_id": "evidence_7425abd01c1fa62fc179fe0492b2f65b",
+          "locator_id": "evidence_083c8a505d9d3673346efd4a42e89950",
           "schema_version": "1.0.0",
           "transform": {
-            "source_digest": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a"
+            "source_digest": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620"
           }
         }
       ],
       "format": "fhir_r4",
       "name": "exchange",
-      "source_digest": "sha256:f66e033edc9f33ec41f6ddfbd22220441127364c14db8a151c3dbaa71b1ea67a",
+      "source_digest": "sha256:e1b85a4d15d3f7bf84e47fb76a7712bf2a6c5532a8c677d3f50e5eec5e0db620",
       "source_id": "source_fhirsynthetic001",
-      "source_size": 124
+      "source_size": 227
     },
     {
       "artifact": {
-        "artifact_id": "artifact_cb13f195e22f994caea518559b89d164",
+        "artifact_id": "artifact_534b815d7fae4cdee634c68d21d7c53f",
         "artifact_type": "hl7v2",
         "attributes": {
           "coordinate_convention": "hl7v2_field_component_v1",
@@ -2760,12 +2766,12 @@
           },
           "parser_id": "openmed.evidence.hl7v2",
           "parser_version": "1.0.0",
-          "source_digest": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d",
+          "source_digest": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80",
           "source_format": "hl7v2",
           "source_version": "2.5.1"
         },
-        "byte_size": 138,
-        "content_hash": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d",
+        "byte_size": 194,
+        "content_hash": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80",
         "derivation_hash": null,
         "encounter_id": "encounter_synthetic0000001",
         "media_type": "application/hl7-v2",
@@ -2777,27 +2783,27 @@
       },
       "evidence": [
         {
-          "artifact_id": "artifact_cb13f195e22f994caea518559b89d164",
+          "artifact_id": "artifact_534b815d7fae4cdee634c68d21d7c53f",
           "location": {
-            "path": "PID.3.1[1]"
+            "path": "PID.1.1[1]"
           },
           "location_type": "message_field",
-          "locator_id": "evidence_097ce9264647d07536c882c9e77bff84",
+          "locator_id": "evidence_0ea8e5e908c345241b2357f5200038d3",
           "schema_version": "1.0.0",
           "transform": {
-            "source_digest": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d"
+            "source_digest": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80"
           }
         }
       ],
       "format": "hl7v2",
       "name": "message",
-      "source_digest": "sha256:2f9eac5650fef6086101369b1a1fb4c3f769602798b077633beb35688b8add3d",
+      "source_digest": "sha256:e0d24dd45bd3dbc388ef7cf5d1a4e15f65449a138e83c547ec8aa40f9b223d80",
       "source_id": "source_hl7synthetic0001",
-      "source_size": 138
+      "source_size": 194
     },
     {
       "artifact": {
-        "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
+        "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
         "artifact_type": "csv",
         "attributes": {
           "coordinate_convention": "table_cell_v1",
@@ -2811,12 +2817,12 @@
           },
           "parser_id": "openmed.evidence.csv",
           "parser_version": "1.0.0",
-          "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+          "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
           "source_format": "csv",
           "source_version": "rfc4180"
         },
-        "byte_size": 56,
-        "content_hash": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+        "byte_size": 106,
+        "content_hash": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
         "derivation_hash": null,
         "encounter_id": "encounter_synthetic0000001",
         "media_type": "text/csv",
@@ -2828,24 +2834,24 @@
       },
       "evidence": [
         {
-          "artifact_id": "artifact_f73e7226b621150b62da07f7918e983f",
+          "artifact_id": "artifact_6a66ce853e93d38bdfd30b949221ac6e",
           "location": {
-            "column": 1,
-            "row": 2
+            "column": 4,
+            "row": 1
           },
           "location_type": "table_cell",
-          "locator_id": "evidence_0820a2d6d80d92ff2434dd0d0a29c431",
+          "locator_id": "evidence_0453d9b00e8f278e72b6a8601ecb0573",
           "schema_version": "1.0.0",
           "transform": {
-            "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d"
+            "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3"
           }
         }
       ],
       "format": "csv",
       "name": "table",
-      "source_digest": "sha256:e76841faedb85362270334275747d6831ccb45f9447d7366419df7a505365a6d",
+      "source_digest": "sha256:6ea94a9efa92292625e51e811351c3634f5486af40cb6f341c6e5d7db22fd3b3",
       "source_id": "source_tablesynthetic001",
-      "source_size": 56
+      "source_size": 106
     },
     {
       "artifact": {
@@ -2885,7 +2891,7 @@
             "tag": "0040,A730"
           },
           "location_type": "dicom_element",
-          "locator_id": "evidence_6a3095b499b92c98e1de6e7fad0ead22",
+          "locator_id": "evidence_b9ce359c31f59013a449669c1eb715c5",
           "schema_version": "1.0.0",
           "transform": {
             "coordinate_record": {
@@ -2894,7 +2900,7 @@
               "node_path": "1.1",
               "normalized_span": [
                 0,
-                39
+                93
               ],
               "schema_version": "1.0.0"
             },
@@ -2923,7 +2929,7 @@
   "unit_conversion": {
     "canonical_magnitude": 0.9,
     "canonical_unit": "g/L",
-    "original_fact_id": "fact_701dc65c43f54462bc7158aac3e00c64",
+    "original_fact_id": "fact_e824241e43b84c7201881f96ead18e4c",
     "original_unit": "mg/dL",
     "status": "ok"
   }

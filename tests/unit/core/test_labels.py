@@ -204,9 +204,8 @@ from openmed.core.labels import (
 class TestEnglishLabels:
     """Lowercase snake_case forms emitted by the English/multilingual models."""
 
-    @pytest.mark.parametrize(
-        "label,expected",
-        [
+    def test_english_lowercase(self, subtests):
+        for label, expected in [
             ("first_name", FIRST_NAME),
             ("last_name", LAST_NAME),
             ("name", PERSON),
@@ -235,18 +234,16 @@ class TestEnglishLabels:
             ("zip", ZIPCODE),
             ("postal_code", ZIPCODE),
             ("credit_debit_card", CREDIT_CARD),
-        ],
-    )
-    def test_english_lowercase(self, label, expected):
-        assert normalize_label(label) == expected
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label) == expected
 
 
 class TestPortugueseUppercaseLabels:
     """All 52 Portuguese UPPERCASE labels from the registry."""
 
-    @pytest.mark.parametrize(
-        "label,expected",
-        [
+    def test_portuguese_uppercase(self, subtests):
+        for label, expected in [
             ("ACCOUNTNAME", "ACCOUNT_NUMBER"),
             ("AGE", AGE),
             ("AMOUNT", "AMOUNT"),
@@ -301,18 +298,16 @@ class TestPortugueseUppercaseLabels:
             ("VIN", "VIN"),
             ("VRM", "VEHICLE_REGISTRATION"),
             ("ZIPCODE", ZIPCODE),
-        ],
-    )
-    def test_portuguese_uppercase(self, label, expected):
-        assert normalize_label(label, lang="pt") == expected
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label, lang="pt") == expected
 
 
 class TestBIOESPrefixes:
     """Privacy-filter family emits BIOES-tagged labels."""
 
-    @pytest.mark.parametrize(
-        "label,expected",
-        [
+    def test_bioes_prefix_stripped(self, subtests):
+        for label, expected in [
             ("B-NAME", PERSON),
             ("I-NAME", PERSON),
             ("E-NAME", PERSON),
@@ -326,10 +321,9 @@ class TestBIOESPrefixes:
             ("S-FIRSTNAME", FIRST_NAME),
             ("B-CPF", ID_NUM),
             ("I-CREDITCARD", CREDIT_CARD),
-        ],
-    )
-    def test_bioes_prefix_stripped(self, label, expected):
-        assert normalize_label(label) == expected
+        ]:
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label) == expected
 
 
 class TestEdgeCases:
@@ -380,9 +374,8 @@ class TestEdgeCases:
 
 
 class TestIdentifierSubtypes:
-    @pytest.mark.parametrize(
-        "label,expected_subtype",
-        [
+    def test_id_aliases_keep_canonical_id_num_with_subtype(self, subtests):
+        for label, expected_subtype in [
             ("medical_record_number", ID_SUBTYPE_MRN),
             ("mrn", ID_SUBTYPE_MRN),
             ("npi", ID_SUBTYPE_NPI),
@@ -401,16 +394,11 @@ class TestIdentifierSubtypes:
             ("teudat_zehut", ID_SUBTYPE_NATIONAL_ID),
             ("tz", ID_SUBTYPE_NATIONAL_ID),
             ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
-        ],
-    )
-    def test_id_aliases_keep_canonical_id_num_with_subtype(
-        self,
-        label,
-        expected_subtype,
-    ):
-        assert normalize_label(label) == ID_NUM
-        assert id_subtype_for(label) == expected_subtype
-        assert expected_subtype in ID_SUBTYPES
+        ]:
+            with subtests.test(label=label, expected_subtype=expected_subtype):
+                assert normalize_label(label) == ID_NUM
+                assert id_subtype_for(label) == expected_subtype
+                assert expected_subtype in ID_SUBTYPES
 
     def test_flat_canonical_id_num_consumers_are_unchanged(self):
         assert normalize_label("mrn") == ID_NUM
@@ -548,9 +536,8 @@ class TestBiomedicalEntityLabels:
         for label in BIOMEDICAL_LABELS:
             assert normalize_label(label) == label
 
-    @pytest.mark.parametrize(
-        ("alias", "expected"),
-        [
+    def test_family_native_aliases_normalize(self, subtests):
+        for alias, expected in [
             ("simple_chemical", CHEMICAL),
             ("CHEM", CHEMICAL),
             ("amino_acid", CHEMICAL),
@@ -568,10 +555,9 @@ class TestBiomedicalEntityLabels:
             ("laterality", LATERALITY),
             ("measurement", MEASUREMENT),
             ("impression", FINDING),
-        ],
-    )
-    def test_family_native_aliases_normalize(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_biomedical_labels_are_non_pii_and_have_no_identifier_tags(self):
         for label in BIOMEDICAL_LABELS:
@@ -615,9 +601,8 @@ class TestClinicalConceptLabels:
         for label in self.NEW_LABELS:
             assert normalize_label(label) == label
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_clinical_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("disease", DISEASE),
             ("diagnosis", PROBLEM),
             ("finding", FINDING),
@@ -633,10 +618,9 @@ class TestClinicalConceptLabels:
             ("anatomy", ANATOMY),
             ("organ", ORGAN),
             ("body site", BODY_SITE),
-        ],
-    )
-    def test_clinical_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_new_labels_are_clinical_concepts(self):
         for label in self.NEW_LABELS:
@@ -666,9 +650,8 @@ class TestAnesthesiaConceptLabels:
         for label in self.NEW_LABELS:
             assert normalize_label(label) == label
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_anesthesia_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("anesthesia type", ANESTHESIA_TYPE),
             ("anesthesia", ANESTHESIA_TYPE),
             ("anesthetic agent", ANESTHETIC_AGENT),
@@ -677,10 +660,9 @@ class TestAnesthesiaConceptLabels:
             ("airway", AIRWAY_MANAGEMENT),
             ("ASA class", ASA_CLASS),
             ("ASA physical status", ASA_CLASS),
-        ],
-    )
-    def test_anesthesia_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_anesthesia_labels_are_clinical_concepts(self):
         for label in self.NEW_LABELS:
@@ -702,9 +684,8 @@ class TestEndocrinologyConceptLabels:
         INSULIN_REGIMEN,
     )
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_endocrinology_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("glycemic measure", GLYCEMIC_MEASURE),
             ("HbA1c", GLYCEMIC_MEASURE),
             ("glucose", GLYCEMIC_MEASURE),
@@ -718,10 +699,9 @@ class TestEndocrinologyConceptLabels:
             ("glargine", INSULIN_REGIMEN),
             ("metabolic finding", CONDITION),
             ("endocrine gland", BODY_SITE),
-        ],
-    )
-    def test_endocrinology_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_endocrinology_labels_round_trip(self):
         for label in self.NEW_LABELS:
@@ -745,9 +725,8 @@ class TestGastroenterologyConceptLabels:
         POLYP_DESCRIPTOR,
     )
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_gastroenterology_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("endoscopic finding", ENDOSCOPIC_FINDING),
             ("endoscopy finding", ENDOSCOPIC_FINDING),
             ("colonoscopy", ENDOSCOPIC_FINDING),
@@ -763,10 +742,9 @@ class TestGastroenterologyConceptLabels:
             ("lesion morphology", POLYP_DESCRIPTOR),
             ("sessile polyp", POLYP_DESCRIPTOR),
             ("biopsy site", BODY_SITE),
-        ],
-    )
-    def test_gastroenterology_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_gastroenterology_labels_round_trip(self):
         for label in self.NEW_LABELS:
@@ -789,9 +767,8 @@ class TestPediatricGrowthConceptLabels:
         DEVELOPMENTAL_MILESTONE,
     )
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_pediatric_growth_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("growth parameter", GROWTH_PARAMETER),
             ("weight", GROWTH_PARAMETER),
             ("length", GROWTH_PARAMETER),
@@ -811,10 +788,9 @@ class TestPediatricGrowthConceptLabels:
             ("motor development", DEVELOPMENTAL_MILESTONE),
             ("feeding history", NUTRITIONAL_STATUS),
             ("pediatric finding", CONDITION),
-        ],
-    )
-    def test_pediatric_growth_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_pediatric_growth_labels_round_trip(self):
         for label in self.NEW_LABELS:
@@ -838,9 +814,8 @@ class TestNursingObservationConceptLabels:
         CARE_INTERVENTION,
     )
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_nursing_observation_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("intake output", INTAKE_OUTPUT),
             ("intake and output", INTAKE_OUTPUT),
             ("urine output", INTAKE_OUTPUT),
@@ -861,10 +836,9 @@ class TestNursingObservationConceptLabels:
             ("mobility status", OTHER),
             ("pain score", OTHER),
             ("skin assessment", BODY_SITE),
-        ],
-    )
-    def test_nursing_observation_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_nursing_observation_labels_round_trip(self):
         for label in self.NEW_LABELS:
@@ -888,9 +862,8 @@ class TestFunctionalStatusConceptLabels:
         FUNCTIONAL_SCALE,
     )
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_functional_status_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("ADL activity", ADL_ACTIVITY),
             ("activity of daily living", ADL_ACTIVITY),
             ("assistance level", ASSISTANCE_LEVEL),
@@ -904,10 +877,9 @@ class TestFunctionalStatusConceptLabels:
             ("Barthel Index", FUNCTIONAL_SCALE),
             ("Katz", FUNCTIONAL_SCALE),
             ("cognitive status", OTHER),
-        ],
-    )
-    def test_functional_status_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_functional_status_labels_round_trip(self):
         for label in self.NEW_LABELS:

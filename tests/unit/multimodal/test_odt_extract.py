@@ -163,22 +163,19 @@ def test_invalid_odt_archive_raises_clear_error(tmp_path: Path):
     path = tmp_path / "invalid.odt"
     path.write_bytes(b"not an odt archive")
 
-    with pytest.raises(UnsupportedDocumentError, match="valid ZIP archive"):
+    with pytest.raises(UnsupportedDocumentError, match="archive_invalid"):
         extract_odt(path)
 
 
-def test_odt_rejects_corrupt_compressed_content(tmp_path: Path, monkeypatch):
+def test_odt_rejects_corrupt_compressed_content(tmp_path: Path):
     path = _write_synthetic_odt(tmp_path / "corrupt-content.odt")
-    read = zipfile.ZipFile.read
-
-    def corrupt_content(archive, name, *args, **kwargs):
-        if name == "content.xml":
-            raise zlib.error("synthetic invalid compressed data")
-        return read(archive, name, *args, **kwargs)
-
-    monkeypatch.setattr(zipfile.ZipFile, "read", corrupt_content)
-
-    with pytest.raises(UnsupportedDocumentError, match="readable entries"):
+    with zipfile.ZipFile(path) as archive:
+        info = archive.getinfo("content.xml")
+        data_offset = info.header_offset + 30 + len(info.filename) + len(info.extra)
+    raw = bytearray(path.read_bytes())
+    raw[data_offset] ^= 0x2
+    path.write_bytes(raw)
+    with pytest.raises(UnsupportedDocumentError, match="archive_invalid"):
         extract_odt(path)
 
 
@@ -200,29 +197,35 @@ def _patch_compression_method(path: Path, entry: str, method: int) -> Path:
     return path
 
 
-@pytest.mark.parametrize("entry", ["mimetype", "content.xml"])
-def test_odt_rejects_unimplemented_compression_methods(tmp_path: Path, entry: str):
-    path = tmp_path / "unknown-method.odt"
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
-        archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
-        archive.writestr("content.xml", CONTENT_XML)
-    _patch_compression_method(path, entry, 99)
+def test_odt_rejects_unimplemented_compression_methods(subtests, tmp_path):
+    case_root = tmp_path
+    for entry in ["mimetype", "content.xml"]:
+        with subtests.test(entry=entry):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "unknown-method.odt"
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_STORED) as archive:
+                archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+                archive.writestr("content.xml", CONTENT_XML)
+            _patch_compression_method(path, entry, 99)
 
-    with pytest.raises(UnsupportedDocumentError, match="stored or deflate"):
-        extract_odt(path)
+            with pytest.raises(UnsupportedDocumentError, match="archive_compression"):
+                extract_odt(path)
 
 
-@pytest.mark.parametrize("compression", [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA])
-def test_odt_rejects_compression_methods_outside_odf_packages(
-    tmp_path: Path, compression: int
-):
-    path = tmp_path / "non-odf-method.odt"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
-        archive.writestr("content.xml", CONTENT_XML, compress_type=compression)
+def test_odt_rejects_compression_methods_outside_odf_packages(subtests, tmp_path):
+    case_root = tmp_path
+    for compression in [zipfile.ZIP_BZIP2, zipfile.ZIP_LZMA]:
+        with subtests.test(compression=compression):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "non-odf-method.odt"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+                archive.writestr("content.xml", CONTENT_XML, compress_type=compression)
 
-    with pytest.raises(UnsupportedDocumentError, match="stored or deflate"):
-        extract_odt(path)
+            with pytest.raises(UnsupportedDocumentError, match="archive_compression"):
+                extract_odt(path)
 
 
 def test_odt_accepts_stored_and_deflated_entries(tmp_path: Path):

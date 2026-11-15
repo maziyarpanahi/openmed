@@ -64,9 +64,8 @@ def test_pass_and_value_free_report():
     assert "Juniper" not in report and "Dehydration" not in report
 
 
-@pytest.mark.parametrize(
-    "change,gate",
-    [
+def test_gate_rejects(subtests):
+    for change, gate in [
         ({"summary": "Juniper Example improved."}, "summary_leakage"),
         ({"summary_facts": []}, "summary_clinical_fact_recall"),
         ({"adjudications": None}, "summary_citation_support"),
@@ -85,21 +84,21 @@ def test_pass_and_value_free_report():
             "summary_fact_coverage",
         ),
         ({"source_facts": []}, "summary_evidence"),
-    ],
-)
-def test_gate_rejects(change, gate):
-    values = sample()
-    values.update(change)
-    checks = {c.gate: c for c in evaluate_summary_gate(**values)}
-    assert gate in checks, {k: v.to_dict() for k, v in checks.items()}
-    assert not checks[gate].passed
+    ]:
+        with subtests.test(change=change, gate=gate):
+            values = sample()
+            values.update(change)
+            checks = {c.gate: c for c in evaluate_summary_gate(**values)}
+            assert gate in checks, {k: v.to_dict() for k, v in checks.items()}
+            assert not checks[gate].passed
 
 
-@pytest.mark.parametrize("value", [True, float("nan"), -1, 2])
-def test_invalid_thresholds_fail_closed(value):
-    values = sample()
-    values["thresholds"]["fact_coverage_min"] = value
-    assert not evaluate_summary_gate(**values)[0].passed
+def test_invalid_thresholds_fail_closed(subtests):
+    for value in [True, float("nan"), -1, 2]:
+        with subtests.test(value=value):
+            values = sample()
+            values["thresholds"]["fact_coverage_min"] = value
+            assert not evaluate_summary_gate(**values)[0].passed
 
 
 def test_missing_dua_corpus_fails_closed(monkeypatch):
@@ -131,6 +130,25 @@ def test_seeded_gold_and_actual_extractive_report_are_reproducible():
     )
     assert report["metrics"]["generated_count"] == 3
     assert not verify_summary_report(report)
+    baseline = run_summary_benchmark(
+        "extractive-baseline", seeds=seeds, thresholds=sample()["thresholds"]
+    ).to_dict()
+    assert not verify_summary_report(baseline)
+    assert baseline["metadata"]["output_digest"] == (
+        "sha256:79c018cd08babb008c8bcefd2c67db578fd75665b5da9f3a25c1d77fb5780988"
+    )
+    for candidate, recall in ((report, 1.0), (baseline, 0.75)):
+        assert candidate["metadata"]["synthetic_only"]
+        assert not candidate["metadata"]["clinical_validation"]
+        assert candidate["metrics"]["failed_fixture_count"] == 3
+        for row in candidate["metrics"]["checks"]:
+            checks = {c["gate"]: c for c in row}
+            assert checks["summary_clinical_fact_recall"]["details"]["value"] == recall
+            assert checks["summary_fact_coverage"]["details"]["value"] == recall
+            assert not checks["summary_citation_support"]["passed"]
+            assert (
+                checks["summary_citation_support"]["reason"] == "missing_adjudication"
+            )
     for fixture in gold:
         assert fixture["text"] not in json.dumps(report)
 

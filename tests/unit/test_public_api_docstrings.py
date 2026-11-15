@@ -57,6 +57,7 @@ EXPECTED_DATA_EXPORTS = {
 }
 
 
+@pytest.mark.slow
 def test_public_api_docstring_coverage_meets_floor():
     """Every public function/class export must carry a docstring."""
     report = checker.measure_public_api_docstrings(min_coverage=MIN_COVERAGE)

@@ -1,0 +1,72 @@
+{
+  "synthetic_only": true,
+  "version": 1,
+  "provenance": {
+    "provider_id": "synthetic",
+    "provider_revision": "v1.0+local",
+    "model_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "language": "en-US"
+  },
+  "invalid_provenance": [
+    {
+      "field": "provider_id",
+      "value": "-bad"
+    },
+    {
+      "field": "provider_id",
+      "value": "bad\n"
+    },
+    {
+      "field": "provider_revision",
+      "value": "bad/one"
+    },
+    {
+      "field": "model_fingerprint",
+      "value": "sha256:GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"
+    },
+    {
+      "field": "language",
+      "value": "english"
+    },
+    {
+      "field": "language",
+      "value": "en-"
+    }
+  ],
+  "segment": {
+    "segment_index": 2,
+    "text": "Café 😀",
+    "start_ms": 500,
+    "end_ms": 900,
+    "token_times": [
+      {
+        "token_index": 0,
+        "start_ms": 500,
+        "end_ms": 650,
+        "confidence_ppm": 750000,
+        "token": "Café"
+      },
+      {
+        "token_index": 1,
+        "start_ms": 650,
+        "end_ms": 900,
+        "confidence_ppm": 250000,
+        "token": " 😀"
+      }
+    ]
+  },
+  "invalid_tokens": [
+    {
+      "start_ms": -1
+    },
+    {
+      "end_ms": 86400001
+    },
+    {
+      "confidence_ppm": 1000001
+    },
+    {
+      "end_ms": 499
+    }
+  ]
+}

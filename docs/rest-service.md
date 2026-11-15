@@ -26,11 +26,27 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
 - `POST /v1/decisions`
+- `POST /v1/systemone`
 - `POST /omop/load`
 - `POST /cohort/resolve`
+- `POST /v1/workflows/preflight`
+- `POST /v1/workflows/preview`
+- `POST /v1/workflows/status`
+- `POST /v1/workflows/review-receipts`
+- `POST /v1/workflows/cancel`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
-schema and returns `404` unless metrics are enabled.
+schema and returns `404` unless metrics are enabled. The authenticated
+`/service/metadata` operator route is excluded the same way; see
+[service metadata](#get-servicemetadata). The operator `/v1/compatibility`
+route is also excluded from the generated schema; it publishes the value-free
+upgrade contract described in [Zero-Downtime Upgrades](deploy/upgrades.md).
+
+Swagger UI (`/docs`), ReDoc (`/redoc`), and the live `/openapi.json` are served
+only in the `dev` profile. Other profiles do not register them; the committed
+`docs/api/openapi.json` is the published contract. See
+[API Docs and Service Metadata](serving/authentication.md#api-docs-and-service-metadata)
+for the authenticated `OPENMED_SERVICE_OPENAPI_ENABLED` opt-in.
 
 The service includes stricter request validation, shared model/pipeline reuse,
 optional startup preload, bounded warm-pool residency, model keep-alive
@@ -56,12 +72,166 @@ uv pip install -e ".[hf,service]"
 Start the API server:
 
 ```bash
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Keep this loopback bind for local use. Before exposing the service on a network,
 configure [authentication](serving/authentication.md), TLS at the ingress or
 reverse proxy, and an exact trusted-host allowlist.
+
+## Experimental multimodal preflight
+
+The single-asset `POST /experimental/multimodal/preflight` route is absent from
+both routing and runtime OpenAPI unless explicitly enabled. Opt in locally:
+
+```bash
+OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT=1 \
+  python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+An embedding host can instead call
+`create_app(experimental_multimodal_preflight=True)`; explicit `False` overrides
+the environment. Unset, `0`, or `false` disables the route; `1` or `true` enables
+it. Other flag values fail configuration without echoing their contents. The
+committed [OpenAPI catalog](api/openapi.json) lists this opt-in operation under
+`x-openmed-experimental-paths`, with `x-experimental: true` and
+`x-enabled-by-default: false`. Its main `paths` map describes the default service
+for existing clients. An enabled running app includes the route in its normal
+OpenAPI `paths`; the default running app omits it.
+
+Send raw bytes as `Content-Type: application/octet-stream`. Supply exactly one
+`X-OpenMed-Manifest` header containing a strict
+[asset manifest](multimodal/asset-manifests.md) JSON object, at most 8192 UTF-8
+bytes. Unknown fields, duplicate JSON keys, duplicate headers, paths, free-text
+metadata and malformed values are rejected. Use a caller-generated opaque
+`asset_id`, never a filename or patient identifier. This transport avoids
+multipart upload spooling and requires no upload dependency.
+
+For example, this caller builds a manifest for a synthetic PNG prefix in memory:
+
+```python
+import hashlib
+import json
+import requests
+
+payload = b"\x89PNG\r\n\x1a\n" + b"synthetic"
+manifest = {
+    "asset_id": "synthetic-asset-1",
+    "media_type": "image/png",
+    "sha256": hashlib.sha256(payload).hexdigest(),
+    "byte_size": len(payload),
+    "width": 8,
+    "height": 8,
+}
+response = requests.post(
+    "http://127.0.0.1:8080/experimental/multimodal/preflight",
+    headers={
+        "Content-Type": "application/octet-stream",
+        "X-OpenMed-Manifest": json.dumps(manifest),
+    },
+    data=payload,
+    timeout=30,
+)
+response.raise_for_status()
+assert response.json()["status"] == "accept"
+```
+
+A successful transport returns HTTP 200 with the exact bytes from
+`preflight_asset(manifest, payload).to_json()`, using the core desktop-v1 limit
+profile. This includes ordinary `abstain` reports: HTTP 200 does not mean asset
+acceptance. In particular, the current PDF manifest cannot express raster pixel
+budgets, so PDF can abstain with `insufficient_metadata`; REST preserves that
+result. Preflight checks declarations, a bounded media signature and integrity;
+it does not decode, redact, validate clinical content or qualify a provider.
+
+Errors use the existing `{"error":{"code":...,"message":...,"details":...}}`
+envelope, without input or exception details:
+
+| HTTP | Code | Trigger |
+| --- | --- | --- |
+| 413 | `request_size_exceeded` | Global `OPENMED_SERVICE_MAX_REQUEST_BYTES` ceiling |
+| 413 | `payload_too_large` | Route body ceiling (`max_request_body_bytes` factory override) |
+| 400 | `request_size_invalid` | Invalid declared request length |
+| 415 | `unsupported_media_type` | Transport is not raw octet-stream |
+| 422 | `malformed_manifest` | Missing, duplicate, oversized or invalid manifest header |
+| 422 | `byte_count_mismatch` | Declared byte count differs from received source |
+| 422 | `sha256_mismatch` | Source digest differs from the manifest |
+
+Both body ceilings apply before preflight, including chunked bodies and bodies
+with incorrect `Content-Length`. The smaller ceiling wins. Source bytes remain
+in memory for the request; the adapter writes no temporary files, caches or
+artifacts. It loads no models, calls no providers and adds no network calls.
+The route follows existing service authentication settings and requires
+`pii:read` when authentication is enabled. Its service access
+logs contain only the fixed route, outcome and controlled reason codes, in both
+JSON and plain formats. Caller request IDs are replaced with generated IDs for
+this route, so failure responses and logs cannot echo identifier-bearing header
+values. Configure ingress/client logging separately to avoid recording headers
+or bodies.
+
+This experimental adapter is REST-only. Batch preflight, inference, SDK changes,
+authentication policy changes and autonomous clinical action are outside this
+surface. The report is non-diagnostic; any later consequential workflow must
+obtain explicit reviewer confirmation before acting on its outputs.
+
+With `OPENMED_PROFILE` unset the service runs under the production
+[security profile](serving/security-profile.md): until authentication is
+configured, `/readyz` reports `security_profile_invalid` and other routes answer
+`503`. For local exploration, prefix these commands with `OPENMED_PROFILE=dev`.
+Run `openmed service preflight` to see which controls a configuration passes.
+
+The reference launcher configures `StructuredJsonLogFormatter` for
+`openmed.service.access` and disables `uvicorn.access`. It emits exactly one
+structured record per request (method, route template, status, duration,
+request id), with no raw target/query string or client address.
+`OPENMED_SERVICE_LOG_LEVEL=off` suppresses those records too. Custom ASGI
+launchers must disable raw access logs (Uvicorn: `--no-access-log`) and configure
+the structured logger explicitly; otherwise rejected URLs may expose PHI.
+
+### Request IDs
+
+Every response carries an `X-Request-ID` header. The same value is the
+`error.request_id` in application error envelopes, the access-log `request_id`
+field and the `openmed.request_id` span attribute. The service keeps an inbound
+`X-Request-ID` only when the whole value matches `^[A-Za-z0-9_.:-]{1,128}$`:
+1 to 128 ASCII letters, digits, `_`, `.`, `:` or `-`. It replaces any other
+value with a random UUID: empty, longer than 128 characters, non-ASCII, or
+containing whitespace, CR/LF, commas, semicolons, slashes or other separators.
+The request is not rejected, and no part of the replaced value is echoed,
+logged or recorded on a span. Request IDs are correlation metadata only; use
+opaque values and never put patient identifiers or other sensitive data in
+them.
+
+The grammar is defined once in `openmed.service.request_id` and shared by the
+other request-ID boundaries:
+
+- The privacy proxy rejects a non-conforming `X-Request-ID` with `400` and
+  reason `request_id_invalid`, without echoing it.
+- The privacy gateway and the outbound and inbound privacy filters reject a
+  non-conforming `request_id` argument.
+- `OpenMedClient` raises `ValueError` before sending a non-conforming
+  `request_id`, and ignores a non-conforming `X-Request-ID` response header.
+
+Governed workflow routes keep only the narrower `req_` plus 32 lowercase hex
+digits or lowercase UUID forms; see [Governed workflows](#governed-workflows).
+
+### Served-model policy
+
+Set `OPENMED_SERVICE_SERVED_MODELS` to the comma-separated model ids or registry
+keys that network clients may select. Requests cannot select filesystem paths,
+home-relative names or undeclared Hub ids. Rejection occurs before loader/path
+inspection and returns `422 model_not_served` without echoing the value. REST,
+GraphQL, gRPC, async jobs, bulk/SMART and the privacy gateway use this shared
+runtime policy; Python-library and CLI model selection remain unchanged.
+
+Without an explicit set, the served ids are the documented defaults
+`disease_detection_superclinical` and
+`OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`, configured public preload ids,
+and the profile's public PII model id. `/models/loaded` includes `served_models`
+and a value-free `model_policy` self-check input. Production without an explicit
+set reports `served_models_not_explicit`; declare the intended set before
+deployment. This selection boundary does not authorize model acquisition:
+operators must separately provision the approved models and network policy.
 
 ## Postman Collection
 
@@ -121,9 +291,58 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     loaded = client.loaded_models()
 ```
 
+The client also exposes `ground()`, `profile()` and `resolve_cohort()` using
+the committed REST request fields. Grounding stays offline by default; the
+operator must provision the selected vocabulary snapshots. Profiling and
+cohort resolution send supplied JSONL content, never a server-side filename.
+
+```python
+from openmed.service.client import ConceptAncestorRequest, OpenMedClient
+
+
+def review_synthetic_batch(records_jsonl, reviewed_phenotype):
+    # The caller supplies a validated phenotype mapping and synthetic JSONL.
+    with OpenMedClient("http://127.0.0.1:8080") as client:
+        grounded = client.ground(
+            "type 2 diabetes", systems=["icd10cm"], top_k=3, offline=True
+        )
+        quality = client.profile(
+            records_jsonl, completeness_floor=0.9, required_fields=["condition"]
+        )
+        cohort = client.resolve_cohort(
+            reviewed_phenotype,
+            records_jsonl,
+            concept_ancestors=[ConceptAncestorRequest(201826, 443238)],
+            required_fields=["condition"],
+        )
+    return grounded, quality, cohort
+```
+
+All three calls accept an opaque `request_id` and use the same
+`OpenMedAPIError` handling as the existing methods. The request dataclasses
+`GroundRequest`, `ProfileRequest`, `CohortResolveRequest` and
+`ConceptAncestorRequest` describe their typed wire payloads. Treat returned
+grounded content as protected and cohort matches as review aids, not clinical
+actions; do not log patient text or records.
+
+Python OpenAPI coverage is explicit: every committed path must have a method
+or an entry in `CLIENT_OPENAPI_EXCLUSIONS`. The deliberately excluded paths are:
+
+- `/health`, `/livez`, `/readyz`: operator-owned deployment probes.
+- `/omop/load`: explicit direct REST bulk-loading workflow.
+- `/pii/deidentify/stream`: no sync de-identification-stream wrapper yet.
+- `/jobs`, `/jobs/{job_id}`: no sync asynchronous-job lifecycle wrapper yet.
+- `/fhir/smart-backend/ingestions`,
+  `/fhir/smart-backend/ingestions/{job_id}` and
+  `/fhir/smart-backend/ingestions/{job_id}/summary`: operator-managed SMART
+  ingestion workflows.
+
+The coverage test rejects a newly added OpenAPI path until it is implemented
+or deliberately documented in this list and the exclusion map.
+
 Non-2xx responses raise `OpenMedAPIError` with the service error `code`,
-`message`, optional `details`, HTTP status, and any `X-Request-ID` returned by
-the service or proxy:
+`message`, optional `details`, HTTP status, and any conforming `X-Request-ID`
+returned by the service or proxy (see [Request IDs](#request-ids)):
 
 ```python
 try:
@@ -151,8 +370,11 @@ export.
 Optional profile selection (defaults to `prod`):
 
 ```bash
-OPENMED_PROFILE=dev uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_PROFILE=dev python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
+
+The `dev` profile also serves the interactive API docs at `/docs` and `/redoc`
+and reports `version` and `profile` from `/health`.
 
 ## Browser and Host Allowlists
 
@@ -169,12 +391,20 @@ scheme/host/port origins and cannot use wildcards. Setting
 `OPENMED_SERVICE_TRUSTED_HOSTS` replaces the loopback default, so include every
 host the service should accept.
 
+Trusted-host validation runs first, then CORS, then authentication, all before
+any request body is read. Preflights therefore succeed without credentials, and
+`401`, `403`, `413` and `429` responses to allowed origins keep their CORS
+headers. Allowed origins may send `X-OpenMed-Priority`; with authentication
+enabled they may also send `Authorization` and `X-API-Key`. `X-Request-ID` and
+`Retry-After` are exposed to browser code. See
+[REST Authentication](serving/authentication.md#middleware-order).
+
 Example browser front-end configuration:
 
 ```bash
 OPENMED_SERVICE_CORS_ORIGINS=http://localhost:5173 \
 OPENMED_SERVICE_TRUSTED_HOSTS=127.0.0.1,localhost \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 For a reverse proxy in front of the service, configure the public browser
@@ -183,14 +413,14 @@ origin and the host header forwarded to Uvicorn:
 ```bash
 OPENMED_SERVICE_CORS_ORIGINS=https://clinic-ui.example.com \
 OPENMED_SERVICE_TRUSTED_HOSTS=api.example.com \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Optional shared model preload at startup:
 
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_PRELOAD_MODELS` is a comma-separated list of registry aliases or full Hugging Face ids. Empty entries are ignored and duplicates are removed.
@@ -200,7 +430,7 @@ Optional warm-pool resident model limit:
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
 OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MAX_RESIDENT_MODELS` bounds how many models remain resident in the shared warm-pool. When the limit is exceeded, the least-recently-used idle model is unloaded. Omit it for unbounded resident model caching.
@@ -208,7 +438,7 @@ uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 Optional default model keep-alive:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_KEEP_ALIVE` accepts seconds as a number or duration strings such as `30s`, `5m`, `1h30m`, or `1d`. Omit it for indefinite caching, use `0` for unload-after-request behavior, or use request-level `keep_alive` to override the default for one call.
@@ -216,7 +446,7 @@ OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 127.0.0.1 
 Optional request text cap:
 
 ```bash
-OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
@@ -230,7 +460,7 @@ Optional privacy-gateway egress endpoint:
 
 ```bash
 OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT=https://llm-proxy.example.com/complete \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `POST /privacy-gateway/complete` refuses to call an external LLM unless
@@ -250,7 +480,7 @@ OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
 OPENMED_SERVICE_BATCH_HIGH_WATERMARK=256 \
 OPENMED_SERVICE_BATCH_LOW_WATERMARK=128 \
 OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS=1000 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Dynamic batching is off by default. When enabled, `/pii/extract` groups
@@ -270,7 +500,7 @@ Optional request coalescing:
 
 ```bash
 OPENMED_SERVICE_COALESCING_ENABLED=true \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Request coalescing is off by default. When enabled, identical concurrent
@@ -286,7 +516,7 @@ OPENMED_SERVICE_RETRY_MAX_ATTEMPTS=3 \
 OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS=0.05 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS=30 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Model load and inference work is retried with bounded exponential backoff and
@@ -295,22 +525,143 @@ model/backend. While a breaker is open, model-backed endpoints return `503`
 with error code `circuit_breaker_open` and a `Retry-After` header. See
 [`Serving Resilience`](serving/resilience.md) for the full set of knobs.
 
-Optional graceful-shutdown drain timeout:
+Optional graceful-shutdown drain budget:
 
 ```bash
-OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 \
+OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS=5 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
-`OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
-During shutdown, readiness is flipped off, new model-backed work is rejected,
-and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
-`/privacy-gateway/complete` requests to finish. The default is `30`.
+Shutdown (SIGTERM or the end of the ASGI lifespan) runs one coordinated drain
+in ordered phases, each bounded by the budget:
+
+1. Readiness drops first (`/readyz` returns `503`), then admission closes on
+   every surface. New model-backed REST and GraphQL requests, including
+   `/jobs` submissions, get `503 not_ready` with a `Retry-After` header and
+   `details.reason = "shutting_down"`. gRPC calls get `UNAVAILABLE` with
+   details `shutting_down` and a `grpc-retry-pushback-ms` trailer when the
+   server was built with `create_grpc_server` on the same runtime.
+   `/livez` stays `200` throughout.
+2. Accepted work may finish for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`
+   (default `30`). Near the end of that window, NDJSON streams stop at their
+   next event and end with one `{"type":"error","error":{"code":"shutting_down",...}}`
+   line; buffered text that was not yet emitted is discarded, never flushed.
+   gRPC streams end the same way with `UNAVAILABLE`. Async jobs stop at their
+   next document boundary. A job still queued or running at the deadline is
+   recorded as `cancelled` with `error.code = "shutting_down"` and
+   `error.retryable = true`; a worker that finishes later cannot overwrite it.
+   Terminal job callbacks sent during a drain make one bounded attempt.
+3. Within `OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS` (default `5`), batch queues
+   are flushed, the gRPC server stops, the model warm pool is closed and its
+   models are unloaded, and accelerator caches already in use are released.
+
+Both values are finite, non-negative seconds. Set the pod termination grace
+period above their sum. With `OPENMED_SERVICE_METRICS_ENABLED=true`,
+`openmed_service_draining`, `openmed_service_drain_participant_total`, and
+`openmed_service_drain_unfinished` report drain progress using only phase,
+participant-category, and outcome labels.
+
+Optional NDJSON stream bounds:
+
+```bash
+OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS=30 \
+OPENMED_SERVICE_STREAM_MAX_EVENTS=100000 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+`OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS` is how long one write to a
+streaming client may stay blocked before the stream is stopped (default `30`).
+`OPENMED_SERVICE_STREAM_MAX_EVENTS` is the most NDJSON lines one stream may
+emit (default `100000`, maximum `10000000`). Both apply to
+`/pii/extract/stream` and `/pii/deidentify/stream`, must be positive, and
+cannot be disabled. See [NDJSON stream bounds](#ndjson-stream-bounds).
+
+Bulk Data and SMART ingestion job bounds:
+
+```bash
+OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS=4 \
+OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS=256 \
+OPENMED_SERVICE_BULK_JOB_TTL_SECONDS=3600 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+The `/fhir/bulk/*` and `/fhir/smart-backend/ingestions` job managers each apply
+these ceilings on their own. All three values are positive integers, and the
+running ceiling must not exceed the retained cap; invalid values fail at
+startup. A start beyond the running ceiling returns `503` with error code
+`bulk_jobs_saturated` and a `Retry-After` header before any output directory
+or task is created. Terminal job records expire after the TTL, and the oldest
+terminal records are evicted first when the retained cap is reached. Running
+jobs are never evicted. An expired job id returns the same `404` as an unknown
+id. See [FHIR Bulk Data](interop/fhir-bulk-data.md#job-admission-and-retention)
+for the per-request tuning limits.
+
+Request-body time limits and connection bounds:
+
+```bash
+OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS=60 \
+OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS=10 \
+OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND=1024 \
+OPENMED_SERVICE_LIMIT_CONCURRENCY=128 \
+OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE=5 \
+OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN=30 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+| Variable | Default | Bound |
+| --- | --- | --- |
+| `OPENMED_SERVICE_REQUEST_BODY_TIMEOUT_SECONDS` | `60` | Total time to receive one request body. |
+| `OPENMED_SERVICE_REQUEST_BODY_GRACE_SECONDS` | `10` | Time allowed before the minimum rate applies. |
+| `OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND` | `1024` | Minimum average body rate; `0` keeps only the total deadline. |
+| `OPENMED_SERVICE_LIMIT_CONCURRENCY` | `128` | Connections or tasks per worker process before Uvicorn answers `503`. |
+| `OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE` | `5` | Seconds an idle HTTP keep-alive connection stays open. |
+| `OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN` | `30` | Seconds shutdown waits for open connections before cancelling them. |
+
+Every `POST`, `PUT`, and `PATCH` body is buffered before route parsing or
+model execution, and it must arrive within these bounds. After the grace allowance, each received byte extends the
+allowance by `1 / OPENMED_SERVICE_REQUEST_BODY_MIN_BYTES_PER_SECOND` seconds,
+so a stalled body is rejected once the grace runs out and a trickling body is
+rejected as soon as it falls behind the minimum rate. A steady upload is
+limited only by the total deadline and the request-size limit. A rejected body
+returns `408` with error code `request_body_timeout` and `Connection: close`.
+Buffered chunks are released before that response is sent, and the response,
+logs, and counters never contain body content or client addresses. The same
+bounds apply to `/v1/workflows/*` bodies.
+
+The reference launcher passes the connection bounds to Uvicorn. The matching
+`--limit-concurrency`, `--timeout-keep-alive`, and `--timeout-graceful-shutdown`
+flags override the environment. Each value must be a positive integer.
+Uvicorn counts open connections, including idle keep-alive ones, and running
+tasks. At the limit, it answers `503 Service Unavailable` in plain text without
+calling the application. With the default 16 MiB request-size limit, the
+default of 128 bounds buffered request bodies to about 2 GiB per worker.
+`OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE` is the HTTP idle-connection timeout,
+separate from the model keep-alive `OPENMED_SERVICE_KEEP_ALIVE`. If a load
+balancer reuses upstream connections, keep its idle timeout below this value.
+Keep `OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN` below the orchestrator's stop
+grace period (45 seconds in the Helm chart and the Compose bundle). The
+application drain that follows waits only for work that outlived its request,
+for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+
+Uvicorn does not time out a connection that never finishes sending its request
+headers. Bound header read time and per-client connections at the reverse
+proxy or ingress in front of a network-exposed service. Custom ASGI launchers
+must set equivalent limits themselves.
+
+With metrics enabled, `/metrics` also exposes
+`openmed_service_request_body_timeout_total`, labelled only by `reason`
+(`deadline` or `min_rate`), and the unlabelled
+`openmed_service_connection_rejected_total`. Uvicorn rejects connections before
+the application runs, so the reference launcher counts its fixed
+connection-limit warning with
+`openmed.service.request_limits.ConnectionLimitLogFilter` on the
+`uvicorn.error` logger. Both counters are per worker process.
 
 Optional pull-only Prometheus metrics endpoint:
 
 ```bash
-OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_METRICS_ENABLED=true python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `GET /metrics` is disabled by default and returns `404` unless
@@ -325,6 +676,18 @@ untrusted networks. Metric labels are limited to static route templates and
 HTTP status codes; text, model outputs, entities, client identity, document
 content, and PHI are never used as label values.
 
+Timeouts end the client wait, not the underlying threadpool work. REST inference
+calls using request timeouts, GraphQL resolver calls, and batch submissions
+retain any concurrency permits and their shutdown-drain tokens until work
+finishes or fails. Drain-token and orphaned-work accounting also apply when
+neither a concurrency limit nor a rate limit is configured.
+While that work occupies a configured concurrency bound, new work returns `503
+service_busy`. Parallel GraphQL resolvers require separate model slots under
+the same bound. The existing REST `504 timeout` response is unchanged.
+`openmed_service_orphaned_work` counts admitted requests with outstanding work
+after their HTTP wait ends, without labels or input values; it returns to zero
+when that work settles. Timing out does not forcibly terminate model threads.
+
 Optional MLX-LM paged KV-cache budget for long-note generation:
 
 ```bash
@@ -332,7 +695,7 @@ OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET=512MiB \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS=128 \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS=512 \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN=65536 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET` is disabled when unset. It accepts
@@ -354,7 +717,7 @@ Optional OpenTelemetry tracing:
 
 ```bash
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Tracing is disabled by default and the OTLP exporter is created only when
@@ -370,6 +733,9 @@ names, counts, labels, lengths, and durations. See
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
 - Streaming de-identification advances the blocking core iterator in the
   threadpool and applies the same active-profile timeout to the complete stream.
+- Streaming PII extraction applies one active-profile deadline across every
+  extraction window, and both NDJSON streams bound slow consumers and event
+  counts; see [NDJSON stream bounds](#ndjson-stream-bounds).
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
 - `/privacy-gateway/complete` redacts PHI before the configured external LLM
@@ -383,7 +749,8 @@ names, counts, labels, lengths, and durations. See
 - Model load and inference work uses bounded retry and an in-process circuit
   breaker. Open breakers fail fast with `503` and `Retry-After`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
-- Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+- Graceful shutdown drops readiness, refuses new work on REST, GraphQL and gRPC with a retryable `shutting_down` result, lets accepted requests, streams and jobs finish or end with a typed terminal result within `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`, then releases batchers, models and accelerators within `OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS`.
+- Bulk Data and SMART ingestion jobs have running, retained and TTL ceilings; saturated starts fail fast with `503` `bulk_jobs_saturated` and `Retry-After`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
 - Application endpoint errors and invalid Host headers use one JSON envelope
@@ -394,30 +761,235 @@ names, counts, labels, lengths, and durations. See
 
 ## Endpoints
 
+### Governed workflows
+
+Five versioned `POST` routes inspect service-custodied actions and record
+review or cancellation metadata. Opaque references stay in JSON bodies rather
+than URLs. None of these routes dispatches, replays or compensates an effect.
+
+| Route | Required scope | Behavior |
+| --- | --- | --- |
+| `/v1/workflows/preflight` | `workflow:read` | Read permission and policy findings |
+| `/v1/workflows/preview` | `workflow:read` | Inspect the content-free effect plan |
+| `/v1/workflows/status` | `workflow:read` | Read lifecycle and effect evidence |
+| `/v1/workflows/review-receipts` | `workflow:review` | Submit a previously consumed approval receipt |
+| `/v1/workflows/cancel` | `workflow:cancel` | Record cancellation intent |
+
+The routes are disabled by default. A host application must configure
+[existing authentication](serving/authentication.md), inject a synchronous local
+`WorkflowGovernanceService`, and opt in with `WorkflowHTTPPolicy`. Passing a
+service alone does not enable the routes. Review submissions and cancellation
+have separate opt-ins. Every route requires an authenticated principal and its
+fixed scope, even if global route exemptions or scope overrides are configured.
+Disabling global authentication cannot make a workflow route public.
+
+```python
+from openmed.service.app import create_app
+from openmed.service.governed_workflows import WorkflowHTTPPolicy
+
+# custody_service is your trusted local governance implementation.
+app = create_app(
+    workflow_service=custody_service,
+    workflow_policy=WorkflowHTTPPolicy(
+        enabled=True,
+        allow_review_submissions=True,
+        allow_cancellation=True,
+        timeout_seconds=5.0,
+    ),
+)
+```
+
+All requests require exactly these six reference fields. The identifiers below
+are synthetic. Inspection may set `expected_state_digest` and `request_id` to
+`null`; mutations require both a state digest and a fresh random request ID.
+
+```json
+{
+  "schema_version": "openmed.service.workflow_request.v1",
+  "run_id": "run_11111111111111111111111111111111",
+  "workflow_id": "workflow:test.example/review@1.0.0",
+  "action_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_state_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "request_id": "req_22222222222222222222222222222222"
+}
+```
+
+Receipt submission additionally requires `receipt`, serialized with the existing
+`ApprovalReceipt.to_dict()` contract. The service must verify it against its
+trusted custody and recheck reviewer authority, run/caller isolation,
+purpose/projection policy, exact action/state binding, expiry and durable
+idempotency atomically at commit. The v2 receipt contains only action/token digests, an `approved` code and its
+schema version; reviewer roles and timestamps remain private service custody.
+A caller-supplied digest or well-formed receipt is insufficient authority. The adapter does not issue or
+consume approval tokens. It binds the receipt and supplies fresh trusted clocks for verification and
+submission; the service owns expiry checks and the final atomic authority check.
+
+The response uses `openmed.service.workflow_response.v1`, the existing
+`ActionPhase`, `WorkflowOutcome` and `EffectRecord` wire vocabularies, opaque
+identifiers, digests and effect counts. It contains no clinical payload,
+credential or protected preview text. `cancellation_requested: true` acknowledges
+recorded intent; it does not claim an in-flight operation has stopped or undo a
+committed effect. Production effect execution belongs to the host's separately
+enabled, permission-gated dispatcher.
+
+The trusted service owns compare-and-set state and durable duplicate handling.
+Identical repeated mutations must return the original acknowledgement; reuse of
+a request ID for different content must fail. The HTTP adapter has no mutation
+cache or automatic retry. A timeout or unexpected service exception during a
+mutation returns `workflow_mutation_unknown` because its worker may continue.
+Inspect status through the custody service before deciding whether to repeat
+the exact request with the same ID. Do not interpret a transport failure as proof
+that a mutation was rolled back.
+
+Requests require `application/json`, no query parameters, a body at most 64 KiB,
+at most 256 parsed nodes and depth eight. Duplicate keys, nonfinite numbers,
+unknown fields and unsupported versions are refused. Responses contain at most
+128 effect records and 256 KiB of serialized metadata. A service call deadline
+must be greater than zero and at most 30 seconds. Request bodies, receipts and
+responses never become access-log fields; arbitrary `X-Request-ID` values are
+replaced with random UUIDs before shared logging. Use opaque request IDs only.
+Successful workflow responses and adapter errors carry `Cache-Control: no-store`.
+
+The OpenAPI export derives exact fields, identifier grammars and enum/reason
+vocabularies from governance types. Native Python checks also enforce cross-field
+bindings, effect ordering, counts and custody, which JSON Schema cannot prove.
+Workflow errors use the existing `error` envelope with fixed messages and codes:
+
+| Status | Workflow codes |
+| --- | --- |
+| 401 | `workflow_authentication_required` |
+| 403 | `workflow_forbidden`, `workflow_receipt_unverified` |
+| 409 | `workflow_conflict`, `workflow_receipt_expired`, `workflow_receipt_future`, `workflow_terminal` |
+| 413 | `workflow_request_too_large` |
+| 422 | `workflow_invalid_input` |
+| 502 | `workflow_invalid_result` |
+| 503 | `workflow_disabled`, `workflow_unavailable`, `workflow_service_failed`, `workflow_mutation_unknown` |
+
+Existing authentication middleware may return its own controlled authentication
+codes before the adapter runs. These offline adapter tests use synthetic custody
+and establish HTTP behavior, not clinical validation or a production database's
+durability guarantee.
+
+
+#### Typed workflow clients
+
+Python and TypeScript clients strictly parse the declared metadata responses,
+recompute preview and run-bound effect commitments, and preserve schema version,
+action digest, phase, outcome, receipt digest and cancellation intent. Unknown
+versions, extra fields, duplicate JSON keys, malformed successful responses and
+binding mismatches fail with fixed `WorkflowClientError` diagnostics. Errors
+retain controlled code/status and a validated opaque correlation ID; they do
+not retain server messages, details, response bodies or transport exceptions.
+A parsed snapshot is evidence to inspect, not clinical execution authority.
+
+```python
+import threading
+from openmed.agent.correlation import RunId
+from openmed.agent.identifiers import WorkflowId
+from openmed.service.client import (
+    OpenMedClient, WorkflowClientError, WorkflowPollPolicy, WorkflowReference,
+)
+
+reference = WorkflowReference(
+    RunId.parse("run_" + "1" * 32),
+    WorkflowId.parse("workflow:test.example/review@1.0.0"),
+    "sha256:" + "2" * 64,
+)
+stop = threading.Event()
+with OpenMedClient("http://127.0.0.1:8080") as client:
+    try:
+        view = client.poll_workflow(
+            reference,
+            policy=WorkflowPollPolicy(max_requests=20, timeout_seconds=60),
+            stop_event=stop,
+        )
+        print(view.phase.value, view.to_dict()["committed_effect_count"])
+    except WorkflowClientError as error:
+        print(error.code)
+```
+
+`workflow_preflight`, `workflow_preview` and `workflow_status` make one request
+by default. Explicit `WorkflowReadOptions(max_attempts=3)` permits up to three
+inspection attempts only for transport or declared temporary service failures.
+`poll_workflow` makes at most 100 status requests within a five-minute deadline;
+it returns on `waiting-review`, `completed` or `aborted`, without accepting a
+receipt or requesting cancellation. A timeout/cancellation error preserves the
+last strictly validated view when one exists. Per-request timeouts are at most
+30 seconds. Python `stop_event` is cooperative between requests, response chunks
+and interruptible waits; a synchronous HTTP read already in flight can run until
+its bounded HTTPX I/O timeout. The deadline is rechecked after each chunk and
+request. Custom synchronous transports must enforce their own I/O timeout.
+
+State changes require separate `workflow_submit_receipt(reference, receipt)` or
+`workflow_cancel(reference)` calls with both a fresh expected-state digest and
+random `req_` idempotency ID. They make one attempt. `mutation_outcome` is
+`not_attempted` before dispatch, `refused` for declared refusals, and `unknown`
+for transport, timeout, malformed success or ambiguous service failures.
+Inspect status before deciding on another explicit call after an unknown result.
+A locally cancelled HTTP request cannot revoke a receipt already recorded.
+Server cancellation records intent and does not undo committed effects.
+
+TypeScript provides the equivalent `WorkflowSnapshot`, `WorkflowReadOptions`,
+`WorkflowMutationOptions`, `WorkflowPollOptions` and `WorkflowClientError`, using
+`AbortSignal` and millisecond bounds. `workflowSubmitReceipt` preserves exact v2 receipt metadata and rejects role or
+timestamp fields; the client cannot infer authority from serialized metadata.
+
+A successful receipt response must acknowledge the submitted receipt digest.
+A successful cancellation response must report a cancellation request or an aborted phase.
+Transport exceptions cannot declare a mutation refused; only a validated server
+refusal can. Otherwise the mutation result stays unknown, and inspection must
+reconcile it before further action. Diagnostic metadata uses only closed codes,
+bounded status and correlation identifiers, and a validated last snapshot.
+See the [TypeScript client](https://github.com/maziyarpanahi/openmed/blob/master/clients/typescript/README.md)
+for runnable usage and the shared offline wire tests. Responses are bounded by
+256 KiB, depth eight, 4,096 values and 128 effects; requests by 64 KiB. No client
+validates human custody, issues approval, executes effects or follows redirects.
+
+
+### `POST /v1/systemone`
+
+The [opt-in System One privacy route](api/fixed-option-decisions.md#de-identifying-system-one-requests) masks state and question text before scoring. The caller needs both `pii:write` and `decisions:write`. Configure authentication, positive rate limits and local-only inference before enabling it.
+
 ### `POST /v1/decisions`
 
 Evaluates a bounded caller-supplied choice, ordering, multi-label, boolean, or
 scalar request and returns calibrated confidence, backend identity, typed
 abstention and failure states, and mandatory review metadata. The default
 backend is local and deterministic; operators can inject a permissively
-licensed encoder, cross-encoder, or small specialist backend. See the
-[fixed-option decision API](./api/fixed-option-decisions.md) for the canonical
-schemas, limits, and client examples.
+licensed encoder, cross-encoder, or small specialist backend. The route also
+accepts the text-only OpenAI-compatible Decisions body and answers in that
+shape; see [one route, two request shapes](./api/fixed-option-decisions.md#one-route-two-request-shapes).
+See the [fixed-option decision API](./api/fixed-option-decisions.md) for the
+canonical schemas, limits, and client examples.
 
 ### `GET /health`
 
-Health response:
+Health response outside the `dev` profile:
 
 ```json
 {
   "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+`GET /health` remains the backward-compatible health alias and never requires
+authentication. Only the `dev` profile adds `version` and `profile` to it.
+Other clients read them from `GET /service/metadata`.
+
+### `GET /service/metadata`
+
+Authenticated operator metadata. It is not part of the published OpenAPI
+contract. When authentication is enabled, any authenticated principal can read
+it and anonymous callers get `401`:
+
+```json
+{
   "service": "openmed-rest",
   "version": "<installed OpenMed version>",
   "profile": "prod"
 }
 ```
-
-`GET /health` remains the backward-compatible health alias.
 
 ### `GET /livez`
 
@@ -442,7 +1014,15 @@ Readiness response after startup preload completes:
 ```
 
 Before startup readiness, `/readyz` returns `503` with `error.code` set to
-`not_ready`.
+`not_ready`. With `OPENMED_SERVICE_REPLICA_MODE=multi`, it returns `503` with
+`error.code` set to `replica_unsafe_state` while an enabled replica-local
+component is neither disabled nor accepted; `error.details.components` lists
+the categories. See
+[Replica-local state](deploy/autoscaling.md#replica-local-state-and-safe-topologies).
+When persisted shared state is outside this build's compatibility window,
+`/readyz` returns `503` with `error.code` set to `incompatible_state` and
+value-free per-component reasons; see
+[Zero-Downtime Upgrades](deploy/upgrades.md).
 
 ### `GET /models/loaded`
 
@@ -559,6 +1139,31 @@ Request body:
 
 Returns the same shape as `extract_pii(...).to_dict()`.
 
+### `POST /pii/extract/stream`
+
+Streams incremental span events for long inputs. It accepts every
+`/pii/extract` field plus `chunk_size` (`1` to `32768`, default `1024`),
+`window_chars` (default `4096`), `tokenizer_context_chars` (default `128`),
+`max_entity_chars` (default `512`), and `include_text` (default `true`; set it
+to `false` to omit span surfaces from events). The response media type is
+`application/x-ndjson`; each line is one event with `type` `emit`, `retract`,
+or `final`, plus a PHI-free `audit` object.
+
+One deadline, the active-profile `timeout`, spans every extraction window. It
+is checked before each window starts and bounds each window's wait, so the
+stream ends on time even if a model window is slow; the last line is then the
+standard `timeout` error:
+
+```json
+{"type":"error","error":{"code":"timeout","message":"Request exceeded configured timeout of 60 seconds","details":{"timeout_seconds":60.0}}}
+```
+
+Model failures end the stream with a value-free `bad_request` or
+`internal_error` line instead. A worker thread cannot be interrupted, so when
+the stream stops while a window is still running, the model reference and the
+admission slot stay held (and are counted as orphaned work) until that window
+returns; they are never reused while the model is busy.
+
 ### `POST /pii/deidentify`
 
 Request body:
@@ -648,9 +1253,39 @@ with requests.post(
 ```
 
 If the configured service timeout is reached after the response has started,
-the last line has `type: "error"` and the standard `timeout` error fields. A
-client disconnect stops iteration and releases the model request. Streamed
-source text is never written to service logs.
+the last line has `type: "error"` and the standard `timeout` error fields; the
+response ends with exactly that one error line and no `chunk` or `final` line
+follows it. A client disconnect stops iteration without emitting further lines.
+In both cases the timeout or cancellation is recorded as the model request
+outcome, and the model reference is released so the `keep_alive` idle-unload
+timer and warm-pool eviction apply. A core window that is still running in a
+worker thread when the stream ends cannot be interrupted, so the service keeps
+the model reference until that window returns, discards its output, and then
+releases the reference. Streamed source text is never written to service logs.
+
+### NDJSON stream bounds
+
+`/pii/extract/stream` and `/pii/deidentify/stream` share these bounds. Each
+one ends the stream with at most one `type: "error"` line carrying a
+controlled code and no request content; no event follows it, and the stream
+has no `final` line.
+
+| Bound | Setting | Terminal `error.code` | `error.details` |
+| --- | --- | --- | --- |
+| Request deadline | active-profile `timeout` | `timeout` | `timeout_seconds` |
+| Event cap | `OPENMED_SERVICE_STREAM_MAX_EVENTS` | `stream_event_limit` | `max_events` |
+| Write idle | `OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS` | `stream_write_idle` | `write_idle_seconds` |
+
+The write-idle bound applies when one write to the client stays blocked, for
+example because the client stopped reading. The blocked write is abandoned,
+the `stream_write_idle` line is offered to the client for up to one second,
+and the stream stops producing events. If the client still is not reading,
+the response is left incomplete (no chunked terminator) and the server closes
+the connection. The service logs only the code.
+
+A stream holds its model reference, its concurrency permit
+(`OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`), and its graceful-shutdown
+drain slot until its body ends, not only until response headers are sent.
 
 ### `POST /privacy-gateway/complete`
 
@@ -776,6 +1411,35 @@ HTTP 500 with `details` set to `null`. See
 compatibility guarantees. Request-schema failures continue to use HTTP 422 and
 `validation_error` as shown above.
 
+JSON structure limits run before route parsing. For `POST`, `PUT`, and
+`PATCH` bodies sent as `application/json`, `application/*+json`, or with no
+`Content-Type`, the shared request-limit middleware streams the body through a
+structural pre-scan using the `OperationalLimits` defaults: nesting depth 32,
+100,000 JSON values, and 4 MiB for the longest decoded string or object key.
+Escapes such as `\u00e9` are measured after decoding, and UTF-16 or UTF-32
+bodies are scanned after transcoding. The first violation returns HTTP 413
+before the framework parser, Pydantic validation, or the route handler runs:
+
+```json
+{
+  "error": {
+    "code": "json_structure_exceeded",
+    "message": "Request rejected by an operational limit",
+    "details": {"category": "nodes", "ceiling": 100000}
+  }
+}
+```
+
+`category` is `depth`, `nodes`, or `string_bytes`, and `ceiling` is the
+configured maximum. The response and logs never include request values.
+Malformed JSON is left to the route's normal `422` handling, and other media
+types are not scanned. `JSON_STRUCTURE_ROUTE_OVERRIDES` in
+`openmed.service.request_limits` documents per-route ceilings for legitimate
+larger arrays; `/cohort/resolve` allows 250,000 values for caller-supplied
+concept hierarchies. `/graphql` request envelopes, including `variables`,
+receive the same default JSON ceilings; GraphQL document complexity remains a
+separate GraphQL-layer limit.
+
 Timeout example:
 
 ```json
@@ -815,8 +1479,10 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 
 Use the provided `docker-compose.yml` to build and start the service with a
 single command. The Compose setup publishes host port **8080**, sets
-`OPENMED_PROFILE=prod`, and persists the standard Hugging Face cache directory
-in a named volume so downloads placed in that cache are reused across restarts.
+`OPENMED_PROFILE=prod`, and persists the image user's cache directory
+(`/home/nonroot/.cache`, holding the OpenMed and Hugging Face caches) in the
+`openmed-cache` named volume so downloads are reused across restarts. The image
+runs as the non-root UID/GID `65532`.
 `OPENMED_CACHE_DIR` is also passed through for data and deployment workflows
 that explicitly read it; it is not a generic `OpenMedConfig.cache_dir`
 override.

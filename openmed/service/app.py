@@ -7,18 +7,17 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
-from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import openmed
 from openmed.core.errors import (
@@ -31,20 +30,42 @@ from openmed.core.errors import (
     OpenMedError,
     PolicyError,
 )
+from openmed.core.key_provider import KeyProvider
 from openmed.processing import format_predictions
 from openmed.structured.decision import (
     DETERMINISTIC_DECISION_BACKEND,
     DecisionAccessPolicy,
     DecisionError,
+    DecisionResult,
     decide,
     decision_result_schema,
 )
 from openmed.structured.decision import (
     DecisionRequest as CoreDecisionRequest,
 )
+from openmed.structured.decision_interop import (
+    DecisionRequestShapeError,
+    decision_request_shape,
+    from_openai_decisions_request,
+    openai_decisions_response_schema,
+    to_openai_decisions_response,
+)
 from openmed.utils.validation import validate_model_name
 
-from .auth import ServiceAuth, parse_service_auth_config
+from .admission import HttpAdmission
+from .auth import (
+    DEVELOPMENT_DOCS_EXEMPT_PATHS,
+    ROUTE_POLICIES,
+    SERVICE_METADATA_PATH,
+    AuthPrincipal,
+    ServiceAuth,
+    is_development_profile,
+    parse_api_docs_config,
+    parse_service_auth_config,
+    request_needs_admission,
+    route_key_for_request,
+    validate_route_policies,
+)
 from .batcher import (
     BackpressureError,
     BatchPriorityHandle,
@@ -52,14 +73,70 @@ from .batcher import (
     DynamicBatcher,
     normalize_priority,
 )
-from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
+from .bulk_data import (
+    BulkPathError,
+    BulkStoragePolicy,
+    FHIRBulkJobConfig,
+    FHIRBulkJobManager,
+    bulk_job_bounds_from_env,
+)
 from .coalesce import RequestCoalescer, coalescing_key
-from .jobs import DeidentifyJobQueue, job_response_payload
+from .compatibility import (
+    CURRENT_CONTRACT,
+    JOB_STORE_COMPONENT,
+    PEER_CONTRACT_HEADER,
+    CompatibilityGate,
+    IncompatibleStateError,
+    SchemaObservation,
+    job_store_observation,
+    local_descriptor,
+    peer_contract_decision,
+)
+from .drain import (
+    BackgroundJobsDrainParticipant,
+    BatcherDrainParticipant,
+    CallbackDrainParticipant,
+    DrainCoordinator,
+    HTTPRequestDrainParticipant,
+    JobQueueDrainParticipant,
+    NDJSONStreamDrainParticipant,
+    ServiceShuttingDownError,
+    shutting_down_details,
+)
+from .egress import EgressDenied, validate_egress_configuration
+from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
+from .idempotency import (
+    IDEMPOTENCY_KEY_HEADER,
+    IDEMPOTENCY_KEY_MAX_LENGTH,
+    IDEMPOTENCY_REPLAYED_HEADER,
+    IdempotencyError,
+    IdempotencyReservation,
+    IdempotentReplay,
+    IdempotentStartRequest,
+    StartIdempotencyStore,
+    parse_idempotency_key,
+)
+from .job_admission import JobAdmissionError
+from .job_bounds import BulkJobsSaturatedError
+from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
+from .jobs import (
+    OWNER_DIGEST_FIELD,
+    SERVICE_JOBS_STORE_ENV_VAR,
+    DeidentifyJobQueue,
+    JobDigestPolicy,
+    JobStoreSchemaError,
+    job_response_payload,
+    parse_jobs_store_path,
+)
+from .journey_access import (
+    JourneyAccessContextProvider,
+    JourneyAccessGate,
+    JourneyAccessRequest,
+)
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
     JourneyResourceKind,
-    JourneyResourceQuery,
     parse_access_attributes,
     parse_resource_fields,
 )
@@ -67,6 +144,7 @@ from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
+    request_scope_path,
     service_log_config_from_env,
     set_access_log_brief,
     set_access_log_grounding,
@@ -100,39 +178,90 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
-from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
+from .replica_state import (
+    ASYNC_JOBS,
+    AUTH_FAILURE_LIMITER,
+    COMPONENT_DISABLED,
+    CONCURRENCY_LIMITER,
+    FHIR_BULK_JOBS,
+    RATE_LIMITER,
+    REQUEST_COALESCER,
+    SMART_BACKEND_JOBS,
+    ReplicaComponentUnavailableError,
+    ReplicaStatePolicy,
+    ReplicaStateReport,
+)
+from .request_limits import (
+    REQUEST_BODY_TIMEOUT,
+    REQUEST_SIZE_INVALID,
+    BoundedRequestBodyMiddleware,
+    connection_rejection_count,
+    request_body_read_limits_from_env,
+    request_limits_from_env,
+)
+from .request_signing import install_request_signing
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
-from .runtime import ServiceRuntime
+from .response_headers import install_response_headers
+from .runtime import (
+    ServiceRuntime,
+    parse_service_coalescing_config,
+    parse_service_throttle_config,
+)
 from .schemas import (
     AnalyzeRequest,
     BriefRequest,
     BriefResponse,
     CohortResolveRequest,
+    DecisionsRequestBody,
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
-    FixedOptionDecisionRequest,
     GroundRequest,
     GroundResponse,
     JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
+    OpenAIDecisionsRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
     PIIExtractStreamRequest,
     PrivacyGatewayRequest,
     ProfileRequest,
     SMARTBackendIngestionRequest,
+    SystemOneRequest,
 )
 from .security_headers import (
-    SERVICE_CORS_HEADERS,
+    SERVICE_CORS_EXPOSE_HEADERS,
     SERVICE_CORS_METHODS,
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
+    service_cors_allow_headers,
 )
-from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
-from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
-from .throttle import ServiceThrottle, format_retry_after
+from .security_profile import (
+    SECURITY_PROFILE_INVALID_CODE,
+    SecurityProfileReport,
+    evaluate_service_security_profile,
+    log_security_profile_report,
+)
+from .smart_backend import (
+    SMARTBackendConfig,
+    SMARTBackendJobManager,
+    authorize_smart_backend_config,
+)
+from .streaming import (
+    STREAM_ROUTE_PATHS,
+    NDJSONStreamControls,
+    PIIDeidentifyStreamRequest,
+    StreamWriteIdleMiddleware,
+    deidentify_ndjson_stream,
+    pii_extract_ndjson_stream,
+)
+from .throttle import (
+    ServiceBusyError,
+    ServiceThrottle,
+    current_request_work,
+    format_retry_after,
+)
 from .tracing import (
     OpenTelemetryMiddleware,
     operational_trace_attributes,
@@ -149,25 +278,85 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
+# Fixed route labels bound into Idempotency-Key scopes.
+_SMART_BACKEND_START_ROUTE = "smart-backend-ingestion"
+_FHIR_BULK_EXPORT_ROUTE = "fhir-bulk-export"
+_FHIR_BULK_IMPORT_ROUTE = "fhir-bulk-import"
+_IDEMPOTENCY_OPENAPI_EXTRA: Dict[str, Any] = {
+    "parameters": [
+        {
+            "name": IDEMPOTENCY_KEY_HEADER,
+            "in": "header",
+            "required": False,
+            "description": (
+                "Optional client key that makes retries of this start return the "
+                "original job instead of starting another one. Scoped to the "
+                "authenticated principal; reusing it with a different request "
+                "body returns 409 idempotency_key_conflict."
+            ),
+            "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": IDEMPOTENCY_KEY_MAX_LENGTH,
+                "pattern": "^[A-Za-z0-9._:~+/=-]+$",
+            },
+        }
+    ]
+}
+_IDEMPOTENT_START_RESPONSES: Dict[int | str, Dict[str, Any]] = {
+    200: {
+        "description": "Ingestion job started, or the replayed original start.",
+        "headers": {
+            IDEMPOTENCY_REPLAYED_HEADER: {
+                "description": (
+                    "`true` when the response replays the start that first used "
+                    "this Idempotency-Key."
+                ),
+                "schema": {"type": "string", "enum": ["true"]},
+            }
+        },
+    },
+    400: {"description": "Malformed Idempotency-Key (`idempotency_key_invalid`)."},
+    409: {
+        "description": (
+            "Idempotency-Key reused for a different request "
+            "(`idempotency_key_conflict`) or still being processed "
+            "(`idempotency_key_in_progress`)."
+        )
+    },
+}
+_IDEMPOTENT_JOB_RESPONSES: Dict[int | str, Dict[str, Any]] = {
+    202: {
+        "description": "Job accepted, or the replayed original submission.",
+        "headers": {
+            IDEMPOTENCY_REPLAYED_HEADER: {
+                "description": (
+                    "`true` when the response returns the job that first used "
+                    "this Idempotency-Key."
+                ),
+                "schema": {"type": "string", "enum": ["true"]},
+            }
+        },
+    },
+    400: {"description": "Malformed Idempotency-Key (`idempotency_key_invalid`)."},
+    409: {
+        "description": (
+            "Idempotency-Key reused for a different request "
+            "(`idempotency_key_conflict`)."
+        )
+    },
+}
 _DECISION_PATH = "/v1/decisions"
+_MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
+_MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
+_MANIFEST_HEADER = "X-OpenMed-Manifest"
+_MAX_MANIFEST_HEADER_BYTES = 8192
+_SYSTEM_ONE_PATH = "/v1/systemone"
+_COMPATIBILITY_PATH = "/v1/compatibility"
 _MODEL_BACKED_PATHS = frozenset(
-    {
-        "/graphql",
-        "/analyze",
-        "/ground",
-        "/brief",
-        "/pii/extract",
-        "/pii/extract/stream",
-        "/pii/deidentify",
-        "/pii/deidentify/stream",
-        "/jobs",
-        _PRIVACY_GATEWAY_PATH,
-        _SMART_BACKEND_START_PATH,
-        _FHIR_BULK_EXPORT_PATH,
-        _FHIR_BULK_IMPORT_PATH,
-        _DECISION_PATH,
-        OPENHIM_MEDIATOR_PATH,
-    }
+    path
+    for (_, path), policy in ROUTE_POLICIES.items()
+    if policy.admission in {"model", "heavy"}
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -188,6 +377,9 @@ class _PIIExtractBatchJob:
     payload: PIIExtractRequest
 
 
+_SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
+
+
 class ServiceTimeoutError(RuntimeError):
     """Raised when a request exceeds the configured service timeout."""
 
@@ -198,83 +390,87 @@ class ServiceTimeoutError(RuntimeError):
         )
 
 
-class _BoundedRequestBodyMiddleware:
-    """Reject oversized model-backed request bodies before JSON parsing."""
+class _DecisionShapeRefused(Exception):
+    """A ``POST /v1/decisions`` body without exactly one decision shape."""
 
-    def __init__(
-        self,
-        app: ASGIApp,
-        *,
-        max_bytes: int,
-        limited_paths: Sequence[str],
-    ) -> None:
-        if max_bytes < 1:
-            raise ValueError("max request body bytes must be positive")
-        self.app = app
-        self.max_bytes = int(max_bytes)
-        self.limited_paths = frozenset(limited_paths)
+    def __init__(self, reason_code: str) -> None:
+        super().__init__(reason_code)
+        self.reason_code = reason_code
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
-            scope["type"] != "http"
-            or scope.get("method") not in {"POST", "PUT", "PATCH"}
-            or scope.get("path") not in self.limited_paths
-        ):
-            await self.app(scope, receive, send)
-            return
 
-        content_length = Headers(scope=scope).get("content-length")
-        if content_length is not None:
-            try:
-                declared_length = int(content_length)
-            except ValueError:
-                await _error_response(
-                    400,
-                    "bad_request",
-                    "Request metadata is invalid",
-                )(scope, receive, send)
-                return
-            if declared_length < 0:
-                await _error_response(
-                    400,
-                    "bad_request",
-                    "Request metadata is invalid",
-                )(scope, receive, send)
-                return
-            if declared_length > self.max_bytes:
-                await _error_response(
-                    413,
-                    "payload_too_large",
-                    "Request body exceeds the configured limit",
-                )(scope, receive, send)
-                return
+async def _negotiate_decision_body(request: Request) -> None:
+    """Refuse mixed, shapeless or media-carrying OpenAI-compatible bodies.
 
-        messages: list[Message] = []
-        received_bytes = 0
-        while True:
-            message = await receive()
-            messages.append(message)
-            if message["type"] == "http.disconnect":
-                return
-            if message["type"] != "http.request":
-                continue
-            received_bytes += len(message.get("body", b""))
-            if received_bytes > self.max_bytes:
-                await _error_response(
-                    413,
-                    "payload_too_large",
-                    "Request body exceeds the configured limit",
-                )(scope, receive, send)
-                return
-            if not message.get("more_body", False):
-                break
+    FastAPI parses the JSON body before it resolves dependencies, so this runs
+    on a decoded body and before either request model validates it. Malformed
+    JSON and non-object bodies are left to the standard validation error.
+    """
 
-        async def replay() -> Message:
-            if messages:
-                return messages.pop(0)
-            return await receive()
+    try:
+        body = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        return
+    if not isinstance(body, Mapping):
+        return
+    try:
+        decision_request_shape(body)
+    except DecisionRequestShapeError as exc:
+        raise _DecisionShapeRefused(exc.reason_code) from None
 
-        await self.app(scope, replay, send)
+
+def _decide_with_service_state(
+    state: Any,
+    decision_request: CoreDecisionRequest,
+) -> DecisionResult:
+    """Decide with the service's configured backend, policy and profiles."""
+
+    return decide(
+        decision_request,
+        backend=getattr(state, "decision_backend", DETERMINISTIC_DECISION_BACKEND),
+        policy=getattr(state, "decision_access_policy", DecisionAccessPolicy()),
+        calibration_profiles=getattr(state, "decision_calibration_profiles", None),
+    )
+
+
+async def _openai_compatible_decision(
+    payload: OpenAIDecisionsRequest,
+    request: Request,
+) -> Any:
+    """Decide an OpenAI-compatible body and answer in the same shape."""
+
+    body = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    try:
+        decision_request = from_openai_decisions_request(body)
+    except (DecisionError, TypeError, ValueError) as exc:
+        # Decision errors carry static, value-free messages; others may not.
+        reason = str(exc) if isinstance(exc, DecisionError) else "invalid_arguments"
+        raise InputError(
+            "Invalid OpenAI-compatible decision request.",
+            details={"reason": reason},
+        ) from exc
+    backend = getattr(
+        request.app.state,
+        "decision_backend",
+        DETERMINISTIC_DECISION_BACKEND,
+    )
+    identity = getattr(backend, "identity", None)
+    if body["model"] != getattr(identity, "model_id", None):
+        # Never answer with a different model than the caller asked for.
+        return _error_response(
+            422,
+            "model_not_served",
+            "Requested model is not served",
+        )
+    result = await run_in_threadpool(
+        _decide_with_service_state,
+        request.app.state,
+        decision_request,
+    )
+    return to_openai_decisions_response(
+        decision_request,
+        result,
+        include_openmed=True,
+    )
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -479,6 +675,24 @@ def _error_response(
     )
 
 
+def _model_route_body_rejection(code: str) -> JSONResponse:
+    """Return the model-route envelope for a request-body bound rejection."""
+
+    if code == REQUEST_SIZE_INVALID:
+        return _error_response(400, "bad_request", "Request metadata is invalid")
+    if code == REQUEST_BODY_TIMEOUT:
+        return _error_response(
+            408,
+            "request_body_timeout",
+            "Request body was not received within the configured time limit",
+        )
+    return _error_response(
+        413,
+        "payload_too_large",
+        "Request body exceeds the configured limit",
+    )
+
+
 _TAXONOMY_HTTP_STATUS: Dict[type[OpenMedError], int] = {
     InputError: 400,
     ConfigurationError: 400,
@@ -544,13 +758,28 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
     existing_job_queue = getattr(app.state, "job_queue", None)
-    if (
+    if _replica_state_policy(app).refusal_code(ASYNC_JOBS) is not None:
+        # A disabled or replica-unsafe job store never loads local job state.
+        if existing_job_queue is not None:
+            existing_job_queue.shutdown()
+        app.state.job_queue = None
+    elif (
         existing_job_queue is None
         or getattr(existing_job_queue, "runtime", None) is not runtime
     ):
         if existing_job_queue is not None:
             existing_job_queue.shutdown()
-        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
+        try:
+            app.state.job_queue = DeidentifyJobQueue.from_env(
+                runtime,
+                key_provider=getattr(app.state, "job_payload_key_provider", None),
+                digests=getattr(app.state, "job_digests", None),
+            )
+        except JobStoreSchemaError:
+            # A store outside this build's window keeps the process up but not
+            # ready: readiness reports it and job routes answer 503 until the
+            # state is compatible, so a mixed-version rollout never crash-loops.
+            app.state.job_queue = None
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -584,6 +813,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
         ),
         limited_paths=_MODEL_BACKED_PATHS,
     )
+    app.state.admission = HttpAdmission(
+        runtime.admission_controller,
+        error_response=_error_response,
+    )
 
 
 def _get_service_runtime(request: Request) -> ServiceRuntime:
@@ -597,37 +830,154 @@ def _get_service_runtime(request: Request) -> ServiceRuntime:
     return runtime
 
 
+def _replica_state_policy(app: FastAPI) -> ReplicaStatePolicy:
+    """Return the replica policy parsed when the app was created."""
+    policy = getattr(app.state, "replica_state", None)
+    if policy is None:
+        policy = ReplicaStatePolicy.from_env()
+        app.state.replica_state = policy
+    return policy
+
+
+def replica_state_report(app: FastAPI) -> ReplicaStateReport:
+    """Evaluate the value-free replica-local state report for one app.
+
+    The report lists every replica-local component category with its scope,
+    multi-replica safety class, and evaluated state. Readiness uses the same
+    report, so a preflight check that calls this function sees the decision
+    ``/readyz`` makes. Before the lifespan attaches a runtime, limiter and
+    coalescer settings are read from the environment.
+
+    Args:
+        app: Application returned by :func:`create_app`.
+
+    Returns:
+        Report naming component categories only, never paths, hosts, or ids.
+    """
+    runtime = getattr(app.state, "runtime", None)
+    throttle = (
+        runtime.throttle if runtime is not None else parse_service_throttle_config()
+    )
+    coalescing = (
+        runtime.coalescing if runtime is not None else parse_service_coalescing_config()
+    )
+    auth = getattr(app.state, "auth", None)
+    auth_config = getattr(auth, "config", None)
+    return _replica_state_policy(app).evaluate(
+        {
+            ASYNC_JOBS: True,
+            FHIR_BULK_JOBS: True,
+            SMART_BACKEND_JOBS: True,
+            RATE_LIMITER: throttle.rate_limit_enabled,
+            CONCURRENCY_LIMITER: throttle.concurrency_enabled,
+            AUTH_FAILURE_LIMITER: bool(
+                auth_config is not None
+                and auth_config.enabled
+                and auth_config.failure_rate_limit_enabled
+            ),
+            REQUEST_COALESCER: coalescing.enabled,
+        }
+    )
+
+
+def _replica_component_gate(category: str) -> Callable[[Request], Awaitable[None]]:
+    """Return a route dependency that refuses a gated replica-local component."""
+
+    async def _require_replica_component(request: Request) -> None:
+        _replica_state_policy(request.app).require_available(category)
+
+    return _require_replica_component
+
+
 async def _run_with_timeout(
     runtime: ServiceRuntime,
     operation: Any,
 ) -> Any:
     """Run blocking service work in a threadpool under the profile timeout."""
-    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
-    if timeout_seconds <= 0:
-        return await run_in_threadpool(operation)
+    work = current_request_work()
 
-    try:
-        return await asyncio.wait_for(
-            run_in_threadpool(operation),
-            timeout=float(timeout_seconds),
-        )
-    except asyncio.TimeoutError as exc:
-        raise ServiceTimeoutError(timeout_seconds) from exc
+    async def model_work() -> Any:
+        release_slot = await work.acquire_model_slot() if work is not None else None
+        try:
+            return await run_in_threadpool(operation)
+        finally:
+            if release_slot is not None:
+                release_slot()
+
+    return await _await_with_timeout(runtime, model_work())
+
+
+def _track_service_work(awaitable: Any) -> asyncio.Future[Any]:
+    """Keep a strong reference and consume late failures without logging input."""
+    task = asyncio.ensure_future(awaitable)
+    _SERVICE_WORK_TASKS.add(task)
+
+    def completed(future: asyncio.Future[Any]) -> None:
+        _SERVICE_WORK_TASKS.discard(future)
+        if not future.cancelled():
+            future.exception()
+
+    task.add_done_callback(completed)
+    work = current_request_work()
+    if work is not None:
+        work.track(task)
+    return task
 
 
 async def _await_with_timeout(
     runtime: ServiceRuntime,
     awaitable: Any,
+    *,
+    cancel_on_timeout: bool = False,
 ) -> Any:
-    """Await async service work under the profile timeout."""
+    """Bound the client wait without cancelling work that still owns capacity."""
+    task = _track_service_work(awaitable)
     timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    wait = task if cancel_on_timeout else asyncio.shield(task)
     if timeout_seconds <= 0:
-        return await awaitable
+        return await wait
 
     try:
-        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+        return await asyncio.wait_for(wait, timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
         raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+async def _submit_with_timeout(
+    runtime: ServiceRuntime,
+    batcher: DynamicBatcher,
+    item: Any,
+    *,
+    priority: str,
+    priority_handle: BatchPriorityHandle,
+) -> Any:
+    """Cancel abandoned queued jobs while retaining ownership of dispatches."""
+    work_done = asyncio.get_running_loop().create_future()
+    _track_service_work(work_done)
+    started = False
+
+    async def submit() -> Any:
+        nonlocal started
+        started = True
+        return await batcher.submit(
+            item,
+            priority=priority,
+            priority_handle=priority_handle,
+            work_done=work_done,
+        )
+
+    task = asyncio.create_task(submit())
+
+    def completed_before_start(future: asyncio.Future[Any]) -> None:
+        if not started and not work_done.done():
+            work_done.set_result(None)
+
+    task.add_done_callback(completed_before_start)
+    return await _await_with_timeout(
+        runtime,
+        task,
+        cancel_on_timeout=True,
+    )
 
 
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
@@ -653,7 +1003,10 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
 def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
     manager = getattr(request.app.state, "smart_backend_jobs", None)
     if manager is None:
-        manager = SMARTBackendJobManager()
+        manager = SMARTBackendJobManager(
+            bounds=getattr(request.app.state, "bulk_job_bounds", None),
+            idempotency=StartIdempotencyStore.from_env(),
+        )
         request.app.state.smart_backend_jobs = manager
     return manager
 
@@ -661,7 +1014,10 @@ def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
 def _get_fhir_bulk_manager(request: Request) -> FHIRBulkJobManager:
     manager = getattr(request.app.state, "fhir_bulk_jobs", None)
     if manager is None:
-        manager = FHIRBulkJobManager()
+        manager = FHIRBulkJobManager(
+            bounds=getattr(request.app.state, "bulk_job_bounds", None),
+            idempotency=StartIdempotencyStore.from_env(),
+        )
         request.app.state.fhir_bulk_jobs = manager
     return manager
 
@@ -670,9 +1026,91 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     queue = getattr(request.app.state, "job_queue", None)
     if queue is None:
         runtime = _get_service_runtime(request)
-        queue = DeidentifyJobQueue.from_env(runtime)
+        queue = DeidentifyJobQueue.from_env(
+            runtime,
+            key_provider=getattr(request.app.state, "job_payload_key_provider", None),
+            digests=getattr(request.app.state, "job_digests", None),
+        )
         request.app.state.job_queue = queue
     return queue
+
+
+def _get_job_ownership(request: Request) -> JobOwnershipPolicy:
+    policy = getattr(request.app.state, "job_ownership", None)
+    if policy is None:
+        raise InternalError(
+            "The job ownership policy is not initialized. Restart the service "
+            "and report the startup invariant if it recurs."
+        )
+    return policy
+
+
+def _submitting_owner_digest(request: Request) -> Optional[dict[str, str]]:
+    """Return the keyed digest of the authenticated submitter, if any."""
+    return _get_job_ownership(request).owner_digest(request.scope.get("openmed.auth"))
+
+
+def _keyed_start_request(
+    request: Request,
+    payload: Any,
+    *,
+    route: str,
+    owner_digest: Optional[dict[str, str]],
+) -> Optional[IdempotentStartRequest]:
+    """Return the digest-only identity of a keyed start, if a key was sent.
+
+    The scope binds the route label, the submitter's owner digest and the key;
+    the request digest covers every validated field except credentials. Both
+    are keyed HMAC digests, so neither the key nor any field is retained.
+    """
+    key = parse_idempotency_key(request.headers.getlist(IDEMPOTENCY_KEY_HEADER))
+    if key is None:
+        return None
+    fields = (
+        payload.model_dump(mode="json")
+        if hasattr(payload, "model_dump")
+        else payload.dict()
+    )
+    return IdempotentStartRequest.derive(
+        _get_job_ownership(request).key,
+        route=route,
+        owner_digest=owner_digest,
+        idempotency_key=key,
+        request_fields=fields,
+    )
+
+
+def _job_visible(
+    request: Request,
+    *,
+    admin_scope: str,
+    owner_digest: Callable[[], Any],
+) -> bool:
+    """Return whether the caller may read or cancel a job record.
+
+    The owner lookup is deferred so auth-disabled requests never consult it.
+    Callers answer ``False`` exactly like an unknown job id, so other
+    principals cannot probe which ids exist.
+    """
+    policy = _get_job_ownership(request)
+    principal = request.scope.get("openmed.auth")
+    if not isinstance(principal, AuthPrincipal):
+        return policy.permits(None, None, admin_scope=admin_scope)
+    return policy.permits(principal, owner_digest(), admin_scope=admin_scope)
+
+
+def _require_visible_bulk_job(
+    request: Request,
+    manager: FHIRBulkJobManager | SMARTBackendJobManager,
+    job_id: str,
+) -> None:
+    """Raise ``KeyError`` for an unknown job or one the caller does not own."""
+    if not _job_visible(
+        request,
+        admin_scope=BULK_ADMIN_SCOPE,
+        owner_digest=lambda: manager.owner_digest(job_id),
+    ):
+        raise KeyError(job_id)
 
 
 def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
@@ -681,6 +1119,88 @@ def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
         catalog = JourneyResourceCatalog()
         request.app.state.journey_resources = catalog
     return catalog
+
+
+def _get_journey_access_gate(request: Request) -> JourneyAccessGate:
+    gate = getattr(request.app.state, "journey_access", None)
+    if not isinstance(gate, JourneyAccessGate):
+        gate = JourneyAccessGate.from_env()
+        request.app.state.journey_access = gate
+    return gate
+
+
+def _create_compatibility_gate(
+    app: FastAPI, runtime: ServiceRuntime
+) -> CompatibilityGate:
+    """Gate readiness on the persisted state this process shares with peers."""
+
+    def job_store_probe() -> SchemaObservation:
+        queue = getattr(app.state, "job_queue", None)
+        if queue is not None:
+            return job_store_observation(queue.store.path)
+        if _replica_state_policy(app).refusal_code(ASYNC_JOBS) is not None:
+            # Async jobs are off on this replica, so no job store is shared.
+            return SchemaObservation.absent()
+        # No queue yet, for example because the store was refused on open.
+        return job_store_observation(
+            parse_jobs_store_path(os.getenv(SERVICE_JOBS_STORE_ENV_VAR))
+        )
+
+    return CompatibilityGate(
+        local_descriptor(runtime),
+        {JOB_STORE_COMPONENT: job_store_probe},
+    )
+
+
+def _get_compatibility_gate(request: Request) -> CompatibilityGate:
+    gate = getattr(request.app.state, "compatibility", None)
+    if gate is None:
+        gate = _create_compatibility_gate(request.app, _get_service_runtime(request))
+        request.app.state.compatibility = gate
+    return gate
+
+
+def _incompatible_state_response(blocking: Mapping[str, Any]) -> JSONResponse:
+    return _error_response(
+        503,
+        "incompatible_state",
+        "Persisted state is outside this build's compatibility window",
+        details={
+            "components": {
+                name: {"state": item.state.value, "reason": item.code}
+                for name, item in sorted(blocking.items())
+            }
+        },
+    )
+
+
+def _peer_contract_rejection(request: Request) -> Optional[JSONResponse]:
+    """Refuse an announced peer outside the window before any processing."""
+    values = request.headers.getlist(PEER_CONTRACT_HEADER)
+    if not values or request.url.path == _COMPATIBILITY_PATH:
+        return None
+    policy = ROUTE_POLICIES.get(route_key_for_request(request))
+    if policy is None or policy.admission == "probe":
+        return None
+    decision = peer_contract_decision(CURRENT_CONTRACT, values)
+    if decision.compatible:
+        return None
+    if decision.code == "peer_contract_malformed":
+        return _error_response(
+            400,
+            "peer_contract_malformed",
+            "Peer contract header is malformed",
+            details=None,
+        )
+    return _error_response(
+        409,
+        "peer_incompatible",
+        "Peer build is outside this build's compatibility window",
+        details={
+            "reason": decision.code,
+            "peer_contract": CURRENT_CONTRACT.peer_contract,
+        },
+    )
 
 
 async def _run_maybe_coalesced(
@@ -703,11 +1223,15 @@ async def _run_maybe_coalesced(
             "openmed.coalescing.enabled": True,
         },
     ):
-        return await coalescer.run(
-            coalescing_key(endpoint, payload),
-            operation,
-            priority=priority,
-            on_priority_upgrade=on_priority_upgrade,
+        return await asyncio.shield(
+            _track_service_work(
+                coalescer.run(
+                    coalescing_key(endpoint, payload),
+                    operation,
+                    priority=priority,
+                    on_priority_upgrade=on_priority_upgrade,
+                )
+            )
         )
 
 
@@ -740,6 +1264,102 @@ async def _batch_backpressure_check(request: Request) -> Optional[BackpressureEr
     return await batcher.admission_error(_request_priority(request))
 
 
+def _shutting_down_response(retry_after_seconds: float) -> JSONResponse:
+    """Return the stable, retryable REST refusal used once admission closes."""
+    response = _error_response(
+        503,
+        "not_ready",
+        "Service is shutting down and not accepting new requests",
+        details=shutting_down_details(retry_after_seconds),
+    )
+    response.headers["Retry-After"] = format_retry_after(retry_after_seconds)
+    return response
+
+
+def _drain_retry_after(state: Any) -> float:
+    coordinator = getattr(state, "drain", None)
+    return float(getattr(coordinator, "retry_after_seconds", 1.0))
+
+
+def _drain_aware_stream(
+    request: Request,
+    events: Any,
+    *,
+    retain: Optional[Callable[[asyncio.Future[Any]], None]] = None,
+) -> Any:
+    """Give an NDJSON body a bounded tail and a typed drain terminal event.
+
+    ``retain`` keeps a read the client abandoned under the request's admission
+    while it settles, as the bounded stream controls do for model windows.
+    """
+    streams = getattr(request.app.state, "drain_streams", None)
+    if not isinstance(streams, NDJSONStreamDrainParticipant):
+        return events
+    return streams.wrap(events, retain=retain)
+
+
+async def _stop_openhim_mediator(state: Any) -> None:
+    mediator = getattr(state, "openhim_mediator", None)
+    if mediator is not None:
+        await mediator.stop()
+
+
+def _shutdown_tracing(state: Any) -> None:
+    tracing = getattr(state, "tracing", None)
+    if tracing is not None:
+        tracing.shutdown()
+
+
+def _install_drain_coordinator(
+    app: FastAPI, runtime: ServiceRuntime
+) -> DrainCoordinator:
+    """Register REST lifecycle participants on the runtime's coordinator.
+
+    Participants look state up when the drain runs, so batchers, queues, and
+    managers swapped in after start-up are still drained. Participants added
+    with ``register_drain_participant(app, ...)`` join every lifespan.
+    """
+    state = app.state
+    coordinator = runtime.get_drain_coordinator()
+    coordinator.on_readiness_lost(lambda: setattr(state, "ready", False))
+    streams = NDJSONStreamDrainParticipant(
+        retry_after_seconds=coordinator.retry_after_seconds
+    )
+    state.drain = coordinator
+    state.drain_streams = streams
+    state.drain_report = None
+    for participant in (
+        HTTPRequestDrainParticipant(state),
+        CallbackDrainParticipant(
+            "openhim",
+            priority=15,
+            stop_admission=lambda _ctx: _stop_openhim_mediator(state),
+        ),
+        streams,
+        BatcherDrainParticipant(
+            lambda: (
+                getattr(state, "analyze_batcher", None),
+                getattr(state, "pii_extract_batcher", None),
+            )
+        ),
+        JobQueueDrainParticipant(lambda: getattr(state, "job_queue", None)),
+        BackgroundJobsDrainParticipant(
+            lambda: getattr(state, "smart_backend_jobs", None),
+            category="smart_jobs",
+        ),
+        BackgroundJobsDrainParticipant(
+            lambda: getattr(state, "fhir_bulk_jobs", None),
+            category="bulk_jobs",
+        ),
+        CallbackDrainParticipant(
+            "tracing", priority=70, flush=lambda _ctx: _shutdown_tracing(state)
+        ),
+        *tuple(getattr(state, "drain_participants", None) or ()),
+    ):
+        coordinator.register(participant)
+    return coordinator
+
+
 def _metrics_route_label(request: Request) -> str:
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
@@ -748,127 +1368,303 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
-    """Create and configure the OpenMed REST FastAPI app."""
+def _security_profile_report(fastapi_app: FastAPI) -> SecurityProfileReport:
+    """Return the app's security-profile report, evaluating it on first use."""
+    report = getattr(fastapi_app.state, "security_profile_report", None)
+    if report is None:
+        report = evaluate_service_security_profile(fastapi_app)
+        fastapi_app.state.security_profile_report = report
+        log_security_profile_report(report)
+    return report
+
+
+def _security_profile_blocks(request: Request) -> bool:
+    """Refuse every non-probe route while the security profile is invalid."""
+    if _security_profile_report(request.app).ready:
+        return False
+    method, path = route_key_for_request(request)
+    if not path:
+        return False  # No route matches; the router answers 404 without work.
+    policy = ROUTE_POLICIES.get((method, path))
+    return policy is None or policy.admission != "probe"
+
+
+def _security_profile_invalid_response(
+    report: SecurityProfileReport,
+    *,
+    include_details: bool,
+) -> JSONResponse:
+    return _error_response(
+        503,
+        SECURITY_PROFILE_INVALID_CODE,
+        "Service security profile checks failed; the service is not accepting "
+        "requests. Run 'openmed service preflight' for the report.",
+        details=report.readiness_details() if include_details else None,
+    )
+
+
+def create_app(
+    *,
+    max_request_body_bytes: Optional[int] = None,
+    experimental_multimodal_preflight: Optional[bool] = None,
+    workflow_service: Optional[WorkflowGovernanceService] = None,
+    workflow_policy: Optional[WorkflowHTTPPolicy] = None,
+    workflow_clock: Optional[Callable[[], int]] = None,
+    journey_access_context_provider: Optional[JourneyAccessContextProvider] = None,
+    job_payload_key_provider: Optional[KeyProvider] = None,
+) -> FastAPI:
+    """Create the REST app, optionally enabling single-asset preflight.
+
+    Args:
+        max_request_body_bytes: Override the route-specific body ceiling.
+        experimental_multimodal_preflight: Explicit experimental opt-in. When
+            omitted, read OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT;
+            unset or false keeps the route absent.
+        workflow_service: Trusted local custody service for workflow routes.
+        workflow_policy: Server-owned workflow opt-ins; disabled by default.
+        workflow_clock: Integer Unix-seconds source for receipt validity checks.
+        journey_access_context_provider: Operator hook that resolves the
+            authoritative Journey access context for authenticated principals.
+            Defaults to the grants in ``OPENMED_SERVICE_JOURNEY_GRANTS``.
+        job_payload_key_provider: Caller-owned key provider that enables
+            encrypted retention of async job payloads. Without it, job payloads
+            stay in memory only.
+
+    Returns:
+        Configured application, without starting its lifespan or an effect executor.
+    """
+
+    if experimental_multimodal_preflight is None:
+        flag = os.getenv(_MULTIMODAL_PREFLIGHT_ENV, "0").strip().lower()
+        if flag not in {"", "0", "false", "1", "true"}:
+            raise ValueError("Experimental multimodal preflight flag is invalid")
+        experimental_multimodal_preflight = flag in {"1", "true"}
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
+        validate_route_policies(fastapi_app)
+        validate_egress_configuration()
         runtime = ServiceRuntime.from_env(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.compatibility = _create_compatibility_gate(
+            fastapi_app, runtime
+        )
+        await run_in_threadpool(fastapi_app.state.compatibility.report, force=True)
+        bulk_job_bounds = getattr(fastapi_app.state, "bulk_job_bounds", None)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
-            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
+            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager(
+                bounds=bulk_job_bounds,
+                idempotency=StartIdempotencyStore.from_env(),
+            )
         if getattr(fastapi_app.state, "fhir_bulk_jobs", None) is None:
-            fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager()
+            fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager(
+                bounds=bulk_job_bounds,
+                idempotency=StartIdempotencyStore.from_env(),
+            )
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
         fastapi_app.state.openhim_mediator = None
+        coordinator = _install_drain_coordinator(fastapi_app, runtime)
 
-        if runtime.preload_models:
-            await run_in_threadpool(runtime.preload)
+        # Fail closed: an invalid profile never preloads, contacts OpenHIM or
+        # becomes ready, and every non-probe route answers 503.
+        fastapi_app.state.security_profile_report = None
+        mtls = getattr(fastapi_app.state, "mtls", None)
+        if _security_profile_report(fastapi_app).ready:
+            if runtime.preload_models:
+                await run_in_threadpool(runtime.preload)
 
-        if openhim_settings.enabled:
-            mediator = create_openhim_mediator(openhim_settings)
-            fastapi_app.state.openhim_mediator = mediator
-            try:
-                await mediator.start()
-            except Exception:
-                await mediator.stop()
-                raise
+            if openhim_settings.enabled:
+                mediator = create_openhim_mediator(openhim_settings)
+                fastapi_app.state.openhim_mediator = mediator
+                try:
+                    await mediator.start()
+                except Exception:
+                    await mediator.stop()
+                    raise
 
-        fastapi_app.state.ready = True
+            if mtls is not None:
+                mtls.start_reload_watcher()
+            fastapi_app.state.ready = True
 
         try:
             yield
         finally:
-            fastapi_app.state.ready = False
-            fastapi_app.state.shutting_down = True
-            mediator = getattr(fastapi_app.state, "openhim_mediator", None)
-            if mediator is not None:
-                await mediator.stop()
-            loop = asyncio.get_event_loop()
-            deadline = loop.time() + float(
-                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
-            )
-            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
-                loop.time() < deadline
-            ):
-                await asyncio.sleep(0.05)
-            tracing = getattr(fastapi_app.state, "tracing", None)
-            if tracing is not None:
-                tracing.shutdown()
-            manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
-            if manager is not None:
-                await manager.cancel_all()
-            bulk_manager = getattr(fastapi_app.state, "fhir_bulk_jobs", None)
-            if bulk_manager is not None:
-                await bulk_manager.cancel_all()
-            job_queue = getattr(fastapi_app.state, "job_queue", None)
-            if job_queue is not None:
-                job_queue.shutdown()
+            # The credential reload watcher stops before the drain so no reload
+            # races shutdown. Readiness then drops; admission closes on every
+            # surface, in-flight work finishes or ends with a typed result, and
+            # models and devices are released, each phase within its budget.
+            if mtls is not None:
+                mtls.stop_reload_watcher()
+            fastapi_app.state.drain_report = await coordinator.drain()
 
+    api_docs = parse_api_docs_config()
     app = FastAPI(
         title="OpenMed REST API",
         version=openmed.__version__,
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
+        openapi_url=api_docs.openapi_url,
+        docs_url=api_docs.docs_url,
+        redoc_url=api_docs.redoc_url,
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
-    if security_config.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=security_config.cors_origins,
-            allow_methods=SERVICE_CORS_METHODS,
-            allow_headers=SERVICE_CORS_HEADERS,
+    app.state.job_payload_key_provider = job_payload_key_provider
+    app.state.bulk_storage = BulkStoragePolicy.from_env()
+    app.state.bulk_job_bounds = bulk_job_bounds_from_env()
+    auth_config = parse_service_auth_config()
+    if api_docs.public:
+        auth_config = replace(
+            auth_config,
+            exempt_paths=auth_config.exempt_paths | DEVELOPMENT_DOCS_EXEMPT_PATHS,
         )
-    app.add_middleware(
-        ErrorEnvelopeTrustedHostMiddleware,
-        allowed_hosts=security_config.trusted_hosts,
-        www_redirect=False,
-    )
-    app.state.auth = ServiceAuth(
-        parse_service_auth_config(),
-        error_response=_error_response,
-    )
+    app.state.auth = ServiceAuth(auth_config, error_response=_error_response)
     app.state.mtls = ServiceMTLS(
         parse_service_mtls_config(),
         error_response=_error_response,
     )
+    app.state.job_ownership = JobOwnershipPolicy.from_env(
+        authentication_enabled=app.state.auth.enabled or app.state.mtls.enabled
+    )
+    # One deployment key serves owner, span, document and webhook URL digests.
+    app.state.job_digests = JobDigestPolicy.from_env(key=app.state.job_ownership.key)
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
     app.state.tracing = service_tracing_from_env()
+    install_response_headers(app)
     app.state.openhim_settings = openhim_settings
     app.state.openhim_deidentifier = None
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.journey_access = JourneyAccessGate.from_env(
+        provider=journey_access_context_provider
+    )
     app.state.operational_limits = request_limits_from_env()
+    app.state.request_body_read_limits = request_body_read_limits_from_env()
+    app.state.replica_state = ReplicaStatePolicy.from_env()
+    app.state.system_one_enabled = os.getenv(
+        "OPENMED_SERVICE_SYSTEM_ONE", ""
+    ).strip().lower() in {"true", "1", "yes"}
+    app.state.system_one_audit_key = os.urandom(32)
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
 
+    if experimental_multimodal_preflight:
+
+        @app.post(
+            _MULTIMODAL_PREFLIGHT_PATH,
+            tags=["Experimental"],
+            summary="Experimental single-asset multimodal preflight",
+            description=(
+                "Disabled by default. Supply a strict AssetManifest JSON object "
+                "in X-OpenMed-Manifest (at most 8192 bytes) and raw asset bytes "
+                "as application/octet-stream. Returns the unchanged core "
+                "PreflightReport JSON using desktop-v1 limits. No decoding, "
+                "inference or clinical action is performed."
+            ),
+            openapi_extra={
+                "x-experimental": True,
+                "x-enabled-by-default": False,
+                "parameters": [
+                    {
+                        "name": _MANIFEST_HEADER,
+                        "in": "header",
+                        "required": True,
+                        "schema": {"type": "string", "maxLength": 8192},
+                        "description": "Strict AssetManifest JSON; opaque references only",
+                    }
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {"type": "string", "format": "binary"}
+                        }
+                    },
+                },
+            },
+            responses={
+                200: {"description": "Byte-stable core PreflightReport JSON"},
+                413: {"description": "Request body exceeds the configured ceiling"},
+                415: {"description": "unsupported_media_type error envelope"},
+                422: {"description": "malformed_manifest or digest mismatch envelope"},
+            },
+        )
+        async def multimodal_preflight(request: Request) -> Response:
+            """Validate one in-memory asset using the existing preflight contract."""
+            from openmed.multimodal.asset_manifest import (
+                AssetManifest,
+                AssetManifestError,
+            )
+            from openmed.multimodal.preflight import preflight_asset
+
+            def reject(status: int, code: str) -> JSONResponse:
+                request.scope["openmed.preflight_outcome"] = "rejected"
+                request.scope["openmed.preflight_reason_codes"] = (code,)
+                return _error_response(status, code, "Multimodal preflight rejected")
+
+            if (
+                request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                != "application/octet-stream"
+            ):
+                return reject(415, "unsupported_media_type")
+            headers = request.headers.getlist(_MANIFEST_HEADER)
+            if (
+                len(headers) != 1
+                or len(headers[0].encode("utf-8")) > _MAX_MANIFEST_HEADER_BYTES
+            ):
+                return reject(422, "malformed_manifest")
+            try:
+                manifest = AssetManifest.from_json(headers[0])
+            except (AssetManifestError, RecursionError):
+                return reject(422, "malformed_manifest")
+            report = await run_in_threadpool(
+                preflight_asset, manifest, await request.body()
+            )
+            reasons = tuple(finding.reason_code for finding in report.findings)
+            # Do not echo even a syntactically valid caller reference when
+            # source integrity fails. Other abstentions preserve core parity.
+            for code in ("byte_count_mismatch", "sha256_mismatch"):
+                if code in reasons:
+                    return reject(422, code)
+            request.scope["openmed.preflight_outcome"] = report.status.value
+            request.scope["openmed.preflight_reason_codes"] = reasons
+            return Response(content=report.to_json(), media_type="application/json")
+
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
-        path = request.url.path
-        if path in _MODEL_BACKED_PATHS:
+        if _security_profile_blocks(request):
+            return _security_profile_invalid_response(
+                _security_profile_report(request.app), include_details=False
+            )
+        peer_rejection = _peer_contract_rejection(request)
+        if peer_rejection is not None:
+            return peer_rejection
+        if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
-                return _error_response(
-                    503,
-                    "not_ready",
-                    "Service is shutting down and not accepting new requests",
-                    details=None,
-                )
+                return _shutting_down_response(_drain_retry_after(state))
             state.inflight = getattr(state, "inflight", 0) + 1
             try:
                 return await call_next(request)
             finally:
-                state.inflight = getattr(state, "inflight", 0) - 1
+
+                def release_inflight() -> None:
+                    state.inflight = getattr(state, "inflight", 0) - 1
+
+                work = current_request_work()
+                if work is None:
+                    release_inflight()
+                else:
+                    work.on_finished(release_inflight)
         return await call_next(request)
 
     if app.state.metrics is not None:
@@ -899,10 +1695,20 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             registry.set_circuit_breaker_state_counts(
                 runtime.circuit_breaker_state_counts()
             )
+            registry.set_connection_rejected_total(connection_rejection_count())
             return Response(
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
             )
+
+    # Declared before the throttle so it runs inside it: rate limits shed first,
+    # and the request's tracked work is visible when the permit is released.
+    @app.middleware("http")
+    async def _admission_middleware(request: Request, call_next):
+        admission = getattr(request.app.state, "admission", None)
+        if admission is None:
+            return await call_next(request)
+        return await admission.dispatch(request, call_next)
 
     @app.middleware("http")
     async def _throttle_middleware(request: Request, call_next):
@@ -914,7 +1720,6 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             return await call_next(request)
         return await throttle.dispatch(request, call_next)
 
-    @app.middleware("http")
     async def _auth_middleware(request: Request, call_next):
         auth = getattr(request.app.state, "auth", None)
         mtls = getattr(request.app.state, "mtls", None)
@@ -930,14 +1735,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Question IDs and unknown JSON keys may themselves contain PHI. Use the
+        # matched route so mounted services receive the same content-free error.
+        protected_route = (
+            getattr(request.scope.get("route"), "path", None) == _SYSTEM_ONE_PATH
+        )
         return _error_response(
             422,
             "validation_error",
             "Request validation failed",
-            details=_format_validation_details(exc),
+            details=None if protected_route else _format_validation_details(exc),
         )
 
     @app.exception_handler(ServiceTimeoutError)
@@ -949,12 +1759,102 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             details={"timeout_seconds": exc.timeout_seconds},
         )
 
+    @app.exception_handler(ReplicaComponentUnavailableError)
+    async def _replica_component_handler(
+        _: Request,
+        exc: ReplicaComponentUnavailableError,
+    ) -> JSONResponse:
+        if exc.code == COMPONENT_DISABLED:
+            return _error_response(
+                503,
+                "component_disabled",
+                "This service component is disabled by the replica policy",
+                details={"component": exc.category},
+            )
+        return _error_response(
+            503,
+            "replica_unsafe_state",
+            "This component keeps replica-local state that multi-replica mode "
+            "has not accepted",
+            details={"component": exc.category, "replica_mode": "multi"},
+        )
+
+    @app.exception_handler(JobStoreSchemaError)
+    async def _job_store_schema_handler(
+        _: Request,
+        exc: JobStoreSchemaError,
+    ) -> JSONResponse:
+        # A store outside this build's window is refused when it is opened.
+        return _error_response(
+            503,
+            "incompatible_state",
+            "Persisted state is outside this build's compatibility window",
+            details={
+                "components": {
+                    JOB_STORE_COMPONENT: {
+                        "state": "incompatible",
+                        "reason": exc.compatibility_reason or exc.code,
+                    }
+                }
+            },
+        )
+
+    @app.exception_handler(IncompatibleStateError)
+    async def _incompatible_state_handler(
+        _: Request,
+        exc: IncompatibleStateError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "incompatible_state",
+            "Persisted state is outside this build's compatibility window",
+            details=exc.to_details(),
+        )
+
     @app.exception_handler(BackpressureError)
     async def _backpressure_handler(
         _: Request,
         exc: BackpressureError,
     ) -> JSONResponse:
         return _backpressure_response(exc)
+
+    @app.exception_handler(BulkJobsSaturatedError)
+    async def _bulk_jobs_saturated_handler(
+        _: Request,
+        exc: BulkJobsSaturatedError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "bulk_jobs_saturated",
+            "Bulk job capacity is saturated; retry later",
+            details=exc.to_details(),
+            headers={"Retry-After": format_retry_after(exc.retry_after_seconds)},
+        )
+
+    @app.exception_handler(ServiceBusyError)
+    async def _service_busy_handler(_: Request, exc: ServiceBusyError) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "max_concurrency": exc.max_concurrency,
+                "wait_seconds": exc.wait_seconds,
+                "key": exc.key_by,
+            },
+        )
+
+    @app.exception_handler(EgressDenied)
+    async def _egress_denied_handler(
+        _: Request,
+        exc: EgressDenied,
+    ) -> JSONResponse:
+        return _error_response(
+            403,
+            exc.error_code,
+            "Outbound destination is not permitted by the egress policy",
+            details={"reason": exc.reason_code},
+        )
 
     @app.exception_handler(PrivacyGatewayConfigurationError)
     async def _privacy_gateway_config_handler(
@@ -992,6 +1892,22 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             details={"reason": exc.reason_code},
         )
 
+    @app.exception_handler(JobAdmissionError)
+    async def _job_admission_handler(
+        _: Request,
+        exc: JobAdmissionError,
+    ) -> JSONResponse:
+        headers = None
+        if exc.retry_after_seconds is not None:
+            headers = {"Retry-After": format_retry_after(exc.retry_after_seconds)}
+        return _error_response(
+            exc.status_code,
+            exc.error_code,
+            exc.message,
+            details=exc.to_details(),
+            headers=headers,
+        )
+
     @app.exception_handler(CircuitBreakerOpenError)
     async def _circuit_breaker_handler(
         _: Request,
@@ -1005,6 +1921,13 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             details=circuit_breaker_details(exc),
             headers={"Retry-After": retry_after},
         )
+
+    @app.exception_handler(ServiceShuttingDownError)
+    async def _service_shutting_down_handler(
+        _: Request,
+        exc: ServiceShuttingDownError,
+    ) -> JSONResponse:
+        return _shutting_down_response(exc.retry_after_seconds)
 
     @app.exception_handler(WarmPoolBackpressureError)
     async def _warm_pool_backpressure_handler(
@@ -1023,6 +1946,27 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             },
         )
 
+    @app.exception_handler(_DecisionShapeRefused)
+    async def _decision_shape_handler(
+        _: Request,
+        exc: _DecisionShapeRefused,
+    ) -> JSONResponse:
+        details = {"reason": exc.reason_code}
+        if exc.reason_code == "media_unsupported":
+            return _error_response(
+                422,
+                "decision_media_unsupported",
+                "OpenAI-compatible decision requests are text-only.",
+                details=details,
+            )
+        return _error_response(
+            422,
+            "decision_request_ambiguous",
+            "Send exactly one of an OpenMed decision request or an "
+            "OpenAI-compatible Decisions body.",
+            details=details,
+        )
+
     @app.exception_handler(OpenMedError)
     async def _openmed_error_handler(
         _: Request,
@@ -1030,8 +1974,33 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     ) -> JSONResponse:
         return _openmed_error_response(exc)
 
+    @app.exception_handler(IdempotencyError)
+    async def _idempotency_error_handler(
+        _: Request,
+        exc: IdempotencyError,
+    ) -> JSONResponse:
+        headers = (
+            None if exc.retry_after is None else {"Retry-After": str(exc.retry_after)}
+        )
+        return _error_response(
+            exc.status_code, exc.code, str(exc), details=None, headers=headers
+        )
+
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+        from .runtime import ModelNotServedError
+
+        if isinstance(exc, ModelNotServedError):
+            return _error_response(
+                422,
+                "model_not_served",
+                "Requested model is not served",
+                details=None,
+            )
+        if isinstance(exc, BulkPathError):
+            return _error_response(
+                400, exc.code, "Bulk storage request is not permitted", details=None
+            )
         del exc
         return _error_response(
             400,
@@ -1061,11 +2030,25 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             details=None,
         )
 
+    async_jobs_gate = [Depends(_replica_component_gate(ASYNC_JOBS))]
+    fhir_bulk_gate = [Depends(_replica_component_gate(FHIR_BULK_JOBS))]
+    smart_backend_gate = [Depends(_replica_component_gate(SMART_BACKEND_JOBS))]
+
     @app.get("/health")
     async def health(request: Request) -> Dict[str, str]:
         runtime = _get_service_runtime(request)
+        payload = {"status": "ok", "service": SERVICE_NAME}
+        if is_development_profile(runtime.profile):
+            # Outside development, version and profile need an authenticated
+            # call to the metadata route.
+            payload["version"] = openmed.__version__
+            payload["profile"] = runtime.profile
+        return payload
+
+    @app.get(SERVICE_METADATA_PATH, include_in_schema=False)
+    async def service_metadata(request: Request) -> Dict[str, str]:
+        runtime = _get_service_runtime(request)
         return {
-            "status": "ok",
             "service": SERVICE_NAME,
             "version": openmed.__version__,
             "profile": runtime.profile,
@@ -1077,14 +2060,46 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.get("/readyz")
     async def readyz(request: Request):
-        if getattr(request.app.state, "ready", False):
-            return {"status": "ready", "service": SERVICE_NAME}
-        return _error_response(
-            503,
-            "not_ready",
-            "Service preload has not completed",
-            details=None,
-        )
+        security_report = _security_profile_report(request.app)
+        if not security_report.ready:
+            return _security_profile_invalid_response(
+                security_report, include_details=True
+            )
+        if not getattr(request.app.state, "ready", False):
+            if getattr(request.app.state, "shutting_down", False):
+                return _shutting_down_response(_drain_retry_after(request.app.state))
+            return _error_response(
+                503,
+                "not_ready",
+                "Service preload has not completed",
+                details=None,
+            )
+        report = replica_state_report(request.app)
+        if not report.ready:
+            return _error_response(
+                503,
+                "replica_unsafe_state",
+                "Replica-local service state is not safe behind multiple replicas",
+                details=report.readiness_details(),
+            )
+        compatibility = await run_in_threadpool(_get_compatibility_gate(request).report)
+        if not compatibility.ready:
+            return _incompatible_state_response(compatibility.blocking())
+        return {"status": "ready", "service": SERVICE_NAME}
+
+    @app.get(_COMPATIBILITY_PATH, include_in_schema=False)
+    async def compatibility(request: Request) -> Dict[str, Any]:
+        """Publish the value-free contract and persisted-state compatibility."""
+        snapshot = await run_in_threadpool(_get_compatibility_gate(request).snapshot)
+        return {
+            **snapshot,
+            "service": SERVICE_NAME,
+            "admission": (
+                "draining"
+                if getattr(request.app.state, "shutting_down", False)
+                else "open"
+            ),
+        }
 
     @app.get(
         "/v1/journey/resources",
@@ -1094,26 +2109,33 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     async def list_journey_resources(
         request: Request,
         resource_type: JourneyResourceKind,
-        namespace: str = "default",
-        purpose: str = "care_review",
-        role: str = "clinician",
+        namespace: Optional[str] = None,
+        purpose: Optional[str] = None,
+        role: Optional[str] = None,
         attributes: Optional[str] = Query(default=None, max_length=1024),
-        consent_state: str = "active",
-        export_policy: str = "metadata_only",
+        consent_state: Optional[str] = None,
+        export_policy: Optional[str] = None,
         first: int = Query(default=20, ge=1, le=100),
         after: Optional[str] = Query(default=None, max_length=2048),
         fields: Optional[str] = Query(default=None, max_length=1024),
     ) -> Dict[str, Any]:
-        """List a bounded, policy-filtered page of versioned Journey resources."""
+        """List a bounded, principal-bound page of versioned Journey resources.
+
+        Access context comes from the authenticated principal. The namespace,
+        purpose, role, attribute, consent, and export parameters may only
+        narrow that context; anything wider returns a typed denied page.
+        """
 
         catalog = _get_journey_resource_catalog(request)
         policy = getattr(request.app.state, "journey_access_policy", None)
-        query = JourneyResourceQuery(
+        access_request = JourneyAccessRequest(
             resource_type=resource_type,
             namespace=namespace,
             purpose=purpose,
             role=role,
-            attributes=parse_access_attributes(attributes),
+            attributes=(
+                None if attributes is None else parse_access_attributes(attributes)
+            ),
             consent_state=consent_state,
             export_policy=export_policy,
             first=first,
@@ -1121,7 +2143,13 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             fields=parse_resource_fields(fields),
         )
         started_at = time.perf_counter()
-        page = catalog.list_resources(query, policy=policy)
+        page = _get_journey_access_gate(request).list_resources(
+            catalog,
+            access_request,
+            principal=request.scope.get("openmed.auth"),
+            policy=policy,
+            transport="rest",
+        )
         event = OperationalEvent(
             category=OperationalCategory.QUERY,
             operation="list",
@@ -1138,49 +2166,158 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         _DECISION_PATH,
         response_model=None,
         tags=["decision"],
+        dependencies=[Depends(_negotiate_decision_body)],
         responses={
             200: {
-                "description": "A calibrated fixed-option decision result.",
-                "content": {"application/json": {"schema": decision_result_schema()}},
+                "description": (
+                    "A calibrated decision in the shape of the request: an "
+                    "OpenMed result for an OpenMed request, or an "
+                    "OpenAI-compatible Decisions response for that body."
+                ),
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "oneOf": [
+                                decision_result_schema(),
+                                openai_decisions_response_schema(),
+                            ]
+                        }
+                    }
+                },
             }
         },
     )
     async def fixed_option_decision(
-        payload: FixedOptionDecisionRequest,
+        payload: DecisionsRequestBody,
         request: Request,
-    ) -> Dict[str, Any]:
-        """Evaluate a bounded local decision and return a typed review result."""
+    ) -> Any:
+        """Evaluate a bounded local decision and return a typed review result.
 
+        The body is either an OpenMed decision request or an OpenAI-compatible
+        Decisions body; the response uses the same shape as the request.
+        """
+
+        if isinstance(payload, OpenAIDecisionsRequest):
+            return await _openai_compatible_decision(payload, request)
+        # Only caller-set fields reach the core contract, so a request without
+        # extension fields still resolves to schema 1.0.0.
         body = (
-            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload.dict(exclude_unset=True)
         )
         try:
-            decision_request = CoreDecisionRequest.from_dict(body)
+            # Optional video preflight and metadata scrubbing must not block
+            # the event loop serving unrelated requests.
+            decision_request = await run_in_threadpool(
+                CoreDecisionRequest.from_dict, body
+            )
         except (DecisionError, TypeError, ValueError) as exc:
             raise InputError(
                 "Invalid fixed-option decision request.",
                 details={"reason": str(exc)},
             ) from exc
         result = await run_in_threadpool(
-            decide,
+            _decide_with_service_state,
+            request.app.state,
             decision_request,
-            backend=getattr(
-                request.app.state,
-                "decision_backend",
-                DETERMINISTIC_DECISION_BACKEND,
-            ),
-            policy=getattr(
-                request.app.state,
-                "decision_access_policy",
-                DecisionAccessPolicy(),
-            ),
-            calibration_profiles=getattr(
-                request.app.state,
-                "decision_calibration_profiles",
-                None,
-            ),
         )
         return result.to_dict()
+
+    @app.post(
+        _SYSTEM_ONE_PATH,
+        tags=["decision"],
+        response_model=None,
+        responses={
+            200: {
+                "description": "System One answers plus an OpenMed decision ID.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["decision_id", "model", "answers"],
+                            "properties": {
+                                "decision_id": {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$",
+                                },
+                                "model": {"type": "string"},
+                                "answers": {"type": "object"},
+                            },
+                        }
+                    }
+                },
+            },
+            404: {"description": "Route disabled (default)."},
+            422: {"description": "De-identification refused; nothing forwarded."},
+        },
+    )
+    async def private_system_one(payload: SystemOneRequest, request: Request):
+        """De-identify state and every question before scoring with the configured local backend."""
+        from openmed.core.offline import is_local_only
+
+        from .system_one import (
+            SystemOneInputError,
+            SystemOnePrivacyError,
+            protect_and_decide,
+        )
+
+        app_state = request.app.state
+        if not app_state.system_one_enabled:
+            raise HTTPException(status_code=404, detail="System One route is disabled.")
+        runtime = _get_service_runtime(request)
+        if not (
+            app_state.auth.config.enabled
+            and runtime.throttle.rate_limit_enabled
+            and is_local_only(runtime.config)
+        ):
+            return _error_response(
+                503,
+                "privacy_gateway_not_configured",
+                "Local-only mode, service authentication and rate limits are required.",
+            )
+
+        def clean(text: str):
+            model = (
+                runtime.config.pii_model
+                or "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+            )
+            return runtime.run_model_request(
+                model,
+                None,
+                lambda: openmed.deidentify(
+                    text,
+                    method="mask",
+                    model_name=model,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    keep_mapping=False,
+                    use_safety_sweep=True,
+                ),
+            )
+
+        try:
+            return await run_in_threadpool(
+                protect_and_decide,
+                {"state": payload.state, "questions": payload.questions},
+                cleaner=clean,
+                backend=app_state.decision_backend,
+                policy=app_state.decision_access_policy,
+                profiles=app_state.decision_calibration_profiles,
+                audit_key=app_state.system_one_audit_key,
+            )
+        except SystemOneInputError:
+            return _error_response(400, "bad_request", "Invalid System One request.")
+        except SystemOnePrivacyError:
+            return _error_response(
+                422, "outbound_redaction_failed", "Unable to de-identify the request."
+            )
+        except Exception:
+            return _error_response(
+                503,
+                "not_ready",
+                "The local decision backend is unavailable.",
+            )
 
     if openhim_settings.enabled:
 
@@ -1283,13 +2420,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_analyze_batcher(request).submit(
-                        _AnalyzeBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_analyze_batcher(request),
+                    _AnalyzeBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1329,13 +2465,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_pii_extract_batcher(request).submit(
-                        _PIIExtractBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_pii_extract_batcher(request),
+                    _PIIExtractBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1370,26 +2505,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         request: Request,
     ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
-
-        async def _events():
-            async for event in runtime.stream_pii_extract(
-                text=payload.text,
-                model_name=payload.model_name,
-                confidence_threshold=payload.confidence_threshold,
-                use_smart_merging=payload.use_smart_merging,
-                lang=payload.lang,
-                normalize_accents=payload.normalize_accents,
-                keep_alive=payload.keep_alive,
-                chunk_size=payload.chunk_size,
-                window_chars=payload.window_chars,
-                tokenizer_context_chars=payload.tokenizer_context_chars,
-                max_entity_chars=payload.max_entity_chars,
-            ):
-                event_payload = event.to_dict(include_text=payload.include_text)
-                event_payload["audit"] = event.to_audit_dict()
-                yield json.dumps(event_payload, sort_keys=True) + "\n"
-
-        return StreamingResponse(_events(), media_type="application/x-ndjson")
+        runtime.validate_served_model(payload.model_name)
+        controls = NDJSONStreamControls.for_request(request.scope, runtime)
+        return controls.response(
+            _drain_aware_stream(
+                request,
+                pii_extract_ndjson_stream(
+                    payload,
+                    runtime,
+                    retain_abandoned_work=controls.retain,
+                ),
+                retain=controls.retain,
+            )
+        )
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
@@ -1434,7 +2562,10 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
         events = deidentify_ndjson_stream(payload, runtime)
-        return StreamingResponse(events, media_type="application/x-ndjson")
+        controls = NDJSONStreamControls.for_request(request.scope, runtime)
+        return controls.response(
+            _drain_aware_stream(request, events, retain=controls.retain)
+        )
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
@@ -1497,21 +2628,30 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         ):
             return await run_in_threadpool(_profile_summary, payload)
 
-    @app.post("/brief", response_model=BriefResponse)
+    @app.post("/brief", response_model=BriefResponse, response_model_exclude_unset=True)
     async def brief_route(payload: BriefRequest, request: Request) -> Dict[str, Any]:
         """Return the shared local brief without recording protected content."""
+        from openmed.clinical.brief_cancellation import BriefCancellation
+
         from .brief import brief_response
 
+        cancellation = BriefCancellation()
         provider = getattr(request.app.state, "brief_context_provider", None)
         try:
-            response = await run_in_threadpool(
+            response = await asyncio.to_thread(
                 brief_response,
                 payload.text,
                 model=payload.model,
                 profile=payload.profile,
                 review_id=payload.review_id,
                 context_provider=provider,
+                cancellation=cancellation,
             )
+            set_access_log_brief(request, response)
+            return response
+        except asyncio.CancelledError:
+            cancellation.cancel()
+            response = brief_response("", cancellation=cancellation)
             set_access_log_brief(request, response)
             return response
         except (TypeError, ValueError):
@@ -1574,40 +2714,54 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
                 )
             raise
 
-    @app.post(_FHIR_BULK_EXPORT_PATH, status_code=202, include_in_schema=False)
+    @app.post(
+        _FHIR_BULK_EXPORT_PATH,
+        status_code=202,
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def start_fhir_bulk_export(
         payload: FHIRBulkExportRequest,
         request: Request,
         response: Response,
     ) -> Dict[str, Any]:
-        status = _start_fhir_bulk_job(payload, request)
-        status_url = f"{request.url.path}/{status.job_id}"
-        response.headers["Content-Location"] = status_url
-        payload = status.to_dict()
-        payload["status_url"] = status_url
-        return payload
+        return _start_fhir_bulk_route(
+            payload, request, response, route=_FHIR_BULK_EXPORT_ROUTE
+        )
 
-    @app.post(_FHIR_BULK_IMPORT_PATH, status_code=202, include_in_schema=False)
+    @app.post(
+        _FHIR_BULK_IMPORT_PATH,
+        status_code=202,
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def start_fhir_bulk_import(
         payload: FHIRBulkImportRequest,
         request: Request,
         response: Response,
     ) -> Dict[str, Any]:
-        status = _start_fhir_bulk_job(payload, request)
-        status_url = f"{request.url.path}/{status.job_id}"
-        response.headers["Content-Location"] = status_url
-        payload = status.to_dict()
-        payload["status_url"] = status_url
-        return payload
+        return _start_fhir_bulk_route(
+            payload, request, response, route=_FHIR_BULK_IMPORT_ROUTE
+        )
 
-    @app.get(f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}", include_in_schema=False)
-    @app.get(f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}", include_in_schema=False)
+    @app.get(
+        f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}",
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
+    @app.get(
+        f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}",
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def fhir_bulk_job_status(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).get(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.get(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1617,17 +2771,21 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     @app.get(
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/manifest",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.get(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/manifest",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def fhir_bulk_job_manifest(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).manifest(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.manifest(job_id)
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1639,17 +2797,21 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     @app.get(
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/report",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.get(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/report",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def fhir_bulk_job_report(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            return _get_fhir_bulk_manager(request).report(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.report(job_id)
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1662,18 +2824,22 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}",
         status_code=202,
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.delete(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}",
         status_code=202,
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def cancel_fhir_bulk_job(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_fhir_bulk_manager(request)
         try:
-            status = await _get_fhir_bulk_manager(request).cancel(job_id)
+            _require_visible_bulk_job(request, manager, job_id)
+            status = await manager.cancel(job_id)
             return status.to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
@@ -1706,37 +2872,92 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
                     },
                 )
 
-    @app.post(_SMART_BACKEND_START_PATH)
+    @app.post(
+        _SMART_BACKEND_START_PATH,
+        dependencies=smart_backend_gate,
+        responses=_IDEMPOTENT_START_RESPONSES,
+        openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA,
+    )
     async def start_smart_backend_ingestion(
         payload: SMARTBackendIngestionRequest,
         request: Request,
+        response: Response,
     ) -> Dict[str, Any]:
-        runtime = _get_service_runtime(request)
         manager = _get_smart_backend_manager(request)
-        config = _smart_backend_config_from_payload(payload)
-        deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(config, deidentifier=deidentifier).to_dict()
+        owner_digest = _submitting_owner_digest(request)
+        keyed = _keyed_start_request(
+            request,
+            payload,
+            route=_SMART_BACKEND_START_ROUTE,
+            owner_digest=owner_digest,
+        )
+        reservation: Optional[IdempotencyReservation] = None
+        if keyed is not None:
+            outcome = manager.reserve_idempotent_start(keyed)
+            if isinstance(outcome, IdempotentReplay):
+                response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
+                return outcome.response
+            reservation = outcome
+        try:
+            runtime = _get_service_runtime(request)
+            runtime.validate_served_model(payload.model_name)
+            config = _smart_backend_config_from_payload(payload)
+            authorize_smart_backend_config(config)
+            # Admission precedes path reservation so a rejected start leaves no
+            # output directory behind.
+            manager.ensure_capacity()
+            job_id = uuid.uuid4().hex
+            _, output, checkpoint = request.app.state.bulk_storage.prepare(
+                input_dir=None,
+                output_dir=payload.output_dir,
+                checkpoint_path=payload.checkpoint_path,
+                job_id=job_id,
+            )
+            config = replace(config, output_dir=output, checkpoint_path=checkpoint)
+            deidentifier = _smart_backend_deidentifier(payload, runtime)
+            status = manager.start(
+                config,
+                deidentifier=deidentifier,
+                job_id=job_id,
+                owner_digest=owner_digest,
+            )
+            if reservation is not None:
+                manager.complete_idempotent_start(reservation, status)
+        finally:
+            if reservation is not None:
+                manager.release_idempotent_start(reservation)
+        return status.to_dict()
 
-    @app.get("/fhir/smart-backend/ingestions/{job_id}")
+    @app.get(
+        "/fhir/smart-backend/ingestions/{job_id}",
+        dependencies=smart_backend_gate,
+    )
     async def smart_backend_ingestion_status(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return _get_smart_backend_manager(request).get(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.get(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
                 detail="ingestion job not found",
             ) from exc
 
-    @app.get("/fhir/smart-backend/ingestions/{job_id}/summary")
+    @app.get(
+        "/fhir/smart-backend/ingestions/{job_id}/summary",
+        dependencies=smart_backend_gate,
+    )
     async def smart_backend_ingestion_summary(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return _get_smart_backend_manager(request).summary(job_id).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return manager.summary(job_id).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
@@ -1752,43 +2973,73 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         "/fhir/smart-backend/ingestions/{job_id}",
         status_code=202,
         include_in_schema=False,
+        dependencies=smart_backend_gate,
     )
     async def cancel_smart_backend_ingestion(
         job_id: str,
         request: Request,
     ) -> Dict[str, Any]:
+        manager = _get_smart_backend_manager(request)
         try:
-            return (await _get_smart_backend_manager(request).cancel(job_id)).to_dict()
+            _require_visible_bulk_job(request, manager, job_id)
+            return (await manager.cancel(job_id)).to_dict()
         except KeyError as exc:
             raise StarletteHTTPException(
                 status_code=404,
                 detail="ingestion job not found",
             ) from exc
 
-    @app.post("/jobs", status_code=202)
+    @app.post(
+        "/jobs",
+        status_code=202,
+        dependencies=async_jobs_gate,
+        responses=_IDEMPOTENT_JOB_RESPONSES,
+        openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA,
+    )
     async def create_job(
         payload: DeidentifyJobRequest,
         request: Request,
+        response: Response,
     ) -> Dict[str, Any]:
-        _get_service_runtime(request)
+        _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
-        record = queue.submit(payload)
+        submission = queue.submit_job(
+            payload,
+            owner_digest=_submitting_owner_digest(request),
+            idempotency_key=parse_idempotency_key(
+                request.headers.getlist(IDEMPOTENCY_KEY_HEADER)
+            ),
+        )
+        record = submission.record
+        if not submission.created:
+            response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
 
-    @app.get("/jobs/{job_id}")
+    @app.get("/jobs/{job_id}", dependencies=async_jobs_gate)
     async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
         queue = _get_job_queue(request)
         record = queue.get(job_id)
-        if record is None:
+        if record is None or not _job_visible(
+            request,
+            admin_scope=JOBS_ADMIN_SCOPE,
+            owner_digest=lambda: record.get(OWNER_DIGEST_FIELD),
+        ):
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
-    from .graphql_app import mount_graphql
+    from .graphql_app import GraphQLPrivacyHeadersMiddleware, mount_graphql
 
     mount_graphql(
         app,
         runtime_getter=_get_service_runtime,
         resource_getter=_get_journey_resource_catalog,
+        access_getter=_get_journey_access_gate,
+    )
+
+    from .workflow_routes import WorkflowBoundaryMiddleware, mount_workflow_routes
+
+    mount_workflow_routes(
+        app, service=workflow_service, policy=workflow_policy, clock=workflow_clock
     )
 
     if app.state.tracing.enabled:
@@ -1796,6 +3047,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             OpenTelemetryMiddleware,
             tracing=app.state.tracing,
         )
+    # Signature checks sit inside both body-limit layers and before routing.
+    install_request_signing(
+        app,
+        error_response=_error_response,
+        max_body_bytes=app.state.operational_limits.max_request_bytes,
+    )
     body_limit = (
         int(max_request_body_bytes)
         if max_request_body_bytes is not None
@@ -1804,19 +3061,63 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             + _REQUEST_BODY_OVERHEAD_BYTES
         )
     )
+    app.state.model_body_limit_bytes = body_limit
     app.add_middleware(
-        _BoundedRequestBodyMiddleware,
+        BoundedRequestBodyMiddleware,
         max_bytes=body_limit,
-        limited_paths=_MODEL_BACKED_PATHS,
+        limited_paths=_MODEL_BACKED_PATHS
+        | (
+            {_MULTIMODAL_PREFLIGHT_PATH} if experimental_multimodal_preflight else set()
+        ),
+        read_limits=app.state.request_body_read_limits,
+        rejection_response=_model_route_body_rejection,
+        metrics=app.state.metrics,
+        # The global limiter below already checked the JSON structure.
+        scan_json=False,
+    )
+    app.add_middleware(
+        BoundedRequestBodyMiddleware,
+        read_limits=app.state.request_body_read_limits,
+        metrics=app.state.metrics,
+        limits=app.state.operational_limits,
     )
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
+        minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
     app.add_middleware(
-        BoundedRequestBodyMiddleware,
-        limits=app.state.operational_limits,
+        WorkflowBoundaryMiddleware,
+        read_limits=app.state.request_body_read_limits,
+        metrics=app.state.metrics,
     )
+    # Starlette runs the last-added middleware first. Host, CORS and
+    # header-only credential checks must finish before the body-limit and
+    # throttle layers registered earlier read a body or spend a token.
+    app.middleware("http")(_auth_middleware)
+    if security_config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=security_config.cors_origins,
+            allow_methods=SERVICE_CORS_METHODS,
+            allow_headers=service_cors_allow_headers(
+                auth_enabled=app.state.auth.enabled
+            ),
+            expose_headers=SERVICE_CORS_EXPOSE_HEADERS,
+        )
+    app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=security_config.trusted_hosts,
+        www_redirect=False,
+    )
+    # Outside the app's own layers, so a stalled NDJSON consumer is bounded at
+    # the server's send.
+    app.add_middleware(StreamWriteIdleMiddleware, paths=STREAM_ROUTE_PATHS)
+
+    # Registered last so it is outermost: every /graphql response, including
+    # rejections raised by the middlewares above, carries the privacy headers.
+    app.add_middleware(GraphQLPrivacyHeadersMiddleware)
+    validate_route_policies(app)
     return app
 
 
@@ -2374,7 +3675,9 @@ def _fhir_bulk_config_from_payload(
 ) -> FHIRBulkJobConfig:
     """Convert a validated route payload without retaining request metadata."""
 
-    input_dir = payload.input_dir or payload.source_dir
+    input_dir = (
+        payload.input_dir if payload.input_dir is not None else payload.source_dir
+    )
     return FHIRBulkJobConfig(
         input_dir=input_dir,
         output_dir=payload.output_dir,
@@ -2395,16 +3698,94 @@ def _fhir_bulk_config_from_payload(
     )
 
 
+def _start_fhir_bulk_route(
+    payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
+    request: Request,
+    response: Response,
+    *,
+    route: str,
+) -> Dict[str, Any]:
+    """Start, or replay the keyed start of, one bulk export/import job.
+
+    A repeated ``Idempotency-Key`` is resolved before any validation, storage
+    reservation or task scheduling, so a replay or conflict has no side effect.
+    """
+    manager = _get_fhir_bulk_manager(request)
+    owner_digest = _submitting_owner_digest(request)
+    keyed = _keyed_start_request(
+        request, payload, route=route, owner_digest=owner_digest
+    )
+    reservation: Optional[IdempotencyReservation] = None
+    if keyed is not None:
+        outcome = manager.reserve_idempotent_start(keyed)
+        if isinstance(outcome, IdempotentReplay):
+            response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
+            return _fhir_bulk_start_payload(
+                request, response, outcome.job_id, outcome.response
+            )
+        reservation = outcome
+    try:
+        status = _start_fhir_bulk_job(
+            payload, request, manager=manager, owner_digest=owner_digest
+        )
+        if reservation is not None:
+            manager.complete_idempotent_start(reservation, status)
+    finally:
+        if reservation is not None:
+            manager.release_idempotent_start(reservation)
+    return _fhir_bulk_start_payload(request, response, status.job_id, status.to_dict())
+
+
+def _fhir_bulk_start_payload(
+    request: Request,
+    response: Response,
+    job_id: str,
+    status_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    status_url = f"{request.url.path}/{job_id}"
+    response.headers["Content-Location"] = status_url
+    payload = dict(status_payload)
+    payload["status_url"] = status_url
+    return payload
+
+
 def _start_fhir_bulk_job(
     payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
     request: Request,
+    *,
+    manager: FHIRBulkJobManager,
+    owner_digest: Optional[dict[str, str]],
 ):
     runtime = _get_service_runtime(request)
-    manager = _get_fhir_bulk_manager(request)
+    runtime.validate_served_model(payload.model_name)
     config = _fhir_bulk_config_from_payload(payload)
+    if payload.input_dir is not None and payload.source_dir is not None:
+        raise BulkPathError("path_invalid")
+    if not config.is_local:
+        authorize_smart_backend_config(config.to_smart_config())
+    # Admission precedes path reservation so a rejected start leaves no output
+    # directory behind.
+    manager.ensure_capacity()
+    job_id = uuid.uuid4().hex
+    source, output, checkpoint = request.app.state.bulk_storage.prepare(
+        input_dir=payload.input_dir
+        if payload.input_dir is not None
+        else payload.source_dir,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        job_id=job_id,
+    )
+    config = replace(
+        config, input_dir=source, output_dir=output, checkpoint_path=checkpoint
+    )
     configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
     deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
-    return manager.start(config, deidentifier=deidentifier)
+    return manager.start(
+        config,
+        deidentifier=deidentifier,
+        job_id=job_id,
+        owner_digest=owner_digest,
+    )
 
 
 def _fhir_bulk_deidentifier(

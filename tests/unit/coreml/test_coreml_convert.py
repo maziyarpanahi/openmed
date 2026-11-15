@@ -37,11 +37,44 @@ class TestCoreMLConvertModule:
         assert "conversion_manifest_path" in params
         assert "eval_suite_path" in params
         assert "swift_parity_corpus_path" in params
+        assert "ane_conv_layout" in params
 
     def test_main_exists(self):
         from openmed.coreml.convert import main
 
         assert callable(main)
+
+
+def test_ane_optimization_profile_uses_conv_layout_name():
+    from openmed.coreml.convert import _ane_optimization_profile
+
+    assert (
+        _ane_optimization_profile(
+            optimize_for_ane=True,
+            ane_conv_layout=True,
+            compute_precision="float16",
+            compute_units="cpuAndNeuralEngine",
+        )
+        == "nchw-conv1x1-fp16"
+    )
+    assert (
+        _ane_optimization_profile(
+            optimize_for_ane=True,
+            ane_conv_layout=False,
+            compute_precision="float16",
+            compute_units="cpuAndNeuralEngine",
+        )
+        == "static-rank2-fp16"
+    )
+    assert (
+        _ane_optimization_profile(
+            optimize_for_ane=False,
+            ane_conv_layout=True,
+            compute_precision="float16",
+            compute_units="cpuAndNeuralEngine",
+        )
+        == "dynamic"
+    )
 
 
 def test_resolve_supported_model_type_accepts_architecture_hints():
@@ -55,16 +88,21 @@ def test_resolve_supported_model_type_accepts_architecture_hints():
     assert resolve_supported_model_type(config) == "deberta-v2"
 
 
-@pytest.mark.parametrize(
-    "model_type",
-    ["bert", "distilbert", "electra", "roberta", "xlm-roberta", "deberta-v2"],
-)
-def test_resolve_supported_model_type_accepts_supported_families(model_type: str):
-    from openmed.coreml.convert import resolve_supported_model_type
+def test_resolve_supported_model_type_accepts_supported_families(subtests):
+    for model_type in [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+    ]:
+        with subtests.test(model_type=model_type):
+            from openmed.coreml.convert import resolve_supported_model_type
 
-    config = types.SimpleNamespace(model_type=model_type, architectures=[])
+            config = types.SimpleNamespace(model_type=model_type, architectures=[])
 
-    assert resolve_supported_model_type(config) == model_type
+            assert resolve_supported_model_type(config) == model_type
 
 
 def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
@@ -243,6 +281,41 @@ def test_analyze_ane_residency_flags_cpu_fallback(tmp_path):
     assert report.passed is False
 
 
+def test_analyze_ane_residency_allows_embedding_cpu_fallback(tmp_path):
+    from openmed.coreml.convert import analyze_ane_residency
+
+    compiled = tmp_path / "compiled.mlmodelc"
+    compiled.mkdir()
+    (compiled / "compute_plan.json").write_text(
+        json.dumps(
+            {
+                "operations": [
+                    {
+                        "name": "embeddings/gather",
+                        "op_type": "gather",
+                        "compute_unit": "CPU",
+                        "flops": 2,
+                    },
+                    {
+                        "name": "encoder/conv",
+                        "op_type": "conv",
+                        "compute_unit": "NeuralEngine",
+                        "flops": 98,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = analyze_ane_residency(compiled)
+
+    assert report.ane_residency_percentage == pytest.approx(1.0)
+    assert report.cpu_fallback_layers[0].name == "embeddings/gather"
+    assert report.blocking_cpu_fallback_layers == ()
+    assert report.passed is True
+
+
 def test_write_coreml_variant_parity_report_rejects_int4(tmp_path):
     from openmed.coreml.convert import write_coreml_variant_parity_report
 
@@ -285,8 +358,8 @@ def test_convert_rejects_unsupported_architecture(monkeypatch, tmp_path):
 
     state = _install_conversion_stubs(
         monkeypatch,
-        model_type="longformer",
-        architectures=["LongformerForTokenClassification"],
+        model_type="gpt2",
+        architectures=["GPT2ForTokenClassification"],
     )
     output_path = tmp_path / "unsupported.mlpackage"
 
@@ -412,6 +485,9 @@ def _install_conversion_stubs(
         palettizer_config=None,
         palettizer_configs=[],
         tokenizer_loads=0,
+        config_references=[],
+        model_references=[],
+        tokenizer_references=[],
     )
 
     class FakeConfig:
@@ -439,15 +515,18 @@ def _install_conversion_stubs(
                 "attention_mask": "attention_mask",
             }
 
-    def load_config(*_args, **_kwargs):
+    def load_config(model_id, **_kwargs):
+        state.config_references.append(model_id)
         state.config_loads += 1
         return FakeConfig()
 
-    def load_tokenizer(*_args, **_kwargs):
+    def load_tokenizer(model_id, **_kwargs):
+        state.tokenizer_references.append(model_id)
         state.tokenizer_loads += 1
         return FakeTokenizer()
 
-    def load_model(*_args, **_kwargs):
+    def load_model(model_id, **_kwargs):
+        state.model_references.append(model_id)
         state.model_loads += 1
         return FakeModel()
 
@@ -477,6 +556,21 @@ def _install_conversion_stubs(
     monkeypatch.setitem(sys.modules, "torch", torch_module)
     monkeypatch.setitem(sys.modules, "transformers", transformers_module)
     monkeypatch.setitem(sys.modules, "coremltools", coremltools_module)
+    import importlib
+
+    converter = importlib.import_module("openmed.coreml.convert")
+    monkeypatch.setattr(
+        converter,
+        "resolve_source_context",
+        lambda model_id, **kwargs: types.SimpleNamespace(
+            source_model_id=model_id,
+            load_reference=model_id,
+            revision="a" * 40,
+            source_digest=None,
+            license=None,
+        ),
+        raising=False,
+    )
     return state
 
 

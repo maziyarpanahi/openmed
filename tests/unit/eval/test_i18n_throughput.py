@@ -45,20 +45,16 @@ def _throughput_report(value: float = 1_000.0) -> dict[str, object]:
     }
 
 
-@pytest.mark.parametrize(
-    "language",
-    i18n_throughput.I18N_THROUGHPUT_LANGUAGES,
-)
-def test_committed_corpora_are_large_deterministic_faker_fixtures(
-    language: str,
-) -> None:
-    fixture = i18n_throughput.load_synthetic_corpus(language)
+def test_committed_corpora_are_large_deterministic_faker_fixtures(subtests) -> None:
+    for language in i18n_throughput.I18N_THROUGHPUT_LANGUAGES:
+        with subtests.test(language=language):
+            fixture = i18n_throughput.load_synthetic_corpus(language)
 
-    assert len(fixture["text"]) >= i18n_throughput.I18N_THROUGHPUT_MIN_CHARS
-    assert fixture["metadata"]["synthetic"] is True
-    assert fixture["metadata"]["generated_only"] is True
-    assert fixture["metadata"]["generator"] == "Faker"
-    assert fixture["metadata"]["sha256"].startswith("sha256:")
+            assert len(fixture["text"]) >= i18n_throughput.I18N_THROUGHPUT_MIN_CHARS
+            assert fixture["metadata"]["synthetic"] is True
+            assert fixture["metadata"]["generated_only"] is True
+            assert fixture["metadata"]["generator"] == "Faker"
+            assert fixture["metadata"]["sha256"].startswith("sha256:")
 
 
 def test_benchmark_emits_cold_start_and_steady_state_metrics() -> None:

@@ -16,9 +16,12 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, cast
 
+from .abstention import AbstentionReason
+
 __all__ = [
     "MAX_PROVIDER_RESULT_JSON_BYTES",
     "PROVIDER_RESULT_SCHEMA_VERSION",
+    "PROVIDER_RESULT_SCHEMA_VERSION_V2",
     "ProviderAbstentionCode",
     "ProviderResultEnvelope",
     "ProviderResultError",
@@ -26,6 +29,7 @@ __all__ = [
 ]
 
 PROVIDER_RESULT_SCHEMA_VERSION: Final = "openmed.multimodal.provider_result.v1"
+PROVIDER_RESULT_SCHEMA_VERSION_V2: Final = "openmed.multimodal.provider_result.v2"
 MAX_PROVIDER_RESULT_JSON_BYTES: Final = 64 * 1024
 
 _MAX_COUNT: Final = (1 << 63) - 1
@@ -59,7 +63,7 @@ _REQUIRED_FIELDS: Final = frozenset(
     }
 )
 _OPTIONAL_FIELDS: Final = frozenset(
-    {"output_digest", "abstention_code", "count_metadata"}
+    {"output_digest", "abstention_code", "count_metadata", "guard_metadata"}
 )
 
 
@@ -86,6 +90,18 @@ class ProviderAbstentionCode(str, Enum):
     PHI_UNCERTAINTY = "phi_uncertainty"
     SPEAKER_UNCERTAINTY = "speaker_uncertainty"
     TEMPORAL_INSTABILITY = "temporal_instability"
+    CONSENT_UNAVAILABLE = AbstentionReason.CONSENT_UNAVAILABLE.value
+    CONSENT_WITHDRAWN = AbstentionReason.CONSENT_WITHDRAWN.value
+    CAPTURE_INTERRUPTED = AbstentionReason.CAPTURE_INTERRUPTED.value
+    LANGUAGE_UNSUPPORTED = AbstentionReason.LANGUAGE_UNSUPPORTED.value
+    LANGUAGE_UNCERTAIN = AbstentionReason.LANGUAGE_UNCERTAIN.value
+    POLICY_REFUSED = AbstentionReason.POLICY_REFUSED.value
+
+    @property
+    def _wire_version(self) -> str:
+        if AbstentionReason(self.value).schema_version == 2:
+            return PROVIDER_RESULT_SCHEMA_VERSION_V2
+        return PROVIDER_RESULT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -101,7 +117,9 @@ class ProviderResultEnvelope:
         count_metadata: Closed, bounded mapping of aggregate counters.
         output_digest: Required only for a successful result.
         abstention_code: Required only for an abstention result.
-        schema_version: Exact supported envelope schema identifier.
+        schema_version: Omit to select v2 only for new abstention codes, otherwise
+            v1. An explicit identifier must match that required version.
+        guard_metadata: Optional closed generated-text release decision and digests.
     """
 
     provider_id: str
@@ -112,15 +130,10 @@ class ProviderResultEnvelope:
     count_metadata: Mapping[str, int] = field(default_factory=dict)
     output_digest: str | None = None
     abstention_code: ProviderAbstentionCode | None = None
-    schema_version: str = PROVIDER_RESULT_SCHEMA_VERSION
+    schema_version: str | None = None
+    guard_metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if (
-            type(self.schema_version) is not str
-            or self.schema_version != PROVIDER_RESULT_SCHEMA_VERSION
-        ):
-            raise ProviderResultError("provider result schema is unsupported")
-
         provider_id = _identifier(self.provider_id, "provider")
         model_id = _identifier(self.model_id, "model")
         input_digest = _digest(self.input_digest, required=True)
@@ -129,6 +142,7 @@ class ProviderResultEnvelope:
         count_metadata = _counts(self.count_metadata)
         output_digest = _digest(self.output_digest, required=False)
         abstention_code = _abstention_code(self.abstention_code)
+        guard_metadata = _guard_metadata(self.guard_metadata)
 
         if outcome is ProviderResultOutcome.SUCCESS:
             if output_digest is None:
@@ -142,6 +156,27 @@ class ProviderResultEnvelope:
         elif abstention_code is not None:
             raise ProviderResultError("abstention code is invalid for result outcome")
 
+        if guard_metadata:
+            released = guard_metadata["decision"] in {"pass", "redact"}
+            if released and outcome is not ProviderResultOutcome.SUCCESS:
+                raise ProviderResultError("guard decision conflicts with outcome")
+            if not released and (
+                outcome is not ProviderResultOutcome.ABSTENTION
+                or abstention_code is not ProviderAbstentionCode.PHI_UNCERTAINTY
+            ):
+                raise ProviderResultError("guard decision conflicts with outcome")
+
+        version = (
+            abstention_code._wire_version
+            if abstention_code is not None
+            else PROVIDER_RESULT_SCHEMA_VERSION
+        )
+        if self.schema_version is not None and (
+            type(self.schema_version) is not str or self.schema_version != version
+        ):
+            raise ProviderResultError("provider result schema is unsupported")
+
+        object.__setattr__(self, "schema_version", version)
         object.__setattr__(self, "provider_id", provider_id)
         object.__setattr__(self, "model_id", model_id)
         object.__setattr__(self, "input_digest", input_digest)
@@ -150,11 +185,12 @@ class ProviderResultEnvelope:
         object.__setattr__(self, "count_metadata", count_metadata)
         object.__setattr__(self, "output_digest", output_digest)
         object.__setattr__(self, "abstention_code", abstention_code)
+        object.__setattr__(self, "guard_metadata", guard_metadata)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a fresh, fixed-shape dictionary containing safe metadata."""
 
-        return {
+        result: dict[str, Any] = {
             "schema_version": self.schema_version,
             "provider_id": self.provider_id,
             "model_id": self.model_id,
@@ -167,6 +203,9 @@ class ProviderResultEnvelope:
             "duration_ms": self.duration_ms,
             "count_metadata": dict(self.count_metadata),
         }
+        if self.guard_metadata:
+            result["guard_metadata"] = dict(self.guard_metadata)
+        return result
 
     def to_json(self) -> str:
         """Serialize to deterministic compact JSON."""
@@ -190,6 +229,8 @@ class ProviderResultEnvelope:
             _REQUIRED_FIELDS | _OPTIONAL_FIELDS
         ):
             raise ProviderResultError("provider result fields are invalid")
+        if type(payload["schema_version"]) is not str:
+            raise ProviderResultError("provider result schema is unsupported")
         return cls(
             schema_version=payload["schema_version"],
             provider_id=payload["provider_id"],
@@ -200,6 +241,7 @@ class ProviderResultEnvelope:
             abstention_code=payload.get("abstention_code"),
             duration_ms=payload["duration_ms"],
             count_metadata=payload.get("count_metadata", {}),
+            guard_metadata=payload.get("guard_metadata", {}),
         )
 
     @classmethod
@@ -231,6 +273,30 @@ def _identifier(value: object, kind: str) -> str:
     if parts & _FORBIDDEN_IDENTIFIER_PARTS:
         raise ProviderResultError(f"{kind} identifier is invalid")
     return value
+
+
+def _guard_metadata(value: object) -> Mapping[str, str]:
+    if type(value) is not dict and not isinstance(value, MappingProxyType):
+        raise ProviderResultError("guard metadata is invalid")
+    if not value:
+        return MappingProxyType({})
+    if set(value) != {
+        "decision",
+        "detector_version_digest",
+        "policy_digest",
+        "report_digest",
+    }:
+        raise ProviderResultError("guard metadata fields are invalid")
+    if type(value["decision"]) is not str or value["decision"] not in {
+        "pass",
+        "redact",
+        "withhold",
+        "abstain",
+    }:
+        raise ProviderResultError("guard decision is invalid")
+    for name in ("detector_version_digest", "policy_digest", "report_digest"):
+        _digest(value[name], required=True)
+    return MappingProxyType(dict(sorted(value.items())))
 
 
 def _digest(value: object, *, required: bool) -> str | None:

@@ -10,6 +10,8 @@ import json
 import random
 from datetime import datetime
 
+import pytest
+
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.providers.clinical_ids import (
     ChineseResidentIdProvider,
@@ -121,6 +123,7 @@ def test_validator_rejects_checksum_date_region_and_sequence_errors() -> None:
     assert not validate_chinese_resident_id(f" {valid}")
 
 
+@pytest.mark.slow
 def test_provider_registry_and_locale_generator_round_trip_10k_samples() -> None:
     spec = get_national_id("zh-CN", "resident id")
     assert spec is not None

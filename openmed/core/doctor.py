@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
+import json
 import os
 import platform
+import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -34,7 +38,7 @@ SUPPORTED_ARCHS = frozenset(
     }
 )
 
-MIN_PYTHON_VERSION = (3, 10)
+MIN_PYTHON_VERSION = (3, 11)
 LOW_RESOURCE_MIN_RAM_BYTES = 4 * 1024**3
 LOW_RESOURCE_SUGGEST_RAM_BYTES = 8 * 1024**3
 DEFAULT_HF_ENDPOINT = "https://huggingface.co"
@@ -73,7 +77,7 @@ def run_diagnostics() -> list[dict[str, Any]]:
             "python_version",
             "PASS" if python_supported else "FAIL",
             python_version,
-            None if python_supported else "Use Python 3.10 or newer.",
+            None if python_supported else "Use Python 3.11 or newer.",
         )
     )
 
@@ -92,11 +96,247 @@ def run_diagnostics() -> list[dict[str, Any]]:
     _check_low_resource_envelope(checks)
     _check_optional_dependencies(checks)
     _check_hf_token(checks)
+    _check_persisted_credentials(checks)
     _check_network_environment(checks)
     _check_offline_mode(checks)
     _check_manifest(checks)
+    checks.extend(clinical_brief_readiness())
 
     return checks
+
+
+def value_free_health_checks(
+    environ: Mapping[str, str] | None = None,
+) -> list[dict[str, str]]:
+    """Return doctor outcomes reduced to stable names, statuses and codes.
+
+    Unlike :func:`run_diagnostics`, the result never contains versions, paths,
+    endpoints, proxy addresses or environment values. It does not import
+    optional backends and does not read configuration or cache files, so a
+    bounded diagnostic bundle can include it as its health section.
+
+    Args:
+        environ: Environment snapshot; defaults to ``os.environ``.
+
+    Returns:
+        Check dictionaries with ``name``, ``status`` (``PASS``, ``WARN`` or
+        ``FAIL``) and a controlled ``code``.
+    """
+    env = os.environ if environ is None else environ
+    checks: list[dict[str, str]] = []
+
+    def add(name: str, ok: bool, ready: str, missing: str, failed: str) -> None:
+        checks.append(
+            {
+                "name": name,
+                "status": "PASS" if ok else failed,
+                "code": ready if ok else missing,
+            }
+        )
+
+    add(
+        "python_version",
+        sys.version_info[:2] >= MIN_PYTHON_VERSION,
+        "python_supported",
+        "python_unsupported",
+        "FAIL",
+    )
+    add(
+        "python_arch",
+        (platform.machine() or "unknown") in SUPPORTED_ARCHS,
+        "arch_supported",
+        "arch_unsupported",
+        "FAIL",
+    )
+    try:
+        fits = _effective_memory_bytes() >= LOW_RESOURCE_MIN_RAM_BYTES
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+        checks.append(
+            {"name": "low_resource_memory", "status": "WARN", "code": "memory_unknown"}
+        )
+    else:
+        add(
+            "low_resource_memory",
+            fits,
+            "memory_fits_low_resource",
+            "memory_below_low_resource",
+            "WARN",
+        )
+    add(
+        "hf_token",
+        any(
+            env.get(name)
+            for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN")
+        ),
+        "token_present",
+        "token_absent",
+        "WARN",
+    )
+    add(
+        "hf_endpoint",
+        _url_uses_https(env.get("HF_ENDPOINT") or DEFAULT_HF_ENDPOINT),
+        "endpoint_https",
+        "endpoint_not_https",
+        "WARN",
+    )
+    proxy = any(env.get(name) or env.get(name.lower()) for name in PROXY_ENV_VARS)
+    checks.append(
+        {
+            "name": "proxy",
+            "status": "PASS",
+            "code": "proxy_configured" if proxy else "proxy_not_configured",
+        }
+    )
+    offline = env_flag_enabled(env.get("OPENMED_OFFLINE"))
+    checks.append(
+        {
+            "name": "openmed_offline",
+            "status": "PASS",
+            "code": "offline_enabled" if offline else "offline_disabled",
+        }
+    )
+    add(
+        "manifest",
+        MANIFEST_PATH.exists(),
+        "manifest_present",
+        "manifest_missing",
+        "WARN",
+    )
+    return checks
+
+
+def clinical_brief_readiness() -> list[dict[str, Any]]:
+    """Inspect local brief prerequisites without importing runtimes or loading models.
+
+    Returns:
+        Value-free PASS/WARN checks with controlled codes and remediation hints.
+        Cache presence is not inference, calibration, review or clinical approval.
+        The raw-note check covers the default English PII artifact only; callers
+        selecting another language/model must provision that artifact separately.
+    """
+    from .model_registry import (
+        get_default_nli_model,
+        get_default_pii_model,
+        resolve_summarizer_model,
+        resolve_summarizer_package,
+    )
+
+    def check(name: str, available: bool, ready: str, missing: str, hint: str):
+        code = ready if available else missing
+        result = _check(
+            name, "PASS" if available else "WARN", code, None if available else hint
+        )
+        result["code"] = code
+        return result
+
+    platform_ready = platform.system() == "Darwin" and platform.machine() in {
+        "arm64",
+        "aarch64",
+    }
+    runtime_ready = all(
+        _brief_module_present(name) for name in ("mlx", "mlx_lm", "huggingface_hub")
+    )
+    summarizer, revision = resolve_summarizer_model("mlx")
+    pii = get_default_pii_model("en")
+    nli = get_default_nli_model()
+    return [
+        check(
+            "brief_extractive",
+            True,
+            "extractive_available",
+            "extractive_unavailable",
+            "",
+        ),
+        check(
+            "brief_mlx_platform",
+            platform_ready,
+            "mlx_platform_supported",
+            "mlx_platform_unsupported",
+            "Use Apple silicon for the MLX alias, or explicitly choose extractive/local caller-supplied generation.",
+        ),
+        check(
+            "brief_mlx_runtime",
+            runtime_ready,
+            "mlx_runtime_present",
+            "mlx_runtime_missing",
+            "Install the mlx extra before provisioning local inference.",
+        ),
+        check(
+            "brief_summarizer_cache",
+            _brief_cached_artifact(summarizer, revision),
+            "pinned_summarizer_cached",
+            "pinned_summarizer_missing",
+            "Provision the registered pinned Maple revision before offline use.",
+        ),
+        check(
+            "brief_summarizer_package",
+            resolve_summarizer_package("mlx") is not None,
+            "summarizer_pin_registered",
+            "summarizer_package_unpinned",
+            "Register the reviewed local package and its trusted immutable manifest pin at application startup; cache presence alone does not satisfy runtime admission.",
+        ),
+        check(
+            "brief_raw_note_pii_cache",
+            pii is not None and _brief_cached_artifact(pii, "main"),
+            "default_pii_cached",
+            "default_pii_missing",
+            "Provision the default English PII artifact, or supply an already de-identified artifact and reviewed context.",
+        ),
+        check(
+            "brief_nli_provider",
+            nli is not None,
+            "released_nli_registered",
+            "caller_nli_provider_required",
+            "Supply a calibrated local NLI provider; training a new checkpoint is not required to use the SDK.",
+        ),
+    ]
+
+
+def _brief_module_present(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError, OSError):
+        return False
+
+
+def _brief_cached_artifact(model_id: str, revision: str) -> bool:
+    """Read only cache metadata/stat results; never download or construct a model."""
+    try:
+        cache, _ = _hf_cache_location()
+        repository = cache / ("models--" + model_id.replace("/", "--"))
+        if revision == "main":
+            with (repository / "refs" / "main").open(encoding="ascii") as handle:
+                revision = handle.read(42).strip()
+        if re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None:
+            return False
+        snapshot = repository / "snapshots" / revision
+
+        def present(name: str) -> bool:
+            path = snapshot / name
+            return path.is_file() and path.stat().st_size > 0
+
+        if not all(present(name) for name in ("config.json", "tokenizer.json")):
+            return False
+        if any(present(name) for name in ("model.safetensors", "pytorch_model.bin")):
+            return True
+        index = snapshot / "model.safetensors.index.json"
+        with index.open("rb") as index_handle:
+            payload = index_handle.read(1_048_577)
+        if len(payload) > 1_048_576:
+            return False
+        data = json.loads(payload)
+        mapping = data.get("weight_map")
+        if not isinstance(mapping, dict) or not mapping or len(mapping) > 100_000:
+            return False
+        weights = set(mapping.values())
+        return len(weights) <= 256 and all(
+            type(name) is str
+            and re.fullmatch(r"[A-Za-z0-9_-]+\.safetensors", name) is not None
+            and present(name)
+            for name in weights
+        )
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
+        return False
 
 
 def _check_low_resource_envelope(checks: list[dict[str, Any]]) -> None:
@@ -253,6 +493,33 @@ def _check_hf_token(checks: list[dict[str, Any]]) -> None:
     )
     check["present"] = token_present
     checks.append(check)
+
+
+def _check_persisted_credentials(checks: list[dict[str, Any]]) -> None:
+    """Report legacy config secrets without returning their contents or paths."""
+    import warnings
+
+    from .config import PROFILES_DIR, _load_toml, resolve_config_path
+
+    paths = [resolve_config_path(), *PROFILES_DIR.glob("*.toml")]
+    present = False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            for path in paths:
+                if path.is_file() and _load_toml(path).get("hf_token"):
+                    present = True
+    except (OSError, ValueError):
+        checks.append(_check("persisted_credentials", "WARN", "config_unreadable"))
+        return
+    checks.append(
+        _check(
+            "persisted_credentials",
+            "WARN" if present else "PASS",
+            "persisted_credential" if present else "no_persisted_credentials",
+            "Remove stored hf_token values and use HF_TOKEN." if present else None,
+        )
+    )
 
 
 def _check_network_environment(checks: list[dict[str, Any]]) -> None:

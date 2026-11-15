@@ -126,9 +126,11 @@ def test_clinical_family_targets_cover_every_family_and_respect_recipe_modes():
         assert hasattr(import_module(label_module), label_attribute)
 
 
-@pytest.mark.parametrize(
-    ("family", "manifest_family", "repo_name", "task", "benchmark"),
-    [
+def test_clinical_family_release_requires_signed_g5_g6_and_writes_artifacts(
+    subtests, tmp_path
+):
+    case_root = tmp_path
+    for family, manifest_family, repo_name, task, benchmark in [
         (
             "doctype",
             "DocType",
@@ -164,51 +166,53 @@ def test_clinical_family_targets_cover_every_family_and_respect_recipe_modes():
             "feature-extraction",
             "MedMentions st21pv",
         ),
-    ],
-)
-def test_clinical_family_release_requires_signed_g5_g6_and_writes_artifacts(
-    tmp_path,
-    family,
-    manifest_family,
-    repo_name,
-    task,
-    benchmark,
-):
-    signing_key = "synthetic-clinical-family-release-key"
-    evidence = _clinical_dataset_evidence(family)
-    manifest = _clinical_manifest(
-        family=manifest_family,
-        repo_id=repo_name,
-        task=task,
-        benchmark=benchmark,
-        evidence=evidence,
-    )
-    report = _clinical_gate_report(
-        family=manifest_family,
-        repo_id=repo_name,
-        signing_key=signing_key,
-    )
+    ]:
+        with subtests.test(
+            family=family,
+            manifest_family=manifest_family,
+            repo_name=repo_name,
+            task=task,
+            benchmark=benchmark,
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            signing_key = "synthetic-clinical-family-release-key"
+            evidence = _clinical_dataset_evidence(family)
+            manifest = _clinical_manifest(
+                family=manifest_family,
+                repo_id=repo_name,
+                task=task,
+                benchmark=benchmark,
+                evidence=evidence,
+            )
+            report = _clinical_gate_report(
+                family=manifest_family,
+                repo_id=repo_name,
+                signing_key=signing_key,
+            )
 
-    release = build_clinical_family_release(
-        family,
-        recipe_mode="B",
-        manifest_row=manifest,
-        gate_report=report,
-        dataset_evidence=evidence,
-        signing_key=signing_key,
-    )
-    paths = release.write(tmp_path / family)
+            release = build_clinical_family_release(
+                family,
+                recipe_mode="B",
+                manifest_row=manifest,
+                gate_report=report,
+                dataset_evidence=evidence,
+                signing_key=signing_key,
+            )
+            paths = release.write(tmp_path / family)
 
-    assert release.to_dict() == release.to_dict()
-    assert re.fullmatch(r"sha256:[0-9a-f]{64}", release.to_dict()["release_hash"])
-    assert "| G5 tier fit | passed" in release.model_card
-    assert "| G6 latency | passed" in release.model_card
-    assert "Corpus rows and restricted-vocabulary content are not bundled" in (
-        release.model_card
-    )
-    if family == "link":
-        assert "top1_accuracy=0.71" in release.model_card
-    assert all(path.is_file() for path in paths.values())
+            assert release.to_dict() == release.to_dict()
+            assert re.fullmatch(
+                r"sha256:[0-9a-f]{64}", release.to_dict()["release_hash"]
+            )
+            assert "| G5 tier fit | passed" in release.model_card
+            assert "| G6 latency | passed" in release.model_card
+            assert "Corpus rows and restricted-vocabulary content are not bundled" in (
+                release.model_card
+            )
+            if family == "link":
+                assert "top1_accuracy=0.71" in release.model_card
+            assert all(path.is_file() for path in paths.values())
 
 
 def test_clinical_family_release_rejects_unsigned_or_failed_gate_report():

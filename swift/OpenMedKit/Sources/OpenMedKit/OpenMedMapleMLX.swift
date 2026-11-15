@@ -113,7 +113,7 @@
 
         func validate() throws {
             guard modelType == "maple" else {
-                throw OpenMedMapleRuntimeError.unsupportedArchitecture(modelType)
+                throw OpenMedMapleRuntimeError.unsupportedArchitecture
             }
             guard hiddenLayers == layerTypes.count else {
                 throw OpenMedMapleRuntimeError.invalidConfiguration(
@@ -572,7 +572,7 @@
         }
     }
 
-    private struct OpenMedMapleTokenizerAdapter: MLXLMCommon.Tokenizer, @unchecked Sendable {
+    private struct OpenMedMapleTokenizerAdapter: MLXLMCommon.Tokenizer, Sendable {
         let tokenizer: any Tokenizers.Tokenizer
 
         func encode(text: String, addSpecialTokens: Bool) -> [Int] {
@@ -618,8 +618,8 @@
 
     private struct OpenMedMapleTokenizerLoader: TokenizerLoader {
         func load(from directory: URL) async throws -> any MLXLMCommon.Tokenizer {
-            let tokenizer = try OpenMed.loadTokenizer(
-                tokenizerName: directory.path,
+            let tokenizer = try await OpenMed.loadTokenizerAsync(
+                tokenizerName: nil,
                 tokenizerFolderURL: directory
             )
             return OpenMedMapleTokenizerAdapter(tokenizer: tokenizer)
@@ -627,17 +627,21 @@
     }
 
     /// Errors raised before or during local Maple inference.
+    ///
+    /// `missingFiles` lists names from ``OpenMedMaple/requiredModelFiles`` and
+    /// `invalidConfiguration` carries a fixed OpenMedKit phrase. Neither holds a
+    /// directory path or a value read from the model configuration.
     public enum OpenMedMapleRuntimeError: LocalizedError {
         case missingFiles([String])
-        case unsupportedArchitecture(String)
+        case unsupportedArchitecture
         case invalidConfiguration(String)
 
         public var errorDescription: String? {
             switch self {
             case .missingFiles(let files):
                 return "The Maple model cache is incomplete. Missing: \(files.joined(separator: ", "))."
-            case .unsupportedArchitecture(let type):
-                return "Unsupported Maple model_type: \(type)."
+            case .unsupportedArchitecture:
+                return "The Maple configuration declares an unsupported model_type."
             case .invalidConfiguration(let detail):
                 return "Invalid Maple model configuration: \(detail)."
             }
@@ -674,8 +678,20 @@
         ]
 
         private var container: ModelContainer?
+        private var modelDirectoryURL: URL?
 
+        /// Internal dependency injection for runtime lifecycle contract tests.
+        init(container: ModelContainer?, modelDirectoryURL: URL? = nil) {
+            self.container = container
+            self.modelDirectoryURL = modelDirectoryURL
+        }
+
+        /// Loads Maple from a complete local model directory.
+        ///
+        /// - Throws: ``OpenMedMLXRuntimeError/unsupportedPlatform`` on the iOS
+        ///   Simulator or an Intel Mac, before any file or MLX access.
         public init(modelDirectoryURL: URL) async throws {
+            try OpenMedMLXRuntimeSupport.requireSupported()
             let missing = Self.missingRequiredFiles(in: modelDirectoryURL)
             guard missing.isEmpty else {
                 throw OpenMedMapleRuntimeError.missingFiles(missing)
@@ -699,6 +715,7 @@
                 from: modelDirectoryURL,
                 using: OpenMedMapleTokenizerLoader()
             )
+            self.modelDirectoryURL = modelDirectoryURL
         }
 
         /// Returns whether all files needed for exact-head inference exist.
@@ -740,7 +757,7 @@
                 temperature: 0,
                 topP: 1,
                 topK: 0,
-                prefillStepSize: 256,
+                prefill: PrefillParameters(stepSize: 256, chunking: .remainder),
                 seed: 0
             )
             let stream = try await container.generate(
@@ -778,26 +795,31 @@
         public func brief(
             source: String,
             originalIdentifiers: [String],
+            cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
             evaluate: @Sendable (String, String) async throws -> Data,
             privacyCheck: @Sendable (String) throws -> Bool
         ) async throws -> ClinicalBrief {
+            guard container != nil,
+                let modelDirectoryURL,
+                Self.isModelDirectoryReady(modelDirectoryURL)
+            else { throw ClinicalBriefError.modelUnavailable }
             guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024 else {
                 throw ClinicalBriefError.invalidPacket
             }
-            do {
-                let result = try await complete(OpenMedMapleRequest(task: .brief, document: source))
-                guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
-                let packet = try await evaluate(source, summary)
-                return try ClinicalBrief.validate(
-                    evaluationJSON: packet, source: source,
-                    generatedSummary: summary, originalIdentifiers: originalIdentifiers,
-                    privacyCheck: privacyCheck)
-            } catch let error as ClinicalBriefError { throw error } catch is CancellationError { throw CancellationError() } catch { throw ClinicalBriefError.invalidPacket }
+            return try await ClinicalBrief.compose(
+                source: source, originalIdentifiers: originalIdentifiers,
+                cancellation: cancellation,
+                generate: { source in
+                    let result = try await self.complete(OpenMedMapleRequest(task: .brief, document: source))
+                    guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
+                    return summary
+                }, evaluate: evaluate, privacyCheck: privacyCheck)
         }
 
         /// Releases model ownership. Call before switching to another large
         /// on-device model.
         public func unload() {
+            guard container != nil else { return }
             container = nil
             OpenMed.clearRuntimeMemoryCache()
         }

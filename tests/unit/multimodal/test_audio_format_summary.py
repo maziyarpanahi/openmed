@@ -99,9 +99,8 @@ def test_small_cell_threshold_is_inclusive() -> None:
     assert suppressed.by_format == (CategoryCount(SUPPRESSED_CATEGORY, 1),)
 
 
-@pytest.mark.parametrize(
-    "duration,bucket",
-    [
+def test_duration_bucket_boundaries(subtests) -> None:
+    for duration, bucket in [
         (0.0, "under_1s"),
         (0.999, "under_1s"),
         (1.0, "1s_to_10s"),
@@ -112,16 +111,16 @@ def test_small_cell_threshold_is_inclusive() -> None:
         (599.99, "1m_to_10m"),
         (600.0, "10m_or_more"),
         (5000.0, "10m_or_more"),
-    ],
-)
-def test_duration_bucket_boundaries(duration, bucket) -> None:
-    summary = summarize_audio_formats([rec(duration=duration)], min_cell_count=1)
-    assert summary.by_duration_bucket[0].category == bucket
+    ]:
+        with subtests.test(duration=duration, bucket=bucket):
+            summary = summarize_audio_formats(
+                [rec(duration=duration)], min_cell_count=1
+            )
+            assert summary.by_duration_bucket[0].category == bucket
 
 
-@pytest.mark.parametrize(
-    "kwargs,category",
-    [
+def test_invalid_records_fail_closed(subtests) -> None:
+    for kwargs, category in [
         ({"fmt": "wav"}, "audio_format_format_invalid"),
         ({"fmt": 3}, "audio_format_format_invalid"),
         ({"fmt": None}, "audio_format_format_invalid"),
@@ -141,19 +140,23 @@ def test_duration_bucket_boundaries(duration, bucket) -> None:
         ({"duration": True}, "audio_format_duration_invalid"),
         ({"duration": "short"}, "audio_format_duration_invalid"),
         ({"duration": 2**31}, "audio_format_duration_invalid"),
-    ],
-)
-def test_invalid_records_fail_closed(kwargs, category) -> None:
-    with pytest.raises(AudioFormatSummaryError, match=f"^{category}$") as raised:
-        rec(**kwargs)
-    assert raised.value.category == category
-    assert str(raised.value) == category
+    ]:
+        with subtests.test(kwargs=kwargs, category=category):
+            with pytest.raises(
+                AudioFormatSummaryError, match=f"^{category}$"
+            ) as raised:
+                rec(**kwargs)
+            assert raised.value.category == category
+            assert str(raised.value) == category
 
 
-@pytest.mark.parametrize("foreign", [None, b"samples", "note.wav", 42, {"a": 1}])
-def test_non_record_entries_are_rejected(foreign) -> None:
-    with pytest.raises(AudioFormatSummaryError, match="^audio_format_record_type$"):
-        summarize_audio_formats([rec(), foreign])
+def test_non_record_entries_are_rejected(subtests) -> None:
+    for foreign in [None, b"samples", "note.wav", 42, {"a": 1}]:
+        with subtests.test(foreign=foreign):
+            with pytest.raises(
+                AudioFormatSummaryError, match="^audio_format_record_type$"
+            ):
+                summarize_audio_formats([rec(), foreign])
 
 
 def test_invalid_records_produce_no_partial_summary() -> None:
@@ -163,10 +166,11 @@ def test_invalid_records_produce_no_partial_summary() -> None:
         summarize_audio_formats([rec(fmt="mp3"), rec()])
 
 
-@pytest.mark.parametrize("min_cell_count", [None, True, 0, -1, 2.5, "3", []])
-def test_invalid_min_cell_count_fails_with_constant_message(min_cell_count) -> None:
-    with pytest.raises(ValueError, match="^min_cell_count"):
-        summarize_audio_formats([rec()], min_cell_count=min_cell_count)
+def test_invalid_min_cell_count_fails_with_constant_message(subtests) -> None:
+    for min_cell_count in [None, True, 0, -1, 2.5, "3", []]:
+        with subtests.test(min_cell_count=min_cell_count):
+            with pytest.raises(ValueError, match="^min_cell_count"):
+                summarize_audio_formats([rec()], min_cell_count=min_cell_count)
 
 
 def test_default_min_cell_count_is_three() -> None:

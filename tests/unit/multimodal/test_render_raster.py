@@ -5,7 +5,6 @@ import json
 from io import BytesIO
 
 import pytest
-from PIL import Image, ImageDraw, PngImagePlugin
 
 from openmed.multimodal import (
     RasterExportError,
@@ -13,6 +12,10 @@ from openmed.multimodal import (
     render_redacted_raster_pages,
 )
 from openmed.multimodal import render_raster as renderer
+
+Image = pytest.importorskip("PIL.Image")
+ImageDraw = pytest.importorskip("PIL.ImageDraw")
+PngImagePlugin = pytest.importorskip("PIL.PngImagePlugin")
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@ from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
+from openmed.service.graphql_app import graphql_ide_for_profile
 from openmed.service.graphql_schema import SAFE_RESOLVER_ERROR
 from scripts.export_graphql_schema import (
     DEFAULT_OUTPUT_PATH,
@@ -22,6 +23,92 @@ from scripts.export_graphql_schema import (
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 SYNTHETIC_TEXT = "Paciente: Maria Garcia"
+
+
+def test_graphql_authorizes_complete_document_before_resolvers(subtests, caplog):
+    for selection in [
+        'analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
+        'alias: deidentify(input: {text: "SYNTHETIC_FORBIDDEN"}) { deidentifiedText }',
+        'entityTypes { label } hidden: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
+        "...Secret",
+    ]:
+        with subtests.test(selection=selection):
+            caplog.clear()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import json
+
+                from openmed.service.auth import hash_api_key
+
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    json.dumps(
+                        [
+                            {
+                                "key_hash": hash_api_key("synthetic-key"),
+                                "scopes": ["models:read"],
+                            }
+                        ]
+                    ),
+                )
+                app = create_app()
+                query = "query { " + selection + " }"
+                if selection == "...Secret":
+                    query += ' fragment Secret on Query { alias: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text } }'
+                with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+                    response = client.post(
+                        "/graphql",
+                        json={"query": query},
+                        headers={"X-API-Key": "synthetic-key"},
+                    )
+                result = response.json()
+                assert result["data"] is None
+                assert any(
+                    error.get("extensions", {}).get("code") == "OPENMED_FORBIDDEN"
+                    for error in result["errors"]
+                )
+                assert app.state.runtime._loader is None
+                assert "SYNTHETIC_FORBIDDEN" not in response.text + caplog.text
+
+
+def test_graphql_allowed_scope_preserves_results_and_rejects_unserved_models(
+    monkeypatch,
+):
+    import json
+
+    from openmed.service.auth import hash_api_key
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [{"key_hash": hash_api_key("synthetic-key"), "scopes": ["analyze:*"]}]
+        ),
+    )
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    monkeypatch.setattr(openmed, "analyze_text", lambda *a, **kw: _prediction_result())
+    query = "query($input: AnalyzeInput!) { analyze(input: $input) { spans { label start } } entityTypes { label } }"
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        allowed = client.post(
+            "/graphql",
+            json={"query": query, "variables": {"input": {"text": "synthetic"}}},
+            headers={"X-API-Key": "synthetic-key"},
+        )
+        denied = client.post(
+            "/graphql",
+            json={
+                "query": query,
+                "variables": {
+                    "input": {"text": "synthetic", "modelName": "/SYNTHETIC_UNSERVED"}
+                },
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert allowed.json()["data"]["analyze"]["spans"] == [
+        {"label": "NAME", "start": 10}
+    ]
+    assert denied.json()["errors"][0]["extensions"]["code"] == "model_not_served"
+    assert "SYNTHETIC_UNSERVED" not in denied.text
 
 
 class FakeLoader:
@@ -68,6 +155,21 @@ def client(monkeypatch: pytest.MonkeyPatch):
     """Create a GraphQL client backed by one shared fake loader."""
     FakeLoader.instances = []
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    app = create_app()
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def development_client(monkeypatch: pytest.MonkeyPatch):
+    """Create a GraphQL client for the explicit development profile."""
+    FakeLoader.instances = []
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    monkeypatch.setenv("OPENMED_PROFILE", "dev")
     app = create_app()
     with TestClient(
         app,
@@ -263,3 +365,128 @@ def test_schema_is_read_only() -> None:
     assert "type Query" in sdl
     assert "type Mutation" not in sdl
     assert "type Subscription" not in sdl
+
+
+def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
+    import json
+
+    from openmed.service.auth import hash_api_key
+    from openmed.service.graphql_schema import GRAPHQL_FIELD_SCOPES
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps([{"key_hash": hash_api_key("synthetic-key"), "scopes": ["*"]}]),
+    )
+    monkeypatch.delitem(GRAPHQL_FIELD_SCOPES, "analyze")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/graphql",
+            json={
+                "query": 'query { analyze(input: {text: "synthetic"}) { text } entityTypes { label } }'
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert response.json()["data"] is None
+    assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
+    assert app.state.runtime._loader is None
+
+
+def test_get_queries_are_rejected_before_any_resolver_runs(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A GET request cannot execute introspection or resolver work."""
+
+    sentinel = "Patient SECRET-PHI-471"
+    caplog.set_level(logging.DEBUG)
+    response = client.get(
+        "/graphql",
+        params={
+            "query": (
+                "query {"
+                "  __schema { queryType { fields { name } } }"
+                f'  analyze(input: {{ text: "{sentinel}" }}) {{ text }}'
+                "}"
+            )
+        },
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert "entityTypes" not in response.text
+    assert sentinel not in response.text
+    assert sentinel not in caplog.text
+    assert FakeLoader.instances == []
+
+
+def test_interactive_ide_is_disabled_outside_the_development_profile(
+    client: TestClient,
+) -> None:
+    response = client.get("/graphql", headers={"Accept": "text/html"})
+
+    assert response.status_code == 404
+    assert "graphiql" not in response.text.lower()
+
+
+def test_development_profile_serves_the_ide_and_keeps_operations_on_post(
+    development_client: TestClient,
+) -> None:
+    ide_response = development_client.get("/graphql", headers={"Accept": "text/html"})
+    assert ide_response.status_code == 200
+    assert "graphiql" in ide_response.text.lower()
+
+    rejected = development_client.get(
+        "/graphql",
+        params={"query": "{ entityTypes { label } }"},
+        headers={"Accept": "application/json"},
+    )
+    assert rejected.status_code == 400
+
+    accepted = development_client.post(
+        "/graphql", json={"query": "{ entityTypes { label } }"}
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["data"]["entityTypes"]
+
+
+def test_every_graphql_response_carries_the_privacy_headers(
+    client: TestClient,
+) -> None:
+    responses = {
+        "post": client.post("/graphql", json={"query": "{ entityTypes { label } }"}),
+        "get_query": client.get(
+            "/graphql",
+            params={"query": "{ entityTypes { label } }"},
+            headers={"Accept": "application/json"},
+        ),
+        "get_ide_disabled": client.get("/graphql", headers={"Accept": "text/html"}),
+        "unsupported_method": client.request(
+            "PUT", "/graphql", json={"query": "{ entityTypes { label } }"}
+        ),
+    }
+
+    assert responses["post"].status_code == 200
+    assert responses["get_query"].status_code == 400
+    assert responses["get_ide_disabled"].status_code == 404
+    assert responses["unsupported_method"].status_code == 405
+    for name, response in responses.items():
+        assert response.headers["cache-control"] == "no-store", name
+        assert response.headers["pragma"] == "no-cache", name
+        assert response.headers["referrer-policy"] == "no-referrer", name
+
+
+def test_privacy_headers_are_scoped_to_the_graphql_transport(
+    client: TestClient,
+) -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers.get("pragma") != "no-cache"
+
+
+def test_graphql_ide_is_limited_to_the_development_profile() -> None:
+    assert graphql_ide_for_profile("dev") == "graphiql"
+    assert graphql_ide_for_profile("prod") is None
+    assert graphql_ide_for_profile("test") is None

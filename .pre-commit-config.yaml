@@ -1,9 +1,21 @@
 repos:
+  - repo: local
+    hooks:
+      - id: effect-paths
+        name: Classified effects and legacy-writer boundaries
+        entry: python3 scripts/security/check_effect_paths.py --check
+        language: system
+        pass_filenames: false
+        always_run: true
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+        # Kotlin binary-compatibility-validator dumps end with a blank line,
+        # and `apiCheck` compares them line by line.
+        exclude: ^android/.*/api/.*\.api$
       - id: check-yaml
         exclude: ^mkdocs\.yml$
       - id: check-added-large-files

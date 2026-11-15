@@ -248,6 +248,7 @@ def test_archive_verifier_rejects_path_traversal(tmp_path: Path) -> None:
         airgap.verify_bundle(archive)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(os.name == "nt", reason="install.sh is a POSIX installer")
 def test_installer_uses_local_wheels_and_copies_standard_model_cache(
     fake_downloads: None,

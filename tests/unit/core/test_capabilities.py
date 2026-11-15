@@ -80,6 +80,8 @@ def test_registered_backends_cover_every_optional_seam():
         "onnx",
         "openvino",
         "gliner",
+        "gliformer",
+        "gliner2",
         "spacy",
         "presidio",
         "hf",

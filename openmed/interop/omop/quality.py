@@ -1532,6 +1532,12 @@ def _safe_environment(environment: Mapping[str, str] | None) -> dict[str, str]:
         "LC_ALL": "C.UTF-8",
         "PATH": os.environ.get("PATH", os.defpath),
     }
+    if os.name == "nt":
+        # Windows cannot recover runtime/home locations from a passwd database.
+        # Keep OS paths needed by local Python adapters, never ambient secrets.
+        for name in ("SystemRoot", "USERPROFILE"):
+            if name in os.environ:
+                result[name] = os.environ[name]
     if environment is None:
         return result
     if not isinstance(environment, Mapping):

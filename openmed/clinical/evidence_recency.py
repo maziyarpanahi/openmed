@@ -23,6 +23,8 @@ from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Final, cast
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 __all__ = [
     "CURRENT_RECENCY_LABEL",
     "EVIDENCE_RECENCY_DISCLAIMER",
@@ -332,7 +334,7 @@ def _coerce_timestamp(value: object) -> datetime | None:
             if not normalized or any(ord(character) < 32 for character in normalized):
                 return None
             try:
-                parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+                parsed = parse_iso_datetime(normalized.replace("Z", "+00:00"))
             except (TypeError, ValueError, OverflowError):
                 return None
         else:

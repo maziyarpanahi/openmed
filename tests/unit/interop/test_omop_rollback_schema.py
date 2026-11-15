@@ -129,25 +129,26 @@ def test_schema_tracks_runtime_enums_and_count_bounds() -> None:
     assert schema["properties"]["schema"] == {"const": OMOP_ROLLBACK_MANIFEST_SCHEMA}
 
 
-@pytest.mark.parametrize("field", ["entries", "tables", "operation_counts"])
-def test_schema_rejects_incomplete_manifests(field: str) -> None:
-    payload = _manifest()
-    payload.pop(field)
+def test_schema_rejects_incomplete_manifests(subtests) -> None:
+    for field in ["entries", "tables", "operation_counts"]:
+        with subtests.test(field=field):
+            payload = _manifest()
+            payload.pop(field)
 
-    assert not _validator().is_valid(payload)
-
-
-@pytest.mark.parametrize("field", ["entries", "tables"])
-def test_schema_rejects_empty_manifest_coverage(field: str) -> None:
-    payload = _manifest()
-    payload[field] = []
-
-    assert not _validator().is_valid(payload)
+            assert not _validator().is_valid(payload)
 
 
-@pytest.mark.parametrize(
-    ("path", "value"),
-    [
+def test_schema_rejects_empty_manifest_coverage(subtests) -> None:
+    for field in ["entries", "tables"]:
+        with subtests.test(field=field):
+            payload = _manifest()
+            payload[field] = []
+
+            assert not _validator().is_valid(payload)
+
+
+def test_schema_rejects_row_sql_and_malformed_content(subtests) -> None:
+    for path, value in [
         (("entries", 0, "row"), {"person_id": "synthetic-private-key"}),
         (("entries", 0, "sql"), "DELETE FROM person"),
         (("entries", 0, "mutation_digest"), "not-a-digest"),
@@ -155,19 +156,15 @@ def test_schema_rejects_empty_manifest_coverage(field: str) -> None:
         (("entries", 0, "operation"), "replace"),
         (("mutation_count",), 0),
         (("vocabulary_snapshot_digest",), _digest("A")),
-    ],
-)
-def test_schema_rejects_row_sql_and_malformed_content(
-    path: tuple[str | int, ...],
-    value: Any,
-) -> None:
-    payload = _manifest()
-    target: Any = payload
-    for part in path[:-1]:
-        target = target[part]
-    target[path[-1]] = value
+    ]:
+        with subtests.test(path=path, value=value):
+            payload = _manifest()
+            target: Any = payload
+            for part in path[:-1]:
+                target = target[part]
+            target[path[-1]] = value
 
-    assert not _validator().is_valid(payload)
+            assert not _validator().is_valid(payload)
 
 
 def test_schema_binds_each_operation_to_its_rollback_strategy() -> None:

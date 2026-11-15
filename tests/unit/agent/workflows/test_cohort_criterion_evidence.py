@@ -175,51 +175,42 @@ def test_satisfied_criteria_are_eligible_but_never_authorize_action() -> None:
     assert explanation.to_dict()["authorizes_contact"] is False
 
 
-@pytest.mark.parametrize(
-    ("kind", "assertion"),
-    [
+def test_failed_inclusion_or_met_exclusion_is_ineligible(subtests) -> None:
+    for kind, assertion in [
         (CriterionKind.INCLUSION, EvidenceAssertion.NOT_MET),
         (CriterionKind.EXCLUSION, EvidenceAssertion.MET),
-    ],
-)
-def test_failed_inclusion_or_met_exclusion_is_ineligible(
-    kind: CriterionKind,
-    assertion: EvidenceAssertion,
-) -> None:
-    definition = _definition((CohortCriterion("clinical.rule", kind),))
-    explanation = explain_cohort_membership(
-        _record((_evidence("clinical.rule", assertion),)),
-        definition,
-    )
+    ]:
+        with subtests.test(kind=kind, assertion=assertion):
+            definition = _definition((CohortCriterion("clinical.rule", kind),))
+            explanation = explain_cohort_membership(
+                _record((_evidence("clinical.rule", assertion),)),
+                definition,
+            )
 
-    assert explanation.membership_state is MembershipState.INELIGIBLE
-    assert explanation.requires_human_review is False
-    assert explanation.authorizes_enrollment is False
+            assert explanation.membership_state is MembershipState.INELIGIBLE
+            assert explanation.requires_human_review is False
+            assert explanation.authorizes_enrollment is False
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
+def test_unknown_or_conflicting_criterion_requires_human_review(subtests) -> None:
+    for evidence in [
         (),
         (_evidence("clinical.rule", EvidenceAssertion.UNKNOWN),),
         (
             _evidence("clinical.rule", EvidenceAssertion.MET, EVIDENCE_A),
             _evidence("clinical.rule", EvidenceAssertion.NOT_MET, EVIDENCE_B),
         ),
-    ],
-)
-def test_unknown_or_conflicting_criterion_requires_human_review(
-    evidence: tuple[CriterionEvidence, ...],
-) -> None:
-    definition = _definition(
-        (CohortCriterion("clinical.rule", CriterionKind.INCLUSION),)
-    )
-    explanation = explain_cohort_membership(_record(evidence), definition)
+    ]:
+        with subtests.test(evidence=evidence):
+            definition = _definition(
+                (CohortCriterion("clinical.rule", CriterionKind.INCLUSION),)
+            )
+            explanation = explain_cohort_membership(_record(evidence), definition)
 
-    assert explanation.membership_state is MembershipState.REVIEW_REQUIRED
-    assert explanation.requires_human_review is True
-    assert explanation.authorizes_enrollment is False
-    assert explanation.authorizes_contact is False
+            assert explanation.membership_state is MembershipState.REVIEW_REQUIRED
+            assert explanation.requires_human_review is True
+            assert explanation.authorizes_enrollment is False
+            assert explanation.authorizes_contact is False
 
 
 def test_decisive_evidence_wins_over_inconclusive_evidence() -> None:
@@ -239,9 +230,8 @@ def test_decisive_evidence_wins_over_inconclusive_evidence() -> None:
     assert explanation.membership_state is MembershipState.ELIGIBLE
 
 
-@pytest.mark.parametrize(
-    ("record", "code", "field_name"),
-    [
+def test_mismatched_contracts_fail_closed(subtests) -> None:
+    for record, code, field_name in [
         (
             _record(
                 (_evidence("clinical.unknown", EvidenceAssertion.MET),),
@@ -272,18 +262,13 @@ def test_decisive_evidence_wins_over_inconclusive_evidence() -> None:
             "definition_version_mismatch",
             "definition_version",
         ),
-    ],
-)
-def test_mismatched_contracts_fail_closed(
-    record: CohortRecordEvidence,
-    code: str,
-    field_name: str,
-) -> None:
-    with pytest.raises(CohortExplanationError) as caught:
-        explain_cohort_membership(record, _definition())
+    ]:
+        with subtests.test(record=record, code=code, field_name=field_name):
+            with pytest.raises(CohortExplanationError) as caught:
+                explain_cohort_membership(record, _definition())
 
-    assert caught.value.code == code
-    assert caught.value.field_name == field_name
+            assert caught.value.code == code
+            assert caught.value.field_name == field_name
 
 
 def test_duplicate_evidence_and_criteria_fail_closed() -> None:
@@ -307,9 +292,8 @@ def test_duplicate_evidence_and_criteria_fail_closed() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
+def test_invalid_identifiers_never_echo_sensitive_values(subtests) -> None:
+    for factory in [
         lambda value: TimeWindowReference(value, EVIDENCE_A),
         lambda value: CohortCriterion(value, CriterionKind.INCLUSION),
         lambda value: CohortDefinition(
@@ -320,17 +304,16 @@ def test_duplicate_evidence_and_criteria_fail_closed() -> None:
             EvidenceAssertion.MET,
             EVIDENCE_A,
         ),
-    ],
-)
-def test_invalid_identifiers_never_echo_sensitive_values(factory: Any) -> None:
-    sentinel = "Jane Synthetic / MRN-12345"
+    ]:
+        with subtests.test(factory=factory):
+            sentinel = "Jane Synthetic / MRN-12345"
 
-    with pytest.raises(CohortExplanationError) as caught:
-        factory(sentinel)
+            with pytest.raises(CohortExplanationError) as caught:
+                factory(sentinel)
 
-    rendered = "".join(traceback.format_exception(caught.value))
-    assert caught.value.code == "invalid_identifier"
-    assert sentinel not in rendered
+            rendered = "".join(traceback.format_exception(caught.value))
+            assert caught.value.code == "invalid_identifier"
+            assert sentinel not in rendered
 
 
 def test_invalid_digest_never_echoes_sensitive_value() -> None:

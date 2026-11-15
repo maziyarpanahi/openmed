@@ -124,15 +124,16 @@ def test_missing_unit_context_requires_review() -> None:
     assert result.evidence[0].reason is NumericPrecheckReason.MISSING_UNIT_CONTEXT
 
 
-@pytest.mark.parametrize("unit", ["units", "not-a-unit"])
-def test_ambiguous_or_unknown_units_require_review(unit: str) -> None:
-    result = numeric_contradiction_precheck(
-        {"value": 5, "unit": unit},
-        {"value": 5, "unit": unit},
-    )
+def test_ambiguous_or_unknown_units_require_review(subtests) -> None:
+    for unit in ["units", "not-a-unit"]:
+        with subtests.test(unit=unit):
+            result = numeric_contradiction_precheck(
+                {"value": 5, "unit": unit},
+                {"value": 5, "unit": unit},
+            )
 
-    assert result.status is NumericPrecheckStatus.REVIEW_REQUIRED
-    assert result.evidence[0].reason is NumericPrecheckReason.UNRESOLVED_UNIT
+            assert result.status is NumericPrecheckStatus.REVIEW_REQUIRED
+            assert result.evidence[0].reason is NumericPrecheckReason.UNRESOLVED_UNIT
 
 
 def test_unitless_numeric_values_are_compared_exactly() -> None:
@@ -221,25 +222,28 @@ def test_result_and_claim_are_immutable() -> None:
         result.status = NumericPrecheckStatus.CONTRADICTION  # type: ignore[misc]
 
 
-@pytest.mark.parametrize(
-    ("left", "right", "unit"),
-    [(0, 5e-13, None), (1e-13, 2e-13, None), (1e-10, 2e-10, "g")],
-)
-def test_distinct_tiny_values_are_not_hidden_by_absolute_tolerance(left, right, unit):
-    result = numeric_contradiction_precheck(
-        {"value": left, "unit": unit}, {"value": right, "unit": unit}
-    )
-    assert result.status is NumericPrecheckStatus.CONTRADICTION
-    assert result.evidence[0].reason is NumericPrecheckReason.VALUE_MISMATCH
+def test_distinct_tiny_values_are_not_hidden_by_absolute_tolerance(subtests):
+    for left, right, unit in [
+        (0, 5e-13, None),
+        (1e-13, 2e-13, None),
+        (1e-10, 2e-10, "g"),
+    ]:
+        with subtests.test(left=left, right=right, unit=unit):
+            result = numeric_contradiction_precheck(
+                {"value": left, "unit": unit}, {"value": right, "unit": unit}
+            )
+            assert result.status is NumericPrecheckStatus.CONTRADICTION
+            assert result.evidence[0].reason is NumericPrecheckReason.VALUE_MISMATCH
 
 
-@pytest.mark.parametrize("unit", [None, "g"])
-def test_oversized_magnitudes_require_review(unit):
-    result = numeric_contradiction_precheck(
-        {"value": 10**400, "unit": unit}, {"value": 1, "unit": unit}
-    )
-    assert result.status is NumericPrecheckStatus.REVIEW_REQUIRED
-    assert not result.inference_allowed
+def test_oversized_magnitudes_require_review(subtests):
+    for unit in [None, "g"]:
+        with subtests.test(unit=unit):
+            result = numeric_contradiction_precheck(
+                {"value": 10**400, "unit": unit}, {"value": 1, "unit": unit}
+            )
+            assert result.status is NumericPrecheckStatus.REVIEW_REQUIRED
+            assert not result.inference_allowed
 
 
 def test_invalid_value_callbacks_do_not_echo_content_in_tracebacks():

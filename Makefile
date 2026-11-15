@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
+.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test test-multimodal sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy ort-browser-lane
 
 UV ?= uv
 
@@ -33,6 +33,7 @@ lock-check: ## Verify that uv.lock matches pyproject.toml
 lint: ## Run Ruff lint checks
 	@echo "🔎 Running Ruff lint checks..."
 	$(UV) run --frozen --extra dev ruff check .
+	$(UV) run --frozen --extra dev python scripts/security/check_effect_paths.py --check
 
 type-check: ## Type-check the annotated public-module scope
 	@echo "🔎 Running scoped mypy checks..."
@@ -60,6 +61,9 @@ quality: lint type-check format-check test ## Run the local quality gate
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
 	$(UV) run --frozen --extra dev pytest
+
+test-multimodal: ## Run the offline multimodal slice with a zero-skip gate
+	$(UV) run --no-sync --offline python -m scripts.testing.multimodal_ci
 
 sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependencies
 	@echo "📦 Generating CycloneDX SBOM..."
@@ -97,6 +101,15 @@ docs-browser-test: docs-stage ## Run the pinned Chromium, Firefox, and WebKit br
 	npm exec --prefix tests/browser/brand -- playwright install chromium firefox webkit
 	@echo "🧭 Running the cross-browser Pages matrix..."
 	npm --prefix tests/browser/brand test
+
+ort-browser-lane: ## Run exported token-classification graphs on ONNX Runtime Web
+	$(UV) run --extra dev --extra onnx --frozen python -m openmed.onnx.browser_lane prepare
+	npm ci --prefix js/openmedkit-web
+	npm --prefix js/openmedkit-web run build
+	npm ci --prefix tests/browser/ort-lane
+	npm exec --prefix tests/browser/ort-lane -- playwright install chromium
+	npm --prefix tests/browser/ort-lane test
+	$(UV) run --extra dev --frozen python -m openmed.onnx.browser_lane check
 
 docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages (gh-pages branch)
 	@echo "🚀 Deploying documentation to GitHub Pages..."

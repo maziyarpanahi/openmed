@@ -243,19 +243,22 @@ def test_spark_parallelizes_one_slice_per_shard_by_default(tmp_path):
     assert session.sparkContext.num_slices == 4
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [{"max_in_flight": 0}, {"max_in_flight": -1}, {"max_in_flight": True}],
-)
-def test_ray_rejects_invalid_in_flight_bounds(kwargs):
-    with pytest.raises(ShardExecutionError):
-        RayShardExecutor(**kwargs)
+def test_ray_rejects_invalid_in_flight_bounds(subtests):
+    for kwargs in [
+        {"max_in_flight": 0},
+        {"max_in_flight": -1},
+        {"max_in_flight": True},
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ShardExecutionError):
+                RayShardExecutor(**kwargs)
 
 
-@pytest.mark.parametrize("kwargs", [{"num_slices": 0}, {"num_slices": True}])
-def test_spark_rejects_invalid_slice_counts(kwargs):
-    with pytest.raises(ShardExecutionError):
-        SparkShardExecutor(**kwargs)
+def test_spark_rejects_invalid_slice_counts(subtests):
+    for kwargs in [{"num_slices": 0}, {"num_slices": True}]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ShardExecutionError):
+                SparkShardExecutor(**kwargs)
 
 
 def test_spark_requires_a_session_when_none_is_active(monkeypatch):

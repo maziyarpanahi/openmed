@@ -175,57 +175,51 @@ def test_mismatched_workflow_purpose_is_rejected_without_echoing_purposes() -> N
     assert OTHER_PURPOSE not in combined
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
+def test_unreviewed_or_overbroad_tool_contracts_fail_closed(subtests) -> None:
+    for mutate in [
         lambda schema: schema.pop("x-openmed-purpose"),
         lambda schema: schema.update({"additionalProperties": True}),
         lambda schema: schema["properties"]["documents"].update(
             {"x-openmed-minimum-data": "optional"}
         ),
         lambda schema: schema.update({"required": []}),
-    ],
-)
-def test_unreviewed_or_overbroad_tool_contracts_fail_closed(mutate: Any) -> None:
-    schema = _schema()
-    mutate(schema)
+    ]:
+        with subtests.test(mutate=mutate):
+            schema = _schema()
+            mutate(schema)
 
-    with pytest.raises(DataProjectionValidationError) as caught:
-        plan_data_projection(
-            schema,
-            workflow_purpose=PURPOSE,
-            granted_data_classes=(CLINICAL, FORMAT),
-        )
+            with pytest.raises(DataProjectionValidationError) as caught:
+                plan_data_projection(
+                    schema,
+                    workflow_purpose=PURPOSE,
+                    granted_data_classes=(CLINICAL, FORMAT),
+                )
 
-    assert caught.value.code == "invalid_tool_schema"
-    assert caught.value.field_name == "schema"
+            assert caught.value.code == "invalid_tool_schema"
+            assert caught.value.field_name == "schema"
 
 
-@pytest.mark.parametrize(
-    ("target", "value"),
-    [
+def test_invalid_data_class_metadata_fails_without_echoing_it(subtests) -> None:
+    for target, value in [
         ("schema", "clinical-text"),
         ("grant", "clinical-text"),
-    ],
-)
-def test_invalid_data_class_metadata_fails_without_echoing_it(
-    target: str, value: str
-) -> None:
-    schema = _schema()
-    grants = (CLINICAL, FORMAT)
-    if target == "schema":
-        schema["properties"]["documents"]["x-openmed-data-class"] = value
-    else:
-        grants = (value,)
+    ]:
+        with subtests.test(target=target, value=value):
+            schema = _schema()
+            grants = (CLINICAL, FORMAT)
+            if target == "schema":
+                schema["properties"]["documents"]["x-openmed-data-class"] = value
+            else:
+                grants = (value,)
 
-    with pytest.raises(DataProjectionValidationError) as caught:
-        plan_data_projection(
-            schema,
-            workflow_purpose=PURPOSE,
-            granted_data_classes=grants,
-        )
+            with pytest.raises(DataProjectionValidationError) as caught:
+                plan_data_projection(
+                    schema,
+                    workflow_purpose=PURPOSE,
+                    granted_data_classes=grants,
+                )
 
-    assert value not in str(caught.value)
+            assert value not in str(caught.value)
 
 
 def test_missing_data_class_annotation_fails_closed() -> None:

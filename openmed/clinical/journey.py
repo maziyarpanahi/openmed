@@ -33,6 +33,7 @@ from openmed.clinical.timeline_graph import (
     TimelineGraphEdge,
     TimelineGraphNode,
 )
+from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.structured.store import (
     CanonicalRecordVersion,
     JobMetadata,
@@ -945,7 +946,7 @@ def _parse_time_bounds(value: str) -> tuple[datetime, datetime]:
         return candidate, candidate.replace(
             hour=23, minute=59, second=59, microsecond=999999
         )
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("journey time values must include a timezone")
     normalized = parsed.astimezone(timezone.utc)

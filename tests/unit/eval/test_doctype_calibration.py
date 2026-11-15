@@ -205,29 +205,24 @@ def test_report_writers_emit_only_the_rendered_artifacts(tmp_path) -> None:
     assert RAW_NOTE not in markdown_path.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_validation_errors_do_not_echo_rejected_values(subtests) -> None:
+    for field, value in [
         ("expected_type", RAW_NOTE),
         ("predicted_type", RAW_NOTE),
         ("confidence", float("nan")),
-    ],
-)
-def test_validation_errors_do_not_echo_rejected_values(
-    field: str,
-    value: object,
-) -> None:
-    sample = {
-        "expected_type": "progress_note",
-        "predicted_type": "progress_note",
-        "confidence": 0.5,
-    }
-    sample[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            sample = {
+                "expected_type": "progress_note",
+                "predicted_type": "progress_note",
+                "confidence": 0.5,
+            }
+            sample[field] = value
 
-    with pytest.raises(ValueError) as captured:
-        build_doctype_calibration_report([sample], model="synthetic")
+            with pytest.raises(ValueError) as captured:
+                build_doctype_calibration_report([sample], model="synthetic")
 
-    assert RAW_NOTE not in str(captured.value)
+            assert RAW_NOTE not in str(captured.value)
 
 
 def test_invalid_output_path_is_not_echoed() -> None:

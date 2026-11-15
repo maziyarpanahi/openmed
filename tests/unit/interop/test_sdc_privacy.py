@@ -151,23 +151,21 @@ def test_projection_is_deterministic_and_summary_has_no_answer_values():
     assert "synthetic-secret" not in summary_json
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_ambiguous_policy_paths_fail_closed_without_echoing_payload(subtests):
+    for path in [
         "item.answer.valueString",
         "item[0].answer.valueString",
         "item[0].answer[0].value[x]",
         "item[*].answer[0].valueString",
-    ],
-)
-def test_ambiguous_policy_paths_fail_closed_without_echoing_payload(path):
-    with pytest.raises(AmbiguousPolicyPathError) as excinfo:
-        project_questionnaire_response(
-            _questionnaire_response(),
-            {path: "allow"},
-        )
+    ]:
+        with subtests.test(path=path):
+            with pytest.raises(AmbiguousPolicyPathError) as excinfo:
+                project_questionnaire_response(
+                    _questionnaire_response(),
+                    {path: "allow"},
+                )
 
-    assert "synthetic-secret" not in str(excinfo.value)
+            assert "synthetic-secret" not in str(excinfo.value)
 
 
 def test_keyword_field_policy_alias_and_empty_default_drop_policy():

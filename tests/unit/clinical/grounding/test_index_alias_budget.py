@@ -42,13 +42,17 @@ def _index(dominant, others=2):
     )
 
 
-@pytest.mark.parametrize("dominant", [8, 9, 32])
-def test_many_aliases_do_not_hide_second_concept(dominant):
-    index = _index(dominant)
-    found = index.query((1.0, 0.0), k=2)
-    assert [(c.code, c.score) for c in found] == [("SYN-A", 1.0), ("SYN-0", 0.8)]
-    assert found[0].matched_alias == "alpha-0"
-    assert all(c.source == "dense" for c in found)
+def test_many_aliases_do_not_hide_second_concept(subtests):
+    for dominant in [8, 9, 32]:
+        with subtests.test(dominant=dominant):
+            index = _index(dominant)
+            found = index.query((1.0, 0.0), k=2)
+            assert [(c.code, c.score) for c in found] == [
+                ("SYN-A", 1.0),
+                ("SYN-0", 0.8),
+            ]
+            assert found[0].matched_alias == "alpha-0"
+            assert all(c.source == "dense" for c in found)
 
 
 def test_budget_expands_only_as_far_as_needed(monkeypatch):
@@ -80,10 +84,11 @@ def test_empty_index_remains_empty():
     assert _index(0, others=0).query((1.0, 0.0), k=2) == []
 
 
-@pytest.mark.parametrize("k", [0, -1])
-def test_invalid_k_remains_rejected(k):
-    with pytest.raises(ValueError, match="positive integer"):
-        _index(8).query((1.0, 0.0), k=k)
+def test_invalid_k_remains_rejected(subtests):
+    for k in [0, -1]:
+        with subtests.test(k=k):
+            with pytest.raises(ValueError, match="positive integer"):
+                _index(8).query((1.0, 0.0), k=k)
 
 
 def test_concept_identity_includes_vocabulary_system():

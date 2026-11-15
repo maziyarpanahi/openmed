@@ -48,9 +48,10 @@ def test_registry_is_complete_immutable_and_deterministic() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("relation_type", "source", "target", "expected_type"),
-    [
+def test_registered_relation_directions_accept_canonical_endpoint_roles(
+    subtests,
+) -> None:
+    for relation_type, source, target, expected_type in [
         ("causes", "CAUSE", "EFFECT", "causes"),
         ("caused_by", "effect", "cause", "caused_by"),
         ("etiology", "diagnosis", "risk-factor", "etiology"),
@@ -68,25 +69,24 @@ def test_registry_is_complete_immutable_and_deterministic() -> None:
             "indication",
             "drug_to_indication",
         ),
-    ],
-)
-def test_registered_relation_directions_accept_canonical_endpoint_roles(
-    relation_type: str,
-    source: str,
-    target: str,
-    expected_type: str,
-) -> None:
-    result = validate_relation_direction(
-        relation_type,
-        source,
-        target,
-        direction="source_to_target",
-    )
+    ]:
+        with subtests.test(
+            relation_type=relation_type,
+            source=source,
+            target=target,
+            expected_type=expected_type,
+        ):
+            result = validate_relation_direction(
+                relation_type,
+                source,
+                target,
+                direction="source_to_target",
+            )
 
-    assert result.relation_type == expected_type
-    assert result.direction == "forward"
-    assert result.relation_class in GUARDED_RELATION_CLASSES
-    assert "text" not in result.to_dict()
+            assert result.relation_type == expected_type
+            assert result.direction == "forward"
+            assert result.relation_class in GUARDED_RELATION_CLASSES
+            assert "text" not in result.to_dict()
 
 
 def test_every_registered_relation_rejects_reverse_direction() -> None:
@@ -108,33 +108,28 @@ def test_every_registered_relation_rejects_reverse_direction() -> None:
         assert error.value.to_dict()["observed_direction"] == "reverse"
 
 
-@pytest.mark.parametrize(
-    ("relation_type", "source", "target", "endpoint"),
-    [
+def test_reversed_endpoint_roles_fail_with_a_typed_error(subtests) -> None:
+    for relation_type, source, target, endpoint in [
         ("treatment", "MEDICATION", "CONDITION", "source"),
         ("procedure_indication", "CONDITION", "PROCEDURE", "source"),
         ("drug_to_indication", "PROCEDURE", "CONDITION", "source"),
         ("causes", "EFFECT", "CAUSE", "source"),
         ("drug_treatment", "CONDITION", "PROCEDURE", "target"),
-    ],
-)
-def test_reversed_endpoint_roles_fail_with_a_typed_error(
-    relation_type: str,
-    source: str,
-    target: str,
-    endpoint: str,
-) -> None:
-    with pytest.raises(InvalidEndpointTypeError) as error:
-        validate_relation_direction(relation_type, source, target)
+    ]:
+        with subtests.test(
+            relation_type=relation_type, source=source, target=target, endpoint=endpoint
+        ):
+            with pytest.raises(InvalidEndpointTypeError) as error:
+                validate_relation_direction(relation_type, source, target)
 
-    assert error.value.code == "invalid_endpoint_type"
-    assert error.value.endpoint == endpoint
-    assert error.value.observed_type in {
-        "CONDITION",
-        "EFFECT",
-        "MEDICATION",
-        "PROCEDURE",
-    }
+            assert error.value.code == "invalid_endpoint_type"
+            assert error.value.endpoint == endpoint
+            assert error.value.observed_type in {
+                "CONDITION",
+                "EFFECT",
+                "MEDICATION",
+                "PROCEDURE",
+            }
 
 
 def test_guarded_mapping_is_validated_before_score_access_and_omits_surface_text() -> (

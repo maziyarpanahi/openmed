@@ -35,21 +35,19 @@ def test_coordinated_findings_under_one_predicate_remain_one_assertion() -> None
     assert result.complexity.assertion_count == 1
 
 
-@pytest.mark.parametrize(
-    "hypothesis",
-    [
+def test_multi_assertion_hypotheses_require_segmentation(subtests) -> None:
+    for hypothesis in [
         "The finding is present and the treatment was started.",
         "The finding is present but was later denied.",
         "The finding is present. The treatment was started.",
-    ],
-)
-def test_multi_assertion_hypotheses_require_segmentation(hypothesis: str) -> None:
-    result = guard_hypothesis(hypothesis)
+    ]:
+        with subtests.test(hypothesis=hypothesis):
+            result = guard_hypothesis(hypothesis)
 
-    assert result.status is HypothesisGuardStatus.SEGMENTATION_REQUIRED
-    assert result.inference_allowed is False
-    assert result.hypothesis is None
-    assert HypothesisComplexityReason.ASSERTION_LIMIT_EXCEEDED in result.reasons
+            assert result.status is HypothesisGuardStatus.SEGMENTATION_REQUIRED
+            assert result.inference_allowed is False
+            assert result.hypothesis is None
+            assert HypothesisComplexityReason.ASSERTION_LIMIT_EXCEEDED in result.reasons
 
 
 def test_subordinate_clause_count_is_measured_deterministically() -> None:
@@ -134,26 +132,25 @@ def test_alias_and_configured_multi_assertion_contract() -> None:
     ).inference_allowed
 
 
-@pytest.mark.parametrize("hypothesis", ["", "   ", None, 123])
-def test_invalid_hypothesis_fails_without_echoing_values(hypothesis: object) -> None:
-    with pytest.raises(HypothesisGuardError, match="invalid hypothesis text"):
-        guard_hypothesis(hypothesis)  # type: ignore[arg-type]
+def test_invalid_hypothesis_fails_without_echoing_values(subtests) -> None:
+    for hypothesis in ["", "   ", None, 123]:
+        with subtests.test(hypothesis=hypothesis):
+            with pytest.raises(HypothesisGuardError, match="invalid hypothesis text"):
+                guard_hypothesis(hypothesis)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_limits_fail_closed(subtests) -> None:
+    for kwargs in [
         {"max_characters": 0},
         {"max_clauses": -1},
         {"max_assertions": True},
-    ],
-)
-def test_invalid_limits_fail_closed(kwargs: dict[str, object]) -> None:
-    with pytest.raises(
-        HypothesisGuardError,
-        match="invalid hypothesis complexity limit",
-    ):
-        guard_hypothesis("synthetic finding", **kwargs)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(
+                HypothesisGuardError,
+                match="invalid hypothesis complexity limit",
+            ):
+                guard_hypothesis("synthetic finding", **kwargs)  # type: ignore[arg-type]
 
 
 def test_reports_and_repr_never_include_hypothesis_text() -> None:

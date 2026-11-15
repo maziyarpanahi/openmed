@@ -76,10 +76,11 @@ class TestValidateRomanianCnp:
     def test_rejects_too_long(self):
         assert validate_romanian_cnp("18001014001810") is False
 
-    @pytest.mark.parametrize("gender_code", [0, 7, 8, 9])
-    def test_rejects_undocumented_gender_or_century_codes(self, gender_code):
-        cnp = _cnp_from_body(f"{gender_code}80010140018")
-        assert validate_romanian_cnp(cnp) is False
+    def test_rejects_undocumented_gender_or_century_codes(self, subtests):
+        for gender_code in [0, 7, 8, 9]:
+            with subtests.test(gender_code=gender_code):
+                cnp = _cnp_from_body(f"{gender_code}80010140018")
+                assert validate_romanian_cnp(cnp) is False
 
     def test_rejects_impossible_date_feb30(self):
         # 1980-02-30 is not a real date.
@@ -95,32 +96,32 @@ class TestValidateRomanianCnp:
         assert _cnp_birth_date(cnp) == date(2099, 12, 31)
         assert validate_romanian_cnp(cnp) is False
 
-    @pytest.mark.parametrize("county", [0, 47, 48, 49, 50, 53, 99])
-    def test_rejects_unassigned_county_codes(self, county):
-        cnp = _cnp_from_body(f"1800101{county:02d}018")
-        assert validate_romanian_cnp(cnp) is False
+    def test_rejects_unassigned_county_codes(self, subtests):
+        for county in [0, 47, 48, 49, 50, 53, 99]:
+            with subtests.test(county=county):
+                cnp = _cnp_from_body(f"1800101{county:02d}018")
+                assert validate_romanian_cnp(cnp) is False
 
-    @pytest.mark.parametrize("county", [1, 40, 46, 51, 52, 70])
-    def test_accepts_assigned_county_codes(self, county):
-        cnp = _cnp_from_body(f"1800101{county:02d}018")
-        assert validate_romanian_cnp(cnp) is True
+    def test_accepts_assigned_county_codes(self, subtests):
+        for county in [1, 40, 46, 51, 52, 70]:
+            with subtests.test(county=county):
+                cnp = _cnp_from_body(f"1800101{county:02d}018")
+                assert validate_romanian_cnp(cnp) is True
 
     def test_rejects_zero_serial(self):
         cnp = _cnp_from_body("180010140000")
         assert validate_romanian_cnp(cnp) is False
 
-    @pytest.mark.parametrize(
-        "candidate",
-        [
+    def test_rejects_internal_separators(self, subtests):
+        for candidate in [
             "1 800101 400181",
             "1-800101-400181",
             "1.800101.400181",
             "1/800101/400181",
             "1x800101x400181",
-        ],
-    )
-    def test_rejects_internal_separators(self, candidate):
-        assert validate_romanian_cnp(candidate) is False
+        ]:
+            with subtests.test(candidate=candidate):
+                assert validate_romanian_cnp(candidate) is False
 
     def test_ignores_surrounding_whitespace_only(self):
         assert validate_romanian_cnp("  1800101400181\n") is True
@@ -214,42 +215,38 @@ class TestRomanianPackWiring:
         assert spec.validate(surrogate)
 
 
-@pytest.mark.parametrize(
-    "address",
-    (
+def test_romanian_safety_sweep_preserves_unicode_address_offsets(subtests):
+    for address in (
         "Șoseaua Ștefan cel Mare 15",
         "Şoseaua Ştefan cel Mare 15",
         unicodedata.normalize("NFD", "Șoseaua Ștefan cel Mare 15"),
-    ),
-)
-def test_romanian_safety_sweep_preserves_unicode_address_offsets(address):
-    text = f"Adresă {address}, cod poștal 010101 București."
-    entities = safety_sweep(text, [], lang="ro")
-    address_entities = [
-        entity for entity in entities if entity.label == "street_address"
-    ]
+    ):
+        with subtests.test(address=address):
+            text = f"Adresă {address}, cod poștal 010101 București."
+            entities = safety_sweep(text, [], lang="ro")
+            address_entities = [
+                entity for entity in entities if entity.label == "street_address"
+            ]
 
-    assert len(address_entities) == 1
-    entity = address_entities[0]
-    assert entity.text == address
-    assert entity.start == text.index(address)
-    assert entity.end == entity.start + len(address)
-    assert text[entity.start : entity.end] == address
-    assert entity.metadata["source"] == SAFETY_SWEEP_SOURCE
+            assert len(address_entities) == 1
+            entity = address_entities[0]
+            assert entity.text == address
+            assert entity.start == text.index(address)
+            assert entity.end == entity.start + len(address)
+            assert text[entity.start : entity.end] == address
+            assert entity.metadata["source"] == SAFETY_SWEEP_SOURCE
 
 
-@pytest.mark.parametrize(
-    "context",
-    (
+def test_romanian_safety_sweep_accepts_unicode_postcode_context(subtests):
+    for context in (
         "cod poștal",
         "cod poştal",
         unicodedata.normalize("NFD", "cod poștal"),
-    ),
-)
-def test_romanian_safety_sweep_accepts_unicode_postcode_context(context):
-    text = f"{context} 010101"
-    entities = safety_sweep(text, [], lang="ro")
+    ):
+        with subtests.test(context=context):
+            text = f"{context} 010101"
+            entities = safety_sweep(text, [], lang="ro")
 
-    assert [(entity.text, entity.label) for entity in entities] == [
-        ("010101", "postcode")
-    ]
+            assert [(entity.text, entity.label) for entity in entities] == [
+                ("010101", "postcode")
+            ]

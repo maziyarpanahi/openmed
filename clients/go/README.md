@@ -19,6 +19,14 @@ spec (`docs/api/openapi.json`).
 
 ## Install
 
+Workflow transport methods (`WorkflowPreflight`, `WorkflowPreview`,
+`WorkflowStatus`, `WorkflowSubmitReceipt`, `WorkflowCancel`) return metadata-only
+`JSONObject` responses. They do not verify a receipt, grant reviewer authority,
+poll or automatically retry. The server's explicitly enabled custody service
+owns authority, state comparisons and durable idempotency. Cancellation records
+intent; a transport failure may leave the commit result unknown. Dedicated
+governed clients add strict workflow parsing and bounded polling separately.
+
 ```bash
 go get github.com/maziyarpanahi/openmed/clients/go
 ```
@@ -54,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("service:", health.Service, "version:", health.Version)
+	fmt.Println("service:", health.Service, "status:", health.Status)
 
 	// Analyze clinical text.
 	strategy := openmed.AggregationSimple
@@ -117,6 +125,20 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Println("decision state:", decision.State, "choice:", decision.Choice)
+
+	// The same route accepts an OpenAI-compatible Decisions body and answers
+	// in that shape. Model must name the model the service decides with.
+	answers, err := client.OpenAIDecisions(ctx, openmed.OpenAIDecisionsRequest{
+		Model: "openmed/deterministic-fixed-option",
+		Input: "Synthetic review priority is urgent.",
+		Questions: []openmed.JSONObject{
+			{"type": "predicate", "name": "urgent"},
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("answers:", len(answers.Answers), "review:", answers.OpenMed["review"])
 
 	// Inspect loaded models and unload one.
 	loaded, err := client.LoadedModels(ctx)
@@ -267,6 +289,7 @@ non-nil redirect policy when that forwarding behavior is deliberate.
 | `CreateJob` | `POST /jobs` |
 | `GetJob` | `GET /jobs/{job_id}` |
 | `StartSMARTBackendIngestion` | `POST /fhir/smart-backend/ingestions` |
+| `StartSMARTBackendIngestionWithIdempotencyKey` | `POST /fhir/smart-backend/ingestions` with `Idempotency-Key` |
 | `SMARTBackendIngestionStatus` | `GET /fhir/smart-backend/ingestions/{job_id}` |
 | `SMARTBackendIngestionSummary` | `GET /fhir/smart-backend/ingestions/{job_id}/summary` |
 

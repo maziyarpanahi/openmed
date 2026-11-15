@@ -157,17 +157,15 @@ def test_explicit_aggregates_cannot_understate_section_measurements() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("factory", "value"),
-    [
+def test_count_fields_reject_non_safe_values(subtests) -> None:
+    for factory, value in [
         (lambda value: ArtifactSizeBudget(max_total_bytes=value), True),
         (lambda value: ArtifactSectionDescriptor(size_bytes=value), -1),
         (lambda value: ArtifactDescriptor(total_bytes=value), "not-a-count"),
-    ],
-)
-def test_count_fields_reject_non_safe_values(factory, value) -> None:
-    with pytest.raises((TypeError, ValueError), match="non-negative integer"):
-        factory(value)
+    ]:
+        with subtests.test(factory=factory, value=value):
+            with pytest.raises((TypeError, ValueError), match="non-negative integer"):
+                factory(value)
 
 
 def test_unknown_or_unconfigured_dimensions_are_not_reported() -> None:

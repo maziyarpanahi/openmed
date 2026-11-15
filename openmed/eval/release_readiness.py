@@ -42,6 +42,27 @@ _DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
 _DISCLAIMER_CONSTANT = "OPENMED_CLINICAL_DISCLAIMER"
 _DEFAULT_GATE_SIGNING_KEY = "openmed-release-gate-local-key"
 _DEFAULT_READINESS_SIGNING_KEY = "openmed-release-readiness-local-key"
+_V31_SECURITY_REMOVALS = frozenset(
+    f"{namespace}.{field}"
+    for namespaces, fields in (
+        (
+            (
+                "openmed.agent.approvals.ApprovalReceipt",
+                "openmed.agent.approvals.tokens.ApprovalReceipt",
+            ),
+            ("reviewer_role", "consumed_at", "expires_at"),
+        ),
+        (
+            (
+                "openmed.risk.AggregateDPRelease",
+                "openmed.risk.aggregate_dp.AggregateDPRelease",
+            ),
+            ("noise", "seed_digest"),
+        ),
+    )
+    for namespace in namespaces
+    for field in fields
+)
 
 
 @dataclass
@@ -234,6 +255,7 @@ def _check_api_compat(
         if type(breaking) is not int or breaking < 0:
             raise ValueError("missing breaking-change count")
         reviewed_breaking: list[str] = []
+        reviewed_security: list[str] = []
         if breaking:
             before = re.fullmatch(
                 r"v([0-9]+)\.([0-9]+)\.([0-9]+)", str(data.get("before_ref", ""))
@@ -264,7 +286,36 @@ def _check_api_compat(
                     and len(set(symbols)) == breaking
                 ):
                     reviewed_breaking = symbols
-        if breaking and not reviewed_breaking:
+            # Maintainer-approved 2026-10-20 exception: preserve the two privacy
+            # fixes in 3.1.0 without hiding their breaks or admitting other ones.
+            if (
+                version == "3.1.0"
+                and data.get("before_ref") == "v3.0.0"
+                and breaking == len(_V31_SECURITY_REMOVALS)
+                and isinstance(entries, list)
+                and len(entries) == breaking
+                and guide.is_file()
+            ):
+                text = guide.read_text(encoding="utf-8")
+                removals = [
+                    entry["symbol"]
+                    for entry in entries
+                    if isinstance(entry, dict)
+                    and isinstance(entry.get("symbol"), str)
+                    and entry["symbol"] in _V31_SECURITY_REMOVALS
+                    and entry.get("change") == "removed"
+                    and "after" not in entry
+                    and isinstance(entry.get("before"), dict)
+                    and entry["before"].get("kind") == "attribute"
+                    and entry["before"].get("name") == entry["symbol"]
+                    and entry["symbol"] in text
+                ]
+                if (
+                    len(removals) == breaking
+                    and frozenset(removals) == _V31_SECURITY_REMOVALS
+                ):
+                    reviewed_security = removals
+        if breaking and not (reviewed_breaking or reviewed_security):
             return GateCheck(
                 "api_compat",
                 False,
@@ -283,8 +334,12 @@ def _check_api_compat(
                 "after_ref": str(data.get("after_ref", "")),
                 "breaking": breaking,
                 "reviewed_major_migrations": reviewed_breaking,
+                "reviewed_security_remediations": reviewed_security,
+                "security_exception": "v3.1.0-privacy-remediations"
+                if reviewed_security
+                else None,
                 "migration_hash": _file_hash(_resolve_path(repo_root, migration_guide))
-                if reviewed_breaking
+                if reviewed_breaking or reviewed_security
                 else None,
             },
         )

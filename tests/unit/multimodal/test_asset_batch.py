@@ -171,9 +171,8 @@ def test_build_orders_assets_canonically_and_rejects_other_orders() -> None:
         AssetBatch(batch_id="packet-order", assets=(PDF, IMAGE))
 
 
-@pytest.mark.parametrize(
-    ("assets", "expected"),
-    [
+def test_duplicate_identifiers_and_digests_produce_stable_findings(subtests) -> None:
+    for assets, expected in [
         (
             (IMAGE, _image("img-001", 9)),
             [BatchFinding("duplicate_asset_id", position=1)],
@@ -189,23 +188,20 @@ def test_build_orders_assets_canonically_and_rejects_other_orders() -> None:
                 BatchFinding("duplicate_sha256", position=1),
             ],
         ),
-    ],
-)
-def test_duplicate_identifiers_and_digests_produce_stable_findings(
-    assets, expected
-) -> None:
-    payload = {
-        "batch_id": "packet-dup",
-        "assets": [manifest.to_dict() for manifest in assets],
-    }
+    ]:
+        with subtests.test(assets=assets, expected=expected):
+            payload = {
+                "batch_id": "packet-dup",
+                "assets": [manifest.to_dict() for manifest in assets],
+            }
 
-    assert validate_asset_batch(payload) == expected
-    with pytest.raises(AssetBatchError) as exc_info:
-        AssetBatch(batch_id="packet-dup", assets=assets)
-    for finding in expected:
-        assert finding.reason_code in str(exc_info.value)
-    with pytest.raises(AssetBatchError):
-        AssetBatch.build("packet-dup", assets)
+            assert validate_asset_batch(payload) == expected
+            with pytest.raises(AssetBatchError) as exc_info:
+                AssetBatch(batch_id="packet-dup", assets=assets)
+            for finding in expected:
+                assert finding.reason_code in str(exc_info.value)
+            with pytest.raises(AssetBatchError):
+                AssetBatch.build("packet-dup", assets)
 
 
 def test_batches_above_the_policy_limit_fail_closed() -> None:
@@ -238,9 +234,8 @@ def test_batches_above_the_hard_cap_fail_closed_with_one_finding() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    ("field", "assets"),
-    [
+def test_aggregate_overflow_fails_closed(subtests) -> None:
+    for field, assets in [
         (
             "total_bytes",
             (
@@ -269,24 +264,22 @@ def test_batches_above_the_hard_cap_fail_closed_with_one_finding() -> None:
                 _image("audio-002", 2, duration_seconds=MAX_MANIFEST_DURATION_SECONDS),
             ),
         ),
-    ],
-)
-def test_aggregate_overflow_fails_closed(field, assets) -> None:
-    payload = {
-        "batch_id": "packet-overflow",
-        "assets": [manifest.to_dict() for manifest in assets],
-    }
+    ]:
+        with subtests.test(field=field, assets=assets):
+            payload = {
+                "batch_id": "packet-overflow",
+                "assets": [manifest.to_dict() for manifest in assets],
+            }
 
-    assert validate_asset_batch(payload) == [
-        BatchFinding("aggregate_overflow", field_name=field)
-    ]
-    with pytest.raises(AssetBatchError, match="aggregate_overflow"):
-        AssetBatch(batch_id="packet-overflow", assets=assets)
+            assert validate_asset_batch(payload) == [
+                BatchFinding("aggregate_overflow", field_name=field)
+            ]
+            with pytest.raises(AssetBatchError, match="aggregate_overflow"):
+                AssetBatch(batch_id="packet-overflow", assets=assets)
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "reason_code"),
-    [
+def test_declared_aggregates_must_match_manifests(subtests) -> None:
+    for field, value, reason_code in [
         ("asset_count", 3, "aggregate_mismatch"),
         ("total_bytes", 1, "aggregate_mismatch"),
         ("total_pages", 0, "aggregate_mismatch"),
@@ -301,18 +294,17 @@ def test_aggregate_overflow_fails_closed(field, assets) -> None:
         ("total_duration_seconds", float("inf"), "aggregate_invalid"),
         ("total_duration_seconds", True, "aggregate_invalid"),
         ("total_duration_seconds", "3.5", "aggregate_invalid"),
-    ],
-)
-def test_declared_aggregates_must_match_manifests(field, value, reason_code) -> None:
-    batch = AssetBatch.build("packet-agg", [AUDIO, PDF, IMAGE, DICOM])
-    payload = batch.to_dict()
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value, reason_code=reason_code):
+            batch = AssetBatch.build("packet-agg", [AUDIO, PDF, IMAGE, DICOM])
+            payload = batch.to_dict()
+            payload[field] = value
 
-    assert validate_asset_batch(payload) == [
-        BatchFinding(reason_code, field_name=field)
-    ]
-    with pytest.raises(AssetBatchError, match=reason_code):
-        AssetBatch.from_dict(payload)
+            assert validate_asset_batch(payload) == [
+                BatchFinding(reason_code, field_name=field)
+            ]
+            with pytest.raises(AssetBatchError, match=reason_code):
+                AssetBatch.from_dict(payload)
 
 
 def test_duration_tolerance_is_absolute_not_relative() -> None:
@@ -339,9 +331,8 @@ def test_declared_aggregates_are_optional_and_accept_integer_durations() -> None
     assert AssetBatch.from_dict({**payload, "total_duration_seconds": 0}) == batch
 
 
-@pytest.mark.parametrize(
-    ("payload", "expected"),
-    [
+def test_schema_failures_produce_stable_findings_and_fail_closed(subtests) -> None:
+    for payload, expected in [
         ("not-a-dict", [BatchFinding("invalid_batch")]),
         (
             {},
@@ -425,16 +416,13 @@ def test_declared_aggregates_are_optional_and_accept_integer_durations() -> None
                 BatchFinding("invalid_version", field_name="version"),
             ],
         ),
-    ],
-)
-def test_schema_failures_produce_stable_findings_and_fail_closed(
-    payload, expected
-) -> None:
-    assert validate_asset_batch(payload) == expected
-    with pytest.raises(AssetBatchError) as exc_info:
-        AssetBatch.from_dict(payload)
-    for finding in expected:
-        assert finding.reason_code in str(exc_info.value)
+    ]:
+        with subtests.test(payload=payload, expected=expected):
+            assert validate_asset_batch(payload) == expected
+            with pytest.raises(AssetBatchError) as exc_info:
+                AssetBatch.from_dict(payload)
+            for finding in expected:
+                assert finding.reason_code in str(exc_info.value)
 
 
 def test_findings_are_sorted_and_deduplicated() -> None:
@@ -480,10 +468,11 @@ def test_sentinel_values_never_appear_in_findings_or_errors() -> None:
     assert sentinels[0] not in str(direct_error.value)
 
 
-@pytest.mark.parametrize("payload", ["{", b"\xff", 42])
-def test_malformed_json_fails_closed(payload) -> None:
-    with pytest.raises(AssetBatchError):
-        AssetBatch.from_json(payload)  # type: ignore[arg-type]
+def test_malformed_json_fails_closed(subtests) -> None:
+    for payload in ["{", b"\xff", 42]:
+        with subtests.test(payload=payload):
+            with pytest.raises(AssetBatchError):
+                AssetBatch.from_json(payload)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -504,55 +493,50 @@ def test_duplicate_json_fields_fail_closed_without_echoing_values(payload) -> No
     assert "synthetic-secret" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_policy_arguments_fail_closed(subtests) -> None:
+    for kwargs in [
         {"max_assets": 0},
         {"max_assets": True},
         {"max_assets": MAX_BATCH_ASSETS + 1},
         {"max_assets": "5"},
         {"allow_empty": "yes"},
         {"allow_empty": 1},
-    ],
-)
-def test_invalid_policy_arguments_fail_closed(kwargs) -> None:
-    batch = AssetBatch.build("packet-policy", [IMAGE])
+    ]:
+        with subtests.test(kwargs=kwargs):
+            batch = AssetBatch.build("packet-policy", [IMAGE])
 
-    with pytest.raises(AssetBatchError):
-        validate_asset_batch(batch, **kwargs)
-    with pytest.raises(AssetBatchError):
-        AssetBatch.from_dict(batch.to_dict(), **kwargs)
-
-
-@pytest.mark.parametrize("manifests", [42, [IMAGE, "pdf-001"], [IMAGE.to_dict()]])
-def test_build_rejects_non_manifest_inputs(manifests) -> None:
-    with pytest.raises(AssetBatchError):
-        AssetBatch.build("packet-build", manifests)
+            with pytest.raises(AssetBatchError):
+                validate_asset_batch(batch, **kwargs)
+            with pytest.raises(AssetBatchError):
+                AssetBatch.from_dict(batch.to_dict(), **kwargs)
 
 
-@pytest.mark.parametrize(
-    "assets",
-    [[IMAGE], (IMAGE, "pdf-001"), (IMAGE, PDF.to_dict())],
-)
-def test_direct_construction_requires_a_tuple_of_manifests(assets) -> None:
-    with pytest.raises(AssetBatchError):
-        AssetBatch(batch_id="packet-direct", assets=assets)  # type: ignore[arg-type]
+def test_build_rejects_non_manifest_inputs(subtests) -> None:
+    for manifests in [42, [IMAGE, "pdf-001"], [IMAGE.to_dict()]]:
+        with subtests.test(manifests=manifests):
+            with pytest.raises(AssetBatchError):
+                AssetBatch.build("packet-build", manifests)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_direct_construction_requires_a_tuple_of_manifests(subtests) -> None:
+    for assets in [[IMAGE], (IMAGE, "pdf-001"), (IMAGE, PDF.to_dict())]:
+        with subtests.test(assets=assets):
+            with pytest.raises(AssetBatchError):
+                AssetBatch(batch_id="packet-direct", assets=assets)  # type: ignore[arg-type]
+
+
+def test_findings_reject_unsupported_codes_fields_and_positions(subtests) -> None:
+    for kwargs in [
         {"reason_code": "patient_leaked"},
         {"reason_code": 1},
         {"reason_code": "unknown_field", "field_name": "patient_name"},
         {"reason_code": "invalid_asset", "position": -1},
         {"reason_code": "invalid_asset", "position": True},
         {"reason_code": "invalid_asset", "position": "0"},
-    ],
-)
-def test_findings_reject_unsupported_codes_fields_and_positions(kwargs) -> None:
-    with pytest.raises(AssetBatchError):
-        BatchFinding(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(AssetBatchError):
+                BatchFinding(**kwargs)
 
 
 def test_findings_serialize_without_unset_fields() -> None:

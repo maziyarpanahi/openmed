@@ -45,7 +45,7 @@ selected pixels and encoding, not OCR completeness, detection accuracy or every
 PDF viewer's rendering. Compare output with the source in the intended workflow.
 
 The path-based API below has a separate selectable-text and layout-fidelity
-contract and remains unchanged.
+contract.
 
 `render_redacted_pdf` accepts the top-origin, 0-based page rectangles returned
 by `project_text_spans`:
@@ -75,6 +75,77 @@ print(result.to_dict())
 
 The destination is written atomically only after all verification gates pass.
 Existing destinations are protected unless `overwrite=True` is explicit.
+
+## Annotation Safety
+
+Both PDF rasterizing redaction paths omit all annotation appearances by default.
+This includes FreeText, Stamp, Text and widget appearances: their pixels must
+not enter the output merely because ordinary page-text detection cannot see
+them. Annotation removal happens in memory without modifying the source or
+writing an intermediate source PDF. Default layout verification compares with
+that annotation-free source, so omitted appearances are not fidelity failures.
+
+Owned multi-phase operations capture one immutable in-memory source before
+extraction, detection, mapping and rendering. Updating the input path or stream
+during a detector callback cannot switch the document that is rendered. A
+seekable caller-owned binary stream stays open, and its name is never opened as
+a replacement path. Caller-supplied `document=` values or regions calculated in
+a separate call must still be matched to the source by the caller.
+
+`result.to_dict()["annotations"]` contains one entry per page with `page`,
+`annotation_count`, `omitted_annotation_count`, and a `subtypes` count mapping.
+Subtype names come from a closed vocabulary; other values become `Other`.
+Annotation contents, field names, appearance text and source paths never enter
+these annotation reports.
+
+To explicitly inspect and keep supported text appearances, supply a local
+detector that returns character offsets into its input:
+
+```python
+def annotation_detector(text):
+    # Replace this synthetic example with your local PHI detector.
+    marker = "SYNTHETIC_PATIENT"
+    start = text.find(marker)
+    return [] if start < 0 else [(start, start + len(marker))]
+
+result = render_redacted_pdf(
+    source,
+    output,
+    rectangles,
+    annotation_detector=annotation_detector,
+)
+```
+
+The detector sees both annotation `Contents` and the selected normal appearance
+text, which can disagree. Mapped visual words and PDF text-operation order are
+both provided when they differ, including rotated or mirrored text. Any detected
+span masks the entire annotation rectangle. Inspected appearances with no
+detected spans may remain as flattened page content; interactive annotation
+objects never survive. Internal fidelity checks use this inspected, flattened
+source in opt-in mode. The standalone `measure_pdf_layout_fidelity` helper uses
+an annotation-free source and should not be used to independently accept retained
+annotation appearances.
+
+`extract_pdf(source, include_annotations=True)` exposes the same additional
+text and full-extent source spans without rendering. The document-ingestion
+path accepts `policy={"include_annotations": True, "return_bytes": True}`
+only with an injected detector. It preserves full annotation masks even when a
+table or caption also covers a detected span.
+
+Opt-in processing fails closed with `annotation_appearance_unmappable` before
+writing output when an appearance has no reliable text/coordinate map. Unsupported
+cases include image or nested-form appearances, vector painting, Type 3 fonts,
+missing appearance states, invalid transforms, text outside its rectangle,
+clipped rectangles, shifted media origins and distinct crop boxes. These cases
+need a separately verified OCR/geometry workflow; they do not silently fall back
+to retaining unchecked pixels. Detector failures use `annotation_detection_failed`.
+Coordinate verification does not establish detector recall or clinical correctness.
+Each detector is invoked once after its call signature is checked. Results must
+be explicit span sequences (or supported `entities`/`pii_entities`/`spans` wrappers)
+with non-boolean integral offsets in range and a coordinate map for every span.
+Malformed results, callback failures and excessive result iteration fail closed.
+The verified renderer bounds detector results with `max_regions`; document
+ingestion accepts at most 10,000 detections in annotation opt-in mode.
 
 ## What The Renderer Preserves
 
@@ -162,3 +233,101 @@ Scanned or image-only source PDFs are outside this API's text-removal proof:
 their redaction rectangles must come from the OCR pipeline, and residual text
 must be verified by re-OCR. PDF redaction is an assistive privacy control, not a
 diagnostic or clinical decision system.
+
+## Identifier-bearing barcodes and 2D codes
+
+`redact_image`, `redact_dicom_pixels`, `render_redacted_pdf` and
+`render_redacted_raster_pages` scan each source frame/page for codes independently
+of OCR. PDF output through `redact_document` also scans each rasterized page
+and records source and residual coverage in the result metadata. Every located code is treated as an identifier-bearing redaction region,
+including a symbol with an unreadable payload. Code boxes join the existing OCR
+or caller-selected boxes; PDF pixel boxes are converted to page points before
+text exclusion and layout verification. Image-only code regions keep their
+measured zero source-word counts and set `source_text_required: false`; ordinary
+text regions still require measurable source text. Residual verification scans the redacted
+pixels again and rejects any remaining detectable code before writing output.
+
+The issue's implementation surface is Python. OpenMedKit currently has no image,
+PDF or DICOM pixel-redaction API to extend; this change adds no cloud bridge or
+Apple Foundation Models fallback.
+
+### Local providers and availability policy
+
+Pass `code_detector` and `code_detection_policy` as arguments to the image,
+DICOM and raster APIs, or as PDF redaction policy keys for `redact_document`. The
+policy defaults to `"coverage_incomplete"`: a missing or failing detector produces
+an explicit `coverage_incomplete: true` in the code coverage report, rather than
+claiming codes were absent. Select `"fail_closed"` to reject unavailable detection
+before output publication. Malformed boxes and exhausted region limits always
+fail closed. A residual-pass outage follows the same policy and is recorded in
+its separate coverage report. Existing OCR/pixel `clean` or `passed` flags describe
+those checks; callers must inspect both code coverage reports for completeness.
+Disabling image/DICOM residual verification does not disable the source code scan.
+
+The default adapter is `ZXingCodeRegionDetector`. Install its optional local
+backend separately; no dependency, weights, downloads or network transport are
+added to the core SDK:
+
+```bash
+pip install "zxing-cpp==2.3.0"
+```
+
+The [ZXing Python binding](https://github.com/zxing-cpp/zxing-cpp/tree/v2.3.0/wrappers/python)
+and [license](https://github.com/zxing-cpp/zxing-cpp/blob/v2.3.0/LICENSE) are
+Apache-2.0. The adapter supports linear, QR and DataMatrix classes (other detected
+symbologies are still redacted). It requests located decoding failures as well
+as valid codes and never reads the backend's decoded text, bytes or error detail.
+This is detection support, not measured clinical qualification: distorted,
+partially hidden or unsupported codes can still be missed. Synthetic tests and
+generated sentinel codes do not establish real-world recall.
+
+```python
+from openmed.multimodal import ZXingCodeRegionDetector, redact_image
+
+result = redact_image(
+    "synthetic-label.png",
+    models=local_pii_models,
+    code_detector=ZXingCodeRegionDetector(),
+    code_detection_policy="fail_closed",
+)
+coverage = result.code_coverage.to_dict()
+residual = result.residual_report.code_coverage.to_dict()
+```
+
+DICOM accepts these options directly or in `DicomPixelRedactionPolicy`.
+Code findings have null text and model-confidence fields, rather than invented
+text evidence or confidence scores. For
+`redact_document` image dispatch, inject `models["code_detector"]` and put
+`"code_detection_policy"` in the policy mapping alongside the output destination.
+
+### Provider and report contract
+
+`CodeRegionDetector.detect(image)` receives an in-memory Pillow image or uint8
+array and returns `CodeRegion(symbology, bbox)` values. Boxes use a top-left origin
+and exclusive right/bottom pixel edges. The caller assigns the zero-based page or
+frame index. Provider geometry must be finite, non-empty and within image bounds.
+`FakeCodeRegionDetector` returns fixed synthetic boxes for offline tests; use a
+pixel-aware fake or independent verification provider when testing residuals.
+
+Reports expose only controlled symbology classes (`linear`, `qr`, `datamatrix`,
+`other`), counts, boxes and coverage status. If an injected provider returns a
+mapping with `payload`, `text` or `bytes`, the boundary reduces that value to an
+opaque SHA-256 digest in the in-memory region; neither the payload nor its digest
+is included in the coverage report. Backend exception messages are suppressed.
+Providers must themselves avoid logging decoded content. Code-free images keep
+the same encoded output bytes as the existing redaction path; metadata stripping
+and existing OCR redaction continue to apply. No source-byte identity is claimed
+for metadata-bearing or re-encoded source images.
+
+Example safe report:
+
+```json
+{"count": 1, "boxes": [{"symbology": "qr", "bbox": [10, 10, 60, 60], "page": 0}], "coverage_incomplete": false}
+```
+
+No regional coverage audit, mask-lineage implementation, autonomous clinical
+action or release qualification is added by this detector integration.
+
+
+Annotation source and detector refusals use fixed diagnostics and discard underlying
+exception context, including document and provider error details.

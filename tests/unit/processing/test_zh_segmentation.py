@@ -39,6 +39,7 @@ def _span_tokens(text: str, words: list[str]) -> list[SpanToken]:
     return tokens
 
 
+@pytest.mark.slow
 def test_default_jieba_backend_keeps_seeded_clinical_terms_and_offsets():
     text = "患者王芳因心房颤动入院"
 
@@ -52,6 +53,7 @@ def test_default_jieba_backend_keeps_seeded_clinical_terms_and_offsets():
     validate_segmentation(text, tokens)
 
 
+@pytest.mark.slow
 def test_user_dictionary_loader_and_custom_jieba_dictionary(tmp_path):
     dictionary = tmp_path / "custom.txt"
     dictionary.write_text(
@@ -68,13 +70,17 @@ def test_user_dictionary_loader_and_custom_jieba_dictionary(tmp_path):
     assert "心脏超声" in [token.text for token in tokens]
 
 
-@pytest.mark.parametrize("frequency", ["zero 0", "negative -1", "bad nope"])
-def test_user_dictionary_rejects_invalid_frequency(tmp_path, frequency):
-    dictionary = tmp_path / "invalid.txt"
-    dictionary.write_text(f"{frequency}\n", encoding="utf-8")
+def test_user_dictionary_rejects_invalid_frequency(subtests, tmp_path):
+    case_root = tmp_path
+    for frequency in ["zero 0", "negative -1", "bad nope"]:
+        with subtests.test(frequency=frequency):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            dictionary = tmp_path / "invalid.txt"
+            dictionary.write_text(f"{frequency}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="frequency"):
-        load_user_dictionary(dictionary)
+            with pytest.raises(ValueError, match="frequency"):
+                load_user_dictionary(dictionary)
 
 
 def test_validation_rejects_wrong_offsets_overlap_and_non_whitespace_gaps():
@@ -91,6 +97,7 @@ def test_validation_rejects_wrong_offsets_overlap_and_non_whitespace_gaps():
         validate_segmentation("患者王芳", [SpanToken("王芳", 2, 4)])
 
 
+@pytest.mark.slow
 def test_round_trip_invariant_for_1000_random_han_strings():
     randomizer = random.Random(639)
     alphabet = "患者王芳心房颤动入院高血压糖尿病肺炎肾功能正常异常检查治疗"
@@ -106,6 +113,7 @@ def test_round_trip_invariant_for_1000_random_han_strings():
         validate_segmentation(text, tokens)
 
 
+@pytest.mark.slow
 def test_held_out_200_sentence_boundary_f1_gate():
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     segmenter = JiebaSegmenter()

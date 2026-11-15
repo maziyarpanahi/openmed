@@ -104,6 +104,16 @@ from openmed.eval.suites.cblue_coverage import (
     run_cblue_task_coverage,
     run_synthetic_cblue_task_coverage_smoke,
 )
+from openmed.eval.suites.chart_abstraction import (
+    AbstractionFieldType,
+    AbstractionMetric,
+    AbstractionScores,
+    ChartAbstractionBenchmarkReport,
+    ChartAbstractionGoldField,
+    ChartAbstractionPrediction,
+    run_chart_abstraction_benchmark,
+    synthetic_chart_abstraction_gold,
+)
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     CHINESE_CLINICAL_NER_MODEL_DIR_ENV,
@@ -308,6 +318,13 @@ from openmed.eval.suites.relations import (
     relation_trap_summary,
     score_relation_fixtures,
 )
+from openmed.eval.suites.sdoh_extraction import (
+    SDOH_EXTRACTION,
+    load_sdoh_extraction_fixtures,
+    run_sdoh_extraction_benchmark,
+    run_shac_sdoh_benchmark,
+    sdoh_extraction_metadata,
+)
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
@@ -384,7 +401,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
 SUPPORTED_SUITES: tuple[str, ...] = (
     DEFAULT_SUITES
     + PROMOTION_ONLY_RELATION_SUITES
-    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE)
+    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE, SDOH_EXTRACTION)
 )
 REGISTERED_EVAL_SUITES: tuple[str, ...] = SUPPORTED_SUITES
 
@@ -402,6 +419,8 @@ def validate_suite_name(name: str) -> str:
 def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     """Load benchmark fixtures for a named suite."""
     suite = validate_suite_name(name)
+    if suite == SDOH_EXTRACTION:
+        return load_sdoh_extraction_fixtures(kwargs.get("path"))
     if suite == CLINICAL_DOMAIN_COVERAGE:
         raise ValueError(
             "clinical domain coverage is an aggregate gate; "
@@ -522,6 +541,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
 def _suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
+    if suite == SDOH_EXTRACTION:
+        return sdoh_extraction_metadata()
     if suite == CLINICAL_DOMAIN_COVERAGE:
         return domain_coverage_metadata()
     if suite == I2B2:
@@ -685,6 +706,19 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "AbstractionFieldType",
+    "AbstractionMetric",
+    "AbstractionScores",
+    "ChartAbstractionBenchmarkReport",
+    "ChartAbstractionGoldField",
+    "ChartAbstractionPrediction",
+    "run_chart_abstraction_benchmark",
+    "synthetic_chart_abstraction_gold",
+    "SDOH_EXTRACTION",
+    "load_sdoh_extraction_fixtures",
+    "run_sdoh_extraction_benchmark",
+    "run_shac_sdoh_benchmark",
+    "sdoh_extraction_metadata",
     "DRUG_SAFETY_SUITE_VERSION",
     "DrugSafetyBenchmarkCase",
     "DrugSafetyBenchmarkReport",

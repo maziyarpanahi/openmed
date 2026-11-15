@@ -8,6 +8,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 from openmed.plugins import PluginComponentMetadata
 from openmed.plugins.quarantine import (
     CATEGORY_AVAILABLE,
@@ -50,6 +52,7 @@ def test_report_does_not_enumerate_or_load_entry_points(monkeypatch) -> None:
     assert report.quarantined == ()
 
 
+@pytest.mark.slow
 def test_module_import_does_not_trigger_entry_point_discovery() -> None:
     code = """
     import importlib.metadata

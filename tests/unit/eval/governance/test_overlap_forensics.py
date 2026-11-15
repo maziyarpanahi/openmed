@@ -166,22 +166,16 @@ def test_no_signal_language_does_not_claim_absence_of_contamination() -> None:
     assert "does not establish the absence" in report.interpretation
 
 
-@pytest.mark.parametrize(
-    ("argument", "value", "reason"),
-    (
+def test_invalid_configuration_fails_with_closed_error_codes(subtests) -> None:
+    for argument, value, reason in (
         ("submission_items", (), "submission_items: empty"),
         ("public_items", ("***",), "public_items: empty_after_normalization"),
         ("fuzzy_threshold_basis_points", True, "invalid_basis_points"),
         ("shadow_margin_basis_points", 10_001, "invalid_basis_points"),
-    ),
-)
-def test_invalid_configuration_fails_with_closed_error_codes(
-    argument: str,
-    value: object,
-    reason: str,
-) -> None:
-    with pytest.raises(OverlapForensicsError, match=reason):
-        _scan(**{argument: value})
+    ):
+        with subtests.test(argument=argument, value=value, reason=reason):
+            with pytest.raises(OverlapForensicsError, match=reason):
+                _scan(**{argument: value})
 
 
 def test_invalid_evidence_and_items_never_echo_caller_values() -> None:

@@ -296,39 +296,36 @@ def test_resume_refuses_mismatched_configuration(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("field", "invalid_value"),
-    [
+def test_resume_rejects_malformed_checkpoint_integers(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field, invalid_value in [
         ("schema_version", {}),
         ("total_items", "1"),
         ("committed_count", 1.0),
         ("checkpoint_interval", False),
-    ],
-)
-def test_resume_rejects_malformed_checkpoint_integers(
-    tmp_path: Path,
-    field: str,
-    invalid_value: object,
-) -> None:
-    output_path = tmp_path / "results.json"
-    checkpoint_path = tmp_path / "results.checkpoint.json"
-    processor = _SyntheticProcessor()
-    processor.process_texts(
-        ["Patient Alice Example"],
-        output_path=output_path,
-        checkpoint_path=checkpoint_path,
-    )
-    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-    checkpoint[field] = invalid_value
-    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+    ]:
+        with subtests.test(field=field, invalid_value=invalid_value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            output_path = tmp_path / "results.json"
+            checkpoint_path = tmp_path / "results.checkpoint.json"
+            processor = _SyntheticProcessor()
+            processor.process_texts(
+                ["Patient Alice Example"],
+                output_path=output_path,
+                checkpoint_path=checkpoint_path,
+            )
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            checkpoint[field] = invalid_value
+            checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
 
-    with pytest.raises(BatchCheckpointError, match="Checkpoint .* is invalid"):
-        processor.process_texts(
-            ["Patient Alice Example"],
-            output_path=output_path,
-            checkpoint_path=checkpoint_path,
-            resume_from_checkpoint=True,
-        )
+            with pytest.raises(BatchCheckpointError, match="Checkpoint .* is invalid"):
+                processor.process_texts(
+                    ["Patient Alice Example"],
+                    output_path=output_path,
+                    checkpoint_path=checkpoint_path,
+                    resume_from_checkpoint=True,
+                )
 
 
 def test_resume_refuses_mismatched_item_output_offset(tmp_path: Path) -> None:
@@ -388,39 +385,38 @@ def test_resume_requires_hash_for_every_successful_file(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("target_name", ["checkpoint.json", "checkpoint.json.part"])
-@pytest.mark.parametrize(
-    "crash_phase",
-    [
-        "after_write",
-        "after_fsync",
-        "before_replace",
-        "after_replace",
-        "after_directory_fsync",
-    ],
-)
 def test_atomic_checkpoint_and_output_survive_every_crash_point(
-    tmp_path: Path,
-    target_name: str,
-    crash_phase: str,
+    subtests, tmp_path
 ) -> None:
-    target = tmp_path / target_name
-    previous = b'{"generation":1}\n'
-    candidate = b'{"generation":2}\n'
-    target.write_bytes(previous)
+    case_root = tmp_path
+    for target_name in ["checkpoint.json", "checkpoint.json.part"]:
+        for crash_phase in [
+            "after_write",
+            "after_fsync",
+            "before_replace",
+            "after_replace",
+            "after_directory_fsync",
+        ]:
+            with subtests.test(target_name=target_name, crash_phase=crash_phase):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                target = tmp_path / target_name
+                previous = b'{"generation":1}\n'
+                candidate = b'{"generation":2}\n'
+                target.write_bytes(previous)
 
-    def crash_hook(phase: str, path: Path) -> None:
-        assert path == target
-        if phase == crash_phase:
-            raise RuntimeError("simulated power loss")
+                def crash_hook(phase: str, path: Path) -> None:
+                    assert path == target
+                    if phase == crash_phase:
+                        raise RuntimeError("simulated power loss")
 
-    with pytest.raises(RuntimeError, match="simulated power loss"):
-        _atomic_write_bytes(target, candidate, hook=crash_hook)
+                with pytest.raises(RuntimeError, match="simulated power loss"):
+                    _atomic_write_bytes(target, candidate, hook=crash_hook)
 
-    persisted = target.read_bytes()
-    assert persisted in {previous, candidate}
-    assert json.loads(persisted)["generation"] in {1, 2}
-    assert not list(tmp_path.glob(f".{target.name}.*.tmp"))
+                persisted = target.read_bytes()
+                assert persisted in {previous, candidate}
+                assert json.loads(persisted)["generation"] in {1, 2}
+                assert not list(tmp_path.glob(f".{target.name}.*.tmp"))
 
 
 def test_cli_parses_resume_and_checkpoint_interval_flags() -> None:

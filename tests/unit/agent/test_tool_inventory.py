@@ -117,9 +117,8 @@ def test_multi_tool_inventory_sorts_by_tool_and_version() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "forbidden_field",
-    [
+def test_content_bearing_record_fields_fail_closed(subtests) -> None:
+    for forbidden_field in [
         "description",
         "endpoint",
         "path",
@@ -128,23 +127,23 @@ def test_multi_tool_inventory_sorts_by_tool_and_version() -> None:
         "arguments",
         "example",
         "headers",
-    ],
-)
-def test_content_bearing_record_fields_fail_closed(forbidden_field: str) -> None:
-    sentinel = "Synthetic Patient credential at https://private.example.test"
-    payload = _record().to_dict()
-    payload[forbidden_field] = sentinel
+    ]:
+        with subtests.test(forbidden_field=forbidden_field):
+            sentinel = "Synthetic Patient credential at https://private.example.test"
+            payload = _record().to_dict()
+            payload[forbidden_field] = sentinel
 
-    with pytest.raises(ToolInventoryError, match="tool: invalid_fields") as caught:
-        ToolInventoryRecord.from_dict(payload)
+            with pytest.raises(
+                ToolInventoryError, match="tool: invalid_fields"
+            ) as caught:
+                ToolInventoryRecord.from_dict(payload)
 
-    assert sentinel not in str(caught.value)
-    assert sentinel not in repr(caught.value)
+            assert sentinel not in str(caught.value)
+            assert sentinel not in repr(caught.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "reason"),
-    [
+def test_free_form_and_identifying_values_fail_closed(subtests) -> None:
+    for field, value, reason in [
         ("tool_id", "https://private.example.test/tool", "invalid_identifier"),
         ("tool_id", "/private/agent/tool", "invalid_identifier"),
         ("tool_id", "tool:org.example/summarize@1.0.0", "version_must_be_separate"),
@@ -152,19 +151,16 @@ def test_content_bearing_record_fields_fail_closed(forbidden_field: str) -> None
         ("capability_class", "patient discharge summary", "invalid_identifier"),
         ("schema_digest", "secret-api-token", "invalid_digest"),
         ("side_effect_class", "sometimes writes records", "invalid_class"),
-    ],
-)
-def test_free_form_and_identifying_values_fail_closed(
-    field: str, value: object, reason: str
-) -> None:
-    sentinel = str(value)
-    payload = _record().to_dict()
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value, reason=reason):
+            sentinel = str(value)
+            payload = _record().to_dict()
+            payload[field] = value
 
-    with pytest.raises(ToolInventoryError, match=reason) as caught:
-        ToolInventoryRecord.from_dict(payload)
+            with pytest.raises(ToolInventoryError, match=reason) as caught:
+                ToolInventoryRecord.from_dict(payload)
 
-    assert sentinel not in str(caught.value)
+            assert sentinel not in str(caught.value)
 
 
 def test_inventory_mapping_round_trip_is_byte_stable() -> None:

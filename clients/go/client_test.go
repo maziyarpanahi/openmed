@@ -48,6 +48,87 @@ func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
 
+func TestWorkflowTransportBindingsAreExplicitAndDoNotRetry(t *testing.T) {
+	state := "sha256:" + strings.Repeat("b", 64)
+	key := "req_" + strings.Repeat("2", 32)
+	ref := openmed.GovernedWorkflowReference{
+		SchemaVersion: "openmed.service.workflow_request.v1",
+		RunID:         "run_" + strings.Repeat("1", 32), WorkflowID: "workflow:test.example/review",
+		ActionDigest:        "sha256:" + strings.Repeat("a", 64),
+		ExpectedStateDigest: &state, RequestID: &key,
+	}
+	mutation := openmed.GovernedWorkflowMutation{
+		SchemaVersion: ref.SchemaVersion, RunID: ref.RunID, WorkflowID: ref.WorkflowID,
+		ActionDigest: ref.ActionDigest, ExpectedStateDigest: state, RequestID: key,
+	}
+	review := openmed.GovernedWorkflowReview{
+		SchemaVersion: ref.SchemaVersion, RunID: ref.RunID, WorkflowID: ref.WorkflowID,
+		ActionDigest: ref.ActionDigest, ExpectedStateDigest: state, RequestID: key,
+		Receipt: openmed.JSONObject{"schema_version": "synthetic-expired-refusal-vector"},
+	}
+	cases := []struct {
+		path string
+		call func(*openmed.Client) (*openmed.JSONObject, error)
+	}{
+		{"preflight", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowPreflight(context.Background(), ref)
+		}},
+		{"preview", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowPreview(context.Background(), ref)
+		}},
+		{"status", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowStatus(context.Background(), ref)
+		}},
+		{"review-receipts", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowSubmitReceipt(context.Background(), review)
+		}},
+		{"cancel", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowCancel(context.Background(), mutation)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			for _, refused := range []bool{false, true} {
+				calls := 0
+				transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					calls++
+					if req.Method != http.MethodPost || req.URL.Path != "/v1/workflows/"+tc.path || req.URL.RawQuery != "" {
+						t.Fatal("unexpected workflow transport target")
+					}
+					var body map[string]any
+					decodeBody(t, req, &body)
+					if body["run_id"] != ref.RunID || body["action_digest"] != ref.ActionDigest || body["request_id"] != key {
+						t.Fatal("workflow reference changed in transport")
+					}
+					status := http.StatusOK
+					response := `{"schema_version":"openmed.service.workflow_response.v1","committed_effect_count":0}`
+					if refused {
+						status = http.StatusServiceUnavailable
+						response = `{"error":{"code":"workflow_mutation_unknown","message":"Governed workflow request refused.","details":[]}}`
+					}
+					return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(response))}, nil
+				})
+				client, err := openmed.New("https://openmed.invalid", openmed.WithHTTPClient(&http.Client{Transport: transport}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				result, err := tc.call(client)
+				if calls != 1 {
+					t.Fatal("workflow transport retried")
+				}
+				if refused {
+					var apiError *openmed.APIError
+					if !errors.As(err, &apiError) || apiError.Code() != "workflow_mutation_unknown" {
+						t.Fatal("unknown mutation result was concealed")
+					}
+				} else if err != nil || (*result)["committed_effect_count"] != float64(0) {
+					t.Fatal("workflow metadata changed")
+				}
+			}
+		})
+	}
+}
+
 type countingReadCloser struct {
 	remaining int
 	read      int
@@ -421,6 +502,52 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 				t.Fatalf("call failed: %v", err)
 			}
 		})
+	}
+}
+
+func TestStartSMARTBackendIngestionSendsIdempotencyKey(t *testing.T) {
+	const key = "synthetic-retry-key-0001"
+	var received []string
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/fhir/smart-backend/ingestions" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		received = append(received, r.Header.Values("Idempotency-Key")...)
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Idempotency-Replayed", "true")
+		_, _ = io.WriteString(w, `{"job_id":"job-1","status":"running"}`)
+	})
+
+	status, err := client.StartSMARTBackendIngestionWithIdempotencyKey(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{OutputDir: "synthetic-out"},
+		key,
+	)
+	if err != nil {
+		t.Fatalf("StartSMARTBackendIngestionWithIdempotencyKey: %v", err)
+	}
+	if status.JobID != "job-1" {
+		t.Fatalf("job ID = %q", status.JobID)
+	}
+	if _, err := client.StartSMARTBackendIngestion(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{OutputDir: "synthetic-out"},
+	); err != nil {
+		t.Fatalf("StartSMARTBackendIngestion: %v", err)
+	}
+	if len(received) != 1 || received[0] != key {
+		t.Fatalf("Idempotency-Key values = %q, want one %q", received, key)
+	}
+
+	if _, err := client.StartSMARTBackendIngestionWithIdempotencyKey(
+		context.Background(),
+		openmed.SMARTBackendIngestionRequest{},
+		"  ",
+	); err == nil {
+		t.Fatal("blank idempotency key was accepted")
 	}
 }
 
@@ -1111,6 +1238,55 @@ func TestGetJobEscapesPath(t *testing.T) {
 	}
 }
 
+func TestGetJobDecodesKeyedAndOmittedDigests(t *testing.T) {
+	digest := `{"alg":"hmac-sha256","key_id":"synthetic-key","value":"` + strings.Repeat("a", 64) + `"}`
+	bodies := map[string]string{
+		"keyed": `{"schema_version":3,"id":"keyed","status":"done",` +
+			`"digests":{"mode":"keyed","alg":"hmac-sha256","key_id":"synthetic-key","reason":null},` +
+			`"spans":[{"document_id":"d","start":0,"end":4,"label":"ID","text_digest":` + digest + `,"confidence":0.9}],` +
+			`"documents":[{"id":"d","length":4,"text_digest":` + digest + `}],` +
+			`"webhook":{"configured":true,"url_digest":` + digest + `,"max_attempts":1,"backoff_seconds":0}}`,
+		"omitted": `{"schema_version":3,"id":"omitted","status":"done",` +
+			`"digests":{"mode":"omitted","alg":null,"key_id":null,"reason":"digest_key_unconfigured"},` +
+			`"spans":[{"document_id":"d","start":0,"end":4,"label":"ID","text_digest":null,"confidence":0.9}],` +
+			`"documents":[{"id":"d","length":4,"text_digest":null}],` +
+			`"webhook":{"configured":true,"url_digest":null,"max_attempts":1,"backoff_seconds":0}}`,
+	}
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, bodies[strings.TrimPrefix(r.URL.Path, "/jobs/")])
+	})
+
+	keyed, err := client.GetJob(context.Background(), "keyed")
+	if err != nil {
+		t.Fatalf("GetJob keyed: %v", err)
+	}
+	if keyed.SchemaVersion != 3 || keyed.Digests == nil || keyed.Digests.Mode != "keyed" {
+		t.Fatalf("keyed record markers = %d %+v", keyed.SchemaVersion, keyed.Digests)
+	}
+	for _, got := range []*openmed.KeyedDigest{
+		keyed.Spans[0].TextDigest,
+		keyed.Documents[0].TextDigest,
+		keyed.Webhook.URLDigest,
+	} {
+		if got == nil || got.Alg != "hmac-sha256" || got.KeyID != "synthetic-key" || len(got.Value) != 64 {
+			t.Fatalf("keyed digest = %+v", got)
+		}
+	}
+
+	omitted, err := client.GetJob(context.Background(), "omitted")
+	if err != nil {
+		t.Fatalf("GetJob omitted: %v", err)
+	}
+	if omitted.Digests == nil || omitted.Digests.Mode != "omitted" || omitted.Digests.Reason == nil ||
+		*omitted.Digests.Reason != "digest_key_unconfigured" || omitted.Digests.KeyID != nil {
+		t.Fatalf("omitted record markers = %+v", omitted.Digests)
+	}
+	if omitted.Spans[0].TextDigest != nil || omitted.Documents[0].TextDigest != nil || omitted.Webhook.URLDigest != nil {
+		t.Fatal("omitted record decoded a digest")
+	}
+}
+
 func TestJobMethodsRejectAmbiguousPathSegments(t *testing.T) {
 	called := false
 	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -1165,7 +1341,7 @@ func TestCreateJobSupportsFractionalWebhookBackoff(t *testing.T) {
 			"status":"queued",
 			"webhook":{
 				"configured":true,
-				"url_hash":"sha256",
+				"url_digest":null,
 				"max_attempts":3,
 				"backoff_seconds":0.25
 			}

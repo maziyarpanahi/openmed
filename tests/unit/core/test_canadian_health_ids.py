@@ -140,31 +140,30 @@ def test_bc_phn_locale_pattern_is_used_by_safety_sweep():
     )
 
 
-@pytest.mark.parametrize(
-    ("id_type", "faker_method"),
-    (
+def test_canadian_registry_specs_generate_valid_surrogates(subtests):
+    for id_type, faker_method in (
         ("sin", "canadian_sin"),
         ("on_health_card", "ontario_health_card"),
         ("bc_phn", "bc_phn"),
-    ),
-)
-def test_canadian_registry_specs_generate_valid_surrogates(id_type, faker_method):
-    faker = Faker("en_CA")
-    register_clinical_providers(faker)
-    faker.seed_instance(42)
+    ):
+        with subtests.test(id_type=id_type, faker_method=faker_method):
+            faker = Faker("en_CA")
+            register_clinical_providers(faker)
+            faker.seed_instance(42)
 
-    spec = get_national_id("en", id_type)
-    assert spec is not None
-    assert spec.faker_method == faker_method
+            spec = get_national_id("en", id_type)
+            assert spec is not None
+            assert spec.faker_method == faker_method
 
-    surrogate = getattr(faker, spec.faker_method)()
-    assert spec.validate(surrogate), f"{id_type} generated {surrogate!r}"
+            surrogate = getattr(faker, spec.faker_method)()
+            assert spec.validate(surrogate), f"{id_type} generated {surrogate!r}"
 
 
-@pytest.mark.parametrize("locale", ("en_CA", "fr_CA", "ca"))
-def test_canadian_ids_discoverable_from_locale_aliases(locale):
-    for id_type in ("sin", "on_health_card", "bc_phn"):
-        assert get_national_id(locale, id_type) is not None
+def test_canadian_ids_discoverable_from_locale_aliases(subtests):
+    for locale in ("en_CA", "fr_CA", "ca"):
+        with subtests.test(locale=locale):
+            for id_type in ("sin", "on_health_card", "bc_phn"):
+                assert get_national_id(locale, id_type) is not None
 
 
 def test_extract_pii_en_ca_locale_yields_canadian_identifier_spans(monkeypatch):

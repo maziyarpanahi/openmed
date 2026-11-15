@@ -46,18 +46,20 @@ def test_fixture_rows_are_synthetic():
     assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
-@pytest.mark.parametrize("row", _load_fixture())
-def test_parser_matches_gold_row(row):
-    produced = parse_hgvs(row["text"])
-    assert len(produced) == len(row["gold"])
-    for mention, gold in zip(produced, row["gold"]):
-        for field in MENTION_FIELDS:
-            assert mention[field] == gold[field], field
-        assert list(mention["span"]) == gold["span"]
-        # Offset stability: the span reproduces raw_text byte-for-byte.
-        assert (
-            row["text"][mention["span"][0] : mention["span"][1]] == mention["raw_text"]
-        )
+def test_parser_matches_gold_row(subtests):
+    for row in _load_fixture():
+        with subtests.test(row=row):
+            produced = parse_hgvs(row["text"])
+            assert len(produced) == len(row["gold"])
+            for mention, gold in zip(produced, row["gold"]):
+                for field in MENTION_FIELDS:
+                    assert mention[field] == gold[field], field
+                assert list(mention["span"]) == gold["span"]
+                # Offset stability: the span reproduces raw_text byte-for-byte.
+                assert (
+                    row["text"][mention["span"][0] : mention["span"][1]]
+                    == mention["raw_text"]
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -83,40 +85,37 @@ def test_substitution_position_and_edit():
     assert (mention["position"], mention["edit"]) == ("76", "A>T")
 
 
-@pytest.mark.parametrize(
-    ("text", "position"),
-    [
+def test_intron_and_utr_coordinates(subtests):
+    for text, position in [
         ("c.88+1G>T", "88+1"),  # intron offset
         ("c.-14G>C", "-14"),  # 5' UTR
         ("c.*32A>T", "*32"),  # 3' UTR
-    ],
-)
-def test_intron_and_utr_coordinates(text, position):
-    assert _one(text)["position"] == position
+    ]:
+        with subtests.test(text=text, position=position):
+            assert _one(text)["position"] == position
 
 
-@pytest.mark.parametrize(
-    ("text", "edit"),
-    [
+def test_edit_operations(subtests):
+    for text, edit in [
         ("c.76dup", "dup"),
         ("c.76_77insACG", "insACG"),
         ("c.76_78del", "del"),
         ("c.112_117delinsTG", "delinsTG"),
         ("g.123_456inv", "inv"),
-    ],
-)
-def test_edit_operations(text, edit):
-    mention = _one(text)
-    assert mention["edit"] == edit
-    assert mention["status"] == "valid"
+    ]:
+        with subtests.test(text=text, edit=edit):
+            mention = _one(text)
+            assert mention["edit"] == edit
+            assert mention["status"] == "valid"
 
 
-@pytest.mark.parametrize("ctype", list("cpgmnr"))
-def test_every_coordinate_type_is_recognized(ctype):
-    variant = "Arg97Gly" if ctype == "p" else "76A>T"
-    mention = _one(f"{ctype}.{variant}")
-    assert mention["coordinate_type"] == ctype
-    assert mention["status"] == "valid"
+def test_every_coordinate_type_is_recognized(subtests):
+    for ctype in list("cpgmnr"):
+        with subtests.test(ctype=ctype):
+            variant = "Arg97Gly" if ctype == "p" else "76A>T"
+            mention = _one(f"{ctype}.{variant}")
+            assert mention["coordinate_type"] == ctype
+            assert mention["status"] == "valid"
 
 
 # ---------------------------------------------------------------------------
@@ -124,21 +123,19 @@ def test_every_coordinate_type_is_recognized(ctype):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("text", "position", "edit"),
-    [
+def test_protein_changes(subtests):
+    for text, position, edit in [
         ("p.Arg97Gly", "Arg97", "Gly"),  # missense
         ("p.Phe508del", "Phe508", "del"),  # deletion
         ("p.Arg97Ter", "Arg97", "Ter"),  # nonsense (Ter)
         ("p.Arg97*", "Arg97", "*"),  # nonsense (*)
         ("p.Gly12fs", "Gly12", "fs"),  # frameshift
         ("p.Arg97_Gly99del", "Arg97_Gly99", "del"),  # range
-    ],
-)
-def test_protein_changes(text, position, edit):
-    mention = _one(text)
-    assert (mention["position"], mention["edit"]) == (position, edit)
-    assert mention["status"] == "valid"
+    ]:
+        with subtests.test(text=text, position=position, edit=edit):
+            mention = _one(text)
+            assert (mention["position"], mention["edit"]) == (position, edit)
+            assert mention["status"] == "valid"
 
 
 def test_predicted_protein_parentheses_are_unwrapped():
@@ -147,47 +144,42 @@ def test_predicted_protein_parentheses_are_unwrapped():
     assert mention["status"] == "valid"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_protein_delins_insertion_and_extension_are_valid(subtests):
+    for text in [
         "p.Cys28delinsTrpVal",  # protein delins
         "p.Lys23_Leu24insArgSer",  # protein insertion
         "p.Ter110GlnextTer17",  # stop-loss extension
-    ],
-)
-def test_protein_delins_insertion_and_extension_are_valid(text):
-    assert _one(text)["status"] == "valid"
+    ]:
+        with subtests.test(text=text):
+            assert _one(text)["status"] == "valid"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_protein_frameshift_forms_are_valid(subtests):
+    for text in [
         "p.Arg97ProfsTer23",
         "p.Arg97fs*23",
         "p.Arg97fsTer?",
-    ],
-)
-def test_protein_frameshift_forms_are_valid(text):
-    assert _one(text)["status"] == "valid"
+    ]:
+        with subtests.test(text=text):
+            assert _one(text)["status"] == "valid"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_malformed_frameshift_and_extension_tails_are_rejected(subtests):
+    for text in [
         "p.Arg97junkfs",
         "p.Arg97fsjunk",
         "p.Ter110badextstuff",
-    ],
-)
-def test_malformed_frameshift_and_extension_tails_are_rejected(text):
-    mention = _one(text)
-    assert mention["status"] == "malformed"
-    assert mention["reason"] == "invalid_amino_acid"
+    ]:
+        with subtests.test(text=text):
+            mention = _one(text)
+            assert mention["status"] == "malformed"
+            assert mention["reason"] == "invalid_amino_acid"
 
 
-@pytest.mark.parametrize("text", ["p.=", "p.?", "p.0", "p.(=)"])
-def test_protein_synonymous_and_unknown_are_valid(text):
-    assert _one(text)["status"] == "valid"
+def test_protein_synonymous_and_unknown_are_valid(subtests):
+    for text in ["p.=", "p.?", "p.0", "p.(=)"]:
+        with subtests.test(text=text):
+            assert _one(text)["status"] == "valid"
 
 
 def test_protein_position_without_edit_is_malformed():
@@ -231,25 +223,25 @@ def test_no_position_is_unparseable():
     assert mention["position"] is None and mention["edit"] is None
 
 
-@pytest.mark.parametrize("text", ["p.Met1?", "p.(Met1?)", "c.76?"])
-def test_unknown_consequence_question_mark_is_valid(text):
-    # e.g. p.Met1? (start-loss, effect unknown) is a valid HGVS descriptor.
-    mention = _one(text)
-    assert mention["edit"] == "?"
-    assert mention["status"] == "valid"
+def test_unknown_consequence_question_mark_is_valid(subtests):
+    for text in ["p.Met1?", "p.(Met1?)", "c.76?"]:
+        with subtests.test(text=text):
+            # e.g. p.Met1? (start-loss, effect unknown) is a valid HGVS descriptor.
+            mention = _one(text)
+            assert mention["edit"] == "?"
+            assert mention["status"] == "valid"
 
 
-@pytest.mark.parametrize(
-    "text", ["c.[76A>T]", "NM_000059.3:c.[76A>T]", "c.[76A>T];[88+1G>T]"]
-)
-def test_allele_bracket_notation_is_surfaced_not_dropped(text):
-    # Bracket/allele notation is beyond the single-variant subset, but must be
-    # captured and surfaced (not silently dropped) with a stable span.
-    mentions = parse_hgvs(text)
-    assert mentions, text  # at least one mention -- never zero (no silent loss)
-    first = mentions[0]
-    assert first["status"] == "unparseable"
-    assert text[first["span"][0] : first["span"][1]] == first["raw_text"]
+def test_allele_bracket_notation_is_surfaced_not_dropped(subtests):
+    for text in ["c.[76A>T]", "NM_000059.3:c.[76A>T]", "c.[76A>T];[88+1G>T]"]:
+        with subtests.test(text=text):
+            # Bracket/allele notation is beyond the single-variant subset, but must be
+            # captured and surfaced (not silently dropped) with a stable span.
+            mentions = parse_hgvs(text)
+            assert mentions, text  # at least one mention -- never zero (no silent loss)
+            first = mentions[0]
+            assert first["status"] == "unparseable"
+            assert text[first["span"][0] : first["span"][1]] == first["raw_text"]
 
 
 def test_insertion_without_sequence_is_flagged():
@@ -266,11 +258,12 @@ def test_insertion_with_non_nucleotide_payload_is_flagged():
     assert _one("c.76_77insZZ")["reason"] == "invalid_nucleotide"
 
 
-@pytest.mark.parametrize("text", ["c.=", "c.?"])
-def test_dna_no_change_and_unknown_are_valid(text):
-    mention = _one(text)
-    assert mention["status"] == "valid"
-    assert mention["position"] is None
+def test_dna_no_change_and_unknown_are_valid(subtests):
+    for text in ["c.=", "c.?"]:
+        with subtests.test(text=text):
+            mention = _one(text)
+            assert mention["status"] == "valid"
+            assert mention["position"] is None
 
 
 # ---------------------------------------------------------------------------

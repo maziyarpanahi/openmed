@@ -2,19 +2,86 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, Request
+from starlette.datastructures import MutableHeaders
+from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
+from strawberry.http.ides import GraphQL_IDE
 from strawberry.types import ExecutionResult
+from strawberry.types.unset import UNSET
 
-from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
+from openmed.core.config import PROFILE_ENV_VAR
+
+from .admission import REASON_GLOBAL_LIMIT
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE
+from .graphql_limits import (
+    GraphQLLimitCategory,
+    GraphQLLimitError,
+    GraphQLLimitViolation,
+    batch_violation,
+    deadline_violation,
+    graphql_limits_for_request,
+    graphql_limits_from_env,
+    record_graphql_rejection,
+    variable_depth_violation,
+)
+from .graphql_schema import (
+    ADMISSION_REJECTED_CODE,
+    ADMISSION_REJECTED_MESSAGE,
+    SAFE_RESOLVER_ERROR,
+    OpenMedGraphQLContext,
+    schema,
+)
+from .journey_access import JourneyAccessGate
 from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
 
 GRAPHQL_PATH = "/graphql"
+DEFAULT_PROFILE = "prod"
+GRAPHQL_IDE_PROFILE = "dev"
+GRAPHQL_PRIVACY_HEADERS = (
+    ("cache-control", "no-store"),
+    ("pragma", "no-cache"),
+    ("referrer-policy", "no-referrer"),
+)
+
+
+def graphql_ide_for_profile(profile: str) -> GraphQL_IDE | None:
+    """Return the interactive IDE only for an explicit development profile."""
+
+    return "graphiql" if profile == GRAPHQL_IDE_PROFILE else None
+
+
+class GraphQLPrivacyHeadersMiddleware:
+    """Attach no-store privacy headers to every GraphQL transport response."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not _is_graphql_path(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_privacy_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for name, value in GRAPHQL_PRIVACY_HEADERS:
+                    headers[name] = value
+            await send(message)
+
+        await self.app(scope, receive, send_with_privacy_headers)
+
+
+def _is_graphql_path(path: str) -> bool:
+    return path == GRAPHQL_PATH or path.startswith(f"{GRAPHQL_PATH}/")
 
 
 class PrivacySafeGraphQLRouter(GraphQLRouter):
@@ -26,6 +93,43 @@ class PrivacySafeGraphQLRouter(GraphQLRouter):
         result: ExecutionResult,
     ) -> GraphQLHTTPResponse:
         """Return GraphQL data while removing exception-derived messages."""
+        if result.errors and any(
+            error.extensions.get("code") == "OPENMED_FORBIDDEN"
+            for error in result.errors
+        ):
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": "Operation is not permitted.",
+                        "extensions": {"code": "OPENMED_FORBIDDEN"},
+                    }
+                ],
+            }
+        admission_reasons = [
+            error.extensions.get("reason")
+            for error in result.errors or ()
+            if error.extensions.get("code") == ADMISSION_REJECTED_CODE
+        ]
+        if admission_reasons:
+            # Drop partial results so a rejected document is retried whole.
+            reason = (
+                REASON_GLOBAL_LIMIT
+                if REASON_GLOBAL_LIMIT in admission_reasons
+                else admission_reasons[0]
+            )
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": ADMISSION_REJECTED_MESSAGE,
+                        "extensions": {
+                            "code": ADMISSION_REJECTED_CODE,
+                            "reason": reason,
+                        },
+                    }
+                ],
+            }
         response: dict[str, Any] = {"data": result.data}
         if result.errors:
             response["errors"] = [
@@ -35,14 +139,71 @@ class PrivacySafeGraphQLRouter(GraphQLRouter):
             response["extensions"] = result.extensions
         return response  # type: ignore[return-value]
 
+    async def run(
+        self,
+        request: Any,
+        context: Any = UNSET,
+        root_value: Any = UNSET,
+    ) -> Any:
+        """Run one HTTP operation under the configured GraphQL deadline.
+
+        The deadline covers body decoding, parsing, validation, resolver
+        execution, and result processing. On expiry the operation is cancelled
+        and a value-free ``OPENMED_GRAPHQL_TIMEOUT`` error is returned. Model
+        work already running in a worker thread keeps its admission permit and
+        warm-pool lease until the worker returns, then releases both.
+        """
+        if self.is_websocket_request(request):
+            return await super().run(request, context=context, root_value=root_value)
+        limits = graphql_limits_for_request(request)
+        deadline = asyncio.timeout(limits.deadline_seconds)
+        try:
+            async with deadline:
+                return await super().run(
+                    request, context=context, root_value=root_value
+                )
+        except GraphQLLimitError as error:
+            return _rejection_response(request, error.violation)
+        except RecursionError:
+            # Only the JSON body decoder recurses on client input before the
+            # document budgets run; report it as nested variables.
+            return _rejection_response(request, variable_depth_violation(limits))
+        except TimeoutError:
+            if not deadline.expired():
+                raise
+            return _rejection_response(request, deadline_violation(limits))
+
+    def _validate_batch_request(self, request_data: Any, protocol: Any) -> None:
+        """Reject every batched operation array with a stable error code."""
+        raise GraphQLLimitError(batch_violation())
+
 
 def mount_graphql(
     app: FastAPI,
     *,
     runtime_getter: Callable[[Request], ServiceRuntime],
     resource_getter: Callable[[Request], JourneyResourceCatalog],
+    access_getter: Callable[[Request], JourneyAccessGate] | None = None,
 ) -> None:
-    """Mount the GraphQL endpoint on an existing OpenMed service app."""
+    """Mount the POST-only GraphQL endpoint on an existing OpenMed service app.
+
+    Args:
+        app: Service application to extend.
+        runtime_getter: Returns the shared service runtime for a request.
+        resource_getter: Returns the shared Journey catalog for a request.
+        access_getter: Returns the shared Journey access gate. When omitted,
+            the gate on ``app.state.journey_access`` is used, or one is built
+            from the environment.
+    """
+
+    def default_access_getter(request: Request) -> JourneyAccessGate:
+        gate = getattr(request.app.state, "journey_access", None)
+        if not isinstance(gate, JourneyAccessGate):
+            gate = JourneyAccessGate.from_env()
+            request.app.state.journey_access = gate
+        return gate
+
+    resolve_access = access_getter or default_access_getter
 
     async def get_context(request: Request) -> OpenMedGraphQLContext:
         policy = getattr(request.app.state, "journey_access_policy", None)
@@ -52,21 +213,44 @@ def mount_graphql(
             runtime_getter(request),
             resource_getter(request),
             policy,
+            journey_access=resolve_access(request),
+            principal=request.scope.get("openmed.auth"),
         )
 
+    profile = os.getenv(PROFILE_ENV_VAR, DEFAULT_PROFILE)
     router = PrivacySafeGraphQLRouter(
         schema,
         context_getter=get_context,
-        graphql_ide="graphiql",
-        allow_queries_via_get=True,
+        graphql_ide=graphql_ide_for_profile(profile),
+        allow_queries_via_get=False,
         subscription_protocols=(),
         multipart_uploads_enabled=False,
     )
     app.include_router(router, prefix=GRAPHQL_PATH, include_in_schema=False)
+    app.state.graphql_limits = graphql_limits_from_env()
+
+
+def _rejection_response(request: Request, violation: GraphQLLimitViolation) -> Response:
+    record_graphql_rejection(request, violation)
+    error = violation.to_response_error()
+    if violation.category is GraphQLLimitCategory.BATCH:
+        # A batch is not a single well-formed GraphQL request, so no data key.
+        return JSONResponse({"errors": [error]}, status_code=400)
+    return JSONResponse({"data": None, "errors": [error]})
 
 
 def _safe_formatted_error(error: Any) -> dict[str, Any]:
     formatted = dict(error.formatted)
+    if error.extensions.get("code") == "model_not_served":
+        return {
+            "message": "Requested model is not served",
+            "extensions": {"code": "model_not_served"},
+        }
+    if error.extensions.get("code") == SHUTTING_DOWN:
+        return {
+            "message": SHUTTING_DOWN_MESSAGE,
+            "extensions": {"code": SHUTTING_DOWN, "retryable": True},
+        }
     if error.original_error is None:
         return formatted
 

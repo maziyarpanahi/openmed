@@ -53,18 +53,16 @@ def test_disclaimer_always_present_and_non_empty():
     assert guarded.to_dict()["disclaimer"] == CLINICAL_DECISION_SUPPORT_DISCLAIMER
 
 
-@pytest.mark.parametrize(
-    "disclaimer",
-    ["", "   ", None, "Clinician review required"],
-)
-def test_missing_or_noncanonical_disclaimer_is_rejected(disclaimer):
-    with pytest.raises(GuardrailValidationError):
-        build_guarded_suggestion(
-            "x",
-            [_synthetic_span()],
-            0.5,
-            disclaimer=disclaimer,
-        )
+def test_missing_or_noncanonical_disclaimer_is_rejected(subtests):
+    for disclaimer in ["", "   ", None, "Clinician review required"]:
+        with subtests.test(disclaimer=disclaimer):
+            with pytest.raises(GuardrailValidationError):
+                build_guarded_suggestion(
+                    "x",
+                    [_synthetic_span()],
+                    0.5,
+                    disclaimer=disclaimer,
+                )
 
 
 def test_validate_rejects_mapping_with_noncanonical_disclaimer():
@@ -137,20 +135,20 @@ def test_validate_rejects_autonomous_decision_mapping():
         validate_guarded_suggestion(payload)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_validate_rejects_non_boolean_safety_flags(subtests):
+    for field, value in [
         ("autonomous_decision", 0),
         ("autonomous_decision", "false"),
         ("requires_clinician_review", 1),
         ("requires_clinician_review", "true"),
-    ],
-)
-def test_validate_rejects_non_boolean_safety_flags(field, value):
-    payload = build_guarded_suggestion("suggestion", [_synthetic_span()], 0.6).to_dict()
-    payload[field] = value
-    with pytest.raises(GuardrailValidationError):
-        validate_guarded_suggestion(payload)
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = build_guarded_suggestion(
+                "suggestion", [_synthetic_span()], 0.6
+            ).to_dict()
+            payload[field] = value
+            with pytest.raises(GuardrailValidationError):
+                validate_guarded_suggestion(payload)
 
 
 def test_requires_clinician_review_cannot_be_disabled():
@@ -163,16 +161,20 @@ def test_requires_clinician_review_cannot_be_disabled():
         )
 
 
-@pytest.mark.parametrize("confidence", [-0.01, 1.01, float("nan")])
-def test_out_of_range_confidence_is_rejected(confidence):
-    with pytest.raises(GuardrailValidationError):
-        build_guarded_suggestion("suggestion", [_synthetic_span()], confidence)
+def test_out_of_range_confidence_is_rejected(subtests):
+    for confidence in [-0.01, 1.01, float("nan")]:
+        with subtests.test(confidence=confidence):
+            with pytest.raises(GuardrailValidationError):
+                build_guarded_suggestion("suggestion", [_synthetic_span()], confidence)
 
 
-@pytest.mark.parametrize("confidence", [0.0, 0.5, 1.0])
-def test_boundary_confidence_is_accepted(confidence):
-    guarded = build_guarded_suggestion("suggestion", [_synthetic_span()], confidence)
-    assert guarded.confidence == confidence
+def test_boundary_confidence_is_accepted(subtests):
+    for confidence in [0.0, 0.5, 1.0]:
+        with subtests.test(confidence=confidence):
+            guarded = build_guarded_suggestion(
+                "suggestion", [_synthetic_span()], confidence
+            )
+            assert guarded.confidence == confidence
 
 
 def test_synthetic_suggestion_round_trips_through_serialization():
@@ -225,16 +227,14 @@ def test_invalid_source_span_offsets_are_rejected():
         SourceSpan(start=4, end=4)
 
 
-@pytest.mark.parametrize(
-    "span",
-    [
+def test_source_span_mapping_requires_integer_offsets(subtests):
+    for span in [
         {"start": "1", "end": 2},
         {"start": 1.5, "end": 2},
-    ],
-)
-def test_source_span_mapping_requires_integer_offsets(span):
-    with pytest.raises(TypeError):
-        SourceSpan.from_obj(span)
+    ]:
+        with subtests.test(span=span):
+            with pytest.raises(TypeError):
+                SourceSpan.from_obj(span)
 
 
 def test_decorator_wraps_tuple_producer_into_validated_envelope():

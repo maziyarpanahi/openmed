@@ -89,28 +89,28 @@ def test_clean_relative_path_has_only_a_fingerprint():
     ]
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_windows_reserved_components_are_reported(subtests):
+    for path in [
         "models/CON.txt",
         "models/lpt1 ",
         "models/aux./weights.bin",
-    ],
-)
-def test_windows_reserved_components_are_reported(path):
-    report = audit_resource_paths([path])
+    ]:
+        with subtests.test(path=path):
+            report = audit_resource_paths([path])
 
-    assert RESERVED_COMPONENT in report.records[0].issue_categories
+            assert RESERVED_COMPONENT in report.records[0].issue_categories
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["/synthetic-root/file", r"\\server\share\file", "file:///synthetic/file"],
-)
-def test_host_specific_roots_are_reported(path):
-    report = audit_resource_paths([path])
+def test_host_specific_roots_are_reported(subtests):
+    for path in [
+        "/synthetic-root/file",
+        r"\\server\share\file",
+        "file:///synthetic/file",
+    ]:
+        with subtests.test(path=path):
+            report = audit_resource_paths([path])
 
-    assert ABSOLUTE_ROOT in report.records[0].issue_categories
+            assert ABSOLUTE_ROOT in report.records[0].issue_categories
 
 
 def test_input_errors_do_not_echo_source_values():
@@ -140,9 +140,8 @@ def test_unicode_normalization_drift_is_detected_without_other_path_changes():
     assert report.records[0].issue_categories == (NORMALIZATION_DRIFT,)
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_cross_platform_invalid_components_are_reserved(subtests):
+    for path in [
         "models/name:stream.json",
         "models/question?.json",
         "models/control\x00.json",
@@ -154,32 +153,30 @@ def test_unicode_normalization_drift_is_detected_without_other_path_changes():
         "models/COM\u00b9.txt",
         "models/" + ("a" * 256),
         "models/" + ("é" * 128),
-    ],
-)
-def test_cross_platform_invalid_components_are_reserved(path):
-    report = audit_resource_paths([path])
+    ]:
+        with subtests.test(path=path):
+            report = audit_resource_paths([path])
 
-    assert RESERVED_COMPONENT in report.records[0].issue_categories
-
-
-@pytest.mark.parametrize("component", ["a" * 255, ("é" * 127) + "a"])
-def test_component_at_portable_byte_limit_remains_clean(component):
-    report = audit_resource_paths([f"models/{component}"])
-
-    assert report.is_clean
+            assert RESERVED_COMPONENT in report.records[0].issue_categories
 
 
-@pytest.mark.parametrize(
-    "paths",
-    [
+def test_component_at_portable_byte_limit_remains_clean(subtests):
+    for component in ["a" * 255, ("é" * 127) + "a"]:
+        with subtests.test(component=component):
+            report = audit_resource_paths([f"models/{component}"])
+
+            assert report.is_clean
+
+
+def test_input_work_is_bounded(subtests):
+    for paths in [
         itertools.repeat("models/weights.bin", MAX_AUDIT_PATHS + 1),
         ["x" * (MAX_PATH_CHARACTERS + 1)],
         ["/".join(["part"] * (MAX_PATH_COMPONENTS + 1))],
-    ],
-)
-def test_input_work_is_bounded(paths):
-    with pytest.raises(PathPortabilityInputError):
-        audit_resource_paths(paths)
+    ]:
+        with subtests.test(paths=paths):
+            with pytest.raises(PathPortabilityInputError):
+                audit_resource_paths(paths)
 
 
 def test_hostile_iterator_failures_do_not_echo_source_values():

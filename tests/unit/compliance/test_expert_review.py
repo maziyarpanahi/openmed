@@ -196,56 +196,49 @@ def _report(*, reverse: bool = False) -> ExpertReviewEvidenceReport:
     )
 
 
-@pytest.mark.parametrize("missing_model", ["l_diversity", "t_closeness", "both"])
-def test_sensitive_attributes_require_complete_l_and_t_evidence(
-    missing_model: str,
-) -> None:
-    complete = _report().privacy_models
-    omit_l = missing_model in {"l_diversity", "both"}
-    omit_t = missing_model in {"t_closeness", "both"}
-    models = PrivacyModelEvidence(
-        configured_k=complete.configured_k,
-        pre_achieved_k=complete.pre_achieved_k,
-        achieved_k=complete.achieved_k,
-        l_variant=None if omit_l else "distinct",
-        configured_l=None if omit_l else complete.configured_l,
-        pre_achieved_l=None if omit_l else complete.pre_achieved_l,
-        achieved_l=None if omit_l else complete.achieved_l,
-        t_variant=None if omit_t else "variational",
-        configured_t=None if omit_t else complete.configured_t,
-        pre_achieved_t=None if omit_t else complete.pre_achieved_t,
-        achieved_t=None if omit_t else complete.achieved_t,
-    )
+def test_sensitive_attributes_require_complete_l_and_t_evidence(subtests) -> None:
+    for missing_model in ["l_diversity", "t_closeness", "both"]:
+        with subtests.test(missing_model=missing_model):
+            complete = _report().privacy_models
+            omit_l = missing_model in {"l_diversity", "both"}
+            omit_t = missing_model in {"t_closeness", "both"}
+            models = PrivacyModelEvidence(
+                configured_k=complete.configured_k,
+                pre_achieved_k=complete.pre_achieved_k,
+                achieved_k=complete.achieved_k,
+                l_variant=None if omit_l else "distinct",
+                configured_l=None if omit_l else complete.configured_l,
+                pre_achieved_l=None if omit_l else complete.pre_achieved_l,
+                achieved_l=None if omit_l else complete.achieved_l,
+                t_variant=None if omit_t else "variational",
+                configured_t=None if omit_t else complete.configured_t,
+                pre_achieved_t=None if omit_t else complete.pre_achieved_t,
+                achieved_t=None if omit_t else complete.achieved_t,
+            )
 
-    with pytest.raises(
-        ValueError,
-        match="sensitive attributes require both l-diversity and t-closeness",
-    ):
-        replace(_report(), privacy_models=models)
+            with pytest.raises(
+                ValueError,
+                match="sensitive attributes require both l-diversity and t-closeness",
+            ):
+                replace(_report(), privacy_models=models)
 
 
-@pytest.mark.parametrize(
-    ("longitudinal", "overlap", "status"),
-    [
+def test_single_release_composition_must_remain_unassessed(subtests) -> None:
+    for longitudinal, overlap, status in [
         (True, False, "not_assessed"),
         (False, True, "not_assessed"),
         (False, False, "increase_observed"),
         (True, True, "inconclusive"),
-    ],
-)
-def test_single_release_composition_must_remain_unassessed(
-    longitudinal: bool,
-    overlap: bool,
-    status: str,
-) -> None:
-    with pytest.raises(ValueError, match="single-release"):
-        CompositionEvidence(
-            release_count=1,
-            longitudinal_linkage_assessed=longitudinal,
-            prior_release_overlap_assessed=overlap,
-            risk_status=status,
-            evidence_digest=_digest("single release"),
-        )
+    ]:
+        with subtests.test(longitudinal=longitudinal, overlap=overlap, status=status):
+            with pytest.raises(ValueError, match="single-release"):
+                CompositionEvidence(
+                    release_count=1,
+                    longitudinal_linkage_assessed=longitudinal,
+                    prior_release_overlap_assessed=overlap,
+                    risk_status=status,
+                    evidence_digest=_digest("single release"),
+                )
 
 
 def test_bundle_contains_required_aggregate_evidence_and_placeholders() -> None:
@@ -388,23 +381,21 @@ def test_search_evidence_preserves_schema_two_positional_constructor() -> None:
     assert search.optimality_proven is False
 
 
-@pytest.mark.parametrize(
-    "duplicate_prefix",
-    [
+def test_json_parser_rejects_duplicate_keys_before_integrity_verification(
+    subtests,
+) -> None:
+    for duplicate_prefix in [
         '"schema_version":999,',
         '"title":"discarded-sensitive-canary",',
-    ],
-)
-def test_json_parser_rejects_duplicate_keys_before_integrity_verification(
-    duplicate_prefix: str,
-) -> None:
-    rendered = _report().to_json(indent=None)
-    ambiguous = "{" + duplicate_prefix + rendered[1:]
+    ]:
+        with subtests.test(duplicate_prefix=duplicate_prefix):
+            rendered = _report().to_json(indent=None)
+            ambiguous = "{" + duplicate_prefix + rendered[1:]
 
-    with pytest.raises(ValueError, match="invalid JSON") as raised:
-        ExpertReviewEvidenceReport.from_json(ambiguous)
+            with pytest.raises(ValueError, match="invalid JSON") as raised:
+                ExpertReviewEvidenceReport.from_json(ambiguous)
 
-    assert "discarded-sensitive-canary" not in str(raised.value)
+            assert "discarded-sensitive-canary" not in str(raised.value)
 
 
 def test_json_parser_rejects_nested_duplicate_keys() -> None:
@@ -424,20 +415,18 @@ def test_json_parser_rejects_nested_duplicate_keys() -> None:
     assert "discarded-sensitive-canary" not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "constant",
-    ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"],
-)
-def test_json_parser_rejects_non_finite_numbers(constant: str) -> None:
-    rendered = _report().to_json(indent=None)
-    malformed = rendered.replace(
-        '"schema_version":3',
-        f'"schema_version":{constant}',
-        1,
-    )
+def test_json_parser_rejects_non_finite_numbers(subtests) -> None:
+    for constant in ["NaN", "Infinity", "-Infinity", "1e999", "-1e999"]:
+        with subtests.test(constant=constant):
+            rendered = _report().to_json(indent=None)
+            malformed = rendered.replace(
+                '"schema_version":3',
+                f'"schema_version":{constant}',
+                1,
+            )
 
-    with pytest.raises(ValueError, match="invalid JSON"):
-        ExpertReviewEvidenceReport.from_json(malformed)
+            with pytest.raises(ValueError, match="invalid JSON"):
+                ExpertReviewEvidenceReport.from_json(malformed)
 
 
 def test_bundle_does_not_accept_or_leak_row_level_canaries() -> None:
@@ -509,9 +498,8 @@ def test_markdown_has_required_review_and_method_sections() -> None:
     assert "Qualified expert name: ____________________" in markdown
 
 
-@pytest.mark.parametrize(
-    ("factory", "message"),
-    [
+def test_invalid_aggregate_inputs_are_rejected(subtests) -> None:
+    for factory, message in [
         (
             lambda: EvidenceDigests(
                 source_dataset=_digest("source dataset"),
@@ -558,14 +546,10 @@ def test_markdown_has_required_review_and_method_sections() -> None:
             lambda: AttributeRoleReview("patient_id", ("privacy_unit",)),
             "paired only with direct_identifier",
         ),
-    ],
-)
-def test_invalid_aggregate_inputs_are_rejected(
-    factory: object,
-    message: str,
-) -> None:
-    with pytest.raises((TypeError, ValueError), match=message):
-        factory()  # type: ignore[operator]
+    ]:
+        with subtests.test(factory=factory, message=message):
+            with pytest.raises((TypeError, ValueError), match=message):
+                factory()  # type: ignore[operator]
 
 
 def test_disclaimer_and_review_placeholders_cannot_be_removed() -> None:

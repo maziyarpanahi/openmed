@@ -22,6 +22,8 @@ from enum import Enum
 from itertools import combinations
 from typing import Any, Mapping, Sequence
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 DOCUMENT_LINKING_ADVISORY = (
     "Document-linking outputs are assistive software outputs, not a medical "
     "device, diagnosis, or substitute for qualified clinical judgment."
@@ -379,7 +381,7 @@ def _parse_datetime(value: Any) -> datetime | None:
         parsed = value
     elif isinstance(value, str):
         try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
         except ValueError:
             return None
     else:

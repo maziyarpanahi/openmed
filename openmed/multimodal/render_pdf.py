@@ -30,10 +30,26 @@ import math
 import os
 import tempfile
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+    merge_code_coverage,
+)
+from .documents_pdf import (
+    _annotation_entities,
+    _prepare_annotation_source,
+    _snapshot_pdf_source,
+    project_text_spans,
+)
 from .exceptions import MissingDependencyError
 from .verify_pdf import (
     PdfFidelityReport,
@@ -219,6 +235,13 @@ class PdfRedactionResult:
     region_fidelity: PdfFidelityReport
     text_removal: PdfTextRemovalReport
     layout_fidelity: PdfLayoutFidelityReport
+    code_coverage: CodeCoverageReport = field(
+        default_factory=CodeCoverageReport, kw_only=True
+    )
+    residual_code_coverage: CodeCoverageReport = field(
+        default_factory=CodeCoverageReport, kw_only=True
+    )
+    annotations: tuple[Mapping[str, Any], ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -227,12 +250,15 @@ class PdfRedactionResult:
             self.region_fidelity.passed
             and self.text_removal.passed
             and self.layout_fidelity.passed
+            and not self.residual_code_coverage.regions
         )
 
     def to_dict(self) -> dict[str, Any]:
         """Return audit-safe evidence without echoing a potentially identifying path."""
         return {
             "check": "redacted_pdf_render",
+            "code_coverage": self.code_coverage.to_dict(),
+            "residual_code_coverage": self.residual_code_coverage.to_dict(),
             "passed": self.passed,
             "page_count": self.page_count,
             "region_count": self.region_count,
@@ -241,6 +267,7 @@ class PdfRedactionResult:
             "region_fidelity": self.region_fidelity.to_dict(),
             "text_removal": self.text_removal.to_dict(),
             "layout_fidelity": self.layout_fidelity.to_dict(),
+            "annotations": list(self.annotations),
         }
 
     def summary(self) -> str:
@@ -268,6 +295,9 @@ def render_redacted_pdf(
     max_total_pixels: int = _DEFAULT_MAX_TOTAL_PIXELS,
     max_regions: int = _DEFAULT_MAX_REGIONS,
     overwrite: bool = False,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
+    annotation_detector: Any = None,
 ) -> PdfRedactionResult:
     """Render and verify a clean redacted PDF from projected rectangles.
 
@@ -289,6 +319,12 @@ def render_redacted_pdf(
         max_total_pixels: Maximum rendered pixels accepted across all pages.
         max_regions: Maximum number of distinct redaction rectangles.
         overwrite: Permit atomically replacing an existing output file.
+        code_detector: Local code provider, or optional ZXing by default.
+        code_detection_policy: Fail closed or record unavailable code coverage.
+        annotation_detector: Optional callable that detects PHI offsets in the
+            annotation Contents/appearance text. Omit to remove all annotations.
+            Unmappable appearances fail closed; matched spans redact the full
+            annotation extent. No annotation objects survive in either mode.
 
     Returns:
         A :class:`PdfRedactionResult` containing PHI-safe verification evidence.
@@ -316,23 +352,54 @@ def render_redacted_pdf(
     )
     max_regions = _validate_positive_limit(max_regions, name="max_regions")
     normalized_regions = _normalize_regions(regions)
-    if not normalized_regions:
-        raise ValueError("At least one redaction region is required")
+    source_path = Path(source)
+    output_path = Path(output)
+    _validate_paths(source_path, output_path, overwrite=overwrite)
+    pdfplumber, pikepdf, image_draw = _import_render_stack()
+    if annotation_detector is not None and not callable(annotation_detector):
+        raise ValueError("annotation_detector_required")
+    source_failed = False
+    try:
+        content = _snapshot_pdf_source(source_path)
+        prepared = _prepare_annotation_source(
+            BytesIO(content), include_annotations=annotation_detector is not None
+        )
+    except MissingDependencyError:
+        raise
+    except ValueError:
+        if annotation_detector is not None:
+            raise
+        source_failed = True
+    if source_failed:
+        raise RuntimeError("Source PDF could not be rendered safely") from None
+    if annotation_detector is not None:
+        try:
+            detections = _annotation_entities(
+                prepared.document,
+                annotation_detector,
+                None,
+                max_detections=max_regions,
+            )
+            annotation_regions = project_text_spans(prepared.document, detections)
+        except Exception:
+            annotation_regions = None
+        if annotation_regions is None:
+            raise ValueError("annotation_detection_failed") from None
+        normalized_regions = _normalize_regions(
+            (*normalized_regions, *annotation_regions)
+        )
     if len(normalized_regions) > max_regions:
         raise ValueError(
             f"PDF redaction region count exceeds max_regions={max_regions}"
         )
 
-    source_path = Path(source)
-    output_path = Path(output)
-    _validate_paths(source_path, output_path, overwrite=overwrite)
-    pdfplumber, pikepdf, image_draw = _import_render_stack()
-
     output_pdf = pikepdf.Pdf.new()
+    code_reports = []
+    code_region_boxes: list[tuple[int, tuple[float, float, float, float]]] = []
     try:
         try:
-            _reject_type3_fonts(source_path, pikepdf)
-            with pdfplumber.open(source_path) as source_pdf:
+            _reject_type3_fonts(BytesIO(content), pikepdf)
+            with pdfplumber.open(BytesIO(prepared.content)) as source_pdf:
                 pages = tuple(getattr(source_pdf, "pages", ()))
                 if not pages:
                     raise ValueError("Source PDF contains no pages")
@@ -353,6 +420,35 @@ def render_redacted_pdf(
                     )
                     width, height = _page_size(page)
                     image = _render_page(page, resolution=render_dpi)
+                    code_report = detect_code_regions(
+                        image,
+                        detector=code_detector,
+                        policy=code_detection_policy,
+                        page=page_index,
+                        max_regions=max_regions,
+                    )
+                    code_reports.append(code_report)
+                    code_regions = tuple(
+                        PdfRedactionRegion(
+                            page_index,
+                            (
+                                region.bbox[0] * width / image.width,
+                                region.bbox[1] * height / image.height,
+                                region.bbox[2] * width / image.width,
+                                region.bbox[3] * height / image.height,
+                            ),
+                            "CODE_REGION",
+                        )
+                        for region in code_report.regions
+                    )
+                    code_regions = _pad_regions(code_regions, pages)
+                    code_region_boxes.extend(
+                        (region.page, region.bbox) for region in code_regions
+                    )
+                    normalized_regions += code_regions
+                    if len(normalized_regions) > max_regions:
+                        raise ValueError("PDF redaction region limit exceeded")
+                    page_regions += code_regions
                     _burn_redactions(
                         image,
                         page_regions,
@@ -375,6 +471,8 @@ def render_redacted_pdf(
         except Exception:
             raise RuntimeError("Source PDF could not be rendered safely") from None
 
+        if not normalized_regions:
+            raise ValueError("At least one redaction region is required")
         temporary_path = _temporary_output_path(output_path)
         try:
             try:
@@ -387,7 +485,7 @@ def render_redacted_pdf(
                     deterministic_id=True,
                 )
                 result = _verify_rendered_output(
-                    source_path,
+                    BytesIO(prepared.content),
                     temporary_path,
                     output_path,
                     normalized_regions,
@@ -400,8 +498,27 @@ def render_redacted_pdf(
                     max_page_pixels=max_page_pixels,
                     max_total_pixels=max_total_pixels,
                     pdfplumber=pdfplumber,
+                    code_region_boxes=tuple(code_region_boxes),
+                    annotations=prepared.report,
                 )
-            except PdfRenderVerificationError:
+                residual_reports = []
+                with pdfplumber.open(temporary_path) as verified_pdf:
+                    for page_index, page in enumerate(verified_pdf.pages):
+                        with _render_page(page, resolution=render_dpi) as image:
+                            report = detect_code_regions(
+                                image,
+                                detector=code_detector,
+                                policy=code_detection_policy,
+                                page=page_index,
+                            )
+                            assert_no_residual_codes(report)
+                            residual_reports.append(report)
+                result = replace(
+                    result,
+                    code_coverage=merge_code_coverage(code_reports),
+                    residual_code_coverage=merge_code_coverage(residual_reports),
+                )
+            except (PdfRenderVerificationError, CodeDetectionError):
                 raise
             except Exception:
                 raise RuntimeError(
@@ -474,8 +591,9 @@ def measure_pdf_layout_fidelity(
         raise ValueError("At least one redaction region is required")
 
     pdfplumber, image_chops, image_draw, image_stat = _import_measure_stack()
+    original_source = _prepare_annotation_source(original)
     with (
-        pdfplumber.open(original) as original_pdf,
+        pdfplumber.open(BytesIO(original_source.content)) as original_pdf,
         pdfplumber.open(redacted) as redacted_pdf,
     ):
         original_pages = tuple(getattr(original_pdf, "pages", ()))
@@ -551,7 +669,7 @@ def measure_pdf_layout_fidelity(
 
 
 def _verify_rendered_output(
-    source: Path,
+    source: Any,
     temporary: Path,
     output: Path,
     regions: tuple[PdfRedactionRegion, ...],
@@ -565,6 +683,8 @@ def _verify_rendered_output(
     max_page_pixels: int,
     max_total_pixels: int,
     pdfplumber: Any,
+    code_region_boxes: tuple[tuple[int, tuple[float, float, float, float]], ...] = (),
+    annotations: tuple[Mapping[str, Any], ...],
 ) -> PdfRedactionResult:
     region_payload = tuple(region.to_dict() for region in regions)
     region_fidelity = verify_redacted_pdf(
@@ -574,6 +694,18 @@ def _verify_rendered_output(
         rasterizer=_cached_region_rasterizer(pdfplumber),
     )
     text_removal = verify_redacted_text_removed(source, temporary, region_payload)
+    # Keep actual source counts unchanged. Only boxes located by the code
+    # provider may use pixel evidence instead of selectable-text evidence.
+    code_boxes = set(code_region_boxes)
+    text_removal = replace(
+        text_removal,
+        regions=tuple(
+            replace(region, source_text_required=False)
+            if (region.page, region.bbox) in code_boxes
+            else region
+            for region in text_removal.regions
+        ),
+    )
     layout_fidelity = measure_pdf_layout_fidelity(
         source,
         temporary,
@@ -594,6 +726,7 @@ def _verify_rendered_output(
         region_fidelity=region_fidelity,
         text_removal=text_removal,
         layout_fidelity=layout_fidelity,
+        annotations=annotations,
     )
 
 
@@ -818,9 +951,11 @@ def _cached_region_rasterizer(
         if page != cached_page:
             cached_images.clear()
             cached_page = page
-        key = os.fspath(path)
+        key = os.fspath(path) if isinstance(path, (str, Path)) else str(id(path))
         cached = cached_images.get(key)
         if cached is None:
+            if hasattr(path, "seek"):
+                path.seek(0)
             with pdfplumber.open(path) as pdf:
                 page_obj = pdf.pages[page]
                 page_size = _page_size(page_obj)
@@ -989,7 +1124,7 @@ def _validate_page_budget(
             )
 
 
-def _reject_type3_fonts(source: Path, pikepdf: Any) -> None:
+def _reject_type3_fonts(source: BinaryIO, pikepdf: Any) -> None:
     with pikepdf.open(source) as pdf:
         for obj in pdf.objects:
             try:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from openmed.core import LanguagePackRegistry, get_language_pack, pack_coherence_report
 from openmed.core.language_pack_catalog import BUILTIN_LANGUAGE_PACKS
 from openmed.core.language_pack_coherence import APPROXIMATED, CAPABILITY_SLOTS
@@ -35,6 +37,7 @@ def test_builtin_bootstrap_registers_the_reference_declarations_once() -> None:
         assert get_language_pack(pack.code) is pack
 
 
+@pytest.mark.slow
 def test_cross_script_reference_packs_have_no_empty_capability_slots() -> None:
     rows = {row["language"]: row for row in pack_coherence_report()}
 

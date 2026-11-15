@@ -54,7 +54,8 @@ from openmed.interop.ingest import (
     TextEvidenceAdapter,
 )
 
-store = SQLiteIngestionStore("./journey.sqlite3")
+# `encryption` is a JourneyStoreEncryption; see the local Journey store guide.
+store = SQLiteIngestionStore("./journey.sqlite3", encryption=encryption)
 adapter = TextEvidenceAdapter()
 pipeline = IngestionToFactPipeline(store, components)
 source = "caller-held clinical text"

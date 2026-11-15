@@ -12,7 +12,7 @@ Install the GLiNER optional dependencies:
 uv pip install -e ".[gliner]"
 ```
 
-The inference examples require a local zero-shot model entry in
+The indexed examples below use a local zero-shot model entry in
 `models/index.json`. Replace `gliner-biomed-tiny` with a model identifier from
 your local index if needed.
 

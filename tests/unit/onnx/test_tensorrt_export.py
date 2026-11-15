@@ -255,21 +255,20 @@ def test_certify_tensorrt_reference_rejects_span_change() -> None:
         )
 
 
-@pytest.mark.parametrize("invalid_value", [np.nan, np.inf, -np.inf])
-def test_certify_tensorrt_reference_rejects_non_finite_logits(
-    invalid_value: float,
-) -> None:
-    module = _export_module()
-    reference = np.array([[[0.9, 0.1]]], dtype=np.float32)
-    candidate = reference.copy()
-    candidate[0, 0, 0] = invalid_value
+def test_certify_tensorrt_reference_rejects_non_finite_logits(subtests) -> None:
+    for invalid_value in [np.nan, np.inf, -np.inf]:
+        with subtests.test(invalid_value=invalid_value):
+            module = _export_module()
+            reference = np.array([[[0.9, 0.1]]], dtype=np.float32)
+            candidate = reference.copy()
+            candidate[0, 0, 0] = invalid_value
 
-    with pytest.raises(module.TensorRTVerificationError, match="finite"):
-        module.certify_tensorrt_reference(
-            reference_logits=reference,
-            tensorrt_logits=candidate,
-            id2label={0: "O", 1: "B-NAME"},
-        )
+            with pytest.raises(module.TensorRTVerificationError, match="finite"):
+                module.certify_tensorrt_reference(
+                    reference_logits=reference,
+                    tensorrt_logits=candidate,
+                    id2label={0: "O", 1: "B-NAME"},
+                )
 
 
 def test_certify_tensorrt_reference_rejects_invalid_evidence_shape_and_tolerance() -> (
@@ -857,9 +856,8 @@ def test_tensorrt_latency_measurement_records_distinct_p50_and_p95(
     assert record.p95_latency_ms == pytest.approx(10.0)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_tensorrt_benchmark_record_rejects_invalid_metrics(subtests) -> None:
+    for field, value in [
         ("latency_ms", float("nan")),
         ("latency_ms", 0.0),
         ("p95_latency_ms", 3.0),
@@ -867,27 +865,23 @@ def test_tensorrt_latency_measurement_records_distinct_p50_and_p95(
         ("sample_count", 0),
         ("batch_size", 0),
         ("sequence_length", 0),
-    ],
-)
-def test_tensorrt_benchmark_record_rejects_invalid_metrics(
-    field: str,
-    value: object,
-) -> None:
-    module = _export_module()
-    kwargs = {
-        "device_tier": "jetson-orin",
-        "device": "Orin AGX",
-        "precision": "fp16",
-        "latency_ms": 4.0,
-        "throughput_items_per_second": 250.0,
-        "sample_count": 3,
-        "batch_size": 1,
-        "sequence_length": 128,
-    }
-    kwargs[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            module = _export_module()
+            kwargs = {
+                "device_tier": "jetson-orin",
+                "device": "Orin AGX",
+                "precision": "fp16",
+                "latency_ms": 4.0,
+                "throughput_items_per_second": 250.0,
+                "sample_count": 3,
+                "batch_size": 1,
+                "sequence_length": 128,
+            }
+            kwargs[field] = value
 
-    with pytest.raises((TypeError, ValueError)):
-        module.TensorRTBenchmarkRecord(**kwargs)
+            with pytest.raises((TypeError, ValueError)):
+                module.TensorRTBenchmarkRecord(**kwargs)
 
 
 def test_tensorrt_benchmark_report_rejects_duplicate_device_tiers() -> None:

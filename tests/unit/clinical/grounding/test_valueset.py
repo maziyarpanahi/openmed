@@ -507,15 +507,16 @@ def test_remote_cache_is_bound_to_endpoint(tmp_path) -> None:
     assert not result.provenance.cache_hit
 
 
-@pytest.mark.parametrize("field, value", [("offset", 1), ("total", 1)])
-def test_remote_inconsistent_page_metadata_fails_closed(field, value) -> None:
-    payload = _remote_valueset()
-    payload["expansion"][field] = value
-    engine = ValueSetExpansionEngine(
-        "https://one.example/fhir", client=_Client(payload)
-    )
-    with pytest.raises(ValueSetExpansionResponseError):
-        engine.expand_valueset(VALUESET_URL)
+def test_remote_inconsistent_page_metadata_fails_closed(subtests) -> None:
+    for field, value in [("offset", 1), ("total", 1)]:
+        with subtests.test(field=field, value=value):
+            payload = _remote_valueset()
+            payload["expansion"][field] = value
+            engine = ValueSetExpansionEngine(
+                "https://one.example/fhir", client=_Client(payload)
+            )
+            with pytest.raises(ValueSetExpansionResponseError):
+                engine.expand_valueset(VALUESET_URL)
 
 
 def test_valueset_version_is_not_inferred_from_code_system_version() -> None:

@@ -431,6 +431,7 @@ def ground(
     normalize_composites: bool = False,
     composite_atomic_terms: Iterable[str] | None = None,
     postcoordination: PostCoordinationStage | None = None,
+    verify: object = False,
 ) -> GroundingResult:
     """Ground text or extracted entities against local vocabulary snapshots.
 
@@ -502,6 +503,10 @@ def ground(
         postcoordination: Optional user-key-gated SNOMED expression stage. It is
             consulted only after lookup abstains or scores below the stage's
             pre-coordination threshold.
+        verify: Opt in with ``True`` for configured local NLI, an explicit
+            registry alias or local backend object. Concept displays are
+            checked against exact raw-text source slices. Entity-only input
+            without resolvable source text yields abstention evidence.
 
     Returns:
         A :class:`GroundingResult`. Iteration preserves the existing
@@ -580,13 +585,35 @@ def ground(
             composite_atomic_terms=composite_atomic_terms,
             postcoordination=postcoordination,
         )
-    return GroundingResult.from_spans(
+    result = GroundingResult.from_spans(
         grounded_spans,
         systems=ordered_systems,
         language=effective_language,
         top_k=top_k,
         offline=offline,
     )
+    if verify is not False:
+        from openmed.clinical.nli import _verify_claim_spans
+
+        source = text_or_entities if isinstance(text_or_entities, str) else None
+        offsets = [
+            (concept.start, concept.end)
+            if source is not None
+            and source[concept.start : concept.end] == concept.surface_text
+            else None
+            for concept in result.concepts
+        ]
+        checks = _verify_claim_spans(
+            [
+                concept.display if concept.code is not None else None
+                for concept in result.concepts
+            ],
+            source,
+            offsets,
+            option=verify,
+        )
+        result = replace(result, verification=checks)
+    return result
 
 
 def ground_payload(

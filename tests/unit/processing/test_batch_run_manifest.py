@@ -367,49 +367,48 @@ def test_manifest_missing_a_required_field_is_refused(tmp_path: Path) -> None:
         LocalFileRunManifestStore(path).load()
 
 
-@pytest.mark.parametrize(
-    ("crash_phase", "expect_replaced"),
-    [
+def test_manifest_survives_every_crash_point(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for crash_phase, expect_replaced in [
         ("after_write", False),
         ("after_fsync", False),
         ("before_replace", False),
         ("after_replace", True),
         ("after_directory_fsync", True),
-    ],
-)
-def test_manifest_survives_every_crash_point(
-    tmp_path: Path,
-    crash_phase: str,
-    expect_replaced: bool,
-) -> None:
-    path = tmp_path / "run-manifest.json"
-    reader = LocalFileRunManifestStore(path)
+    ]:
+        with subtests.test(crash_phase=crash_phase, expect_replaced=expect_replaced):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "run-manifest.json"
+            reader = LocalFileRunManifestStore(path)
 
-    first = _manifest()
-    reader.save(first)
-    second = replace(first, updated_at=2_000.0)
+            first = _manifest()
+            reader.save(first)
+            second = replace(first, updated_at=2_000.0)
 
-    observed: list[str] = []
+            observed: list[str] = []
 
-    def crash_hook(phase: str, target: Path) -> None:
-        assert target == path
-        observed.append(phase)
-        if phase == crash_phase:
-            raise RuntimeError("simulated power loss")
+            def crash_hook(phase: str, target: Path) -> None:
+                assert target == path
+                observed.append(phase)
+                if phase == crash_phase:
+                    raise RuntimeError("simulated power loss")
 
-    with pytest.raises(RuntimeError, match="simulated power loss"):
-        LocalFileRunManifestStore(path, atomic_write_hook=crash_hook).save(second)
+            with pytest.raises(RuntimeError, match="simulated power loss"):
+                LocalFileRunManifestStore(path, atomic_write_hook=crash_hook).save(
+                    second
+                )
 
-    # The crash point really fired, and fired where the write sequence says it does.
-    assert observed[-1] == crash_phase
+            # The crash point really fired, and fired where the write sequence says it does.
+            assert observed[-1] == crash_phase
 
-    persisted = reader.load()
-    assert persisted is not None
-    assert persisted in {first, second}
-    # Non-vacuous: the on-disk generation differs across the rename boundary.
-    assert persisted.updated_at == (2_000.0 if expect_replaced else 1_000.0)
-    assert persisted == (second if expect_replaced else first)
-    assert not list(tmp_path.glob(f".{path.name}.*.tmp"))
+            persisted = reader.load()
+            assert persisted is not None
+            assert persisted in {first, second}
+            # Non-vacuous: the on-disk generation differs across the rename boundary.
+            assert persisted.updated_at == (2_000.0 if expect_replaced else 1_000.0)
+            assert persisted == (second if expect_replaced else first)
+            assert not list(tmp_path.glob(f".{path.name}.*.tmp"))
 
 
 # --- Resume semantics ------------------------------------------------------
@@ -745,14 +744,15 @@ def test_run_id_carries_the_same_bounds_as_the_other_free_text_labels(
 # --- Non-finite floats -----------------------------------------------------
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
-def test_non_finite_timestamps_are_refused(bad: float) -> None:
-    manifest = _manifest()
+def test_non_finite_timestamps_are_refused(subtests) -> None:
+    for bad in [float("nan"), float("inf"), float("-inf")]:
+        with subtests.test(bad=bad):
+            manifest = _manifest()
 
-    with pytest.raises(RunManifestError, match="finite"):
-        replace(manifest.shard(0), started_at=bad)
-    with pytest.raises(RunManifestError, match="finite"):
-        replace(manifest, updated_at=bad)
+            with pytest.raises(RunManifestError, match="finite"):
+                replace(manifest.shard(0), started_at=bad)
+            with pytest.raises(RunManifestError, match="finite"):
+                replace(manifest, updated_at=bad)
 
 
 def test_non_finite_timestamps_are_refused_on_load(tmp_path: Path) -> None:

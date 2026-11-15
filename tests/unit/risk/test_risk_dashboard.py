@@ -469,9 +469,8 @@ def test_release_dashboard_drops_unsafe_control_and_bidi_labels():
     assert "Canary Name" not in html
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_release_dashboard_never_echoes_strings_from_numeric_fields(subtests) -> None:
+    for path in [
         ("row_count",),
         ("privacy_unit_count",),
         ("policy", "target_k"),
@@ -484,25 +483,25 @@ def test_release_dashboard_drops_unsafe_control_and_bidi_labels():
         ("attribute_disclosure", 0, "l_diversity", "violating_classes"),
         ("attribute_disclosure", 0, "t_closeness", "achieved"),
         ("attribute_disclosure", 0, "t_closeness", "violating_classes"),
-    ],
-)
-def test_release_dashboard_never_echoes_strings_from_numeric_fields(
-    path: tuple[str | int, ...],
+    ]:
+        with subtests.test(path=path):
+            payload = deepcopy(
+                assess_release(_release_rows(), _release_policy()).to_dict()
+            )
+            target = payload
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = "numeric-field-canary"
+
+            html = render_release_assessment_dashboard(payload)
+
+            assert "numeric-field-canary" not in html
+
+
+def test_anonymization_dashboard_never_echoes_strings_from_numeric_fields(
+    subtests,
 ) -> None:
-    payload = deepcopy(assess_release(_release_rows(), _release_policy()).to_dict())
-    target = payload
-    for key in path[:-1]:
-        target = target[key]
-    target[path[-1]] = "numeric-field-canary"
-
-    html = render_release_assessment_dashboard(payload)
-
-    assert "numeric-field-canary" not in html
-
-
-@pytest.mark.parametrize(
-    "path",
-    [
+    for path in [
         ("generalization", "information_loss"),
         ("utility", "row_suppression_rate"),
         ("utility", "privacy_unit_suppression_rate"),
@@ -510,22 +509,19 @@ def test_release_dashboard_never_echoes_strings_from_numeric_fields(
         ("utility", "released_rows"),
         ("generalization", "levels", 0, "level"),
         ("generalization", "levels", 0, "loss"),
-    ],
-)
-def test_anonymization_dashboard_never_echoes_strings_from_numeric_fields(
-    path: tuple[str | int, ...],
-) -> None:
-    payload = deepcopy(
-        anonymize_release(_release_rows(), _release_policy()).to_safe_dict()
-    )
-    target = payload
-    for key in path[:-1]:
-        target = target[key]
-    target[path[-1]] = "numeric-field-canary"
+    ]:
+        with subtests.test(path=path):
+            payload = deepcopy(
+                anonymize_release(_release_rows(), _release_policy()).to_safe_dict()
+            )
+            target = payload
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = "numeric-field-canary"
 
-    html = render_release_assessment_dashboard(payload)
+            html = render_release_assessment_dashboard(payload)
 
-    assert "numeric-field-canary" not in html
+            assert "numeric-field-canary" not in html
 
 
 def test_write_release_assessment_dashboard_writes_safe_balanced_html(tmp_path):

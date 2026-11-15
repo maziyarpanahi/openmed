@@ -23,9 +23,8 @@ def test_conditional_is_hypothetical():
     assert resolve_temporality("if chest pain recurs") == "hypothetical"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_historical_cue_families(subtests):
+    for text in [
         "h/o myocardial infarction",
         "hx of stroke",
         "status post CABG",
@@ -34,35 +33,30 @@ def test_conditional_is_hypothetical():
         "pneumonia resolved",
         "fracture in the past",
         "prior DVT",
-    ],
-)
-def test_historical_cue_families(text):
-    assert resolve_temporality(text) == HISTORICAL
+    ]:
+        with subtests.test(text=text):
+            assert resolve_temporality(text) == HISTORICAL
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_hypothetical_cue_families(subtests):
+    for text in [
         "should fever develop",
         "in case of bleeding",
         "in the event of shock",
         "unless symptoms worsen",
-    ],
-)
-def test_hypothetical_cue_families(text):
-    assert resolve_temporality(text) == HYPOTHETICAL
+    ]:
+        with subtests.test(text=text):
+            assert resolve_temporality(text) == HYPOTHETICAL
 
 
-@pytest.mark.parametrize(
-    ("text", "expected"),
-    [
+def test_multiword_cues_tolerate_clinical_whitespace(subtests):
+    for text, expected in [
         ("history\nof MI", HISTORICAL),
         ("status\tpost CABG", HISTORICAL),
         ("in case\nof bleeding", HYPOTHETICAL),
-    ],
-)
-def test_multiword_cues_tolerate_clinical_whitespace(text, expected):
-    assert resolve_temporality(text) == expected
+    ]:
+        with subtests.test(text=text, expected=expected):
+            assert resolve_temporality(text) == expected
 
 
 def test_default_is_recent_without_cues():
@@ -95,9 +89,8 @@ def test_hypothetical_takes_precedence_over_historical():
     assert resolve_temporality("if history of MI recurs") == HYPOTHETICAL
 
 
-@pytest.mark.parametrize(
-    ("context", "target", "cue"),
-    [
+def test_temporal_cues_do_not_cross_sentence_boundary(subtests):
+    for context, target, cue in [
         (
             "History of MI. Patient has acute chest pain.",
             "chest pain",
@@ -108,12 +101,11 @@ def test_hypothetical_takes_precedence_over_historical():
             "Chest pain",
             "if",
         ),
-    ],
-)
-def test_temporal_cues_do_not_cross_sentence_boundary(context, target, cue):
-    span = _span_in_context(context, target)
+    ]:
+        with subtests.test(context=context, target=target, cue=cue):
+            span = _span_in_context(context, target)
 
-    assert resolve_temporality(span, [cue]) == RECENT
+            assert resolve_temporality(span, [cue]) == RECENT
 
 
 def test_temporal_cues_do_not_cross_clause_boundary():

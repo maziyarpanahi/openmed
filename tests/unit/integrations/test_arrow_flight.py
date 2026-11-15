@@ -145,10 +145,11 @@ def test_descriptor_is_versioned_and_carries_policy() -> None:
     assert ARROW_FLIGHT_DESCRIPTOR_VERSION == 1
 
 
-@pytest.mark.parametrize("batch_size", [0, -1])
-def test_server_rejects_non_positive_batch_size(batch_size: int) -> None:
-    with pytest.raises(ValueError, match="batch_size must be positive"):
-        ArrowFlightDeidentificationServer(batch_size=batch_size)
+def test_server_rejects_non_positive_batch_size(subtests) -> None:
+    for batch_size in [0, -1]:
+        with subtests.test(batch_size=batch_size):
+            with pytest.raises(ValueError, match="batch_size must be positive"):
+                ArrowFlightDeidentificationServer(batch_size=batch_size)
 
 
 def test_server_rejects_managed_process_batch_overrides() -> None:

@@ -31,24 +31,21 @@ def _interaction_codes(items: list[dict]) -> list[str]:
     return [item["code"] for item in items]
 
 
-@pytest.mark.parametrize(
-    ("builder", "expected_interactions"),
-    [
+def test_resource_fixture_drives_one_interaction_outcome(subtests) -> None:
+    for builder, expected_interactions in [
         (build_read_only_capability_statement, ["read", "search-type"]),
         (build_create_capability_statement, ["create"]),
         (build_update_capability_statement, ["update"]),
-    ],
-)
-def test_resource_fixture_drives_one_interaction_outcome(
-    builder,
-    expected_interactions: list[str],
-) -> None:
-    resource = _resource(builder())
+    ]:
+        with subtests.test(
+            builder=builder, expected_interactions=expected_interactions
+        ):
+            resource = _resource(builder())
 
-    assert resource["type"] == SUPPORTED_RESOURCE_TYPE
-    assert _interaction_codes(resource["interaction"]) == expected_interactions
-    assert resource["conditionalCreate"] is False
-    assert resource["conditionalUpdate"] is False
+            assert resource["type"] == SUPPORTED_RESOURCE_TYPE
+            assert _interaction_codes(resource["interaction"]) == expected_interactions
+            assert resource["conditionalCreate"] is False
+            assert resource["conditionalUpdate"] is False
 
 
 def test_conditional_fixture_declares_both_conditional_write_modes() -> None:
@@ -77,38 +74,36 @@ def test_unsupported_fixture_omits_the_planned_resource_type() -> None:
     assert UNSUPPORTED_RESOURCE_TYPE not in declared_types
 
 
-@pytest.mark.parametrize(
-    "builder",
-    [
+def test_fixtures_are_minimal_r4_and_contain_no_server_or_clinical_data(
+    subtests,
+) -> None:
+    for builder in [
         build_read_only_capability_statement,
         build_create_capability_statement,
         build_update_capability_statement,
         build_conditional_capability_statement,
         build_transaction_capability_statement,
         build_unsupported_resource_capability_statement,
-    ],
-)
-def test_fixtures_are_minimal_r4_and_contain_no_server_or_clinical_data(
-    builder,
-) -> None:
-    statement = builder()
-    serialized = json.dumps(statement, sort_keys=True).lower()
+    ]:
+        with subtests.test(builder=builder):
+            statement = builder()
+            serialized = json.dumps(statement, sort_keys=True).lower()
 
-    assert statement["resourceType"] == "CapabilityStatement"
-    assert statement["fhirVersion"] == FHIR_R4_VERSION
-    assert statement["format"] == ["json"]
-    assert statement["rest"][0]["mode"] == "server"
-    for forbidden in (
-        "endpoint",
-        "credential",
-        "authorization",
-        "organization",
-        "publisher",
-        "software",
-        "implementation",
-        "patient",
-    ):
-        assert forbidden not in serialized
+            assert statement["resourceType"] == "CapabilityStatement"
+            assert statement["fhirVersion"] == FHIR_R4_VERSION
+            assert statement["format"] == ["json"]
+            assert statement["rest"][0]["mode"] == "server"
+            for forbidden in (
+                "endpoint",
+                "credential",
+                "authorization",
+                "organization",
+                "publisher",
+                "software",
+                "implementation",
+                "patient",
+            ):
+                assert forbidden not in serialized
 
 
 def test_builders_are_deterministic_and_return_independent_values() -> None:
@@ -149,14 +144,15 @@ def test_invalid_field_helper_supports_nested_paths_without_mutation() -> None:
     assert statement == original
 
 
-@pytest.mark.parametrize("path", [(), ("missing",), "fhirVersion"])
-def test_corruption_helpers_reject_missing_or_malformed_paths(path) -> None:
-    statement = build_create_capability_statement()
+def test_corruption_helpers_reject_missing_or_malformed_paths(subtests) -> None:
+    for path in [(), ("missing",), "fhirVersion"]:
+        with subtests.test(path=path):
+            statement = build_create_capability_statement()
 
-    with pytest.raises(KeyError):
-        without_capability_field(statement, path)
-    with pytest.raises(KeyError):
-        with_invalid_capability_field(statement, path, None)
+            with pytest.raises(KeyError):
+                without_capability_field(statement, path)
+            with pytest.raises(KeyError):
+                with_invalid_capability_field(statement, path, None)
 
 
 def test_fixture_builders_run_without_network_access(monkeypatch) -> None:

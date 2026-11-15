@@ -266,13 +266,14 @@ def test_reject_inferred_field_raises() -> None:
     assert "secret" not in str(exc2.value)
 
 
-@pytest.mark.parametrize("field", ["presentedForm", "result"])
-def test_repeating_elements_reject_raw_scalar_items(field: str) -> None:
-    sentinel = "Patient_Jane_Doe_MRN_123456"
+def test_repeating_elements_reject_raw_scalar_items(subtests) -> None:
+    for field in ["presentedForm", "result"]:
+        with subtests.test(field=field):
+            sentinel = "Patient_Jane_Doe_MRN_123456"
 
-    with pytest.raises(ValueError, match=field) as error:
-        to_diagnostic_report(_synthetic_report(**{field: [sentinel, 42]}))
-    assert sentinel not in str(error.value)
+            with pytest.raises(ValueError, match=field) as error:
+                to_diagnostic_report(_synthetic_report(**{field: [sentinel, 42]}))
+            assert sentinel not in str(error.value)
 
 
 def test_sensitive_unsupported_key_is_not_echoed() -> None:

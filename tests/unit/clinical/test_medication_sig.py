@@ -16,22 +16,20 @@ from openmed.clinical.grounding import Candidate
 from openmed.processing.outputs import EntityPrediction
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_per_day"),
-    [
+def test_normalize_frequency_common_sig_cues(subtests):
+    for text, expected_per_day in [
         ("qd", 1.0),
         ("daily", 1.0),
         ("BID", 2.0),
         ("TID", 3.0),
         ("QID", 4.0),
         ("q.h.s.", 1.0),
-    ],
-)
-def test_normalize_frequency_common_sig_cues(text, expected_per_day):
-    normalized = normalize_frequency(text)
-    assert normalized["recognized"] is True
-    assert normalized["frequency_per_day"] == expected_per_day
-    assert normalized["confidence"] > 0
+    ]:
+        with subtests.test(text=text, expected_per_day=expected_per_day):
+            normalized = normalize_frequency(text)
+            assert normalized["recognized"] is True
+            assert normalized["frequency_per_day"] == expected_per_day
+            assert normalized["confidence"] > 0
 
 
 def test_normalize_frequency_interval_q8h():
@@ -82,23 +80,21 @@ def test_normalize_frequency_unrecognized_preserves_raw_text():
     assert normalized["frequency_per_day"] is None
 
 
-@pytest.mark.parametrize(
-    ("text", "value", "unit", "days"),
-    [
+def test_normalize_duration_common_cues(subtests):
+    for text, value, unit, days in [
         ("x 7 days", 7, "d", 7),
         ("x7d", 7, "d", 7),
         ("for 2 weeks", 2, "wk", 14),
         ("10/7", 10, "d", 10),
         ("2/52", 2, "wk", 14),
-    ],
-)
-def test_normalize_duration_common_cues(text, value, unit, days):
-    normalized = normalize_duration(text)
-    assert normalized["recognized"] is True
-    assert normalized["value"] == value
-    assert normalized["unit"] == unit
-    assert normalized["days"] == days
-    assert normalized["confidence"] == 1.0
+    ]:
+        with subtests.test(text=text, value=value, unit=unit, days=days):
+            normalized = normalize_duration(text)
+            assert normalized["recognized"] is True
+            assert normalized["value"] == value
+            assert normalized["unit"] == unit
+            assert normalized["days"] == days
+            assert normalized["confidence"] == 1.0
 
 
 def test_normalize_duration_unrecognized_preserves_raw_text():
@@ -168,26 +164,24 @@ def test_medication_candidate_filter_accepts_entity_predictions_at_boundary():
     ]
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_observation_abbreviations_are_rejected_from_medication_candidates(subtests):
+    for text in [
         "PP 202mg/dL",
         "FBS: 202 mg/dL",
         "HR 72 bpm",
         "BP 120 mmHg",
-    ],
-)
-def test_observation_abbreviations_are_rejected_from_medication_candidates(text):
-    surface = text.split(maxsplit=1)[0].rstrip(":")
-    entity = {
-        "text": surface,
-        "entity_group": "CHEM",
-        "score": 0.99,
-        "start": 0,
-        "end": len(surface),
-    }
+    ]:
+        with subtests.test(text=text):
+            surface = text.split(maxsplit=1)[0].rstrip(":")
+            entity = {
+                "text": surface,
+                "entity_group": "CHEM",
+                "score": 0.99,
+                "start": 0,
+                "end": len(surface),
+            }
 
-    assert filter_medication_candidates(text, [entity]) == []
+            assert filter_medication_candidates(text, [entity]) == []
 
 
 def test_simple_mass_dose_does_not_trigger_observation_filter():
@@ -205,16 +199,21 @@ def test_simple_mass_dose_does_not_trigger_observation_filter():
     ]
 
 
-@pytest.mark.parametrize(
-    "text,accepted",
-    [("K 4,2 mmol/L", False), ("LVEF 55,5 %", False), ("ASA 47,5 mg", True)],
-)
 def test_german_observation_filter_understands_decimal_comma_without_dropping_drug_dose(
-    text, accepted
+    subtests,
 ):
-    surface = text.split()[0]
-    entity = {"start": 0, "end": len(surface), "label": "CHEM", "score": 0.99}
-    assert bool(filter_medication_candidates(text, [entity], language="de")) == accepted
+    for text, accepted in [
+        ("K 4,2 mmol/L", False),
+        ("LVEF 55,5 %", False),
+        ("ASA 47,5 mg", True),
+    ]:
+        with subtests.test(text=text, accepted=accepted):
+            surface = text.split()[0]
+            entity = {"start": 0, "end": len(surface), "label": "CHEM", "score": 0.99}
+            assert (
+                bool(filter_medication_candidates(text, [entity], language="de"))
+                == accepted
+            )
 
 
 def test_observation_filter_does_not_inspect_the_next_line():

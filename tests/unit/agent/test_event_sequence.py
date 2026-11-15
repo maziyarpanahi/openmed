@@ -72,12 +72,13 @@ def test_generators_are_consumed_in_append_order() -> None:
     assert report.event_count == 4
 
 
-@pytest.mark.parametrize("start", [0, 1, 7])
-def test_expected_start_is_configurable(start: int) -> None:
-    report = validate_event_sequence(
-        RUN, [ref(start), ref(start + 1)], expected_start=start
-    )
-    assert report.is_valid
+def test_expected_start_is_configurable(subtests) -> None:
+    for start in [0, 1, 7]:
+        with subtests.test(start=start):
+            report = validate_event_sequence(
+                RUN, [ref(start), ref(start + 1)], expected_start=start
+            )
+            assert report.is_valid
 
 
 def test_start_sequence_mismatch_is_reported() -> None:
@@ -218,21 +219,23 @@ def test_reference_serialization_is_metadata_only() -> None:
     }
 
 
-@pytest.mark.parametrize("value", [True, False, 1.0, "1", None, 2**70])
-def test_boolean_and_non_integer_sequence_numbers_fail_closed(value) -> None:
-    with pytest.raises(EventSequenceError) as excinfo:
-        EventReference(run_id=RUN, event_id="ev-a", sequence_number=value)
-    assert excinfo.value.code in {
-        "invalid_sequence_number",
-        "sequence_number_out_of_range",
-    }
-    assert excinfo.value.field_name == "sequence_number"
+def test_boolean_and_non_integer_sequence_numbers_fail_closed(subtests) -> None:
+    for value in [True, False, 1.0, "1", None, 2**70]:
+        with subtests.test(value=value):
+            with pytest.raises(EventSequenceError) as excinfo:
+                EventReference(run_id=RUN, event_id="ev-a", sequence_number=value)
+            assert excinfo.value.code in {
+                "invalid_sequence_number",
+                "sequence_number_out_of_range",
+            }
+            assert excinfo.value.field_name == "sequence_number"
 
 
-@pytest.mark.parametrize("value", [-1, MAX_SEQUENCE_NUMBER + 1])
-def test_out_of_range_sequence_numbers_fail_closed(value: int) -> None:
-    with pytest.raises(EventSequenceError, match="^sequence_number: "):
-        EventReference(run_id=RUN, event_id="ev-a", sequence_number=value)
+def test_out_of_range_sequence_numbers_fail_closed(subtests) -> None:
+    for value in [-1, MAX_SEQUENCE_NUMBER + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(EventSequenceError, match="^sequence_number: "):
+                EventReference(run_id=RUN, event_id="ev-a", sequence_number=value)
 
 
 def test_max_sequence_number_is_accepted() -> None:
@@ -240,17 +243,18 @@ def test_max_sequence_number_is_accepted() -> None:
     assert reference.sequence_number == MAX_SEQUENCE_NUMBER
 
 
-@pytest.mark.parametrize("field", ["run_id", "event_id"])
-@pytest.mark.parametrize("value", ["", "-lead", "trail-", "a" * 129, 7, None, b"x"])
-def test_invalid_identifiers_fail_closed(field: str, value) -> None:
-    kwargs = {"run_id": RUN, "event_id": "ev-a", "sequence_number": 0}
-    kwargs[field] = value
-    with pytest.raises(EventSequenceError) as excinfo:
-        EventReference(**kwargs)
-    assert (excinfo.value.code, excinfo.value.field_name) == (
-        "invalid_identifier",
-        field,
-    )
+def test_invalid_identifiers_fail_closed(subtests) -> None:
+    for field in ["run_id", "event_id"]:
+        for value in ["", "-lead", "trail-", "a" * 129, 7, None, b"x"]:
+            with subtests.test(field=field, value=value):
+                kwargs = {"run_id": RUN, "event_id": "ev-a", "sequence_number": 0}
+                kwargs[field] = value
+                with pytest.raises(EventSequenceError) as excinfo:
+                    EventReference(**kwargs)
+                assert (excinfo.value.code, excinfo.value.field_name) == (
+                    "invalid_identifier",
+                    field,
+                )
 
 
 def test_unknown_reason_codes_fail_closed() -> None:
@@ -259,14 +263,13 @@ def test_unknown_reason_codes_fail_closed() -> None:
     assert "findings_truncated" in SEQUENCE_REASON_CODES
 
 
-@pytest.mark.parametrize(
-    "references", [ref(0), "abc", b"abc", 5, None, [ref(0), "abc"], [None]]
-)
-def test_invalid_reference_containers_fail_closed(references) -> None:
-    with pytest.raises(EventSequenceError) as excinfo:
-        validate_event_sequence(RUN, references)
-    assert excinfo.value.code in {"invalid_sequence", "invalid_reference_type"}
-    assert excinfo.value.field_name == "references"
+def test_invalid_reference_containers_fail_closed(subtests) -> None:
+    for references in [ref(0), "abc", b"abc", 5, None, [ref(0), "abc"], [None]]:
+        with subtests.test(references=references):
+            with pytest.raises(EventSequenceError) as excinfo:
+                validate_event_sequence(RUN, references)
+            assert excinfo.value.code in {"invalid_sequence", "invalid_reference_type"}
+            assert excinfo.value.field_name == "references"
 
 
 def test_oversized_sequences_fail_closed() -> None:
@@ -285,16 +288,18 @@ def test_length_limit_is_a_positive_bound() -> None:
     assert MAX_EVENT_SEQUENCE_LENGTH > 0
 
 
-@pytest.mark.parametrize("value", [True, -1, 1.5, "0", 2**70])
-def test_invalid_expected_start_fails_closed(value) -> None:
-    with pytest.raises(EventSequenceError, match="^expected_start: "):
-        validate_event_sequence(RUN, [ref(0)], expected_start=value)
+def test_invalid_expected_start_fails_closed(subtests) -> None:
+    for value in [True, -1, 1.5, "0", 2**70]:
+        with subtests.test(value=value):
+            with pytest.raises(EventSequenceError, match="^expected_start: "):
+                validate_event_sequence(RUN, [ref(0)], expected_start=value)
 
 
-@pytest.mark.parametrize("value", [True, -1, 1.5, "0"])
-def test_invalid_terminal_sequence_fails_closed(value) -> None:
-    with pytest.raises(EventSequenceError, match="^terminal_sequence_number: "):
-        validate_event_sequence(RUN, [ref(0)], terminal_sequence_number=value)
+def test_invalid_terminal_sequence_fails_closed(subtests) -> None:
+    for value in [True, -1, 1.5, "0"]:
+        with subtests.test(value=value):
+            with pytest.raises(EventSequenceError, match="^terminal_sequence_number: "):
+                validate_event_sequence(RUN, [ref(0)], terminal_sequence_number=value)
 
 
 def test_terminal_before_expected_start_fails_closed() -> None:

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 import openmed
 from openmed.interop.gateway import assert_redacted
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.openhim_mediator import (
     DEFAULT_MEDIATOR_URN,
     OPENHIM_MEDIA_TYPE,
@@ -51,6 +52,23 @@ REPLACEMENTS = sorted(
     reverse=True,
 )
 service_app = importlib.import_module("openmed.service.app")
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_openhim_core(monkeypatch: pytest.MonkeyPatch) -> None:
+    # OpenHIM egress is deny-by-default; allow only the synthetic core origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["openhim"],
+                    "destination": "https://openhim-core.example:8080",
+                    "allow_credentials": True,
+                }
+            ]
+        ),
+    )
 
 
 @dataclass
@@ -186,25 +204,21 @@ def test_management_api_url_rejects_embedded_credentials(
         OpenHIMMediatorSettings.from_env()
 
 
-@pytest.mark.parametrize(
-    ("name", "value", "message"),
-    [
+def test_processing_and_authentication_settings_are_validated_at_startup(
+    subtests,
+) -> None:
+    for name, value, message in [
         ("OPENMED_OPENHIM_AUTH_MODE", "session", "must be one of"),
         ("OPENMED_OPENHIM_METHOD", "keep", "must be one of"),
         ("OPENMED_OPENHIM_POLICY", "not_a_policy", "bundled policy"),
-    ],
-)
-def test_processing_and_authentication_settings_are_validated_at_startup(
-    monkeypatch: pytest.MonkeyPatch,
-    name: str,
-    value: str,
-    message: str,
-) -> None:
-    _set_enabled_env(monkeypatch)
-    monkeypatch.setenv(name, value)
+    ]:
+        with subtests.test(name=name, value=value, message=message):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                _set_enabled_env(monkeypatch)
+                monkeypatch.setenv(name, value)
 
-    with pytest.raises(OpenHIMMediatorConfigurationError, match=message):
-        OpenHIMMediatorSettings.from_env()
+                with pytest.raises(OpenHIMMediatorConfigurationError, match=message):
+                    OpenHIMMediatorSettings.from_env()
 
 
 def test_recorded_token_registration_and_heartbeat_handshake_is_idempotent() -> None:

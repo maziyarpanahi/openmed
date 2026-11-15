@@ -828,25 +828,26 @@ def test_portuguese_accent_stripped_notes_resolve_identically() -> None:
         ), row["case_id"]
 
 
-@pytest.mark.parametrize("terminator", ("mas", "porém", "porem", "contudo", "embora"))
-def test_portuguese_conjunction_terminators_block_cue_scope(terminator: str) -> None:
-    text = f"Sem evidência de pneumonia {terminator} febre presente."
-    span = _pt_span(text, "febre")
+def test_portuguese_conjunction_terminators_block_cue_scope(subtests) -> None:
+    for terminator in ("mas", "porém", "porem", "contudo", "embora"):
+        with subtests.test(terminator=terminator):
+            text = f"Sem evidência de pneumonia {terminator} febre presente."
+            span = _pt_span(text, "febre")
 
-    hits = scan_context_cues(text, [span], language=PORTUGUESE)
+            hits = scan_context_cues(text, [span], language=PORTUGUESE)
 
-    assert hits[span] == ()
+            assert hits[span] == ()
 
 
-@pytest.mark.parametrize(
-    "terminator", ("e", "mas", "porém", "porem", "contudo", "ou", "embora")
-)
-def test_portuguese_scope_terminators_bound_the_resolver_window(
-    terminator: str,
-) -> None:
-    text = f"Sem evidência de pneumonia {terminator} febre presente."
+def test_portuguese_scope_terminators_bound_the_resolver_window(subtests) -> None:
+    for terminator in ("e", "mas", "porém", "porem", "contudo", "ou", "embora"):
+        with subtests.test(terminator=terminator):
+            text = f"Sem evidência de pneumonia {terminator} febre presente."
 
-    assert resolve_negation(_pt_span(text, "febre"), language=PORTUGUESE) == AFFIRMED
+            assert (
+                resolve_negation(_pt_span(text, "febre"), language=PORTUGUESE)
+                == AFFIRMED
+            )
 
 
 def test_portuguese_scope_terminator_negative_case() -> None:

@@ -275,14 +275,16 @@ def test_string_path_cannot_override_version(tmp_path) -> None:
         load_summary_profile(str(path), version="9.0")
 
 
-@pytest.mark.parametrize(
-    "source", ['{"SYNTHETIC_PRIVATE_VALUE":', "missing-SYNTHETIC_PRIVATE_PATH.json"]
-)
-def test_loading_errors_do_not_retain_sensitive_context(source) -> None:
-    with pytest.raises(SummaryProfileError) as caught:
-        load_summary_profile(source)
-    assert caught.value.__cause__ is None
-    assert caught.value.__context__ is None
+def test_loading_errors_do_not_retain_sensitive_context(subtests) -> None:
+    for source in [
+        '{"SYNTHETIC_PRIVATE_VALUE":',
+        "missing-SYNTHETIC_PRIVATE_PATH.json",
+    ]:
+        with subtests.test(source=source):
+            with pytest.raises(SummaryProfileError) as caught:
+                load_summary_profile(source)
+            assert caught.value.__cause__ is None
+            assert caught.value.__context__ is None
 
 
 def test_field_type_error_does_not_retain_input() -> None:

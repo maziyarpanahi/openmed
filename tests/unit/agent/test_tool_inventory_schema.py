@@ -66,9 +66,8 @@ def test_schema_is_valid_draft_2020_12_and_resolves_locally() -> None:
     _validator().validate(_payload())
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
+def test_malformed_or_content_bearing_payloads_fail(subtests) -> None:
+    for mutate in [
         lambda payload: payload.update({"description": "synthetic clinical note"}),
         lambda payload: _record(payload).update(
             {"endpoint": "https://private.example.test"}
@@ -87,16 +86,13 @@ def test_schema_is_valid_draft_2020_12_and_resolves_locally() -> None:
             {"schema_digest": "sha256:synthetic-patient-content"}
         ),
         lambda payload: _record(payload).pop("schema_digest"),
-    ],
-)
-def test_malformed_or_content_bearing_payloads_fail(
-    mutate: Callable[[dict[str, Any]], object],
-) -> None:
-    payload = _payload()
-    mutate(payload)
+    ]:
+        with subtests.test(mutate=mutate):
+            payload = _payload()
+            mutate(payload)
 
-    with pytest.raises(ValidationError):
-        _validator().validate(payload)
+            with pytest.raises(ValidationError):
+                _validator().validate(payload)
 
 
 def test_inventory_size_and_strings_are_bounded() -> None:

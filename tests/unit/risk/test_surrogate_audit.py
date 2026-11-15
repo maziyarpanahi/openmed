@@ -176,9 +176,8 @@ def test_parallel_metadata_and_package_alias_are_supported() -> None:
     assert report.checked_keys == 2
 
 
-@pytest.mark.parametrize(
-    "surrogate_maps",
-    [
+def test_ambiguous_or_open_input_mappings_are_rejected_without_values(subtests) -> None:
+    for surrogate_maps in [
         {"entries": [{"key_hash": "hash", "hash": "hash", "surrogate": "S"}]},
         {"entries": [], "bindings": []},
         {"entries": [], "unsupported": "synthetic-sensitive-value"},
@@ -191,15 +190,12 @@ def test_parallel_metadata_and_package_alias_are_supported() -> None:
                 }
             ]
         },
-    ],
-)
-def test_ambiguous_or_open_input_mappings_are_rejected_without_values(
-    surrogate_maps: object,
-) -> None:
-    with pytest.raises(SurrogateAuditInputError) as error:
-        audit_surrogate_maps(surrogate_maps)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(surrogate_maps=surrogate_maps):
+            with pytest.raises(SurrogateAuditInputError) as error:
+                audit_surrogate_maps(surrogate_maps)  # type: ignore[arg-type]
 
-    assert "synthetic-sensitive-value" not in str(error.value)
+            assert "synthetic-sensitive-value" not in str(error.value)
 
 
 def test_relationships_and_metadata_must_reference_known_distinct_maps() -> None:

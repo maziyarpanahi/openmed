@@ -89,6 +89,7 @@ from openmed.core.pii_i18n import (
     validate_rwanda_id,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_sri_lanka_nic,
     validate_swedish_personnummer,
     validate_swiss_ahv,
     validate_taiwan_compatriot_permit,
@@ -156,6 +157,7 @@ from .clinical_ids import (
     SouthAfricanIdProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
+    SriLankaNICProvider,
     SwissAHVProvider,
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
@@ -549,6 +551,13 @@ def _register_builtin_specs() -> None:
         validate=validate_iran_national_id,
         faker_method="iran_national_id",
         faker_provider=IranNationalIDProvider,
+    )
+    _register_aliases(
+        ("lk", "si", "si_LK"),
+        id_type="sri_lanka_nic",
+        validate=validate_sri_lanka_nic,
+        faker_method="sri_lanka_nic",
+        faker_provider=SriLankaNICProvider,
     )
     for id_type, validate, faker_method in (
         ("abha_number", validate_abha_number, "abha_number"),

@@ -1,0 +1,43 @@
+# -dontwarn filters allowed in the merged R8 configuration of consumer-r8-smoke.
+#
+# R8 fails the build on missing classes unless a rule silences them. Every
+# -dontwarn filter that reaches R8 (from the AGP default file, OpenMedKit's
+# proguard.txt or any transitive dependency) must be listed here. Catch-all
+# filters and com.openmed.** are rejected. OpenMedKit's own proguard.txt and
+# this app's proguard-rules.pro currently contribute none.
+
+# AGP proguard-android-optimize.txt: legacy support and AndroidX annotations.
+android.support.**
+androidx.**
+
+# play-services-basement (ML Kit): platform and build-time annotation classes.
+android.app.Notification
+android.security.NetworkSecurityPolicy
+com.google.android.apps.common.proguard.SideEffectFree
+com.google.android.apps.common.proguard.UsedBy*
+com.google.android.gms.common.util.VisibleForTesting
+com.google.errorprone.annotations.**
+javax.annotation.**
+libcore.io.Memory
+org.checkerframework.**
+org.jspecify.nullness.NullMarked
+sun.misc.Unsafe
+
+# datatransport (ML Kit): AutoValue annotations stripped at build time.
+com.google.auto.value.AutoValue
+com.google.auto.value.AutoValue$Builder
+
+# firebase-components (ML Kit): annotation-only enum references.
+com.google.firebase.components.Component$ComponentType
+com.google.firebase.components.Component$Instantiation
+
+# kotlinx-coroutines: JVM-only debug agent and ClassValue fast path.
+java.lang.ClassValue
+java.lang.instrument.ClassFileTransformer
+java.lang.instrument.Instrumentation
+org.codehaus.mojo.animal_sniffer.IgnoreJRERequirement
+sun.misc.Signal
+sun.misc.SignalHandler
+
+# kotlinx-serialization: JVM-only ClassValue cache.
+kotlinx.serialization.internal.ClassValueReferences

@@ -360,6 +360,7 @@ def test_prefetch_model_preserves_single_allow_pattern(
     assert [call["filename"] for call in calls] == ["model.safetensors"]
 
 
+@pytest.mark.slow
 def test_prefetch_model_downloads_through_hf_endpoint_mirror(
     tmp_path: Path,
 ) -> None:
@@ -756,31 +757,33 @@ def test_prefetch_model_default_retries_five_times(
     assert attempts == 6
 
 
-@pytest.mark.parametrize("status_code", [401, 404])
-def test_prefetch_model_does_not_retry_permanent_http_errors(
-    monkeypatch: pytest.MonkeyPatch, status_code: int
-) -> None:
-    attempts = 0
+def test_prefetch_model_does_not_retry_permanent_http_errors(subtests) -> None:
+    for status_code in [401, 404]:
+        with subtests.test(status_code=status_code):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                attempts = 0
 
-    def fake_hf_hub_download(**kwargs: Any) -> str:
-        nonlocal attempts
-        attempts += 1
-        error = RuntimeError(f"HTTP {status_code}")
-        error.response = types.SimpleNamespace(status_code=status_code)  # type: ignore[attr-defined]
-        raise error
+                def fake_hf_hub_download(**kwargs: Any) -> str:
+                    nonlocal attempts
+                    attempts += 1
+                    error = RuntimeError(f"HTTP {status_code}")
+                    error.response = types.SimpleNamespace(status_code=status_code)  # type: ignore[attr-defined]
+                    raise error
 
-    _install_fake_hub(
-        monkeypatch,
-        snapshot_download=lambda **kwargs: "/offline/cache",
-        model_info=lambda *args, **kwargs: _model_info("config.json", b"{}"),
-        hf_hub_download=fake_hf_hub_download,
-    )
-    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+                _install_fake_hub(
+                    monkeypatch,
+                    snapshot_download=lambda **kwargs: "/offline/cache",
+                    model_info=lambda *args, **kwargs: _model_info(
+                        "config.json", b"{}"
+                    ),
+                    hf_hub_download=fake_hf_hub_download,
+                )
+                monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
-    with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
-        prefetch_model(_ALIAS)
+                with pytest.raises(RuntimeError, match=f"HTTP {status_code}"):
+                    prefetch_model(_ALIAS)
 
-    assert attempts == 1
+                assert attempts == 1
 
 
 def test_prefetch_model_does_not_retry_permanent_error_with_transient_cause(
@@ -880,26 +883,31 @@ def test_prefetch_model_fails_when_integrity_metadata_is_missing(
         prefetch_model(_ALIAS)
 
 
-@pytest.mark.parametrize(
-    "invalid_filename",
-    ["../secret", "/absolute", "..\\secret", "bad\nname", "\x1b[31mred"],
-)
-def test_prefetch_model_rejects_unsafe_remote_filenames(
-    monkeypatch: pytest.MonkeyPatch, invalid_filename: str
-) -> None:
-    info = _model_info(invalid_filename, b"content")
-    _install_fake_hub(
-        monkeypatch,
-        snapshot_download=lambda **kwargs: "/offline/cache",
-        model_info=lambda *args, **kwargs: info,
-        hf_hub_download=lambda **kwargs: "/unused",
-    )
-    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
+def test_prefetch_model_rejects_unsafe_remote_filenames(subtests) -> None:
+    for invalid_filename in [
+        "../secret",
+        "/absolute",
+        "..\\secret",
+        "bad\nname",
+        "\x1b[31mred",
+    ]:
+        with subtests.test(invalid_filename=invalid_filename):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                info = _model_info(invalid_filename, b"content")
+                _install_fake_hub(
+                    monkeypatch,
+                    snapshot_download=lambda **kwargs: "/offline/cache",
+                    model_info=lambda *args, **kwargs: info,
+                    hf_hub_download=lambda **kwargs: "/unused",
+                )
+                monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
 
-    with pytest.raises(DownloadIntegrityError, match="invalid filename") as exc_info:
-        prefetch_model(_ALIAS)
+                with pytest.raises(
+                    DownloadIntegrityError, match="invalid filename"
+                ) as exc_info:
+                    prefetch_model(_ALIAS)
 
-    assert invalid_filename not in str(exc_info.value)
+                assert invalid_filename not in str(exc_info.value)
 
 
 def test_prefetch_model_offline_attempts_no_socket_connection(
@@ -928,26 +936,23 @@ def test_prefetch_model_offline_attempts_no_socket_connection(
     assert calls[0]["local_files_only"] is True
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
+def test_prefetch_model_offline_preserves_non_cache_miss_errors(subtests) -> None:
+    for error in [
         PermissionError("cache unreadable"),
         OSError("cache corrupted"),
         ValueError("invalid download arguments"),
-    ],
-)
-def test_prefetch_model_offline_preserves_non_cache_miss_errors(
-    monkeypatch: pytest.MonkeyPatch,
-    error: Exception,
-) -> None:
-    def fake_snapshot_download(**kwargs: Any) -> str:
-        raise error
+    ]:
+        with subtests.test(error=error):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
-    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+                def fake_snapshot_download(**kwargs: Any) -> str:
+                    raise error
 
-    with pytest.raises(type(error), match=str(error)):
-        prefetch_model(_ALIAS)
+                _install_fake_hub(monkeypatch, snapshot_download=fake_snapshot_download)
+                monkeypatch.setenv("OPENMED_OFFLINE", "1")
+
+                with pytest.raises(type(error), match=str(error)):
+                    prefetch_model(_ALIAS)
 
 
 # --- list_cached_models ----------------------------------------------------

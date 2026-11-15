@@ -18,6 +18,16 @@ Later sources win. The report uses the stable source classes `default`, `file`,
 - `same_value`: multiple sources supplied equivalent values.
 - `overridden`: at least one lower-precedence source supplied a different value.
 
+Inspect the sources for the current CLI configuration without printing values:
+
+```bash
+openmed config provenance
+openmed config provenance --json
+```
+
+The text output lists each key, its source class, and any conflict category.
+Use `OPENMED_CONFIG` to select the local configuration file for the audit.
+
 ## Resolve local sources
 
 Pass mappings for deterministic tests and adapters. A file source can also be a

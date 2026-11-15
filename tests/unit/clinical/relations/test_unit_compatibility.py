@@ -19,9 +19,8 @@ from openmed.clinical.relations import (
 from openmed.clinical.relations.candidate import RelationCandidate
 
 
-@pytest.mark.parametrize(
-    ("left", "right", "relation_kind", "status"),
-    [
+def test_check_unit_compatibility_is_dimension_only(subtests):
+    for left, right, relation_kind, status in [
         ("mg", "g", "dose", UNIT_COMPATIBLE),
         ("mg/h", "g/s", "rate", UNIT_COMPATIBLE),
         ("mg/dL", "g/L", "concentration", UNIT_COMPATIBLE),
@@ -29,20 +28,23 @@ from openmed.clinical.relations.candidate import RelationCandidate
         ("mg", "mL", "dose", UNIT_INCOMPATIBLE),
         ("mg", "g", "rate", UNIT_INCOMPATIBLE),
         ("unknown-unit", "mg", "laboratory", UNIT_UNKNOWN),
-    ],
-)
-def test_check_unit_compatibility_is_dimension_only(left, right, relation_kind, status):
-    result = check_unit_compatibility(
-        left,
-        right,
-        relation_kind=relation_kind,
-    )
+    ]:
+        with subtests.test(
+            left=left, right=right, relation_kind=relation_kind, status=status
+        ):
+            result = check_unit_compatibility(
+                left,
+                right,
+                relation_kind=relation_kind,
+            )
 
-    assert result.status == status
-    assert result.review_required is (status != UNIT_COMPATIBLE)
-    assert result.decision == ("accept" if status == UNIT_COMPATIBLE else "review")
-    assert "magnitude" not in result.to_dict()
-    assert "converted" not in result.to_dict()
+            assert result.status == status
+            assert result.review_required is (status != UNIT_COMPATIBLE)
+            assert result.decision == (
+                "accept" if status == UNIT_COMPATIBLE else "review"
+            )
+            assert "magnitude" not in result.to_dict()
+            assert "converted" not in result.to_dict()
 
 
 def test_unknown_and_missing_units_are_explicit_review_findings():

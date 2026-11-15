@@ -241,21 +241,17 @@ def test_mapping_aliases_and_wildcards_are_supported_without_raw_trace_values() 
     json.loads(result.to_json())
 
 
-@pytest.mark.parametrize(
-    ("scope", "selector"),
-    [
+def test_invalid_policy_values_raise_without_echoing_input(subtests) -> None:
+    for scope, selector in [
         ("field", "synthetic-field"),
         ("resource", "synthetic-resource"),
         ("transport", "synthetic-transport"),
-    ],
-)
-def test_invalid_policy_values_raise_without_echoing_input(
-    scope: str, selector: str
-) -> None:
-    with pytest.raises(ValueError) as error:
-        PrivacyPolicy(scope=scope, decision="unsupported", selector=selector)
+    ]:
+        with subtests.test(scope=scope, selector=selector):
+            with pytest.raises(ValueError) as error:
+                PrivacyPolicy(scope=scope, decision="unsupported", selector=selector)
 
-    assert selector not in str(error.value)
+            assert selector not in str(error.value)
 
 
 def test_policy_and_context_mappings_are_closed_and_unambiguous() -> None:

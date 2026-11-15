@@ -158,9 +158,8 @@ def test_ready_plan_emits_only_bounded_read_only_typed_calls() -> None:
     assert not list(validator_for(schema)(schema).iter_errors(plan.to_dict()))
 
 
-@pytest.mark.parametrize(
-    ("sql", "error"),
-    (
+def test_sql_guard_rejects_mutation_and_unbounded_scans(subtests) -> None:
+    for sql, error in (
         ("DELETE FROM journey_facts LIMIT 5", "sql_not_read_only"),
         ("SELECT fact_id FROM journey_facts", "sql_unbounded"),
         ("SELECT * FROM journey_facts LIMIT 5", "sql_wildcard_rejected"),
@@ -200,11 +199,10 @@ def test_ready_plan_emits_only_bounded_read_only_typed_calls() -> None:
             "SELECT fact_id FROM journey_facts LIMIT 5; DROP TABLE journey_facts",
             "sql_multiple_statements",
         ),
-    ),
-)
-def test_sql_guard_rejects_mutation_and_unbounded_scans(sql: str, error: str) -> None:
-    with pytest.raises(ValueError, match=error):
-        validate_bounded_read_only_sql(sql, max_rows=100)
+    ):
+        with subtests.test(sql=sql, error=error):
+            with pytest.raises(ValueError, match=error):
+                validate_bounded_read_only_sql(sql, max_rows=100)
 
 
 def test_sql_literals_are_inert_and_raw_sql_is_not_serialized() -> None:
@@ -262,9 +260,8 @@ def test_sql_limit_property_accepts_only_the_declared_bound(limit: int) -> None:
             validate_bounded_read_only_sql(sql, max_rows=limit - 1)
 
 
-@pytest.mark.parametrize(
-    ("query_text", "intent", "reason"),
-    (
+def test_advice_and_state_changes_are_refused_without_tool_calls(subtests) -> None:
+    for query_text, intent, reason in (
         (
             "What medication should the patient take?",
             QueryIntent.EVIDENCE_RETRIEVAL,
@@ -285,19 +282,16 @@ def test_sql_limit_property_accepts_only_the_declared_bound(limit: int) -> None:
             QueryIntent.CLINICAL_ADVICE,
             "unsupported_clinical_advice",
         ),
-    ),
-)
-def test_advice_and_state_changes_are_refused_without_tool_calls(
-    query_text: str, intent: QueryIntent, reason: str
-) -> None:
-    plan = plan_evidence_query(_query(query_text=query_text, intent=intent))
-    assert plan.state is QueryPlanState.REFUSED
-    assert plan.refusal_code == reason
-    assert plan.tool_calls == ()
-    answer = compose_evidence_answer(plan, ())
-    assert answer.state is EvidenceAnswerState.REFUSED
-    assert answer.reason_code == reason
-    assert answer.statements == ()
+    ):
+        with subtests.test(query_text=query_text, intent=intent, reason=reason):
+            plan = plan_evidence_query(_query(query_text=query_text, intent=intent))
+            assert plan.state is QueryPlanState.REFUSED
+            assert plan.refusal_code == reason
+            assert plan.tool_calls == ()
+            answer = compose_evidence_answer(plan, ())
+            assert answer.state is EvidenceAnswerState.REFUSED
+            assert answer.reason_code == reason
+            assert answer.statements == ()
 
 
 def test_successful_patient_answer_has_citations_snapshot_access_and_schema() -> None:

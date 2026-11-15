@@ -39,15 +39,16 @@ def _native(base: int, digits: str) -> str:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("script", list(_BASES))
-def test_all_nine_scripts_fold_to_ascii(script):
-    base = _BASES[script]
-    native = "".join(chr(base + d) for d in range(10))
+def test_all_nine_scripts_fold_to_ascii(subtests):
+    for script in list(_BASES):
+        with subtests.test(script=script):
+            base = _BASES[script]
+            native = "".join(chr(base + d) for d in range(10))
 
-    result = fold_indic_digits(native)
+            result = fold_indic_digits(native)
 
-    assert isinstance(result, DigitFolding)
-    assert result.text == "0123456789"
+            assert isinstance(result, DigitFolding)
+            assert result.text == "0123456789"
 
 
 def test_exported_script_names_cover_all_nine():

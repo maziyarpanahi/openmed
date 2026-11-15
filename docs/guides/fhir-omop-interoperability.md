@@ -154,8 +154,11 @@ without installing Java code or changing the local-first runtime:
 
 ```bash
 uv pip install -e ".[grounding-validate]"
+# HL7 FHIR validator CLI 6.8.1.
 curl --fail --location \
-  https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.8.1/validator_cli.jar \
+  --header 'Accept: application/octet-stream' \
+  --header 'X-GitHub-Api-Version: 2022-11-28' \
+  https://api.github.com/repos/hapifhir/org.hl7.fhir.core/releases/assets/358670016 \
   --output /opt/fhir/validator_cli.jar
 echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  /opt/fhir/validator_cli.jar" \
   | sha256sum --check --strict

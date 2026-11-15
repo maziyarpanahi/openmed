@@ -2,26 +2,32 @@ name: Low-resource profile
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
       - "openmed/**"
       - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "tests/fixtures/parity/tokenizer/**"
       - "uv.lock"
   push:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/low-resource.yml"
       - "docs/benchmarks/low-resource-baseline.json"
       - "openmed/**"
       - "pyproject.toml"
       - "scripts/benchmarks/low_resource_deid.py"
+      - "tests/fixtures/parity/tokenizer/**"
       - "uv.lock"
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   benchmark:
@@ -46,6 +52,11 @@ jobs:
 
       - name: Install CPU-only runtime
         run: uv sync --frozen --extra dev --extra onnx-runtime --python 3.11
+
+      - name: Verify portable tokenizer conformance before inference
+        run: |
+          .venv/bin/python -m pytest tests/unit/eval/test_tokenizer_conformance.py \
+            -q -p no:cacheprovider -k python_tokenizers_runtime -rs
 
       - name: Cache the official INT8 artifact
         run: |

@@ -138,9 +138,8 @@ class TestGenomicCanonicalLabels:
         for label in NEW_LABELS:
             assert normalize_label(label) == label
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("gene", GENE),
             ("gene symbol", GENE_SYMBOL),
             ("variant descriptor", VARIANT_DESCRIPTOR),
@@ -148,10 +147,9 @@ class TestGenomicCanonicalLabels:
             ("protein change", PROTEIN_CHANGE),
             ("zygosity", ZYGOSITY),
             ("clinical significance", CLINICAL_SIGNIFICANCE),
-        ],
-    )
-    def test_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_new_labels_are_clinical_concepts(self):
         for label in NEW_LABELS:
@@ -219,9 +217,8 @@ class TestPulmonologyDomain:
             "AirwayDevice",
         ]
 
-    @pytest.mark.parametrize(
-        "alias,expected",
-        [
+    def test_aliases_resolve(self, subtests):
+        for alias, expected in [
             ("spirometry measure", SPIROMETRY_MEASURE),
             ("spirometry", SPIROMETRY_MEASURE),
             ("fev1", SPIROMETRY_MEASURE),
@@ -237,10 +234,9 @@ class TestPulmonologyDomain:
             ("mmrc", DYSPNEA_GRADE),
             ("dyspnea", DYSPNEA_GRADE),
             ("airway device", AIRWAY_MANAGEMENT),
-        ],
-    )
-    def test_aliases_resolve(self, alias, expected):
-        assert normalize_label(alias) == expected
+        ]:
+            with subtests.test(alias=alias, expected=expected):
+                assert normalize_label(alias) == expected
 
     def test_new_labels_are_clinical_concepts(self):
         for label in (

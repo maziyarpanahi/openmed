@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from functools import wraps
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from threading import Event
-from typing import Any
+from typing import Any, Callable, ParamSpec, TypeVar
 
 import httpx
 
@@ -22,12 +25,210 @@ from openmed.interop.fhir.bulk import (
     _safe_resource_type,
 )
 
+from .egress import EgressDenied, EgressPolicy
+from .idempotency import (
+    IdempotencyReservation,
+    IdempotentStartRequest,
+    StartIdempotencyStore,
+    StartOutcome,
+)
+from .job_bounds import (
+    DEFAULT_MAX_RETAINED_JOBS,
+    DEFAULT_MAX_RUNNING_JOBS,
+    DEFAULT_TERMINAL_TTL_SECONDS,
+    BulkJobBounds,
+    ensure_job_capacity,
+    prune_job_records,
+)
+from .jobs import _parse_positive_int
 from .smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
     SMARTBackendError,
     SMARTBackendIngestionSummary,
+    authorize_smart_backend_config,
 )
+
+_PATH_CODES = frozenset(
+    {"bulk_paths_disabled", "path_invalid", "path_exists", "path_outside_root"}
+)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+BULK_MAX_RUNNING_JOBS_ENV_VAR = "OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS"
+BULK_MAX_RETAINED_JOBS_ENV_VAR = "OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS"
+BULK_JOB_TTL_ENV_VAR = "OPENMED_SERVICE_BULK_JOB_TTL_SECONDS"
+
+
+class BulkPathError(ValueError):
+    """Controlled rejection of untrusted service-side filesystem authority."""
+
+    def __init__(self, code: str) -> None:
+        self.code = (
+            code if type(code) is str and code in _PATH_CODES else "path_invalid"
+        )
+        super().__init__(self.code)
+
+
+def _private_path_errors(callback: Callable[_P, _R]) -> Callable[_P, _R]:
+    @wraps(callback)
+    def guarded(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        code = "path_invalid"
+        try:
+            return callback(*args, **kwargs)
+        except BulkPathError as error:
+            if (
+                type(error) is BulkPathError
+                and type(error.code) is str
+                and error.code in _PATH_CODES
+            ):
+                code = error.code
+        except Exception:
+            pass
+        # Filesystem exceptions retain private filenames even with `from None`.
+        raise BulkPathError(code)
+
+    return guarded
+
+
+@dataclass(frozen=True)
+class BulkStoragePolicy:
+    """Operator-owned local roots; request paths never grant filesystem access."""
+
+    input_roots: tuple[Path, ...] = ()
+    output_root: Path | None = None
+
+    @classmethod
+    def from_env(cls) -> "BulkStoragePolicy":
+        """Read trusted root configuration once, before handling requests."""
+        roots = tuple(
+            Path(item.strip()).expanduser().resolve()
+            for item in os.getenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", "").split(",")
+            if item.strip()
+        )
+        output = os.getenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT")
+        return cls(roots, Path(output).expanduser().resolve() if output else None)
+
+    @_private_path_errors
+    def prepare(
+        self,
+        *,
+        input_dir: str | None,
+        output_dir: str,
+        checkpoint_path: str | None,
+        job_id: str,
+    ) -> tuple[Path | None, Path, Path]:
+        """Validate all inputs, then reserve a new private job-owned output."""
+        if self.output_root is None or (input_dir is not None and not self.input_roots):
+            raise BulkPathError("bulk_paths_disabled")
+        if (
+            type(job_id) is not str
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", job_id)
+            or ".." in job_id
+        ):
+            raise BulkPathError("path_invalid")
+        if checkpoint_path is not None:
+            raise BulkPathError("path_invalid")
+        output_parts = _relative_path_parts(output_dir)
+        input_parts = _relative_path_parts(input_dir) if input_dir is not None else None
+        source = None
+        if input_parts is not None:
+            for root in self.input_roots:
+                candidate = _confined_path(root, input_parts)
+                if candidate.is_dir():
+                    source = candidate
+                    break
+            if source is None:
+                raise BulkPathError("path_invalid")
+            # BulkDataGateway walks recursively: reject sibling file and directory
+            # links too, not just a link in the submitted directory itself.
+            if any(path.is_symlink() for path in source.rglob("*")):
+                raise BulkPathError("path_outside_root")
+        destination = _confined_path(self.output_root, output_parts)
+        if destination.exists():
+            raise BulkPathError("path_exists")
+        if not destination.parent.is_dir():
+            raise BulkPathError("path_invalid")
+        try:
+            destination.mkdir(mode=0o700, exist_ok=False)
+        except FileExistsError:
+            raise BulkPathError("path_exists") from None
+        except OSError:
+            raise BulkPathError("path_invalid") from None
+        return source, destination, destination / f".checkpoint-{job_id}.json"
+
+
+def bulk_job_bounds_from_env() -> BulkJobBounds:
+    """Read bulk and SMART job ceilings once, before handling requests.
+
+    Each manager applies the same ceilings independently. Values must be
+    positive integers, and the running ceiling must not exceed the retained
+    cap so admission can always make room for a new record.
+
+    Returns:
+        Validated admission and retention bounds.
+
+    Raises:
+        ValueError: If a value is malformed or the ceilings are inconsistent.
+    """
+
+    running = _parse_positive_int(
+        os.getenv(BULK_MAX_RUNNING_JOBS_ENV_VAR),
+        env_var=BULK_MAX_RUNNING_JOBS_ENV_VAR,
+        default=DEFAULT_MAX_RUNNING_JOBS,
+    )
+    retained = _parse_positive_int(
+        os.getenv(BULK_MAX_RETAINED_JOBS_ENV_VAR),
+        env_var=BULK_MAX_RETAINED_JOBS_ENV_VAR,
+        default=DEFAULT_MAX_RETAINED_JOBS,
+    )
+    ttl_seconds = _parse_positive_int(
+        os.getenv(BULK_JOB_TTL_ENV_VAR),
+        env_var=BULK_JOB_TTL_ENV_VAR,
+        default=int(DEFAULT_TERMINAL_TTL_SECONDS),
+    )
+    if running > retained:
+        raise ValueError(
+            f"{BULK_MAX_RUNNING_JOBS_ENV_VAR} must not exceed "
+            f"{BULK_MAX_RETAINED_JOBS_ENV_VAR}"
+        )
+    return BulkJobBounds(
+        max_running_jobs=running,
+        max_retained_jobs=retained,
+        terminal_ttl_seconds=ttl_seconds,
+    )
+
+
+def _relative_path_parts(value: str) -> tuple[str, ...]:
+    if (
+        not value
+        or value != value.strip()
+        or "\\" in value
+        or "~" in value
+        or "\x00" in value
+    ):
+        raise BulkPathError("path_invalid")
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        posix.is_absolute()
+        or windows.drive
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+    ):
+        raise BulkPathError("path_invalid")
+    return posix.parts
+
+
+def _confined_path(root: Path, parts: tuple[str, ...]) -> Path:
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise BulkPathError("path_outside_root")
+    try:
+        current.resolve().relative_to(root)
+    except (ValueError, OSError, RuntimeError):
+        raise BulkPathError("path_outside_root") from None
+    return current
 
 
 @dataclass(frozen=True)
@@ -149,20 +350,92 @@ class _JobRecord:
     status: FHIRBulkJobStatus
     task: asyncio.Task[Any]
     cancel_event: Event
+    owner_digest: dict[str, str] | None = None
 
 
 class FHIRBulkJobManager:
-    """Manage asynchronous local and SMART Bulk Data jobs in memory."""
+    """Manage asynchronous local and SMART Bulk Data jobs in memory.
+
+    Admission and retention are bounded by ``BulkJobBounds``: starts beyond
+    the running ceiling raise ``BulkJobsSaturatedError`` before a task is
+    created, and terminal records expire or are evicted oldest first.
+
+    Args:
+        transport: Optional injected HTTP transport for SMART requests.
+        client_assertion_builder: Optional injected client-assertion signer.
+        bounds: Running, retained and TTL ceilings; defaults apply when omitted.
+        clock: Seconds clock for job timestamps and terminal-record expiry.
+    """
 
     def __init__(
         self,
         *,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         client_assertion_builder: Any = None,
+        bounds: BulkJobBounds | None = None,
+        clock: Callable[[], float] = time.time,
+        idempotency: StartIdempotencyStore | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
+        """Create an empty manager.
+
+        Args:
+            transport: Optional HTTP transport for SMART-backed jobs.
+            client_assertion_builder: Optional SMART client assertion builder.
+            idempotency: Store for ``Idempotency-Key`` starts; defaults to a
+                store with the default retention and capacity.
+        """
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
+        self._bounds = bounds if bounds is not None else BulkJobBounds()
+        self._clock = clock
+        self._egress_policy = egress_policy
         self._jobs: dict[str, _JobRecord] = {}
+        self._idempotency = (
+            idempotency if idempotency is not None else StartIdempotencyStore()
+        )
+
+    def reserve_idempotent_start(self, request: IdempotentStartRequest) -> StartOutcome:
+        """Return the job a keyed start already created, or claim its key.
+
+        Args:
+            request: Digest-only identity of the keyed start.
+
+        Returns:
+            The remembered first response, or a reservation to pass to
+            :meth:`complete_idempotent_start` or :meth:`release_idempotent_start`.
+
+        Raises:
+            IdempotencyError: If the key was used for a different request, is
+                still being processed, or cannot be remembered.
+        """
+        return self._idempotency.reserve(request, job_exists=self._jobs.__contains__)
+
+    def complete_idempotent_start(
+        self,
+        reservation: IdempotencyReservation,
+        status: FHIRBulkJobStatus,
+    ) -> None:
+        """Remember the job and initial status created for a reserved key."""
+        self._idempotency.complete(
+            reservation, job_id=status.job_id, response=status.to_dict()
+        )
+
+    def release_idempotent_start(self, reservation: IdempotencyReservation) -> None:
+        """Forget a reserved key whose start was rejected; no-op once completed."""
+        self._idempotency.release(reservation)
+
+    @property
+    def bounds(self) -> BulkJobBounds:
+        """Return the admission and retention ceilings for this manager."""
+
+        return self._bounds
+
+    def ensure_capacity(self) -> None:
+        """Raise ``BulkJobsSaturatedError`` if no running slot is free."""
+
+        prune_job_records(self._jobs, self._bounds, self._clock())
+        ensure_job_capacity(self._jobs, self._bounds, kind="fhir_bulk")
 
     def start(
         self,
@@ -170,14 +443,29 @@ class FHIRBulkJobManager:
         *,
         deidentifier: Any = None,
         job_id: str | None = None,
+        owner_digest: dict[str, str] | None = None,
     ) -> FHIRBulkJobStatus:
-        """Start one asynchronous job and return its polling status."""
+        """Start one asynchronous job and return its polling status.
+
+        Args:
+            config: Validated job configuration.
+            deidentifier: Optional de-identification callable.
+            job_id: Optional pre-reserved job id.
+            owner_digest: Keyed digest of the submitting principal, kept out
+                of every status payload; ``None`` when auth is disabled.
+
+        Returns:
+            The initial polling status.
+        """
 
         self._validate_config(config)
         run_id = job_id or uuid.uuid4().hex
+        now = self._clock()
+        prune_job_records(self._jobs, self._bounds, now)
         if run_id in self._jobs:
             raise ValueError("job_id already exists")
-        now = time.time()
+        ensure_job_capacity(self._jobs, self._bounds, kind="fhir_bulk")
+        prune_job_records(self._jobs, self._bounds, now, reserve=1)
         status = FHIRBulkJobStatus(
             job_id=run_id,
             status="running",
@@ -190,16 +478,30 @@ class FHIRBulkJobManager:
             status=status,
             task=task,
             cancel_event=cancel_event,
+            owner_digest=None if owner_digest is None else dict(owner_digest),
         )
         return status
 
     def get(self, job_id: str) -> FHIRBulkJobStatus:
-        """Return one job's current status."""
+        """Return one job's current status; expired jobs read as unknown."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
         return record.status
+
+    def owner_digest(self, job_id: str) -> dict[str, str] | None:
+        """Return the stored owner digest of one job.
+
+        Raises:
+            KeyError: If the job does not exist.
+        """
+
+        record = self._jobs.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        return None if record.owner_digest is None else dict(record.owner_digest)
 
     def report(self, job_id: str) -> dict[str, Any]:
         """Return the completed PHI-free report."""
@@ -220,25 +522,32 @@ class FHIRBulkJobManager:
     async def cancel(self, job_id: str) -> FHIRBulkJobStatus:
         """Cancel one running job and remove any uncommitted local output."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
-        if not record.task.done() and record.status.status == "running":
-            record.cancel_event.set()
-            record.status.status = "cancelled"
-            record.status.updated_at = time.time()
-            record.task.cancel()
-            await asyncio.gather(record.task, return_exceptions=True)
-        return record.status
+        return await self._cancel_record(record)
+
+    def active_count(self) -> int:
+        """Return background jobs whose task has not finished."""
+
+        return sum(1 for record in self._jobs.values() if not record.task.done())
 
     async def cancel_all(self) -> None:
         """Cancel all in-flight jobs during service shutdown."""
 
-        jobs = [
-            job_id for job_id, record in self._jobs.items() if not record.task.done()
-        ]
-        if jobs:
-            await asyncio.gather(*(self.cancel(job_id) for job_id in jobs))
+        records = [record for record in self._jobs.values() if not record.task.done()]
+        if records:
+            await asyncio.gather(*(self._cancel_record(record) for record in records))
+
+    async def _cancel_record(self, record: _JobRecord) -> FHIRBulkJobStatus:
+        if not record.task.done() and record.status.status == "running":
+            record.cancel_event.set()
+            record.status.status = "cancelled"
+            record.status.updated_at = self._clock()
+            record.task.cancel()
+            await asyncio.gather(record.task, return_exceptions=True)
+        return record.status
 
     async def _run(
         self,
@@ -275,6 +584,7 @@ class FHIRBulkJobManager:
                     transport=self._transport,
                     client_assertion_builder=self._client_assertion_builder,
                     deidentifier=deidentifier,
+                    egress_policy=self._egress_policy,
                 )
                 summary = await ingestor.run(job_id=job_id)
                 result = _report_from_smart_summary(summary)
@@ -282,31 +592,33 @@ class FHIRBulkJobManager:
         except asyncio.CancelledError:
             record.status.status = "cancelled"
             record.status.error = None
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
         except BulkJobCancelled:
             record.status.status = "cancelled"
             record.status.error = None
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
         except Exception as exc:
             record.status.status = "failed"
             record.status.error = _safe_job_error(exc)
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
 
         record.status.status = "succeeded"
         record.status.report = result
         record.status.manifest = manifest
-        record.status.updated_at = time.time()
+        record.status.updated_at = self._clock()
 
-    @staticmethod
-    def _validate_config(config: FHIRBulkJobConfig) -> None:
+    def _validate_config(self, config: FHIRBulkJobConfig) -> None:
         if config.is_local:
             if not str(config.input_dir).strip():
                 raise ValueError("input_dir must not be blank")
             return
-        config.to_smart_config()
+        authorize_smart_backend_config(
+            config.to_smart_config(),
+            egress_policy=self._egress_policy,
+        )
 
 
 def _manifest_from_local_report(report: FHIRBulkJobReport) -> dict[str, Any]:
@@ -400,6 +712,8 @@ def _safe_file_label(value: str | Path) -> str:
 def _safe_job_error(exc: BaseException) -> str:
     if isinstance(exc, SMARTBackendError):
         return str(exc)
+    if isinstance(exc, EgressDenied):
+        return f"egress policy denied the request: {exc.reason_code}"
     if isinstance(exc, (httpx.HTTPError, OSError)):
         return "remote SMART endpoint unavailable"
     if isinstance(exc, ValueError):
@@ -414,7 +728,11 @@ def _safe_job_error(exc: BaseException) -> str:
 
 
 __all__ = [
+    "BULK_JOB_TTL_ENV_VAR",
+    "BULK_MAX_RETAINED_JOBS_ENV_VAR",
+    "BULK_MAX_RUNNING_JOBS_ENV_VAR",
     "FHIRBulkJobConfig",
     "FHIRBulkJobManager",
     "FHIRBulkJobStatus",
+    "bulk_job_bounds_from_env",
 ]

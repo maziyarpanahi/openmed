@@ -44,20 +44,18 @@ def test_retired_teacher_emits_employment_status_and_type() -> None:
     assert finding.span == (0, len(text))
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_status"),
-    [
+def test_employment_status_cues(subtests) -> None:
+    for text, expected_status in [
         ("currently employed engineer", "employed"),
         ("unemployed", "unemployed"),
         ("retired", "retired"),
         ("on disability", "disabled"),
         ("student", "student"),
-    ],
-)
-def test_employment_status_cues(text: str, expected_status: str) -> None:
-    finding = _only_finding(text, "employment")
+    ]:
+        with subtests.test(text=text, expected_status=expected_status):
+            finding = _only_finding(text, "employment")
 
-    assert finding.status == expected_status
+            assert finding.status == expected_status
 
 
 def test_previously_employed_reuses_context_temporality() -> None:
@@ -68,21 +66,19 @@ def test_previously_employed_reuses_context_temporality() -> None:
     assert finding.temporality == "historical"
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_type"),
-    [
+def test_living_status_types(subtests) -> None:
+    for text, expected_type in [
         ("stable housing", "housed"),
         ("homeless", "homeless"),
         ("lives alone", "lives_alone"),
         ("lives with family", "lives_with_family"),
         ("assisted living", "assisted_living"),
-    ],
-)
-def test_living_status_types(text: str, expected_type: str) -> None:
-    finding = _only_finding(text, "living_status")
+    ]:
+        with subtests.test(text=text, expected_type=expected_type):
+            finding = _only_finding(text, "living_status")
 
-    assert finding.status == expected_type
-    assert finding.value == expected_type
+            assert finding.status == expected_type
+            assert finding.value == expected_type
 
 
 def test_homeless_takes_priority_in_combined_living_status_clause() -> None:
@@ -96,21 +92,19 @@ def test_homeless_takes_priority_in_combined_living_status_clause() -> None:
     assert finding.temporality == "recent"
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_food_insecurity_cues_emit_extension_finding(subtests) -> None:
+    for text in [
         "reports food insecurity",
         "food insecure",
         "receives SNAP",
         "skips meals",
-    ],
-)
-def test_food_insecurity_cues_emit_extension_finding(text: str) -> None:
-    finding = _only_finding(text, "food_insecurity")
+    ]:
+        with subtests.test(text=text):
+            finding = _only_finding(text, "food_insecurity")
 
-    assert finding.status == "current"
-    assert finding.value == "food_insecure"
-    assert finding.temporality == "recent"
+            assert finding.status == "current"
+            assert finding.value == "food_insecure"
+            assert finding.temporality == "recent"
 
 
 def test_food_cues_document_unrestricted_shac_extension() -> None:

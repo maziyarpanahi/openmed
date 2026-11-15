@@ -216,26 +216,27 @@ def test_report_rejects_misattributed_slice() -> None:
         )
 
 
-@pytest.mark.parametrize("target", ["phenomena", "records"])
-def test_invalid_iterable_errors_do_not_expose_source(target: str) -> None:
-    import traceback
+def test_invalid_iterable_errors_do_not_expose_source(subtests) -> None:
+    for target in ["phenomena", "records"]:
+        with subtests.test(target=target):
+            import traceback
 
-    class PrivateIterable:
-        def __iter__(self):
-            raise TypeError("synthetic-private-5550199")
+            class PrivateIterable:
+                def __iter__(self):
+                    raise TypeError("synthetic-private-5550199")
 
-    with pytest.raises((ValueError, TypeError)) as caught:
-        if target == "phenomena":
-            NLIErrorSliceCase(
-                fixture_id="synthetic-case",
-                phenomena=PrivateIterable(),
-                gold_label="entailment",
-                predicted_label="neutral",
-            )
-        else:
-            build_nli_error_slice_report(PrivateIterable())
-    formatted = "".join(traceback.format_exception(caught.value))
-    assert "synthetic-private-5550199" not in formatted
+            with pytest.raises((ValueError, TypeError)) as caught:
+                if target == "phenomena":
+                    NLIErrorSliceCase(
+                        fixture_id="synthetic-case",
+                        phenomena=PrivateIterable(),
+                        gold_label="entailment",
+                        predicted_label="neutral",
+                    )
+                else:
+                    build_nli_error_slice_report(PrivateIterable())
+            formatted = "".join(traceback.format_exception(caught.value))
+            assert "synthetic-private-5550199" not in formatted
 
 
 def test_report_loader_rejects_unsupported_slice() -> None:

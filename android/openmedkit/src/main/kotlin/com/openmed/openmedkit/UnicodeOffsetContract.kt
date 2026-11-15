@@ -110,6 +110,56 @@ object UnicodeOffsetContract {
         return text.replaceRange(range.start, range.end, replacement)
     }
 
+    /** Convert a Unicode scalar offset to a UTF-8 byte offset. */
+    @JvmStatic
+    fun scalarToUtf8Offset(
+        text: String,
+        scalarOffset: Int,
+    ): Int {
+        val utf16Index = scalarToUtf16Index(text, scalarOffset)
+        var bytes = 0
+        var index = 0
+        while (index < utf16Index) {
+            val codePoint = text.codePointAt(index)
+            bytes += utf8Width(codePoint)
+            index += Character.charCount(codePoint)
+        }
+        return bytes
+    }
+
+    /**
+     * Convert a UTF-8 byte offset to a Unicode scalar offset.
+     *
+     * An offset inside a multi-byte sequence is rejected because it cannot
+     * represent a valid OpenMed entity boundary.
+     */
+    @JvmStatic
+    fun utf8ToScalarOffset(
+        text: String,
+        utf8Offset: Int,
+    ): Int {
+        require(utf8Offset >= 0) { "utf8Offset must be non-negative" }
+        var bytes = 0
+        var scalars = 0
+        var index = 0
+        while (bytes < utf8Offset && index < text.length) {
+            val codePoint = text.codePointAt(index)
+            bytes += utf8Width(codePoint)
+            index += Character.charCount(codePoint)
+            scalars += 1
+        }
+        require(bytes >= utf8Offset) { "utf8Offset is past the end of the text" }
+        require(bytes == utf8Offset) { "utf8Offset must not split a UTF-8 sequence" }
+        return scalars
+    }
+
+    private fun utf8Width(codePoint: Int): Int = when {
+        codePoint < 0x80 -> 1
+        codePoint < 0x800 -> 2
+        codePoint < 0x10000 -> 3
+        else -> 4
+    }
+
     /** Return whether [utf16Index] is outside the middle of a surrogate pair. */
     @JvmStatic
     fun isCodePointBoundary(

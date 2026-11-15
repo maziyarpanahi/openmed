@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from packaging.requirements import Requirement
 
 try:  # Python 3.11+
     import tomllib as _toml
@@ -203,7 +204,11 @@ def test_documented_version_ranges_match_pyproject() -> None:
             if requirement.startswith("jieba")
         ),
         "pkuseg": optional["zh-pkuseg"][0],
-        "hanlp": optional["zh-hanlp"][0],
+        "hanlp": next(
+            requirement
+            for requirement in optional["zh-hanlp"]
+            if Requirement(requirement).name == "hanlp"
+        ),
     }
 
     rows = _table_rows(_guide(), "Backend", "Install", "License", "Declared range")

@@ -88,23 +88,19 @@ def test_bounded_json_rejects_depth_nodes_and_strings_without_echoing_values() -
     assert canary not in repr(string_error.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    (
+def test_bounded_json_rejects_invalid_unicode_and_nonfinite_values(subtests) -> None:
+    for payload in (
         b'"\\ud800"',
         b'{"\\ud800":1}',
         b"NaN",
         b"Infinity",
         b"1e999",
-    ),
-)
-def test_bounded_json_rejects_invalid_unicode_and_nonfinite_values(
-    payload: bytes,
-) -> None:
-    with pytest.raises(OperationalLimitError) as error:
-        parse_bounded_json(payload)
+    ):
+        with subtests.test(payload=payload):
+            with pytest.raises(OperationalLimitError) as error:
+                parse_bounded_json(payload)
 
-    assert error.value.code == "json_invalid"
+            assert error.value.code == "json_invalid"
 
 
 def test_zip_bomb_and_traversal_are_denied_without_member_decompression() -> None:

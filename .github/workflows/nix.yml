@@ -2,7 +2,7 @@ name: Nix
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/nix.yml"
       - "flake.lock"
@@ -10,19 +10,24 @@ on:
       - "openmed/**"
       - "pyproject.toml"
       - "tests/**"
+  # Pull requests rebuild the dev shell only when its inputs change; pushes
+  # to the default branches keep checking it against every code change.
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/nix.yml"
       - "flake.lock"
       - "flake.nix"
-      - "openmed/**"
       - "pyproject.toml"
-      - "tests/**"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   flake-check:
@@ -39,4 +44,18 @@ jobs:
         run: nix flake check --print-build-logs
 
       - name: Run the test suite in the dev shell
-        run: nix develop --command python -m pytest tests/ -q
+        # The full tier runs in ci.yml; here the shell only has to carry the
+        # fast tier. Nix's pyarrow links a shared libprotobuf whose symbols
+        # clash with the protobuf grpcio-tools embeds, so loading protoc
+        # in-process after pyarrow crashes the interpreter. The API schema
+        # tests compile the gRPC contract in-process and never use pyarrow, so
+        # they run in a process of their own.
+        run: >-
+          nix develop --command python -m pytest tests/ -q -m "not slow and not fuzz"
+          --ignore=tests/unit/service/test_api_schema_compatibility.py
+
+      - name: Run the in-process protobuf contract tests in their own process
+        run: >-
+          nix develop --command python -m pytest
+          tests/unit/service/test_api_schema_compatibility.py -q
+          -m "not slow and not fuzz"

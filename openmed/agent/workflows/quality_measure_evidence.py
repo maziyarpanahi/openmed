@@ -19,6 +19,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Final, cast
 
+from openmed.agent.outcomes import _bounded_governance_json
+
 QUALITY_MEASURE_EVIDENCE_SCHEMA: Final = (
     "openmed.agent.workflows.quality_measure_evidence.v1"
 )
@@ -594,12 +596,17 @@ class QualityMeasureEvidencePacket:
         if not isinstance(serialized, (str, bytes, bytearray)):
             raise QualityMeasureEvidenceError("invalid_json", "packet")
         try:
-            value = json.loads(serialized, object_pairs_hook=_reject_duplicate_pairs)
+            value = _bounded_governance_json(
+                serialized, object_pairs_hook=_reject_duplicate_pairs
+            )
         except QualityMeasureEvidenceError:
-            raise
-        except (UnicodeError, json.JSONDecodeError, TypeError, ValueError):
-            raise QualityMeasureEvidenceError("invalid_json", "packet") from None
-        return cls.from_dict(_as_mapping(value, "packet"))
+            duplicate_key = True
+        except (UnicodeError, TypeError, ValueError, RecursionError):
+            duplicate_key = False
+        else:
+            return cls.from_dict(_as_mapping(value, "packet"))
+        code = "duplicate_json_key" if duplicate_key else "invalid_json"
+        raise QualityMeasureEvidenceError(code, "packet")
 
     def __repr__(self) -> str:
         return f"QualityMeasureEvidencePacket(packet_digest={self.packet_digest!r})"

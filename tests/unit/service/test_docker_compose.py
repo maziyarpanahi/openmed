@@ -1,7 +1,9 @@
 """Unit tests for docker-compose.yml."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 import yaml
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -38,14 +40,47 @@ def test_docker_compose_persists_hf_and_openmed_model_cache():
     service = _app_service(compose)
     environment = service["environment"]
 
-    assert "hf-cache" in compose["volumes"]
-    assert "hf-cache:/root/.cache/huggingface" in service["volumes"]
+    # The image runs as the non-root user, so the volume holds that user's
+    # cache directory (OpenMed and Hugging Face caches) instead of /root.
+    assert "openmed-cache" in compose["volumes"]
+    assert service["volumes"] == ["openmed-cache:/home/nonroot/.cache"]
     assert environment["OPENMED_PROFILE"] == "${OPENMED_PROFILE:-prod}"
     assert (
         environment["OPENMED_CACHE_DIR"]
-        == "${OPENMED_CACHE_DIR:-/root/.cache/huggingface/openmed}"
+        == "${OPENMED_CACHE_DIR:-/home/nonroot/.cache/openmed}"
     )
+    assert not any("/root" in str(value) for value in environment.values())
     assert (
         environment["OPENMED_SERVICE_MAX_RESIDENT_MODELS"]
         == "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
     )
+
+
+@pytest.mark.parametrize(("status", "exit_code"), [(200, 0), (503, 1), (302, 1)])
+def test_docker_compose_app_healthcheck_probes_readyz(monkeypatch, status, exit_code):
+    """Probe loopback directly, refusing redirects and nonready responses."""
+    healthcheck = _app_service(_load_compose())["healthcheck"]
+    assert healthcheck["test"][:3] == ["CMD", "python3", "-c"]
+
+    class Connection:
+        def __init__(self, host, port, timeout):
+            assert (host, port, timeout) == ("127.0.0.1", 8080, 3)
+
+        def request(self, method, path):
+            assert (method, path) == ("GET", "/readyz")
+
+        def getresponse(self):
+            return SimpleNamespace(status=status)
+
+    monkeypatch.setattr("http.client.HTTPConnection", Connection)
+    with pytest.raises(SystemExit) as exc:
+        exec(healthcheck["test"][3], {})
+    assert exc.value.code == exit_code
+    assert {"interval", "timeout", "start_period", "retries"} <= healthcheck.keys()
+
+
+def test_docker_compose_declares_single_replica_mode():
+    service = _app_service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service

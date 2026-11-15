@@ -161,6 +161,7 @@ def test_changed_paths_select_only_added_and_modified_files(tmp_path: Path) -> N
     assert changed_paths(tmp_path, base, head) == ("added.txt", "unchanged.txt")
 
 
+@pytest.mark.slow
 def test_pre_push_updates_scan_the_pushed_range(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / "note.txt").write_text("safe\n", encoding="utf-8")
@@ -185,6 +186,7 @@ def test_pre_push_updates_scan_the_pushed_range(tmp_path: Path) -> None:
     assert range_result.files == {"note.txt": {"email": 1}}
 
 
+@pytest.mark.slow
 def test_range_scan_catches_sensitive_content_removed_before_head(
     tmp_path: Path,
 ) -> None:
@@ -235,6 +237,7 @@ def test_new_branch_pre_push_update_uses_empty_tree(tmp_path: Path) -> None:
     assert result.scanned_files == ("note.txt",)
 
 
+@pytest.mark.slow
 def test_new_branch_scan_includes_sensitive_intermediate_commit(
     tmp_path: Path,
 ) -> None:
