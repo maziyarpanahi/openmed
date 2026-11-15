@@ -251,7 +251,7 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 | `swift-visionos-mlx` | visionos 1+ | apple-vision | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
 | `swift-watchos-coreml-non-nano` | watchos 10+ | apple-watch | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
 | `swift-visionos-coreml-non-nano` | visionos 1+ | apple-vision | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
-| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | longformer, openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family, DeBERTa-v2 and ModernBERT only. |
+| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family, DeBERTa-v2, ModernBERT and Longformer only. |
 | `swift-mac-catalyst` | mac-catalyst | mac-catalyst | any | any | any | any | any | — | not-qualified | — | Package.swift declares no Mac Catalyst platform and no lane builds it. |
 
 ## Kotlin and Android OpenMedKit

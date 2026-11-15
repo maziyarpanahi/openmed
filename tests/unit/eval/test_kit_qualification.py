@@ -55,12 +55,19 @@ BUNDLE_FOR = {
     SIM_COREML: "bert-int8-coreml",
     MAC_MLX: "bert-int8-mlx",
 }
+# Records claim the runtime the committed matrix pins, so pin bumps stay coherent.
+PINNED = {
+    pin["id"]: pin["version"] for pin in load_kit_support_matrix()["runtime_pins"]
+}
 AXES: dict[str, dict[str, Any]] = {
     NNAPI: {
         "device_class": "android-device",
         "abi": "arm64-v8a",
         "platform": {"name": "android", "version": "34"},
-        "runtime": {"pin": "onnxruntime-android", "version": "1.25.1"},
+        "runtime": {
+            "pin": "onnxruntime-android",
+            "version": PINNED["onnxruntime-android"],
+        },
         "provider": "nnapi",
     },
     IOS_COREML: {
@@ -81,7 +88,7 @@ AXES: dict[str, dict[str, Any]] = {
         "device_class": "apple-silicon-mac",
         "abi": "arm64",
         "platform": {"name": "macos", "version": "15.1"},
-        "runtime": {"pin": "mlx-swift", "version": "0.31.3"},
+        "runtime": {"pin": "mlx-swift", "version": PINNED["mlx-swift"]},
         "provider": "metal",
     },
 }
