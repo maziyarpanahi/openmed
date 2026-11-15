@@ -8,7 +8,7 @@
     /// Fails every request and counts it, so tests can prove zero traffic.
     private final class FailingTokenizerURLProtocol: URLProtocol {
         private static let lock = NSLock()
-        private static var count = 0
+        nonisolated(unsafe) private static var count = 0
 
         static var requestCount: Int {
             lock.lock()
@@ -36,8 +36,8 @@
     /// Serves synthetic tokenizer files keyed by the last path component.
     private final class PinnedTokenizerURLProtocol: URLProtocol {
         private static let lock = NSLock()
-        private static var files: [String: Data] = [:]
-        private static var urls: [URL] = []
+        nonisolated(unsafe) private static var files: [String: Data] = [:]
+        nonisolated(unsafe) private static var urls: [URL] = []
 
         static var requestedURLs: [URL] {
             lock.lock()

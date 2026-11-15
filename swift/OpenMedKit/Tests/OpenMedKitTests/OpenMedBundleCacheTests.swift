@@ -453,8 +453,9 @@ final class OpenMedBundleCacheTests: XCTestCase {
         let root = try temporaryDirectory()
         let caches = try [cache(root, owner: "process-a"), cache(root, owner: "process-b"), cache(root, owner: "process-c")]
         let files = files("v1")
-        let requests = try caches.map { _ in try request("v1", source: FakeSource(files: files, identity: "source-a")) }
-        var results = [OpenMedBundleAcquireResult?](repeating: nil, count: caches.count)
+        // Workers only read `requests`; `lock` guards every write to `results`.
+        nonisolated(unsafe) let requests = try caches.map { _ in try request("v1", source: FakeSource(files: files, identity: "source-a")) }
+        nonisolated(unsafe) var results = [OpenMedBundleAcquireResult?](repeating: nil, count: caches.count)
         let lock = NSLock()
         DispatchQueue.concurrentPerform(iterations: caches.count) { index in
             let result = caches[index].acquire(requests[index])
@@ -490,9 +491,10 @@ final class OpenMedBundleCacheTests: XCTestCase {
                 proceed.wait()
             }
         }
-        let holderRequest = try request("v1", source: source)
+        // `done` orders the worker's write to `held` before the test reads it.
+        nonisolated(unsafe) let holderRequest = try request("v1", source: source)
         let done = DispatchSemaphore(value: 0)
-        var held: OpenMedBundleAcquireResult?
+        nonisolated(unsafe) var held: OpenMedBundleAcquireResult?
         DispatchQueue.global().async {
             held = holder.acquire(holderRequest)
             done.signal()

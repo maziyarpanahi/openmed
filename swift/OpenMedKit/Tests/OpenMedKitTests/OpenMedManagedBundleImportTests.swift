@@ -415,9 +415,10 @@ final class OpenMedManagedBundleImportTests: XCTestCase {
         let stop = Box(false)
         let failures = Box<[String]>([])
         let lock = NSLock()
+        let bundleID = self.bundleID
         let reader = Thread {
             while !stop.value {
-                guard let lease = try? cache.open(bundleID: self.bundleID) else { continue }
+                guard let lease = try? cache.open(bundleID: bundleID) else { continue }
                 for (path, text) in expected[lease.generation] ?? [:] {
                     let data = try? Data(contentsOf: lease.payloadDirectory.appending(path: path))
                     if data != Data(text.utf8) {
@@ -519,11 +520,14 @@ final class OpenMedManagedBundleImportTests: XCTestCase {
 
 extension DispatchQueue {
     /// Runs `body` `count` times concurrently and returns the results in order.
-    fileprivate static func concurrentPerformResult<T>(count: Int, _ body: (Int) -> T) -> [T] {
-        var results = [T?](repeating: nil, count: count)
+    ///
+    /// Callers pass work that is safe to run concurrently; `lock` guards `results`.
+    fileprivate static func concurrentPerformResult<T>(count: Int, _ body: @escaping (Int) -> T) -> [T] {
+        nonisolated(unsafe) let work = body
+        nonisolated(unsafe) var results = [T?](repeating: nil, count: count)
         let lock = NSLock()
         concurrentPerform(iterations: count) { index in
-            let value = body(index)
+            let value = work(index)
             lock.lock()
             results[index] = value
             lock.unlock()

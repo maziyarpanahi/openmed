@@ -248,6 +248,9 @@ final class DocumentRedactionContractTests: XCTestCase {
     }
 
     final class DocumentRedactionExporterTests: XCTestCase {
+        // PDFKitDocumentIntakeSource holds only a URL or bytes and a scale, but it is
+        // not declared Sendable. Sources sent to the exporter actor more than once
+        // are marked nonisolated(unsafe); each call receives an independent copy.
         private var directory: URL!
 
         override func setUpWithError() throws {
@@ -365,7 +368,7 @@ final class DocumentRedactionContractTests: XCTestCase {
                     Block(color: 4, rect: CGRect(x: 20, y: 60, width: 40, height: 20)),
                 ])
             ])
-            let source = PDFKitDocumentIntakeSource(data: pdf)
+            nonisolated(unsafe) let source = PDFKitDocumentIntakeSource(data: pdf)
             let recognizer = BlockRecognizer(words: words)
             let report = try await DocumentIntake(recognizer: recognizer).run(source)
             XCTAssertEqual(report.text, "Jane Roe Jane")
@@ -378,13 +381,13 @@ final class DocumentRedactionContractTests: XCTestCase {
 
         func testUnverifiableOrChangedSourcesNeverProduceArtifacts() async throws {
             let pdf = try twoPagePDF()
-            let source = PDFKitDocumentIntakeSource(data: pdf)
+            nonisolated(unsafe) let source = PDFKitDocumentIntakeSource(data: pdf)
             let report = try await DocumentIntake(recognizer: BlockRecognizer(words: words)).run(source)
             let request = DocumentRedactionRequest(report: report, masks: [.span(0..<4)])
             let failing = try DocumentRedactionExporter(recognizer: BlockRecognizer(words: words, behavior: .fail), directory: directory)
             await assertExportError(.verificationIncomplete) { _ = try await failing.export(request, from: source) }
             let exporter = try DocumentRedactionExporter(recognizer: BlockRecognizer(words: words), directory: directory)
-            let changed = PDFKitDocumentIntakeSource(data: try syntheticPDF([SyntheticPage(blocks: [])], annotate: false))
+            nonisolated(unsafe) let changed = PDFKitDocumentIntakeSource(data: try syntheticPDF([SyntheticPage(blocks: [])], annotate: false))
             await assertExportError(.sourceChanged) { _ = try await exporter.export(request, from: changed) }
             await assertExportError(.sourceChanged) { _ = try await exporter.export(request, from: PDFKitDocumentIntakeSource(data: Data("%PDF-x".utf8))) }
             let partial = try await DocumentIntake(recognizer: BlockRecognizer(words: words), limits: DocumentIntakeLimits(maxPages: 1)).run(source)
@@ -398,10 +401,10 @@ final class DocumentRedactionContractTests: XCTestCase {
 
         func testCancelledExportRemovesPartialOutput() async throws {
             let pdf = try twoPagePDF()
-            let source = PDFKitDocumentIntakeSource(data: pdf)
-            let report = try await DocumentIntake(recognizer: BlockRecognizer(words: words)).run(source)
+            let report = try await DocumentIntake(recognizer: BlockRecognizer(words: words)).run(PDFKitDocumentIntakeSource(data: pdf))
             let exporter = try DocumentRedactionExporter(recognizer: BlockRecognizer(words: words, behavior: .cancel), directory: directory)
-            let task = Task { try await exporter.export(DocumentRedactionRequest(report: report, masks: [.span(0..<4)]), from: source) }
+            // Each task opens its own source over the same bytes.
+            let task = Task { try await exporter.export(DocumentRedactionRequest(report: report, masks: [.span(0..<4)]), from: PDFKitDocumentIntakeSource(data: pdf)) }
             do {
                 _ = try await task.value
                 XCTFail("cancelled export returned an artifact")
@@ -410,7 +413,7 @@ final class DocumentRedactionContractTests: XCTestCase {
             }
             let early = Task {
                 withUnsafeCurrentTask { $0?.cancel() }
-                return try await exporter.export(DocumentRedactionRequest(report: report, masks: []), from: source)
+                return try await exporter.export(DocumentRedactionRequest(report: report, masks: []), from: PDFKitDocumentIntakeSource(data: pdf))
             }
             do {
                 _ = try await early.value
@@ -425,7 +428,7 @@ final class DocumentRedactionContractTests: XCTestCase {
 
         func testChangedMasksPolicyOrBytesInvalidateTheArtifact() async throws {
             let pdf = try twoPagePDF()
-            let source = PDFKitDocumentIntakeSource(data: pdf)
+            nonisolated(unsafe) let source = PDFKitDocumentIntakeSource(data: pdf)
             let recognizer = BlockRecognizer(words: words)
             let report = try await DocumentIntake(recognizer: recognizer).run(source)
             let request = DocumentRedactionRequest(report: report, masks: [.span(0..<4)])

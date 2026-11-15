@@ -169,7 +169,8 @@ final class DocumentIntakeTests: XCTestCase {
         let temporary = FileManager.default.temporaryDirectory
         let before = try FileManager.default.contentsOfDirectory(atPath: temporary.path).sorted()
         let pages = (0..<3).map { _ in page() }
-        let document = FakeDocument(pages.map(\.0))
+        // The test reads the fake document only after the intake task finished.
+        nonisolated(unsafe) let document = FakeDocument(pages.map(\.0))
         let recognizer = FakeRecognizer(behavior: .cancelOnSecondPage)
         let task = Task { try await DocumentIntake(recognizer: recognizer).run(FakeSource(document: document)) }
         do {
