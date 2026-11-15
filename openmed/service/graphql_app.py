@@ -17,6 +17,7 @@ from strawberry.http.ides import GraphQL_IDE
 from strawberry.types import ExecutionResult
 from strawberry.types.unset import UNSET
 
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE
 from openmed.core.config import PROFILE_ENV_VAR
 
 from .admission import REASON_GLOBAL_LIMIT
@@ -244,6 +245,11 @@ def _safe_formatted_error(error: Any) -> dict[str, Any]:
         return {
             "message": "Requested model is not served",
             "extensions": {"code": "model_not_served"},
+        }
+    if error.extensions.get("code") == SHUTTING_DOWN:
+        return {
+            "message": SHUTTING_DOWN_MESSAGE,
+            "extensions": {"code": SHUTTING_DOWN, "retryable": True},
         }
     if error.original_error is None:
         return formatted

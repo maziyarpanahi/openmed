@@ -34,6 +34,14 @@ from .admission import (
     AdmissionConfig,
     AdmissionController,
 )
+from .drain import (
+    DEFAULT_RELEASE_SECONDS,
+    AcceleratorDrainParticipant,
+    DrainBudget,
+    DrainCoordinator,
+    WarmPoolDrainParticipant,
+    detect_accelerator_devices,
+)
 from .keep_alive import parse_keep_alive
 from .resilience import ResilienceManager, ServiceResilienceConfig
 from .warm_pool import (
@@ -72,6 +80,7 @@ SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
 SERVICE_STREAM_WRITE_IDLE_ENV_VAR = "OPENMED_SERVICE_STREAM_WRITE_IDLE_SECONDS"
 SERVICE_STREAM_MAX_EVENTS_ENV_VAR = "OPENMED_SERVICE_STREAM_MAX_EVENTS"
+SERVICE_SHUTDOWN_RELEASE_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
 SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
@@ -115,6 +124,7 @@ DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS = 30.0
 DEFAULT_SERVICE_STREAM_MAX_EVENTS = 100_000
 MAX_SERVICE_STREAM_MAX_EVENTS = 10_000_000
+DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS = DEFAULT_RELEASE_SECONDS
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 DEFAULT_SERVICE_TRUSTED_PROXY_HOPS = 1
 DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS = 10_000
@@ -512,6 +522,27 @@ def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
         raise ValueError(
             f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be greater than or equal to 0"
         )
+    if not math.isfinite(parsed):
+        raise ValueError(f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be a finite number")
+    return parsed
+
+
+def parse_shutdown_release_seconds(raw_value: Optional[str]) -> float:
+    """Parse the flush-and-release window that follows the in-flight drain.
+
+    Args:
+        raw_value: Raw ``OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS`` value.
+
+    Returns:
+        Finite, non-negative seconds; defaults to 5.
+    """
+    parsed = _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_SHUTDOWN_RELEASE_ENV_VAR,
+        default=DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS,
+    )
+    if not math.isfinite(parsed):
+        raise ValueError(f"{SERVICE_SHUTDOWN_RELEASE_ENV_VAR} must be a finite number")
     return parsed
 
 
@@ -986,6 +1017,9 @@ class ServiceRuntime:
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     stream_write_idle_seconds: float = DEFAULT_SERVICE_STREAM_WRITE_IDLE_SECONDS
     stream_max_events: int = DEFAULT_SERVICE_STREAM_MAX_EVENTS
+    shutdown_release_seconds: float = field(
+        default=DEFAULT_SERVICE_SHUTDOWN_RELEASE_SECONDS, kw_only=True
+    )
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
@@ -1010,6 +1044,7 @@ class ServiceRuntime:
         init=False,
         repr=False,
     )
+    _drain: Optional[DrainCoordinator] = field(default=None, init=False, repr=False)
 
     metrics: Optional[Any] = None
 
@@ -1072,6 +1107,9 @@ class ServiceRuntime:
             ),
             stream_max_events=parse_stream_max_events(
                 os.getenv(SERVICE_STREAM_MAX_EVENTS_ENV_VAR)
+            ),
+            shutdown_release_seconds=parse_shutdown_release_seconds(
+                os.getenv(SERVICE_SHUTDOWN_RELEASE_ENV_VAR)
             ),
             batching=batching,
             coalescing=coalescing,
@@ -1136,6 +1174,37 @@ class ServiceRuntime:
                 if self._resilience is None:
                     self._resilience = ResilienceManager(self.resilience_config)
         return self._resilience
+
+    def get_drain_coordinator(self) -> DrainCoordinator:
+        """Return this runtime's single-shot drain coordinator.
+
+        The coordinator is created on first use with the configured drain and
+        release windows. The runtime registers the resources it owns: the warm
+        pool (fenced and released) and accelerators already in use (released
+        back to the baseline captured here). REST, GraphQL, gRPC, jobs, and
+        other surfaces built on this runtime register their own participants.
+
+        Returns:
+            The shared coordinator.
+        """
+        if self._drain is None:
+            with self._loader_lock:
+                if self._drain is None:
+                    coordinator = DrainCoordinator(
+                        DrainBudget(
+                            drain_seconds=self.shutdown_drain_seconds,
+                            release_seconds=self.shutdown_release_seconds,
+                        ),
+                        metrics=self.metrics,
+                    )
+                    coordinator.register(
+                        WarmPoolDrainParticipant(lambda: self._warm_pool)
+                    )
+                    coordinator.register(
+                        AcceleratorDrainParticipant(detect_accelerator_devices())
+                    )
+                    self._drain = coordinator
+        return self._drain
 
     def preload(self) -> None:
         """Warm configured model pipelines during service startup."""

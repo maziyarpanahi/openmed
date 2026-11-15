@@ -33,12 +33,13 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Final, Optional
+from typing import Any, Callable, Collection, Final, Optional
 
 import openmed
 from openmed.core.config import PROFILE_ENV_VAR
 from openmed.core.key_provider import EncryptionError, KeyProvider
 
+from .drain import SHUTTING_DOWN, ServiceShuttingDownError
 from .job_admission import (
     DEFAULT_MAX_DOCUMENTS_PER_JOB,
     DEFAULT_MAX_PENDING_JOBS,
@@ -126,6 +127,7 @@ DIGEST_KEY_UNCONFIGURED: Final = "digest_key_unconfigured"
 LEGACY_DIGESTS_REMOVED: Final = "legacy_digests_removed"
 _LEGACY_TEXT_HASH_FIELD: Final = "text_hash"
 _LEGACY_URL_HASH_FIELD: Final = "url_hash"
+ACTIVE_STATUSES = frozenset({"queued", "running"})
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
@@ -146,6 +148,13 @@ class JobStoreSchemaError(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(f"Job metadata store cannot be read ({code})")
+
+
+class JobQueueClosedError(ServiceShuttingDownError):
+    """Raised when a job is submitted after the queue stopped admitting work."""
+
+    def __init__(self) -> None:
+        super().__init__("Job queue is shutting down")
 
 
 @dataclass(frozen=True)
@@ -567,6 +576,39 @@ class LocalJobStore:
             self._publish_locked({job_id: current})
             return _copy_record(record)
 
+    def update_if(
+        self,
+        job_id: str,
+        *,
+        expected_statuses: Collection[str],
+        **changes: Any,
+    ) -> Optional[dict[str, Any]]:
+        """Apply changes only while the record is in an expected status.
+
+        This is the commit fence for job lifecycle transitions: once a drain
+        marks a job ``cancelled``, a stale worker's later update is refused.
+
+        Args:
+            job_id: Record identifier.
+            expected_statuses: Statuses the record must currently have.
+            **changes: Fields to update.
+
+        Returns:
+            The updated record, or ``None`` when the fence refused the change.
+        """
+        with self._lock:
+            current = self._records.get(job_id)
+            if current is None or current.get("status") not in expected_statuses:
+                return None
+            # Same copy-on-write discipline as :meth:`update`: the current
+            # record is the rollback snapshot and is never mutated in place.
+            record = dict(current)
+            record.update(_copy_record(changes))
+            record["updated_at"] = _isoformat(self.clock())
+            self._records[job_id] = record
+            self._publish_locked({job_id: current})
+            return _copy_record(record)
+
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
@@ -772,6 +814,12 @@ class DeidentifyJobQueue:
         self._futures_lock = threading.Lock()
         self._futures: dict[str, Future[None]] = {}
         self.payloads.recover(self._live_payload_refs())
+        self._admission_closed = False
+        self._cancel_requested = threading.Event()
+        self._callback_timeout_seconds: Optional[float] = None
+        self._active: dict[str, str] = {}
+        self._drain_completed = 0
+        self._drain_cancelled = 0
 
     @classmethod
     def from_env(
@@ -849,8 +897,8 @@ class DeidentifyJobQueue:
         self._payload_retention_seconds(snapshot)
         cost = JobCost.for_texts(document.text for document in snapshot.documents)
         with self._lock:
-            if self._shutdown:
-                raise RuntimeError("Job queue is shutting down")
+            if self._shutdown or self._admission_closed:
+                raise JobQueueClosedError()
             self._sweep_payloads()
             reservation = self.admission.reserve(cost)
             try:
@@ -860,7 +908,12 @@ class DeidentifyJobQueue:
                 except BaseException:
                     self.payloads.delete(item.input_ref, reason="submission_failed")
                     raise
-                future = self._executor.submit(self._run_job, item)
+                self._active[item.job_id] = "queued"
+                try:
+                    future = self._executor.submit(self._run_job, item)
+                except BaseException:
+                    self._active.pop(item.job_id, None)
+                    raise
             except BaseException:
                 reservation.release()
                 raise
@@ -946,9 +999,15 @@ class DeidentifyJobQueue:
             # Storage errors can name paths; surface a fixed message instead.
             raise RuntimeError("Cancelled job state could not be persisted")
 
-    def _forget_future(self, job_id: str, _future: Future[None]) -> None:
+    def _forget_future(self, job_id: str, future: Future[None]) -> None:
         with self._futures_lock:
             self._futures.pop(job_id, None)
+        if future.cancelled():
+            # A cancelled future never runs ``_run_job``, so it is released
+            # here instead.
+            with self._lock:
+                if self._active.get(job_id) == "queued":
+                    self._active.pop(job_id, None)
 
     def _payload_retention_seconds(self, payload: DeidentifyJobRequest) -> int:
         maximum = self.payloads.max_retention_seconds
@@ -960,6 +1019,66 @@ class DeidentifyJobQueue:
                 "payload_retention_seconds exceeds the configured service maximum"
             )
         return int(requested)
+
+    def close_admission(
+        self, *, callback_timeout_seconds: Optional[float] = None
+    ) -> None:
+        """Refuse new jobs and bound terminal callbacks sent while draining.
+
+        Args:
+            callback_timeout_seconds: Per-attempt timeout for callbacks; while
+                draining each terminal callback makes a single attempt.
+        """
+        with self._lock:
+            self._admission_closed = True
+            self._callback_timeout_seconds = callback_timeout_seconds
+
+    def request_cancel(self) -> None:
+        """Ask workers to stop at their next document (checkpoint) boundary."""
+        self._cancel_requested.set()
+
+    def cancel_outstanding(self) -> int:
+        """Fence every queued or running job as cancelled.
+
+        A worker that is still inside a model call can no longer commit its
+        result: every later status-bearing update is refused by the store.
+
+        Returns:
+            Jobs moved to ``cancelled`` by this call.
+        """
+        return self._cancel_jobs(phases=("queued", "running"))
+
+    def outstanding_count(self) -> int:
+        """Return jobs that are queued, running, or sending their callback."""
+        with self._lock:
+            return len(self._active)
+
+    def drain_stats(self) -> dict[str, int]:
+        """Return value-free terminal counts recorded since admission closed."""
+        with self._lock:
+            return {
+                "completed": self._drain_completed,
+                "cancelled": self._drain_cancelled,
+            }
+
+    def _cancel_jobs(self, *, phases: tuple[str, ...]) -> int:
+        with self._lock:
+            targets = [
+                (job_id, phase)
+                for job_id, phase in self._active.items()
+                if phase in phases
+            ]
+        cancelled = 0
+        for job_id, phase in targets:
+            if self._mark_cancelled(
+                job_id, expected=ACTIVE_STATUSES, error=_shutdown_error()
+            ):
+                cancelled += 1
+            if phase == "queued":
+                with self._lock:
+                    if self._active.get(job_id) == "queued":
+                        self._active.pop(job_id, None)
+        return cancelled
 
     def _expiry_timestamp(self, moment: datetime) -> str:
         """Return the metadata expiry for a record that reached *moment*."""
@@ -1014,16 +1133,33 @@ class DeidentifyJobQueue:
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
-        record = self.store.get(item.job_id)
-        if record is None or record.get("status") != "queued":
-            return
+        handed_off = False
+        try:
+            handed_off = self._run_job_fenced(item)
+        finally:
+            # A job whose terminal callback went to the dispatcher stays
+            # outstanding until that delivery settles.
+            if not handed_off:
+                with self._lock:
+                    self._active.pop(item.job_id, None)
+
+    def _run_job_fenced(self, item: _JobWorkItem) -> bool:
+        if self._cancel_requested.is_set():
+            self._mark_cancelled(
+                item.job_id, expected=("queued",), error=_shutdown_error()
+            )
+            return False
         started_at = self.clock()
-        self.store.update(
+        started = self.store.update_if(
             item.job_id,
+            expected_statuses=("queued",),
             status="running",
             started_at=_isoformat(started_at),
             progress_percent=0.0,
         )
+        if started is None:
+            return False
+        self._set_phase(item.job_id, "running")
         try:
             request = _request_from_body(
                 self.payloads.read(
@@ -1034,10 +1170,10 @@ class DeidentifyJobQueue:
             )
         except EncryptionError as exc:
             self._fail_unreadable_input(item.job_id, exc.code)
-            return
+            return False
         except (TypeError, ValueError):
             self._fail_unreadable_input(item.job_id, "payload_invalid")
-            return
+            return False
 
         summary = _JobSummary(total=len(request.documents), digests=self.digests)
         error: Optional[dict[str, str]] = None
@@ -1048,6 +1184,12 @@ class DeidentifyJobQueue:
         last_write = self.monotonic()
 
         for index, document in enumerate(request.documents):
+            if self._cancel_requested.is_set():
+                # Document boundary: the last committed checkpoint stays.
+                self._mark_cancelled(
+                    item.job_id, expected=("running",), error=_shutdown_error()
+                )
+                return False
             document_id = _document_id(index, document)
             try:
                 result = self._deidentify_document(request, document)
@@ -1061,7 +1203,13 @@ class DeidentifyJobQueue:
             if attempted < summary.total and attempted >= next_checkpoint:
                 now = self.monotonic()
                 if now - last_write >= self.progress_interval_seconds:
-                    self.store.update(item.job_id, **summary.to_progress_record())
+                    progress = self.store.update_if(
+                        item.job_id,
+                        expected_statuses=("running",),
+                        **summary.to_progress_record(),
+                    )
+                    if progress is None:
+                        return False
                     last_write = now
                     next_checkpoint = attempted + checkpoint_step
 
@@ -1076,15 +1224,24 @@ class DeidentifyJobQueue:
             expires_at=self._expiry_timestamp(completed_at),
             **_pending_webhook_delivery(request.webhook),
         )
-        final_record = self.store.update(item.job_id, **terminal)
-        self._finish_job(item, request, final_record)
+        final_record = self.store.update_if(
+            item.job_id, expected_statuses=("running",), **terminal
+        )
+        if final_record is None:
+            # A drain fenced this job while its last document ran.
+            return False
+        with self._lock:
+            if self._admission_closed or self._shutdown:
+                self._drain_completed += 1
+        return self._finish_job(item, request, final_record)
 
     def _fail_unreadable_input(self, job_id: str, code: str) -> None:
         # The payload is left untouched so the last verified state survives; it
         # still expires on its own deadline.
         completed_at = self.clock()
-        self.store.update(
+        self.store.update_if(
             job_id,
+            expected_statuses=("running",),
             status="failed",
             error={
                 "code": code,
@@ -1100,7 +1257,13 @@ class DeidentifyJobQueue:
         item: _JobWorkItem,
         request: DeidentifyJobRequest,
         final_record: dict[str, Any],
-    ) -> None:
+    ) -> bool:
+        """Seal and hand off the terminal event; return whether it is pending.
+
+        Returns:
+            ``True`` when the terminal callback went to the webhook dispatcher,
+            so the job stays outstanding until that delivery settles.
+        """
         webhook = request.webhook
         terminal_ref: Optional[PayloadRef] = None
         unavailable_code = WEBHOOK_EVENT_UNAVAILABLE
@@ -1138,13 +1301,15 @@ class DeidentifyJobQueue:
             item.job_id, PAYLOAD_KIND_INPUT, item.input_ref, reason="consumed"
         )
         if webhook is None:
-            return
+            return False
         if terminal_ref is None:
             delivery = _payload_delivery_failure(unavailable_code)
             delivery["payload_ref"] = None
             self.store.update(item.job_id, webhook_delivery=delivery)
-            return
+            return False
+        self._set_phase(item.job_id, "callback")
         self._deliver_terminal_event(item.job_id, terminal_ref)
+        return True
 
     def _deliver_terminal_event(self, job_id: str, terminal_ref: PayloadRef) -> None:
         """Deliver the sealed terminal event on the bounded webhook dispatcher.
@@ -1176,6 +1341,12 @@ class DeidentifyJobQueue:
                 return _unsent_delivery(exc.code)
 
         def _settle(result: WebhookDeliveryResult) -> None:
+            try:
+                _record(result)
+            finally:
+                self._release_callback(job_id)
+
+        def _record(result: WebhookDeliveryResult) -> None:
             if payload_failure and not result.success:
                 delivery = _payload_delivery_failure(payload_failure[0])
             else:
@@ -1197,7 +1368,16 @@ class DeidentifyJobQueue:
                     reason="delivery_failed",
                 )
 
-        self._webhooks.submit(_deliver, _settle)
+        try:
+            self._webhooks.submit(_deliver, _settle)
+        except BaseException:
+            self._release_callback(job_id)
+            raise
+
+    def _release_callback(self, job_id: str) -> None:
+        with self._lock:
+            if self._active.get(job_id) == "callback":
+                self._active.pop(job_id, None)
 
     def _send_webhook(
         self,
@@ -1227,6 +1407,15 @@ class DeidentifyJobQueue:
             options["cancel_event"] = cancel_event
         if max_total_seconds is not None:
             options["max_total_seconds"] = max_total_seconds
+        with self._lock:
+            draining = self._admission_closed or self._shutdown
+            callback_timeout = self._callback_timeout_seconds
+        if draining:
+            # One bounded attempt: a drain never waits on retry backoff.
+            max_attempts = 1
+            backoff_seconds = 0.0
+            if callback_timeout is not None:
+                options["timeout_seconds"] = callback_timeout
         try:
             result = sender(
                 url,
@@ -1243,28 +1432,52 @@ class DeidentifyJobQueue:
         # The sealed delivery id is authoritative even for custom senders.
         return dataclasses.replace(result, delivery_id=delivery_id)
 
-    def _mark_cancelled(self, job_id: str) -> None:
+    def _mark_cancelled(
+        self,
+        job_id: str,
+        *,
+        expected: Collection[str] = ("queued",),
+        error: Optional[dict[str, Any]] = None,
+    ) -> bool:
+        """Fence one job as ``cancelled`` and delete its retained input payload.
+
+        The store refuses the change unless the record is still in an
+        ``expected`` status, so a stale worker can never overwrite it and a job
+        is cancelled at most once.
+
+        Args:
+            job_id: Job to cancel.
+            expected: Statuses the job may currently have.
+            error: Value-free error to record; defaults to the
+                ``cancelled_on_shutdown`` error for jobs that never started.
+
+        Returns:
+            Whether this call moved the job to ``cancelled``.
+        """
         with self._record_lock:
-            record = self.store.get(job_id)
-            if record is None or record.get("status") != "queued":
-                return
             cancelled_at = self.clock()
-            self.store.update(
+            record = self.store.update_if(
                 job_id,
+                expected_statuses=expected,
                 status="cancelled",
-                error={
-                    "code": "cancelled_on_shutdown",
-                    "type": "CancelledError",
-                    "message": "Job was cancelled before it started",
-                },
+                error=error if error is not None else _cancelled_on_shutdown_error(),
                 completed_at=_isoformat(cancelled_at),
                 expires_at=self._expiry_timestamp(cancelled_at),
             )
+        if record is None:
+            return False
+        with self._lock:
+            if self._admission_closed or self._shutdown:
+                self._drain_cancelled += 1
         input_entry = _payload_entry(record, PAYLOAD_KIND_INPUT)
-        if input_entry is not None:
+        if (
+            input_entry is not None
+            and input_entry.get("state") != PAYLOAD_STATE_DELETED
+        ):
             self._discard_payload(
                 job_id, PAYLOAD_KIND_INPUT, input_entry["ref"], reason="cancelled"
             )
+        return True
 
     def _discard_payload(
         self, job_id: str, kind: str, ref: str, *, reason: str
@@ -1311,6 +1524,11 @@ class DeidentifyJobQueue:
                 if entry is not None and entry.get("state") == PAYLOAD_STATE_RETAINED:
                     live.add(str(entry.get("ref")))
         return live
+
+    def _set_phase(self, job_id: str, phase: str) -> None:
+        with self._lock:
+            if job_id in self._active or phase == "running":
+                self._active[job_id] = phase
 
     def _deidentify_document(
         self,
@@ -1529,6 +1747,23 @@ def _record_retention_seconds(record: Mapping[str, Any], maximum: int) -> int:
     if isinstance(retention, bool) or not isinstance(retention, int):
         return maximum
     return max(1, min(retention, maximum))
+
+
+def _cancelled_on_shutdown_error() -> dict[str, Any]:
+    return {
+        "code": "cancelled_on_shutdown",
+        "type": "CancelledError",
+        "message": "Job was cancelled before it started",
+    }
+
+
+def _shutdown_error() -> dict[str, Any]:
+    return {
+        "type": "ServiceShuttingDown",
+        "code": SHUTTING_DOWN,
+        "message": "Job was cancelled because the service shut down; resubmit it",
+        "retryable": True,
+    }
 
 
 def webhook_payload(record: dict[str, Any]) -> dict[str, Any]:

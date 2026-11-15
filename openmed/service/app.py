@@ -81,6 +81,17 @@ from .bulk_data import (
     bulk_job_bounds_from_env,
 )
 from .coalesce import RequestCoalescer, coalescing_key
+from .drain import (
+    BackgroundJobsDrainParticipant,
+    BatcherDrainParticipant,
+    CallbackDrainParticipant,
+    DrainCoordinator,
+    HTTPRequestDrainParticipant,
+    JobQueueDrainParticipant,
+    NDJSONStreamDrainParticipant,
+    ServiceShuttingDownError,
+    shutting_down_details,
+)
 from .egress import EgressDenied, validate_egress_configuration
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .idempotency import (
@@ -1137,6 +1148,93 @@ async def _batch_backpressure_check(request: Request) -> Optional[BackpressureEr
     return await batcher.admission_error(_request_priority(request))
 
 
+def _shutting_down_response(retry_after_seconds: float) -> JSONResponse:
+    """Return the stable, retryable REST refusal used once admission closes."""
+    response = _error_response(
+        503,
+        "not_ready",
+        "Service is shutting down and not accepting new requests",
+        details=shutting_down_details(retry_after_seconds),
+    )
+    response.headers["Retry-After"] = format_retry_after(retry_after_seconds)
+    return response
+
+
+def _drain_retry_after(state: Any) -> float:
+    coordinator = getattr(state, "drain", None)
+    return float(getattr(coordinator, "retry_after_seconds", 1.0))
+
+
+def _drain_aware_stream(request: Request, events: Any) -> Any:
+    """Give an NDJSON body a bounded tail and a typed drain terminal event."""
+    streams = getattr(request.app.state, "drain_streams", None)
+    if not isinstance(streams, NDJSONStreamDrainParticipant):
+        return events
+    return streams.wrap(events)
+
+
+async def _stop_openhim_mediator(state: Any) -> None:
+    mediator = getattr(state, "openhim_mediator", None)
+    if mediator is not None:
+        await mediator.stop()
+
+
+def _shutdown_tracing(state: Any) -> None:
+    tracing = getattr(state, "tracing", None)
+    if tracing is not None:
+        tracing.shutdown()
+
+
+def _install_drain_coordinator(
+    app: FastAPI, runtime: ServiceRuntime
+) -> DrainCoordinator:
+    """Register REST lifecycle participants on the runtime's coordinator.
+
+    Participants look state up when the drain runs, so batchers, queues, and
+    managers swapped in after start-up are still drained. Participants added
+    with ``register_drain_participant(app, ...)`` join every lifespan.
+    """
+    state = app.state
+    coordinator = runtime.get_drain_coordinator()
+    coordinator.on_readiness_lost(lambda: setattr(state, "ready", False))
+    streams = NDJSONStreamDrainParticipant(
+        retry_after_seconds=coordinator.retry_after_seconds
+    )
+    state.drain = coordinator
+    state.drain_streams = streams
+    state.drain_report = None
+    for participant in (
+        HTTPRequestDrainParticipant(state),
+        CallbackDrainParticipant(
+            "openhim",
+            priority=15,
+            stop_admission=lambda _ctx: _stop_openhim_mediator(state),
+        ),
+        streams,
+        BatcherDrainParticipant(
+            lambda: (
+                getattr(state, "analyze_batcher", None),
+                getattr(state, "pii_extract_batcher", None),
+            )
+        ),
+        JobQueueDrainParticipant(lambda: getattr(state, "job_queue", None)),
+        BackgroundJobsDrainParticipant(
+            lambda: getattr(state, "smart_backend_jobs", None),
+            category="smart_jobs",
+        ),
+        BackgroundJobsDrainParticipant(
+            lambda: getattr(state, "fhir_bulk_jobs", None),
+            category="bulk_jobs",
+        ),
+        CallbackDrainParticipant(
+            "tracing", priority=70, flush=lambda _ctx: _shutdown_tracing(state)
+        ),
+        *tuple(getattr(state, "drain_participants", None) or ()),
+    ):
+        coordinator.register(participant)
+    return coordinator
+
+
 def _metrics_route_label(request: Request) -> str:
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
@@ -1242,6 +1340,7 @@ def create_app(
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
         fastapi_app.state.openhim_mediator = None
+        coordinator = _install_drain_coordinator(fastapi_app, runtime)
 
         # Fail closed: an invalid profile never preloads, contacts OpenHIM or
         # becomes ready, and every non-probe route answers 503.
@@ -1267,33 +1366,13 @@ def create_app(
         try:
             yield
         finally:
+            # The credential reload watcher stops before the drain so no reload
+            # races shutdown. Readiness then drops; admission closes on every
+            # surface, in-flight work finishes or ends with a typed result, and
+            # models and devices are released, each phase within its budget.
             if mtls is not None:
                 mtls.stop_reload_watcher()
-            fastapi_app.state.ready = False
-            fastapi_app.state.shutting_down = True
-            mediator = getattr(fastapi_app.state, "openhim_mediator", None)
-            if mediator is not None:
-                await mediator.stop()
-            loop = asyncio.get_event_loop()
-            deadline = loop.time() + float(
-                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
-            )
-            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
-                loop.time() < deadline
-            ):
-                await asyncio.sleep(0.05)
-            tracing = getattr(fastapi_app.state, "tracing", None)
-            if tracing is not None:
-                tracing.shutdown()
-            manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
-            if manager is not None:
-                await manager.cancel_all()
-            bulk_manager = getattr(fastapi_app.state, "fhir_bulk_jobs", None)
-            if bulk_manager is not None:
-                await bulk_manager.cancel_all()
-            job_queue = getattr(fastapi_app.state, "job_queue", None)
-            if job_queue is not None:
-                job_queue.shutdown()
+            fastapi_app.state.drain_report = await coordinator.drain()
 
     api_docs = parse_api_docs_config()
     app = FastAPI(
@@ -1440,12 +1519,7 @@ def create_app(
         if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
-                return _error_response(
-                    503,
-                    "not_ready",
-                    "Service is shutting down and not accepting new requests",
-                    details=None,
-                )
+                return _shutting_down_response(_drain_retry_after(state))
             state.inflight = getattr(state, "inflight", 0) + 1
             try:
                 return await call_next(request)
@@ -1684,6 +1758,13 @@ def create_app(
             headers={"Retry-After": retry_after},
         )
 
+    @app.exception_handler(ServiceShuttingDownError)
+    async def _service_shutting_down_handler(
+        _: Request,
+        exc: ServiceShuttingDownError,
+    ) -> JSONResponse:
+        return _shutting_down_response(exc.retry_after_seconds)
+
     @app.exception_handler(WarmPoolBackpressureError)
     async def _warm_pool_backpressure_handler(
         _: Request,
@@ -1821,6 +1902,8 @@ def create_app(
                 security_report, include_details=True
             )
         if not getattr(request.app.state, "ready", False):
+            if getattr(request.app.state, "shutting_down", False):
+                return _shutting_down_response(_drain_retry_after(request.app.state))
             return _error_response(
                 503,
                 "not_ready",
@@ -2244,10 +2327,13 @@ def create_app(
         runtime.validate_served_model(payload.model_name)
         controls = NDJSONStreamControls.for_request(request.scope, runtime)
         return controls.response(
-            pii_extract_ndjson_stream(
-                payload,
-                runtime,
-                retain_abandoned_work=controls.retain,
+            _drain_aware_stream(
+                request,
+                pii_extract_ndjson_stream(
+                    payload,
+                    runtime,
+                    retain_abandoned_work=controls.retain,
+                ),
             )
         )
 
@@ -2295,7 +2381,7 @@ def create_app(
         runtime = _get_service_runtime(request)
         events = deidentify_ndjson_stream(payload, runtime)
         controls = NDJSONStreamControls.for_request(request.scope, runtime)
-        return controls.response(events)
+        return controls.response(_drain_aware_stream(request, events))
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(

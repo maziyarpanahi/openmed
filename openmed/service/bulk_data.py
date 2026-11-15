@@ -528,6 +528,11 @@ class FHIRBulkJobManager:
             raise KeyError(job_id)
         return await self._cancel_record(record)
 
+    def active_count(self) -> int:
+        """Return background jobs whose task has not finished."""
+
+        return sum(1 for record in self._jobs.values() if not record.task.done())
+
     async def cancel_all(self) -> None:
         """Cancel all in-flight jobs during service shutdown."""
 
