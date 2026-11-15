@@ -736,6 +736,15 @@ def test_rendered_manifests_contain_no_secrets_or_host_access(render_args):
                 # Plain values are limited to non-secret runtime paths;
                 # everything else must come from a referenced Secret.
                 if "value" in item:
+                    name = item["name"]
+                    if name.endswith("_FILE") or name.startswith(
+                        "OPENMED_JOURNEY_POSTGRES_SSL"
+                    ):
+                        # Mounted secret and certificate paths, never contents.
+                        assert str(item["value"]).startswith(
+                            ("/var/run/secrets/", "/etc/openmed/")
+                        )
+                        continue
                     assert item["name"] in {
                         "HOME",
                         "TMPDIR",

@@ -31,41 +31,6 @@ targets:
         check: auth.enabled
         reason: auth_disabled
         why: fail_closed
-      - &api-root
-        workload: Deployment/api
-        check: deploy.security_context
-        reason: runs_as_root
-        why: known
-        owner_pr: 4443
-        issue: 3916
-      - &api-escalation
-        workload: Deployment/api
-        check: deploy.security_context
-        reason: privilege_escalation_allowed
-        why: known
-        owner_pr: 4443
-        issue: 3916
-      - &api-writable-root
-        workload: Deployment/api
-        check: deploy.security_context
-        reason: root_filesystem_writable
-        why: known
-        owner_pr: 4443
-        issue: 3916
-      - &api-capabilities
-        workload: Deployment/api
-        check: deploy.security_context
-        reason: capabilities_not_dropped
-        why: known
-        owner_pr: 4443
-        issue: 3916
-      - &api-seccomp
-        workload: Deployment/api
-        check: deploy.security_context
-        reason: seccomp_not_confined
-        why: known
-        owner_pr: 4443
-        issue: 3916
 
   - id: helm-ci
     platform: helm
@@ -74,11 +39,6 @@ targets:
       - ../helm/openmed-service/ci-values.yaml
     expect:
       - *default-auth
-      - *api-root
-      - *api-escalation
-      - *api-writable-root
-      - *api-capabilities
-      - *api-seccomp
 
   - id: helm-journey
     platform: helm
