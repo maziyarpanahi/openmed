@@ -1,0 +1,39 @@
+{
+  "schema": "openmed.native_span_parity_manifest",
+  "version": 1,
+  "fixture_schema": "openmed.native_span_parity",
+  "fixture_version": 2,
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "expected_spans.json",
+      "sha256": "923f2ed699694371d7d5fe9bc0b35d224b50db3d75b2d8401d9bdd22efce1ec2"
+    },
+    {
+      "path": "synthetic_clinical_note.txt",
+      "sha256": "a8778d36ef0e5d45ea0833ea1de415acc5ddc8b093d902f8d875e2d31535b70a"
+    }
+  ],
+  "update_command": "python scripts/parity/update_native_span_fixture.py --write",
+  "check_command": "python scripts/parity/update_native_span_fixture.py --check",
+  "consumers": [
+    {
+      "surface": "python",
+      "test": "tests/unit/parity/test_native_span_fixture.py",
+      "workflow": ".github/workflows/ci.yml",
+      "gate": "pytest"
+    },
+    {
+      "surface": "swift",
+      "test": "swift/OpenMedKit/Tests/OpenMedKitTests/SpanEquivalenceParityTests.swift",
+      "workflow": ".github/workflows/swift-test.yml",
+      "gate": "swift test --filter SpanEquivalenceParityTests"
+    },
+    {
+      "surface": "kotlin",
+      "test": "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/SpanEquivalenceTest.kt",
+      "workflow": ".github/workflows/android-ci.yml",
+      "gate": "--tests '*SpanEquivalenceTest'"
+    }
+  ]
+}

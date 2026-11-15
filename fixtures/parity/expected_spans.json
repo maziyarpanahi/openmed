@@ -1,36 +1,293 @@
 {
-  "version": 1,
-  "description": "Synthetic OpenMedKit Swift/Kotlin parity fixture. All values are invented and non-PHI.",
-  "spans": [
+  "schema": "openmed.native_span_parity",
+  "version": 2,
+  "description": "Synthetic OpenMedKit Swift/Kotlin span-equivalence fixture. All values are invented and non-PHI. Offsets are half-open Unicode scalar offsets; utf8_* and utf16_* fields are derived. Refresh derived fields and digests with scripts/parity/update_native_span_fixture.py --write.",
+  "offset_unit": "unicode_scalar",
+  "cases": [
     {
-      "label": "patient_name",
-      "start": 9,
-      "end": 20
+      "id": "clinical_note_ascii",
+      "policy": "hipaa_safe_harbor",
+      "text_file": "synthetic_clinical_note.txt",
+      "spans": [
+        {
+          "label": "patient_name",
+          "start": 9,
+          "end": 20,
+          "utf8_start": 9,
+          "utf8_end": 20,
+          "utf16_start": 9,
+          "utf16_end": 20
+        },
+        {
+          "label": "date_of_birth",
+          "start": 26,
+          "end": 36,
+          "utf8_start": 26,
+          "utf8_end": 36,
+          "utf16_start": 26,
+          "utf16_end": 36
+        },
+        {
+          "label": "medical_record_number",
+          "start": 42,
+          "end": 52,
+          "utf8_start": 42,
+          "utf8_end": 52,
+          "utf16_start": 42,
+          "utf16_end": 52
+        },
+        {
+          "label": "phone_number",
+          "start": 60,
+          "end": 72,
+          "utf8_start": 60,
+          "utf8_end": 72,
+          "utf16_start": 60,
+          "utf16_end": 72
+        },
+        {
+          "label": "email",
+          "start": 80,
+          "end": 104,
+          "utf8_start": 80,
+          "utf8_end": 104,
+          "utf16_start": 80,
+          "utf16_end": 104
+        },
+        {
+          "label": "date",
+          "start": 141,
+          "end": 151,
+          "utf8_start": 141,
+          "utf8_end": 151,
+          "utf16_start": 141,
+          "utf16_end": 151
+        }
+      ],
+      "actions": [
+        {
+          "label": "patient_name",
+          "canonical_label": "OTHER",
+          "action": "mask",
+          "start": 9,
+          "end": 20,
+          "replacement": "[OTHER]"
+        },
+        {
+          "label": "date_of_birth",
+          "canonical_label": "DATE_OF_BIRTH",
+          "action": "mask",
+          "start": 26,
+          "end": 36,
+          "replacement": "[DATE_OF_BIRTH]"
+        },
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "mask",
+          "start": 42,
+          "end": 52,
+          "replacement": "[ID_NUM]"
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 60,
+          "end": 72,
+          "replacement": "[PHONE]"
+        },
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 80,
+          "end": 104,
+          "replacement": "[EMAIL]"
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 141,
+          "end": 151,
+          "replacement": "[DATE]"
+        }
+      ],
+      "expected_deidentified_text": "Patient: [OTHER]\nDOB: [DATE_OF_BIRTH]\nMRN: [ID_NUM]\nPhone: [PHONE]\nEmail: [EMAIL]\nFollow-up at North Harbor Clinic on [DATE].\n"
     },
     {
-      "label": "date_of_birth",
-      "start": 26,
-      "end": 36
+      "id": "emoji_and_combining_marks",
+      "policy": "hipaa_safe_harbor",
+      "text": "Intake \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f re\u0301sume\u0301 caf\u00e9 \ud83c\udde8\ud83c\udde6 \u2705\nPatient: Sam Okafor\nDOB: 1990-07-04\nMRN: \ud83e\ude7aMRN-551903 \ud83d\udccb\nPhone \ud83d\udcde 555-014-2290\nEmail: sam.okafor@example.test\ud83d\udc4d\nSeen in \u6771\u4eac on 2026-01-09 n\u0303\u0303.\n",
+      "spans": [
+        {
+          "label": "patient_name",
+          "start": 41,
+          "end": 51,
+          "utf8_start": 64,
+          "utf8_end": 74,
+          "utf16_start": 45,
+          "utf16_end": 55
+        },
+        {
+          "label": "date_of_birth",
+          "start": 57,
+          "end": 67,
+          "utf8_start": 80,
+          "utf8_end": 90,
+          "utf16_start": 61,
+          "utf16_end": 71
+        },
+        {
+          "label": "medical_record_number",
+          "start": 74,
+          "end": 84,
+          "utf8_start": 100,
+          "utf8_end": 110,
+          "utf16_start": 79,
+          "utf16_end": 89
+        },
+        {
+          "label": "phone_number",
+          "start": 95,
+          "end": 107,
+          "utf8_start": 127,
+          "utf8_end": 139,
+          "utf16_start": 102,
+          "utf16_end": 114
+        },
+        {
+          "label": "email",
+          "start": 115,
+          "end": 138,
+          "utf8_start": 147,
+          "utf8_end": 170,
+          "utf16_start": 122,
+          "utf16_end": 145
+        },
+        {
+          "label": "date",
+          "start": 154,
+          "end": 164,
+          "utf8_start": 193,
+          "utf8_end": 203,
+          "utf16_start": 162,
+          "utf16_end": 172
+        }
+      ],
+      "actions": [
+        {
+          "label": "patient_name",
+          "canonical_label": "OTHER",
+          "action": "mask",
+          "start": 41,
+          "end": 51,
+          "replacement": "[OTHER]"
+        },
+        {
+          "label": "date_of_birth",
+          "canonical_label": "DATE_OF_BIRTH",
+          "action": "mask",
+          "start": 57,
+          "end": 67,
+          "replacement": "[DATE_OF_BIRTH]"
+        },
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "mask",
+          "start": 74,
+          "end": 84,
+          "replacement": "[ID_NUM]"
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 95,
+          "end": 107,
+          "replacement": "[PHONE]"
+        },
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 115,
+          "end": 138,
+          "replacement": "[EMAIL]"
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 154,
+          "end": 164,
+          "replacement": "[DATE]"
+        }
+      ],
+      "expected_deidentified_text": "Intake \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f re\u0301sume\u0301 caf\u00e9 \ud83c\udde8\ud83c\udde6 \u2705\nPatient: [OTHER]\nDOB: [DATE_OF_BIRTH]\nMRN: \ud83e\ude7a[ID_NUM] \ud83d\udccb\nPhone \ud83d\udcde [PHONE]\nEmail: [EMAIL]\ud83d\udc4d\nSeen in \u6771\u4eac on [DATE] n\u0303\u0303.\n"
     },
     {
-      "label": "medical_record_number",
-      "start": 42,
-      "end": 52
+      "id": "overlapping_identifiers",
+      "policy": "clinical_minimal_redaction",
+      "text": "Email: MRN-204812@example.test was confirmed on 2025-02-14.\n",
+      "spans": [
+        {
+          "label": "medical_record_number",
+          "start": 7,
+          "end": 17,
+          "utf8_start": 7,
+          "utf8_end": 17,
+          "utf16_start": 7,
+          "utf16_end": 17
+        },
+        {
+          "label": "email",
+          "start": 7,
+          "end": 30,
+          "utf8_start": 7,
+          "utf8_end": 30,
+          "utf16_start": 7,
+          "utf16_end": 30
+        },
+        {
+          "label": "date",
+          "start": 48,
+          "end": 58,
+          "utf8_start": 48,
+          "utf8_end": 58,
+          "utf16_start": 48,
+          "utf16_end": 58
+        }
+      ],
+      "actions": [
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 7,
+          "end": 30,
+          "replacement": "[EMAIL]"
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "keep",
+          "start": 48,
+          "end": 58,
+          "replacement": null
+        }
+      ],
+      "expected_deidentified_text": "Email: [EMAIL] was confirmed on 2025-02-14.\n"
     },
     {
-      "label": "phone_number",
-      "start": 60,
-      "end": 72
-    },
-    {
-      "label": "email",
-      "start": 80,
-      "end": 104
-    },
-    {
-      "label": "date",
-      "start": 141,
-      "end": 151
+      "id": "unicode_without_identifiers",
+      "policy": "hipaa_safe_harbor",
+      "text": "Caf\u00e9 \u2615 re\u0301union \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f on call; MRN pending; DOB unknown \ud83c\udde8\ud83c\udde6\n",
+      "spans": [],
+      "actions": [],
+      "expected_deidentified_text": "Caf\u00e9 \u2615 re\u0301union \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f on call; MRN pending; DOB unknown \ud83c\udde8\ud83c\udde6\n"
     }
   ]
 }

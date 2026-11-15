@@ -13,6 +13,8 @@ on:
       - 'scripts/release/check_swift_manifest_drift.py'
       - 'scripts/release/check_swift_strict_concurrency.py'
       - 'swift/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
@@ -30,6 +32,8 @@ on:
       - 'scripts/release/check_swift_manifest_drift.py'
       - 'scripts/release/check_swift_strict_concurrency.py'
       - 'swift/**'
+      - 'fixtures/parity/**'
+      - 'scripts/parity/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
       - 'tests/fixtures/multimodal/local_review_v1.json'
@@ -94,6 +98,9 @@ jobs:
       run: >-
         swift test --sanitize=thread
         --filter 'ConcurrencySafetyTests|SpeechDecoderProgressConcurrencyTests'
+
+    - name: Test Swift-Kotlin span-equivalence fixture
+      run: swift test --filter SpanEquivalenceParityTests
 
   build-ios:
     name: Build for iOS
