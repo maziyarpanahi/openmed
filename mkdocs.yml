@@ -844,6 +844,7 @@ nav:
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
       - Tokenizer Conformance: tokenizer-conformance.md
       - Device Capability Resolution: runtimes/device-capabilities.md
+      - Managed Offline Model-Bundle Import: mobile/managed-model-bundles.md
   - Project:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md

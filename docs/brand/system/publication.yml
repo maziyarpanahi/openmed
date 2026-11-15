@@ -895,6 +895,7 @@ classification:
     - swift-kotlin-parity.md
     - tokenizer-conformance.md
     - runtimes/device-capabilities.md
+    - mobile/managed-model-bundles.md
     - faq.md
     - troubleshooting.md
     - onboarding.md

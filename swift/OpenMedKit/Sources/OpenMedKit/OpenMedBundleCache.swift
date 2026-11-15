@@ -467,6 +467,20 @@ public final class OpenMedBundleCache: @unchecked Sendable, CustomStringConverti
         return OpenMedBundleRecoveryReport(actions: actions)
     }
 
+    /// Quarantines `generation` with reason `rolled_back` and falls the pointer
+    /// back to last green, then rollback, then none. The managed importer calls
+    /// it when the activation check of a probation generation fails.
+    func withdraw(bundleID: String, generation: String) throws {
+        let key = Self.bundleKey(bundleID: bundleID)
+        try locked(key) { try quarantineAndRepair(key, generation, reason: Self.rolledBack) }
+    }
+
+    /// Signed anti-rollback sequence of a ready generation.
+    func sequence(bundleID: String, generation: String) -> Int64? {
+        let key = Self.bundleKey(bundleID: bundleID)
+        return try? locked(key) { readGenerationRecord(key, generation)?.sequence }
+    }
+
     /// Value-free snapshot of one bundle.
     public func snapshot(bundleID: String) throws -> OpenMedBundleCacheSnapshot {
         let key = Self.bundleKey(bundleID: bundleID)
