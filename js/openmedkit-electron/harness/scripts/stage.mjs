@@ -20,8 +20,22 @@ const appDir = join(buildDir, "app");
 const resourcesDir = join(buildDir, "resources", "openmed-harness");
 const vectorsPath = join(repoRoot, "tests", "fixtures", "portable_bundle", "vectors.json");
 const openmedSource = join(repoRoot, "js", "openmedkit-web", "src", "index.ts");
-// Renderer-side bundles need only the label tables, never the Node loaders.
-const openmedLabels = join(repoRoot, "js", "openmedkit-web", "src", "types.ts");
+const openmedWebSources = join(repoRoot, "js", "openmedkit-web", "src");
+
+// Renderer-side bundles need only the label tables and the kit-parity helpers
+// the renderer client imports, never the Node loaders, so `openmed` resolves
+// to a virtual module that re-exports just those two web-package sources.
+const openmedRenderer = {
+  name: "openmed-renderer",
+  setup(build) {
+    build.onResolve({ filter: /^openmed$/ }, () => ({ path: "openmed", namespace: "openmed-renderer" }));
+    build.onLoad({ filter: /^openmed$/, namespace: "openmed-renderer" }, () => ({
+      contents: 'export * from "./types";\nexport * from "./kit-parity";\n',
+      loader: "ts",
+      resolveDir: openmedWebSources,
+    }));
+  },
+};
 
 const BUNDLES = {
   golden: { caseId: "valid_web", understoodExtensions: [] },
@@ -86,7 +100,8 @@ async function bundleSources() {
   await build({ ...node, entryPoints: [join(harnessDir, "src", "worker.ts")], outfile: join(appDir, "worker.cjs") });
   const preload = {
     ...common,
-    alias: { openmed: openmedLabels },
+    alias: {},
+    plugins: [openmedRenderer],
     platform: "browser",
     format: "cjs",
     target: "chrome120",
@@ -100,7 +115,8 @@ async function bundleSources() {
   });
   await build({
     ...common,
-    alias: { openmed: openmedLabels },
+    alias: {},
+    plugins: [openmedRenderer],
     platform: "browser",
     format: "iife",
     target: "chrome120",
