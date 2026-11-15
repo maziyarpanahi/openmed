@@ -666,6 +666,9 @@ def _run_brief_probe(profile: str, source_root: Path) -> SmokeReport:
             checks.append(_passed(active))
             if profile == "adapters":
                 active = "brief_rest_client"
+                # The in-memory service runs without auth, which the production
+                # security profile refuses; the smoke check is a test run.
+                stack.enter_context(patch.dict(os.environ, {"OPENMED_PROFILE": "test"}))
                 _probe_rest(value, provider, expected, loop)
                 checks.append(_passed(active))
                 active = "brief_mcp"

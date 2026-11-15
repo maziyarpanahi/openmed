@@ -651,12 +651,14 @@ def test_negative_controls_must_fail_at_their_own_check(
 
 @pytest.fixture
 def service_probe_env(monkeypatch: Any):
-    """Mirror the child's clean, default-profile, auth-free service environment."""
+    """Mirror the child's clean, auth-free, test-profile service environment."""
     for module in ("fastapi", "grpc", "httpx", "strawberry"):
         pytest.importorskip(module)
     for name in list(os.environ):
         if name == "OPENMED_PROFILE" or name.startswith("OPENMED_SERVICE_"):
             monkeypatch.delenv(name)
+    # The child runs its auth-free in-memory service under the test profile.
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.setattr(
         "openmed.service.runtime.ModelLoader", smoke_check._SyntheticPIILoader
     )
