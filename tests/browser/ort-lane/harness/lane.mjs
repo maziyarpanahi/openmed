@@ -125,6 +125,15 @@ async function runCase(fixture, laneCase, record, capture) {
     session = await sdk.loadWebGpuTokenClassificationSession({
       assetPath: ORT_ASSET_PATH,
       capabilities: provider === "webgpu" ? undefined : { webgpu: false },
+      // The runtime refuses raw sessionOptions.externalData; shards go
+      // through the typed option with their declared sizes.
+      externalData: {
+        shards: graph.external_data.map((item) => ({
+          byteLength: item.bytes,
+          location: `${FIXTURE_BASE}${item.file}`,
+          path: item.location,
+        })),
+      },
       fallbackOnWebGpuError: false,
       labelCount,
       modelName: "synthetic-token-classifier",
@@ -132,10 +141,6 @@ async function runCase(fixture, laneCase, record, capture) {
       precision: graph.precision,
       runtime: ort,
       sessionOptions: {
-        externalData: graph.external_data.map((item) => ({
-          data: `${FIXTURE_BASE}${item.file}`,
-          path: item.location,
-        })),
         graphOptimizationLevel: "all",
         logSeverityLevel: 0,
         logVerbosityLevel: 0,
