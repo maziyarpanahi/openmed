@@ -8,7 +8,9 @@ parses those committed files with the standard library only, maps every
 declared package to the reviewed SPDX expression in
 ``docs/security/kit-license-inventory.md`` and fails closed when a package is
 unreviewed, unknown, copyleft, source-available or proprietary without a
-scoped, documented exception.
+scoped, documented exception.  Android NDK runtime libraries that a module
+copies into its AAR (``bundledNdkLibraries``) are reviewed the same way, as
+``ndk`` packages.
 
 The gate never resolves packages, runs a build tool or contacts a registry.
 Reports carry ecosystems, package names, repository-relative manifest paths,
@@ -108,7 +110,7 @@ DEVELOPMENT_HARNESS_MANIFESTS: frozenset[str] = frozenset(
 )
 
 ECOSYSTEMS = frozenset(
-    {"cargo", "cocoapods", "gradle", "gradle-plugin", "npm", "pub", "swiftpm"}
+    {"cargo", "cocoapods", "gradle", "gradle-plugin", "ndk", "npm", "pub", "swiftpm"}
 )
 
 # Development-only tooling never ships in a kit artifact, so these reviewed
@@ -621,6 +623,12 @@ _GRADLE_INCLUDE_RE = re.compile(
     r"\binclude(?![A-Za-z0-9_])\s*\(?(?P<arguments>[^)\n]*)\)?"
 )
 _GRADLE_LOCAL_BINARY_RE = re.compile(r"\b(?P<function>files|fileTree)\s*\(")
+# Android NDK runtime libraries a module copies into its AAR, declared as
+# ``val bundledNdkLibraries = listOf("libc++_shared.so")``.  They ship like a
+# runtime dependency but have no Maven coordinate, so they are reviewed as
+# ``ndk`` rows.
+_GRADLE_BUNDLED_NDK_RE = re.compile(r"\bval\s+bundledNdkLibraries\s*=\s*listOf\s*\(")
+_NDK_LIBRARY_RE = re.compile(r"^lib[A-Za-z0-9_+-]+\.so$")
 _GRADLE_DEVELOPMENT_CONFIGS = frozenset(
     {"annotationprocessor", "classpath", "detektplugins", "lintchecks", "lintpublish"}
 )
@@ -726,6 +734,25 @@ def _check_local_binaries(body: str, manifest: str) -> None:
             )
 
 
+def _add_bundled_ndk_libraries(
+    text: str, manifest: str, discovery: KitDiscovery
+) -> None:
+    """Record the NDK runtime libraries a build file copies into its artifact."""
+
+    for match in _GRADLE_BUNDLED_NDK_RE.finditer(_blank_strings(text)):
+        open_index = match.end() - 1
+        arguments = text[open_index + 1 : _balanced_end(text, open_index, "(", ")")]
+        names = [value for _start, _end, value in _string_literals(arguments)]
+        if (
+            not names
+            or _blank_strings(arguments).replace(",", "").replace('"', "").strip()
+            or not all(_NDK_LIBRARY_RE.fullmatch(name) for name in names)
+        ):
+            raise KitManifestError("Bundled NDK library list is not static", manifest)
+        for name in names:
+            discovery.add("ndk", name, Usage.RUNTIME, manifest)
+
+
 def _add_plugin(discovery: KitDiscovery, plugin_id: str, manifest: str) -> None:
     # Unqualified ids are Gradle core plugins or legacy aliases whose artifact
     # is reviewed through its ``classpath`` coordinate.
@@ -762,6 +789,7 @@ def _parse_gradle_build(
     for match in _GRADLE_USE_MODULE_RE.finditer(text):
         coordinate = _gradle_coordinate(match["coordinate"], manifest)
         discovery.add("gradle", coordinate, Usage.DEVELOPMENT, manifest)
+    _add_bundled_ndk_libraries(text, manifest, discovery)
 
     for _start, body in _blocks(text, "dependencies"):
         _check_local_binaries(body, manifest)

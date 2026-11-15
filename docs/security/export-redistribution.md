@@ -75,7 +75,9 @@ Converter licenses, from the dependency license inventory unless noted:
 These libraries are linked into, or installed beside, the applications that
 use OpenMedKit, so an app that ships them redistributes them and must carry
 their notices. OpenMed declares them as package dependencies; it does not
-vendor their sources or binaries into this repository.
+vendor their sources or binaries into this repository. The one exception is
+the NDK's `libc++_shared.so`, which the Android build copies from the pinned
+NDK into the OpenMedKit AAR at build time.
 
 ### Swift
 
@@ -106,6 +108,7 @@ declares them in `android/openmedkit/build.gradle.kts`.
 | --- | --- | --- | --- | --- |
 | `com.microsoft.onnxruntime:onnxruntime-android` | 1.25.1 | `MIT` | Gradle cache POM | Every OpenMedKit Android consumer |
 | `ai.djl.huggingface:tokenizers`, `ai.djl.android:tokenizer-native` (with `ai.djl:api`) | 0.33.0 | `Apache-2.0` | Gradle cache POMs | Every OpenMedKit Android consumer |
+| LLVM libc++ (`libc++_shared.so`), packaged in the OpenMedKit AAR | NDK r28c (28.2.13676358), `android-ndk` in the version catalog | `Apache-2.0 WITH LLVM-exception` | NDK `NOTICE.toolchain`, which also carries libc++'s legacy NCSA and MIT notice | Every OpenMedKit Android consumer; the POM does not declare it, so add it to the app's notices |
 | `org.jetbrains.kotlinx:kotlinx-coroutines-core` | 1.8.1 | `Apache-2.0` | Gradle cache POM | Every OpenMedKit Android consumer |
 | `org.jetbrains.kotlinx:kotlinx-serialization-json` | 1.5.1 | `Apache-2.0` | Gradle cache POM | Every OpenMedKit Android consumer |
 | `org.jetbrains.kotlin:kotlin-stdlib` | Follows the Kotlin plugin (1.8.22; 1.9.24 in the Flutter plugin) | `Apache-2.0` | Gradle cache POM (1.4.32) | Every Kotlin consumer, including the Flutter Android plugin |

@@ -433,6 +433,10 @@ def test_checked_in_kits_pass_and_report_mlkit_as_restricted_exception() -> None
         ].dependency.usage
         == kit.Usage.DEVELOPMENT
     )
+    # The NDK C++ runtime the OpenMedKit AAR packages for the DJL tokenizer.
+    libcxx = records[("ndk", "libc++_shared.so", "android/openmedkit/build.gradle.kts")]
+    assert libcxx.decision == kit.Decision.PERMISSIVE
+    assert libcxx.dependency.usage == kit.Usage.RUNTIME
     assert (
         records[
             ("npm", "typescript", "js/openmedkit-web/package-lock.json")
@@ -592,6 +596,15 @@ def test_synthetic_kits_distinguish_runtime_and_development(tmp_path: Path) -> N
             '    runtimeOnly("com.example:unreviewed-literal:1.0.0")\n    api(',
             "gradle",
             "com.example:unreviewed-literal",
+            "runtime",
+        ),
+        (
+            "android/core/build.gradle.kts",
+            "dependencies {",
+            'val bundledNdkLibraries = listOf("libunreviewed_shared.so")\n\n'
+            "dependencies {",
+            "ndk",
+            "libunreviewed_shared.so",
             "runtime",
         ),
         (
@@ -929,6 +942,27 @@ def test_unresolvable_gradle_declarations_fail_closed(tmp_path: Path) -> None:
 
         assert error.value.manifest == "android/core/build.gradle.kts"
         assert str(root) not in str(error.value)
+
+
+def test_bundled_ndk_libraries_must_be_static_library_names(tmp_path: Path) -> None:
+    for label, declaration in [
+        ("variable-entry", 'listOf("libc++_shared.so", extraLibrary)'),
+        ("not-a-library", 'listOf("c++_shared")'),
+        ("empty", "listOf()"),
+    ]:
+        root = tmp_path / label
+        inventory_path = build_repo(root)
+        target = root / "android/core/build.gradle.kts"
+        target.write_text(
+            f"val bundledNdkLibraries = {declaration}\n\n"
+            + target.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(kit.KitManifestError, match="not static") as error:
+            kit.audit_kits(root, inventory_path, SYNTHETIC_MANIFESTS)
+
+        assert error.value.manifest == "android/core/build.gradle.kts", label
 
 
 def test_only_the_r8_consumer_may_consume_first_party_aar_build_outputs(

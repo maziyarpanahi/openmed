@@ -28,6 +28,7 @@ in the `repo-policy` job next to the Python dependency license policy.
 | Swift (nested package) | `swift/OpenMedKit/Package.swift` |
 | Swift demo apps | the committed `Package.resolved` of `OpenMedDemo` and `OpenMedScanDemo` |
 | Android | `android/settings.gradle.kts`, the root and every included module's build file, `android/gradle/libs.versions.toml` |
+| Android NDK runtime libraries | `bundledNdkLibraries` in an Android module's build file |
 | Web, Electron, React Native, Tauri | `js/*/package-lock.json` with the sibling `package.json` |
 | Electron packaging harness | `js/openmedkit-electron/harness/package-lock.json` with its `package.json` |
 | React Native native modules | the bridge's podspec and `android/build.gradle`, and those of the parity probe in `example/probe` |
@@ -58,9 +59,10 @@ apart:
 - **runtime** dependencies ship in, or are linked into, a kit artifact or demo
   app: SwiftPM packages used by non-test targets and all resolved pins, Gradle
   `implementation`, `api`, `compileOnly`, `runtimeOnly` and custom
-  configurations, npm production, optional and peer dependencies, Cargo crates
-  reachable from `[dependencies]`, pub `dependencies`, and podspec
-  dependencies. Unknown or unreferenced declarations are treated as runtime.
+  configurations, NDK runtime libraries copied into an AAR, npm production,
+  optional and peer dependencies, Cargo crates reachable from
+  `[dependencies]`, pub `dependencies`, and podspec dependencies. Unknown or
+  unreferenced declarations are treated as runtime.
 - **development** dependencies never ship: SwiftPM packages used only by test
   targets, Gradle `test*`, `androidTest*`, `debug*`, `kapt`, `ksp`,
   `annotationProcessor`, `lintChecks` and `classpath` configurations and
@@ -131,6 +133,32 @@ Kit never passes silently. Declaring it in any other manifest, or changing its
 reviewed expression, fails the gate. ML Kit's own transitive Google Play
 services artifacts appear only in the Gradle lockfiles, which this gate does
 not read.
+
+## Android NDK runtime libraries
+
+`ai.djl.android:tokenizer-native` ships `libdjl_tokenizer.so`, which links
+against the NDK's shared C++ runtime (`DT_NEEDED libc++_shared.so`), but no
+dependency ships that runtime. The `:openmedkit` build therefore copies
+`libc++_shared.so` out of the NDK it pins through `android.ndkVersion`
+(`android-ndk` in `android/gradle/libs.versions.toml`, NDK r28c,
+28.2.13676358) into the release AAR for `arm64-v8a`, `armeabi-v7a`, `x86` and
+`x86_64`, and AGP strips it with the same NDK. No binary is committed. Every
+app that uses OpenMedKit Android ships this library.
+
+The library has no Maven coordinate, so the gate reads the
+`bundledNdkLibraries` list in the module's build file and reviews each entry
+as an `ndk` package. A list that is not a static set of `lib*.so` string
+literals fails the gate, and a new entry fails until it has a row.
+
+libc++ is part of the LLVM project, licensed `Apache-2.0 WITH LLVM-exception`.
+The NDK's `NOTICE.toolchain` also carries libc++'s legacy license (the
+University of Illinois/NCSA and MIT licenses, offered as alternatives) for
+code contributed before LLVM relicensed. The LLVM exception covers runtime
+portions compiled into an application's own object code. A copy of
+`libc++_shared.so` redistributes the library itself, so an app that ships it
+should carry the libc++ license text with its other open-source notices.
+The OpenMedKit POM declares only OpenMed's own Apache-2.0 license, so license
+tools that read POMs do not list libc++.
 
 ## Speech recognition (WhisperKit)
 
@@ -223,6 +251,12 @@ the tables. Rows that no manifest uses any more are counted as
 | gradle-plugin | `org.jetbrains.kotlin.android` | `Apache-2.0` | Kotlin Gradle Plugin |
 | gradle-plugin | `org.jetbrains.kotlin.plugin.compose` | `Apache-2.0` | Kotlin Compose compiler plugin for the demo apps |
 | gradle-plugin | `org.jetbrains.kotlinx.binary-compatibility-validator` | `Apache-2.0` | public API dump and check; build tooling |
+
+### NDK runtime libraries
+
+| Ecosystem | Package | License expression | Review note |
+| --- | --- | --- | --- |
+| ndk | `libc++_shared.so` | `Apache-2.0 WITH LLVM-exception` | LLVM libc++ from NDK r28c (28.2.13676358), packaged in the OpenMedKit AAR for four ABIs; legacy NCSA/MIT notice in the NDK `NOTICE.toolchain` |
 
 ### npm
 
