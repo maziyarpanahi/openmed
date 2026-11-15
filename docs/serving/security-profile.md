@@ -112,8 +112,10 @@ check is reported but never blocks.
 the feature it guards is enabled. When the feature is disabled the check
 reports `not_applicable`. A missing control therefore blocks a production
 deployment only when that deployment turns its feature on: for example, setting
-`OPENMED_JOURNEY_POSTGRES_DSN` makes `journey.principal_binding` and
-`journey.encryption_at_rest` block until their controls ship.
+`OPENMED_JOURNEY_POSTGRES_DSN` makes `journey.encryption_at_rest` block until
+its control ships. `journey.principal_binding` passes once the Journey access
+gate binds every read to the authenticated principal, and fails if the gate is
+missing or allows anonymous reads.
 
 Some surfaces cannot be switched off on this build: GraphQL is always mounted
 with GET queries and the GraphiQL IDE, FastAPI serves its API docs, and job and

@@ -317,7 +317,9 @@ def test_development_profile_keeps_insecure_configuration_running(
 
 # --- one focused failing test per unsafe production configuration -----------
 
-_JOURNEY_STUBS = {"journey.principal_binding", "journey.encryption_at_rest"}
+# Journey principal binding is implemented by the Journey access gate (#3549);
+# encryption at rest is still a stub until its control lands.
+_JOURNEY_STUBS = {"journey.encryption_at_rest"}
 
 
 @pytest.mark.parametrize(
@@ -514,7 +516,6 @@ def test_undeclared_route_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None
 @pytest.mark.parametrize(
     "state",
     [
-        {"journey_resources": SimpleNamespace(record_count=1)},
         {"openhim_settings": SimpleNamespace(enabled=True)},
         {
             "tracing": SimpleNamespace(
@@ -524,7 +525,7 @@ def test_undeclared_route_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None
             )
         },
     ],
-    ids=["journey-catalog-records", "openhim-mediator", "otlp-exporter"],
+    ids=["openhim-mediator", "otlp-exporter"],
 )
 def test_enabled_feature_without_its_control_blocks(
     monkeypatch: pytest.MonkeyPatch, state: dict[str, Any]
@@ -539,7 +540,26 @@ def test_enabled_feature_without_its_control_blocks(
     assert len(report.blocking_checks) == 1
     result = _result(report, report.blocking_checks[0])
     assert result.status is sp.CheckStatus.NOT_IMPLEMENTED
-    assert result.tracking_issue in {3549, 3581}
+    assert result.tracking_issue == 3581
+
+
+def test_journey_records_are_bound_by_the_access_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_production(monkeypatch)
+    app = create_app()
+    app.state.journey_resources = SimpleNamespace(record_count=1)
+
+    bound = _result(_evaluate(app), "journey.principal_binding")
+    assert (bound.status, bound.reason) == (
+        sp.CheckStatus.PASS,
+        "journey_principals_bound",
+    )
+    assert not bound.blocking
+
+    app.state.journey_access = None
+    missing = _result(_evaluate(app), "journey.principal_binding")
+    assert (missing.reason, missing.blocking) == ("journey_access_gate_missing", True)
 
 
 def test_not_implemented_controls_block_only_when_their_feature_is_enabled(
@@ -567,7 +587,7 @@ def test_not_implemented_controls_block_only_when_their_feature_is_enabled(
     )
     assert not development.blocking
     assert _result(development, "journey.principal_binding").status is (
-        sp.CheckStatus.NOT_IMPLEMENTED
+        sp.CheckStatus.PASS
     )
 
 

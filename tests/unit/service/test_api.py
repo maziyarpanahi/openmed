@@ -742,8 +742,11 @@ def test_app_defaults_to_prod_profile_when_env_missing(monkeypatch, fake_loader_
     with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
         response = test_client.get("/service/metadata")
 
-    assert response.status_code == 200
-    assert response.json()["profile"] == "prod"
+    # With no profile set the service runs as prod, so the fail-closed
+    # security profile refuses requests until authentication is configured.
+    assert app.state.runtime.profile == "prod"
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "security_profile_invalid"
 
 
 def test_preload_models_are_parsed_deduped_and_warmed(monkeypatch, fake_loader_cls):

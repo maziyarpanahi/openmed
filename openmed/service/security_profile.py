@@ -915,7 +915,14 @@ def _check_journey_principal_binding(context: SecurityCheckContext) -> CheckOutc
     records = getattr(catalog, "record_count", 0)
     if not _journey_store_configured(context) and not records:
         return _not_applicable("journey_disabled")
-    return _not_implemented()
+    from .journey_access import JourneyAccessGate
+
+    gate = context.state("journey_access")
+    if not isinstance(gate, JourneyAccessGate):
+        return _fail("journey_access_gate_missing")
+    if gate.anonymous_allowed:
+        return _fail("journey_anonymous_access_allowed")
+    return _pass("journey_principals_bound")
 
 
 def _check_journey_encryption(context: SecurityCheckContext) -> CheckOutcome:

@@ -282,10 +282,16 @@ def _jwt(claims: dict[str, Any]) -> str:
     return f"{signing_input}.{_b64url(signature)}"
 
 
+JWT_ISSUER = "https://issuer.synthetic.example"
+JWT_AUDIENCE = "openmed-journey-tests"
+
+
 def _jwt_claims(subject: str, **extra: Any) -> dict[str, Any]:
     now = int(time.time())
     return {
         "sub": subject,
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
         "scope": "journey:read",
         "iat": now,
         "exp": now + 600,
@@ -330,6 +336,11 @@ def _configure_auth(
             }
         ),
     )
+    # Production rejects unbounded JWT verification, so pin issuer, audience
+    # and a maximum token lifetime like a real deployment.
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_JWT_ISSUER", JWT_ISSUER)
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_JWT_AUDIENCE", JWT_AUDIENCE)
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_JWT_MAX_LIFETIME_SECONDS", "3600")
     if grants is not None:
         monkeypatch.setenv(SERVICE_JOURNEY_GRANTS_ENV_VAR, json.dumps(grants))
 
@@ -410,6 +421,23 @@ def _snake(value: Any) -> Any:
     if isinstance(value, list):
         return [_snake(item) for item in value]
     return value
+
+
+def _security_profile_blocks(app: Any) -> bool:
+    report = getattr(app.state, "security_profile_report", None)
+    return report is not None and not report.ready
+
+
+def _assert_fails_closed(client: TestClient) -> None:
+    """A production profile without authentication refuses Journey reads."""
+    responses = (
+        client.get("/v1/journey/resources", params={"resource_type": "fact"}),
+        client.post("/graphql", json={"query": "{ entityTypes { label } }"}),
+    )
+    for response in responses:
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "security_profile_invalid"
+        assert SYNTHETIC_VALUE not in response.text
 
 
 def _assert_denied(page: dict[str, Any], code: str) -> None:
@@ -754,6 +782,22 @@ def test_mtls_principal_cannot_borrow_a_same_named_api_key_grant(
         ),
     )
     monkeypatch.setenv(SERVICE_JOURNEY_GRANTS_ENV_VAR, json.dumps(GRANT_DOCUMENT))
+    # Production readiness requires service authentication. The request below
+    # sends no API key, so it still authenticates through the mTLS principal.
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [
+                {
+                    "id": "key-unrelated",
+                    "key_hash": hash_api_key("synthetic-unrelated-api-key"),
+                    "principal": "synthetic-unrelated-service",
+                    "scopes": ["journey:read"],
+                }
+            ]
+        ),
+    )
     app = create_app()
     app.state.journey_resources = _catalog()
     app.state.journey_access_policy = POLICY
@@ -789,6 +833,13 @@ def test_anonymous_production_requests_receive_no_journey_records(
     app.state.journey_resources = _catalog()
 
     with _client(app) as client:
+        if _security_profile_blocks(app):
+            # Production-class profiles without authentication fail closed
+            # before any Journey read, which is stronger than the gate's
+            # anonymous denial.
+            _assert_fails_closed(client)
+            assert list(app.state.journey_access.audit.records) == []
+            return
         rest = _rest_page(client, {}, {"resource_type": "fact", "role": "clinician"})
         graph = _graphql_page(client, {}, {"resource_type": "fact"})
 
@@ -824,8 +875,10 @@ def test_only_named_development_profiles_allow_anonymous_resolution() -> None:
     assert JourneyAccessGate.from_env(environ={}).profile == "prod"
 
 
+@pytest.mark.parametrize("profile", ["prod", "fast"])
 def test_anonymous_production_denial_never_consults_the_provider(
     monkeypatch: pytest.MonkeyPatch,
+    profile: str,
 ) -> None:
     calls: list[Any] = []
 
@@ -842,14 +895,17 @@ def test_anonymous_production_denial_never_consults_the_provider(
                 consent_state="active",
             )
 
-    monkeypatch.setenv("OPENMED_PROFILE", "prod")
+    monkeypatch.setenv("OPENMED_PROFILE", profile)
     app = create_app(journey_access_context_provider=PermissiveProvider())
     app.state.journey_resources = _catalog()
     with _client(app) as client:
-        _assert_denied(
-            _rest_page(client, {}, {"resource_type": "fact"}),
-            "anonymous_access_denied",
-        )
+        if _security_profile_blocks(app):
+            _assert_fails_closed(client)
+        else:
+            _assert_denied(
+                _rest_page(client, {}, {"resource_type": "fact"}),
+                "anonymous_access_denied",
+            )
     assert calls == []
 
 

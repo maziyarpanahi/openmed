@@ -684,9 +684,11 @@ def test_adversarial_documents_never_reach_a_resolver_or_model_loader(
         )
 
 
-def test_json_body_nested_past_the_decoder_fails_as_a_variable_limit(
+def test_json_body_nested_past_the_decoder_is_rejected_before_decoding(
     resolver_calls: list[str],
 ) -> None:
+    from openmed.service.request_limits import JSON_STRUCTURE_EXCEEDED
+
     nested = "[" * 50_000 + "]" * 50_000
     body = '{"query": "{ entityTypes { label } }", "variables": {"x": ' + nested + "}}"
 
@@ -697,12 +699,11 @@ def test_json_body_nested_past_the_decoder_fails_as_a_variable_limit(
             headers={"content-type": "application/json"},
         )
 
-    assert response.status_code == 200
-    assert response.json()["errors"][0]["extensions"] == _limit_extensions(
-        GraphQLLimitCategory.VARIABLE_DEPTH,
-        DEFAULT_GRAPHQL_LIMITS.max_variable_depth,
-        DEFAULT_GRAPHQL_LIMITS.max_variable_depth + 1,
-    )
+    # The shared streaming JSON-structure guard rejects the body before the
+    # GraphQL decoder or any resolver runs; shallower nesting is still caught
+    # by the GraphQL variable-depth limit.
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == JSON_STRUCTURE_EXCEEDED
     assert resolver_calls == []
 
 
@@ -898,9 +899,8 @@ def test_deadline_cancels_a_stalled_resolver_and_releases_its_permit(
                 assert app.state.inflight == 0
                 assert _orphaned_work(app) == 0
                 assert not _live_service_tasks()
-                assert not app.state.throttle.concurrency_gate._semaphores[
-                    "global"
-                ].locked()
+                # No permit is held once the deadline released it.
+                assert app.state.throttle.concurrency_gate.tracked_key_count == 0
                 follow_up = await client.post(
                     "/graphql", json={"query": "{ entityTypes { label } }"}
                 )
@@ -966,9 +966,8 @@ def test_deadline_expiry_leaves_no_lease_task_permit_or_inflight_counter(
                     await _wait_for_work_to_finish(app)
 
                 assert active_leases() == 0
-                assert not app.state.throttle.concurrency_gate._semaphores[
-                    "global"
-                ].locked()
+                # No permit is held once the deadline released it.
+                assert app.state.throttle.concurrency_gate.tracked_key_count == 0
                 recovered = await client.post("/graphql", json=_analyze_body("ok"))
                 assert recovered.status_code == 200
                 assert "errors" not in recovered.json()
