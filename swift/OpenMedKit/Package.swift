@@ -121,7 +121,10 @@ let package = Package(
         // Test support only: no product exposes this target, so apps never link it.
         .target(
             name: "OpenMedPrivacySweep",
-            path: "Sources/OpenMedPrivacySweep"
+            path: "Sources/OpenMedPrivacySweep",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "OpenMedKitTests",
