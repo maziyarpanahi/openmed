@@ -802,7 +802,7 @@ def convert(
             sample_texts=(sample_text,) if sample_text else (),
             tokenizer_loader=partial(
                 _webgpu_gate_tokenizer,
-                model_id,
+                load_reference,
                 cache_dir=cache_dir,
             ),
             gate_config=gate_config,
