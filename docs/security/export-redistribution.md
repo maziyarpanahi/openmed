@@ -44,6 +44,7 @@ inside an app, such as the Tauri sidecar below, are covered with the kits.
 | `export_gguf_int4` | [GGUF Grounding Runtime](../runtimes/gguf-grounding.md) | The same llama.cpp checkout plus its `llama-quantize` and `llama-embedding` builds | Not declared or pinned by OpenMed. | `model-q4_k_m.gguf` and its recall certificate |
 | `quantize_awq`, `quantize_awq_grounding` | [AWQ Export](../export-awq.md), [AWQ Grounding Embedder](../runtimes/awq-grounding.md) | `openmed[awq]`, Linux only | autoawq `==0.2.9`; transformers `==5.12.1`; torch `>=2.13.0` (2.13.0); datasets `>=5.0.1` (5.0.1). | AWQ checkpoint and `quant_config.json` |
 | `quantize_gptq` | [GPTQ Export](../export-gptq.md) | `openmed[gptq]` | auto-gptq `>=0.7.1` (0.7.1); torch `>=2.13.0` (2.13.0); datasets `>=5.0.1` (5.0.1). | GPTQ checkpoint and `quant_config.json` |
+| `python -m openmed.core.hf_publish` | [ONNX and WebGPU Export](../export-onnx-webgpu.md#gate-record) | `openmed[hf]` | No converter. huggingface-hub `>=0.30` (locked 1.33.0) uploads a directory that one of the commands above already wrote, and refuses a `webgpu` artifact without a passing fp16 gate record that matches the file. | A generated `README.md` model card in the artifact directory, a `models.jsonl` row, and the Hub upload |
 
 Hugging Face Optimum is not part of any export path: the ONNX converter calls
 the PyTorch exporter directly, and `pyproject.toml` declares no `optimum`
