@@ -9,6 +9,7 @@ on:
       - 'fixtures/parity/**'
       - 'scripts/parity/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
@@ -26,6 +27,7 @@ on:
       - 'fixtures/parity/**'
       - 'scripts/parity/**'
       - 'scripts/android/check_apk_zip_alignment.py'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
@@ -96,6 +98,10 @@ jobs:
     - name: Verify 16 KB APK zip alignment
       working-directory: android
       run: ./gradlew verifyApkZipAlignment --stacktrace
+
+    - name: Verify 16 KB ELF alignment of APK native libraries
+      working-directory: android
+      run: ./gradlew verifyApkElfAlignment --stacktrace
 
     - name: Cross-check APK alignment with SDK zipalign
       shell: bash

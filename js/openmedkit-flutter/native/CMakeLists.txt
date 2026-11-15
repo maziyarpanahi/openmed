@@ -57,6 +57,14 @@ if(UNIX AND NOT APPLE)
   target_link_libraries(openmed_ffi PRIVATE m)
 endif()
 
+if(ANDROID)
+  # Android 15+ devices with 16 KB memory pages can only map a shared library
+  # whose ELF LOAD segments are aligned to at least 16 KB. NDK r28 and newer
+  # link 64-bit libraries that way by default; this keeps r27 and older NDKs
+  # compatible. scripts/android/check_elf_page_alignment.py verifies the result.
+  target_link_options(openmed_ffi PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
+
 set_target_properties(
   openmed_ffi
   PROPERTIES

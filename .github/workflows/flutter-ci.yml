@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/flutter-ci.yml'
       - 'js/openmedkit-flutter/**'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/mobile/test_flutter_ffi.*'
       - 'tests/mobile/fixtures/flutter_ffi_golden.json'
       - 'examples/flutter/**'
@@ -13,6 +14,7 @@ on:
     paths:
       - '.github/workflows/flutter-ci.yml'
       - 'js/openmedkit-flutter/**'
+      - 'scripts/android/check_elf_page_alignment.py'
       - 'tests/mobile/test_flutter_ffi.*'
       - 'tests/mobile/fixtures/flutter_ffi_golden.json'
       - 'examples/flutter/**'
@@ -71,6 +73,11 @@ jobs:
           flutter pub add openmedkit_flutter \
             --path "$GITHUB_WORKSPACE/js/openmedkit-flutter"
           flutter build apk --debug
+      - name: Verify 16 KB ELF alignment of Android native libraries
+        run: >-
+          python3 scripts/android/check_elf_page_alignment.py
+          --require-native-libraries
+          "$RUNNER_TEMP/openmed_flutter_mobile/build/app/outputs/flutter-apk/app-debug.apk"
 
   desktop-build:
     runs-on: ubuntu-latest

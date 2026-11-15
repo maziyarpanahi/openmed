@@ -122,7 +122,52 @@ entries 4-byte aligned, and compressed entries are skipped. A task fails when an
 APK has no uncompressed native libraries, so the gate cannot pass vacuously. The
 Android CI job repeats the check with the SDK's `zipalign` (Build-Tools 35 or
 newer). This covers zip alignment only; the ELF segment alignment of the native
-libraries themselves is a separate check.
+libraries themselves is a separate check, described next.
+
+## 16 KB ELF Alignment
+
+A 64-bit native library can only be mapped on a 16 KB page-size device when
+every ELF `PT_LOAD` segment has `p_align` of at least 16384.
+`scripts/android/check_elf_page_alignment.py` reads the program headers of each
+`.so` in AARs (`jni/<abi>/`), APKs and JARs (`lib/<abi>/`), loose files and
+directories. It prints only library names, ABIs, alignment values, and the file
+name of the containing archive. 32-bit libraries are reported and skipped. Two
+Gradle gates run it:
+
+```bash
+cd android
+./gradlew :openmedkit:verifyReleaseNativeLibraryAlignment
+./gradlew verifyApkElfAlignment
+```
+
+- `:openmedkit:verifyReleaseNativeLibraryAlignment` checks the release AAR plus
+  every AAR resolved on its release runtime classpath, which is what consumers
+  receive. It is part of `:openmedkit:verifyAndroidBudgets`.
+- `verifyApkElfAlignment` checks every debug demo APK and the OpenMedKit
+  instrumented test APK. Each application variant also has its own task, for
+  example `:OpenMedMapleDemo:app:verifyReleaseApkElfAlignment`.
+
+Both gates fail when no 64-bit library is found, so they cannot pass vacuously.
+
+`gradle/native-page-alignment-allowlist.toml` holds reviewed, expiring
+exceptions. Each entry names the library, its ABIs, the Maven artifact that
+ships it, an owner, an expiry date, a tracking issue, and the upstream fix it
+waits for. A covered library is reported as `ALLOW`. After its `expires` date it
+fails again. The release AAR gate runs with `--strict-allowlist`, so an entry
+that no longer matches a misaligned library also fails and must be removed. A
+unit test checks that each entry's artifact version matches
+`gradle/libs.versions.toml`, so bumping the dependency means revisiting the
+entry.
+
+The only current entry is `libdjl_tokenizer.so` from
+`ai.djl.android:tokenizer-native:0.33.0`, which is linked with 4 KB alignment
+on `arm64-v8a` and `x86_64`. It is the newest release on Maven Central, and the
+upstream fix is tracked in
+[deepjavalibrary/djl#3815](https://github.com/deepjavalibrary/djl/issues/3815).
+Until a 16 KB-aligned release exists, the DJL tokenizer cannot load on 16 KB
+page-size devices. The other libraries in the dependency graph are 16 KB
+aligned: ONNX Runtime 1.25.1, the ML Kit OCR pipeline, and the CameraX 1.4
+libraries in the scan demo.
 
 ## R8 And ProGuard
 
