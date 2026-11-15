@@ -157,3 +157,9 @@ The REST and GraphQL application installs a body-size middleware for `POST`,
 default within the library's safe ceiling. Declared sizes are rejected before
 the body is read; streamed bodies are counted and rejected before route parsing
 or model execution.
+The same middleware streams JSON bodies through `JsonStructureScanner`, a
+single-pass, non-recursive scan that enforces `max_json_depth`,
+`max_json_nodes`, and `max_json_string_bytes` while chunks arrive. Violations
+return `json_structure_exceeded` with only the limit category and ceiling, so
+oversized structure is rejected before JSON decoding, Pydantic validation, or
+model execution and without echoing request values.
