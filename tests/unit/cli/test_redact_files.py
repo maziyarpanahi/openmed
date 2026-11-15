@@ -203,6 +203,29 @@ def test_check_mode_exits_zero_for_clean_text(
     assert [path.name for path in tmp_path.iterdir()] == ["clean-note.txt"]
 
 
+def test_check_mode_text_output_reports_counts_and_stays_value_free(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    input_path = tmp_path / "support-export.txt"
+    input_path.write_text(f"Caller {SYNTHETIC_NAME} used {SYNTHETIC_PHONE}.\n")
+    monkeypatch.setattr("openmed.core.pii.deidentify", _fake_deidentify)
+
+    exit_code = main_module.main(["redact-files", str(input_path), "--check"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert exit_code == 1
+    assert captured.err == ""
+    assert payload["total_spans"] == 2
+    assert payload["per_label_counts"] == {"NAME": 1, "PHONE": 1}
+    assert [item["label"] for item in payload["offsets"]] == ["NAME", "PHONE"]
+    assert SYNTHETIC_NAME not in captured.out
+    assert SYNTHETIC_PHONE not in captured.out
+    assert [path.name for path in tmp_path.iterdir()] == ["support-export.txt"]
+
+
 def test_check_mode_rejects_an_output_path(
     tmp_path: Path,
     capsys,
