@@ -289,6 +289,35 @@ export type {
   ServeInferenceWorkerOptions,
 } from "./worker/server";
 
+export {
+  PORTABLE_BUNDLE_DEFAULT_LIMITS,
+  PORTABLE_BUNDLE_ENVELOPE_FILENAME,
+  PORTABLE_BUNDLE_ENVELOPE_SCHEMA,
+  PORTABLE_BUNDLE_MANIFEST_FILENAME,
+  PORTABLE_BUNDLE_PAYLOAD_TYPE,
+  PORTABLE_BUNDLE_REASONS,
+  PORTABLE_BUNDLE_SCHEMA,
+  PORTABLE_BUNDLE_SCHEMA_VERSION,
+  PORTABLE_BUNDLE_TRUST_POLICY_SCHEMA,
+  PORTABLE_BUNDLE_VERIFICATION_SCHEMA,
+  PortableBundleError,
+  canonicalJson,
+  parsePortableBundleManifest,
+  parsePortableBundleTrustPolicy,
+  portableBundleContentId,
+  portableBundleSigningInput,
+  verifyPortableBundle,
+} from "./portable-bundle";
+export type {
+  PortableBundleContext,
+  PortableBundleReason,
+  PortableBundleTarget,
+  PortableBundleTrustedKey,
+  PortableBundleTrustPolicy,
+  PortableBundleVerification,
+  VerifyPortableBundleInput,
+} from "./portable-bundle";
+
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
 /** Hub commit of `DEFAULT_MODEL_ID` that the default path requests. */
