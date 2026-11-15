@@ -3,6 +3,8 @@ package com.openmed.openmedkit.onnx
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import com.openmed.openmedkit.util.LeaseGate
+import com.openmed.openmedkit.util.withLease
 import java.io.Closeable
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +30,8 @@ public class OnnxTokenClassifier internal constructor(
 ) : Closeable {
     private val id2Label: Map<Int, String> = id2Label.toMap()
 
-    @Volatile
-    private var closed = false
+    // Native session close is deferred until no run holds the session.
+    private val gate = LeaseGate(::releaseNativeResources)
 
     public constructor(
         modelPath: String,
@@ -98,17 +100,28 @@ public class OnnxTokenClassifier internal constructor(
         offsets: List<TokenOffset>,
     ): List<TokenPrediction> = withContext(Dispatchers.Default) {
         currentCoroutineContext().ensureActive()
-        val predictions = runBlocking(inputIds, attentionMask, offsets)
+        val predictions = gate.withLease(
+            onClosed = {
+                throw InferenceError.InvalidInput("OnnxTokenClassifier is closed")
+            },
+        ) {
+            runBlocking(inputIds, attentionMask, offsets)
+        }
         currentCoroutineContext().ensureActive()
         predictions
     }
 
+    /**
+     * Close idempotently.
+     *
+     * New runs fail immediately. When a run is in progress, the native session
+     * is released after that run returns instead of underneath it.
+     */
     public override fun close() {
-        if (closed) {
-            return
-        }
-        closed = true
+        gate.close()
+    }
 
+    private fun releaseNativeResources() {
         var closeFailure: Throwable? = null
         try {
             session.close()
@@ -138,7 +151,6 @@ public class OnnxTokenClassifier internal constructor(
         attentionMask: IntArray,
         offsets: List<TokenOffset>,
     ): List<TokenPrediction> {
-        ensureOpen()
         validateInputs(inputIds, attentionMask, offsets)
 
         val inputs = mutableMapOf(
@@ -152,12 +164,6 @@ public class OnnxTokenClassifier internal constructor(
         val logitsOutput = outputs[LOGITS_NAME]
             ?: throw InferenceError.MissingOutput(LOGITS_NAME)
         return decodePredictions(normalizeLogits(logitsOutput), offsets)
-    }
-
-    private fun ensureOpen() {
-        if (closed) {
-            throw InferenceError.InvalidInput("OnnxTokenClassifier is closed")
-        }
     }
 
     private fun validateInputs(
