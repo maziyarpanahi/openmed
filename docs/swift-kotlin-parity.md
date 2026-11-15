@@ -123,6 +123,11 @@ comparison never depends on confidence scores or model metadata.
 
 The cases cover:
 
+Before span parity runs, both kits check their tokenizer adapters against the
+shared vectors described in [Portable Tokenizer
+Conformance](tokenizer-conformance.md), so drift in normalization,
+special tokens or windows is reported before any model output is compared.
+
 - `clinical_note_ascii`: the original note under `hipaa_safe_harbor`.
 - `emoji_and_combining_marks`: an emoji ZWJ sequence with a skin-tone
   modifier, a regional-indicator flag, decomposed and stacked combining marks,
