@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import tempfile
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -26,10 +28,15 @@ SERVICE_JOBS_TTL_ENV_VAR = "OPENMED_SERVICE_JOBS_TTL_SECONDS"
 SERVICE_JOBS_WORKERS_ENV_VAR = "OPENMED_SERVICE_JOBS_WORKERS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
+DEFAULT_PROGRESS_INTERVAL_SECONDS = 1.0
+DEFAULT_MAX_PROGRESS_WRITES = 100
 TERMINAL_STATUSES = frozenset({"done", "failed"})
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
+# Maps each job id touched by one publication to its prior record, or None
+# when the id did not exist before. Used to roll back a failed publication.
+_RecordSnapshots = dict[str, Optional[dict[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -120,9 +127,9 @@ class LocalJobStore:
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         """Persist a new job record."""
         with self._lock:
-            previous = _copy_record(self._records)
-            self.cleanup_expired_locked()
+            previous = self._remove_expired_locked()
             job_id = str(record["id"])
+            previous.setdefault(job_id, self._records.get(job_id))
             self._records[job_id] = _copy_record(record)
             self._publish_locked(previous)
             return _copy_record(self._records[job_id])
@@ -137,21 +144,30 @@ class LocalJobStore:
     def update(self, job_id: str, **changes: Any) -> dict[str, Any]:
         """Apply changes to a job record and persist them."""
         with self._lock:
-            previous = _copy_record(self._records)
-            record = self._records[job_id]
+            current = self._records[job_id]
+            # Build the new record from a shallow copy so the current record
+            # stays untouched and serves as the rollback snapshot. Changes only
+            # replace top-level values, and stored records are never mutated in
+            # place, so no other record needs a snapshot.
+            record = dict(current)
             record.update(_copy_record(changes))
             record["updated_at"] = _isoformat(self.clock())
-            self._publish_locked(previous)
+            self._records[job_id] = record
+            self._publish_locked({job_id: current})
             return _copy_record(record)
 
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
-            previous = _copy_record(self._records)
-            if self.cleanup_expired_locked():
+            previous = self._remove_expired_locked()
+            if previous:
                 self._publish_locked(previous)
 
     def cleanup_expired_locked(self) -> bool:
+        """Drop expired terminal records from memory without persisting."""
+        return bool(self._remove_expired_locked())
+
+    def _remove_expired_locked(self) -> _RecordSnapshots:
         now = self.clock()
         expired = [
             job_id
@@ -159,9 +175,7 @@ class LocalJobStore:
             if record.get("status") in TERMINAL_STATUSES
             and _parse_timestamp(record.get("expires_at")) <= now
         ]
-        for job_id in expired:
-            self._records.pop(job_id, None)
-        return bool(expired)
+        return {job_id: self._records.pop(job_id) for job_id in expired}
 
     def _load(self) -> dict[str, dict[str, Any]]:
         if not self.path.exists():
@@ -202,11 +216,15 @@ class LocalJobStore:
                     pass
             raise
 
-    def _publish_locked(self, previous: dict[str, dict[str, Any]]) -> None:
+    def _publish_locked(self, previous: _RecordSnapshots) -> None:
         try:
             self._persist_locked()
         except BaseException:
-            self._records = previous
+            for job_id, record in previous.items():
+                if record is None:
+                    self._records.pop(job_id, None)
+                else:
+                    self._records[job_id] = record
             raise
 
 
@@ -224,7 +242,30 @@ def _parse_timestamp(raw_value: Any) -> datetime:
 
 
 class DeidentifyJobQueue:
-    """Bounded local worker pool for async de-identification jobs."""
+    """Bounded local worker pool for async de-identification jobs.
+
+    Status transitions and terminal results are persisted immediately.
+    Per-document progress is coalesced into checkpoints: a checkpoint is
+    written only after ``progress_interval_seconds`` have elapsed since the
+    previous write and after at least ``1 / max_progress_writes`` of the job's
+    documents have completed since then. Each job therefore rewrites the store
+    a bounded number of times regardless of its document count.
+
+    Args:
+        runtime: Service runtime that executes model requests.
+        store: Local metadata store for job records.
+        max_workers: Maximum number of concurrently running jobs.
+        webhook_sender: Callable that delivers terminal webhooks.
+        clock: Wall-clock source for record timestamps.
+        progress_interval_seconds: Minimum seconds between two progress
+            checkpoints of one job. ``0`` disables the time limit.
+        max_progress_writes: Maximum number of progress checkpoints per job.
+        monotonic: Monotonic seconds source used to space checkpoints.
+
+    Raises:
+        ValueError: If ``progress_interval_seconds`` is negative or
+            ``max_progress_writes`` is less than one.
+    """
 
     def __init__(
         self,
@@ -234,11 +275,21 @@ class DeidentifyJobQueue:
         max_workers: int = DEFAULT_JOBS_WORKERS,
         webhook_sender: WebhookSender = deliver_webhook,
         clock: Callable[[], datetime] = _utc_now,
+        progress_interval_seconds: float = DEFAULT_PROGRESS_INTERVAL_SECONDS,
+        max_progress_writes: int = DEFAULT_MAX_PROGRESS_WRITES,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
+        if not progress_interval_seconds >= 0:
+            raise ValueError("progress_interval_seconds must be non-negative")
+        if int(max_progress_writes) < 1:
+            raise ValueError("max_progress_writes must be a positive integer")
         self.runtime = runtime
         self.store = store
         self.webhook_sender = webhook_sender
         self.clock = clock
+        self.progress_interval_seconds = float(progress_interval_seconds)
+        self.max_progress_writes = int(max_progress_writes)
+        self.monotonic = monotonic
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
             thread_name_prefix="openmed-job",
@@ -324,6 +375,11 @@ class DeidentifyJobQueue:
         )
         summary = _JobSummary(total=len(item.payload.documents))
         error: Optional[dict[str, str]] = None
+        # Each checkpoint must cover at least this many newly attempted
+        # documents, which caps progress writes at max_progress_writes.
+        checkpoint_step = max(1, math.ceil(summary.total / self.max_progress_writes))
+        next_checkpoint = checkpoint_step
+        last_write = self.monotonic()
 
         for index, document in enumerate(item.payload.documents):
             document_id = _document_id(index, document)
@@ -334,18 +390,26 @@ class DeidentifyJobQueue:
                 summary.failed_count += 1
                 error = _safe_error(exc)
 
-            self.store.update(item.job_id, **summary.to_progress_record())
+            attempted = summary.attempted
+            # The terminal update below records the last document.
+            if attempted < summary.total and attempted >= next_checkpoint:
+                now = self.monotonic()
+                if now - last_write >= self.progress_interval_seconds:
+                    self.store.update(item.job_id, **summary.to_progress_record())
+                    last_write = now
+                    next_checkpoint = attempted + checkpoint_step
 
         completed_at = self.clock()
         status = "failed" if summary.failed_count else "done"
-        final_record = self.store.update(
-            item.job_id,
+        terminal = summary.to_progress_record()
+        terminal.update(
             status=status,
             progress_percent=100.0,
             error=error,
             completed_at=_isoformat(completed_at),
             expires_at=self._expiry_timestamp(completed_at),
         )
+        final_record = self.store.update(item.job_id, **terminal)
         self._send_terminal_webhook(item.payload.webhook, final_record)
 
     def _deidentify_document(
@@ -425,8 +489,13 @@ class _JobSummary:
             self.label_histogram[label] = self.label_histogram.get(label, 0) + count
         self.spans.extend(spans)
 
+    @property
+    def attempted(self) -> int:
+        """Return the number of documents processed or failed so far."""
+        return self.processed_count + self.failed_count
+
     def to_progress_record(self) -> dict[str, Any]:
-        attempted = self.processed_count + self.failed_count
+        attempted = self.attempted
         progress = (
             100.0 if self.total == 0 else round((attempted / self.total) * 100, 2)
         )
