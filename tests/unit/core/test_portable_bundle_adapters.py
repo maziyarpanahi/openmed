@@ -80,6 +80,16 @@ def _onnx_export(root: Path, *, extra: list[ExportArtifact] = ()) -> Path:
         ],
         tokenizer_files=["tokenizer.json", "vocab.txt"],
         segmenter=descriptor,
+        # A WebGPU artifact is listed only with a passing fp16 parity gate.
+        webgpu_fp16_gate={
+            "passed": True,
+            "reasons": [],
+            "tolerances": {},
+            "evaluated_lengths": [8],
+            "artifact_sha256": hashlib.sha256(
+                (root / "model.webgpu.onnx").read_bytes()
+            ).hexdigest(),
+        },
     )
     return root
 
