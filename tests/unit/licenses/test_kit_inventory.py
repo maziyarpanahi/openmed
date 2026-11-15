@@ -1036,6 +1036,73 @@ def test_legacy_lockfile_formats_are_supported(tmp_path: Path) -> None:
     assert discovery.counted_development == {"npm": 1}
 
 
+def test_test_app_harness_installs_only_development_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = "js/kit-rn/example/package-lock.json"
+    probe = "js/kit-rn/example/probe/package.json"
+    monkeypatch.setattr(
+        kit, "DEVELOPMENT_HARNESS_MANIFESTS", frozenset({harness, probe})
+    )
+    write(
+        tmp_path,
+        "js/kit-rn/example/package.json",
+        json.dumps(
+            {
+                "dependencies": {"app-runtime": "1", "first-party": "file:.."},
+                "devDependencies": {"app-tooling": "1"},
+            }
+        ),
+    )
+    write(
+        tmp_path,
+        harness,
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "": {
+                        "dependencies": {"app-runtime": "1", "first-party": "file:.."},
+                        "devDependencies": {"app-tooling": "1"},
+                    },
+                    "node_modules/app-runtime": {"version": "1.0.0"},
+                    "node_modules/app-runtime-child": {"version": "1.0.0"},
+                    "node_modules/app-tooling": {"version": "1.0.0", "dev": True},
+                    "node_modules/first-party": {"resolved": "..", "link": True},
+                },
+            }
+        ),
+    )
+    write(tmp_path, probe, json.dumps({"dependencies": {"probe-runtime": "1"}}))
+    write(
+        tmp_path,
+        "js/kit-rn/package.json",
+        json.dumps({"dependencies": {"kit-runtime": "1"}}),
+    )
+
+    discovery = kit.discover_kit_dependencies(
+        tmp_path, (harness, probe, "js/kit-rn/package.json")
+    )
+
+    assert sorted(
+        (dependency.name, dependency.usage, dependency.direct, dependency.manifest)
+        for dependency in discovery.dependencies
+    ) == [
+        ("app-runtime", "development", True, harness),
+        ("app-tooling", "development", True, harness),
+        ("kit-runtime", "runtime", True, "js/kit-rn/package.json"),
+        ("probe-runtime", "development", True, probe),
+    ]
+    # Transitive harness packages are counted, never reviewed as shipped code.
+    assert discovery.counted_development == {"npm": 1}
+    assert {
+        harness,
+        "js/kit-rn/example/package.json",
+        probe,
+        "js/kit-rn/package.json",
+    } <= discovery.manifests_read
+
+
 def test_manifest_paths_must_be_repository_relative(tmp_path: Path) -> None:
     for manifest in ("/etc/Package.swift", "../Package.swift"):
         with pytest.raises(kit.InventoryError, match="repository-relative"):

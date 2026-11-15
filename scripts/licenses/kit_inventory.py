@@ -82,6 +82,8 @@ DEFAULT_KIT_MANIFESTS: tuple[str, ...] = (
     "js/openmedkit-react-native/package-lock.json",
     "js/openmedkit-react-native/openmedkit-react-native.podspec",
     "js/openmedkit-react-native/android/build.gradle",
+    "js/openmedkit-react-native/example/package-lock.json",
+    "js/openmedkit-react-native/example/probe/package.json",
     "js/openmedkit-react-native/example/probe/openmedkit-parity-probe.podspec",
     "js/openmedkit-react-native/example/probe/android/build.gradle",
     "js/openmedkit-tauri/package-lock.json",
@@ -91,6 +93,18 @@ DEFAULT_KIT_MANIFESTS: tuple[str, ...] = (
     "js/openmedkit-flutter/ios/openmedkit_flutter.podspec",
     "js/openmedkit-flutter/macos/openmedkit_flutter.podspec",
     "js/openmedkit-flutter/android/build.gradle",
+)
+
+# Private test apps whose installed tree never ships in a kit artifact, like the
+# Electron packaging harness whose packages are all development dependencies.
+# Every package they install is development-only: direct dependencies are
+# reviewed and transitive lock entries are counted.  Native modules they build
+# are registered separately (the parity probe's podspec and build file).
+DEVELOPMENT_HARNESS_MANIFESTS: frozenset[str] = frozenset(
+    {
+        "js/openmedkit-react-native/example/package-lock.json",
+        "js/openmedkit-react-native/example/probe/package.json",
+    }
 )
 
 ECOSYSTEMS = frozenset(
@@ -898,9 +912,14 @@ def _parse_npm_lock(root: Path, manifest: str, discovery: KitDiscovery) -> None:
         discovery.manifests_read.add(package_json)
     direct_runtime = lock_runtime | json_runtime
     direct_development = (lock_development | json_development) - direct_runtime
+    harness = manifest in DEVELOPMENT_HARNESS_MANIFESTS
+    if harness:
+        direct_development |= direct_runtime
+        direct_runtime = set()
 
     seen: set[str] = set()
     for name, dev, top_level in _npm_lock_entries(payload, manifest):
+        dev = dev or harness
         is_direct = top_level and name in direct_runtime | direct_development
         if dev and not is_direct:
             discovery.count_development("npm")
@@ -919,6 +938,24 @@ def _parse_npm_lock(root: Path, manifest: str, discovery: KitDiscovery) -> None:
     for name in sorted(direct_development - seen):
         source = manifest if name in lock_development else package_json
         discovery.add("npm", name, Usage.DEVELOPMENT, source)
+
+
+def _parse_npm_package(root: Path, manifest: str, discovery: KitDiscovery) -> None:
+    """Read a ``package.json`` registered without a lockfile.
+
+    Only packages with no installed tree of their own are registered this way,
+    such as the React Native parity probe, so the declarations are the whole
+    dependency set.
+    """
+
+    runtime, development = _npm_direct(_load_json(root, manifest), manifest)
+    if manifest in DEVELOPMENT_HARNESS_MANIFESTS:
+        development |= runtime
+        runtime = set()
+    for name in sorted(runtime):
+        discovery.add("npm", name, Usage.RUNTIME, manifest)
+    for name in sorted(development - runtime):
+        discovery.add("npm", name, Usage.DEVELOPMENT, manifest)
 
 
 def _npm_lock_entries(
@@ -1237,6 +1274,8 @@ def _parser_for(manifest: str) -> Any:
         return _parse_gradle_standalone
     if name == "package-lock.json":
         return _parse_npm_lock
+    if name == "package.json":
+        return _parse_npm_package
     if name == "Cargo.lock":
         return _parse_cargo_lock
     if name == "pubspec.yaml":

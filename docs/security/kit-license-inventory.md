@@ -31,8 +31,16 @@ in the `repo-policy` job next to the Python dependency license policy.
 | Web, Electron, React Native, Tauri | `js/*/package-lock.json` with the sibling `package.json` |
 | Electron packaging harness | `js/openmedkit-electron/harness/package-lock.json` with its `package.json` |
 | React Native native modules | the bridge's podspec and `android/build.gradle`, and those of the parity probe in `example/probe` |
+| React Native parity example | `js/openmedkit-react-native/example/package-lock.json` with its `package.json`, and `example/probe/package.json` |
 | Tauri sidecar | `js/openmedkit-tauri/src-tauri/Cargo.lock` with its `Cargo.toml` |
 | Flutter | `js/openmedkit-flutter/pubspec.yaml`, the iOS and macOS podspecs, `android/build.gradle` |
+
+The Electron packaging harness and the React Native parity example are private
+test apps that never ship in a kit artifact. Every package they install is
+treated as development-only: their direct dependencies are reviewed below, and
+their transitive lock entries are counted rather than reviewed. The native
+modules the parity example builds are gated through their own podspec and
+build file. The registry of these test apps is `DEVELOPMENT_HARNESS_MANIFESTS`.
 
 Android modules are discovered from `include(...)` in the settings file, so a
 new module such as `:openmedkit-mlkit` is gated without a registry change. The
@@ -220,11 +228,21 @@ the tables. Rows that no manifest uses any more are counted as
 
 | Ecosystem | Package | License expression | Review note |
 | --- | --- | --- | --- |
+| npm | `@babel/core` | `MIT` | React Native parity example; build tooling |
+| npm | `@babel/preset-env` | `MIT` | React Native parity example; build tooling |
+| npm | `@babel/runtime` | `MIT` | React Native parity example; build tooling |
 | npm | `@electron/fuses` | `MIT` | Electron packaging harness; build tooling |
 | npm | `@huggingface/tokenizers` | `Apache-2.0` | web kit tokenizer conformance tests |
 | npm | `@huggingface/transformers` | `Apache-2.0` | optional peer of the web kit |
+| npm | `@react-native-community/cli` | `MIT` | React Native parity example; build tooling |
+| npm | `@react-native-community/cli-platform-android` | `MIT` | React Native parity example; build tooling |
+| npm | `@react-native-community/cli-platform-ios` | `MIT` | React Native parity example; build tooling |
+| npm | `@react-native/babel-preset` | `MIT` | React Native parity example; build tooling |
+| npm | `@react-native/metro-config` | `MIT` | React Native parity example; build tooling |
+| npm | `@react-native/typescript-config` | `MIT` | React Native parity example; build tooling |
 | npm | `@tauri-apps/api` | `Apache-2.0 OR MIT` | peer of the Tauri kit |
 | npm | `@types/node` | `MIT` | type definitions; build tooling |
+| npm | `@types/react` | `MIT` | React Native parity example; type definitions |
 | npm | `electron` | `MIT` | optional peer of the Electron kit |
 | npm | `electron-builder` | `MIT` | Electron packaging harness; build tooling |
 | npm | `esbuild` | `MIT` | Electron packaging harness; build tooling |
