@@ -23,7 +23,10 @@ export interface CorpusSelector {
   cases: string;
   /** Path inside each case to its stable, non-PHI identifier. */
   id: string;
-  /** Path inside each case to its synthetic input text. */
+  /**
+   * Path inside each case to its synthetic input text. Empty text is a valid
+   * case: the shared kit-parity and portable-policy vectors pin empty input.
+   */
   text: string;
   /** Optional path inside each case to a policy profile name. */
   policy?: string;
@@ -189,7 +192,7 @@ export function extractCases(
     if (typeof caseId !== "string" || caseId.length === 0) {
       throw new CorpusError("corpus_case_invalid", `${corpusId}[${index}].id`);
     }
-    if (typeof text !== "string" || text.length === 0) {
+    if (typeof text !== "string") {
       throw new CorpusError("corpus_case_invalid", `${corpusId}:${caseId}.text`);
     }
     if (ids.has(caseId)) {

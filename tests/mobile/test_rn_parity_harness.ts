@@ -189,6 +189,21 @@ test("pending kit-parity and portable-policy vectors can be dropped in by select
   );
   assert.deepEqual(portableCases.map((item) => [item.caseId, item.policy]), [["edge", "strict_no_leak"]]);
 
+  // Both vector files pin an empty-input case; it is a case, not a gap.
+  const emptyCases = extractCases(
+    kit.id,
+    kit.select,
+    { vectors: [{ id: "empty_input", text: "" }] },
+    manifest.defaults,
+  );
+  assert.deepEqual(emptyCases.map((item) => [item.caseId, item.text]), [["empty_input", ""]]);
+  for (const text of [undefined, null, 7]) {
+    assertCorpusError(
+      () => extractCases(kit.id, kit.select, { vectors: [{ id: "bad", text }] }, manifest.defaults),
+      "corpus_case_invalid",
+    );
+  }
+
   // Once the newer vector files land, their real shape must extract as well.
   for (const entry of manifest.pending) {
     const path = join(rootDir, entry.path);
