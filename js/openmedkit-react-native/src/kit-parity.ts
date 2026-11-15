@@ -1,4 +1,5 @@
 import type { OpenMedDeidentifyResult, OpenMedSpan } from "./index";
+import { PORTABLE_TAXONOMY_LABELS } from "./portable-taxonomy-labels";
 
 /**
  * React Native projection of the OpenMedKit kit-parity result profile
@@ -20,70 +21,12 @@ export const KIT_PARITY_ACTIONS = [
   "replace",
 ] as const;
 
-export const KIT_PARITY_CANONICAL_LABELS = [
-  "ACCOUNT_NUMBER",
-  "AGE",
-  "AMOUNT",
-  "ANTIBIOTIC",
-  "API_KEY",
-  "BIC",
-  "BITCOIN_ADDRESS",
-  "BODY_SITE",
-  "BUILDING_NUMBER",
-  "CONDITION",
-  "CREDIT_CARD",
-  "CREDIT_CARD_ISSUER",
-  "CURRENCY",
-  "CVV",
-  "DATE",
-  "DATE_OF_BIRTH",
-  "DIET_TYPE",
-  "EMAIL",
-  "ETHEREUM_ADDRESS",
-  "EYE_COLOR",
-  "FEEDING_ROUTE",
-  "FIRST_NAME",
-  "GENDER",
-  "GPS_COORDINATES",
-  "HEIGHT",
-  "IBAN",
-  "ID_NUM",
-  "IMEI",
-  "IP_ADDRESS",
-  "JOB_DEPARTMENT",
-  "JOB_TITLE",
-  "LAB_TEST",
-  "LAST_NAME",
-  "LITECOIN_ADDRESS",
-  "LOCATION",
-  "MAC_ADDRESS",
-  "MASKED_NUMBER",
-  "MEDICATION",
-  "MICROORGANISM",
-  "MIDDLE_NAME",
-  "NUTRITIONAL_STATUS",
-  "NUTRITION_TARGET",
-  "OCCUPATION",
-  "ORDINAL_DIRECTION",
-  "ORGANIZATION",
-  "OTHER",
-  "PASSWORD",
-  "PERSON",
-  "PHONE",
-  "PIN",
-  "PREFIX",
-  "PROCEDURE",
-  "SSN",
-  "STREET_ADDRESS",
-  "SUSCEPTIBILITY",
-  "TIME",
-  "URL",
-  "USERNAME",
-  "USER_AGENT",
-  "VEHICLE_REGISTRATION",
-  "VIN",
-  "ZIPCODE",
-] as const;
+/**
+ * Canonical labels a kit result may carry: the portable policy taxonomy,
+ * generated from `openmed/core/labels.py` by
+ * `scripts/parity/generate_portable_policies.py`.
+ */
+export const KIT_PARITY_CANONICAL_LABELS: readonly string[] = PORTABLE_TAXONOMY_LABELS;
 
 export interface KitParitySpan {
   label: string;

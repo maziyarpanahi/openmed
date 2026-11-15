@@ -11,6 +11,11 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
+      - 'tests/fixtures/parity/portable_policy_vectors.json'
+      - 'openmed/core/policies/**'
+      - 'openmed/core/labels.py'
+      - 'openmed/core/thresholds.json'
+      - 'openmed/core/portable_policy.py'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
@@ -22,6 +27,11 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
+      - 'tests/fixtures/parity/portable_policy_vectors.json'
+      - 'openmed/core/policies/**'
+      - 'openmed/core/labels.py'
+      - 'openmed/core/thresholds.json'
+      - 'openmed/core/portable_policy.py'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
 
 permissions:
@@ -65,6 +75,7 @@ jobs:
         --tests '*MultimodalContractParityTest'
         --tests '*SpanEquivalenceTest'
         --tests '*KitParityVectorTest'
+        --tests '*PortablePolicyVectorTest'
         --stacktrace
 
     - name: Verify Android library budgets

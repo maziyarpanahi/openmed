@@ -172,7 +172,7 @@ Stdout returns exactly one correlated line. This display abbreviates each span;
 the actual response includes every canonical `OpenMedSpan` field:
 
 ```json
-{"id":"1","ok":true,"result":{"deidentified_text":"Callback [phone_number].","spans":[{"canonical_label":"PHONE","start":9,"end":21,"action":"mask","replacement":"[phone_number]"}]}}
+{"id":"1","ok":true,"result":{"deidentified_text":"Callback [PHONE].","spans":[{"canonical_label":"PHONE","start":9,"end":21,"action":"mask","replacement":"[PHONE]"}]}}
 ```
 
 Supported operations are `ping`, `deidentify`, and `shutdown`. Closing stdin,

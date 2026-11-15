@@ -162,7 +162,7 @@ Python reference implementation is `openmed.core.kit_parity`.
 | `deidentified_text` | string | The exact de-identified output, compared as UTF-8 bytes. |
 | `spans` | array | Applied spans ordered by `(start, end)`, non-empty, non-overlapping. May be empty. |
 | `spans[].label` | string | Detector label, preserved byte for byte; ASCII `^[A-Za-z][A-Za-z0-9_:-]{0,79}$`. |
-| `spans[].canonical_label` | string | One of the 62 profile labels (the OpenMedKit policy taxonomy). |
+| `spans[].canonical_label` | string | One of the portable policy taxonomy labels (the full OpenMed canonical label set; see Portable Policy Subset). |
 | `spans[].action` | string | One of `hash`, `keep`, `mask`, `redact`, `remove`, `replace`. |
 | `spans[].start`, `spans[].end` | integer | Half-open Unicode scalar offsets into the source text. |
 | `spans[].confidence_ppm` | integer, optional | `floor(confidence * 1_000_000 + 0.5)` in double precision, in `[0, 1000000]`. Omitted when the surface has no score. |
@@ -268,14 +268,13 @@ Projection notes:
 - Python projects `DeidentificationResult` through
   `from_deidentification_result`. Methods outside the profile, such as
   `shift_dates` and `format_preserve`, are rejected rather than mapped.
-  Python's own mask placeholders use the raw entity type, so the Python engine
-  output is not yet compared against these vectors; that is part of policy and
-  surrogate equivalence.
+  Python mask placeholders name the canonical label (`[PERSON]`), matching the
+  kits; the portable policy vectors below compare the shared decision engine
+  byte for byte.
 - Swift and Kotlin project `PolicyDeidentificationResult` through
-  `kitParityResult()` and `toKitParityResult()`. Swift's policy taxonomy
-  currently omits `DIET_TYPE`, `FEEDING_ROUTE`, `NUTRITIONAL_STATUS`, and
-  `NUTRITION_TARGET` and maps them to `OTHER`; both kits stay inside the profile
-  vocabulary.
+  `kitParityResult()` and `toKitParityResult()`. Both load their label taxonomy,
+  including `DIET_TYPE`, `FEEDING_ROUTE`, `NUTRITIONAL_STATUS`, and
+  `NUTRITION_TARGET`, from the generated portable taxonomy.
 - React Native rejects native spans with missing or non-integer offsets or an
   unknown action name with `OpenMedKitParityError` instead of coercing them.
 - Electron renderer spans carry no action or replacement and always redact to
@@ -289,3 +288,161 @@ To change the vectors, edit the inputs (`text`, the span inputs, `engine`, and
 the negative controls), run
 `python scripts/parity/update_native_span_fixture.py --write`, and run every
 consumer gate above.
+
+## Portable Policy Subset
+
+`openmed.core.portable_policy` declares the bounded policy subset that every
+kit executes identically and is its Python reference implementation. The
+Python policy runtime stays richer; anything outside the subset is excluded by
+name rather than approximated.
+
+### Profiles and Resources
+
+The portable profiles are `australia_privacy_act`, `canada_pipeda`,
+`clinical_minimal_redaction`, `gdpr_art9_health`, `gdpr_pseudonymization`,
+`hipaa_expert_review_assist`, `hipaa_safe_harbor` (the default),
+`research_limited_dataset`, and `strict_no_leak`. Every other file in
+`openmed/core/policies/` is listed in the manifest's `excluded_profiles` with a
+value-free reason (`python_only_profile`, or `structured_schema_policy` for the
+FHIR and OMOP schema policies). Loading one on any kit fails with
+`profile_not_portable`.
+
+`openmed/core/policies/`, `openmed/core/labels.py`, and
+`openmed/core/thresholds.json` are the only sources.
+`python scripts/parity/generate_portable_policies.py --write` lowers them into
+versioned canonical JSON (`openmed.portable_policy`, IR version 1) and writes
+byte-identical copies to:
+
+| Kit | Location |
+| --- | --- |
+| Swift | `swift/OpenMedKit/Sources/OpenMedKit/Resources/policies/` |
+| Kotlin | `android/openmedkit/src/main/assets/policies/` |
+| Web | `js/openmedkit-web/src/portable-policy-resources.ts` (the same documents embedded as strings) |
+| React Native | `js/openmedkit-react-native/src/portable-taxonomy-labels.ts` (taxonomy labels only) |
+
+Each kit ships one file per profile, `portable_policy_taxonomy.json`, and
+`portable_policy_manifest.json`. The manifest pins the `sha256:` digest of every
+profile and of the taxonomy, the profile aliases, and the exclusions. A profile
+declares its source digest, actions for every taxonomy label, the policy-class
+actions, the default action, the threshold profile resolved to integer parts per
+million, the arbitration mode, `strict_no_leak`, the merge and surrogate
+algorithm versions, its required capabilities, and the Python-only features it
+omits (`excluded_features`, for example `safety_sweep`,
+`forced_cascade_execution`, `language_specific_thresholds`, and
+`realistic_surrogates`).
+
+`--check` (the default) fails when any kit copy is missing, stale, or
+unexpected, or when a vector expectation drifts. It runs in the `lint` job of
+`.github/workflows/ci.yml` and inside `tests/unit/parity/test_portable_policy.py`.
+
+### Label Taxonomy
+
+The portable taxonomy is the full Python canonical label set, which is also the
+kit-parity result vocabulary. Normalization strips whitespace and one BIOES
+prefix, lowercases, keeps `a-z0-9`, and looks the key up in the generated alias
+table. It equals `openmed.core.labels.normalize_label` for ASCII labels; the
+Chinese CMeEE mapping is language-conditional and stays Python-only. Unknown
+labels normalize to `OTHER`, and every kit loads the same table instead of a
+hand-maintained one, so role-qualified names such as `patient_name` and
+`doctor_name` resolve to `PERSON` everywhere.
+
+### Loading and Fail-Closed Outcomes
+
+Loading checks, in order: the manifest schema and IR version, the profile name
+(aliases resolve first), an optional caller-pinned digest, the profile resource
+digest, the taxonomy resource digest, and then the profile document (IR schema,
+IR version, name, taxonomy binding, required capabilities, merge algorithm,
+surrogate algorithm, arbitration mode, `strict_no_leak`, actions, default
+action, thresholds). Every failure is a reason code and a JSON field path:
+
+| Code | Meaning |
+| --- | --- |
+| `profile_name_invalid`, `profile_unknown`, `profile_not_portable` | The name is blank, unknown, or names an excluded profile. |
+| `digest_mismatch` | The caller pinned a different profile digest. |
+| `resource_digest_mismatch`, `taxonomy_digest_mismatch` | A bundled resource is stale against the manifest, or a profile binds a different taxonomy. |
+| `manifest_invalid`, `manifest_version_unsupported`, `ir_version_unsupported`, `profile_invalid`, `taxonomy_invalid` | Schema or version mismatch. |
+| `capability_missing` | The profile requires a capability the runtime does not implement. A strict no-leak profile on a runtime without `strict_no_leak.v1` is refused, never downgraded. |
+| `merge_algorithm_unsupported`, `surrogate_algorithm_unsupported` | The profile names an algorithm version the runtime does not implement. |
+
+### Decisions
+
+`decide` (Python), `PolicyEngine.decide` (Swift and Kotlin), and
+`decidePortablePolicy` (web) take the source text and normalized detections
+(label, scalar offsets, `confidence_ppm`, and `source` of `model` or
+`semantic`) and run these stages:
+
+1. Validate detections, overrides, and the surrogate key
+   (`detection_label_invalid`, `detection_offset_invalid`,
+   `detection_offset_out_of_bounds`, `detection_confidence_invalid`,
+   `detection_source_invalid`, `override_label_unknown`,
+   `override_action_unknown`, `surrogate_key_invalid`).
+2. Normalize labels through the taxonomy.
+3. Merge each semantic unit with the model spans it overlaps: the dominant
+   model label wins when the unit's label is among the model labels or less
+   specific; the extent is the union; the confidence is
+   `(6 * model_average + 4 * unit + 5) // 10` for a validated unit and
+   `(9 * model_average + 1 * unit + 5) // 10` otherwise, in integer parts per
+   million. A unit with no overlapping model span is a `semantic_only`
+   candidate.
+4. Keep a candidate when `confidence_ppm >= keep_floor_ppm` for its label and
+   flag it `escalate` when it is below `escalate_below_ppm` (review metadata
+   only; no cascade runs portably).
+5. Resolve the action: a caller override, else the profile action. Under
+   `strict_no_leak`, `keep` becomes `mask` and the decision records
+   `strict_upgrade`.
+6. Collapse exact duplicates (same offsets and label), then cluster transitive
+   overlaps. Each cluster becomes one span over the union of its members, so no
+   overlapping text is left unredacted. The winner order is: a protective
+   (non-`keep`) action, higher specificity, longer span, higher confidence,
+   earlier start, then ASCII label order. Under `high_recall_union`, only the
+   members carrying the strongest action
+   (`keep < replace < hash < mask < redact < remove`) compete.
+7. Render right to left at scalar offsets: `mask` and `redact` give
+   `[LABEL]`, `remove` gives the empty string, `hash` gives
+   `LABEL_` plus the first 12 bytes of the SHA-256 of the span as hex, and
+   `keep` leaves the text in place.
+
+The output is a kit-parity result plus one value-free decision record per
+candidate (`inputs`, `kind`, labels, offsets, `confidence_ppm`,
+`keep_floor_ppm`, `escalate`, `action`, `strict_upgrade`, `outcome`, and the
+output `span`). Grapheme snapping stays a platform pre-step in Swift and
+Kotlin; the vectors use grapheme-aligned offsets. The Swift and Kotlin policy
+de-identification paths (`OpenMed.deidentify(_:policy:)` and
+`DeidentifyEngine`) now run through this engine.
+
+### Surrogates
+
+Portable `replace` is a deterministic keyed surrogate
+(`openmed.portable_surrogate.hmac_sha256`, version 1). With a caller-supplied
+key of 16 to 64 bytes, a span renders `[LABEL_token]`, where `token` is the
+first 8 bytes, as hex, of HMAC-SHA256 over
+`openmed.portable_surrogate.v1` 0x00 label 0x00 span text. The same key, label,
+and text always give the same token, within a document and across documents;
+a different key gives a different token. Without a key, `replace` renders the
+value-free placeholder `[LABEL_REPLACED]`. Keys and reversible mappings stay in
+caller-controlled storage and never enter a profile, a resource, a decision, or
+an error. Python's realistic, locale-aware surrogates are Python-only and listed
+in `excluded_features`.
+
+### Portable Vectors and Consumers
+
+`tests/fixtures/parity/portable_policy_vectors.json` (schema
+`openmed.portable_policy_vectors`, version 1) holds synthetic decision cases
+(threshold edges, label normalization, keep and mask overrides, overlap and
+tie-breaking, duplicates, semantic merging, semantic-only matches,
+`strict_no_leak`, `high_recall_union`, and surrogate reuse), error cases, and
+load cases (every profile digest, aliases, refusals, stale digests, schema and
+capability mismatches). The surrogate keys are named `synthetic_test_key_*` and
+are for tests only. The expected blocks are derived from the Python reference by
+`generate_portable_policies.py --write`.
+
+| Surface | Test | CI gate |
+| --- | --- | --- |
+| Python | `tests/unit/parity/test_portable_policy.py` | the `pytest` run and the generator `--check` step in `.github/workflows/ci.yml` |
+| Swift | `swift/OpenMedKit/Tests/OpenMedKitTests/PortablePolicyVectorTests.swift` | `swift test --filter PortablePolicyVectorTests` in `.github/workflows/swift-test.yml` |
+| Kotlin | `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/policy/PortablePolicyVectorTest.kt` | `--tests '*PortablePolicyVectorTest'` in `.github/workflows/android-ci.yml` |
+| Web | `tests/web/test_portable_policy.spec.ts` | `npm --prefix js/openmedkit-web test` in the `openmedkit-kit-parity` job |
+
+To change a profile, edit `openmed/core/policies/`, run
+`python scripts/parity/generate_portable_policies.py --write`, review the
+regenerated resources and vectors, and run every consumer above.

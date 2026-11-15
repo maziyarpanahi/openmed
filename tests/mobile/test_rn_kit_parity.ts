@@ -170,7 +170,7 @@ test("an altered offset, label, action, or byte fails the bridge gate", async ()
       spans[0]!.end = (spans[0]!.end as number) + 1;
     },
     (spans: Record<string, unknown>[]) => {
-      spans[0]!.canonical_label = "PERSON";
+      spans[0]!.canonical_label = "OTHER";
     },
     (spans: Record<string, unknown>[]) => {
       spans[1]!.action = "redact";

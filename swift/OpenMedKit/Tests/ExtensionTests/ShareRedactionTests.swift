@@ -19,7 +19,7 @@ final class ShareRedactionTests: XCTestCase {
                 entity(label: "first_name", value: "Ada", in: text),
                 entity(label: "date_of_birth", value: "04/01/2026", in: text),
             ]
-            let reference = OpenMed.deidentify(text, entities: entities, policy: policy)
+            let reference = try OpenMed.deidentify(text, entities: entities, policy: policy)
             let handler = ExtensionRedactionHandler { receivedText, receivedPolicy in
                 XCTAssertEqual(receivedText, text)
                 XCTAssertEqual(receivedPolicy, policy)

@@ -127,19 +127,36 @@ def test_every_kit_vocabulary_stays_inside_the_profile() -> None:
     labels = set(kit_parity.KIT_CANONICAL_LABELS)
     actions = set(kit_parity.KIT_ACTIONS)
 
+    # Every kit loads its label vocabulary from the generated, digest-pinned
+    # portable taxonomy instead of a hand-maintained list.
+    taxonomy_paths = (
+        "swift/OpenMedKit/Sources/OpenMedKit/Resources/policies/"
+        "portable_policy_taxonomy.json",
+        "android/openmedkit/src/main/assets/policies/portable_policy_taxonomy.json",
+    )
+    for path in taxonomy_paths:
+        taxonomy = json.loads((ROOT / path).read_text(encoding="utf-8"))
+        assert list(taxonomy["labels"]) == list(kit_parity.KIT_CANONICAL_LABELS)
+    sources = {
+        "swift/OpenMedKit/Sources/OpenMedKit/KitParity.swift": (
+            "Policy.bundledTaxonomy?.labels"
+        ),
+        "android/openmedkit/src/main/kotlin/com/openmed/openmedkit/KitParity.kt": (
+            "PolicyProfiles.bundledTaxonomyLabels()"
+        ),
+        "js/openmedkit-web/src/kit-parity.ts": "= PORTABLE_TAXONOMY_LABELS;",
+        "js/openmedkit-react-native/src/kit-parity.ts": "= PORTABLE_TAXONOMY_LABELS;",
+    }
+    for path, marker in sources.items():
+        assert marker in (ROOT / path).read_text(encoding="utf-8"), path
+
     kotlin = (
         ROOT / "android/openmedkit/src/main/kotlin/com/openmed/openmedkit/policy/"
         "PolicyProfiles.kt"
     ).read_text(encoding="utf-8")
-    kotlin_labels = re.search(
-        r"private val CANONICAL_LABELS = setOf\((.*?)\)", kotlin, re.S
-    )
     kotlin_actions = re.findall(r'^\s+[A-Z]+\("([a-z_]+)"\),', kotlin, re.M)
     swift = (ROOT / "swift/OpenMedKit/Sources/OpenMedKit/Policy.swift").read_text(
         encoding="utf-8"
-    )
-    swift_labels = re.search(
-        r"private static let canonicalLabels: Set<String> = \[(.*?)\]", swift, re.S
     )
     swift_actions = re.search(
         r"public enum PolicyAction.*?\{(.*?)\n\s*var", swift, re.S
@@ -148,11 +165,8 @@ def test_every_kit_vocabulary_stays_inside_the_profile() -> None:
     web_labels = re.search(r"CANONICAL_LABELS = \[(.*?)\] as const", web, re.S)
     native = (ROOT / "js/openmedkit-react-native/src/index.ts").read_text("utf-8")
     rn_actions = re.search(r"export type SpanAction =(.*?);", native, re.S)
-    assert kotlin_labels and swift_labels and web_labels
-    assert swift_actions and rn_actions
+    assert web_labels and swift_actions and rn_actions
 
-    assert set(re.findall(r'"([A-Z_]+)"', kotlin_labels.group(1))) == labels
-    assert set(re.findall(r'"([A-Z_]+)"', swift_labels.group(1))) <= labels
     assert set(re.findall(r'"([A-Z_]+)"', web_labels.group(1))) <= labels
     assert set(kotlin_actions) == actions
     assert set(re.findall(r"case (\w+)", swift_actions.group(1))) == actions
@@ -277,7 +291,7 @@ def test_python_projection_rejects_unrepresentable_entities() -> None:
     assert project(action="shift_dates").code == "action_unknown"
     assert project(action="format_preserve").field_path == "$.spans[0].action"
     assert project(action=None).code == "field_missing"
-    assert project(canonical_label="DISEASE").code == "label_unknown"
+    assert project(canonical_label="NOT_A_LABEL").code == "label_unknown"
     assert project(redacted_text=None).field_path == "$.spans[0].replacement"
     assert project(confidence=1.5).field_path == "$.spans[0].confidence_ppm"
     assert project(start=None).field_path == "$.spans[0].start"
@@ -370,7 +384,7 @@ def test_altered_offset_label_action_order_or_bytes_fail_the_gate() -> None:
         )
 
     shifted = [dataclasses.replace(spans[0], end=spans[0].end + 1), *spans[1:]]
-    relabeled = [dataclasses.replace(spans[0], canonical_label="PERSON"), *spans[1:]]
+    relabeled = [dataclasses.replace(spans[0], canonical_label="OTHER"), *spans[1:]]
     reaction = [spans[0], dataclasses.replace(spans[1], action="redact"), spans[2]]
     output = vector["deidentified_text"]
 
@@ -379,8 +393,8 @@ def test_altered_offset_label_action_order_or_bytes_fail_the_gate() -> None:
         f"actual={spans[0].end + 1}"
     ]
     assert _differences(vector["id"], expected, serialized(relabeled, output)) == [
-        "case=emoji_sequences path=$.spans[0].canonical_label expected=OTHER "
-        "actual=PERSON"
+        "case=emoji_sequences path=$.spans[0].canonical_label expected=PERSON "
+        "actual=OTHER"
     ]
     assert _differences(vector["id"], expected, serialized(reaction, output)) == [
         "case=emoji_sequences path=$.spans[1].action expected=mask actual=redact"

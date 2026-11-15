@@ -159,7 +159,7 @@ def test_boundary_identifier_is_fully_redacted_and_never_logged(
         event["redacted_text"] for event in events if event["type"] == "chunk"
     )
 
-    assert redacted == "Contact [email] before the appointment tomorrow."
+    assert redacted == "Contact [EMAIL] before the appointment tomorrow."
     assert identifier not in redacted
     assert "jane.patient" not in redacted
     assert "example.com" not in redacted

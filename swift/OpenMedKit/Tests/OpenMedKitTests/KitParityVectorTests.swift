@@ -228,10 +228,10 @@ final class KitParityVectorTests: XCTestCase {
         )
 
         var relabeled = parsed
-        relabeled.spans[0].canonicalLabel = "PERSON"
+        relabeled.spans[0].canonicalLabel = "OTHER"
         XCTAssertEqual(
             Self.differences(vector.id, expected: expected, actual: try KitParity.serialize(relabeled)),
-            ["case=emoji_sequences path=$.spans[0].canonical_label expected=OTHER actual=PERSON"]
+            ["case=emoji_sequences path=$.spans[0].canonical_label expected=PERSON actual=OTHER"]
         )
 
         var reaction = parsed
@@ -286,7 +286,7 @@ final class KitParityVectorTests: XCTestCase {
                         end: detection.end
                     )
                 }
-                let result = OpenMed.deidentify(
+                let result = try OpenMed.deidentify(
                     vector.text,
                     entities: entities,
                     policy: try Policy(named: engine.policy)
