@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+from typing import Any
 
 import httpx
 import pytest
@@ -39,6 +40,16 @@ from openmed.service.webhooks import (
 
 SENTINEL = "SYNTHETIC-SENTINEL-3899"
 SENTINEL_URL = f"https://receiver.invalid/{SENTINEL}/hook?token={SENTINEL}"
+
+
+def _v1_summary(result: WebhookDeliveryResult) -> dict[str, Any]:
+    """Return the delivery summary without the version 2 delivery fields."""
+    summary = result.to_dict()
+    delivery_id = summary.pop("delivery_id", None)
+    assert delivery_id is None or str(delivery_id).startswith("dlv_")
+    summary.pop("signature_version", None)
+    summary.pop("attempt_receipts", None)
+    return summary
 
 
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:
@@ -137,7 +148,7 @@ def test_deliver_webhook_reports_failure_after_attempts() -> None:
     assert result.attempts == 2
     assert result.status_code == 500
     assert result.error == "http_status"
-    assert result.to_dict() == {
+    assert _v1_summary(result) == {
         "status": "failed",
         "success": False,
         "attempts": 2,
@@ -328,7 +339,7 @@ def test_deliver_webhook_reports_controlled_transport_codes(
         client=client,
     )
 
-    assert result.to_dict() == {
+    assert _v1_summary(result) == {
         "status": "failed",
         "success": False,
         "attempts": 2,
@@ -381,7 +392,7 @@ def test_deliver_webhook_backoff_wait_is_cancellable() -> None:
 
     assert not worker.is_alive()
     assert calls == 1
-    assert results[0].to_dict() == {
+    assert _v1_summary(results[0]) == {
         "status": "abandoned",
         "success": False,
         "attempts": 1,
@@ -421,7 +432,7 @@ def test_deliver_webhook_stops_at_the_total_wall_time_ceiling() -> None:
         _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
         _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
     ]
-    assert result.to_dict() == {
+    assert _v1_summary(result) == {
         "status": "abandoned",
         "success": False,
         "attempts": 2,
@@ -445,7 +456,6 @@ def test_deliver_webhook_caps_attempt_timeout_at_the_remaining_budget() -> None:
 
     assert result.success is True
     assert seen == [_timeout_extensions(2.5)]
-
 
 
 # --- Version 2 delivery contract (#3573) -----------------------------------
@@ -526,8 +536,8 @@ def test_retries_keep_the_delivery_id_with_fresh_attempt_identity() -> None:
         204,
     ]
     assert [receipt.error for receipt in result.attempt_receipts] == [
-        "HTTP 503",
-        "HTTP 502",
+        "http_status",
+        "http_status",
         None,
     ]
     summary = json.dumps(result.to_dict())

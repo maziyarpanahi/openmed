@@ -434,7 +434,7 @@ def test_retries_and_restarts_reuse_the_sealed_delivery_id(
         sender=sender,
     )
     job_id = first.submit(_request())["id"]
-    first._run_job(first._executor.work[0])
+    _run_and_settle(first, first._executor.work[0])
     record = first.get(job_id)
     terminal_ref = record["payloads"]["terminal_event"]["ref"]
     delivery_id = record["webhook_delivery"]["delivery_id"]
@@ -442,6 +442,7 @@ def test_retries_and_restarts_reuse_the_sealed_delivery_id(
     assert sender.calls[0]["delivery_id"] == delivery_id
 
     first._deliver_terminal_event(job_id, first.payloads._index[terminal_ref])
+    assert first._webhooks.wait_idle(5.0)
     assert sender.calls[1]["delivery_id"] == delivery_id
     first.shutdown = lambda: None  # type: ignore[method-assign]
 
@@ -454,6 +455,7 @@ def test_retries_and_restarts_reuse_the_sealed_delivery_id(
         sender=sender,
     )
     second._deliver_terminal_event(job_id, second.payloads._index[terminal_ref])
+    assert second._webhooks.wait_idle(5.0)
 
     assert sender.calls[2]["delivery_id"] == delivery_id
     delivery = second.get(job_id)["webhook_delivery"]
@@ -560,7 +562,7 @@ def test_unreadable_input_fails_closed_and_keeps_the_payload(
         clock=clock,
         payload_store=_encrypted_store(tmp_path, clock, material=KEY_TWO),
     )
-    wrong._run_job(item)
+    _run_and_settle(wrong, item)
 
     record = wrong.get(job_id)
     assert record["status"] == "failed"

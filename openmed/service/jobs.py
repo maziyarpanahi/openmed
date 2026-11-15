@@ -11,9 +11,9 @@ under an explicit, bounded retention deadline.
 from __future__ import annotations
 
 import copy
-import inspect
 import dataclasses
 import functools
+import inspect
 import json
 import math
 import os
@@ -997,6 +997,7 @@ class DeidentifyJobQueue:
             payload.keep_alive,
             _operation,
         )
+
 
 def _pending_webhook_delivery(
     webhook: Optional[JobWebhookRequest],

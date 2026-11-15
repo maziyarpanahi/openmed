@@ -84,12 +84,19 @@ def _without_payload_ref(
     ref = delivery.pop("payload_ref", None)
     # A settled delivery names the sealed terminal-event payload it read.
     assert ref is None or (isinstance(ref, str) and ref.startswith("jp_"))
+    # Signed (version 2) deliveries also carry their stable delivery id.
+    delivery_id = delivery.pop("delivery_id", None)
+    assert delivery_id is None or str(delivery_id).startswith("dlv_")
+    delivery.pop("signature_version", None)
+    delivery.pop("attempt_receipts", None)
     return delivery
 
 
 def _delivery(store: jobs.LocalJobStore, job_id: str) -> Optional[dict[str, Any]]:
     record = store.get(job_id)
-    return None if record is None else _without_payload_ref(record.get("webhook_delivery"))
+    return (
+        None if record is None else _without_payload_ref(record.get("webhook_delivery"))
+    )
 
 
 def _settled(store: jobs.LocalJobStore, job_id: str) -> bool:

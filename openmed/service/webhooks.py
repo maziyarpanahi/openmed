@@ -432,6 +432,7 @@ def deliver_webhook(
         attempt_receipts=tuple(receipts),
     )
 
+
 WebhookDelivery = Callable[[threading.Event, float], WebhookDeliveryResult]
 WebhookSettle = Callable[[WebhookDeliveryResult], None]
 
