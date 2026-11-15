@@ -1007,11 +1007,19 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
         """Return whether open streams were told to stop."""
         return self._terminating
 
-    def wrap(self, source: AsyncIterator[str]) -> AsyncIterator[str]:
+    def wrap(
+        self,
+        source: AsyncIterator[str],
+        *,
+        retain: Optional[Callable[[asyncio.Future[Any]], None]] = None,
+    ) -> AsyncIterator[str]:
         """Return a drain-aware view of an NDJSON line iterator.
 
         Args:
             source: Async iterator of newline-terminated JSON lines.
+            retain: Optional callback that keeps request admission held for
+                a read the client abandoned while it settles in the
+                background, so that work is accounted as orphaned.
 
         Returns:
             An async iterator that ends with the terminal event when drained.
@@ -1019,7 +1027,7 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
         with self._lock:
             self._active += 1
         lease = _StreamLease(self)
-        iterator = self._iterate(source, lease)
+        iterator = self._iterate(source, lease, retain)
         # A body that is never iterated still frees its slot when discarded.
         weakref.finalize(iterator, lease.release_if_unstarted)
         return iterator
@@ -1059,7 +1067,10 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
         return self._signal
 
     async def _iterate(
-        self, source: AsyncIterator[str], lease: _StreamLease
+        self,
+        source: AsyncIterator[str],
+        lease: _StreamLease,
+        retain: Optional[Callable[[asyncio.Future[Any]], None]] = None,
     ) -> AsyncIterator[str]:
         lease.started = True
         pending: Optional[asyncio.Future[str]] = None
@@ -1081,7 +1092,7 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
                     return
                 yield line
         finally:
-            self._settle(source, pending, lease, exhausted)
+            self._settle(source, pending, lease, exhausted, retain)
 
     async def _race(self, pending: asyncio.Future[str]) -> bool:
         if pending.done():
@@ -1102,6 +1113,7 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
         pending: Optional[asyncio.Future[str]],
         lease: _StreamLease,
         exhausted: bool,
+        retain: Optional[Callable[[asyncio.Future[Any]], None]] = None,
     ) -> None:
         if pending is None and exhausted:
             lease.release()
@@ -1132,6 +1144,10 @@ class NDJSONStreamDrainParticipant(DrainParticipant):
         task = loop.create_task(cleanup())
         self._cleanup.add(task)
         task.add_done_callback(self._cleanup.discard)
+        if retain is not None and pending is not None:
+            # The client left mid-read: the read keeps running, so it stays
+            # under the request's admission and counts as orphaned work.
+            retain(task)
 
 
 class CallAdmission:

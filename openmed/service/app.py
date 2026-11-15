@@ -1165,12 +1165,21 @@ def _drain_retry_after(state: Any) -> float:
     return float(getattr(coordinator, "retry_after_seconds", 1.0))
 
 
-def _drain_aware_stream(request: Request, events: Any) -> Any:
-    """Give an NDJSON body a bounded tail and a typed drain terminal event."""
+def _drain_aware_stream(
+    request: Request,
+    events: Any,
+    *,
+    retain: Optional[Callable[[asyncio.Future[Any]], None]] = None,
+) -> Any:
+    """Give an NDJSON body a bounded tail and a typed drain terminal event.
+
+    ``retain`` keeps a read the client abandoned under the request's admission
+    while it settles, as the bounded stream controls do for model windows.
+    """
     streams = getattr(request.app.state, "drain_streams", None)
     if not isinstance(streams, NDJSONStreamDrainParticipant):
         return events
-    return streams.wrap(events)
+    return streams.wrap(events, retain=retain)
 
 
 async def _stop_openhim_mediator(state: Any) -> None:
@@ -2334,6 +2343,7 @@ def create_app(
                     runtime,
                     retain_abandoned_work=controls.retain,
                 ),
+                retain=controls.retain,
             )
         )
 
@@ -2381,7 +2391,9 @@ def create_app(
         runtime = _get_service_runtime(request)
         events = deidentify_ndjson_stream(payload, runtime)
         controls = NDJSONStreamControls.for_request(request.scope, runtime)
-        return controls.response(_drain_aware_stream(request, events))
+        return controls.response(
+            _drain_aware_stream(request, events, retain=controls.retain)
+        )
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
