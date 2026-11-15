@@ -17,6 +17,7 @@ evidence, public responses, and logs for them.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -37,6 +38,11 @@ from hypothesis import strategies as st
 
 from openmed.core.key_provider import DATA_KEY_BYTES, InMemoryKeyProvider, KeyState
 from openmed.service import jobs
+from openmed.service.drain import (
+    DrainBudget,
+    DrainCoordinator,
+    JobQueueDrainParticipant,
+)
 from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.idempotency import IdempotencyError
 from openmed.service.job_payloads import (
@@ -822,6 +828,66 @@ def test_durable_shutdown_keeps_queued_work_and_refunds_drained_attempts(
     assert drain(restarted) is False
     for job_id in (queued_id, running_id):
         _assert_single_logical_completion(restarted.get(job_id))
+    _assert_value_free(harness, restarted)
+
+
+def test_drain_hands_durable_jobs_to_the_next_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The service drain checkpoints durable work instead of cancelling it."""
+    harness = Harness(tmp_path, monkeypatch)
+    queue = harness.start()
+    running_id = queue.submit(_request())["id"]
+    queued_id = queue.submit(_request())["id"]
+    (_operation, running_item, _future) = queue._executor.work.pop(0)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def stop_after_first(
+        request: DeidentifyJobRequest, document: DeidentifyJobDocument
+    ) -> SimpleNamespace:
+        result = harness.model(request, document)
+        if document.id == "d0":
+            entered.set()
+            # Finish the document only once the drain asks workers to stop.
+            assert queue._cancel_requested.wait(10)
+            release.set()
+        return result
+
+    queue._deidentify_document = stop_after_first  # type: ignore[method-assign]
+    worker = threading.Thread(target=queue._run_job, args=(running_item,))
+    worker.start()
+    assert entered.wait(10)
+    coordinator = DrainCoordinator(DrainBudget(drain_seconds=1.0, release_seconds=0.2))
+    coordinator.register(JobQueueDrainParticipant(lambda: queue))
+
+    report = asyncio.run(coordinator.drain())
+    worker.join(10)
+
+    assert release.is_set() and not worker.is_alive()
+    stopped = queue.get(running_id)
+    assert stopped["status"] == "queued"
+    assert stopped["recovery"]["completed_documents"] == 1
+    assert stopped["recovery"]["lease"] is None
+    # A drain interruption does not use up an attempt.
+    assert stopped["recovery"]["attempt"] == 0
+    assert stopped["recovery"]["retry"]["reason_code"] == "interrupted_by_shutdown"
+    assert queue.get(queued_id)["status"] == "queued"
+    event = report.events_for("job_queue")[1]
+    assert (event.completed, event.cancelled, event.checkpointed) == (0, 0, 2)
+    assert event.unfinished == 0
+    assert queue.outstanding_count() == 0
+    assert harness.sender.calls == []
+
+    harness.clock.advance(STEP_SECONDS)
+    restarted = harness.start()
+    assert drain(restarted) is False
+    for job_id in (running_id, queued_id):
+        _assert_single_logical_completion(restarted.get(job_id))
+    # Each job processed each document once: the stopped job resumed after its
+    # checkpoint instead of processing d0 again.
+    assert sorted(harness.model.calls) == ["d0", "d0", "d1", "d1", "d2", "d2"]
+    assert len(harness.sender.calls) == 2
     _assert_value_free(harness, restarted)
 
 

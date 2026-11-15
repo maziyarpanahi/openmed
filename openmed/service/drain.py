@@ -1281,8 +1281,11 @@ class JobQueueDrainParticipant(DrainParticipant):
 
     Running jobs may finish until the settle deadline. Afterwards they stop at
     their next document boundary; at the deadline every job still queued or
-    running is fenced as ``cancelled`` with a retryable ``shutting_down`` code,
-    so a stale worker can never commit after the handoff.
+    running is fenced, so a stale worker can never commit after the handoff.
+    With memory-only payloads a fenced job is ``cancelled`` with a retryable
+    ``shutting_down`` code. With encrypted payloads it keeps its committed
+    checkpoint and stays ``queued`` for the next start, and it is reported as
+    ``checkpointed``.
 
     Args:
         resolver: Returns the job queue, or ``None`` when absent.
@@ -1319,6 +1322,7 @@ class JobQueueDrainParticipant(DrainParticipant):
         return PhaseResult.from_counts(
             completed=int(stats.get("completed", 0)),
             cancelled=int(stats.get("cancelled", 0)),
+            checkpointed=int(stats.get("checkpointed", 0)),
             unfinished=queue.outstanding_count(),
         )
 
