@@ -1380,14 +1380,6 @@ def test_rest_stream_disconnect_emits_no_unsafe_tail(core: CoreSpy) -> None:
     assert_no_sentinel(json.dumps(events))
 
 
-_REST_STREAM_LEASE_LEAK = (
-    "The REST de-identification stream calls close() on a generator still "
-    "running in its worker thread, so finish_model_request never runs and the "
-    "warm-pool lease leaks after a deadline or disconnect; fixed by #4137."
-)
-
-
-@pytest.mark.xfail(strict=True, reason=_REST_STREAM_LEASE_LEAK)
 @pytest.mark.parametrize("trigger", ["deadline", "disconnect"])
 def test_rest_stream_releases_its_lease_after_deadline_or_disconnect(
     core: CoreSpy, trigger: str
