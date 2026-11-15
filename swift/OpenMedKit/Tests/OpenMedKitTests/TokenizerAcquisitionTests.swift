@@ -190,6 +190,7 @@
         }
 
         func testLegacyMLXArtifactNoLongerFallsBackToNetwork() throws {
+            try skipUnlessMLXCanRun()
             let directory = try makeLegacyMLXArtifactWithoutTokenizer()
 
             XCTAssertThrowsError(try OpenMed(backend: .mlx(modelDirectoryURL: directory))) { error in

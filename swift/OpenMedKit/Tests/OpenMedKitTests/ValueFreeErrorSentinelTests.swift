@@ -640,10 +640,15 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
                 _ = try await OpenMedMaple(modelDirectoryURL: sentinelDirectory)
                 XCTFail("an empty directory must not load")
             } catch {
-                guard case OpenMedMapleRuntimeError.missingFiles(let files) = error else {
-                    return XCTFail("Unexpected error type")
+                if OpenMedMLXRuntimeSupport.isSupported {
+                    guard case OpenMedMapleRuntimeError.missingFiles(let files) = error else {
+                        return XCTFail("Unexpected error type")
+                    }
+                    XCTAssertEqual(files, OpenMedMaple.requiredModelFiles)
+                } else {
+                    // The iOS Simulator refuses MLX before any model file is read.
+                    XCTAssertEqual(error as? OpenMedMLXRuntimeError, .unsupportedPlatform)
                 }
-                XCTAssertEqual(files, OpenMedMaple.requiredModelFiles)
                 assertValueFree(error)
             }
 
