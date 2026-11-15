@@ -292,6 +292,7 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
     # layer only decorates /graphql responses, so it may wrap the host check.
     assert _middleware_names(app) == [
         "GraphQLPrivacyHeadersMiddleware",
+        "StreamWriteIdleMiddleware",
         "ErrorEnvelopeTrustedHostMiddleware",
         "CORSMiddleware",
         "_auth_middleware",
@@ -307,8 +308,9 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
 def test_middleware_stack_keeps_trusted_host_outermost_without_cors() -> None:
     names = _middleware_names(create_app())
 
-    assert names[:3] == [
+    assert names[:4] == [
         "GraphQLPrivacyHeadersMiddleware",
+        "StreamWriteIdleMiddleware",
         "ErrorEnvelopeTrustedHostMiddleware",
         "_auth_middleware",
     ]

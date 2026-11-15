@@ -199,7 +199,14 @@ from .security_profile import (
     log_security_profile_report,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
-from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
+from .streaming import (
+    STREAM_ROUTE_PATHS,
+    NDJSONStreamControls,
+    PIIDeidentifyStreamRequest,
+    StreamWriteIdleMiddleware,
+    deidentify_ndjson_stream,
+    pii_extract_ndjson_stream,
+)
 from .throttle import (
     ServiceBusyError,
     ServiceThrottle,
@@ -2072,26 +2079,14 @@ def create_app(
     ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
         runtime.validate_served_model(payload.model_name)
-
-        async def _events():
-            async for event in runtime.stream_pii_extract(
-                text=payload.text,
-                model_name=payload.model_name,
-                confidence_threshold=payload.confidence_threshold,
-                use_smart_merging=payload.use_smart_merging,
-                lang=payload.lang,
-                normalize_accents=payload.normalize_accents,
-                keep_alive=payload.keep_alive,
-                chunk_size=payload.chunk_size,
-                window_chars=payload.window_chars,
-                tokenizer_context_chars=payload.tokenizer_context_chars,
-                max_entity_chars=payload.max_entity_chars,
-            ):
-                event_payload = event.to_dict(include_text=payload.include_text)
-                event_payload["audit"] = event.to_audit_dict()
-                yield json.dumps(event_payload, sort_keys=True) + "\n"
-
-        return StreamingResponse(_events(), media_type="application/x-ndjson")
+        controls = NDJSONStreamControls.for_request(request.scope, runtime)
+        return controls.response(
+            pii_extract_ndjson_stream(
+                payload,
+                runtime,
+                retain_abandoned_work=controls.retain,
+            )
+        )
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
@@ -2136,7 +2131,8 @@ def create_app(
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
         events = deidentify_ndjson_stream(payload, runtime)
-        return StreamingResponse(events, media_type="application/x-ndjson")
+        controls = NDJSONStreamControls.for_request(request.scope, runtime)
+        return controls.response(events)
 
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
@@ -2632,6 +2628,9 @@ def create_app(
         allowed_hosts=security_config.trusted_hosts,
         www_redirect=False,
     )
+    # Outside the app's own layers, so a stalled NDJSON consumer is bounded at
+    # the server's send.
+    app.add_middleware(StreamWriteIdleMiddleware, paths=STREAM_ROUTE_PATHS)
 
     # Registered last so it is outermost: every /graphql response, including
     # rejections raised by the middlewares above, carries the privacy headers.
