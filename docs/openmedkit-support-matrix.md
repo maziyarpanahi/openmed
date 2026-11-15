@@ -132,10 +132,10 @@ Matrix `openmedkit-support-matrix` schema 1, release v4.0, state **frozen** on 2
 | Swift OpenMedKit (`swift`) | P0 | supported | 1 | 9 | 10 |
 | Kotlin and Android OpenMedKit (`android`) | P0 | experimental-only | 0 | 4 | 8 |
 | React Native bridge (`react-native`) | P1 | experimental-only | 0 | 3 | 2 |
-| Browser inference (`web`) | P1 | experimental-only | 0 | 8 | 5 |
+| Browser inference (`web`) | P1 | experimental-only | 0 | 8 | 6 |
 | Shared document intake (`document-intake`) | P1 | experimental-only | 0 | 2 | 3 |
 | Platform key-store integration (`key-store`) | P1 | experimental-only | 0 | 4 | 3 |
-| Flutter plugin (`flutter`) | P2 | experimental-only | 0 | 5 | 3 |
+| Flutter plugin (`flutter`) | P2 | experimental-only | 0 | 5 | 4 |
 | Electron integration (`electron`) | P2 | experimental-only | 0 | 3 | 2 |
 | Tauri sidecar (`tauri`) | P2 | experimental-only | 0 | 3 | 3 |
 
@@ -215,7 +215,7 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `python-mlx-off-apple-silicon` | linux | server-or-desktop | any | mlx >=0.22 | any | any | any | — | runtime-unavailable | — | OpenMed's MLX backends require Apple Silicon macOS. |
 | `python-gguf-token-classification` | any | server-or-desktop | any | any | cpu | any | any | — | runtime-unavailable | — | GGUF export is embedding-only; token-classification heads are rejected. |
-| `python-onnx-unexported-families` | any | any | any | onnxruntime >=1.16 | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `python-onnx-unexported-families` | any | any | any | onnxruntime >=1.16 | any | gliner-token-relex | any | — | family-not-exported | — |  |
 
 ## Swift OpenMedKit
 
@@ -330,7 +330,8 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 | `web-webgpu-insecure-context` | any | desktop-browser | any | onnxruntime >=1.20.0 | webgpu | any | any | secure-context:absent | runtime-unavailable | — | WebGPU requires HTTPS or localhost. |
 | `web-threads-without-isolation` | any | desktop-browser | wasm32 | onnxruntime >=1.20.0 | wasm-simd-threads | any | any | cross-origin-isolation:absent | runtime-unavailable | — | Without COOP and COEP headers the loader uses single-threaded WASM. |
 | `web-mobile-browser` | any | mobile-browser | any | onnxruntime >=1.20.0 | any | any | any | — | not-qualified | — |  |
-| `web-unexported-families` | any | desktop-browser | any | onnxruntime >=1.20.0 | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `web-unexported-families` | any | desktop-browser | any | onnxruntime >=1.20.0 | any | gliner-token-relex | any | — | family-not-exported | — |  |
+| `web-zero-shot-families` | any | desktop-browser | any | onnxruntime >=1.20.0 | any | gliner-span, gliclass | any | — | not-qualified | — | Zero-shot ONNX bundles are qualified on the CPU provider only; this kit's providers are not qualified. |
 
 ## Shared document intake
 
@@ -398,7 +399,8 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `flutter-web` | any | desktop-browser | any | any | any | any | any | — | runtime-not-linked | — | pubspec.yaml declares no web platform for the plugin. |
 | `flutter-apple-coreml` | ios 13.0+ | iphone-ipad | any | coreml system | coreml | any | any | — | runtime-not-linked | — | The plugin links ONNX Runtime only; use Swift OpenMedKit for Core ML. |
-| `flutter-onnx-unexported-families` | any | any | any | any | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `flutter-onnx-unexported-families` | any | any | any | any | any | gliner-token-relex | any | — | family-not-exported | — |  |
+| `flutter-onnx-zero-shot-families` | any | any | any | any | any | gliner-span, gliclass | any | — | not-qualified | — | Zero-shot ONNX bundles are qualified on the CPU provider only; this kit's providers are not qualified. |
 
 ## Electron integration
 

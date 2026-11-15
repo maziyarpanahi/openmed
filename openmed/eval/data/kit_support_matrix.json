@@ -2137,8 +2137,6 @@
       "runtime": "onnxruntime-python",
       "provider": "*",
       "families": [
-        "gliner-span",
-        "gliclass",
         "gliner-token-relex"
       ],
       "precisions": [
@@ -2671,8 +2669,6 @@
       "runtime": "onnxruntime-web",
       "provider": "*",
       "families": [
-        "gliner-span",
-        "gliclass",
         "gliner-token-relex"
       ],
       "precisions": [
@@ -2681,6 +2677,27 @@
       "status": "unsupported",
       "reason": "family-not-exported",
       "artifact": "onnx"
+    },
+    {
+      "id": "web-zero-shot-families",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "*",
+      "families": [
+        "gliner-span",
+        "gliclass"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "note": "Zero-shot ONNX bundles are qualified on the CPU provider only; this kit's providers are not qualified."
     },
     {
       "id": "document-intake-android-mlkit-non-latin",
@@ -2843,8 +2860,6 @@
       "runtime": "*",
       "provider": "*",
       "families": [
-        "gliner-span",
-        "gliclass",
         "gliner-token-relex"
       ],
       "precisions": [
@@ -2853,6 +2868,27 @@
       "status": "unsupported",
       "reason": "family-not-exported",
       "artifact": "onnx"
+    },
+    {
+      "id": "flutter-onnx-zero-shot-families",
+      "surface": "flutter",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "*",
+      "abi": "*",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "gliner-span",
+        "gliclass"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "note": "Zero-shot ONNX bundles are qualified on the CPU provider only; this kit's providers are not qualified."
     },
     {
       "id": "electron-renderer-inference",
