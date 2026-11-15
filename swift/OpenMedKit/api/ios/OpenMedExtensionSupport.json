@@ -3,6 +3,29 @@
   "module": "OpenMedExtensionSupport",
   "generator": "swift-api-digester -dump-sdk",
   "symbols": {
+    "OpenMedExtensionSupport.ExtensionAssetRole": [
+      "conformance OpenMedExtensionSupport.ExtensionAssetRole: CaseIterable",
+      "conformance OpenMedExtensionSupport.ExtensionAssetRole: Equatable",
+      "conformance OpenMedExtensionSupport.ExtensionAssetRole: Hashable",
+      "conformance OpenMedExtensionSupport.ExtensionAssetRole: RawRepresentable",
+      "conformance OpenMedExtensionSupport.ExtensionAssetRole: Sendable",
+      "enum OpenMedExtensionSupport.ExtensionAssetRole raw(String)"
+    ],
+    "OpenMedExtensionSupport.ExtensionAssetRole.bundleResources": [
+      "case OpenMedExtensionSupport.ExtensionAssetRole.bundleResources"
+    ],
+    "OpenMedExtensionSupport.ExtensionAssetRole.labelMap": [
+      "case OpenMedExtensionSupport.ExtensionAssetRole.labelMap"
+    ],
+    "OpenMedExtensionSupport.ExtensionAssetRole.model": [
+      "case OpenMedExtensionSupport.ExtensionAssetRole.model"
+    ],
+    "OpenMedExtensionSupport.ExtensionAssetRole.tokenizerFile": [
+      "case OpenMedExtensionSupport.ExtensionAssetRole.tokenizerFile"
+    ],
+    "OpenMedExtensionSupport.ExtensionAssetRole.tokenizerFolder": [
+      "case OpenMedExtensionSupport.ExtensionAssetRole.tokenizerFolder"
+    ],
     "OpenMedExtensionSupport.ExtensionInputBudget": [
       "enum OpenMedExtensionSupport.ExtensionInputBudget"
     ],
@@ -22,7 +45,7 @@
       "static func OpenMedExtensionSupport.ExtensionItemCodec.extensionItems(for: [Swift.String]) -> [Foundation.NSExtensionItem]"
     ],
     "OpenMedExtensionSupport.ExtensionItemCodec.plainText": [
-      "static func OpenMedExtensionSupport.ExtensionItemCodec.plainText(from: [Any]) async throws -> [Swift.String]"
+      "static nonisolated func OpenMedExtensionSupport.ExtensionItemCodec.plainText(from: [Any]) async throws -> [Swift.String]"
     ],
     "OpenMedExtensionSupport.ExtensionRedactedSpan": [
       "conformance OpenMedExtensionSupport.ExtensionRedactedSpan: Equatable",
@@ -76,13 +99,13 @@
       "case OpenMedExtensionSupport.ExtensionRedactionError.inputTooLarge: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.invalidAsset": [
-      "case OpenMedExtensionSupport.ExtensionRedactionError.invalidAsset: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+      "case OpenMedExtensionSupport.ExtensionRedactionError.invalidAsset: (OpenMedExtensionSupport.ExtensionAssetRole) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.invalidRedactionOutput": [
       "case OpenMedExtensionSupport.ExtensionRedactionError.invalidRedactionOutput"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.missingAsset": [
-      "case OpenMedExtensionSupport.ExtensionRedactionError.missingAsset: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+      "case OpenMedExtensionSupport.ExtensionRedactionError.missingAsset: (OpenMedExtensionSupport.ExtensionAssetRole) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.missingPlainTextInput": [
       "case OpenMedExtensionSupport.ExtensionRedactionError.missingPlainTextInput"
@@ -91,7 +114,7 @@
       "case OpenMedExtensionSupport.ExtensionRedactionError.modelAssetsTooLarge: (Swift.Int64, Swift.Int64) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.nonLocalAsset": [
-      "case OpenMedExtensionSupport.ExtensionRedactionError.nonLocalAsset: (Foundation.URL) -> OpenMedExtensionSupport.ExtensionRedactionError"
+      "case OpenMedExtensionSupport.ExtensionRedactionError.nonLocalAsset: (OpenMedExtensionSupport.ExtensionAssetRole) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.tooManyAssetFiles": [
       "case OpenMedExtensionSupport.ExtensionRedactionError.tooManyAssetFiles: (Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
@@ -100,7 +123,7 @@
       "case OpenMedExtensionSupport.ExtensionRedactionError.tooManyInputItems: (Swift.Int, Swift.Int) -> OpenMedExtensionSupport.ExtensionRedactionError"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionError.unsupportedModelFormat": [
-      "case OpenMedExtensionSupport.ExtensionRedactionError.unsupportedModelFormat: (Swift.String) -> OpenMedExtensionSupport.ExtensionRedactionError"
+      "case OpenMedExtensionSupport.ExtensionRedactionError.unsupportedModelFormat"
     ],
     "OpenMedExtensionSupport.ExtensionRedactionHandler": [
       "final class OpenMedExtensionSupport.ExtensionRedactionHandler"

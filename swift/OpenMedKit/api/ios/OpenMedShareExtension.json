@@ -30,8 +30,11 @@
       "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.numberOfComponents(in: UIKit.UIPickerView) -> Swift.Int"
     ],
     "OpenMedShareExtension.RedactionShareViewController.pickerView": [
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, didSelectRow: Swift.Int, inComponent: Swift.Int) -> ()",
       "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, numberOfRowsInComponent: Swift.Int) -> Swift.Int",
-      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, titleForRow: Swift.Int, forComponent: Swift.Int) -> Swift.String?"
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, rowHeightForComponent: Swift.Int) -> CoreGraphics.CGFloat",
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, titleForRow: Swift.Int, forComponent: Swift.Int) -> Swift.String?",
+      "@preconcurrency func OpenMedShareExtension.RedactionShareViewController.pickerView(_: UIKit.UIPickerView, viewForRow: Swift.Int, forComponent: Swift.Int, reusing: UIKit.UIView?) -> UIKit.UIView"
     ],
     "OpenMedShareExtension.RedactionShareViewController.viewDidLoad": [
       "func OpenMedShareExtension.RedactionShareViewController.viewDidLoad() -> ()"
