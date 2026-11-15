@@ -158,10 +158,13 @@ class JobStoreSchemaError(ValueError):
         code: ``job_store_schema_unsupported`` for a newer or invalid version,
             or ``job_store_unknown_fields`` for fields this binary would
             otherwise drop on its next write.
+        compatibility_reason: Value-free compatibility-window reason, such as
+            ``schema_ahead_of_window``, when the version itself was readable.
     """
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, compatibility_reason: Optional[str] = None):
         self.code = code
+        self.compatibility_reason = compatibility_reason
         super().__init__(f"Job metadata store cannot be read ({code})")
 
 
@@ -695,8 +698,13 @@ class LocalJobStore:
         # Refuse before any write: a newer document, or one with fields this
         # binary does not know, would otherwise be silently rewritten.
         version = raw.get("schema_version", 1)
-        if type(version) is not int or not 1 <= version <= JOB_STORE_SCHEMA_VERSION:
+        if type(version) is not int:
             raise JobStoreSchemaError("job_store_schema_unsupported")
+        if not 1 <= version <= JOB_STORE_SCHEMA_VERSION:
+            window = evaluate_component(self._schema, SchemaObservation.at(version))
+            raise JobStoreSchemaError(
+                "job_store_schema_unsupported", compatibility_reason=window.code
+            )
         if set(raw) - _JOB_STORE_FIELDS:
             raise JobStoreSchemaError("job_store_unknown_fields")
         jobs = raw.get("jobs")

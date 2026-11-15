@@ -121,10 +121,12 @@ from .job_bounds import BulkJobsSaturatedError
 from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
 from .jobs import (
     OWNER_DIGEST_FIELD,
+    SERVICE_JOBS_STORE_ENV_VAR,
     DeidentifyJobQueue,
     JobDigestPolicy,
     JobStoreSchemaError,
     job_response_payload,
+    parse_jobs_store_path,
 )
 from .journey_access import (
     JourneyAccessContextProvider,
@@ -746,11 +748,17 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     ):
         if existing_job_queue is not None:
             existing_job_queue.shutdown()
-        app.state.job_queue = DeidentifyJobQueue.from_env(
-            runtime,
-            key_provider=getattr(app.state, "job_payload_key_provider", None),
-            digests=getattr(app.state, "job_digests", None),
-        )
+        try:
+            app.state.job_queue = DeidentifyJobQueue.from_env(
+                runtime,
+                key_provider=getattr(app.state, "job_payload_key_provider", None),
+                digests=getattr(app.state, "job_digests", None),
+            )
+        except JobStoreSchemaError:
+            # A store outside this build's window keeps the process up but not
+            # ready: readiness reports it and job routes answer 503 until the
+            # state is compatible, so a mixed-version rollout never crash-loops.
+            app.state.job_queue = None
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -1107,9 +1115,15 @@ def _create_compatibility_gate(
 
     def job_store_probe() -> SchemaObservation:
         queue = getattr(app.state, "job_queue", None)
-        if queue is None:
+        if queue is not None:
+            return job_store_observation(queue.store.path)
+        if _replica_state_policy(app).refusal_code(ASYNC_JOBS) is not None:
+            # Async jobs are off on this replica, so no job store is shared.
             return SchemaObservation.absent()
-        return job_store_observation(queue.store.path)
+        # No queue yet, for example because the store was refused on open.
+        return job_store_observation(
+            parse_jobs_store_path(os.getenv(SERVICE_JOBS_STORE_ENV_VAR))
+        )
 
     return CompatibilityGate(
         local_descriptor(runtime),
@@ -1756,7 +1770,10 @@ def create_app(
             "Persisted state is outside this build's compatibility window",
             details={
                 "components": {
-                    JOB_STORE_COMPONENT: {"state": "incompatible", "reason": exc.code}
+                    JOB_STORE_COMPONENT: {
+                        "state": "incompatible",
+                        "reason": exc.compatibility_reason or exc.code,
+                    }
                 }
             },
         )
