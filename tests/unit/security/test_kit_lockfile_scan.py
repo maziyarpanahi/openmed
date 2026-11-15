@@ -24,6 +24,8 @@ KIT_SCAN_TARGETS = {
     "js": "js",
     "clients": "clients",
 }
+# Private test apps under a scan target that never ship in a kit artifact.
+KIT_SCAN_EXCLUSIONS = {"js": ("openmedkit-react-native/example",)}
 LOCKFILE_NAMES = (
     "Package.resolved",
     "package-lock.json",
@@ -148,7 +150,12 @@ def test_kit_scan_covers_every_surface_with_the_lockfile_scanner_options() -> No
     assert "--pkg-types library" in scan
     assert "--format json" in scan
     for name, target in KIT_SCAN_TARGETS.items():
-        assert f"scan {name} {target}\n" in scan
+        skips = "".join(
+            f' --skip-dirs "**/{directory}"'
+            for directory in KIT_SCAN_EXCLUSIONS.get(name, ())
+        )
+        assert f"scan {name} {target}{skips}\n" in scan
+    assert '"$@"' in scan
     assert "gradle_lockfile_view.py" in scan
     assert "--source android" in scan
     assert 'scan android "$raw/android-release-runtime"' in scan
@@ -229,7 +236,26 @@ def test_every_committed_kit_lockfile_is_under_a_scan_target() -> None:
     # Negative control: discovery sees every ecosystem the issue covers.
     assert {"Package.resolved", "package-lock.json", "Cargo.lock"} <= names
     assert "gradle.lockfile" in names
+    excluded = [
+        ROOT / KIT_SCAN_TARGETS[name] / directory
+        for name, directories in KIT_SCAN_EXCLUSIONS.items()
+        for directory in directories
+    ]
+    skipped = [
+        lockfile
+        for lockfile in lockfiles
+        if any(directory in lockfile.parents for directory in excluded)
+    ]
+    # Only the documented test apps are excluded, and each holds a lockfile.
+    assert {
+        directory
+        for directory in excluded
+        for lockfile in skipped
+        if directory in lockfile.parents
+    } == set(excluded)
     for lockfile in lockfiles:
+        if lockfile in skipped:
+            continue
         assert any(
             lockfile == target or target in lockfile.parents for target in targets
         ), lockfile.relative_to(ROOT)

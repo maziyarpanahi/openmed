@@ -269,16 +269,21 @@ jobs:
             --source android \
             --output "$raw/android-release-runtime"
           scan() {
+            local name="$1" target="$2"
+            shift 2
             trivy fs \
               --scanners vuln \
               --pkg-types library \
               --format json \
-              --output "$raw/trivy-$1.json" \
-              "$2"
+              --output "$raw/trivy-$name.json" \
+              "$@" \
+              "$target"
           }
           scan swiftpm-root Package.resolved
           scan swiftpm-demos swift
-          scan js js
+          # The React Native parity example is a private test app that never
+          # ships in a kit artifact; see docs/supply-chain/vulnerability-scanning.md.
+          scan js js --skip-dirs "**/openmedkit-react-native/example"
           scan clients clients
           scan android "$raw/android-release-runtime"
           {
