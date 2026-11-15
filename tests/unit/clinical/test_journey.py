@@ -32,9 +32,13 @@ from openmed.structured.facts import (
 )
 from openmed.structured.store import (
     DenyStorageOperations,
+    JourneyStoreEncryption,
     LocalJourneyStore,
     StoreState,
 )
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 SUBJECT_ID = "subject_aaaaaaaaaaaaaaaa"
 ENCOUNTER_A = "encounter_aaaaaaaaaaaaaaaa"
@@ -48,7 +52,7 @@ CANARY = "SYNTHETIC-JOURNEY-CANARY"
 def test_equal_timestamps_order_by_fact_id_without_inventing_precision(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "equal-time")
+    store = LocalJourneyStore(tmp_path / "equal-time", encryption=PLAINTEXT_DEV)
     second = _fact("equal-b", effective_time={"precision": "month", "start": "2026-06"})
     first = _fact("equal-a", effective_time={"precision": "month", "start": "2026-06"})
     _ingest(store, second, source_suffix="source-b", committed_at=T0)
@@ -71,7 +75,7 @@ def test_equal_timestamps_order_by_fact_id_without_inventing_precision(
 def test_point_in_time_replays_before_correction_and_preserves_history(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "correction")
+    store = LocalJourneyStore(tmp_path / "correction", encryption=PLAINTEXT_DEV)
     original = _fact(
         "correction-original",
         value={"code": "synthetic-old"},
@@ -145,7 +149,7 @@ def test_point_in_time_replays_before_correction_and_preserves_history(
 def test_unresolved_conflict_is_reviewable_and_never_selects_truth(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "review")
+    store = LocalJourneyStore(tmp_path / "review", encryption=PLAINTEXT_DEV)
     first = _fact("review-a", value={"code": "synthetic-a"})
     second = _fact("review-b", value={"code": "synthetic-b"})
     _ingest(store, first, source_suffix="source-a", committed_at=T0)
@@ -177,7 +181,7 @@ def test_unresolved_conflict_is_reviewable_and_never_selects_truth(
 
 
 def test_filters_and_snapshot_bound_cursor_are_deterministic(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "filters")
+    store = LocalJourneyStore(tmp_path / "filters", encryption=PLAINTEXT_DEV)
     condition = _fact(
         "filter-condition",
         fact_type="condition",
@@ -247,7 +251,7 @@ def test_filters_and_snapshot_bound_cursor_are_deterministic(tmp_path: Path) -> 
 
 
 def test_time_filter_abstains_when_fact_time_is_unknown(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "unknown-time")
+    store = LocalJourneyStore(tmp_path / "unknown-time", encryption=PLAINTEXT_DEV)
     fact = _fact("unknown-time", effective_time={})
     _ingest(store, fact, source_suffix="source-a", committed_at=T0)
 
@@ -262,7 +266,7 @@ def test_time_filter_abstains_when_fact_time_is_unknown(tmp_path: Path) -> None:
 
 
 def test_unsupported_fact_type_returns_typed_outcome(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "unsupported-type")
+    store = LocalJourneyStore(tmp_path / "unsupported-type", encryption=PLAINTEXT_DEV)
     fact = _fact("unsupported-type", fact_type="relation")
     _ingest(store, fact, source_suffix="source-a", committed_at=T0)
 
@@ -274,7 +278,7 @@ def test_unsupported_fact_type_returns_typed_outcome(tmp_path: Path) -> None:
 
 
 def test_read_policy_denial_stays_typed(tmp_path: Path) -> None:
-    store = LocalJourneyStore(tmp_path / "denied")
+    store = LocalJourneyStore(tmp_path / "denied", encryption=PLAINTEXT_DEV)
     fact = _fact("denied")
     _ingest(store, fact, source_suffix="source-a", committed_at=T0)
     store.metadata.policy = DenyStorageOperations(frozenset({"read"}))
@@ -289,7 +293,7 @@ def test_read_policy_denial_stays_typed(tmp_path: Path) -> None:
 def test_event_drills_to_artifact_locator_and_derivation_versions(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "provenance")
+    store = LocalJourneyStore(tmp_path / "provenance", encryption=PLAINTEXT_DEV)
     fact = _fact("provenance", value={"code": CANARY})
     _ingest(store, fact, source_suffix="source-a", committed_at=T0)
     result = query_journey(store.metadata, JourneyQuery(subject_id=SUBJECT_ID))
@@ -317,7 +321,9 @@ def test_public_journey_contracts_reject_malformed_nested_values(
             snapshot=cast(Any, "malformed"),
         )
 
-    store = LocalJourneyStore(tmp_path / "malformed-contracts")
+    store = LocalJourneyStore(
+        tmp_path / "malformed-contracts", encryption=PLAINTEXT_DEV
+    )
     fact = _fact("malformed-contracts")
     _ingest(store, fact, source_suffix="source-a", committed_at=T0)
     result = query_journey(store.metadata, JourneyQuery(subject_id=SUBJECT_ID))
@@ -334,7 +340,9 @@ def test_public_journey_contracts_reject_malformed_nested_values(
 def test_semantic_axes_intervals_relations_and_mappings_survive_materialization(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "semantic-provenance")
+    store = LocalJourneyStore(
+        tmp_path / "semantic-provenance", encryption=PLAINTEXT_DEV
+    )
     condition = _fact(
         "semantic-condition",
         fact_type="condition",

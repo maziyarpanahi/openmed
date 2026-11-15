@@ -21,6 +21,7 @@ from openmed.clinical.journey_contracts import (
 from openmed.structured.store import (
     CanonicalRecord,
     DenyStorageOperations,
+    JourneyStoreEncryption,
     MigrationHealth,
     PointInTimeReader,
     PostgresJourneyStore,
@@ -31,6 +32,9 @@ from openmed.structured.store import (
     TransactionalJourneyStore,
 )
 from openmed.structured.store import postgres as postgres_module
+
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 
 pytestmark = pytest.mark.integration
 
@@ -201,7 +205,9 @@ def test_postgres_matches_sqlite_logical_contract(
     tmp_path: Path,
 ) -> None:
     psycopg, dsn, schema = postgres_runtime
-    with SQLiteJourneyStore(tmp_path / "journey.sqlite3") as local:
+    with SQLiteJourneyStore(
+        tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV
+    ) as local:
         local_result = _exercise_contract(local)
 
     postgres = PostgresJourneyStore(psycopg.connect(dsn), schema=schema)
