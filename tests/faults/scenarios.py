@@ -629,6 +629,9 @@ def run_offline_guard(session: FaultSession) -> Observation:
             store.create(record)
         try:
             queue._run_job(item)  # noqa: SLF001
+            # The terminal webhook goes to the bounded dispatcher; under load it
+            # can still be in flight here, and shutdown would abandon it.
+            queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
         finally:
             queue.shutdown()
         received = receiver.received

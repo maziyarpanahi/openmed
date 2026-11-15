@@ -45,6 +45,8 @@ CONTRACT_SCHEMAS = (JOB_RECORD_SCHEMA, WEBHOOK_PAYLOAD_SCHEMA, ERROR_ENVELOPE_SC
 
 SYNTHETIC_TEXTS = ("synthetic clinical note one", "synthetic clinical note two")
 STATUS_URL = "/jobs/synthetic-job"
+# Upper bound for the background webhook dispatcher to settle one delivery.
+WEBHOOK_SETTLE_SECONDS = 10.0
 WEBHOOK = JobWebhookRequest(
     url="https://example.invalid/openmed/hooks/synthetic",
     secret="synthetic-webhook-secret",
@@ -128,6 +130,9 @@ def _run_synthetic_job(
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
         queue._run_job(item)
+        # Terminal webhooks are delivered by the background dispatcher; wait
+        # for the delivery to settle so shutdown never abandons it under load.
+        assert queue._webhooks.wait_idle(WEBHOOK_SETTLE_SECONDS)
     finally:
         queue.shutdown()
 
