@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from openmed.core.export_provenance import SourceContext
 from openmed.onnx.webgpu_gate import (
     DEFAULT_FP32_KEEP_OPS,
     FP16_MAX_FINITE,
@@ -321,6 +322,12 @@ def _install_fakes(monkeypatch, module, gate, publish_calls=None) -> None:
     monkeypatch.setattr(module, "export_webgpu", _fake_export_webgpu)
     monkeypatch.setattr(module, "save_source_assets", _fake_save_source_assets)
     monkeypatch.setattr(module, "validate_webgpu_fp16_export", gate)
+    # Resolve the stub repository offline, as the other converter tests do.
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
 
     def fake_publish(**kwargs):
         if publish_calls is not None:

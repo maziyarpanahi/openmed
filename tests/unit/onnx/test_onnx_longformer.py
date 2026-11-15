@@ -7,6 +7,7 @@ in-test and need PyTorch, Transformers, ONNX, and ONNX Runtime.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -97,6 +98,20 @@ def stubbed_convert(monkeypatch: pytest.MonkeyPatch):
         "resolve_source_context",
         lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
     )
+
+    # The fp16 WebGPU parity gate is covered by its own tests; pass it here.
+    def passing_webgpu_gate(onnx_path, webgpu_path, **kwargs):
+        return {
+            "passed": True,
+            "reasons": [],
+            "tolerances": {},
+            "evaluated_lengths": list(kwargs.get("lengths") or ()),
+            "artifact_sha256": hashlib.sha256(
+                Path(webgpu_path).read_bytes()
+            ).hexdigest(),
+        }
+
+    monkeypatch.setattr(module, "validate_webgpu_fp16_export", passing_webgpu_gate)
     monkeypatch.setattr(
         export_adapters,
         "metadata",
