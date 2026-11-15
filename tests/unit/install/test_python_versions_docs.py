@@ -46,3 +46,9 @@ def test_page_names_the_check_date_and_command() -> None:
     text = PAGE.read_text(encoding="utf-8")
     assert re.search(r"\b20\d\d-\d\d-\d\d\b", text)
     assert "uv pip install --dry-run --python 3.14" in text
+
+
+def test_macos_column_is_labelled_as_resolver_evidence() -> None:
+    text = PAGE.read_text(encoding="utf-8")
+    assert "| macOS arm64 (resolver only) |" in text
+    assert "resolver evidence only" in text

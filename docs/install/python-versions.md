@@ -4,7 +4,8 @@ OpenMed's CI tests Python 3.11 and 3.12 and installs only a few optional
 extras. This page records which extras in `pyproject.toml` install on
 Python 3.14, so you can check before you pick an interpreter.
 
-Checked on **2026-11-14** against `master` (OpenMed 3.3.0) with uv 0.13.8
+Checked on **2026-11-14** against `master` at commit
+`174fd485c1539119d6dccebdca9a9526a0f0e7e1` (OpenMed 3.3.0) with uv 0.13.8
 and CPython 3.14.10. Dependency releases change quickly, so re-run the
 check below before relying on a row.
 
@@ -26,12 +27,20 @@ A dry run only resolves dependencies, and uv accepts a source distribution
 (sdist) when no compatible wheel exists. To find the dependencies that have no
 Python 3.14 wheel, each extra was also resolved with `--only-binary :all:`.
 Every sdist that this check reported was then built on Linux with
-`uv pip install --no-binary <package>` (GCC 15). The macOS builds were not run.
+`uv pip install --no-binary <package>` (GCC 15).
+
+The macOS arm64 column is **resolver evidence only**. It comes from uv
+resolving for a simulated `aarch64-apple-darwin` platform with
+`MACOSX_DEPLOYMENT_TARGET=14.0` on the Linux host. Nothing was installed or
+built on a Mac, so a macOS `install` means that a Python 3.14 wheel or sdist
+was found, not that the extra was tested there. These entries stay labelled
+this way until a native macOS run is available.
 
 ## Status values
 
 - **install**: resolves, and every dependency either has a Python 3.14 wheel or
-  builds from source on Linux. The notes name any native builds.
+  builds from source on Linux. The notes name any native builds. In the macOS
+  column it means only that the resolver found a Python 3.14 wheel or sdist.
 - **fail**: a required dependency has no Python 3.14 wheel and its sdist does
   not build.
 - **platform-limited**: the extra's dependencies are limited to another
@@ -43,7 +52,7 @@ source builds.
 
 ## Results
 
-| Extra | Linux x86_64 | macOS arm64 | Notes |
+| Extra | Linux x86_64 | macOS arm64 (resolver only) | Notes |
 | --- | --- | --- | --- |
 | `dev` | install | install |  |
 | `cli` | install | install |  |
@@ -116,4 +125,5 @@ source builds.
 | `yasbd` | install | install |  |
 
 Rows marked as needing a compiler were built on Linux only. On macOS, install
-the Xcode Command Line Tools before trying them.
+the Xcode Command Line Tools before trying them; those builds have not been
+checked there.
