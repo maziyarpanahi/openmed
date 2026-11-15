@@ -1,0 +1,102 @@
+{
+  "schema": "openmed.model_catalog_filter_vectors",
+  "version": 1,
+  "description": "Synthetic catalog filter vectors. The Python generator test builds catalog from manifest and must reproduce it byte for byte; the Python reference filter and the Swift OpenMedModelCatalog.filter must both return expected_repo_ids, in catalog order, for every case.",
+  "manifest": "tests/fixtures/model_catalog/manifest_subset.jsonl",
+  "catalog": "tests/fixtures/model_catalog/swift_catalog_subset.jsonl",
+  "cases": [
+    {
+      "id": "no-filter-returns-all-rows-sorted",
+      "query": {},
+      "expected_repo_ids": [
+        "OpenMed/a-synthetic-sort-probe-mlx",
+        "OpenMed/Synthetic-Generative-mlx-4bit",
+        "OpenMed/Synthetic-NER-Large-434M-coreml",
+        "OpenMed/Synthetic-PII-Base-125M-mlx-8bit",
+        "OpenMed/Synthetic-PII-Tiny-22M-mlx"
+      ]
+    },
+    {
+      "id": "format-ignores-case",
+      "query": {"format": "MLX-FP"},
+      "expected_repo_ids": [
+        "OpenMed/a-synthetic-sort-probe-mlx",
+        "OpenMed/Synthetic-PII-Tiny-22M-mlx"
+      ]
+    },
+    {
+      "id": "format-coreml",
+      "query": {"format": "coreml"},
+      "expected_repo_ids": ["OpenMed/Synthetic-NER-Large-434M-coreml"]
+    },
+    {
+      "id": "format-non-apple-formats-are-narrowed-out",
+      "query": {"format": "onnx"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "format-pytorch-is-narrowed-out",
+      "query": {"format": "pytorch"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "tier-ignores-case",
+      "query": {"tier": "tiny"},
+      "expected_repo_ids": ["OpenMed/Synthetic-PII-Tiny-22M-mlx"]
+    },
+    {
+      "id": "max-param-count-is-inclusive-and-skips-unknown",
+      "query": {"max_param_count": 125000000},
+      "expected_repo_ids": [
+        "OpenMed/a-synthetic-sort-probe-mlx",
+        "OpenMed/Synthetic-PII-Base-125M-mlx-8bit",
+        "OpenMed/Synthetic-PII-Tiny-22M-mlx"
+      ]
+    },
+    {
+      "id": "max-param-count-below-every-row",
+      "query": {"max_param_count": 1},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "language-ignores-case",
+      "query": {"language": "ES"},
+      "expected_repo_ids": ["OpenMed/Synthetic-PII-Tiny-22M-mlx"]
+    },
+    {
+      "id": "license-ignores-case",
+      "query": {"license": "mit"},
+      "expected_repo_ids": [
+        "OpenMed/Synthetic-Generative-mlx-4bit",
+        "OpenMed/Synthetic-PII-Base-125M-mlx-8bit"
+      ]
+    },
+    {
+      "id": "restricted-license-rows-are-absent",
+      "query": {"license": "other"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "combined-predicates",
+      "query": {
+        "format": "mlx-8bit",
+        "tier": "BASE",
+        "max_param_count": 200000000,
+        "language": "fr",
+        "license": "MIT"
+      },
+      "expected_repo_ids": ["OpenMed/Synthetic-PII-Base-125M-mlx-8bit"]
+    },
+    {
+      "id": "combined-predicates-one-mismatch",
+      "query": {"format": "mlx-8bit", "language": "en"},
+      "expected_repo_ids": []
+    }
+  ],
+  "lookups": [
+    {"repo_id": "OpenMed/Synthetic-PII-Tiny-22M-mlx", "found": true},
+    {"repo_id": "openmed/synthetic-pii-tiny-22m-mlx", "found": false},
+    {"repo_id": "OpenMed/Synthetic-PII-Small-onnx", "found": false},
+    {"repo_id": "OpenMed/Synthetic-Restricted-mlx", "found": false}
+  ]
+}
