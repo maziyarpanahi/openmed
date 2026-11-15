@@ -288,14 +288,16 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
     monkeypatch.setenv("OPENMED_SERVICE_CORS_ORIGINS", ALLOWED_ORIGIN)
     app = create_app()
 
-    # Starlette runs user_middleware[0] outermost.
+    # Starlette runs user_middleware[0] outermost. The GraphQL privacy-header
+    # layer only decorates /graphql responses, so it may wrap the host check.
     assert _middleware_names(app) == [
+        "GraphQLPrivacyHeadersMiddleware",
         "ErrorEnvelopeTrustedHostMiddleware",
         "CORSMiddleware",
         "_auth_middleware",
         "WorkflowBoundaryMiddleware",
-        "BoundedRequestBodyMiddleware",
         "CorrelationIdMiddleware",
+        "BoundedRequestBodyMiddleware",
         "_BoundedRequestBodyMiddleware",
         "_throttle_middleware",
         "_readiness_middleware",
@@ -305,7 +307,11 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
 def test_middleware_stack_keeps_trusted_host_outermost_without_cors() -> None:
     names = _middleware_names(create_app())
 
-    assert names[:2] == ["ErrorEnvelopeTrustedHostMiddleware", "_auth_middleware"]
+    assert names[:3] == [
+        "GraphQLPrivacyHeadersMiddleware",
+        "ErrorEnvelopeTrustedHostMiddleware",
+        "_auth_middleware",
+    ]
     assert "CORSMiddleware" not in names
 
 

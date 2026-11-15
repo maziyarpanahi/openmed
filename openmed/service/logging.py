@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
