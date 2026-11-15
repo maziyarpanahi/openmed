@@ -14,10 +14,20 @@ services:
       OPENMED_OPENHIM_ALLOW_INSECURE_HTTP: ${OPENMED_OPENHIM_ALLOW_INSECURE_HTTP:-false}
       OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS: ${OPENMED_OPENHIM_HEARTBEAT_INTERVAL_SECONDS:-10}
       OPENMED_EGRESS_RULES: ${OPENMED_EGRESS_RULES:?Set OPENMED_EGRESS_RULES to allow the OpenHIM core origin}
-    # Compose copies the host OPENMED_OPENHIM_PASSWORD into an owner-only file;
-    # the container environment never carries the password.
+      # The image runs the prod security profile, which stays unready (and
+      # never registers with OpenHIM) until authentication is configured.
+      OPENMED_SERVICE_AUTH_ENABLED: "true"
+      OPENMED_SERVICE_AUTH_API_KEYS_FILE: /run/secrets/openmed_service_api_keys
+      OPENMED_SERVICE_DIGEST_KEY_FILE: /run/secrets/openmed_service_digest_key
+    # Compose copies the host OPENMED_OPENHIM_PASSWORD, OPENMED_SERVICE_AUTH_API_KEYS
+    # and OPENMED_SERVICE_DIGEST_KEY into owner-only files; the container
+    # environment never carries them.
     secrets:
       - source: openmed_openhim_password
+        mode: 0400
+      - source: openmed_service_api_keys
+        mode: 0400
+      - source: openmed_service_digest_key
         mode: 0400
     ports:
       - "127.0.0.1:${OPENMED_OPENHIM_HOST_PORT:-8080}:8080"
@@ -52,3 +62,7 @@ services:
 secrets:
   openmed_openhim_password:
     environment: OPENMED_OPENHIM_PASSWORD
+  openmed_service_api_keys:
+    environment: OPENMED_SERVICE_AUTH_API_KEYS
+  openmed_service_digest_key:
+    environment: OPENMED_SERVICE_DIGEST_KEY

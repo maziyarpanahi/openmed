@@ -44,6 +44,24 @@ query strings cannot weaken the configured de-identification posture. Change
 these settings only through the mediator deployment configuration and restart
 the service so startup validation runs again.
 
+## Security profile, authentication and egress
+
+The mediator image sets `OPENMED_PROFILE=prod`, so the
+[production security profile](../serving/security-profile.md) must pass before
+the service preloads, registers with OpenHIM or reports ready. The compose
+example therefore enables [service authentication](../serving/authentication.md)
+and needs three more settings:
+
+- `OPENMED_SERVICE_AUTH_API_KEYS`: the hashed API keys of the callers allowed
+  to use the service, including whatever calls `/openhim/deidentify`, which
+  requires the `pii:write` scope.
+- `OPENMED_SERVICE_DIGEST_KEY`: the deployment digest key, at least 32 bytes,
+  required whenever authentication is on outside `dev` and `test`.
+- `OPENMED_EGRESS_RULES`: an [egress rule](../serving/egress-policy.md) for the
+  `openhim` purpose that names the exact OpenHIM core origin, lists its private
+  address range in `cidrs` when the core is not on a public address, and sets
+  `allow_credentials` because registration sends the management credentials.
+
 ## Run with an existing OpenHIM core
 
 From the repository root, set the real management API and credentials, then start the example:
@@ -52,12 +70,15 @@ From the repository root, set the real management API and credentials, then star
 export OPENMED_OPENHIM_CORE_URL=https://openhim-core.internal:8080
 export OPENMED_OPENHIM_USERNAME=mediator-admin@example.org
 export OPENMED_OPENHIM_PASSWORD='use-your-secret-store'
+export OPENMED_EGRESS_RULES='[{"purposes":["openhim"],"destination":"https://openhim-core.internal:8080","cidrs":["10.20.0.0/16"],"allow_credentials":true}]'
+export OPENMED_SERVICE_AUTH_API_KEYS='use-your-secret-store'
+export OPENMED_SERVICE_DIGEST_KEY='use-your-secret-store'
 
 docker compose -f examples/openhim-mediator/docker-compose.yml \
   up --build openmed-mediator
 ```
 
-The compose file passes the host `OPENMED_OPENHIM_PASSWORD` to the container as an owner-only Compose secret at `/run/secrets/openmed_openhim_password` and sets `OPENMED_OPENHIM_PASSWORD_FILE`; the container environment never carries the password. The compose service mounts `mediator-config.json` read-only at `/etc/openmed/mediator-config.json`. If OpenHIM resolves the service under a different hostname, update `host` in both the channel route and endpoint before starting the mediator.
+The compose file passes the host `OPENMED_OPENHIM_PASSWORD`, `OPENMED_SERVICE_AUTH_API_KEYS` and `OPENMED_SERVICE_DIGEST_KEY` to the container as owner-only Compose secrets under `/run/secrets/` and sets the matching `_FILE` settings; the container environment never carries them. The compose service mounts `mediator-config.json` read-only at `/etc/openmed/mediator-config.json`. If OpenHIM resolves the service under a different hostname, update `host` in both the channel route and endpoint before starting the mediator.
 
 After registration, open the mediator in the OpenHIM Console and install the **OpenMed De-identification** default channel. The channel matches `POST /openmed/deidentify` on the OpenHIM router and forwards it to the mediator's `/openhim/deidentify` route.
 
@@ -83,10 +104,10 @@ Transformed responses use the required `application/json+openhim` media type. Th
 
 ## Health and heartbeat
 
-The existing `/health`, `/livez`, and `/readyz` routes retain their normal meanings. When mediator mode is enabled, `GET /openhim/heartbeat` reports local registration and heartbeat state without exposing credentials:
+The existing `/health`, `/livez`, and `/readyz` routes retain their normal meanings; the image health check probes `/readyz`, which turns ready only after registration succeeds. When mediator mode is enabled, `GET /openhim/heartbeat` reports local registration and heartbeat state without exposing credentials. With authentication on, it requires an API key:
 
 ```bash
-curl http://127.0.0.1:8080/openhim/heartbeat
+curl --header "X-API-Key: ${OPENMED_API_KEY}" http://127.0.0.1:8080/openhim/heartbeat
 ```
 
 A healthy response has `registered: true`, a non-null `last_heartbeat_at`, and `last_error: null`.
@@ -100,6 +121,12 @@ export OPENMED_OPENHIM_CORE_URL=http://openhim-fixture:8081
 export OPENMED_OPENHIM_USERNAME=openhim@example.org
 export OPENMED_OPENHIM_PASSWORD=synthetic-password
 export OPENMED_OPENHIM_ALLOW_INSECURE_HTTP=true
+export OPENMED_EGRESS_RULES='[{"purposes":["openhim"],"destination":"http://openhim-fixture:8081","cidrs":["10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"],"allow_credentials":true}]'
+# Throwaway credentials for the fixture run only.
+export OPENMED_API_KEY="$(openssl rand -hex 32)"
+OPENMED_API_KEY_HASH="$(printf %s "${OPENMED_API_KEY}" | openssl dgst -sha256 -r | cut -d' ' -f1)"
+export OPENMED_SERVICE_AUTH_API_KEYS="[{\"id\":\"openhim-smoke\",\"key_hash\":\"sha256:${OPENMED_API_KEY_HASH}\",\"scopes\":[\"pii:write\"]}]"
+export OPENMED_SERVICE_DIGEST_KEY="$(openssl rand -hex 32)"
 
 docker compose -f examples/openhim-mediator/docker-compose.yml \
   --profile fixture up -d openhim-fixture
@@ -107,7 +134,7 @@ docker compose -f examples/openhim-mediator/docker-compose.yml \
 docker compose -f examples/openhim-mediator/docker-compose.yml \
   up -d --build openmed-mediator
 
-curl http://127.0.0.1:8080/openhim/heartbeat
+curl --header "X-API-Key: ${OPENMED_API_KEY}" http://127.0.0.1:8080/openhim/heartbeat
 curl http://127.0.0.1:8081/health
 
 docker compose -f examples/openhim-mediator/docker-compose.yml \
@@ -115,5 +142,5 @@ docker compose -f examples/openhim-mediator/docker-compose.yml \
 ```
 
 The fixture uses synthetic credentials and payloads. Never use it as an HIE
-component. Unset those four variables before configuring a real OpenHIM
+component. Unset those variables before configuring a real OpenHIM
 deployment.
