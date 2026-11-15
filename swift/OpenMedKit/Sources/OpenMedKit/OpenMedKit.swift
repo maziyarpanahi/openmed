@@ -201,6 +201,8 @@
                     artifact: nil
                 )
             case .mlx(let modelDirectoryURL):
+                // Refuse an unsupported platform before reading the artifact.
+                try OpenMedMLXRuntimeSupport.requireSupported()
                 let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
                 if artifact.family == .openaiPrivacyFilter {
                     return TokenizerPlan(request: nil, artifact: artifact)
