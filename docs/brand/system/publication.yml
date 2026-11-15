@@ -232,6 +232,7 @@ classification:
     - evaluation/resource-soak.md
     - serving/mtls.md
     - security/policy-generations.md
+    - serving/security-profile.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md

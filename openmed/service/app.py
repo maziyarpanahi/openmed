@@ -54,6 +54,7 @@ from .auth import (
     parse_api_docs_config,
     parse_service_auth_config,
     request_needs_admission,
+    route_key_for_request,
     validate_route_policies,
 )
 from .batcher import (
@@ -157,6 +158,12 @@ from .security_headers import (
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
     service_cors_allow_headers,
+)
+from .security_profile import (
+    SECURITY_PROFILE_INVALID_CODE,
+    SecurityProfileReport,
+    evaluate_service_security_profile,
+    log_security_profile_report,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
@@ -853,6 +860,41 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
+def _security_profile_report(fastapi_app: FastAPI) -> SecurityProfileReport:
+    """Return the app's security-profile report, evaluating it on first use."""
+    report = getattr(fastapi_app.state, "security_profile_report", None)
+    if report is None:
+        report = evaluate_service_security_profile(fastapi_app)
+        fastapi_app.state.security_profile_report = report
+        log_security_profile_report(report)
+    return report
+
+
+def _security_profile_blocks(request: Request) -> bool:
+    """Refuse every non-probe route while the security profile is invalid."""
+    if _security_profile_report(request.app).ready:
+        return False
+    method, path = route_key_for_request(request)
+    if not path:
+        return False  # No route matches; the router answers 404 without work.
+    policy = ROUTE_POLICIES.get((method, path))
+    return policy is None or policy.admission != "probe"
+
+
+def _security_profile_invalid_response(
+    report: SecurityProfileReport,
+    *,
+    include_details: bool,
+) -> JSONResponse:
+    return _error_response(
+        503,
+        SECURITY_PROFILE_INVALID_CODE,
+        "Service security profile checks failed; the service is not accepting "
+        "requests. Run 'openmed service preflight' for the report.",
+        details=report.readiness_details() if include_details else None,
+    )
+
+
 def create_app(
     *,
     max_request_body_bytes: Optional[int] = None,
@@ -909,22 +951,26 @@ def create_app(
         fastapi_app.state.inflight = 0
         fastapi_app.state.openhim_mediator = None
 
-        if runtime.preload_models:
-            await run_in_threadpool(runtime.preload)
-
-        if openhim_settings.enabled:
-            mediator = create_openhim_mediator(openhim_settings)
-            fastapi_app.state.openhim_mediator = mediator
-            try:
-                await mediator.start()
-            except Exception:
-                await mediator.stop()
-                raise
-
+        # Fail closed: an invalid profile never preloads, contacts OpenHIM or
+        # becomes ready, and every non-probe route answers 503.
+        fastapi_app.state.security_profile_report = None
         mtls = getattr(fastapi_app.state, "mtls", None)
-        if mtls is not None:
-            mtls.start_reload_watcher()
-        fastapi_app.state.ready = True
+        if _security_profile_report(fastapi_app).ready:
+            if runtime.preload_models:
+                await run_in_threadpool(runtime.preload)
+
+            if openhim_settings.enabled:
+                mediator = create_openhim_mediator(openhim_settings)
+                fastapi_app.state.openhim_mediator = mediator
+                try:
+                    await mediator.start()
+                except Exception:
+                    await mediator.stop()
+                    raise
+
+            if mtls is not None:
+                mtls.start_reload_watcher()
+            fastapi_app.state.ready = True
 
         try:
             yield
@@ -1087,6 +1133,10 @@ def create_app(
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
+        if _security_profile_blocks(request):
+            return _security_profile_invalid_response(
+                _security_profile_report(request.app), include_details=False
+            )
         if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
@@ -1370,6 +1420,11 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz(request: Request):
+        security_report = _security_profile_report(request.app)
+        if not security_report.ready:
+            return _security_profile_invalid_response(
+                security_report, include_details=True
+            )
         if getattr(request.app.state, "ready", False):
             return {"status": "ready", "service": SERVICE_NAME}
         return _error_response(
@@ -2246,6 +2301,7 @@ def create_app(
             + _REQUEST_BODY_OVERHEAD_BYTES
         )
     )
+    app.state.model_body_limit_bytes = body_limit
     app.add_middleware(
         _BoundedRequestBodyMiddleware,
         max_bytes=body_limit,

@@ -172,6 +172,12 @@ authentication policy changes and autonomous clinical action are outside this
 surface. The report is non-diagnostic; any later consequential workflow must
 obtain explicit reviewer confirmation before acting on its outputs.
 
+With `OPENMED_PROFILE` unset the service runs under the production
+[security profile](serving/security-profile.md): until authentication is
+configured, `/readyz` reports `security_profile_invalid` and other routes answer
+`503`. For local exploration, prefix these commands with `OPENMED_PROFILE=dev`.
+Run `openmed service preflight` to see which controls a configuration passes.
+
 The reference launcher configures `StructuredJsonLogFormatter` for
 `openmed.service.access` and disables `uvicorn.access`. It emits exactly one
 structured record per request (method, route template, status, duration,

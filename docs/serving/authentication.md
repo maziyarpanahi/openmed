@@ -1,6 +1,10 @@
 # REST Service Authentication
 
-OpenMed REST authentication is off by default for local development. Enable it
+OpenMed REST authentication is off by default. The production
+[security profile](security-profile.md) requires it, with deny-by-default
+authorization and at least one credential source, and keeps the service closed
+until it is configured. JWT deployments under that profile also need an issuer,
+an audience and a lifetime bound of at most 24 hours. Enable authentication
 before exposing the service outside a trusted loopback or private subnet:
 
 ```bash

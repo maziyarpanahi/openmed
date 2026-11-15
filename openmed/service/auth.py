@@ -26,6 +26,7 @@ from .runtime import (
     parse_service_throttle_max_tracked_keys,
     parse_service_trusted_proxy_config,
 )
+from .security_profile import resolve_security_profile
 from .throttle import TokenBucketRateLimiter, client_identity, format_retry_after
 
 SERVICE_AUTH_ENABLED_ENV_VAR = "OPENMED_SERVICE_AUTH_ENABLED"
@@ -348,7 +349,7 @@ def parse_service_auth_config() -> ServiceAuthConfig:
                 default=3600.0,
             )
             if os.getenv(SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR) is not None
-            or os.getenv("OPENMED_PROFILE", "prod") == "prod"
+            or resolve_security_profile().is_production
             else None
         ),
         route_scopes=route_scopes,

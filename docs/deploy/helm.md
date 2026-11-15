@@ -7,6 +7,11 @@ Its optional production Journey profile adds a pre-install/pre-upgrade
 migration gate, a worker Deployment, durable artifact storage, dependency-aware
 readiness, and a default-deny NetworkPolicy.
 
+The default `config.profile: prod` selects the production
+[security profile](../serving/security-profile.md): pods stay unready with
+`security_profile_invalid` until `extraEnv` configures authentication. Run
+`openmed service preflight` against the same environment before installing.
+
 ## Install
 
 Build and publish an OpenMed service image to a registry your cluster can pull,
