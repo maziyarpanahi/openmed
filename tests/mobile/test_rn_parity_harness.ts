@@ -603,16 +603,30 @@ test("native probes mirror OpenMedKit tables and call it offline at scalar offse
   const kotlinProbe = await read(
     "js/openmedkit-react-native/example/probe/android/src/main/java/com/openmed/openmedkit/parityprobe/OpenMedKitParityProbeModule.kt",
   );
-  const swiftPolicy = await read("swift/OpenMedKit/Sources/OpenMedKit/Policy.swift");
-  const kotlinPolicy = await read(
-    "android/openmedkit/src/main/kotlin/com/openmed/openmedkit/policy/PolicyProfiles.kt",
-  );
-
-  for (const name of ["clinicalConceptLabels", "quasiIdentifierLabels"]) {
-    assert.deepEqual(labelSet(swiftProbe, name), labelSet(swiftPolicy, name), name);
+  // OpenMedKit's policy-label table is the generated portable taxonomy each
+  // kit bundles; the probes mirror every group except the direct-identifier
+  // fallback.
+  const swiftTaxonomy = JSON.parse(
+    await read("swift/OpenMedKit/Sources/OpenMedKit/Resources/policies/portable_policy_taxonomy.json"),
+  ) as unknown;
+  const kotlinTaxonomy = JSON.parse(
+    await read("android/openmedkit/src/main/assets/policies/portable_policy_taxonomy.json"),
+  ) as unknown;
+  const mirroredGroups: Array<[swiftName: string, kotlinName: string, policyLabel: string]> = [
+    ["clinicalConceptLabels", "CLINICAL_CONCEPT_LABELS", "CLINICAL_CONCEPT"],
+    ["quasiIdentifierLabels", "QUASI_IDENTIFIER_LABELS", "QUASI_IDENTIFIER"],
+    ["sensitiveAttributeLabels", "SENSITIVE_ATTRIBUTE_LABELS", "SENSITIVE_ATTRIBUTE"],
+  ];
+  for (const taxonomy of [swiftTaxonomy, kotlinTaxonomy]) {
+    assert.deepEqual(
+      Object.keys(taxonomyGroups(taxonomy)).sort(),
+      [...mirroredGroups.map((group) => group[2]), "DIRECT_IDENTIFIER"].sort(),
+      "every taxonomy policy label is mirrored or is the direct-identifier fallback",
+    );
   }
-  for (const name of ["CLINICAL_CONCEPT_LABELS", "QUASI_IDENTIFIER_LABELS"]) {
-    assert.deepEqual(labelSet(kotlinProbe, name), labelSet(kotlinPolicy, name), name);
+  for (const [swiftName, kotlinName, policyLabel] of mirroredGroups) {
+    assert.deepEqual(labelSet(swiftProbe, swiftName), taxonomyGroups(swiftTaxonomy)[policyLabel], swiftName);
+    assert.deepEqual(labelSet(kotlinProbe, kotlinName), taxonomyGroups(kotlinTaxonomy)[policyLabel], kotlinName);
   }
 
   for (const method of [
@@ -919,8 +933,26 @@ function codeOnly(source: string): string {
     .join("\n");
 }
 
+/** Read a `let`/`val` label-table declaration, not the first mention of its name. */
 function labelSet(source: string, name: string): string[] {
-  const match = new RegExp(`${name}[^=]*=\\s*(?:setOf\\(|\\[)([\\s\\S]*?)[\\])]`).exec(source);
+  const match = new RegExp(`\\b(?:let|val)\\s+${name}\\b[^=]*=\\s*(?:setOf\\(|\\[)([\\s\\S]*?)[\\])]`).exec(
+    source,
+  );
   assert.ok(match, `${name} not found`);
   return [...match[1]!.matchAll(/"([A-Z_]+)"/g)].map((item) => item[1]!).sort();
+}
+
+/** Sorted canonical labels of a bundled portable taxonomy, keyed by policy label. */
+function taxonomyGroups(taxonomy: unknown): Record<string, string[]> {
+  const labels = (taxonomy as { labels?: Record<string, { policy_label?: unknown }> }).labels;
+  assert.ok(labels && typeof labels === "object", "taxonomy labels not found");
+  const groups: Record<string, string[]> = {};
+  for (const [label, entry] of Object.entries(labels)) {
+    assert.equal(typeof entry.policy_label, "string", `${label} has no policy label`);
+    (groups[entry.policy_label as string] ??= []).push(label);
+  }
+  for (const group of Object.values(groups)) {
+    group.sort();
+  }
+  return groups;
 }

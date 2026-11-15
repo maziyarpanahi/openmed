@@ -270,10 +270,10 @@ final class OpenMedKitParityProbe: NSObject, RCTBridgeModule {
         return "hmac-sha256:" + signature.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Mirrors the private policy-label table in OpenMedKit `Policy.swift`
-    /// exactly (a test keeps them equal). Swift currently lists fewer clinical
-    /// concept labels than Kotlin; the Swift canonicalizer never emits the
-    /// missing ones, and cross-kit table equivalence belongs to #3643.
+    /// Mirrors the policy-label groups of OpenMedKit's bundled portable
+    /// taxonomy (`Resources/policies/portable_policy_taxonomy.json`, generated
+    /// from `openmed/core/labels.py`) exactly; a test keeps them equal. Every
+    /// other taxonomy label is a direct identifier.
     private static func policyLabel(for canonicalLabel: String) -> String {
         if clinicalConceptLabels.contains(canonicalLabel) {
             return "CLINICAL_CONCEPT"
@@ -281,19 +281,136 @@ final class OpenMedKitParityProbe: NSObject, RCTBridgeModule {
         if quasiIdentifierLabels.contains(canonicalLabel) {
             return "QUASI_IDENTIFIER"
         }
+        if sensitiveAttributeLabels.contains(canonicalLabel) {
+            return "SENSITIVE_ATTRIBUTE"
+        }
         return "DIRECT_IDENTIFIER"
     }
 
     private static let clinicalConceptLabels: Set<String> = [
-        "MICROORGANISM",
+        "ABNORMAL_FLAG",
+        "ADL_ACTIVITY",
+        "ADMINISTRATION_ROUTE",
+        "AIRWAY_MANAGEMENT",
+        "ALLERGEN",
+        "ALLERGY_CRITICALITY",
+        "ANATOMY",
+        "ANESTHESIA_TYPE",
+        "ANESTHETIC_AGENT",
         "ANTIBIOTIC",
-        "SUSCEPTIBILITY",
-        "CONDITION",
-        "MEDICATION",
-        "LAB_TEST",
-        "PROCEDURE",
+        "ASA_CLASS",
+        "ASSISTANCE_LEVEL",
+        "BIOMARKER",
         "BODY_SITE",
+        "CANCER",
+        "CARE_INTERVENTION",
+        "CELL",
+        "CHEMICAL",
+        "CKD_STAGE",
+        "CLINICAL_SIGNIFICANCE",
+        "CONDITION",
+        "DEVELOPMENTAL_MILESTONE",
+        "DEVICE",
+        "DEVICE_MODEL",
+        "DEVICE_TYPE",
+        "DIALYSIS_MODALITY",
+        "DIET_TYPE",
+        "DISEASE",
+        "DNA",
+        "DOSAGE",
+        "DOSE_NUMBER",
+        "DRESSING_TYPE",
+        "DRUG",
+        "DURATION",
+        "DYSPNEA_GRADE",
+        "ENDOSCOPIC_FINDING",
+        "EXUDATE_DESCRIPTOR",
+        "FEEDING_ROUTE",
+        "FETAL_FINDING",
+        "FINDING",
+        "FORM",
+        "FREQUENCY",
+        "FUNCTIONAL_SCALE",
+        "GENE",
+        "GENE_OR_GENE_PRODUCT",
+        "GENE_SYMBOL",
+        "GESTATIONAL_AGE",
+        "GI_SCORE",
+        "GI_SYMPTOM",
+        "GLYCEMIC_MEASURE",
+        "GRAVIDITY_PARITY",
+        "GROWTH_PARAMETER",
+        "GROWTH_PERCENTILE",
+        "HISTOLOGIC_FINDING",
+        "HISTOLOGIC_GRADE",
+        "HORMONE_LEVEL",
+        "IHC_STAIN",
+        "IMAGING_MODALITY",
+        "IMMUNIZATION",
+        "IMPLANT_SITE",
+        "INDICATION",
+        "INSULIN_REGIMEN",
+        "INTAKE_OUTPUT",
+        "LAB_TEST",
+        "LAB_VALUE",
+        "LATERALITY",
+        "LINE_DRAIN_TUBE",
+        "MARGIN_STATUS",
+        "MEASUREMENT",
+        "MEDICATION",
+        "MICROORGANISM",
+        "MOBILITY_ABILITY",
+        "NURSING_RISK_SCORE",
+        "NUTRITIONAL_STATUS",
+        "NUTRITION_TARGET",
+        "OBSTETRIC_EVENT",
+        "ORGAN",
+        "ORGANISM",
         "OTHER",
+        "OXYGEN_SUPPORT",
+        "PACK_YEARS",
+        "PATHOLOGY",
+        "POLYP_DESCRIPTOR",
+        "PROBLEM",
+        "PROCEDURE",
+        "PROTEIN",
+        "PROTEIN_CHANGE",
+        "PSYCH_SYMPTOM",
+        "REACTION_MANIFESTATION",
+        "REACTION_SEVERITY",
+        "RECEPTOR_STATUS",
+        "REFERENCE_RANGE",
+        "RENAL_FUNCTION_MEASURE",
+        "RESPIRATORY_FINDING",
+        "RNA",
+        "ROUTE",
+        "SEVERITY",
+        "SPECIES",
+        "SPECIMEN",
+        "SPECIMEN_TYPE",
+        "SPIROMETRY_MEASURE",
+        "STAGE_GROUP",
+        "STRENGTH",
+        "SUBSTANCE",
+        "SUSCEPTIBILITY",
+        "THYROID_MEASURE",
+        "TISSUE",
+        "TNM_M",
+        "TNM_N",
+        "TNM_T",
+        "TOOTH",
+        "TUMOR_GRADE",
+        "UNIT",
+        "URINE_FINDING",
+        "USE_QUANTITY",
+        "USE_STATUS",
+        "VACCINE_LOT",
+        "VACCINE_NAME",
+        "VACCINE_SERIES",
+        "VARIANT_DESCRIPTOR",
+        "WOUND_STAGE",
+        "WOUND_TYPE",
+        "ZYGOSITY",
     ]
 
     private static let quasiIdentifierLabels: Set<String> = [
@@ -313,6 +430,10 @@ final class OpenMedKitParityProbe: NSObject, RCTBridgeModule {
         "JOB_TITLE",
         "JOB_DEPARTMENT",
         "OCCUPATION",
+    ]
+
+    private static let sensitiveAttributeLabels: Set<String> = [
+        "ETHNICITY",
     ]
 
     // MARK: - Helpers
