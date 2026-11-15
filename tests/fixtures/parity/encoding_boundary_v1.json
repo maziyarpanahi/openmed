@@ -1,0 +1,219 @@
+{
+  "synthetic_only": true,
+  "version": 1,
+  "description": "Encoding-boundary negative vectors for normalize_text and hmac_text_hash. Text inputs use JSON escapes (lone surrogates included); byte inputs are hex-encoded so this file stays valid UTF-8.",
+  "hmac_key": "synthetic-parity-key",
+  "normalize_outcomes": [
+    "ok",
+    "invalid_encoding",
+    "empty_text"
+  ],
+  "hmac_outcomes": [
+    "hashed",
+    "unencodable_text"
+  ],
+  "cases": [
+    {
+      "id": "lone_high_surrogate",
+      "text": "a\ud800b",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "unencodable_text"
+      }
+    },
+    {
+      "id": "lone_low_surrogate",
+      "text": "a\udc00b",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "unencodable_text"
+      }
+    },
+    {
+      "id": "reversed_surrogate_pair",
+      "text": "\udc00\ud800",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "unencodable_text"
+      }
+    },
+    {
+      "id": "trailing_lone_high_surrogate",
+      "text": "ab\udbff",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "unencodable_text"
+      }
+    },
+    {
+      "id": "valid_surrogate_pair_control",
+      "text": "a\ud83d\ude00b",
+      "normalize": {
+        "outcome": "ok",
+        "text": "a\ud83d\ude00b"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:ead3fd8f52ab2a18e8d782e9cc7f624979d285d59062286a76d9fbd9738697f8"
+      }
+    },
+    {
+      "id": "invalid_utf8_continuation",
+      "bytes_hex": "c328",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:a5d231ff33f74e482bb5fc4b7c8ccec25e680d3b81ffac3b0f717532cdc9d434"
+      }
+    },
+    {
+      "id": "invalid_utf8_truncated_sequence",
+      "bytes_hex": "61e282",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:4adb7e71f48e006de16a53d6c90ef62a1f03f998fa2ba89369c920e396d94167"
+      }
+    },
+    {
+      "id": "invalid_utf8_overlong_slash",
+      "bytes_hex": "c0af",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:cd975d0cc85adaefd63cb6748b0011ca0b517bbcaa6465e64a759e8ee477abb6"
+      }
+    },
+    {
+      "id": "invalid_utf8_encoded_surrogate",
+      "bytes_hex": "eda080",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:42daf3ad69b8306ae5bca1ce8fe3fbd48b393654a03c3cba1f6eb0f8007dd872"
+      }
+    },
+    {
+      "id": "invalid_utf8_lone_continuation",
+      "bytes_hex": "80",
+      "normalize": {
+        "outcome": "invalid_encoding"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:39d024ca55b8b52644fbd8aa33af333b430d76c7b5c214d00810149e4e860319"
+      }
+    },
+    {
+      "id": "valid_utf8_bytes_control",
+      "bytes_hex": "6f6b",
+      "normalize": {
+        "outcome": "ok",
+        "text": "ok"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:e8bffebfc1c7456785e3c85eb485d329c6ee3492139b46825ada1674e4364c4e"
+      }
+    },
+    {
+      "id": "embedded_nul",
+      "text": "a\u0000b",
+      "normalize": {
+        "outcome": "ok",
+        "text": "a\u0000b"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:0239fc72b31239598259b759d7263be70642ce594075e0bd852c2a379b496a39"
+      }
+    },
+    {
+      "id": "only_nul",
+      "text": "\u0000",
+      "normalize": {
+        "outcome": "ok",
+        "text": "\u0000"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:62b9336999ed363e8e78edc250986182435e017c2180567d17fa3e7e3734454f"
+      }
+    },
+    {
+      "id": "leading_bom_text",
+      "text": "\ufeffabc",
+      "normalize": {
+        "outcome": "ok",
+        "text": "\ufeffabc"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:0f9d3c0b1fa44cac6486afe10e7767bf5e72c9df3ddfcc929abc82bcc4beca77"
+      }
+    },
+    {
+      "id": "leading_bom_bytes",
+      "bytes_hex": "efbbbf61",
+      "normalize": {
+        "outcome": "ok",
+        "text": "\ufeffa"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:a103742eab3233752468fa27d5081d062dea8fa7b38ad54e1de54e4271d4b019"
+      }
+    },
+    {
+      "id": "crlf_line_endings",
+      "text": "a\r\nb\r\n",
+      "normalize": {
+        "outcome": "ok",
+        "text": "a\r\nb"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:a8d90248f116d42de85b219b0a53ae787e75ed9f8e078e969109e5b319c059f3"
+      }
+    },
+    {
+      "id": "line_separator_u2028",
+      "text": "\u2028a\u2028b\u2028",
+      "normalize": {
+        "outcome": "ok",
+        "text": "a\u2028b"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:52525b51931e32d4003d268c877472eff0e510c0d66bf12529eed78c09b3cfc2"
+      }
+    },
+    {
+      "id": "only_line_separator",
+      "text": "\u2028\u2028",
+      "normalize": {
+        "outcome": "empty_text"
+      },
+      "hmac": {
+        "outcome": "hashed",
+        "digest": "hmac-sha256:8da677601b3d5008dcbae4c6e3bcaecde27ccfca1d2c8f0ea6d217ffe0365a7f"
+      }
+    }
+  ]
+}
