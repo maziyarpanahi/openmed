@@ -1,15 +1,17 @@
-"""PHI-free, template-driven data-residency attestations."""
+"""PHI-free attestations: data residency and OS-enforced no-egress evidence."""
 
 from __future__ import annotations
 
 import copy
 import hashlib
 import json
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from .audit import AuditReport, stable_hash
@@ -511,11 +513,734 @@ def _markdown_cell(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+# ---------------------------------------------------------------------------
+# OS-enforced no-egress attestation
+# ---------------------------------------------------------------------------
+
+NO_EGRESS_ATTESTATION_SCHEMA_VERSION = 1
+NO_EGRESS_ATTESTATION_TYPE = "openmed.no_egress"
+NO_EGRESS_SCHEMA_NAME = "no_egress_attestation.schema.json"
+NO_EGRESS_VOLATILE_FIELDS = ("generated_at", "integrity_hash")
+
+NO_EGRESS_STATUS_PASSED = "passed"
+NO_EGRESS_STATUS_FAILED = "failed"
+NO_EGRESS_STATUS_SKIPPED = "skipped"
+NO_EGRESS_EXIT_CODES: Mapping[str, int] = MappingProxyType(
+    {
+        NO_EGRESS_STATUS_PASSED: 0,
+        NO_EGRESS_STATUS_FAILED: 1,
+        NO_EGRESS_STATUS_SKIPPED: 3,
+    }
+)
+"""Process exit code per status. Only ``passed`` exits zero."""
+
+NO_EGRESS_BOUNDARY_MECHANISMS: Mapping[str, str] = MappingProxyType(
+    {
+        "netns": "linux_user_network_namespace",
+        "container": "container_network_none",
+        "none": "none",
+    }
+)
+"""Boundary kind to the OS mechanism that enforces it."""
+
+NO_EGRESS_SKIP_REASONS = frozenset({"unsupported_host", "boundary_unavailable"})
+NO_EGRESS_RUNNER_FAILURE_REASONS = frozenset(
+    {"runner_failed", "runner_timeout", "runner_result_invalid"}
+)
+
+# Case identifier -> (transport, family, executor). The attestation carries only
+# these identifiers, so destinations never enter the evidence.
+NO_EGRESS_NEGATIVE_CONTROLS: Mapping[str, tuple[str, str, str]] = MappingProxyType(
+    {
+        "ipv4_tcp_socket": ("tcp", "ipv4", "python_socket"),
+        "ipv6_tcp_socket": ("tcp", "ipv6", "python_socket"),
+        "ipv4_udp_socket": ("udp", "ipv4", "python_socket"),
+        "ipv6_udp_socket": ("udp", "ipv6", "python_socket"),
+        "dns_system_resolver": ("dns", "any", "system_resolver"),
+        "dns_udp_query": ("dns", "ipv4", "python_socket"),
+        "subprocess_ipv4_tcp": ("tcp", "ipv4", "subprocess"),
+        "subprocess_ipv6_tcp": ("tcp", "ipv6", "subprocess"),
+        "subprocess_dns": ("dns", "any", "subprocess"),
+        "native_ipv4_tcp": ("tcp", "ipv4", "native_libc"),
+        "native_ipv6_tcp": ("tcp", "ipv6", "native_libc"),
+        "native_ipv4_udp": ("udp", "ipv4", "native_libc"),
+    }
+)
+"""External-egress probes. Every one must be blocked for a pass."""
+
+NO_EGRESS_POSITIVE_CONTROLS: Mapping[str, tuple[str, str, str]] = MappingProxyType(
+    {
+        "loopback_ipv4_tcp_socket": ("tcp", "ipv4", "python_socket"),
+        "loopback_ipv4_udp_socket": ("udp", "ipv4", "python_socket"),
+        "loopback_dns_udp_query": ("dns", "ipv4", "python_socket"),
+        "loopback_system_resolver": ("dns", "any", "system_resolver"),
+        "loopback_subprocess_ipv4_tcp": ("tcp", "ipv4", "subprocess"),
+        "loopback_native_ipv4_tcp": ("tcp", "ipv4", "native_libc"),
+    }
+)
+"""Loopback probes proving each probe executor works when a route exists."""
+
+NO_EGRESS_WORKFLOW_CASES: Mapping[str, str] = MappingProxyType(
+    {
+        "service_start": "lifecycle",
+        "rest_analyze": "rest",
+        "rest_extract": "rest",
+        "rest_deidentify": "rest",
+        "rest_job": "rest",
+        "rest_webhook_egress_denied": "rest",
+        "rest_stream_cancel": "rest",
+        "graphql_analyze": "graphql",
+        "graphql_deidentify": "graphql",
+        "grpc_analyze": "grpc",
+        "grpc_extract": "grpc",
+        "grpc_deidentify": "grpc",
+        "grpc_stream_cancel": "grpc",
+        "journey_persist": "journey",
+        "service_restart": "lifecycle",
+        "journey_reopen": "journey",
+        "service_shutdown": "lifecycle",
+    }
+)
+"""Workflow case identifier -> service surface. Every one must pass."""
+
+NO_EGRESS_FIXTURE_IDS = frozenset({"service_workflow_fixture", "no_egress_gate_runner"})
+
+_NEGATIVE_STATUSES = ("blocked", "not_blocked", "inconclusive", "not_run")
+_POSITIVE_STATUSES = ("reachable", "unreachable", "not_run")
+_WORKFLOW_STATUSES = ("passed", "failed", "not_run")
+_PROBE_REASONS = frozenset(
+    {
+        "network_unreachable",
+        "address_unavailable",
+        "family_unsupported",
+        "permission_denied",
+        "resolver_unreachable",
+        "loopback_reachable",
+        "connection_established",
+        "datagram_sent",
+        "peer_refused",
+        "peer_reset",
+        "name_resolved",
+        "resolver_answered",
+        "host_unreachable",
+        "timeout",
+        "probe_error",
+        "executor_unavailable",
+        "dependency_failed",
+    }
+)
+_BLOCKED_REASONS = frozenset(
+    {
+        "network_unreachable",
+        "address_unavailable",
+        "family_unsupported",
+        "permission_denied",
+        "resolver_unreachable",
+    }
+)
+_WORKFLOW_REASONS = frozenset(
+    {
+        "ok",
+        "unexpected_status",
+        "unexpected_result",
+        "transport_error",
+        "timeout",
+        "server_exit",
+        "not_cancelled",
+        "persistence_mismatch",
+        "dependency_unavailable",
+        "dependency_failed",
+    }
+)
+_HOST_KINDS = frozenset({"linux", "darwin", "windows", "other"})
+_REQUESTED_BOUNDARIES = frozenset({"auto", "netns", "container"})
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+_VERSION_RE = re.compile(r"^[0-9][0-9A-Za-z.+-]{0,63}$")
+
+
+class NoEgressAttestationError(ValueError):
+    """Raised with a controlled code when no-egress evidence is invalid.
+
+    The message is always one fixed code; probe destinations, paths, and
+    exception text are never attached.
+    """
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class NoEgressAttestation(AttestationReport):
+    """Value-free attestation for an OS-enforced no-egress gate run.
+
+    Shares the residency attestation envelope: canonical JSON, a ``repro_hash``
+    over every field except the declared volatile fields, and an
+    ``integrity_hash`` over the full payload.
+    """
+
+    @property
+    def status(self) -> str:
+        """Return ``passed``, ``failed``, or ``skipped``."""
+
+        return str(self._data["status"])
+
+    @property
+    def reason_code(self) -> str:
+        """Return the controlled top-level reason code."""
+
+        return str(self._data["reason_code"])
+
+    @property
+    def passed(self) -> bool:
+        """Return whether the boundary held and the workflow succeeded."""
+
+        return self.status == NO_EGRESS_STATUS_PASSED
+
+    @property
+    def exit_code(self) -> int:
+        """Return the gate exit code; only a pass exits zero."""
+
+        return NO_EGRESS_EXIT_CODES.get(self.status, 1)
+
+    def to_markdown(self) -> str:
+        """Render the attestation as a value-free Markdown summary."""
+
+        payload = self.to_dict()
+        boundary = payload["boundary"]
+        lines = [
+            "# OpenMed no-egress attestation",
+            "",
+            f"- Status: `{payload['status']}` (`{payload['reason_code']}`)",
+            f"- Commit: `{payload['commit']}`",
+            f"- OpenMed version: `{payload['openmed_version']}`",
+            f"- Host kind: `{payload['host']['kind']}`",
+            f"- Boundary: `{boundary['kind']}` (`{boundary['mechanism']}`)",
+            f"- Boundary isolated: `{str(boundary['isolated']).lower()}`",
+            f"- Generated at: `{payload['generated_at']}`",
+            f"- Repro hash: `{payload['repro_hash']}`",
+            f"- Integrity hash: `{payload['integrity_hash']}`",
+            "",
+        ]
+        for title, key in (
+            ("Negative controls", "negative_controls"),
+            ("Positive controls", "positive_controls"),
+        ):
+            lines.extend(
+                [
+                    f"## {title}",
+                    "",
+                    "| Case | Transport | Family | Executor | Status | Reason |",
+                    "|---|---|---|---|---|---|",
+                ]
+            )
+            for case in payload[key]:
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        f"`{case[field]}`"
+                        for field in (
+                            "id",
+                            "transport",
+                            "family",
+                            "executor",
+                            "status",
+                            "reason_code",
+                        )
+                    )
+                    + " |"
+                )
+            lines.append("")
+        lines.extend(
+            [
+                "## Workflow",
+                "",
+                "| Case | Surface | Status | Reason |",
+                "|---|---|---|---|",
+            ]
+        )
+        for case in payload["workflow"]:
+            lines.append(
+                "| "
+                + " | ".join(
+                    f"`{case[field]}`"
+                    for field in ("id", "surface", "status", "reason_code")
+                )
+                + " |"
+            )
+        lines.extend(["", "## Fixtures", ""])
+        for fixture in payload["fixtures"]:
+            lines.append(f"- `{fixture['id']}`: `{fixture['digest']}`")
+        lines.append("")
+        return "\n".join(lines)
+
+
+def load_no_egress_attestation_schema() -> dict[str, Any]:
+    """Return the bundled JSON Schema for no-egress attestations.
+
+    Returns:
+        The Draft 2020-12 schema as a dictionary.
+    """
+
+    resource = resources.files("openmed.core.schemas.json").joinpath(
+        NO_EGRESS_SCHEMA_NAME
+    )
+    with resource.open("r", encoding="utf-8") as handle:
+        schema = json.load(handle)
+    if not isinstance(schema, dict):  # pragma: no cover - bundled resource
+        raise NoEgressAttestationError("schema_unavailable")
+    return schema
+
+
+def build_no_egress_attestation(
+    *,
+    host_kind: str,
+    requested_boundary: str,
+    boundary_kind: str,
+    fixtures: Mapping[str, str],
+    kernel: str = "unknown",
+    interfaces: Mapping[str, int] | None = None,
+    routes: Mapping[str, int] | None = None,
+    negative_controls: Sequence[Mapping[str, Any]] = (),
+    positive_controls: Sequence[Mapping[str, Any]] = (),
+    workflow: Sequence[Mapping[str, Any]] = (),
+    skip_reason: str | None = None,
+    runner_failure: str | None = None,
+    commit: str | None = None,
+    openmed_version: str | None = None,
+    generated_at: datetime | str | None = None,
+) -> NoEgressAttestation:
+    """Build a schema-valid, value-free no-egress attestation.
+
+    The status is derived from the evidence, never supplied by the caller: a
+    run passes only when the boundary is an OS mechanism, the namespace has no
+    non-loopback interface or route, every external negative control is
+    blocked, every loopback positive control is reachable, and every workflow
+    case passed. A host without a supported mechanism produces ``skipped``,
+    which exits non-zero and is never a pass.
+
+    Args:
+        host_kind: ``linux``, ``darwin``, ``windows``, or ``other``.
+        requested_boundary: ``auto``, ``netns``, or ``container``.
+        boundary_kind: The boundary that ran: ``netns``, ``container``, or
+            ``none`` when no mechanism was available.
+        fixtures: Fixture identifier to ``sha256:`` digest.
+        kernel: Kernel observed inside the boundary (``linux`` or ``unknown``).
+        interfaces: ``total``, ``loopback_up``, and ``non_loopback_up`` counts
+            observed inside the boundary.
+        routes: ``ipv4_non_loopback`` and ``ipv6_non_loopback`` route counts.
+        negative_controls: Probe results with ``id``, ``status``, and
+            ``reason_code``; transport, family, and executor come from
+            :data:`NO_EGRESS_NEGATIVE_CONTROLS`.
+        positive_controls: Loopback probe results in the same shape.
+        workflow: Workflow results with ``id``, ``status``, ``reason_code``,
+            and an optional ``result_digest``.
+        skip_reason: A controlled skip reason when no boundary ran.
+        runner_failure: A controlled runner failure when the in-boundary
+            runner crashed, timed out, or returned an invalid result.
+        commit: Git commit identifier; anything else is recorded as
+            ``unknown``.
+        openmed_version: Package version; defaults to the installed version.
+        generated_at: Declared timestamp, the only volatile evidence field.
+
+    Returns:
+        The validated attestation.
+
+    Raises:
+        NoEgressAttestationError: If any input is outside the controlled
+            vocabulary or the evidence is inconsistent.
+    """
+
+    if host_kind not in _HOST_KINDS:
+        raise NoEgressAttestationError("host_kind_invalid")
+    if requested_boundary not in _REQUESTED_BOUNDARIES:
+        raise NoEgressAttestationError("requested_boundary_invalid")
+    if boundary_kind not in NO_EGRESS_BOUNDARY_MECHANISMS:
+        raise NoEgressAttestationError("boundary_kind_invalid")
+    if kernel not in {"linux", "unknown"}:
+        raise NoEgressAttestationError("kernel_invalid")
+    if skip_reason is not None and skip_reason not in NO_EGRESS_SKIP_REASONS:
+        raise NoEgressAttestationError("skip_reason_invalid")
+    if (
+        runner_failure is not None
+        and runner_failure not in NO_EGRESS_RUNNER_FAILURE_REASONS
+    ):
+        raise NoEgressAttestationError("runner_failure_invalid")
+    if skip_reason is not None and runner_failure is not None:
+        raise NoEgressAttestationError("skip_and_failure_conflict")
+    if skip_reason is not None:
+        if boundary_kind != "none":
+            raise NoEgressAttestationError("skip_requires_no_boundary")
+        if negative_controls or positive_controls or workflow:
+            raise NoEgressAttestationError("skip_with_evidence")
+    elif boundary_kind == "none":
+        # Without an OS boundary there is nothing to attest; refusing here
+        # keeps an unsupported host from ever being recorded as a pass.
+        raise NoEgressAttestationError("boundary_required")
+
+    interface_counts = _count_mapping(
+        interfaces, ("total", "loopback_up", "non_loopback_up")
+    )
+    route_counts = _count_mapping(routes, ("ipv4_non_loopback", "ipv6_non_loopback"))
+    isolated = bool(
+        boundary_kind != "none"
+        and kernel == "linux"
+        and interface_counts["loopback_up"] >= 1
+        and interface_counts["non_loopback_up"] == 0
+        and route_counts["ipv4_non_loopback"] == 0
+        and route_counts["ipv6_non_loopback"] == 0
+    )
+    negatives = _probe_records(
+        negative_controls, NO_EGRESS_NEGATIVE_CONTROLS, _NEGATIVE_STATUSES
+    )
+    positives = _probe_records(
+        positive_controls, NO_EGRESS_POSITIVE_CONTROLS, _POSITIVE_STATUSES
+    )
+    for record in negatives:
+        if record["status"] == "blocked" and (
+            record["reason_code"] not in _BLOCKED_REASONS
+        ):
+            raise NoEgressAttestationError("blocked_reason_invalid")
+    cases = _workflow_records(workflow)
+    fixture_records = _fixture_records(fixtures)
+    counts = {
+        "negative_controls": _status_counts(negatives, _NEGATIVE_STATUSES),
+        "positive_controls": _status_counts(positives, _POSITIVE_STATUSES),
+        "workflow": _status_counts(cases, _WORKFLOW_STATUSES),
+    }
+    status, reason = _derive_no_egress_status(
+        isolated=isolated,
+        negatives=negatives,
+        positives=positives,
+        cases=cases,
+        skip_reason=skip_reason,
+        runner_failure=runner_failure,
+    )
+    payload: dict[str, Any] = {
+        "schema_version": NO_EGRESS_ATTESTATION_SCHEMA_VERSION,
+        "attestation_type": NO_EGRESS_ATTESTATION_TYPE,
+        "generated_at": _iso_timestamp(generated_at),
+        "volatile_fields": list(NO_EGRESS_VOLATILE_FIELDS),
+        "commit": _safe_commit(commit),
+        "openmed_version": _safe_version(openmed_version),
+        "status": status,
+        "reason_code": reason,
+        "host": {"kind": host_kind},
+        "boundary": {
+            "requested": requested_boundary,
+            "kind": boundary_kind,
+            "mechanism": NO_EGRESS_BOUNDARY_MECHANISMS[boundary_kind],
+            "kernel": kernel,
+            "isolated": isolated,
+            "interfaces": interface_counts,
+            "routes": route_counts,
+        },
+        "negative_controls": negatives,
+        "positive_controls": positives,
+        "workflow": cases,
+        "counts": counts,
+        "fixtures": fixture_records,
+    }
+    repro_payload = copy.deepcopy(payload)
+    repro_payload.pop("generated_at")
+    payload["repro_hash"] = stable_hash(repro_payload)
+    payload["integrity_hash"] = stable_hash(payload)
+    attestation = NoEgressAttestation(payload)
+    validate_no_egress_attestation(attestation.to_dict())
+    return attestation
+
+
+def validate_no_egress_attestation(
+    payload: Mapping[str, Any],
+) -> NoEgressAttestation:
+    """Validate a no-egress attestation against its schema and evidence rules.
+
+    Beyond the JSON Schema this recomputes the counts, the derived status, both
+    hashes, and the per-case vocabulary, so an edited or hand-written
+    ``passed`` attestation does not validate.
+
+    Args:
+        payload: A decoded attestation object.
+
+    Returns:
+        The attestation wrapped in :class:`NoEgressAttestation`.
+
+    Raises:
+        NoEgressAttestationError: With a controlled code when the payload is
+            invalid.
+    """
+
+    from jsonschema import Draft202012Validator
+
+    if not isinstance(payload, Mapping):
+        raise NoEgressAttestationError("attestation_not_object")
+    data = copy.deepcopy(dict(payload))
+    validator = Draft202012Validator(load_no_egress_attestation_schema())
+    if next(validator.iter_errors(data), None) is not None:
+        raise NoEgressAttestationError("schema_invalid")
+
+    for key, vocabulary in (
+        ("negative_controls", NO_EGRESS_NEGATIVE_CONTROLS),
+        ("positive_controls", NO_EGRESS_POSITIVE_CONTROLS),
+    ):
+        seen: set[str] = set()
+        for record in data[key]:
+            if record["id"] in seen:
+                raise NoEgressAttestationError("duplicate_case")
+            seen.add(record["id"])
+            expected = vocabulary[record["id"]]
+            if (record["transport"], record["family"], record["executor"]) != (
+                expected
+            ):
+                raise NoEgressAttestationError("case_vocabulary_mismatch")
+    seen_cases: set[str] = set()
+    for record in data["workflow"]:
+        if record["id"] in seen_cases:
+            raise NoEgressAttestationError("duplicate_case")
+        seen_cases.add(record["id"])
+        if record["surface"] != NO_EGRESS_WORKFLOW_CASES[record["id"]]:
+            raise NoEgressAttestationError("case_vocabulary_mismatch")
+    fixture_ids = [fixture["id"] for fixture in data["fixtures"]]
+    if len(set(fixture_ids)) != len(fixture_ids):
+        raise NoEgressAttestationError("duplicate_fixture")
+
+    boundary = data["boundary"]
+    if boundary["mechanism"] != NO_EGRESS_BOUNDARY_MECHANISMS[boundary["kind"]]:
+        raise NoEgressAttestationError("boundary_mechanism_mismatch")
+    interfaces = boundary["interfaces"]
+    routes = boundary["routes"]
+    isolated = bool(
+        boundary["kind"] != "none"
+        and boundary["kernel"] == "linux"
+        and interfaces["loopback_up"] >= 1
+        and interfaces["non_loopback_up"] == 0
+        and routes["ipv4_non_loopback"] == 0
+        and routes["ipv6_non_loopback"] == 0
+    )
+    if boundary["isolated"] is not isolated:
+        raise NoEgressAttestationError("boundary_isolation_mismatch")
+    for record in data["negative_controls"]:
+        if record["status"] == "blocked" and (
+            record["reason_code"] not in _BLOCKED_REASONS
+        ):
+            raise NoEgressAttestationError("blocked_reason_invalid")
+
+    expected_counts = {
+        "negative_controls": _status_counts(
+            data["negative_controls"], _NEGATIVE_STATUSES
+        ),
+        "positive_controls": _status_counts(
+            data["positive_controls"], _POSITIVE_STATUSES
+        ),
+        "workflow": _status_counts(data["workflow"], _WORKFLOW_STATUSES),
+    }
+    if data["counts"] != expected_counts:
+        raise NoEgressAttestationError("counts_mismatch")
+
+    status = data["status"]
+    reason = data["reason_code"]
+    if status == NO_EGRESS_STATUS_SKIPPED:
+        expected_status, expected_reason = status, reason
+    elif reason in NO_EGRESS_RUNNER_FAILURE_REASONS:
+        expected_status, expected_reason = NO_EGRESS_STATUS_FAILED, reason
+    else:
+        expected_status, expected_reason = _derive_no_egress_status(
+            isolated=isolated,
+            negatives=data["negative_controls"],
+            positives=data["positive_controls"],
+            cases=data["workflow"],
+            skip_reason=None,
+            runner_failure=None,
+        )
+    if (status, reason) != (expected_status, expected_reason):
+        raise NoEgressAttestationError("status_mismatch")
+
+    attestation = NoEgressAttestation(data)
+    if not attestation.repro_hash_matches():
+        raise NoEgressAttestationError("repro_hash_mismatch")
+    if not attestation.integrity_hash_matches():
+        raise NoEgressAttestationError("integrity_hash_mismatch")
+    return attestation
+
+
+def _derive_no_egress_status(
+    *,
+    isolated: bool,
+    negatives: Sequence[Mapping[str, Any]],
+    positives: Sequence[Mapping[str, Any]],
+    cases: Sequence[Mapping[str, Any]],
+    skip_reason: str | None,
+    runner_failure: str | None,
+) -> tuple[str, str]:
+    if skip_reason is not None:
+        return NO_EGRESS_STATUS_SKIPPED, skip_reason
+    if runner_failure is not None:
+        return NO_EGRESS_STATUS_FAILED, runner_failure
+    negative_status = {record["id"]: record["status"] for record in negatives}
+    if any(value == "not_blocked" for value in negative_status.values()):
+        return NO_EGRESS_STATUS_FAILED, "egress_not_blocked"
+    if set(negative_status) != set(NO_EGRESS_NEGATIVE_CONTROLS) or any(
+        value != "blocked" for value in negative_status.values()
+    ):
+        return NO_EGRESS_STATUS_FAILED, "negative_control_incomplete"
+    if not isolated:
+        return NO_EGRESS_STATUS_FAILED, "boundary_not_isolated"
+    positive_status = {record["id"]: record["status"] for record in positives}
+    if set(positive_status) != set(NO_EGRESS_POSITIVE_CONTROLS) or any(
+        value != "reachable" for value in positive_status.values()
+    ):
+        return NO_EGRESS_STATUS_FAILED, "positive_control_failed"
+    case_status = {record["id"]: record["status"] for record in cases}
+    if set(case_status) != set(NO_EGRESS_WORKFLOW_CASES) or any(
+        value != "passed" for value in case_status.values()
+    ):
+        return NO_EGRESS_STATUS_FAILED, "workflow_failed"
+    return NO_EGRESS_STATUS_PASSED, "all_controls_blocked"
+
+
+def _count_mapping(
+    value: Mapping[str, int] | None, keys: tuple[str, ...]
+) -> dict[str, int]:
+    source = value if isinstance(value, Mapping) else {}
+    counts: dict[str, int] = {}
+    for key in keys:
+        raw = source.get(key, 0)
+        if type(raw) is not int or raw < 0:
+            raise NoEgressAttestationError("count_invalid")
+        counts[key] = raw
+    return counts
+
+
+def _probe_records(
+    records: Sequence[Mapping[str, Any]],
+    vocabulary: Mapping[str, tuple[str, str, str]],
+    statuses: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise NoEgressAttestationError("case_invalid")
+        identifier = record.get("id")
+        if not isinstance(identifier, str) or identifier not in vocabulary:
+            raise NoEgressAttestationError("case_unknown")
+        if identifier in seen:
+            raise NoEgressAttestationError("duplicate_case")
+        seen.add(identifier)
+        status = record.get("status")
+        reason = record.get("reason_code")
+        if status not in statuses:
+            raise NoEgressAttestationError("case_status_invalid")
+        if reason not in _PROBE_REASONS:
+            raise NoEgressAttestationError("case_reason_invalid")
+        transport, family, executor = vocabulary[identifier]
+        result.append(
+            {
+                "id": identifier,
+                "transport": transport,
+                "family": family,
+                "executor": executor,
+                "status": status,
+                "reason_code": reason,
+            }
+        )
+    order = list(vocabulary)
+    return sorted(result, key=lambda item: order.index(item["id"]))
+
+
+def _workflow_records(records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records:
+        if not isinstance(record, Mapping):
+            raise NoEgressAttestationError("case_invalid")
+        identifier = record.get("id")
+        if not isinstance(identifier, str) or identifier not in (
+            NO_EGRESS_WORKFLOW_CASES
+        ):
+            raise NoEgressAttestationError("case_unknown")
+        if identifier in seen:
+            raise NoEgressAttestationError("duplicate_case")
+        seen.add(identifier)
+        status = record.get("status")
+        reason = record.get("reason_code")
+        digest = record.get("result_digest")
+        if status not in _WORKFLOW_STATUSES:
+            raise NoEgressAttestationError("case_status_invalid")
+        if reason not in _WORKFLOW_REASONS:
+            raise NoEgressAttestationError("case_reason_invalid")
+        if (status == "passed") != (reason == "ok"):
+            raise NoEgressAttestationError("case_reason_invalid")
+        if digest is not None and (
+            not isinstance(digest, str) or not _DIGEST_RE.match(digest)
+        ):
+            raise NoEgressAttestationError("case_digest_invalid")
+        result.append(
+            {
+                "id": identifier,
+                "surface": NO_EGRESS_WORKFLOW_CASES[identifier],
+                "status": status,
+                "reason_code": reason,
+                "result_digest": digest,
+            }
+        )
+    order = list(NO_EGRESS_WORKFLOW_CASES)
+    return sorted(result, key=lambda item: order.index(item["id"]))
+
+
+def _fixture_records(fixtures: Mapping[str, str]) -> list[dict[str, str]]:
+    if not isinstance(fixtures, Mapping) or not fixtures:
+        raise NoEgressAttestationError("fixtures_required")
+    records: list[dict[str, str]] = []
+    for identifier, digest in sorted(fixtures.items()):
+        if identifier not in NO_EGRESS_FIXTURE_IDS:
+            raise NoEgressAttestationError("fixture_unknown")
+        if not isinstance(digest, str) or not _DIGEST_RE.match(digest):
+            raise NoEgressAttestationError("fixture_digest_invalid")
+        records.append({"id": identifier, "digest": digest})
+    return records
+
+
+def _status_counts(
+    records: Sequence[Mapping[str, Any]], statuses: tuple[str, ...]
+) -> dict[str, int]:
+    counts = {"total": len(records)}
+    for status in statuses:
+        counts[status] = sum(1 for record in records if record["status"] == status)
+    return counts
+
+
+def _safe_commit(value: str | None) -> str:
+    if isinstance(value, str) and _COMMIT_RE.match(value):
+        return value
+    return "unknown"
+
+
+def _safe_version(value: str | None) -> str:
+    if value is None:
+        from ..__about__ import __version__
+
+        value = __version__
+    return value if isinstance(value, str) and _VERSION_RE.match(value) else "unknown"
+
+
 __all__ = [
     "ATTESTATION_SCHEMA_VERSION",
     "AttestationReport",
     "AttestationTemplateError",
+    "NO_EGRESS_ATTESTATION_SCHEMA_VERSION",
+    "NO_EGRESS_ATTESTATION_TYPE",
+    "NO_EGRESS_BOUNDARY_MECHANISMS",
+    "NO_EGRESS_EXIT_CODES",
+    "NO_EGRESS_NEGATIVE_CONTROLS",
+    "NO_EGRESS_POSITIVE_CONTROLS",
+    "NO_EGRESS_WORKFLOW_CASES",
+    "NoEgressAttestation",
+    "NoEgressAttestationError",
+    "build_no_egress_attestation",
     "generate_attestation",
     "list_attestation_profiles",
     "load_attestation_template",
+    "load_no_egress_attestation_schema",
+    "validate_no_egress_attestation",
 ]
