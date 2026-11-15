@@ -255,11 +255,24 @@ def _outcome(passed: bool, check: str, **observed: int) -> DrillStepOutcome:
 
 
 def _job_record(job_id: str, status: str) -> dict[str, Any]:
+    # Write records at the current store schema, as the job queue does, so a
+    # reopen has nothing to migrate and any difference is a real loss. A node
+    # without a durable digest key records digests as omitted.
+    from openmed.service.compatibility import JOB_STORE_SCHEMA_VERSION
+    from openmed.service.jobs import (
+        DIGESTS_FIELD,
+        OWNER_DIGEST_FIELD,
+        JobDigestPolicy,
+    )
+
     return {
+        "schema_version": JOB_STORE_SCHEMA_VERSION,
         "created_at": _DRILL_TIMESTAMP,
+        DIGESTS_FIELD: JobDigestPolicy().descriptor(),
         "documents": [],
         "expires_at": _DRILL_EXPIRY,
         "id": job_id,
+        OWNER_DIGEST_FIELD: None,
         "status": status,
         "updated_at": _DRILL_TIMESTAMP,
     }
