@@ -19,7 +19,7 @@ final class ShareRedactionTests: XCTestCase {
                 entity(label: "first_name", value: "Ada", in: text),
                 entity(label: "date_of_birth", value: "04/01/2026", in: text),
             ]
-            let reference = OpenMed.deidentify(text, entities: entities, policy: policy)
+            let reference = try OpenMed.deidentify(text, entities: entities, policy: policy)
             let handler = ExtensionRedactionHandler { receivedText, receivedPolicy in
                 XCTAssertEqual(receivedText, text)
                 XCTAssertEqual(receivedPolicy, policy)
@@ -87,10 +87,11 @@ final class ShareRedactionTests: XCTestCase {
                 tokenizerFolderURL: local.appending(path: "tokenizer")
             )
         ) { error in
-            guard case ExtensionRedactionError.nonLocalAsset(let url) = error else {
+            guard case ExtensionRedactionError.nonLocalAsset(let role) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
-            XCTAssertEqual(url, remote)
+            XCTAssertEqual(role, .model)
+            XCTAssertFalse(String(reflecting: error).contains("example.invalid"))
         }
     }
 
@@ -107,7 +108,9 @@ final class ShareRedactionTests: XCTestCase {
                     tokenizerFolderURL: missingFolder,
                     allowNetworkAccess: false
                 )
-            )
+            ) { error in
+                XCTAssertEqual(error as? OpenMedTokenizerError, .missingLocalAssets)
+            }
         }
     #endif
 

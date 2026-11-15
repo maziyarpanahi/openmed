@@ -126,11 +126,16 @@ span-logit decoding; it is not compatible with OpenMedKit's standard Android
 token-classification session. GLiNER remains available through the Python and
 MLX runtimes until a dedicated Android session is implemented and certified.
 
-Privacy-filter mixture-of-experts checkpoints are also excluded. Their current
-PyTorch forward pass uses data-dependent expert routing that cannot be safely
-captured by the legacy ONNX tracer: the exported graph hard-codes routing split
-sizes and fails parity execution on different synthetic inputs. These models
-remain available through their supported Python and MLX runtimes.
+Privacy-filter mixture-of-experts checkpoints stay excluded unless they are
+qualified. The stock forward pass uses data-dependent expert routing that the
+generic tracer cannot capture, so the family adapter in
+`openmed.torch.privacy_filter_export` exports a dense-routed graph and the
+converter qualifies it. The batch includes a Privacy Filter row only when its
+declaration pins a reviewed revision and lists published evidence for every
+Android variant it emits; see
+[Privacy Filter runtime support](export-matrix.md#privacy-filter-runtime-support).
+No checkpoint has that evidence yet, so these models remain available through
+their Python and MLX runtimes.
 
 `model.onnx` is the fp32 graph. `model_fp16.onnx` stores fp16 weights while
 keeping public input and output tensor types stable for Android callers.

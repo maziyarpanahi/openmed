@@ -1,7 +1,10 @@
 """Convert token-classification checkpoints to ONNX runtime artifacts.
 
 Use the default profile for a standard fp32 ONNX export plus the WebGPU fp16
-variant. Use ``--profile android`` for Android ONNX Runtime Mobile artifacts:
+variant. The fp16 variant is emitted only after it passes the fp16-vs-fp32
+parity gate in :mod:`openmed.onnx.webgpu_gate`, whose evidence is recorded under
+``webgpu_fp16_gate`` in ``openmed-onnx.json``. Use ``--profile android`` for
+Android ONNX Runtime Mobile artifacts:
 ``model.onnx`` and ``model_fp16.onnx`` are exported at the fixed Android opset
 with `input_ids` and `attention_mask` inputs, optional `token_type_ids`, a
 `logits` output, and named dynamic `batch` and `sequence` axes. The fixed opset
@@ -17,13 +20,39 @@ import logging
 import os
 import shutil
 import time
-from contextlib import contextmanager
+from contextlib import nullcontext
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.capabilities import raise_missing_backend
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    context_from_metadata,
+    resolve_source_context,
+    validate_observation_path,
+    write_canonical_manifest,
+    write_observation_report,
+)
 from openmed.core.hf_publish import publish_artifact
+from openmed.eval.export_qualification import (
+    EXPORT_QUALIFICATION_FILENAME,
+    GLOBAL_ATTENTION_INPUT,
+    SHAPE_MODE_DYNAMIC,
+    ExportIOContract,
+    ExportQualificationError,
+    ExportQualificationReport,
+    ExportReason,
+    QualificationBinding,
+    VariantCandidate,
+    WindowingPolicy,
+    qualify_export,
+    source_identity,
+    summarize_report,
+    write_qualification_report,
+)
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
 from openmed.mlx.artifact import find_tokenizer_files
 from openmed.onnx.android_profile import (
@@ -32,6 +61,7 @@ from openmed.onnx.android_profile import (
     ANDROID_ONNX_OPSET,
     ANDROID_PROFILE_NAME,
     export_android_fp16,
+    sort_graph_topologically,
     validate_android_profile,
 )
 from openmed.onnx.openvino_export import (
@@ -59,6 +89,18 @@ from openmed.onnx.transformersjs import (
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
 )
+from openmed.onnx.webgpu_gate import (
+    DEFAULT_FP32_KEEP_OPS,
+    WEBGPU_FP16_GATE_KEY,
+    WEBGPU_GATE_POLICIES,
+    WEBGPU_GATE_POLICY_FAIL,
+    WEBGPU_GATE_POLICY_OMIT,
+    WebGpuFp16GateConfig,
+    WebGpuFp16GateError,
+    finalize_fp16_webgpu_graph,
+    validate_webgpu_fp16_export,
+    verify_webgpu_fp16_gate_evidence,
+)
 from openmed.processing.tokenization import (
     SEGMENTER_IDS,
     package_segmenter_resources,
@@ -81,12 +123,23 @@ MINIMUM_TOKEN_CLASSIFICATION_OPSET = 18
 DEFAULT_SHAPE_BUCKETS = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
 DEFAULT_DYNAMIC_VALIDATION_LENGTHS = DEFAULT_SHAPE_BUCKETS
 DEFAULT_EXECUTION_PROVIDERS = ("CPUExecutionProvider",)
+# Tensors smaller than this many bytes stay inline in the graph protobuf.
+EXTERNAL_DATA_SIZE_THRESHOLD = 1024
+# Canonical decoder and threshold profile shipped with adapter families that
+# declare one (Privacy Filter); kept in sync with
+# ``openmed.torch.privacy_filter_export.DECODER_PROFILE_FILENAME``.
+DECODER_PROFILE_FILENAME = "openmed-decoder-profile.json"
 
 _FUSION_OPTION_ATTRS = {
     "attention_fusion": ("enable_attention",),
     "layer_norm_fusion": ("enable_layer_norm", "enable_layer_norm_fusion"),
     "gelu_fusion": ("enable_gelu", "enable_gelu_approximation"),
 }
+
+# Export qualification runs on the CPU provider. The WebGPU graph is checked
+# there as a numeric proxy and recorded with its target provider.
+QUALIFICATION_PROVIDER = "CPUExecutionProvider"
+WEBGPU_TARGET_PROVIDER = "WebGpuExecutionProvider"
 
 
 @dataclass(frozen=True)
@@ -207,8 +260,16 @@ def export_onnx(
     profile: str = DEFAULT_PROFILE_NAME,
     cache_dir: str | None = None,
     sample_text: str = DEFAULT_SAMPLE_TEXT,
+    expected_source_revision: str | None = None,
 ) -> Path:
-    """Export a Hugging Face token-classification checkpoint to ONNX."""
+    """Export a Hugging Face token-classification checkpoint to ONNX.
+
+    Families with a registered export adapter are validated from their
+    configuration before any weights load. Families whose adapter declares a
+    source check (Privacy Filter) also reject ineligible checkpoints,
+    repository code, unsupported configuration shapes, and an unpinned or
+    mismatched *expected_source_revision* at that point.
+    """
 
     profile = _normalize_profile(profile)
     resolved_opset = _resolve_opset(profile=profile, opset=opset)
@@ -227,6 +288,12 @@ def export_onnx(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    _preflight_export_source(
+        model_id,
+        cache_dir=cache_dir,
+        max_seq_length=max_seq_length,
+        expected_source_revision=expected_source_revision,
+    )
     tokenizer = get_tokenizer_with_loader(
         model_id,
         AutoTokenizer.from_pretrained,
@@ -235,9 +302,29 @@ def export_onnx(
     model = AutoModelForTokenClassification.from_pretrained(
         model_id,
         cache_dir=cache_dir,
+        trust_remote_code=False,
     )
     model.to(dtype=torch.float32)
     model.eval()
+    _reject_zero_shot_checkpoint(getattr(model, "config", None) or {})
+    adapter = _resolve_export_adapter(
+        getattr(getattr(model, "config", None), "model_type", None)
+    )
+    graph_inputs: tuple[str, ...] = ("input_ids", "attention_mask")
+    sequence_bound: int | None = None
+    if adapter is not None:
+        adapter.validate_request(
+            runtime="onnx",
+            config=model.config,
+            max_sequence_length=max_seq_length,
+            shape_mode=SHAPE_MODE_DYNAMIC,
+            profile=profile,
+        )
+        adapter.prepare_model(model)
+        graph_inputs = adapter.inputs_for("onnx", profile)
+        if adapter.limits_for(model.config, "onnx", "float32") is not None:
+            # Bounded families declare the sequence ceiling in the graph.
+            sequence_bound = max_seq_length
 
     sample = tokenizer(
         [sample_text, sample_text],
@@ -246,7 +333,7 @@ def export_onnx(
         truncation=True,
         return_tensors="pt",
     )
-    use_token_type_ids = "token_type_ids" in sample
+    use_token_type_ids = "token_type_ids" in sample and adapter is None
 
     class TokenClassificationWrapper(torch.nn.Module):
         def __init__(self, base_model: Any, include_token_type_ids: bool) -> None:
@@ -268,11 +355,20 @@ def export_onnx(
                 inputs["token_type_ids"] = token_type_ids
             return self.base_model(**inputs).logits
 
-    wrapper = TokenClassificationWrapper(model, use_token_type_ids)
-    wrapper.eval()
+    if adapter is not None:
+        wrapper = adapter.build_wrapper(torch, model)
+        trace_context = adapter.trace_context(torch, model)
+    else:
+        wrapper = TokenClassificationWrapper(model, use_token_type_ids)
+        wrapper.eval()
+        trace_context = nullcontext()
 
-    input_names = ["input_ids", "attention_mask"]
-    example_inputs: tuple[Any, ...] = (sample["input_ids"], sample["attention_mask"])
+    if GLOBAL_ATTENTION_INPUT in graph_inputs:
+        global_sample = torch.zeros_like(sample["input_ids"])
+        global_sample[:, 0] = 1
+        sample[GLOBAL_ATTENTION_INPUT] = global_sample
+    input_names = list(graph_inputs)
+    example_inputs: tuple[Any, ...] = tuple(sample[name] for name in input_names)
     if use_token_type_ids:
         input_names.append("token_type_ids")
         example_inputs = (*example_inputs, sample["token_type_ids"])
@@ -291,9 +387,10 @@ def export_onnx(
                 input_names=input_names,
                 max_seq_length=max_seq_length,
                 profile=profile,
+                sequence_bound=sequence_bound,
             )
         )
-        with _onnx_export_compatibility(model, torch):
+        with trace_context:
             torch.onnx.export(
                 wrapper,
                 example_inputs,
@@ -311,25 +408,63 @@ def export_webgpu(
     output_path: str | Path,
     *,
     keep_io_types: bool = True,
+    keep_fp32_ops: Sequence[str] | None = None,
+    keep_fp32_nodes: Sequence[str] = (),
 ) -> Path:
-    """Create a WebGPU-targeted fp16 ONNX artifact from a fp32 ONNX model."""
+    """Create a WebGPU-targeted fp16 ONNX artifact from a fp32 ONNX model.
+
+    Operators in ``keep_fp32_ops`` (plus ONNX Runtime's default fp16 block
+    list) and nodes in ``keep_fp32_nodes`` stay in fp32, and chains of such
+    nodes stay in fp32 end to end. The keep-list is stamped into the artifact's
+    metadata so the parity gate can record it. This function does not gate the
+    artifact; :func:`convert` runs :func:`validate_webgpu_fp16_export` before
+    the artifact is listed in a manifest.
+
+    Args:
+        onnx_path: fp32 source graph.
+        output_path: Destination for the fp16 graph.
+        keep_io_types: Keep float graph inputs and outputs in fp32.
+        keep_fp32_ops: Operator types kept in fp32. ``None`` uses
+            ``DEFAULT_FP32_KEEP_OPS``; an empty sequence keeps only the
+            converter defaults.
+        keep_fp32_nodes: Node names kept in fp32.
+
+    Returns:
+        The written fp16 artifact path.
+    """
 
     try:
         import onnx
-        from onnxruntime.transformers.float16 import convert_float_to_float16
+        from onnxruntime.transformers import float16 as ort_float16
     except ImportError as exc:
         raise_missing_backend("onnx", feature="WebGPU export", cause=exc)
 
     onnx_path = Path(onnx_path)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    fp32_ops = tuple(DEFAULT_FP32_KEEP_OPS if keep_fp32_ops is None else keep_fp32_ops)
+    fp32_nodes = tuple(keep_fp32_nodes)
+    op_block_list = _dedupe_keep_order(
+        [*getattr(ort_float16, "DEFAULT_OP_BLOCK_LIST", ()), *fp32_ops]
+    )
 
     model = onnx.load(str(onnx_path), load_external_data=False)
-    fp16_model = convert_float_to_float16(
+    fp16_model = ort_float16.convert_float_to_float16(
         str(onnx_path),
         keep_io_types=keep_io_types,
+        op_block_list=op_block_list,
+        node_block_list=list(fp32_nodes),
+    )
+    finalize_fp16_webgpu_graph(
+        fp16_model,
+        source_node_names=[
+            node.name for node in getattr(getattr(model, "graph", None), "node", ())
+        ],
+        keep_fp32_ops=fp32_ops,
+        keep_fp32_nodes=fp32_nodes,
     )
     _copy_missing_model_metadata(fp16_model, model)
+    sort_graph_topologically(fp16_model)
     onnx.save(fp16_model, str(output_path))
     _check_onnx_model(output_path)
     return output_path
@@ -363,14 +498,68 @@ def convert(
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
     segmenter_id: str | None = None,
+    qualify: bool | None = None,
+    qualification_fixtures_path: str | Path | None = None,
+    expected_source_revision: str | None = None,
+    direct_identifier_recall_floor: float | None = None,
+    global_attention: str | None = None,
+    webgpu_gate_config: WebGpuFp16GateConfig | None = None,
 ) -> OnnxConversionResult:
-    """Export ONNX artifacts and optionally publish the resulting directory."""
+    """Export ONNX artifacts and optionally publish the resulting directory.
+
+    Families with a registered export adapter (ModernBERT, Longformer,
+    Privacy Filter) are traced through that adapter and qualified on
+    ``CPUExecutionProvider`` against the stock PyTorch checkpoint on a synthetic
+    PHI suite. The report is written to ``openmed-export-qualification.json``
+    and summarized in the manifest. The WebGPU fp16 graph is qualified on the
+    CPU provider as a numeric proxy and is recorded as ``cpu_proxy``, never as
+    a WebGPU claim. Undeclared profiles, providers, or bundles fail with
+    :class:`ExportQualificationError` before any inference, a failing gate
+    raises after the evidence is written, and unqualified artifacts are never
+    published. Privacy Filter requests must name an eligible checkpoint and a
+    pinned ``expected_source_revision``, need ``optimize_onnx=False`` (fused
+    graphs fail with ``unsupported_operator``), and ship
+    ``openmed-decoder-profile.json`` with the canonical decoder and threshold
+    profile, which :class:`~openmed.onnx.inference.OnnxModel` applies.
+
+    The fp16 WebGPU artifact is listed only after
+    :func:`validate_webgpu_fp16_export` passes on the same lengths and corpus as
+    optimized-graph validation, whether or not graph optimization is enabled.
+    ``webgpu_gate_config`` sets the gate tolerances, fp32 keep-list and failure
+    policy: ``"fail"`` (default) raises :class:`WebGpuFp16GateError`, while
+    ``"omit"`` drops ``model.webgpu.onnx`` and records the value-free reason
+    under ``webgpu_fp16_gate`` in ``openmed-onnx.json``. Either way a failed
+    fp16 artifact is deleted before anything is published.
+
+    Args:
+        qualify: ``None`` or ``True`` qualifies adapter families; ``False``
+            skips qualification and the manifest claims nothing. ``True`` for
+            a family without an adapter raises ``unsupported_family``.
+        qualification_fixtures_path: Synthetic suite for qualification.
+            Defaults to the packaged synthetic PHI suite.
+        expected_source_revision: Optional pinned source revision.
+        direct_identifier_recall_floor: Optional absolute recall floor.
+        global_attention: Global attention fill policy for Longformer:
+            ``"none"`` (default) or ``"first_token"``. The default profile
+            graph takes an explicit ``global_attention_mask`` input; the
+            Android profile keeps its two-input contract, so only ``"none"``
+            is accepted there.
+
+    Longformer graphs declare a bounded dynamic sequence axis: the maximum
+    must be a multiple of the largest attention window whose estimated
+    attention working set fits the ONNX memory ceiling. Qualification also
+    sweeps minimum, typical, attention-window boundary, and maximum lengths
+    and compares windowed long documents with the reference.
+    """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     profile = _normalize_profile(profile)
+    explicit_shape_buckets = shape_bucket_config is not None
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
+    source = resolve_source_context(model_id, cache_dir=cache_dir)
+    load_reference = source.load_reference
     should_optimize_onnx = optimize_onnx and profile not in {
         ANDROID_PROFILE_NAME,
         OPENVINO_PROFILE_NAME,
@@ -381,22 +570,24 @@ def convert(
     operator_fallbacks: list[dict[str, Any]] = []
     if should_optimize_onnx:
         unoptimized_path = export_onnx(
-            model_id,
+            load_reference,
             output_dir / DEFAULT_UNOPTIMIZED_ONNX_FILENAME,
             max_seq_length=max_seq_length,
             opset=opset,
             profile=profile,
             cache_dir=cache_dir,
+            expected_source_revision=expected_source_revision,
         )
         onnx_path = output_dir / DEFAULT_ONNX_FILENAME
     else:
         onnx_path = export_onnx(
-            model_id,
+            load_reference,
             output_dir / DEFAULT_ONNX_FILENAME,
             max_seq_length=max_seq_length,
             opset=opset,
             profile=profile,
             cache_dir=cache_dir,
+            expected_source_revision=expected_source_revision,
         )
         unoptimized_path = None
         optimization_manifest = {
@@ -405,13 +596,69 @@ def convert(
         }
 
     config, tokenizer_files = save_source_assets(
-        model_id,
+        load_reference,
         output_dir,
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
+        source_model_id=source.source_model_id,
     )
+    _reject_zero_shot_checkpoint(config)
+    adapter = _resolve_export_adapter(config.get("model_type"))
+    global_policy: str | None = None
+    sequence_limits: Any = None
+    eligibility: dict[str, Any] | None = None
+    binding: QualificationBinding | None = None
+    decoder_profile: dict[str, Any] | None = None
+    if adapter is None:
+        if qualify:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
+        if global_attention is not None:
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_GLOBAL_ATTENTION)
+    else:
+        if profile == OPENVINO_PROFILE_NAME or include_transformersjs:
+            # OpenVINO IR and Transformers.js bundles have no qualified path.
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_RUNTIME)
+        adapter.validate_request(
+            runtime="onnx",
+            config=config,
+            max_sequence_length=max_seq_length,
+            precisions=("float32", "float16") if include_webgpu else ("float32",),
+            quantizations=("int8",) if profile == ANDROID_PROFILE_NAME else (),
+            providers=tuple(optimization_config.providers),
+            shape_mode=SHAPE_MODE_DYNAMIC,
+            global_attention=global_attention,
+            profile=profile,
+        )
+        global_policy = adapter.resolve_global_attention(
+            global_attention, runtime="onnx", profile=profile
+        )
+        sequence_limits = adapter.limits_for(config, "onnx", "float32")
+        if sequence_limits is not None:
+            # Bounded families pad to their declared buckets and validate
+            # optimized graphs only within the qualified maximum.
+            declared = tuple(
+                bucket for bucket in sequence_limits.buckets if bucket <= max_seq_length
+            )
+            if not explicit_shape_buckets:
+                shape_bucket_config = ShapeBucketConfig(
+                    buckets=declared, min_length=1, max_length=max_seq_length
+                )
+            if validation_lengths is None:
+                validation_lengths = declared
+        eligibility = adapter.source_eligibility(
+            config, model_id=model_id, expected_revision=expected_source_revision
+        )
+        if should_optimize_onnx and adapter.onnx_operators is not None:
+            # Fused graphs leave the family's qualified operator set.
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_OPERATOR)
+        binding = adapter.binding(config, model_id, cache_dir)
+        if binding is not None and binding.decoder_profile is not None:
+            decoder_profile = dict(binding.decoder_profile)
+            _write_decoder_profile(
+                output_dir / DECODER_PROFILE_FILENAME, decoder_profile
+            )
     segmenter = (
         package_segmenter_resources(output_dir, segmenter_id)
         if segmenter_id is not None
@@ -428,7 +675,7 @@ def convert(
         validation_manifest = validate_optimized_onnx_export(
             unoptimized_path,
             onnx_path,
-            model_id=model_id,
+            model_id=load_reference,
             cache_dir=cache_dir,
             config=config,
             shape_bucket_config=shape_bucket_config,
@@ -496,14 +743,15 @@ def convert(
             )
     elif profile == OPENVINO_PROFILE_NAME:
         config, tokenizer_files = save_source_assets(
-            model_id,
+            load_reference,
             output_dir,
             cache_dir=cache_dir,
             max_seq_length=max_seq_length,
             require_id2label=True,
+            source_model_id=source.source_model_id,
         )
         tokenizer = get_tokenizer_with_loader(
-            model_id,
+            load_reference,
             _transformers_tokenizer_loader(cache_dir=cache_dir),
             cache_dir=cache_dir,
         )
@@ -536,14 +784,43 @@ def convert(
             ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
         ]
 
+    webgpu_gate: dict[str, Any] | None = None
     if profile not in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME} and include_webgpu:
+        gate_config = webgpu_gate_config or WebGpuFp16GateConfig()
         webgpu_path = export_webgpu(
             onnx_path,
             output_dir / DEFAULT_WEBGPU_FILENAME,
+            keep_fp32_ops=gate_config.keep_fp32_ops,
+            keep_fp32_nodes=gate_config.keep_fp32_nodes,
         )
-        artifacts.append(
-            ExportArtifact(format="webgpu", path=webgpu_path, precision="float16")
+        webgpu_gate = validate_webgpu_fp16_export(
+            onnx_path,
+            webgpu_path,
+            lengths=tuple(validation_lengths or DEFAULT_DYNAMIC_VALIDATION_LENGTHS),
+            config=config,
+            validation_texts=validation_texts,
+            sample_texts=(sample_text,) if sample_text else (),
+            tokenizer_loader=partial(
+                _webgpu_gate_tokenizer,
+                load_reference,
+                cache_dir=cache_dir,
+            ),
+            gate_config=gate_config,
         )
+        if webgpu_gate.get("passed") is True:
+            artifacts.append(
+                ExportArtifact(format="webgpu", path=webgpu_path, precision="float16")
+            )
+        else:
+            Path(webgpu_path).unlink(missing_ok=True)
+            reasons = ", ".join(str(item) for item in webgpu_gate.get("reasons") or [])
+            if gate_config.on_failure != WEBGPU_GATE_POLICY_OMIT:
+                raise WebGpuFp16GateError(webgpu_gate)
+            logger.warning(
+                "Omitted %s: fp16 WebGPU parity gate failed (%s)",
+                DEFAULT_WEBGPU_FILENAME,
+                reasons,
+            )
 
     if include_transformersjs:
         transformersjs_result = export_transformersjs_bundle(
@@ -567,13 +844,14 @@ def convert(
         if int8_path is None:
             raise ValueError("eval_suite_path requires Android INT8 export.")
         recall_report = write_int8_recall_delta_report(
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             artifact_dir=output_dir,
             eval_suite_path=eval_suite_path,
             fp_model_path=onnx_path,
             int8_model_path=int8_path,
             output_path=recall_delta_report_path,
             cache_dir=cache_dir,
+            source_context=source,
         )
         artifacts = [
             (
@@ -592,9 +870,32 @@ def convert(
             for artifact in artifacts
         ]
 
+    qualification_block: dict[str, Any] | None = None
+    if adapter is not None:
+        qualification_block = {
+            "family": adapter.family,
+            "adapter_version": adapter.version,
+            "passed": False,
+            "status": "not_run",
+            "reasons": [ExportReason.MISSING_EVIDENCE.value],
+            "qualified_variants": [],
+        }
+        if global_policy is not None:
+            qualification_block["global_attention"] = global_policy
+            qualification_block["input_names"] = list(
+                adapter.inputs_for("onnx", profile)
+            )
+        if sequence_limits is not None:
+            qualification_block["limits"] = sequence_limits.to_dict(
+                selected=max_seq_length
+            )
+        if decoder_profile is not None:
+            qualification_block["decoder_profile_sha256"] = decoder_profile["sha256"]
+
+    assert_source_unchanged(source)
     manifest_path = write_export_manifest(
         output_dir,
-        source_model_id=model_id,
+        source_model_id=source.source_model_id,
         config=config,
         artifacts=artifacts,
         tokenizer_files=tokenizer_files,
@@ -604,13 +905,79 @@ def convert(
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
         segmenter=segmenter,
+        source_context=source,
+        qualification=qualification_block,
+        webgpu_fp16_gate=webgpu_gate,
     )
+    if eligibility is not None or decoder_profile is not None:
+        _attach_manifest_blocks(
+            manifest_path,
+            {
+                "eligibility": eligibility,
+                "decoder_profile": (
+                    {
+                        "path": DECODER_PROFILE_FILENAME,
+                        "sha256": decoder_profile["sha256"],
+                        "decoder": decoder_profile["decoder"],
+                        "label_space": decoder_profile["label_space"],
+                        "threshold_profile": decoder_profile["threshold_profile"],
+                    }
+                    if decoder_profile is not None
+                    else None
+                ),
+            },
+        )
     if recall_report is not None:
         apply_int8_recall_certification(
             output_dir,
             recall_report,
             report_relpath=str(recall_report["report_path"]),
         )
+
+    # Qualify last so the recorded digests cover the final config and graphs.
+    qualification_report: ExportQualificationReport | None = None
+    if adapter is not None and qualify is not False:
+        qualification_report = _qualify_onnx_artifacts(
+            adapter=adapter,
+            model_id=model_id,
+            cache_dir=cache_dir,
+            output_dir=output_dir,
+            artifacts=artifacts,
+            tokenizer_files=tokenizer_files,
+            max_seq_length=max_seq_length,
+            shape_bucket_config=shape_bucket_config,
+            fixtures_path=qualification_fixtures_path,
+            expected_source_revision=expected_source_revision,
+            direct_identifier_recall_floor=direct_identifier_recall_floor,
+            profile=profile,
+            global_policy=global_policy,
+            sequence_limits=sequence_limits,
+            binding=binding,
+        )
+        write_qualification_report(
+            qualification_report,
+            output_dir / EXPORT_QUALIFICATION_FILENAME,
+        )
+        _attach_manifest_qualification(
+            manifest_path, summarize_report(qualification_report)
+        )
+    if recall_report is not None or qualification_report is not None:
+        # Certification and qualification mutate the manifest after the base
+        # writer. Inventory the final files and metadata, rather than leaving
+        # stale provenance.
+        write_canonical_manifest(
+            output_dir,
+            MANIFEST_FILENAME,
+            json.loads(manifest_path.read_text(encoding="utf-8")),
+            source=source,
+            backend="onnx",
+        )
+    if qualification_report is not None and not qualification_report.passed:
+        logger.warning(
+            "ONNX qualification failed: %s",
+            ", ".join(qualification_report.reasons),
+        )
+        qualification_report.raise_for_failure()
     result = OnnxConversionResult(
         output_dir=output_dir,
         manifest_path=manifest_path,
@@ -618,9 +985,13 @@ def convert(
     )
 
     if publish_to_hub:
+        if adapter is not None and (
+            qualification_report is None or not qualification_report.passed
+        ):
+            raise ExportQualificationError(ExportReason.MISSING_EVIDENCE)
         publish_result = publish_artifact(
             artifact_dir=output_dir,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             format_name=result.formats[0],
             formats=result.formats,
             repo_id=publish_repo_id,
@@ -639,6 +1010,279 @@ def convert(
     return result
 
 
+def _attach_manifest_qualification(
+    manifest_path: Path, qualification: Mapping[str, Any]
+) -> None:
+    _attach_manifest_blocks(manifest_path, {"qualification": dict(qualification)})
+
+
+def _attach_manifest_blocks(
+    manifest_path: Path, blocks: Mapping[str, Mapping[str, Any] | None]
+) -> None:
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    for key, value in blocks.items():
+        if value is not None:
+            manifest[key] = dict(value)
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+
+def _write_decoder_profile(path: Path, profile: Mapping[str, Any]) -> None:
+    from openmed.torch.privacy_filter_export import write_decoder_profile
+
+    write_decoder_profile(profile, path)
+
+
+def _preflight_export_source(
+    model_id: str,
+    *,
+    cache_dir: str | None,
+    max_seq_length: int,
+    expected_source_revision: str | None,
+) -> None:
+    """Validate an adapter family from its configuration before weights load."""
+
+    try:
+        from transformers import AutoConfig
+    except ImportError:
+        return
+    source_config = AutoConfig.from_pretrained(
+        model_id, cache_dir=cache_dir, trust_remote_code=False
+    )
+    adapter = _resolve_export_adapter(getattr(source_config, "model_type", None))
+    if adapter is None:
+        return
+    adapter.validate_request(
+        runtime="onnx",
+        config=source_config,
+        max_sequence_length=max_seq_length,
+        shape_mode=SHAPE_MODE_DYNAMIC,
+    )
+    eligibility = adapter.source_eligibility(
+        source_config,
+        model_id=model_id,
+        expected_revision=expected_source_revision,
+    )
+    if eligibility is not None:
+        source_identity(
+            model_id,
+            config=source_config,
+            expected_revision=expected_source_revision,
+        )
+
+
+def _reject_zero_shot_checkpoint(config: Any) -> None:
+    """Route GLiNER and GLiClass checkpoints to the zero-shot exporter."""
+
+    from openmed.ner.families.zero_shot_export import (
+        reject_zero_shot_token_classification,
+    )
+
+    reject_zero_shot_token_classification(config, runtime="onnx")
+
+
+def _resolve_export_adapter(model_type: Any) -> Any:
+    from openmed.torch.export_adapters import resolve_export_adapter
+
+    return resolve_export_adapter(str(model_type) if model_type else None)
+
+
+def _qualify_onnx_artifacts(
+    *,
+    adapter: Any,
+    model_id: str,
+    cache_dir: str | None,
+    output_dir: Path,
+    artifacts: Sequence[ExportArtifact],
+    tokenizer_files: Sequence[str],
+    max_seq_length: int,
+    shape_bucket_config: ShapeBucketConfig,
+    fixtures_path: str | Path | None,
+    expected_source_revision: str | None,
+    direct_identifier_recall_floor: float | None,
+    profile: str = DEFAULT_PROFILE_NAME,
+    global_policy: str | None = None,
+    sequence_limits: Any = None,
+    binding: QualificationBinding | None = None,
+) -> ExportQualificationReport:
+    """Qualify every exported ONNX graph against the stock PyTorch checkpoint."""
+
+    try:
+        import onnxruntime as ort
+        import torch
+        from transformers import AutoConfig, AutoTokenizer
+    except ImportError as exc:
+        raise_missing_backend("onnx", feature="ONNX export qualification", cause=exc)
+
+    from openmed.torch.export_adapters import torch_reference_runner
+
+    source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    source = source_identity(
+        model_id,
+        config=source_config,
+        expected_revision=expected_source_revision,
+    )
+    tokenizer = get_tokenizer_with_loader(
+        model_id,
+        AutoTokenizer.from_pretrained,
+        cache_dir=cache_dir,
+    )
+    reference_model = adapter.reference_model(torch, model_id, cache_dir)
+
+    candidates = [
+        _onnx_variant_candidate(ort, artifact, output_dir=output_dir)
+        for artifact in artifacts
+    ]
+    for candidate in candidates:
+        operators = candidate.evidence.get("operator_types")
+        # Fail before inference when a graph kept an operator the family
+        # adapter exists to remove (for example Longformer's NonZero gathers)
+        # or left the family's qualified operator set.
+        adapter.check_operators(operators or ())
+        if operators is not None:
+            adapter.check_onnx_operators(operators)
+    support_files = [
+        output_dir / name
+        for name in (
+            "config.json",
+            "id2label.json",
+            DECODER_PROFILE_FILENAME,
+            *tokenizer_files,
+        )
+        if (output_dir / name).is_file()
+    ]
+    buckets = tuple(
+        bucket for bucket in shape_bucket_config.buckets if bucket <= max_seq_length
+    )
+    return qualify_export(
+        family=adapter.family,
+        adapter_version=adapter.version,
+        runtime="onnx",
+        support=adapter.support_for("onnx"),
+        io_contract=ExportIOContract(
+            input_names=adapter.inputs_for("onnx", profile),
+            output_names=("logits",),
+            sequence_buckets=buckets,
+            max_sequence_length=max_seq_length,
+            shape_mode=SHAPE_MODE_DYNAMIC,
+            batch_size=None,
+            input_dtype="int64",
+            global_attention=global_policy,
+            windowing=(
+                WindowingPolicy.for_window(max_seq_length)
+                if adapter.windowed_documents
+                else None
+            ),
+        ),
+        tokenizer=tokenizer,
+        id2label=reference_model.config.id2label,
+        reference_runner=torch_reference_runner(torch, reference_model),
+        candidates=candidates,
+        source=source,
+        artifact_root=output_dir,
+        artifact_paths=support_files,
+        fixtures_path=fixtures_path,
+        exclude_artifact_names=(MANIFEST_FILENAME,),
+        direct_identifier_recall_floor=direct_identifier_recall_floor,
+        sequence_sweep_boundaries=(
+            adapter.sweep_boundaries(source_config)
+            if adapter.sweep_boundaries is not None
+            else None
+        ),
+        limits=(
+            sequence_limits.to_dict(selected=max_seq_length)
+            if sequence_limits is not None
+            else None
+        ),
+        binding=binding,
+    )
+
+
+def _onnx_variant_candidate(
+    ort_module: Any,
+    artifact: ExportArtifact,
+    *,
+    output_dir: Path,
+) -> VariantCandidate:
+    """Build a CPU-provider qualification candidate for one exported graph."""
+
+    path = Path(artifact.path)
+    quantization = "int8" if artifact.format == ONNX_INT8_FORMAT else "none"
+    precision = "float32" if quantization == "int8" else artifact.precision
+    if artifact.format not in {
+        "onnx",
+        "webgpu",
+        ANDROID_ONNX_FORMAT,
+        ONNX_INT8_FORMAT,
+        ORT_ANDROID_FORMAT,
+    }:
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_RUNTIME)
+    tag = {"float32": "fp32", "float16": "fp16"}.get(precision, precision)
+    name = artifact.format if quantization == "int8" else f"{artifact.format}-{tag}"
+    artifact_paths = [path]
+    sidecar = path.with_name(f"{path.name}.data")
+    if sidecar.is_file():
+        artifact_paths.append(sidecar)
+    return VariantCandidate(
+        name=name,
+        runner=_onnx_logits_runner(ort_module, path),
+        precision=precision,
+        quantization=quantization,
+        provider=QUALIFICATION_PROVIDER,
+        artifact_paths=tuple(artifact_paths),
+        target_provider=(
+            WEBGPU_TARGET_PROVIDER if artifact.format == "webgpu" else None
+        ),
+        evidence=_onnx_operator_evidence(path),
+    )
+
+
+def _onnx_logits_runner(ort_module: Any, path: Path) -> Any:
+    import numpy as np
+
+    session = ort_module.InferenceSession(
+        str(path),
+        providers=[QUALIFICATION_PROVIDER],
+    )
+    if QUALIFICATION_PROVIDER not in session.get_providers():
+        raise ExportQualificationError(ExportReason.UNSUPPORTED_PROVIDER)
+    inputs = session.get_inputs()
+
+    def run(feed: Mapping[str, Any]) -> Any:
+        prepared = {
+            item.name: np.asarray(
+                feed[item.name],
+                dtype=np.int32 if "int32" in str(item.type) else np.int64,
+            )
+            for item in inputs
+        }
+        return np.asarray(session.run(["logits"], prepared)[0], dtype=np.float32)
+
+    return run
+
+
+def _onnx_operator_evidence(path: Path) -> dict[str, Any]:
+    """Return the value-free operator inventory of an ONNX graph."""
+
+    if path.suffix != ".onnx":
+        return {"operator_inventory": "not_applicable"}
+    try:
+        import onnx
+    except ImportError:
+        return {"operator_inventory": "unavailable"}
+    graph = onnx.load(str(path), load_external_data=False).graph
+    operators = sorted(
+        {f"{node.domain or 'ai.onnx'}:{node.op_type}" for node in graph.node}
+    )
+    return {
+        "operator_inventory": "computed",
+        "operator_types": operators,
+        "node_count": len(graph.node),
+        "qualified_provider_fallbacks": [],
+    }
+
+
 def save_source_assets(
     model_id: str,
     output_dir: str | Path,
@@ -647,6 +1291,7 @@ def save_source_assets(
     max_seq_length: int = 512,
     require_id2label: bool = False,
     require_tokenizer_json: bool = False,
+    source_model_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Save config, labels, and tokenizer assets beside exported artifacts."""
 
@@ -657,6 +1302,8 @@ def save_source_assets(
 
     output_dir = Path(output_dir)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir).to_dict()
+    if source_model_id is not None:
+        config["_name_or_path"] = source_model_id
     config["max_sequence_length"] = max_seq_length
     if require_id2label:
         config["id2label"] = _ensure_id2label(config)
@@ -679,6 +1326,19 @@ def save_source_assets(
             cache_dir=cache_dir,
         )
         tokenizer.save_pretrained(output_dir)
+        tokenizer_config_path = output_dir / "tokenizer_config.json"
+        if source_model_id is not None and tokenizer_config_path.is_file():
+            tokenizer_config = json.loads(
+                tokenizer_config_path.read_text(encoding="utf-8")
+            )
+            if "name_or_path" in tokenizer_config:
+                tokenizer_config["name_or_path"] = source_model_id
+            if "_name_or_path" in tokenizer_config:
+                tokenizer_config["_name_or_path"] = source_model_id
+            tokenizer_config_path.write_text(
+                json.dumps(tokenizer_config, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
         if require_tokenizer_json:
@@ -713,10 +1373,20 @@ def write_export_manifest(
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
     segmenter: Mapping[str, Any] | None = None,
+    source_context: SourceContext | None = None,
+    qualification: Mapping[str, Any] | None = None,
+    webgpu_fp16_gate: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
+    """Write an ONNX/WebGPU artifact manifest into *output_dir*.
+
+    A ``webgpu`` artifact requires ``webgpu_fp16_gate``: a passing gate record
+    whose ``artifact_sha256`` matches the artifact bytes. The record is stored
+    under the top-level ``webgpu_fp16_gate`` key, also when the gate omitted
+    the artifact.
+    """
 
     output_dir = Path(output_dir)
+    source_context = source_context or context_from_metadata(source_model_id, config)
     formats = _dedupe_keep_order([artifact.format for artifact in artifacts])
     task = str(config.get("_mlx_task") or config.get("task") or "token-classification")
     family = str(
@@ -732,7 +1402,7 @@ def write_export_manifest(
         "formats": formats,
         "task": task,
         "family": family,
-        "source_model_id": source_model_id,
+        "source_model_id": source_context.source_model_id,
         "config_path": "config.json",
         "label_map_path": "id2label.json"
         if (output_dir / "id2label.json").exists()
@@ -756,16 +1426,38 @@ def write_export_manifest(
     }
     if segmenter is not None:
         manifest["segmenter"] = dict(segmenter)
-
-    manifest_path = output_dir / MANIFEST_FILENAME
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
+    # Measurements belong to a sibling observation report, outside the exact
+    # artifact inventory. Retain deterministic validation results in the bundle.
+    if "latency" in manifest["validation"]:
+        artifact_root = output_dir.resolve()
+        observation_path = validate_observation_path(
+            artifact_root.with_name(f"{artifact_root.name}_onnx_observations.json")
+        )
+        observations = (
+            json.loads(observation_path.read_text(encoding="utf-8"))
+            if observation_path.is_file()
+            else {}
+        )
+        observations["validation"] = dict(validation or {})
+        write_observation_report(observation_path, observations, allow_nan=False)
+        manifest["validation"].pop("latency")
+    if qualification is not None:
+        manifest["qualification"] = dict(qualification)
+    if webgpu_fp16_gate is not None:
+        manifest[WEBGPU_FP16_GATE_KEY] = dict(webgpu_fp16_gate)
+    manifest_path = write_canonical_manifest(
+        output_dir, MANIFEST_FILENAME, manifest, source=source_context, backend="onnx"
+    )
     validate_onnx_bundle(output_dir)
     return manifest_path
 
 
 def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
-    """Validate optional manifest-declared resources in an ONNX bundle."""
+    """Validate optional manifest-declared resources in an ONNX bundle.
+
+    Declared segmenter resources must exist, and a declared ``webgpu`` artifact
+    must carry a passing, digest-bound fp16 parity gate record.
+    """
 
     root = Path(output_dir)
     manifest_path = root / MANIFEST_FILENAME
@@ -780,6 +1472,7 @@ def validate_onnx_bundle(output_dir: str | Path) -> dict[str, Any]:
         if not isinstance(segmenter, Mapping):
             raise ValueError("ONNX segmenter descriptor must be an object")
         validate_segmenter_resources(root, segmenter)
+    verify_webgpu_fp16_gate_evidence(root, manifest)
     return manifest
 
 
@@ -1348,22 +2041,29 @@ def _consolidate_external_onnx_data(path: Path) -> None:
     temporary_dir.mkdir()
 
     try:
+        # Small tensors stay inline: ONNX Runtime shape inference cannot read
+        # external constants such as Slice starts/ends, so a sidecar holding
+        # every tensor makes the graph unloadable from disk.
         onnx.save_model(
             model,
             str(temporary_path),
             save_as_external_data=True,
             all_tensors_to_one_file=True,
             location=sidecar_name,
-            size_threshold=0,
+            size_threshold=EXTERNAL_DATA_SIZE_THRESHOLD,
             convert_attribute=False,
         )
-        if not temporary_path.is_file() or not temporary_sidecar.is_file():
+        if not temporary_path.is_file():
+            raise RuntimeError("ONNX external-data consolidation was incomplete")
+        has_sidecar = temporary_sidecar.is_file()
+        if not has_sidecar and _has_external_initializers(onnx, temporary_path):
             raise RuntimeError("ONNX external-data consolidation was incomplete")
 
         if sidecar_path.exists():
             sidecar_path.replace(backup_sidecar)
         try:
-            temporary_sidecar.replace(sidecar_path)
+            if has_sidecar:
+                temporary_sidecar.replace(sidecar_path)
             temporary_path.replace(path)
         except Exception:
             sidecar_path.unlink(missing_ok=True)
@@ -1377,6 +2077,14 @@ def _consolidate_external_onnx_data(path: Path) -> None:
         old_path = (path.parent / location).resolve(strict=False)
         if old_path.parent == path.parent.resolve(strict=False):
             old_path.unlink(missing_ok=True)
+
+
+def _has_external_initializers(onnx_module: Any, path: Path) -> bool:
+    model = onnx_module.load(str(path), load_external_data=False)
+    return any(
+        tensor.data_location == onnx_module.TensorProto.EXTERNAL
+        for tensor in model.graph.initializer
+    )
 
 
 def _copy_missing_model_metadata(target: Any, source: Any) -> None:
@@ -1466,6 +2174,28 @@ def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
     return load_tokenizer
 
 
+def _webgpu_gate_tokenizer(model_id: str, *, cache_dir: str | None) -> Any:
+    """Load the tokenizer for the gate corpus, or ``None`` when unavailable.
+
+    The gate fails closed with ``validation_corpus_unavailable`` when
+    validation texts were requested but no tokenizer could be loaded.
+    """
+
+    try:
+        from transformers import AutoTokenizer
+    except ImportError:
+        return None
+    try:
+        return get_tokenizer_with_loader(
+            model_id,
+            AutoTokenizer.from_pretrained,
+            cache_dir=cache_dir,
+        )
+    except Exception:  # noqa: BLE001 - the gate records a value-free reason.
+        logger.warning("Could not load the tokenizer for the fp16 WebGPU gate corpus")
+        return None
+
+
 def _ensure_id2label(config: Mapping[str, Any]) -> dict[str, str]:
     id2label = config.get("id2label")
     if isinstance(id2label, Mapping) and id2label:
@@ -1493,8 +2223,15 @@ def _dynamic_export_kwargs(
     input_names: Sequence[str],
     max_seq_length: int,
     profile: str = DEFAULT_PROFILE_NAME,
+    sequence_bound: int | None = None,
 ) -> dict[str, Any]:
-    """Return Torch ONNX dynamic-shape kwargs for the installed exporter."""
+    """Return Torch ONNX dynamic-shape kwargs for the installed exporter.
+
+    ``sequence_bound`` declares an inclusive maximum on the dynamo
+    exporter's ``sequence`` dimension. The TorchScript exporter (Android
+    profile) cannot record bounds, so qualification and the runtime loader
+    enforce them instead.
+    """
 
     parameters = inspect.signature(export_fn).parameters
     if profile == ANDROID_PROFILE_NAME:
@@ -1509,7 +2246,11 @@ def _dynamic_export_kwargs(
 
     if "dynamo" in parameters and "dynamic_shapes" in parameters:
         batch_dim = torch_module.export.Dim("batch", min=1)
-        sequence_dim = torch_module.export.Dim("sequence", min=1)
+        sequence_dim = (
+            torch_module.export.Dim("sequence", min=1, max=int(sequence_bound))
+            if sequence_bound is not None
+            else torch_module.export.Dim("sequence", min=1)
+        )
         return {
             "dynamo": True,
             "dynamic_shapes": {
@@ -1521,34 +2262,6 @@ def _dynamic_export_kwargs(
         name: {0: "batch", 1: "sequence"} for name in [*input_names, "logits"]
     }
     return {"dynamic_axes": dynamic_axes}
-
-
-@contextmanager
-def _onnx_export_compatibility(model: Any, torch_module: Any):
-    """Apply narrowly scoped exporter compatibility fixes for known families."""
-
-    if getattr(getattr(model, "config", None), "model_type", None) != "longformer":
-        yield
-        return
-
-    from transformers.models.longformer import modeling_longformer
-
-    original = modeling_longformer.create_bidirectional_mask
-
-    def legacy_bidirectional_mask(
-        *,
-        inputs_embeds: Any,
-        attention_mask: Any,
-        **_: Any,
-    ) -> Any:
-        mask = attention_mask[:, None, None, :].to(dtype=inputs_embeds.dtype)
-        return (1.0 - mask) * torch_module.finfo(inputs_embeds.dtype).min
-
-    modeling_longformer.create_bidirectional_mask = legacy_bidirectional_mask
-    try:
-        yield
-    finally:
-        modeling_longformer.create_bidirectional_mask = original
 
 
 def main() -> None:
@@ -1565,6 +2278,27 @@ def main() -> None:
         "--no-webgpu",
         action="store_true",
         help="Only emit the fp32 ONNX artifact",
+    )
+    parser.add_argument(
+        "--webgpu-gate-policy",
+        choices=list(WEBGPU_GATE_POLICIES),
+        default=WEBGPU_GATE_POLICY_FAIL,
+        help=(
+            "Action when the fp16 WebGPU parity gate fails: fail the conversion "
+            "(default) or omit model.webgpu.onnx and record the reason"
+        ),
+    )
+    parser.add_argument(
+        "--webgpu-keep-fp32-op",
+        action="append",
+        default=None,
+        help="Extra operator type kept in fp32 in model.webgpu.onnx, repeatable",
+    )
+    parser.add_argument(
+        "--webgpu-keep-fp32-node",
+        action="append",
+        default=None,
+        help="Node name kept in fp32 in model.webgpu.onnx, repeatable",
     )
     parser.add_argument(
         "--include-transformersjs",
@@ -1600,7 +2334,10 @@ def main() -> None:
     parser.add_argument(
         "--no-onnx-optimization",
         action="store_true",
-        help="Skip post-export ONNX graph optimization and validation",
+        help=(
+            "Skip post-export ONNX graph optimization and its validation; the "
+            "fp16 WebGPU parity gate still runs"
+        ),
     )
     parser.add_argument(
         "--disable-constant-folding",
@@ -1673,6 +2410,39 @@ def main() -> None:
         "--recall-delta-report",
         default=None,
         help="Output path for the INT8 recall_delta.json report",
+    )
+    parser.add_argument(
+        "--no-qualify",
+        action="store_true",
+        help=(
+            "Skip qualification of adapter families such as ModernBERT; the "
+            "manifest then claims no qualified variant"
+        ),
+    )
+    parser.add_argument(
+        "--qualification-fixtures",
+        default=None,
+        help="Synthetic benchmark fixture JSON/JSONL for qualification",
+    )
+    parser.add_argument(
+        "--expected-source-revision",
+        default=None,
+        help="Fail unless the source checkpoint resolves to this revision",
+    )
+    parser.add_argument(
+        "--direct-identifier-recall-floor",
+        type=float,
+        default=None,
+        help="Optional absolute direct-identifier recall floor",
+    )
+    parser.add_argument(
+        "--global-attention",
+        choices=("none", "first_token"),
+        default=None,
+        help=(
+            "Global attention fill policy for Longformer graphs "
+            "(default: none; the Android profile accepts only none)"
+        ),
     )
     parser.add_argument(
         "--publish-to-hub",
@@ -1751,6 +2521,16 @@ def main() -> None:
         publish_token_env=args.publish_token_env,
         publish_private=args.publish_private,
         publish_overwrite_existing=args.publish_overwrite_existing,
+        qualify=False if args.no_qualify else None,
+        qualification_fixtures_path=args.qualification_fixtures,
+        expected_source_revision=args.expected_source_revision,
+        direct_identifier_recall_floor=args.direct_identifier_recall_floor,
+        global_attention=args.global_attention,
+        webgpu_gate_config=WebGpuFp16GateConfig(
+            on_failure=args.webgpu_gate_policy,
+            keep_fp32_ops=(*DEFAULT_FP32_KEEP_OPS, *(args.webgpu_keep_fp32_op or ())),
+            keep_fp32_nodes=tuple(args.webgpu_keep_fp32_node or ()),
+        ),
     )
 
 

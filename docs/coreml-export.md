@@ -43,9 +43,73 @@ The converter accepts these Hugging Face token-classification source families:
 - `roberta`
 - `xlm-roberta`
 - `deberta-v2`
+- `modernbert` (qualification-gated, see below)
+- `longformer` (qualification-gated, bounded buckets, see below)
+
+- `openai-privacy-filter` (qualification-gated, declared checkpoints and a
+  pinned revision only, see below)
 
 Unsupported architectures fail before tracing with an error that lists the
-supported families.
+supported families and carries the stable `unsupported_family` reason code.
+
+## ModernBERT Qualification
+
+ModernBERT is traced through the family adapter in
+`openmed.torch.export_adapters`, always with one static
+`(1, max_seq_length)` sequence bucket. Dynamic shapes
+(`--disable-ane-static-shapes`), sequences longer than
+`max_position_embeddings`, and Transformers 4.x are rejected before any
+weights load. After conversion, every package (float and each `--quantize`
+variant) is qualified against the PyTorch reference checkpoint on the
+committed synthetic PHI suite: logit parity, span parity, direct-identifier
+recall, critical leakage, and the INT8/INT4 recall-delta limits. The report is
+written to `<stem>_qualification.json`, summarized under `qualification` in
+the conversion manifest, and packages also carry `export_family`,
+`export_adapter_version`, `sequence_shape_mode`, and `sequence_buckets`
+metadata. A failing gate raises after the evidence is written, and
+`--publish-to-hub` refuses unqualified packages.
+
+Qualification runs Core ML predictions, so it needs macOS. Pass `--qualify`
+to require it, or `--no-qualify` to skip it; elsewhere the manifest records
+`status: not_run`. Gate tolerances, reason codes, and the offline reproduction
+command are in the
+[Export Format Support Matrix](export-matrix.md#modernbert-runtime-support).
+
+## Longformer Qualification
+
+Longformer packages are traced through the same family adapter and the same
+qualification harness. Each package has one static `(1, max_seq_length)`
+bucket and three inputs: `input_ids`, `attention_mask`, and an explicit
+`global_attention_mask`. `--max-seq-length` must be a multiple of the largest
+attention window, no longer than the position table allows, and its estimated
+attention working set must fit the Core ML memory ceiling; otherwise the
+request fails before weights load with `bucket_unavailable`,
+`unsupported_sequence_length`, or `memory_budget_exceeded`. Export one package
+per bucket you ship.
+
+`--global-attention none` (the default, matching the stock
+token-classification forward) or `--global-attention first_token` names the
+fill policy that qualification uses and that packages record as
+`global_attention_policy` metadata, next to `attention_windows`,
+`memory_ceiling_bytes`, and `estimated_attention_bytes`. On top of the
+ModernBERT gates, qualification sweeps minimum, typical, attention-window
+boundary, and maximum lengths (with a first/middle/last global-attention
+probe) and compares windowed long documents, with document-global offsets,
+against the windowed reference. Bounds, the memory estimate, and the windowing
+contract are in the
+[Export Format Support Matrix](export-matrix.md#longformer-runtime-support).
+
+## Privacy Filter Qualification
+
+Privacy Filter checkpoints go through the same qualification, with the family
+adapter in `openmed.torch.privacy_filter_export`. Only declared checkpoint
+families export, `--expected-source-revision` is required, and checkpoints
+that need repository code are rejected before weights load. Float16 packages
+keep the attention softmax in float32. Every package ships
+`<stem>_decoder_profile.json` with the canonical Viterbi decoder and threshold
+profile, and its digest is recorded in the package metadata, manifest, and
+qualification report. The declared checkpoints and rules are in the
+[Export Format Support Matrix](export-matrix.md#privacy-filter-runtime-support).
 
 ## Compute Units
 

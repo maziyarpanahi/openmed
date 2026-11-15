@@ -2,8 +2,9 @@
 
 Related models cover the [clinical brief and local generation surfaces](clinical-brief-threat-model.md),
 [Journey workflows](journey-threat-model.md), [MCP gateway](mcp-threat-model.md),
-[agent boundaries](agent-threat-model.md), and
-[multilingual ingestion](threat-model-multilingual-ingestion.md).
+[agent boundaries](agent-threat-model.md),
+[multilingual ingestion](threat-model-multilingual-ingestion.md), and the
+[OpenMedKit portable kits](openmedkit-threat-model.md).
 
 This document is the structured threat analysis for OpenMed's de-identification
 path — the "redactor". OpenMed's security objective is to prevent supported

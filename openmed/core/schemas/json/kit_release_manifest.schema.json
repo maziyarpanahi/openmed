@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/kit_release_manifest.schema.json",
+  "title": "OpenMed v4.0 portable-kit release manifest",
+  "description": "Operator-supplied, value-free evidence manifest for the v4.0 OpenMedKit release gate. Paths are portable and relative to the candidate checkout; they never enter the signed packet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "compatibility_policy", "release", "policy",
+    "evidence", "moved_items"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"},
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "version", "matrix_release", "candidate_commit", "evaluated_at",
+        "source_date_epoch"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]{1,32})?$"
+        },
+        "matrix_release": {"type": "string", "pattern": "^v[0-9]{1,3}\\.[0-9]{1,3}$"},
+        "candidate_commit": {"$ref": "#/$defs/commit"},
+        "evaluated_at": {"$ref": "#/$defs/timestamp"},
+        "source_date_epoch": {"type": "integer", "minimum": 0}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_evidence_age_seconds"],
+      "properties": {
+        "max_evidence_age_seconds": {"type": "integer", "minimum": 1, "maximum": 31536000}
+      }
+    },
+    "evidence": {
+      "type": "array", "maxItems": 512,
+      "items": {"$ref": "#/$defs/evidence_entry"}
+    },
+    "moved_items": {
+      "type": "array", "maxItems": 512,
+      "items": {"$ref": "#/$defs/moved_item"}
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.][A-Za-z0-9_./+@-]{0,511}$",
+      "not": {"pattern": "(^|/)\\.{1,2}(/|$)|//|/$"}
+    },
+    "kind": {
+      "enum": [
+        "kit_artifact", "support_matrix", "qualification_report",
+        "bundle_manifest", "parity_fixture", "license_inventory",
+        "threat_model", "test_lane"
+      ]
+    },
+    "evidence_entry": {
+      "type": "object",
+      "required": ["id", "kind", "path", "sha256", "candidate_commit", "generated_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "kind": {"$ref": "#/$defs/kind"},
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "candidate_commit": {"$ref": "#/$defs/commit"},
+        "generated_at": {"$ref": "#/$defs/timestamp"},
+        "surface": {
+          "enum": [
+            "python", "swift", "android", "react-native", "web",
+            "document-intake", "key-store", "flutter", "electron", "tauri"
+          ]
+        },
+        "format": {
+          "enum": [
+            "aar", "electron-package", "flutter-package", "npm-tarball",
+            "python-sdist", "python-wheel", "swiftpm-source", "tauri-crate"
+          ]
+        }
+      },
+      "if": {"properties": {"kind": {"const": "kit_artifact"}}},
+      "then": {
+        "required": ["surface", "format"],
+        "additionalProperties": false,
+        "properties": {
+          "id": true, "kind": true, "path": true, "sha256": true,
+          "candidate_commit": true, "generated_at": true, "surface": true,
+          "format": true
+        }
+      },
+      "else": {
+        "additionalProperties": false,
+        "properties": {
+          "id": true, "kind": true, "path": true, "sha256": true,
+          "candidate_commit": true, "generated_at": true
+        }
+      }
+    },
+    "moved_item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["issue", "priority", "destination", "rationale", "narrowed_claims"],
+      "properties": {
+        "issue": {"type": "string", "pattern": "^#[1-9][0-9]{0,6}$"},
+        "priority": {"enum": ["P0", "P1", "P2"]},
+        "destination": {"type": ["string", "null"], "maxLength": 32},
+        "rationale": {"type": ["string", "null"], "maxLength": 64},
+        "narrowed_claims": {
+          "type": "array", "uniqueItems": true, "maxItems": 256,
+          "items": {"$ref": "#/$defs/id"}
+        }
+      }
+    }
+  }
+}

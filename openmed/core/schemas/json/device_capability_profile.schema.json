@@ -1,0 +1,254 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/runtimes/device-capability-profile.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed normalized device-capability profile",
+  "description": "Coarse, closed capability record produced by kit adapters: controlled vocabulary, dotted versions, and budgets rounded down to a power of two. It never carries device names, serial numbers, vendor strings, user agents, or exact memory sizes.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "accelerators",
+    "cpu_architecture",
+    "features",
+    "max_model_tier",
+    "max_sequence_length",
+    "memory_budget_bytes",
+    "network",
+    "operator_sets",
+    "os_version",
+    "platform",
+    "precisions",
+    "providers",
+    "runtimes",
+    "schema",
+    "schema_version",
+    "sdk_name",
+    "sdk_version",
+    "storage_budget_bytes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "openmed.device_capabilities"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "platform": {
+      "enum": [
+        "android",
+        "ios",
+        "linux",
+        "macos",
+        "visionos",
+        "watchos",
+        "web",
+        "windows"
+      ]
+    },
+    "sdk_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "sdk_version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,8})(?:\\.(?:0|[1-9][0-9]{0,8})){0,3}$"
+    },
+    "os_version": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]{0,8})(?:\\.(?:0|[1-9][0-9]{0,8}))?$"
+        }
+      ]
+    },
+    "cpu_architecture": {
+      "enum": [
+        "arm64",
+        "armv7",
+        "unknown",
+        "wasm32",
+        "x86_64"
+      ]
+    },
+    "providers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "coreml",
+          "cpu",
+          "metal",
+          "nnapi",
+          "qnn",
+          "wasm",
+          "webgpu"
+        ]
+      }
+    },
+    "accelerators": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "cpu",
+          "gpu",
+          "npu"
+        ]
+      }
+    },
+    "runtimes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "coreml",
+          "mlx",
+          "onnx",
+          "ort",
+          "pytorch",
+          "transformersjs"
+        ]
+      }
+    },
+    "precisions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "bf16",
+          "fp16",
+          "fp32",
+          "int2",
+          "int4",
+          "int8"
+        ]
+      }
+    },
+    "features": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "cpu_avx2",
+          "cpu_fp16",
+          "cpu_neon",
+          "wasm_simd",
+          "wasm_threads",
+          "webgpu_shader_f16"
+        ]
+      }
+    },
+    "operator_sets": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "coreml",
+          "mlx",
+          "onnx",
+          "ort",
+          "pytorch",
+          "transformersjs"
+        ]
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      }
+    },
+    "memory_budget_bytes": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            0,
+            16777216,
+            33554432,
+            67108864,
+            134217728,
+            268435456,
+            536870912,
+            1073741824,
+            2147483648,
+            4294967296,
+            8589934592,
+            17179869184,
+            34359738368,
+            68719476736,
+            137438953472,
+            274877906944,
+            549755813888,
+            1099511627776
+          ]
+        }
+      ]
+    },
+    "storage_budget_bytes": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            0,
+            16777216,
+            33554432,
+            67108864,
+            134217728,
+            268435456,
+            536870912,
+            1073741824,
+            2147483648,
+            4294967296,
+            8589934592,
+            17179869184,
+            34359738368,
+            68719476736,
+            137438953472,
+            274877906944,
+            549755813888,
+            1099511627776
+          ]
+        }
+      ]
+    },
+    "max_sequence_length": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      ]
+    },
+    "max_model_tier": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "nano",
+            "tiny",
+            "base"
+          ]
+        }
+      ]
+    },
+    "network": {
+      "enum": [
+        "offline",
+        "online",
+        "unknown"
+      ]
+    }
+  }
+}

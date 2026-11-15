@@ -26,9 +26,13 @@ LINKING_DOCS = (
 )
 
 _BACKTICK = re.compile(r"`([^`]+)`")
+_FENCE = re.compile(r"```.*?```", re.S)
 
 
 def _backtick_tokens(text: str) -> set[str]:
+    # Fenced blocks hold an odd number of backticks per fence line; drop them
+    # so inline-code pairing stays aligned in later sections.
+    text = _FENCE.sub("", text)
     return {match.strip() for match in _BACKTICK.findall(text)}
 
 
@@ -66,3 +70,164 @@ def test_matrix_is_in_mkdocs_nav_and_cross_linked() -> None:
         assert "export-matrix.md" in text, (
             f"{path.relative_to(ROOT)} should link to the export matrix"
         )
+
+
+def _modernbert_support_rows(
+    text: str, heading: str = "## ModernBERT runtime support"
+) -> dict[str, dict[str, list[str]]]:
+    return _support_rows(text, heading)
+
+
+def _support_rows(text: str, heading: str) -> dict[str, dict[str, list[str]]]:
+    section = text.split(heading, 1)[1]
+    section = section.split("### ", 1)[0]
+    rows: dict[str, dict[str, list[str]]] = {}
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 6 or cells[0] in {"Runtime", "---"}:
+            continue
+        runtime, precisions, quantizations, providers, shapes, target = cells
+        rows[runtime] = {
+            "precisions": precisions.split(", "),
+            "quantizations": quantizations.split(", "),
+            "providers": providers.split(", "),
+            "shape_modes": shapes.split(", "),
+            "target": [target],
+        }
+    return rows
+
+
+def test_modernbert_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.export_adapters import MODERNBERT_EXPORT_ADAPTER
+
+    documented = _modernbert_support_rows(DOC.read_text(encoding="utf-8"))
+    declared = MODERNBERT_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_longformer_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.export_adapters import LONGFORMER_EXPORT_ADAPTER
+
+    documented = _modernbert_support_rows(
+        DOC.read_text(encoding="utf-8"), "## Longformer runtime support"
+    )
+    declared = LONGFORMER_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_longformer_bounds_table_matches_the_declared_limits() -> None:
+    from types import SimpleNamespace
+
+    from openmed.torch.export_adapters import LONGFORMER_EXPORT_ADAPTER
+
+    text = DOC.read_text(encoding="utf-8")
+    section = text.split("### Sequence bounds and memory", 1)[1].split("### ", 1)[0]
+    base = SimpleNamespace(
+        num_hidden_layers=12,
+        num_attention_heads=12,
+        attention_window=512,
+        max_position_embeddings=4098,
+        pad_token_id=1,
+    )
+    rows = 0
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 4 or cells[0] in {"Runtime", "---"}:
+            continue
+        runtime, precision, ceiling, buckets = cells
+        limits = LONGFORMER_EXPORT_ADAPTER.limits_for(base, runtime, precision)
+        assert int(ceiling) * 1024**2 == limits.memory_ceiling_bytes, line
+        assert [int(value) for value in buckets.split(", ")] == list(
+            limits.supported_buckets
+        ), line
+        rows += 1
+    assert rows == 3
+    assert "longformer" in {
+        token for token in _backtick_tokens(text) if token.islower()
+    }
+
+
+def _zero_shot_section(text: str) -> str:
+    section = text.split("## GLiNER span and GLiClass runtime support", 1)[1]
+    return section.split("\n## ", 1)[0]
+
+
+def test_zero_shot_support_table_matches_the_declared_profiles() -> None:
+    from openmed.ner.families.zero_shot_export import (
+        GLICLASS_PROFILE,
+        GLINER_SPAN_PROFILE,
+        ZERO_SHOT_ONNX_SUPPORT,
+    )
+
+    section = _zero_shot_section(DOC.read_text(encoding="utf-8"))
+    rows = {}
+    for line in section.split("### ", 1)[0].splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 6 and cells[0] not in {"Runtime", "---"}:
+            rows[cells[0]] = cells[1:]
+    support = ZERO_SHOT_ONNX_SUPPORT.to_dict()
+    assert rows == {
+        "onnx": [
+            ", ".join(support["precisions"]),
+            ", ".join(support["quantizations"]),
+            ", ".join(support["providers"]),
+            ", ".join(support["shape_modes"]),
+            support["target"],
+        ]
+    }
+    tokens = _backtick_tokens(section)
+    for profile in (GLINER_SPAN_PROFILE, GLICLASS_PROFILE):
+        assert {profile.name, profile.family, profile.task} <= tokens
+        assert set(profile.input_names) <= tokens
+    assert "unsupported_runtime" in tokens  # Core ML stays a typed refusal
+
+
+def test_matrix_lists_every_export_qualification_reason_code() -> None:
+    from openmed.eval.export_qualification import ExportReason
+
+    tokens = _backtick_tokens(DOC.read_text(encoding="utf-8"))
+    missing = {reason.value for reason in ExportReason} - tokens
+    assert not missing, f"undocumented reason codes: {sorted(missing)}"
+
+
+def test_privacy_filter_support_table_matches_the_export_adapter() -> None:
+    from openmed.torch.privacy_filter_export import PRIVACY_FILTER_EXPORT_ADAPTER
+
+    documented = _support_rows(
+        DOC.read_text(encoding="utf-8"), "## Privacy Filter runtime support"
+    )
+    declared = PRIVACY_FILTER_EXPORT_ADAPTER.describe()["support"]
+    assert set(documented) == set(declared)
+    for runtime, support in declared.items():
+        row = documented[runtime]
+        for key in ("precisions", "quantizations", "providers", "shape_modes"):
+            assert row[key] == support[key], (runtime, key)
+        assert row["target"] == [support["target"]]
+
+
+def test_matrix_lists_every_declared_privacy_filter_checkpoint() -> None:
+    from openmed.torch.privacy_filter_export import PRIVACY_FILTER_CHECKPOINTS
+
+    section = DOC.read_text(encoding="utf-8").split("### Eligible checkpoints", 1)[1]
+    section = section.split("### ", 1)[0]
+    rows = {}
+    for line in section.splitlines():
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 5 and "/" in cells[0]:
+            rows[cells[0]] = cells
+    assert set(rows) == {item.repo_id for item in PRIVACY_FILTER_CHECKPOINTS}
+    for item in PRIVACY_FILTER_CHECKPOINTS:
+        _, label_space, labels, revision, evidence = rows[item.repo_id]
+        assert (label_space, int(labels)) == (item.label_space, item.num_labels)
+        assert revision == (item.revision or "none yet")
+        assert evidence == ("published" if item.evidence_sha256 else "none yet")

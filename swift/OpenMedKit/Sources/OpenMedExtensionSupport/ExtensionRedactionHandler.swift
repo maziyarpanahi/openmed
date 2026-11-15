@@ -1,7 +1,19 @@
 import Foundation
 import OpenMedKit
 
+/// Extension model assets referenced by role instead of by URL or file name.
+public enum ExtensionAssetRole: String, CaseIterable, Sendable {
+    case bundleResources = "bundle_resources"
+    case model
+    case labelMap = "label_map"
+    case tokenizerFolder = "tokenizer_folder"
+    case tokenizerFile = "tokenizer_file"
+}
+
 /// Errors raised before extension input or local model assets are processed.
+///
+/// Cases carry counts, limits or an ``ExtensionAssetRole``. They never hold
+/// host text, an asset URL, path or file name.
 public enum ExtensionRedactionError: Error, Equatable, LocalizedError, Sendable {
     case emptyInput
     case inputTooLarge(actual: Int, limit: Int)
@@ -9,11 +21,11 @@ public enum ExtensionRedactionError: Error, Equatable, LocalizedError, Sendable 
     case tooManyInputItems(actual: Int, limit: Int)
     case aggregateInputTooLarge(actual: Int, limit: Int)
     case missingPlainTextInput
-    case nonLocalAsset(URL)
-    case missingAsset(String)
-    case invalidAsset(String)
+    case nonLocalAsset(ExtensionAssetRole)
+    case missingAsset(ExtensionAssetRole)
+    case invalidAsset(ExtensionAssetRole)
     case tooManyAssetFiles(limit: Int)
-    case unsupportedModelFormat(String)
+    case unsupportedModelFormat
     case modelAssetsTooLarge(actual: Int64, limit: Int64)
     case invalidRedactionOutput
 
@@ -31,16 +43,16 @@ public enum ExtensionRedactionError: Error, Equatable, LocalizedError, Sendable 
             return "The selected text items use \(actual) UTF-8 bytes; the extension limit is \(limit)."
         case .missingPlainTextInput:
             return "The host app did not provide a plain-text extension item."
-        case .nonLocalAsset(let url):
-            return "Extension model assets must be local files, not \(url.scheme ?? "unknown") URLs."
-        case .missingAsset(let path):
-            return "A required extension model asset is missing at \(path)."
-        case .invalidAsset(let name):
-            return "A required extension model asset has an invalid type: \(name)."
+        case .nonLocalAsset(let role):
+            return "Extension model assets must be local files (\(role.rawValue))."
+        case .missingAsset(let role):
+            return "A required extension model asset is missing (\(role.rawValue))."
+        case .invalidAsset(let role):
+            return "A required extension model asset has an invalid type (\(role.rawValue))."
         case .tooManyAssetFiles(let limit):
             return "The extension model assets contain more than \(limit) files."
-        case .unsupportedModelFormat(let fileName):
-            return "The extension requires a precompiled .mlmodelc model; received \(fileName)."
+        case .unsupportedModelFormat:
+            return "The extension requires a precompiled .mlmodelc model."
         case .modelAssetsTooLarge(let actual, let limit):
             return "The Nano model assets use \(actual) bytes; the extension limit is \(limit)."
         case .invalidRedactionOutput:
@@ -142,47 +154,54 @@ public struct NanoModelConfiguration: Sendable {
         id2labelURL: URL,
         tokenizerFolderURL: URL
     ) throws {
-        for url in [modelURL, id2labelURL, tokenizerFolderURL] {
+        let roles: [(URL, ExtensionAssetRole)] = [
+            (modelURL, .model),
+            (id2labelURL, .labelMap),
+            (tokenizerFolderURL, .tokenizerFolder),
+        ]
+        for (url, role) in roles {
             guard url.isFileURL else {
-                throw ExtensionRedactionError.nonLocalAsset(url)
+                throw ExtensionRedactionError.nonLocalAsset(role)
             }
         }
         let standardizedModelURL = modelURL.standardizedFileURL
         let standardizedID2LabelURL = id2labelURL.standardizedFileURL
         let standardizedTokenizerURL = tokenizerFolderURL.standardizedFileURL
-        let assetURLs = [
-            standardizedModelURL,
-            standardizedID2LabelURL,
-            standardizedTokenizerURL,
+        let assetURLs: [(URL, ExtensionAssetRole)] = [
+            (standardizedModelURL, .model),
+            (standardizedID2LabelURL, .labelMap),
+            (standardizedTokenizerURL, .tokenizerFolder),
         ]
 
         guard standardizedModelURL.pathExtension == "mlmodelc" else {
-            throw ExtensionRedactionError.unsupportedModelFormat(
-                standardizedModelURL.lastPathComponent
-            )
+            throw ExtensionRedactionError.unsupportedModelFormat
         }
 
         let fileManager = FileManager.default
-        for url in assetURLs where !fileManager.fileExists(atPath: url.path) {
-            throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
+        for (url, role) in assetURLs where !fileManager.fileExists(atPath: url.path) {
+            throw ExtensionRedactionError.missingAsset(role)
         }
-        try Self.validateAssetType(at: standardizedModelURL, directory: true)
-        try Self.validateAssetType(at: standardizedID2LabelURL, directory: false)
-        try Self.validateAssetType(at: standardizedTokenizerURL, directory: true)
+        try Self.validateAssetType(at: standardizedModelURL, directory: true, role: .model)
+        try Self.validateAssetType(at: standardizedID2LabelURL, directory: false, role: .labelMap)
+        try Self.validateAssetType(
+            at: standardizedTokenizerURL,
+            directory: true,
+            role: .tokenizerFolder
+        )
 
         for fileName in ["tokenizer.json", "tokenizer_config.json"] {
             let url = standardizedTokenizerURL.appending(path: fileName)
             guard fileManager.fileExists(atPath: url.path) else {
-                throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
+                throw ExtensionRedactionError.missingAsset(.tokenizerFile)
             }
-            try Self.validateAssetType(at: url, directory: false)
+            try Self.validateAssetType(at: url, directory: false, role: .tokenizerFile)
         }
 
         var assetBytes: Int64 = 0
-        for url in assetURLs {
-            let size = try Self.logicalFileSize(at: url, fileManager: fileManager)
+        for (url, role) in assetURLs {
+            let size = try Self.logicalFileSize(at: url, role: role, fileManager: fileManager)
             guard size > 0 else {
-                throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+                throw ExtensionRedactionError.invalidAsset(role)
             }
             let (next, overflow) = assetBytes.addingReportingOverflow(size)
             guard !overflow, next <= NanoModelMemoryBudget.maximumModelAssetBytes else {
@@ -203,7 +222,7 @@ public struct NanoModelConfiguration: Sendable {
     /// Resolve the expected pre-bundled Nano Core ML model and tokenizer assets.
     public static func bundled(in bundle: Bundle = .main) throws -> Self {
         guard let resources = bundle.resourceURL else {
-            throw ExtensionRedactionError.missingAsset(bundle.bundleURL.lastPathComponent)
+            throw ExtensionRedactionError.missingAsset(.bundleResources)
         }
         let directory = resources.appending(
             path: resourceDirectoryName,
@@ -239,6 +258,7 @@ public struct NanoModelConfiguration: Sendable {
 
     private static func logicalFileSize(
         at url: URL,
+        role: ExtensionAssetRole,
         fileManager: FileManager
     ) throws -> Int64 {
         let keys: Set<URLResourceKey> = [
@@ -247,12 +267,12 @@ public struct NanoModelConfiguration: Sendable {
             .isRegularFileKey,
             .isSymbolicLinkKey,
         ]
-        let values = try url.resourceValues(forKeys: keys)
+        let values = try resourceValues(of: url, keys: keys, role: role)
         guard values.isSymbolicLink != true else {
-            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+            throw ExtensionRedactionError.invalidAsset(role)
         }
         guard values.isDirectory == true else {
-            return try regularFileSize(values, at: url)
+            return try regularFileSize(values, role: role)
         }
 
         var enumerationError: Error?
@@ -267,15 +287,15 @@ public struct NanoModelConfiguration: Sendable {
                 }
             )
         else {
-            throw ExtensionRedactionError.missingAsset(url.lastPathComponent)
+            throw ExtensionRedactionError.missingAsset(role)
         }
 
         var total: Int64 = 0
         var fileCount = 0
         for case let childURL as URL in enumerator {
-            let childValues = try childURL.resourceValues(forKeys: keys)
+            let childValues = try resourceValues(of: childURL, keys: keys, role: role)
             guard childValues.isSymbolicLink != true else {
-                throw ExtensionRedactionError.invalidAsset(childURL.lastPathComponent)
+                throw ExtensionRedactionError.invalidAsset(role)
             }
             if childValues.isRegularFile == true {
                 fileCount += 1
@@ -284,7 +304,7 @@ public struct NanoModelConfiguration: Sendable {
                         limit: maximumAssetFileCount
                     )
                 }
-                let size = try regularFileSize(childValues, at: childURL)
+                let size = try regularFileSize(childValues, role: role)
                 let (next, overflow) = total.addingReportingOverflow(size)
                 guard
                     !overflow,
@@ -297,35 +317,54 @@ public struct NanoModelConfiguration: Sendable {
                 }
                 total = next
             } else if childValues.isDirectory != true {
-                throw ExtensionRedactionError.invalidAsset(childURL.lastPathComponent)
+                throw ExtensionRedactionError.invalidAsset(role)
             }
         }
         if enumerationError != nil {
-            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+            throw ExtensionRedactionError.invalidAsset(role)
         }
         return total
     }
 
-    private static func validateAssetType(at url: URL, directory: Bool) throws {
-        let values = try url.resourceValues(
-            forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
+    private static func validateAssetType(
+        at url: URL,
+        directory: Bool,
+        role: ExtensionAssetRole
+    ) throws {
+        let values = try resourceValues(
+            of: url,
+            keys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
+            role: role
         )
         guard values.isSymbolicLink != true,
             directory ? values.isDirectory == true : values.isRegularFile == true
         else {
-            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+            throw ExtensionRedactionError.invalidAsset(role)
+        }
+    }
+
+    /// Foundation resource errors carry the asset path, so report the role.
+    private static func resourceValues(
+        of url: URL,
+        keys: Set<URLResourceKey>,
+        role: ExtensionAssetRole
+    ) throws -> URLResourceValues {
+        do {
+            return try url.resourceValues(forKeys: keys)
+        } catch {
+            throw ExtensionRedactionError.invalidAsset(role)
         }
     }
 
     private static func regularFileSize(
         _ values: URLResourceValues,
-        at url: URL
+        role: ExtensionAssetRole
     ) throws -> Int64 {
         guard values.isRegularFile == true,
             let fileSize = values.fileSize,
             fileSize >= 0
         else {
-            throw ExtensionRedactionError.invalidAsset(url.lastPathComponent)
+            throw ExtensionRedactionError.invalidAsset(role)
         }
         return Int64(fileSize)
     }

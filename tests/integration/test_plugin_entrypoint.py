@@ -99,7 +99,7 @@ def test_installed_entry_point_recognizer_participates_in_arbitration(
         assert (
             arbitration_span.detector == "plugin:openmed-example-plugin:toy-recognizer"
         )
-        assert result.redacted_text == "Synthetic fixture [person]"
+        assert result.redacted_text == "Synthetic fixture [PERSON]"
     finally:
         detector_plugins._reset_detector_registry_for_tests()
         plugin_registry._reset_plugin_registry_for_tests()

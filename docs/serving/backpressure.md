@@ -59,6 +59,64 @@ The existing `openmed_service_batch_queue_*` and
 `openmed_service_batch_shed_total` families remain available for per-priority
 pending-queue visibility.
 
+## Client Identity and Limiter State
+
+The request throttle (`OPENMED_SERVICE_RATE_LIMIT_*`) and the authentication
+failure limiter key their token buckets by client identity.
+`OPENMED_SERVICE_THROTTLE_KEY` selects `global`, `peer`, or `x-forwarded-for`.
+
+`x-forwarded-for` trusts the header only when the direct peer is listed in
+`OPENMED_SERVICE_TRUSTED_PROXIES`. The service reads entries from right to
+left, skips at most `OPENMED_SERVICE_TRUSTED_PROXY_HOPS` trusted proxies (the
+direct peer counts as the first), and keys the request by the first untrusted
+address. Values a client places at the left of the header are never reached,
+so rotating them cannot create new buckets. Malformed entries fall back to the
+last trusted hop. When no trusted proxies are configured, or a request arrives
+from an untrusted peer, forwarding headers are ignored and the direct peer is
+used, exactly as in `peer` mode.
+
+```bash
+OPENMED_SERVICE_RATE_LIMIT_RPS=10 \
+OPENMED_SERVICE_RATE_LIMIT_BURST=20 \
+OPENMED_SERVICE_THROTTLE_KEY=x-forwarded-for \
+OPENMED_SERVICE_TRUSTED_PROXIES=198.51.100.0/24,2001:db8:ffff::/48 \
+OPENMED_SERVICE_TRUSTED_PROXY_HOPS=2 \
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
+```
+
+Set the hop count to the number of proxy tiers that append to
+`X-Forwarded-For`, for example `2` for a cloud load balancer in front of an
+ingress controller. A value that is too low keys requests by a proxy address;
+a value that is too high lets a client inside a trusted network choose its
+identity.
+
+The authentication-failure limiter defaults to the same `x-forwarded-for`
+resolution and the same trusted proxies, so a client that fails
+authentication behind a proxy is limited on its own instead of locking out
+every client behind that proxy. Set
+`OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer` to key it by the direct
+peer instead.
+
+Each limiter tracks at most `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`
+identities (default `10000`). A bucket is dropped only after it has refilled
+to the full burst, so forgetting it cannot change an admission decision; a
+depleted bucket is never reset. When the bound is reached and no tracked
+bucket is idle, new identities share one overflow bucket until capacity frees
+up. Concurrency semaphores are retained only while a request holds or waits
+for a slot. Rejections and metrics report only the configured key mode and
+aggregate limits, never client addresses or header values.
+
+| Environment variable | Default | Meaning |
+| --- | ---: | --- |
+| `OPENMED_SERVICE_THROTTLE_KEY` | `global` | `global`, `peer`, or `x-forwarded-for`. |
+| `OPENMED_SERVICE_TRUSTED_PROXIES` | empty | Comma-separated proxy addresses or CIDR networks whose `X-Forwarded-For` entries are honored. |
+| `OPENMED_SERVICE_TRUSTED_PROXY_HOPS` | `1` | Maximum trusted proxies skipped, counting the direct peer. |
+| `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS` | `10000` | Per-limiter bound on tracked client identities. |
+
+When Uvicorn's own proxy-header handling rewrites the peer address
+(`--forwarded-allow-ips`), configure only one of the two mechanisms so the
+header is not interpreted twice.
+
 ## Tuning
 
 Start with a high watermark no larger than the request volume that one replica
