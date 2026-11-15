@@ -1233,6 +1233,13 @@ def journey_store_check(encryption: Any) -> ActivationCheck:
     hash) and reads and verifies every artifact.  Missing, revoked, or wrong
     Journey keys therefore fail closed before activation.
 
+    A restored store older than this binary's schema (for example a
+    pre-upgrade recovery point restored to roll back to the previous release)
+    is never opened, because opening would forward-migrate it.  It is
+    verified read-only in memory instead: SQLite integrity, foreign keys, and
+    a migration history that is a known prefix of this binary's chain.  Such
+    stores predate store encryption, so no key is involved.
+
     Args:
         encryption: A
             :class:`~openmed.structured.store.JourneyStoreEncryption` for the
@@ -1253,6 +1260,12 @@ def journey_store_check(encryption: Any) -> ActivationCheck:
         journey = Path(root) / JOURNEY_DIRECTORY
         if not journey.is_dir():
             return ActivationCheckResult("journey_store", True)
+        try:
+            staged_version = _staged_schema_version(journey / _JOURNEY_DATABASE_NAME)
+        except (OSError, sqlite3.Error, ValueError, TypeError):
+            return ActivationCheckResult("journey_store", False, "journey_open_failed")
+        if staged_version < LATEST_MIGRATION_VERSION:
+            return _check_previous_schema(journey / _JOURNEY_DATABASE_NAME)
         try:
             hashes = _staged_content_hashes(journey / _JOURNEY_DATABASE_NAME)
             store = LocalJourneyStore(journey, encryption=encryption)
@@ -2761,6 +2774,49 @@ def _write_activation_record(root: Path, context: RecoveryEpochContext) -> None:
     except (OSError, _Stop):
         # The swap already happened; the record is informational only.
         return
+
+
+def _staged_schema_version(database: Path) -> int:
+    if not database.is_file():
+        return LATEST_MIGRATION_VERSION
+    connection = sqlite3.connect(
+        f"{database.resolve().as_uri()}?mode=ro", uri=True, timeout=5.0
+    )
+    try:
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if "schema_migrations" not in tables:
+            return 0
+        value = connection.execute(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+        ).fetchone()[0]
+        return int(value)
+    finally:
+        connection.close()
+
+
+def _check_previous_schema(database: Path) -> ActivationCheckResult:
+    """Verify an older staged store in memory without migrating it."""
+
+    try:
+        facts = _inspect_journey_image(
+            _read_regular(database, limit=_MAX_DOCUMENT_BYTES),
+            failure="component_invalid",
+        )
+    except _Stop:
+        return ActivationCheckResult("journey_store", False, "integrity_failed")
+    except OSError:
+        return ActivationCheckResult("journey_store", False, "journey_open_failed")
+    for version, name, checksum in facts.migrations:
+        if _KNOWN_MIGRATIONS.get(version) != (name, checksum):
+            return ActivationCheckResult("journey_store", False, "schema_incompatible")
+    if facts.encryption_state not in {None, "plaintext"}:
+        return ActivationCheckResult("journey_store", False, "schema_incompatible")
+    return ActivationCheckResult("journey_store", True)
 
 
 def _staged_content_hashes(database: Path) -> tuple[str, ...]:

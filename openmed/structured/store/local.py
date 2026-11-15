@@ -537,7 +537,7 @@ class SQLiteJourneyStore:
             self._payload_codec = self._bind_encryption()
             if isinstance(self._payload_codec, EncryptedJourneyCodec):
                 self._payload_codec.check_active_key()
-        except (StoreCompatibilityError, EncryptionError):
+        except (StoreCompatibilityError, StoreMigrationError, EncryptionError):
             self._close_after_failed_open()
             raise
         except (OSError, sqlite3.Error) as exc:

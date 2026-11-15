@@ -213,7 +213,28 @@ def _open_store(
     schema: str,
     transport: PostgresTransportSettings | None = None,
 ) -> tuple[PostgresJourneyStore | None, ComponentHealth, ComponentHealth]:
-    result = _connect_store(dsn, schema=schema, transport=transport)
+    return assess_store_open(_connect_store(dsn, schema=schema, transport=transport))
+
+
+def assess_store_open(
+    result: StoreResult[PostgresJourneyStore],
+) -> tuple[PostgresJourneyStore | None, ComponentHealth, ComponentHealth]:
+    """Map one attempted store open to migration and store health.
+
+    This is the single readiness rule shared by ``migrate``, ``probe``, the
+    worker, and the offline migration rehearsal: the store is ready only when
+    the open succeeded, every migration is verified, and the schema version
+    equals the target.  A failed, pending, drifted, or unsupported migration
+    keeps readiness false.
+
+    Args:
+        result: Outcome of :meth:`PostgresJourneyStore.open` or ``connect``.
+
+    Returns:
+        The open store (the caller closes it) or ``None``, then the
+        migration and store component health.
+    """
+
     if not result.ok or result.value is None:
         state = (
             ComponentState.INCOMPATIBLE
@@ -355,11 +376,21 @@ def run_migrations(
 ) -> DeploymentHealth:
     """Apply and verify the append-only PostgreSQL migration chain."""
 
-    store, migration, store_health = _open_store(
-        dsn,
-        schema=schema,
-        transport=transport,
-    )
+    return migration_health(_connect_store(dsn, schema=schema, transport=transport))
+
+
+def migration_health(result: StoreResult[PostgresJourneyStore]) -> DeploymentHealth:
+    """Return the ``migrate`` command's health for one attempted store open.
+
+    Args:
+        result: Outcome of :meth:`PostgresJourneyStore.open` or ``connect``.
+            A successfully opened store is closed.
+
+    Returns:
+        Deployment health with only the migration and store planes enabled.
+    """
+
+    store, migration, store_health = assess_store_open(result)
     if store is not None:
         store.close()
     return DeploymentHealth(

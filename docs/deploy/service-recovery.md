@@ -135,7 +135,11 @@ record, re-hashes every staged file, opens the restored Journey store with the
 Journey key (an integrity check plus reading every artifact), runs any further
 checks, and calls any recovery-epoch hooks. Only after all of that does it
 repoint the link. Without `--journey-key`, activation of a state that has a
-Journey store is refused. Keep traffic stopped until activation completes and
+Journey store is refused. A restored Journey store older than this release's
+schema (a pre-upgrade recovery point restored to roll back to the previous
+release) is never opened, because opening would migrate it forward; it is
+verified read-only in memory instead (SQLite integrity, foreign keys, and a
+known migration history). Keep traffic stopped until activation completes and
 the service's own readiness checks pass.
 
 From Python, pass the production self-check through `checks=` and components
@@ -148,6 +152,49 @@ The previous generation is kept. To roll back, restore again into a new
 directory: a generation that has served traffic no longer matches its
 staging record. `openmed recovery discard <dir> --live <link>` removes an
 inactive restored directory and never the live target.
+
+## Upgrades, preflight, and migration rehearsal
+
+Durable schemas only migrate forward, and rolling an image back does not undo
+a migration. `openmed migrations registry` lists every durable schema (Journey
+SQLite and PostgreSQL, the artifact encryption marker, job metadata, model
+registry state, audit chains, recovery manifests, and placeholders for
+components that are not in this release yet) with its current version, the
+versions it upgrades from, what the previous release's binary does with it,
+and a rollback class:
+
+| Class | Rollback |
+| --- | --- |
+| `backward_compatible` | the previous binary keeps working on the new schema |
+| `restore_required` | restore a recovery point taken before the upgrade |
+| `release_blocking` | no rollback path; the release gate refuses it |
+
+Before an upgrade, run a dry-run plan against the stopped state. It writes
+nothing, refuses newer, drifted, or unknown versions before any migration
+runs, and blocks a `restore_required` step until a verified recovery point
+of the current state is supplied:
+
+```bash
+openmed recovery backup /backups/pre-upgrade --state-root /var/lib/openmed/state \
+  --key backup-2026=/run/secrets/openmed-backup.key --writers-stopped
+openmed migrations preflight --state-root /var/lib/openmed/state \
+  --recovery-point /backups/pre-upgrade \
+  --key backup-2026=/run/secrets/openmed-backup.key
+```
+
+The plan also reports free space, encryption-key availability, cross-component
+consistency, an unfinished recovery activation, and whether writers must stop.
+To roll back, restore and activate the pre-upgrade point as above and start
+the previous release.
+
+`openmed migrations rehearse --signing-key gate-2026=/run/secrets/gate.key`
+exercises every registered schema offline against synthetic fixtures: clean
+and repeated upgrades from every supported version, a migration killed
+mid-transaction, drift, a schema written by a newer binary, the previous
+release's binary, and restore-based rollback followed by a retry. It prints a
+value-free compatibility matrix and gate verdict, signed with HMAC-SHA256 when
+a key is given. PostgreSQL runs against an offline DB-API double there; the
+Python API accepts a connection factory for a disposable server.
 
 ## Receipts and reason codes
 
