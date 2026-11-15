@@ -15,6 +15,10 @@ repository and dependency declarations.
 - `src/main/AndroidManifest.xml` is intentionally minimal for the library.
 - `src/test/kotlin/com/openmed/openmedkit/` contains local JVM unit tests
   running with JUnit and Robolectric.
+- `src/androidTest/` contains the instrumented emulator lane, which runs a tiny
+  synthetic ONNX model through the real ONNX Runtime and DJL tokenizer native
+  libraries. See the
+  [emulator lane guide](../../docs/android-integration.md#emulator-lane).
 
 ## Platform Baseline
 
@@ -34,6 +38,9 @@ temporary files, analytics events, or audit artifacts.
 
 The `analyzeText`, `extractPii`, and `deidentify` inference paths operate only on
 caller-supplied on-device model assets and do not open sockets or invoke HTTP.
+Before loading a tokenizer, OpenMedKit sets DJL's `OPT_OUT_TRACKING` system
+property; otherwise DJL's usage telemetry would send HTTP requests to the cloud
+instance-metadata address whenever a tokenizer is created.
 The optional model downloader is a separate, explicit pre-inference operation;
 it is never called by inference. The library manifest intentionally requests no
 `android.permission.INTERNET` permission.
