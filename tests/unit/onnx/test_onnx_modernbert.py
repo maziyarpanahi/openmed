@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from openmed.core.export_provenance import SourceContext
 from openmed.eval import export_qualification as eq
 from openmed.eval.export_qualification import (
     ExportQualificationError,
@@ -83,6 +84,12 @@ def stubbed_convert(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(module, "optimize_onnx_graph", fake_optimize)
     monkeypatch.setattr(module, "validate_optimized_onnx_export", fake_optimize)
     monkeypatch.setattr(module, "publish_artifact", fake_publish)
+    # Resolve the stub repository offline, as the other converter tests do.
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     monkeypatch.setattr(
         export_adapters,
         "metadata",

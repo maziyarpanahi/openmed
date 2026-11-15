@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from openmed.core.export_provenance import SourceContext
 from openmed.eval.export_qualification import (
     ExportQualificationError,
     ExportReason,
@@ -158,6 +159,12 @@ def _install_stubs(
         return types.SimpleNamespace(skipped=False, repo_id="OpenMed/stub")
 
     monkeypatch.setattr(convert_module, "publish_artifact", fake_publish)
+    # Resolve the stub repository offline, as the other converter tests do.
+    monkeypatch.setattr(
+        convert_module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     return state
 
 
