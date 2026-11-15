@@ -66,15 +66,17 @@ enum MigrationExamples {
     }
 
     /// Map the typed store and policy errors a consumer must handle.
+    ///
+    /// `PolicyError` is matched on its stable `code`, never on its description.
     static func incompatibilityCode(for error: Error) -> String? {
         switch error {
         case OpenMedModelStoreError.invalidManifestPath:
             return "unsafe_manifest_path"
         case OpenMedModelStoreError.missingWeights, OpenMedModelStoreError.missingManifest:
             return "incomplete_snapshot"
-        case PolicyError.unknownProfile:
+        case let error as PolicyError where error.code == "profile_unknown":
             return "unknown_policy_profile"
-        case PolicyError.missingResource:
+        case let error as PolicyError where error.code == "resource_missing":
             return "policy_resource_missing"
         default:
             return nil

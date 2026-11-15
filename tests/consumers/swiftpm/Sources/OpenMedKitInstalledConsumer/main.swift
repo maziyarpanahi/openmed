@@ -32,9 +32,21 @@ do {
     runner.run("migration.typed_incompatibilities") {
         try expect(
             MigrationExamples.incompatibilityCode(
-                for: PolicyError.unknownProfile(contract.unknownProfile, allowed: [])
+                for: PolicyError("profile_unknown", "$.name")
             ) == "unknown_policy_profile",
             "unknown_profile_code"
+        )
+        try expect(
+            MigrationExamples.incompatibilityCode(
+                for: PolicyError("resource_missing", "$.manifest")
+            ) == "policy_resource_missing",
+            "policy_resource_code"
+        )
+        try expect(
+            MigrationExamples.incompatibilityCode(
+                for: PolicyError("profile_invalid", "$")
+            ) == nil,
+            "unmapped_policy_code"
         )
         try expect(
             MigrationExamples.incompatibilityCode(

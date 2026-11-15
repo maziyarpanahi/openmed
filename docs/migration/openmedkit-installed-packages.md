@@ -105,8 +105,11 @@ Typed incompatibilities:
   throws and the ready marker is removed. Re-download from a trusted source.
 - `OpenMedModelStoreError.missingWeights` and `.missingManifest`: the snapshot
   is incomplete.
-- `PolicyError.unknownProfile(_:allowed:)`: the profile name is not bundled.
-  The error lists the accepted names and aliases.
+- `PolicyError` with `code` `profile_unknown` and `fieldPath` `$.name`: the
+  profile name is not bundled. The error carries only the code and field path
+  and never echoes the requested name. `Policy.bundledProfileNames` and
+  `Policy.aliases` list the accepted names. A Python-only profile fails with
+  `profile_not_portable` instead.
 
 Unsupported combinations:
 

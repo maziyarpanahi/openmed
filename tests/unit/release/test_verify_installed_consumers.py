@@ -681,7 +681,7 @@ def test_migration_guide_is_published_and_names_typed_incompatibilities() -> Non
     guide = GUIDE.read_text(encoding="utf-8")
     for symbol in (
         "OpenMedModelStoreError.invalidManifestPath",
-        "PolicyError.unknownProfile",
+        "`PolicyError` with `code` `profile_unknown`",
         "ModelIntegrityException",
         "UnsupportedOperationException",
         "IllegalArgumentException",

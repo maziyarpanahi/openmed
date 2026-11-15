@@ -102,10 +102,19 @@ enum InstalledPackageChecks {
             }
         }
         runner.run("policy.unknown_profile_typed_error") {
+            try expect(
+                Policy.bundledProfileNames.contains(Policy.defaultName),
+                "default_profile_not_bundled"
+            )
             do {
                 _ = try Policy(named: contract.unknownProfile)
-            } catch PolicyError.unknownProfile(_, let allowed) {
-                try expect(allowed.contains(Policy.defaultName), "allowed_list_incomplete")
+            } catch let error as PolicyError {
+                try expect(error.code == "profile_unknown", "unknown_profile_code")
+                try expect(error.fieldPath == "$.name", "unknown_profile_field_path")
+                try expect(
+                    !error.description.contains(contract.unknownProfile),
+                    "unknown_profile_echoed"
+                )
                 return
             }
             throw CheckFailure(code: "unknown_profile_accepted")
