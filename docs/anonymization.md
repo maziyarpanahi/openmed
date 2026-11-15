@@ -124,13 +124,15 @@ value is treated as the maximum absolute offset bound; prefer
 
 Synthetic cross-runtime vectors for both offset helpers live in
 `tests/fixtures/parity/date_shift_v1.json`. They record synthetic patient keys
-(`SYNTH-PATIENT-0001` and so on), a test-only secret, request seeds across the
-signed 64-bit range, several `date_shift_max_days` values, the intermediate
-SHA-256 digests and the expected offsets, plus ISO dates shifted across leap
-days, non-leap century years and year boundaries. A Swift, Kotlin or web port
-can recompute every vector to prove it shifts the same patient by the same
-number of days; `tests/unit/core/test_date_shift_vectors.py` recomputes them in
-Python.
+(`SYNTH-PATIENT-0001` and so on, one with non-ASCII characters), two test-only
+secrets (one UTF-8 text, one raw bytes that are not valid UTF-8), request seeds
+inside and just outside the signed 64-bit range, several `date_shift_max_days`
+values, the intermediate SHA-256 digests and the expected offsets, plus ISO
+dates shifted across leap days, month ends, non-leap Februaries and year
+boundaries. Every vector has an id. A Swift, Kotlin or web port can recompute
+every vector to prove it shifts the same patient by the same number of days;
+`tests/unit/core/test_date_shift_vectors.py` recomputes them in Python and
+reports a mismatch by vector id only.
 
 #### Solar Hijri, Ethiopian and Thai Buddhist-era dates
 
