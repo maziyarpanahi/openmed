@@ -268,3 +268,12 @@ def test_bundle_delivers_credentials_as_secret_files_not_environment() -> None:
         assert service["user"] == "65532:65532"
     assert "secrets" not in services["mcp"]
     assert "OPENMED_JOURNEY_POSTGRES_DSN_FILE" not in services["mcp"]["environment"]
+
+
+
+def test_bundle_declares_single_replica_mode_for_its_one_api_container() -> None:
+    service = _service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service
+    assert len(service["ports"]) == 1

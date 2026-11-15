@@ -82,7 +82,6 @@ from .bulk_data import (
 from .coalesce import RequestCoalescer, coalescing_key
 from .egress import EgressDenied, validate_egress_configuration
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
-from .job_admission import JobAdmissionError
 from .idempotency import (
     IDEMPOTENCY_KEY_HEADER,
     IDEMPOTENCY_KEY_MAX_LENGTH,
@@ -94,6 +93,7 @@ from .idempotency import (
     StartIdempotencyStore,
     parse_idempotency_key,
 )
+from .job_admission import JobAdmissionError
 from .job_bounds import BulkJobsSaturatedError
 from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
 from .jobs import (
@@ -152,6 +152,19 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
+from .replica_state import (
+    ASYNC_JOBS,
+    AUTH_FAILURE_LIMITER,
+    COMPONENT_DISABLED,
+    CONCURRENCY_LIMITER,
+    FHIR_BULK_JOBS,
+    RATE_LIMITER,
+    REQUEST_COALESCER,
+    SMART_BACKEND_JOBS,
+    ReplicaComponentUnavailableError,
+    ReplicaStatePolicy,
+    ReplicaStateReport,
+)
 from .request_limits import (
     REQUEST_BODY_TIMEOUT,
     REQUEST_SIZE_INVALID,
@@ -163,7 +176,11 @@ from .request_limits import (
 from .request_signing import install_request_signing
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .response_headers import install_response_headers
-from .runtime import ServiceRuntime
+from .runtime import (
+    ServiceRuntime,
+    parse_service_coalescing_config,
+    parse_service_throttle_config,
+)
 from .schemas import (
     AnalyzeRequest,
     BriefRequest,
@@ -693,7 +710,12 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
     existing_job_queue = getattr(app.state, "job_queue", None)
-    if (
+    if _replica_state_policy(app).refusal_code(ASYNC_JOBS) is not None:
+        # A disabled or replica-unsafe job store never loads local job state.
+        if existing_job_queue is not None:
+            existing_job_queue.shutdown()
+        app.state.job_queue = None
+    elif (
         existing_job_queue is None
         or getattr(existing_job_queue, "runtime", None) is not runtime
     ):
@@ -748,6 +770,65 @@ def _get_service_runtime(request: Request) -> ServiceRuntime:
         )
         _attach_runtime(request.app, runtime)
     return runtime
+
+
+def _replica_state_policy(app: FastAPI) -> ReplicaStatePolicy:
+    """Return the replica policy parsed when the app was created."""
+    policy = getattr(app.state, "replica_state", None)
+    if policy is None:
+        policy = ReplicaStatePolicy.from_env()
+        app.state.replica_state = policy
+    return policy
+
+
+def replica_state_report(app: FastAPI) -> ReplicaStateReport:
+    """Evaluate the value-free replica-local state report for one app.
+
+    The report lists every replica-local component category with its scope,
+    multi-replica safety class, and evaluated state. Readiness uses the same
+    report, so a preflight check that calls this function sees the decision
+    ``/readyz`` makes. Before the lifespan attaches a runtime, limiter and
+    coalescer settings are read from the environment.
+
+    Args:
+        app: Application returned by :func:`create_app`.
+
+    Returns:
+        Report naming component categories only, never paths, hosts, or ids.
+    """
+    runtime = getattr(app.state, "runtime", None)
+    throttle = (
+        runtime.throttle if runtime is not None else parse_service_throttle_config()
+    )
+    coalescing = (
+        runtime.coalescing if runtime is not None else parse_service_coalescing_config()
+    )
+    auth = getattr(app.state, "auth", None)
+    auth_config = getattr(auth, "config", None)
+    return _replica_state_policy(app).evaluate(
+        {
+            ASYNC_JOBS: True,
+            FHIR_BULK_JOBS: True,
+            SMART_BACKEND_JOBS: True,
+            RATE_LIMITER: throttle.rate_limit_enabled,
+            CONCURRENCY_LIMITER: throttle.concurrency_enabled,
+            AUTH_FAILURE_LIMITER: bool(
+                auth_config is not None
+                and auth_config.enabled
+                and auth_config.failure_rate_limit_enabled
+            ),
+            REQUEST_COALESCER: coalescing.enabled,
+        }
+    )
+
+
+def _replica_component_gate(category: str) -> Callable[[Request], Awaitable[None]]:
+    """Return a route dependency that refuses a gated replica-local component."""
+
+    async def _require_replica_component(request: Request) -> None:
+        _replica_state_policy(request.app).require_available(category)
+
+    return _require_replica_component
 
 
 async def _run_with_timeout(
@@ -1254,6 +1335,7 @@ def create_app(
     )
     app.state.operational_limits = request_limits_from_env()
     app.state.request_body_read_limits = request_body_read_limits_from_env()
+    app.state.replica_state = ReplicaStatePolicy.from_env()
     app.state.system_one_enabled = os.getenv(
         "OPENMED_SERVICE_SYSTEM_ONE", ""
     ).strip().lower() in {"true", "1", "yes"}
@@ -1455,6 +1537,26 @@ def create_app(
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(ReplicaComponentUnavailableError)
+    async def _replica_component_handler(
+        _: Request,
+        exc: ReplicaComponentUnavailableError,
+    ) -> JSONResponse:
+        if exc.code == COMPONENT_DISABLED:
+            return _error_response(
+                503,
+                "component_disabled",
+                "This service component is disabled by the replica policy",
+                details={"component": exc.category},
+            )
+        return _error_response(
+            503,
+            "replica_unsafe_state",
+            "This component keeps replica-local state that multi-replica mode "
+            "has not accepted",
+            details={"component": exc.category, "replica_mode": "multi"},
         )
 
     @app.exception_handler(BackpressureError)
@@ -1669,6 +1771,10 @@ def create_app(
             details=None,
         )
 
+    async_jobs_gate = [Depends(_replica_component_gate(ASYNC_JOBS))]
+    fhir_bulk_gate = [Depends(_replica_component_gate(FHIR_BULK_JOBS))]
+    smart_backend_gate = [Depends(_replica_component_gate(SMART_BACKEND_JOBS))]
+
     @app.get("/health")
     async def health(request: Request) -> Dict[str, str]:
         runtime = _get_service_runtime(request)
@@ -1700,14 +1806,22 @@ def create_app(
             return _security_profile_invalid_response(
                 security_report, include_details=True
             )
-        if getattr(request.app.state, "ready", False):
-            return {"status": "ready", "service": SERVICE_NAME}
-        return _error_response(
-            503,
-            "not_ready",
-            "Service preload has not completed",
-            details=None,
-        )
+        if not getattr(request.app.state, "ready", False):
+            return _error_response(
+                503,
+                "not_ready",
+                "Service preload has not completed",
+                details=None,
+            )
+        report = replica_state_report(request.app)
+        if not report.ready:
+            return _error_response(
+                503,
+                "replica_unsafe_state",
+                "Replica-local service state is not safe behind multiple replicas",
+                details=report.readiness_details(),
+            )
+        return {"status": "ready", "service": SERVICE_NAME}
 
     @app.get(
         "/v1/journey/resources",
@@ -2316,7 +2430,12 @@ def create_app(
                 )
             raise
 
-    @app.post(_FHIR_BULK_EXPORT_PATH, status_code=202, include_in_schema=False)
+    @app.post(
+        _FHIR_BULK_EXPORT_PATH,
+        status_code=202,
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def start_fhir_bulk_export(
         payload: FHIRBulkExportRequest,
         request: Request,
@@ -2326,7 +2445,12 @@ def create_app(
             payload, request, response, route=_FHIR_BULK_EXPORT_ROUTE
         )
 
-    @app.post(_FHIR_BULK_IMPORT_PATH, status_code=202, include_in_schema=False)
+    @app.post(
+        _FHIR_BULK_IMPORT_PATH,
+        status_code=202,
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def start_fhir_bulk_import(
         payload: FHIRBulkImportRequest,
         request: Request,
@@ -2336,8 +2460,16 @@ def create_app(
             payload, request, response, route=_FHIR_BULK_IMPORT_ROUTE
         )
 
-    @app.get(f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}", include_in_schema=False)
-    @app.get(f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}", include_in_schema=False)
+    @app.get(
+        f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}",
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
+    @app.get(
+        f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}",
+        include_in_schema=False,
+        dependencies=fhir_bulk_gate,
+    )
     async def fhir_bulk_job_status(
         job_id: str,
         request: Request,
@@ -2355,10 +2487,12 @@ def create_app(
     @app.get(
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/manifest",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.get(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/manifest",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def fhir_bulk_job_manifest(
         job_id: str,
@@ -2379,10 +2513,12 @@ def create_app(
     @app.get(
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}/report",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.get(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}/report",
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def fhir_bulk_job_report(
         job_id: str,
@@ -2404,11 +2540,13 @@ def create_app(
         f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}",
         status_code=202,
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     @app.delete(
         f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}",
         status_code=202,
         include_in_schema=False,
+        dependencies=fhir_bulk_gate,
     )
     async def cancel_fhir_bulk_job(
         job_id: str,
@@ -2452,6 +2590,7 @@ def create_app(
 
     @app.post(
         _SMART_BACKEND_START_PATH,
+        dependencies=smart_backend_gate,
         responses=_IDEMPOTENT_START_RESPONSES,
         openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA,
     )
@@ -2505,7 +2644,10 @@ def create_app(
                 manager.release_idempotent_start(reservation)
         return status.to_dict()
 
-    @app.get("/fhir/smart-backend/ingestions/{job_id}")
+    @app.get(
+        "/fhir/smart-backend/ingestions/{job_id}",
+        dependencies=smart_backend_gate,
+    )
     async def smart_backend_ingestion_status(
         job_id: str,
         request: Request,
@@ -2520,7 +2662,10 @@ def create_app(
                 detail="ingestion job not found",
             ) from exc
 
-    @app.get("/fhir/smart-backend/ingestions/{job_id}/summary")
+    @app.get(
+        "/fhir/smart-backend/ingestions/{job_id}/summary",
+        dependencies=smart_backend_gate,
+    )
     async def smart_backend_ingestion_summary(
         job_id: str,
         request: Request,
@@ -2544,6 +2689,7 @@ def create_app(
         "/fhir/smart-backend/ingestions/{job_id}",
         status_code=202,
         include_in_schema=False,
+        dependencies=smart_backend_gate,
     )
     async def cancel_smart_backend_ingestion(
         job_id: str,
@@ -2559,7 +2705,7 @@ def create_app(
                 detail="ingestion job not found",
             ) from exc
 
-    @app.post("/jobs", status_code=202)
+    @app.post("/jobs", status_code=202, dependencies=async_jobs_gate)
     async def create_job(
         payload: DeidentifyJobRequest,
         request: Request,
@@ -2569,7 +2715,7 @@ def create_app(
         record = queue.submit(payload, owner_digest=_submitting_owner_digest(request))
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
 
-    @app.get("/jobs/{job_id}")
+    @app.get("/jobs/{job_id}", dependencies=async_jobs_gate)
     async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
         queue = _get_job_queue(request)
         record = queue.get(job_id)

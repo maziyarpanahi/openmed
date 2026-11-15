@@ -1,6 +1,26 @@
 # Number of OpenMed REST service pods to run.
 replicaCount: 1
 
+# Set true when a HorizontalPodAutoscaler, such as deploy/k8s/hpa.yaml, scales
+# this Deployment. The chart does not create the autoscaler; the flag marks the
+# release as multi-replica.
+autoscaling:
+  enabled: false
+
+# Replica-local service state. The chart renders OPENMED_SERVICE_REPLICA_MODE as
+# "multi" when replicaCount is greater than 1 or autoscaling.enabled is true,
+# and "single" otherwise. In multi mode readiness stays false with
+# replica_unsafe_state until every enabled component that keeps replica-local
+# state is disabled or accepted. See docs/deploy/autoscaling.md.
+replicaState:
+  # Categories whose per-replica semantics you accept: rate_limiter,
+  # concurrency_limiter, auth_failure_limiter, async_jobs, fhir_bulk_jobs or
+  # smart_backend_jobs. Accepted limits apply once per replica.
+  accept: []
+  # Job categories to turn off: async_jobs, fhir_bulk_jobs or
+  # smart_backend_jobs. Their routes then return 503 component_disabled.
+  disable: []
+
 # Container image settings for the OpenMed REST service.
 image:
   # Image repository to deploy.

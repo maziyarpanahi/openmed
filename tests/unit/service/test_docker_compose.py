@@ -77,3 +77,11 @@ def test_docker_compose_app_healthcheck_probes_readyz(monkeypatch, status, exit_
         exec(healthcheck["test"][3], {})
     assert exc.value.code == exit_code
     assert {"interval", "timeout", "start_period", "retries"} <= healthcheck.keys()
+
+
+
+def test_docker_compose_declares_single_replica_mode():
+    service = _app_service(_load_compose())
+
+    assert service["environment"]["OPENMED_SERVICE_REPLICA_MODE"] == "single"
+    assert "deploy" not in service
