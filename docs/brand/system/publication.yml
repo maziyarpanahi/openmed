@@ -895,6 +895,7 @@ classification:
     - contributing/reproducible-dependencies.md
     - security/policy-impact.md
     - security/license-inventory.md
+    - security/kit-license-inventory.md
     - compliance/multimodal-dependency-licenses.md
     - security/export-redistribution.md
     - security/exception-taxonomy.md
