@@ -902,6 +902,7 @@ classification:
     - tokenizer-conformance.md
     - runtimes/device-capabilities.md
     - mobile/managed-model-bundles.md
+    - migration/openmedkit-installed-packages.md
     - faq.md
     - troubleshooting.md
     - onboarding.md

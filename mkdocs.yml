@@ -851,6 +851,7 @@ nav:
       - Tokenizer Conformance: tokenizer-conformance.md
       - Device Capability Resolution: runtimes/device-capabilities.md
       - Managed Offline Model-Bundle Import: mobile/managed-model-bundles.md
+      - Installed OpenMedKit Packages: migration/openmedkit-installed-packages.md
   - Project:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md

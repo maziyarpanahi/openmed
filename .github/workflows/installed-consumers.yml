@@ -1,0 +1,152 @@
+name: Installed OpenMedKit consumers
+
+# Builds each OpenMedKit distributable, installs it into a consumer staged
+# outside the checkout and runs offline synthetic checks. Nothing is published.
+# Every job passes --require, so a lane only qualifies when it actually runs.
+on:
+  push:
+    branches: [master, 'release/v*']
+    paths:
+      - '.github/workflows/installed-consumers.yml'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'swift/OpenMedKit/Sources/**'
+      - 'android/**'
+      - 'models.jsonl'
+      - 'js/openmedkit-web/**'
+      - 'js/openmedkit-react-native/**'
+      - 'tests/consumers/**'
+      - 'tests/web/__snapshots__/openmedkit-web-public-api.json'
+      - 'scripts/release/verify_installed_consumers.py'
+  pull_request:
+    paths:
+      - '.github/workflows/installed-consumers.yml'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - 'swift/OpenMedKit/Sources/**'
+      - 'android/**'
+      - 'models.jsonl'
+      - 'js/openmedkit-web/**'
+      - 'js/openmedkit-react-native/**'
+      - 'tests/consumers/**'
+      - 'tests/web/__snapshots__/openmedkit-web-public-api.json'
+      - 'scripts/release/verify_installed_consumers.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  swiftpm:
+    name: SwiftPM consumer from a tagged package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Lint consumer Swift sources
+        run: >-
+          swift format lint --strict --recursive
+          --configuration .swift-format tests/consumers/swiftpm
+
+      - name: Verify the installed Swift package
+        run: >-
+          python scripts/release/verify_installed_consumers.py
+          --lane swiftpm --require --swift-source git
+          --work-dir "$RUNNER_TEMP/openmed-installed-consumers"
+          --report "$RUNNER_TEMP/installed-consumers-swiftpm.json"
+          --print-logs-on-failure
+
+      - name: Upload consumer report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: installed-consumers-swiftpm
+          path: ${{ runner.temp }}/installed-consumers-swiftpm.json
+          if-no-files-found: ignore
+
+  gradle:
+    name: Gradle consumer from mavenLocal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle*
+            android/gradle.properties
+            android/gradle/libs.versions.toml
+            android/gradle/wrapper/gradle-wrapper.properties
+            android/**/build.gradle*
+            tests/consumers/gradle/**/*.gradle.kts
+            tests/consumers/gradle/gradle.properties
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Verify the installed Android AAR
+        run: >-
+          python scripts/release/verify_installed_consumers.py
+          --lane gradle --require
+          --work-dir "$RUNNER_TEMP/openmed-installed-consumers"
+          --report "$RUNNER_TEMP/installed-consumers-gradle.json"
+          --print-logs-on-failure
+
+      - name: Upload consumer report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: installed-consumers-gradle
+          path: ${{ runner.temp }}/installed-consumers-gradle.json
+          if-no-files-found: ignore
+
+  npm:
+    name: npm consumers from packed tarballs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Verify the installed npm tarballs
+        run: >-
+          python scripts/release/verify_installed_consumers.py
+          --lane npm-web --lane npm-react-native --require --install-js-deps
+          --work-dir "$RUNNER_TEMP/openmed-installed-consumers"
+          --report "$RUNNER_TEMP/installed-consumers-npm.json"
+          --print-logs-on-failure
+
+      - name: Upload consumer report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: installed-consumers-npm
+          path: ${{ runner.temp }}/installed-consumers-npm.json
+          if-no-files-found: ignore
