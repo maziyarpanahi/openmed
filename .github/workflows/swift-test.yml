@@ -116,6 +116,18 @@ jobs:
     - name: Test Unicode scalar offset parity fixture
       run: swift test --filter OffsetContractParityTests
 
+    - name: Test Swift-Kotlin span-equivalence fixture
+      run: swift test --filter SpanEquivalenceParityTests
+
+    - name: Test kit-parity result profile vectors
+      run: swift test --filter KitParityVectorTests
+
+    - name: Test portable policy decision vectors
+      run: swift test --filter PortablePolicyVectorTests
+
+    - name: Test portable tokenizer conformance vectors
+      run: swift test --filter TokenizerConformanceTests
+
     - name: Build versioned root-package consumer for macOS
       run: scripts/check_swift_root_consumer.sh macos
 
@@ -141,15 +153,6 @@ jobs:
       run: >-
         swift test --sanitize=thread
         --filter 'ConcurrencySafetyTests|SpeechDecoderProgressConcurrencyTests'
-
-    - name: Test Swift-Kotlin span-equivalence fixture
-      run: swift test --filter SpanEquivalenceParityTests
-
-    - name: Test kit-parity result profile vectors
-      run: swift test --filter KitParityVectorTests
-
-    - name: Test portable policy decision vectors
-      run: swift test --filter PortablePolicyVectorTests
 
   api-baseline-ios:
     name: Check iOS Swift API baseline
@@ -198,9 +201,6 @@ jobs:
       run: >-
         python3 scripts/release/check_native_api_migration.py
         --platform swift --base HEAD^1 --head HEAD
-
-    - name: Test portable tokenizer conformance vectors
-      run: swift test --filter TokenizerConformanceTests
 
   build-ios:
     name: Build for iOS
