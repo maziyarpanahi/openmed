@@ -63,6 +63,7 @@ const List<String> portableBundleReasons = <String>[
   'file_reference_undeclared',
   'fallback_invalid',
   'unknown_critical_extension',
+  'extension_invalid',
   'size_limit_exceeded',
   'bundle_not_yet_valid',
   'bundle_expired',
