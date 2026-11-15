@@ -188,9 +188,8 @@ class KitLicenseException:
 
 # Google ML Kit Text Recognition ships under Google's proprietary ML Kit terms.
 # It is allowed only as the optional on-device OCR adapter: the dedicated
-# ``:openmedkit-mlkit`` module (#4451), the scan demo that exercises it, and,
-# until #4451 lands, the current core module path.  Remove the core path from
-# this set once the core AAR no longer depends on ML Kit.
+# ``:openmedkit-mlkit`` module (#4451) and the scan demo that exercises it.  The
+# core AAR no longer depends on ML Kit, so its build file is not covered.
 SCOPED_KIT_EXCEPTIONS: tuple[KitLicenseException, ...] = (
     KitLicenseException(
         exception_id="mlkit-optional-ocr",
@@ -200,7 +199,6 @@ SCOPED_KIT_EXCEPTIONS: tuple[KitLicenseException, ...] = (
         manifests=frozenset(
             {
                 "android/openmedkit-mlkit/build.gradle.kts",
-                "android/openmedkit/build.gradle.kts",
                 "android/OpenMedScanDemo/app/build.gradle.kts",
             }
         ),

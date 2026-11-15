@@ -115,15 +115,14 @@ adapter, and only in these build files:
 - `android/openmedkit-mlkit/build.gradle.kts`, the optional ML Kit module
   introduced by #4451;
 - `android/OpenMedScanDemo/app/build.gradle.kts`, the scan demo that exercises
-  the adapter;
-- `android/openmedkit/build.gradle.kts`, the core artifact, as a transitional
-  path until #4451 moves ML Kit out of it. Remove this path from
-  `SCOPED_KIT_EXCEPTIONS` when that change lands.
+  the adapter.
 
-The gate prints every use of the exception, so ML Kit never passes silently.
-Declaring it in any other manifest, or changing its reviewed expression, fails
-the gate. ML Kit's own transitive Google Play services artifacts are not
-visible until the Android build commits Gradle lockfiles.
+The core artifact, `android/openmedkit/build.gradle.kts`, no longer depends on
+ML Kit and is not covered. The gate prints every use of the exception, so ML
+Kit never passes silently. Declaring it in any other manifest, or changing its
+reviewed expression, fails the gate. ML Kit's own transitive Google Play
+services artifacts appear only in the Gradle lockfiles, which this gate does
+not read.
 
 ## Speech recognition (WhisperKit)
 
@@ -143,8 +142,9 @@ the tables. Rows that no manifest uses any more are counted as
 
 ## Limits
 
-- Gradle has no committed lockfiles yet, so only declared Android
-  dependencies are gated, not their transitive closure.
+- Only declared Android dependencies are gated, not their transitive
+  closure: the gate does not read the committed `gradle.lockfile` files,
+  which the vulnerability scan covers.
 - Rows are per package, not per version. A license change in a new release is
   caught only when the row is reviewed again.
 - SwiftPM transitive pins of the nested `swift/OpenMedKit` package come from
