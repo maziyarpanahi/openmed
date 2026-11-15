@@ -1,0 +1,602 @@
+{
+  "schema_version": 1,
+  "contract": "openmed.service.protocol-map",
+  "contract_version": "1.0.0",
+  "description": "Operation, field and outcome equivalence between the OpenMed REST, GraphQL and gRPC service transports. Every entry is an identifier, status, code, field path or fixed explanation; nothing in this document is request content.",
+  "categories": [
+    "unauthenticated",
+    "permission_denied",
+    "invalid_argument",
+    "resource_exhausted",
+    "deadline_exceeded",
+    "cancelled",
+    "unavailable",
+    "internal"
+  ],
+  "transports": {
+    "rest": {
+      "error_code_field": "error.code",
+      "status": "http",
+      "stream_error_event": "type=error, error.code"
+    },
+    "graphql": {
+      "endpoint": {"method": "POST", "path": "/graphql"},
+      "error_code_field": "errors[].extensions.code",
+      "status": "http",
+      "http_refusals": "Service HTTP middleware (authentication, throttling, body limits, readiness) refuses a /graphql request before execution and answers with the REST error envelope.",
+      "uncoded_category": "invalid_argument"
+    },
+    "grpc": {
+      "service": "openmed.service.v1.OpenMedService",
+      "reason_metadata": "openmed-reason",
+      "status": "grpc",
+      "status_categories": {
+        "CANCELLED": "cancelled",
+        "DEADLINE_EXCEEDED": "deadline_exceeded",
+        "RESOURCE_EXHAUSTED": "resource_exhausted",
+        "UNAVAILABLE": "unavailable"
+      }
+    }
+  },
+  "operations": [
+    {
+      "id": "analyze",
+      "scopes": ["analyze:write"],
+      "rest": {"method": "POST", "path": "/analyze", "framing": "unary"},
+      "graphql": {"field": "analyze", "argument": "input", "input_type": "AnalyzeInput", "framing": "unary"},
+      "grpc": {"method": "/openmed.service.v1.OpenMedService/Analyze", "framing": "unary"},
+      "request_fields": [
+        {"field": "text", "rest": "text", "graphql": "text", "grpc": "text"},
+        {"field": "model_name", "rest": "model_name", "graphql": "modelName", "grpc": "model_name"},
+        {"field": "confidence_threshold", "rest": "confidence_threshold", "graphql": "confidenceThreshold", "grpc": "confidence_threshold"},
+        {"field": "group_entities", "rest": "group_entities", "graphql": "groupEntities", "grpc": "group_entities"},
+        {"field": "aggregation_strategy", "rest": "aggregation_strategy", "graphql": "aggregationStrategy", "grpc": "aggregation_strategy"},
+        {"field": "sentence_detection", "rest": "sentence_detection", "graphql": "sentenceDetection", "grpc": "sentence_detection"},
+        {"field": "sentence_language", "rest": "sentence_language", "graphql": "sentenceLanguage", "grpc": "sentence_language"},
+        {"field": "sentence_clean", "rest": "sentence_clean", "graphql": "sentenceClean", "grpc": "sentence_clean"},
+        {"field": "use_fast_tokenizer", "rest": "use_fast_tokenizer", "graphql": "useFastTokenizer", "grpc": "use_fast_tokenizer"},
+        {"field": "keep_alive", "rest": "keep_alive", "graphql": "keepAlive", "grpc": "keep_alive"}
+      ],
+      "response_fields": [
+        {"field": "spans[].text", "normalize": "digest", "rest": "entities[].text", "graphql": "entities[].text", "grpc": "entities[].text"},
+        {"field": "spans[].label", "normalize": "code", "rest": "entities[].label", "graphql": "entities[].label", "grpc": "entities[].label"},
+        {"field": "spans[].start", "normalize": "offset", "rest": "entities[].start", "graphql": "entities[].start", "grpc": "entities[].start"},
+        {"field": "spans[].end", "normalize": "offset", "rest": "entities[].end", "graphql": "entities[].end", "grpc": "entities[].end"},
+        {"field": "spans[].confidence", "normalize": "score", "rest": "entities[].confidence", "graphql": "entities[].confidence", "grpc": "entities[].confidence"}
+      ]
+    },
+    {
+      "id": "extract",
+      "scopes": ["pii:read"],
+      "rest": {"method": "POST", "path": "/pii/extract", "framing": "unary"},
+      "graphql": {"supported": false, "reason": "The GraphQL schema exposes no PII extraction field; extraction is not added to GraphQL only for symmetry."},
+      "grpc": {"method": "/openmed.service.v1.OpenMedService/Extract", "framing": "unary"},
+      "request_fields": [
+        {"field": "text", "rest": "text", "grpc": "text"},
+        {"field": "model_name", "rest": "model_name", "grpc": "model_name"},
+        {"field": "confidence_threshold", "rest": "confidence_threshold", "grpc": "confidence_threshold"},
+        {"field": "use_smart_merging", "rest": "use_smart_merging", "grpc": "use_smart_merging"},
+        {"field": "lang", "rest": "lang", "grpc": "lang"},
+        {"field": "normalize_accents", "rest": "normalize_accents", "grpc": "normalize_accents"},
+        {"field": "keep_alive", "rest": "keep_alive", "grpc": "keep_alive"}
+      ],
+      "response_fields": [
+        {"field": "spans[].text", "normalize": "digest", "rest": "entities[].text", "grpc": "entities[].text"},
+        {"field": "spans[].label", "normalize": "code", "rest": "entities[].label", "grpc": "entities[].label"},
+        {"field": "spans[].start", "normalize": "offset", "rest": "entities[].start", "grpc": "entities[].start"},
+        {"field": "spans[].end", "normalize": "offset", "rest": "entities[].end", "grpc": "entities[].end"},
+        {"field": "spans[].confidence", "normalize": "score", "rest": "entities[].confidence", "grpc": "entities[].confidence"}
+      ]
+    },
+    {
+      "id": "deidentify",
+      "scopes": ["pii:write"],
+      "rest": {"method": "POST", "path": "/pii/deidentify", "framing": "unary"},
+      "graphql": {"field": "deidentify", "argument": "input", "input_type": "DeidentifyInput", "framing": "unary"},
+      "grpc": {"method": "/openmed.service.v1.OpenMedService/Deidentify", "framing": "unary"},
+      "request_fields": [
+        {"field": "text", "rest": "text", "graphql": "text", "grpc": "text"},
+        {"field": "method", "rest": "method", "graphql": "method", "grpc": "method"},
+        {"field": "model_name", "rest": "model_name", "graphql": "modelName", "grpc": "model_name"},
+        {"field": "confidence_threshold", "rest": "confidence_threshold", "graphql": "confidenceThreshold", "grpc": "confidence_threshold"},
+        {"field": "keep_year", "rest": "keep_year", "graphql": "keepYear", "grpc": "keep_year"},
+        {"field": "shift_dates", "rest": "shift_dates", "graphql": "shiftDates", "grpc": "shift_dates"},
+        {"field": "date_shift_days", "rest": "date_shift_days", "graphql": "dateShiftDays", "grpc": "date_shift_days"},
+        {"field": "keep_mapping", "rest": "keep_mapping", "graphql": "keepMapping", "grpc": "keep_mapping"},
+        {"field": "policy", "rest": "policy", "graphql": "policy", "grpc": "policy"},
+        {"field": "use_smart_merging", "rest": "use_smart_merging", "graphql": "useSmartMerging", "grpc": "use_smart_merging"},
+        {"field": "use_safety_sweep", "rest": "use_safety_sweep", "graphql": "useSafetySweep", "grpc": "use_safety_sweep"},
+        {"field": "lang", "rest": "lang", "graphql": "lang", "grpc": "lang"},
+        {"field": "normalize_accents", "rest": "normalize_accents", "graphql": "normalizeAccents", "grpc": "normalize_accents"},
+        {"field": "keep_alive", "rest": "keep_alive", "graphql": "keepAlive", "grpc": "keep_alive"}
+      ],
+      "response_fields": [
+        {"field": "redacted_text", "normalize": "digest", "rest": "deidentified_text", "graphql": "deidentifiedText", "grpc": "deidentified_text"},
+        {"field": "method", "normalize": "code", "rest": "method", "graphql": "method", "grpc": "method"},
+        {"field": "entity_count", "normalize": "count", "rest": "num_entities_redacted", "graphql": "numEntitiesRedacted", "grpc": "num_entities_redacted"},
+        {"field": "spans[].text", "normalize": "digest", "rest": "pii_entities[].text", "graphql": "spans[].text", "grpc": "pii_entities[].text"},
+        {"field": "spans[].label", "normalize": "code", "rest": "pii_entities[].label", "graphql": "spans[].label", "grpc": "pii_entities[].label"},
+        {"field": "spans[].entity_type", "normalize": "code", "rest": "pii_entities[].entity_type", "graphql": "spans[].entityType", "grpc": "pii_entities[].entity_type"},
+        {"field": "spans[].canonical_label", "normalize": "code", "rest": "pii_entities[].canonical_label", "graphql": "spans[].canonicalLabel", "grpc": "pii_entities[].canonical_label"},
+        {"field": "spans[].action", "normalize": "code", "rest": "pii_entities[].action", "graphql": "spans[].action", "grpc": "pii_entities[].action"},
+        {"field": "spans[].start", "normalize": "offset", "rest": "pii_entities[].start", "graphql": "spans[].start", "grpc": "pii_entities[].start"},
+        {"field": "spans[].end", "normalize": "offset", "rest": "pii_entities[].end", "graphql": "spans[].end", "grpc": "pii_entities[].end"},
+        {"field": "spans[].confidence", "normalize": "score", "rest": "pii_entities[].confidence", "graphql": "spans[].score", "grpc": "pii_entities[].confidence"},
+        {"field": "spans[].replacement", "normalize": "digest", "rest": "pii_entities[].redacted_text", "graphql": "spans[].replacement", "grpc": "pii_entities[].redacted_text"}
+      ]
+    },
+    {
+      "id": "stream_deidentify",
+      "scopes": ["pii:write"],
+      "rest": {
+        "method": "POST",
+        "path": "/pii/deidentify/stream",
+        "framing": "ndjson",
+        "fragment": "type=chunk, redacted_text",
+        "final": "type=final, spans, audit",
+        "error": "type=error, error.code"
+      },
+      "graphql": {"supported": false, "reason": "GraphQL subscriptions are disabled, so there is no streaming GraphQL operation."},
+      "grpc": {
+        "method": "/openmed.service.v1.OpenMedService/StreamDeidentify",
+        "framing": "server_stream",
+        "fragment": "redacted_text",
+        "final": "final=true, spans, audit_record",
+        "error": "status, openmed-reason"
+      },
+      "request_fields": [
+        {"field": "text", "rest": "text", "grpc": "request.text"},
+        {"field": "method", "rest": "method", "grpc": "request.method"},
+        {"field": "model_name", "rest": "model_name", "grpc": "request.model_name"},
+        {"field": "confidence_threshold", "rest": "confidence_threshold", "grpc": "request.confidence_threshold"},
+        {"field": "keep_year", "rest": "keep_year", "grpc": "request.keep_year"},
+        {"field": "shift_dates", "rest": "shift_dates", "grpc": "request.shift_dates"},
+        {"field": "date_shift_days", "rest": "date_shift_days", "grpc": "request.date_shift_days"},
+        {"field": "keep_mapping", "rest": "keep_mapping", "grpc": "request.keep_mapping"},
+        {"field": "policy", "rest": "policy", "grpc": "request.policy"},
+        {"field": "use_smart_merging", "rest": "use_smart_merging", "grpc": "request.use_smart_merging"},
+        {"field": "use_safety_sweep", "rest": "use_safety_sweep", "grpc": "request.use_safety_sweep"},
+        {"field": "lang", "rest": "lang", "grpc": "request.lang"},
+        {"field": "normalize_accents", "rest": "normalize_accents", "grpc": "request.normalize_accents"},
+        {"field": "keep_alive", "rest": "keep_alive", "grpc": "request.keep_alive"},
+        {"field": "chunk_size", "rest": "chunk_size", "grpc": "chunk_size"},
+        {"field": "chunks", "rest": null, "grpc": "chunks", "note": "REST always splits text by chunk_size on the server."},
+        {"field": "max_buffer", "rest": null, "grpc": "max_buffer", "note": "REST uses the fixed server carry-over buffer."}
+      ],
+      "response_fields": [
+        {"field": "final.spans[].entity_type", "normalize": "code", "rest": "spans[].entity_type", "grpc": "spans[].entity_type"},
+        {"field": "final.spans[].canonical_label", "normalize": "code", "rest": "spans[].canonical_label", "grpc": "spans[].canonical_label"},
+        {"field": "final.spans[].policy_label", "normalize": "code", "rest": "spans[].policy_label", "grpc": "spans[].policy_label"},
+        {"field": "final.spans[].action", "normalize": "code", "rest": "spans[].action", "grpc": "spans[].action"},
+        {"field": "final.spans[].start", "normalize": "offset", "rest": "spans[].start", "grpc": "spans[].start"},
+        {"field": "final.spans[].end", "normalize": "offset", "rest": "spans[].end", "grpc": "spans[].end"},
+        {"field": "final.spans[].score", "normalize": "score", "rest": "spans[].score", "grpc": "spans[].score"},
+        {"field": "final.spans[].text_hash", "normalize": "opaque", "rest": "spans[].text_hash", "grpc": "spans[].text_hash"},
+        {"field": "final.spans[].replacement", "normalize": "digest", "rest": "spans[].replacement", "grpc": "spans[].replacement"}
+      ]
+    }
+  ],
+  "unmapped_operations": {
+    "graphql": {
+      "entityTypes": "Static canonical label catalog; no model work and no REST or gRPC equivalent.",
+      "journeyResources": "Journey resource listing mirrors REST GET /v1/journey/resources and has no gRPC method; its principal binding is owned by #3549."
+    }
+  },
+  "codes": {
+    "rest": {
+      "authentication_required": {"status": 401, "category": "unauthenticated"},
+      "invalid_credentials": {"status": 401, "category": "unauthenticated"},
+      "mtls_certificate_required": {"status": 401, "category": "unauthenticated"},
+      "mtls_certificate_invalid": {"status": 401, "category": "unauthenticated"},
+      "forbidden": {"status": 403, "category": "permission_denied"},
+      "auth_rate_limited": {"status": 429, "category": "resource_exhausted"},
+      "rate_limited": {"status": 429, "category": "resource_exhausted"},
+      "service_busy": {"status": 503, "category": "resource_exhausted"},
+      "backpressure": {"status": 503, "category": "resource_exhausted"},
+      "payload_too_large": {"status": 413, "category": "resource_exhausted"},
+      "request_size_exceeded": {"status": 413, "category": "resource_exhausted"},
+      "budget_exceeded": {"status": 503, "category": "resource_exhausted"},
+      "validation_error": {"status": 422, "category": "invalid_argument"},
+      "bad_request": {"status": 400, "category": "invalid_argument"},
+      "request_size_invalid": {"status": 400, "category": "invalid_argument"},
+      "input_error": {"status": 400, "category": "invalid_argument"},
+      "configuration_error": {"status": 400, "category": "invalid_argument"},
+      "policy_error": {"status": 400, "category": "invalid_argument"},
+      "model_not_served": {"status": 422, "category": "invalid_argument"},
+      "timeout": {"status": 504, "category": "deadline_exceeded"},
+      "not_ready": {"status": 503, "category": "unavailable"},
+      "circuit_breaker_open": {"status": 503, "category": "unavailable"},
+      "capability_error": {"status": 503, "category": "unavailable"},
+      "missing_extra": {"status": 503, "category": "unavailable"},
+      "model_load_error": {"status": 503, "category": "unavailable"},
+      "internal_error": {"status": 500, "category": "internal"},
+      "inference_error": {"status": 500, "category": "internal"},
+      "openmed_error": {"status": 500, "category": "internal"}
+    },
+    "graphql": {
+      "OPENMED_FORBIDDEN": {"status": 200, "category": "permission_denied"},
+      "OPENMED_RESOLVER_ERROR": {"status": 200, "category": "internal"},
+      "model_not_served": {"status": 200, "category": "invalid_argument"}
+    },
+    "grpc": {
+      "authentication_required": {"status": "UNAUTHENTICATED", "category": "unauthenticated"},
+      "invalid_credentials": {"status": "UNAUTHENTICATED", "category": "unauthenticated"},
+      "credentials_malformed": {"status": "UNAUTHENTICATED", "category": "unauthenticated"},
+      "insufficient_scope": {"status": "PERMISSION_DENIED", "category": "permission_denied"},
+      "auth_rate_limited": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "rate_limited": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "concurrency_limited": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "text_too_long": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "stream_too_many_chunks": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "stream_chunk_too_large": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "stream_buffer_too_large": {"status": "RESOURCE_EXHAUSTED", "category": "resource_exhausted"},
+      "invalid_request": {"status": "INVALID_ARGUMENT", "category": "invalid_argument"},
+      "model_not_served": {"status": "INVALID_ARGUMENT", "category": "invalid_argument"},
+      "deadline_exceeded": {"status": "DEADLINE_EXCEEDED", "category": "deadline_exceeded"},
+      "internal_error": {"status": "INTERNAL", "category": "internal"}
+    }
+  },
+  "rest_only_codes": {
+    "bulk_data": [
+      "bulk_paths_disabled",
+      "path_exists",
+      "path_invalid",
+      "path_outside_root"
+    ],
+    "grounding": [
+      "grounding_invalid_request",
+      "offline_snapshot_unavailable",
+      "restricted_terminology_unconfigured",
+      "snapshot_invalid"
+    ],
+    "privacy_gateway": [
+      "privacy_gateway_blocked",
+      "privacy_gateway_error",
+      "privacy_gateway_not_configured",
+      "privacy_gateway_reidentification_error",
+      "privacy_gateway_transport_error"
+    ],
+    "privacy_proxy": [
+      "inbound_duplicate_mapping",
+      "inbound_duplicate_placeholder",
+      "inbound_duplicate_response_key",
+      "inbound_malformed_placeholder",
+      "inbound_request_scope_error",
+      "inbound_restoration_error",
+      "inbound_restoration_limit",
+      "inbound_unknown_placeholder",
+      "inbound_unsupported_response",
+      "outbound_privacy_error",
+      "outbound_redaction_failed",
+      "outbound_redactor_required",
+      "privacy_proxy_error",
+      "privacy_proxy_invalid_request",
+      "privacy_proxy_not_configured",
+      "privacy_proxy_redaction_failed",
+      "privacy_proxy_response_rejected",
+      "privacy_proxy_transport_failed",
+      "replacement_state_error",
+      "replacement_state_limit",
+      "replacement_state_not_found",
+      "unsafe_redaction_output",
+      "unsupported_content_type",
+      "unsupported_request_body"
+    ]
+  },
+  "outcomes": [
+    {
+      "id": "authentication_required",
+      "category": "unauthenticated",
+      "summary": "No credential was presented while service authentication is enabled.",
+      "rest": [{"code": "authentication_required"}],
+      "graphql": [{"rest_code": "authentication_required"}],
+      "grpc": [{"reason": "authentication_required"}]
+    },
+    {
+      "id": "invalid_credentials",
+      "category": "unauthenticated",
+      "summary": "The API key or JWT was not accepted.",
+      "rest": [{"code": "invalid_credentials"}],
+      "graphql": [{"rest_code": "invalid_credentials"}],
+      "grpc": [{"reason": "invalid_credentials"}]
+    },
+    {
+      "id": "credentials_malformed",
+      "category": "unauthenticated",
+      "summary": "The credential carrier itself is malformed, for example duplicated or non-printable.",
+      "rest": [{"code": "authentication_required"}, {"code": "invalid_credentials"}],
+      "graphql": [{"rest_code": "authentication_required"}, {"rest_code": "invalid_credentials"}],
+      "grpc": [{"reason": "credentials_malformed"}]
+    },
+    {
+      "id": "client_certificate_required",
+      "category": "unauthenticated",
+      "summary": "Mutual TLS is required and no client certificate reached the service.",
+      "note": "A gRPC mutual-TLS listener refuses a missing client certificate during the TLS handshake, before any RPC status exists.",
+      "rest": [{"code": "mtls_certificate_required"}],
+      "graphql": [{"rest_code": "mtls_certificate_required"}],
+      "grpc": [{"reason": "authentication_required"}]
+    },
+    {
+      "id": "client_certificate_invalid",
+      "category": "unauthenticated",
+      "summary": "The client certificate is untrusted or maps to no principal.",
+      "rest": [{"code": "mtls_certificate_invalid"}],
+      "graphql": [{"rest_code": "mtls_certificate_invalid"}],
+      "grpc": [{"reason": "invalid_credentials"}]
+    },
+    {
+      "id": "auth_rate_limited",
+      "category": "resource_exhausted",
+      "summary": "Too many failed authentication attempts from one client key.",
+      "rest": [{"code": "auth_rate_limited"}],
+      "graphql": [{"rest_code": "auth_rate_limited"}],
+      "grpc": [{"reason": "auth_rate_limited"}]
+    },
+    {
+      "id": "insufficient_scope",
+      "category": "permission_denied",
+      "summary": "The authenticated principal lacks a scope the operation requires.",
+      "rest": [{"code": "forbidden"}],
+      "graphql": [{"code": "OPENMED_FORBIDDEN"}],
+      "grpc": [{"reason": "insufficient_scope"}]
+    },
+    {
+      "id": "rate_limited",
+      "category": "resource_exhausted",
+      "summary": "The request-rate token bucket for the client key is empty.",
+      "rest": [{"code": "rate_limited"}],
+      "graphql": [{"rest_code": "rate_limited"}],
+      "grpc": [{"reason": "rate_limited"}]
+    },
+    {
+      "id": "concurrency_limited",
+      "category": "resource_exhausted",
+      "summary": "No concurrency slot became free within the configured wait.",
+      "rest": [{"code": "service_busy"}],
+      "graphql": [{"rest_code": "service_busy"}],
+      "grpc": [{"reason": "concurrency_limited"}]
+    },
+    {
+      "id": "batch_backpressure",
+      "category": "resource_exhausted",
+      "summary": "The dynamic batching queue is saturated.",
+      "operations": ["analyze", "extract"],
+      "rest": [{"code": "backpressure"}],
+      "graphql": [],
+      "grpc": [],
+      "not_applicable": {
+        "graphql": "Dynamic batching admits only the REST analyze and extract routes.",
+        "grpc": "The gRPC servicer does not use the dynamic batcher."
+      }
+    },
+    {
+      "id": "model_capacity_busy",
+      "category": "resource_exhausted",
+      "summary": "The warm pool could not admit the model within its memory budget and wait.",
+      "rest": [{"code": "service_busy"}, {"code": "internal_error", "delivery": "stream_event"}],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "internal_error"}]
+    },
+    {
+      "id": "budget_exceeded",
+      "category": "resource_exhausted",
+      "summary": "An OpenMed operation exceeded a declared resource budget.",
+      "rest": [{"code": "budget_exceeded"}, {"code": "internal_error", "delivery": "stream_event"}],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "internal_error"}]
+    },
+    {
+      "id": "text_too_long",
+      "category": "resource_exhausted",
+      "summary": "Request text exceeds OPENMED_SERVICE_MAX_TEXT_LENGTH.",
+      "rest": [{"code": "validation_error"}],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "text_too_long"}]
+    },
+    {
+      "id": "request_too_large",
+      "category": "resource_exhausted",
+      "summary": "The encoded request exceeds the byte limit before it is parsed.",
+      "rest": [{"code": "payload_too_large"}, {"code": "request_size_exceeded"}],
+      "graphql": [{"rest_code": "payload_too_large"}, {"rest_code": "request_size_exceeded"}],
+      "grpc": [{"status": "RESOURCE_EXHAUSTED", "origin": "transport"}]
+    },
+    {
+      "id": "stream_too_many_chunks",
+      "category": "resource_exhausted",
+      "summary": "A streaming request carries or splits into more chunks than allowed.",
+      "operations": ["stream_deidentify"],
+      "rest": [],
+      "graphql": [],
+      "grpc": [{"reason": "stream_too_many_chunks"}],
+      "not_applicable": {
+        "rest": "REST splits text on the server and bounds chunk_size, so the chunk count follows from the text limit.",
+        "graphql": "GraphQL has no streaming operation."
+      }
+    },
+    {
+      "id": "stream_chunk_too_large",
+      "category": "resource_exhausted",
+      "summary": "A streaming chunk exceeds the per-chunk size limit.",
+      "operations": ["stream_deidentify"],
+      "rest": [{"code": "validation_error"}],
+      "graphql": [],
+      "grpc": [{"reason": "stream_chunk_too_large"}],
+      "not_applicable": {"graphql": "GraphQL has no streaming operation."}
+    },
+    {
+      "id": "stream_buffer_too_large",
+      "category": "resource_exhausted",
+      "summary": "The requested carry-over buffer exceeds the server cap.",
+      "operations": ["stream_deidentify"],
+      "rest": [],
+      "graphql": [],
+      "grpc": [{"reason": "stream_buffer_too_large"}],
+      "not_applicable": {
+        "rest": "REST does not accept a caller-selected buffer size.",
+        "graphql": "GraphQL has no streaming operation."
+      }
+    },
+    {
+      "id": "invalid_request",
+      "category": "invalid_argument",
+      "summary": "The request fails schema or argument validation.",
+      "rest": [
+        {"code": "validation_error"},
+        {"code": "bad_request"},
+        {"code": "request_size_invalid"},
+        {"code": "input_error"},
+        {"code": "configuration_error"},
+        {"code": "policy_error"},
+        {"code": "bad_request", "delivery": "stream_event"}
+      ],
+      "graphql": [
+        {"code": null},
+        {"code": "OPENMED_RESOLVER_ERROR"},
+        {"rest_code": "bad_request"},
+        {"rest_code": "request_size_invalid"}
+      ],
+      "grpc": [{"reason": "invalid_request"}]
+    },
+    {
+      "id": "model_not_served",
+      "category": "invalid_argument",
+      "summary": "The selected model is not in the operator's served-model set; nothing is loaded.",
+      "rest": [{"code": "model_not_served"}],
+      "graphql": [{"code": "model_not_served"}],
+      "grpc": [{"reason": "model_not_served"}]
+    },
+    {
+      "id": "deadline_exceeded",
+      "category": "deadline_exceeded",
+      "summary": "The request outlived the server execution budget or the client deadline.",
+      "rest": [{"code": "timeout"}, {"code": "timeout", "delivery": "stream_event"}],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [
+        {"reason": "deadline_exceeded"},
+        {"status": "DEADLINE_EXCEEDED", "origin": "client"}
+      ]
+    },
+    {
+      "id": "cancelled",
+      "category": "cancelled",
+      "summary": "The client abandoned the request; no further output is produced.",
+      "rest": [{"origin": "client"}],
+      "graphql": [{"origin": "client"}],
+      "grpc": [{"status": "CANCELLED", "origin": "client"}]
+    },
+    {
+      "id": "not_ready",
+      "category": "unavailable",
+      "summary": "The service is draining and refuses new model work.",
+      "rest": [{"code": "not_ready"}],
+      "graphql": [{"rest_code": "not_ready"}],
+      "grpc": [],
+      "not_applicable": {
+        "grpc": "The gRPC server has no drain refusal yet; drain is owned by #3576 and gRPC health by #3917."
+      }
+    },
+    {
+      "id": "circuit_breaker_open",
+      "category": "unavailable",
+      "summary": "The model backend circuit breaker is open.",
+      "rest": [{"code": "circuit_breaker_open"}, {"code": "internal_error", "delivery": "stream_event"}],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "internal_error"}]
+    },
+    {
+      "id": "capability_unavailable",
+      "category": "unavailable",
+      "summary": "A required optional extra, backend or model loader is unavailable.",
+      "rest": [
+        {"code": "capability_error"},
+        {"code": "missing_extra"},
+        {"code": "model_load_error"},
+        {"code": "internal_error", "delivery": "stream_event"},
+        {"code": "bad_request", "delivery": "stream_event"}
+      ],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "internal_error"}, {"reason": "invalid_request"}]
+    },
+    {
+      "id": "internal_error",
+      "category": "internal",
+      "summary": "An unexpected server failure; details are never reflected.",
+      "rest": [
+        {"code": "internal_error"},
+        {"code": "inference_error"},
+        {"code": "openmed_error"},
+        {"code": "internal_error", "delivery": "stream_event"}
+      ],
+      "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
+      "grpc": [{"reason": "internal_error"}]
+    }
+  ],
+  "known_divergences": [
+    {
+      "id": "rest_limits_reported_as_validation",
+      "kind": "category",
+      "transport": "rest",
+      "outcomes": ["text_too_long", "stream_chunk_too_large"],
+      "summary": "REST rejects over-limit text and stream chunk sizes during request validation with 422 validation_error, so clients cannot tell a limit from a malformed field.",
+      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+    },
+    {
+      "id": "rest_stream_errors_collapse_to_internal",
+      "kind": "category",
+      "transport": "rest",
+      "outcomes": [
+        "model_capacity_busy",
+        "budget_exceeded",
+        "circuit_breaker_open",
+        "capability_unavailable"
+      ],
+      "summary": "Once a REST NDJSON stream has started, capacity, budget, circuit-breaker and capability failures arrive as in-band internal_error events, or bad_request when the failure is also a ValueError.",
+      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+    },
+    {
+      "id": "graphql_limits_and_deadlines_uncoded",
+      "kind": "category",
+      "transport": "graphql",
+      "outcomes": ["text_too_long", "deadline_exceeded"],
+      "summary": "GraphQL reports text-limit and timeout failures as the generic OPENMED_RESOLVER_ERROR.",
+      "follow_up": "#3545 (OPENMED_GRAPHQL_LIMIT_EXCEEDED and OPENMED_GRAPHQL_TIMEOUT)"
+    },
+    {
+      "id": "graphql_resolver_error_masks_category",
+      "kind": "category",
+      "transport": "graphql",
+      "outcomes": [
+        "model_capacity_busy",
+        "budget_exceeded",
+        "invalid_request",
+        "circuit_breaker_open",
+        "capability_unavailable"
+      ],
+      "summary": "GraphQL collapses validation, capacity and availability failures inside a resolver into OPENMED_RESOLVER_ERROR.",
+      "follow_up": "v4.0 platform-contract R3 (coded GraphQL errors)"
+    },
+    {
+      "id": "grpc_unavailable_reported_as_internal",
+      "kind": "category",
+      "transport": "grpc",
+      "outcomes": [
+        "model_capacity_busy",
+        "budget_exceeded",
+        "circuit_breaker_open",
+        "capability_unavailable"
+      ],
+      "summary": "gRPC reports warm-pool, budget, circuit-breaker and capability failures as internal_error, or as invalid_request when the failure is also a ValueError.",
+      "follow_up": "v4.0 platform-contract R2 (shared error-code registry)"
+    },
+    {
+      "id": "graphql_code_casing",
+      "kind": "naming",
+      "transport": "graphql",
+      "codes": ["OPENMED_FORBIDDEN", "OPENMED_RESOLVER_ERROR", "model_not_served"],
+      "summary": "GraphQL mixes upper-case OPENMED_* extension codes with the lower-case REST code model_not_served.",
+      "follow_up": "v4.0 platform-contract R3 (lower-case GraphQL extensions.code)"
+    }
+  ]
+}
