@@ -71,6 +71,18 @@ Name of the model-cache PVC.
 {{- end -}}
 
 {{/*
+emptyDir volume source with an optional size limit. Renders `{}` when the
+limit is empty so the volume source stays valid.
+*/}}
+{{- define "openmed-service.emptyDir" -}}
+{{- $spec := dict -}}
+{{- with .sizeLimit -}}
+{{- $_ := set $spec "sizeLimit" (toString .) -}}
+{{- end -}}
+{{- toJson $spec -}}
+{{- end -}}
+
+{{/*
 Trusted hosts needed for loopback probes and in-cluster Service DNS.
 */}}
 {{- define "openmed-service.trustedHosts" -}}
