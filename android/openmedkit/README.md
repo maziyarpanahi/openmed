@@ -21,8 +21,9 @@ repository and dependency declarations.
 The module sets `minSdk` to 26. Android 8.0 is a practical baseline for an
 on-device clinical utility library because it keeps support broad while
 allowing later work to rely on modern platform security, storage, and runtime
-behavior. The module currently compiles against Android API 33 for compatibility
-with the repository's Java 11 local development baseline.
+behavior. The module compiles against Android API 35 with JDK 17 and Android
+Gradle Plugin 8, and it still emits Java 11 bytecode for consumers. See the
+[toolchain requirements](../README.md#toolchain-requirements).
 
 ## Privacy And Safety
 

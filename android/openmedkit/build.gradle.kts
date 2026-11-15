@@ -1,6 +1,7 @@
 import java.util.Properties
 import java.util.zip.ZipFile
 import org.gradle.api.tasks.testing.Test
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
@@ -84,27 +85,31 @@ val generateAndroidModelCatalog by tasks.registering(Exec::class) {
 
 android {
     namespace = "org.openmed.openmedkit"
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         // Android 8.0+ keeps on-device inference support aligned with current
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
-        targetSdk = 33
         consumerProguardFiles("consumer-rules.pro")
     }
 
+    // The build runs on JDK 17 (required by AGP 8), while the published
+    // bytecode stays at Java 11 so consumer apps keep the same floor.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
+    testOptions {
+        // AGP 8 deprecates targetSdk in a library's defaultConfig; it only ever
+        // applied to the library's own test APK and lint, never to consumers.
+        targetSdk = 35
+        unitTests.isIncludeAndroidResources = true
     }
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
+    lint {
+        targetSdk = 35
     }
 
     sourceSets {
@@ -128,7 +133,10 @@ android {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
+    }
 }
 
 tasks.matching { it.name.endsWith("Assets") }.configureEach {
