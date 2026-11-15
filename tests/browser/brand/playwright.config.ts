@@ -5,7 +5,7 @@ const baseURL = process.env.OPENMED_PREVIEW_URL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "..",
-  testMatch: ["brand/**/*.spec.ts", "privacy-playground.spec.ts"],
+  testMatch: ["brand/**/*.spec.ts", "privacy-playground.spec.ts", "csp-profile.spec.ts"],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
