@@ -32,7 +32,8 @@ def _assert_unique_schema_ids(schema_paths: Iterable[Path]) -> None:
     problems.extend(f"missing $id: {path}" for path in missing_ids)
 
     if problems:
-        raise AssertionError("Invalid packaged JSON Schema identifiers:\n" + "\n".join(problems))
+        details = "\n".join(problems)
+        raise AssertionError(f"Invalid packaged JSON Schema identifiers:\n{details}")
 
 
 def _packaged_schema_paths(repository_root: Path) -> list[Path]:
