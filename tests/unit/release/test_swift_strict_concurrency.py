@@ -261,6 +261,16 @@ def test_every_unchecked_sendable_source_type_has_a_concurrent_use_test() -> Non
         "GeneratedDetectorBox": "GeneratedTextGuard",
         "ThermalNotificationSubscription": "AppleSystemThermalSource",
         "VerifyingRecognizer": "DocumentRedactionExporter",
+        # The bundle cache and the managed importer each keep a private
+        # per-path lock registry; the importer test names its owner too.
+        "MutexRegistry": "OpenMedBundleCache",
+        "OpenMedDispatchSourceObservation": "OpenMedDispatchMemoryPressureSource",
+        # Wraps a loaded MLX model; the runtime that serializes it is tested.
+        "OpenMedTextModelSession": "OpenMedRuntime",
+        "OpenMedUIApplicationBackgroundAssertion": (
+            "OpenMedUIApplicationBackgroundExecution"
+        ),
+        "OpenMedNotificationObservation": "OpenMedUIApplicationBackgroundExecution",
     }
 
     unchecked = _unchecked_sendable_types()

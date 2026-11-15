@@ -12,6 +12,10 @@ import os
     import CoreGraphics
 #endif
 
+#if canImport(UIKit) && !os(watchOS)
+    import UIKit
+#endif
+
 // Concurrent-use coverage for every `@unchecked Sendable` type in OpenMedKit and
 // compile-time Sendable checks for public value types. Each test hits one shared
 // instance from many tasks or threads and asserts the invariant its lock exists
@@ -115,6 +119,90 @@ private struct YieldingWork: LocalMultimodalWork {
     func run(profile: MultimodalWorkProfile) async throws -> Int {
         await Task.yield()
         return value
+    }
+}
+
+private struct SilentMemoryPressure: OpenMedMemoryPressureSource {
+    func observe(
+        _ handler: @escaping @Sendable (OpenMedMemoryPressureLevel) -> Void
+    ) -> any OpenMedRuntimeObservation {
+        OpenMedInactiveObservation()
+    }
+}
+
+/// Records how many predictions overlap; the runtime must never overlap them.
+private final class OverlapRecordingModel: OpenMedRuntimeModel {
+    private let counts = OSAllocatedUnfairLock(initialState: (running: 0, peak: 0, calls: 0))
+
+    var peak: Int { counts.withLock { $0.peak } }
+    var calls: Int { counts.withLock { $0.calls } }
+
+    func predictEntities(
+        in text: String, checkpoint: OpenMedInferenceCheckpoint
+    ) async throws -> [EntityPrediction] {
+        try checkpoint.check(.tokenization)
+        counts.withLock {
+            $0.running += 1
+            $0.peak = max($0.peak, $0.running)
+            $0.calls += 1
+        }
+        await Task.yield()
+        counts.withLock { $0.running -= 1 }
+        try checkpoint.check(.modelPrediction)
+        return []
+    }
+}
+
+/// The signed synthetic bundle of `tests/fixtures/bundle_cache/vectors.json`.
+private struct SyntheticBundle {
+    let bundleID: String
+    let generation: String
+    let manifest: Data
+    let envelope: Data
+    let files: [String: Data]
+    let trustPolicy: PortableBundleTrustPolicy
+    let context: PortableBundleContext
+
+    init() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<5 { root.deleteLastPathComponent() }
+        let data = try Data(contentsOf: root.appending(path: "tests/fixtures/bundle_cache/vectors.json"))
+        let vectors = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let identities = try XCTUnwrap(vectors["identities"] as? [String: Any])
+        let bundles = try XCTUnwrap(vectors["bundles"] as? [String: [String: Any]])
+        let bundle = try XCTUnwrap(bundles["v1"])
+        let policies = try XCTUnwrap(vectors["trust_policies"] as? [String: Any])
+        let context = try XCTUnwrap(vectors["context"] as? [String: Any])
+        bundleID = try XCTUnwrap(identities["bundle_id"] as? String)
+        generation = try XCTUnwrap(bundle["generation"] as? String)
+        manifest = Data(try XCTUnwrap(bundle["manifest"] as? String).utf8)
+        envelope = Data(try XCTUnwrap(bundle["envelope"] as? String).utf8)
+        var files: [String: Data] = [:]
+        for entry in try XCTUnwrap(bundle["files"] as? [[String: Any]]) {
+            files[try XCTUnwrap(entry["path"] as? String)] = Data(try XCTUnwrap(entry["text"] as? String).utf8)
+        }
+        self.files = files
+        trustPolicy = try PortableBundleTrustPolicy(
+            json: JSONSerialization.data(withJSONObject: try XCTUnwrap(policies["default"])))
+        self.context = try PortableBundleContext(now: try XCTUnwrap(context["now"] as? String))
+    }
+
+    /// Writes the bundle files under `directory`.
+    func write(to directory: URL) throws {
+        for (path, data) in files {
+            let file = directory.appending(path: path)
+            try FileManager.default.createDirectory(
+                at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: file)
+        }
+    }
+
+    /// An acquisition that reads the files written to `directory`.
+    func request(from directory: URL) -> OpenMedBundleAcquireRequest {
+        OpenMedBundleAcquireRequest(
+            manifest: manifest, envelope: envelope,
+            source: OpenMedDirectoryBundleSource(directory: directory, identity: "source-a"),
+            trustPolicy: trustPolicy, context: context)
     }
 }
 
@@ -427,6 +515,261 @@ final class ConcurrencySafetyTests: XCTestCase {
                 } catch {}
             }
             XCTAssertEqual(refusals.withLock { $0 }, contention)
+        }
+    #endif
+
+    func testInferenceLeasesKeepTheirFirstCancellationUnderContention() async {
+        let registry = OpenMedLeaseRegistry()
+        let interrupts = OSAllocatedUnfairLock(initialState: [UInt64: Int]())
+        let leases = (0..<contention).map {
+            OpenMedInferenceLease(id: UInt64($0), clock: OpenMedSystemClock(), probe: nil)
+        }
+        for lease in leases {
+            lease.attachInterrupt { interrupts.withLock { $0[lease.id, default: 0] += 1 } }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for lease in leases { group.addTask { registry.insert(lease) } }
+        }
+        XCTAssertEqual(registry.count, contention)
+
+        // Per-lease cancels, stage checks and registry-wide cancels race; the
+        // first reason must win and each interrupt must fire exactly once.
+        await withTaskGroup(of: Void.self) { group in
+            for (index, lease) in leases.enumerated() {
+                group.addTask {
+                    if index.isMultiple(of: 2) { lease.cancel(.backgroundExpired) }
+                    do { try lease.check(.windowing) } catch {}
+                }
+            }
+            for _ in 0..<4 { group.addTask { registry.cancelAll(.memoryPressure) } }
+        }
+        for (index, lease) in leases.enumerated() {
+            let reason = lease.cancellation?.reason
+            let allowed: [OpenMedRuntimeError] =
+                index.isMultiple(of: 2) ? [.backgroundExpired, .memoryPressure] : [.memoryPressure]
+            XCTAssertTrue(allowed.contains { $0 == reason }, "lease \(index)")
+            XCTAssertThrowsError(try lease.check(.merging)) { error in
+                XCTAssertEqual(error as? OpenMedRuntimeError, reason)
+            }
+        }
+        XCTAssertEqual(
+            interrupts.withLock { $0 }, Dictionary(uniqueKeysWithValues: leases.map { ($0.id, 1) }))
+
+        await withTaskGroup(of: Void.self) { group in
+            for lease in leases { group.addTask { registry.remove(lease) } }
+        }
+        XCTAssertEqual(registry.count, 0)
+    }
+
+    func testRuntimeRunsOneModelSessionAtATimeForConcurrentCallers() async {
+        // OpenMedTextModelSession wraps a non-Sendable OpenMed and relies on this
+        // serialization, so the runtime is exercised with a recording model.
+        let model = OverlapRecordingModel()
+        let loads = OSAllocatedUnfairLock(initialState: 0)
+        let runtime = OpenMedRuntime(
+            configuration: OpenMedRuntimeConfiguration(
+                maxQueuedRequests: contention, idleReleaseMilliseconds: nil),
+            memoryPressure: SilentMemoryPressure(),
+            loader: {
+                loads.withLock { $0 += 1 }
+                return model
+            })
+        let completed = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+            for _ in 0..<contention {
+                group.addTask { (try? await runtime.analyzeText("Synthetic note.")) != nil }
+            }
+            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+        }
+        XCTAssertEqual(completed, contention)
+        XCTAssertEqual(model.calls, contention)
+        XCTAssertEqual(model.peak, 1)
+        XCTAssertEqual(loads.withLock { $0 }, 1)
+        await runtime.shutdown()
+        let snapshot = await runtime.snapshot()
+        XCTAssertFalse(snapshot.hasResidentModel)
+        XCTAssertEqual(snapshot.activeLeases, 0)
+    }
+
+    func testModelBoxHandsItsSessionToExactlyOneTaker() async {
+        let box = OpenMedModelBox(OverlapRecordingModel())
+        let taken = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+            for _ in 0..<contention { group.addTask { box.take() != nil } }
+            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+        }
+        XCTAssertEqual(taken, 1)
+
+        box.store(OverlapRecordingModel())
+        let raced = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+            for index in 0..<contention {
+                group.addTask {
+                    if index == contention / 2 {
+                        box.discard()
+                        return false
+                    }
+                    return box.take() != nil
+                }
+            }
+            return await group.reduce(0) { $0 + ($1 ? 1 : 0) }
+        }
+        // A discard that races takers leaves at most one owner and an empty box.
+        XCTAssertLessThanOrEqual(raced, 1)
+        XCTAssertNil(box.take())
+    }
+
+    func testSignalSequencerIssuesEveryValueOnce() {
+        let sequencer = OpenMedSignalSequencer()
+        let values = OSAllocatedUnfairLock(initialState: [UInt64]())
+        DispatchQueue.concurrentPerform(iterations: contention) { _ in
+            let value = sequencer.next()
+            values.withLock { $0.append(value) }
+        }
+        let issued = values.withLock { $0 }
+        XCTAssertEqual(issued.count, contention)
+        XCTAssertEqual(Set(issued), Set(1...UInt64(contention)))
+    }
+
+    func testMemoryPressureObservationCancelsSafelyFromManyThreads() {
+        let observation = OpenMedDispatchMemoryPressureSource().observe { _ in }
+        // Every caller may cancel; the dispatch source is cancelled exactly once.
+        DispatchQueue.concurrentPerform(iterations: contention) { _ in observation.cancel() }
+        observation.cancel()
+    }
+
+    func testPortableBundlePatternsMatchTheSameFromEveryTask() async {
+        let cases: [(PortableBundlePattern, String, Bool)] = [
+            (.sha256, "sha256:" + String(repeating: "a", count: 64), true),
+            (.sha256, "sha256:" + String(repeating: "A", count: 64), false),
+            (.timestamp, "2026-11-07T00:00:00Z", true),
+            (.timestamp, "2026-13-07T00:00:00Z", false),
+            (.bundleID, "openmed.synthetic.tiny-pii", true),
+            (.bundleID, "openmed.synthétic", false),
+        ]
+        let expected = cases.map(\.2)
+        let observed = await withTaskGroup(of: [Bool].self, returning: [[Bool]].self) { group in
+            for _ in 0..<contention {
+                group.addTask { cases.map { pattern, text, _ in pattern.matches(text) } }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+        XCTAssertEqual(observed.count, contention)
+        XCTAssertTrue(observed.allSatisfy { $0 == expected })
+    }
+
+    func testBundleCacheSharesOneVerifiedGenerationAndItsLeasesAcrossThreads() throws {
+        let bundle = try SyntheticBundle()
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "openmed-bundle-cache-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appending(path: "source")
+        try bundle.write(to: source)
+        let clockReads = OSAllocatedUnfairLock(initialState: 0)
+        // One options value whose clock every caller thread reads.
+        let options = OpenMedBundleCacheOptions(
+            chunkBytes: 16, lockTimeoutMilliseconds: 30_000,
+            now: {
+                clockReads.withLock { $0 += 1 }
+                return 1_793_577_600_000
+            })
+        var otherOptions = options
+        otherOptions.ownerID = UUID().uuidString
+        // Two instances over one directory contend like two processes, through
+        // flock and the process-wide mutex registry.
+        let caches = [
+            try OpenMedBundleCache(rootDirectory: root.appending(path: "cache"), options: options),
+            try OpenMedBundleCache(rootDirectory: root.appending(path: "cache"), options: otherOptions),
+        ]
+
+        let acquired = OSAllocatedUnfairLock(initialState: [OpenMedBundleAcquireResult]())
+        DispatchQueue.concurrentPerform(iterations: 8) { index in
+            let result = caches[index % caches.count].acquire(bundle.request(from: source))
+            acquired.withLock { $0.append(result) }
+        }
+        let results = acquired.withLock { $0 }
+        XCTAssertEqual(results.count, 8)
+        XCTAssertTrue(results.allSatisfy(\.ok), "\(results.map { $0.reason?.rawValue ?? "ok" })")
+        XCTAssertEqual(results.filter { !$0.fromCache }.count, 1)
+        XCTAssertEqual(Set(results.compactMap(\.generation)), [bundle.generation])
+
+        let reads = OSAllocatedUnfairLock(initialState: [Bool]())
+        DispatchQueue.concurrentPerform(iterations: contention) { index in
+            guard let lease = try? caches[index % caches.count].open(bundleID: bundle.bundleID) else {
+                reads.withLock { $0.append(false) }
+                return
+            }
+            // A leased generation is complete and stays readable until released.
+            let intact = bundle.files.allSatisfy { path, data in
+                (try? Data(contentsOf: lease.payloadDirectory.appending(path: path))) == data
+            }
+            reads.withLock { $0.append(intact && lease.generation == bundle.generation) }
+            lease.release()
+            lease.release()
+        }
+        XCTAssertEqual(reads.withLock { $0 }.count, contention)
+        XCTAssertTrue(reads.withLock { $0 }.allSatisfy { $0 })
+
+        // One OpenMedBundleLease released from many threads at once ends once.
+        let lease: OpenMedBundleLease = try caches[0].lease(bundleID: bundle.bundleID)
+        DispatchQueue.concurrentPerform(iterations: contention) { _ in lease.release() }
+        let snapshot = try caches[1].snapshot(bundleID: bundle.bundleID)
+        XCTAssertEqual(snapshot.active, bundle.generation)
+        XCTAssertFalse(snapshot.generations.contains { $0.protections.contains(.leased) })
+        XCTAssertGreaterThan(clockReads.withLock { $0 }, 0)
+    }
+
+    func testManagedBundleImportersSerializeTheirSharedStateDirectory() throws {
+        let suite = "org.openmed.tests.concurrency-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = OpenMedManagedAppConfiguration(defaults: defaults)
+        let root = FileManager.default.temporaryDirectory.appending(
+            path: "openmed-managed-import-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try OpenMedBundleCache(rootDirectory: root.appending(path: "cache"))
+        // Two importers over one state directory share one process-wide mutex.
+        let importers = try (0..<2).map { _ in
+            try OpenMedManagedBundleImporter(cache: cache, stateDirectory: root.appending(path: "state"))
+        }
+        let context = try PortableBundleContext(now: "2026-11-07T00:00:00Z")
+        let attempts = OpenMedManagedBundleImporter.receiptCapacity
+        let reasons = OSAllocatedUnfairLock(initialState: [OpenMedManagedImportReason?]())
+        DispatchQueue.concurrentPerform(iterations: attempts) { index in
+            let receipt = importers[index % 2].importManaged(from: configuration, context: context)
+            reasons.withLock { $0.append(receipt.reason) }
+            _ = importers[(index + 1) % 2].receipts()
+        }
+        // No managed configuration is installed, so every import defers; the
+        // serialized read-modify-write of the state file keeps every receipt.
+        let deferred = reasons.withLock { $0 }
+        XCTAssertEqual(deferred.count, attempts)
+        XCTAssertTrue(deferred.allSatisfy { $0 == .managedConfigAbsent })
+        let receipts = importers[0].receipts()
+        XCTAssertEqual(receipts.count, attempts)
+        XCTAssertTrue(receipts.allSatisfy { $0.reason == .managedConfigAbsent })
+        XCTAssertEqual(importers[1].receipts(), receipts)
+    }
+
+    #if canImport(UIKit) && !os(watchOS)
+        @MainActor
+        func testUIApplicationBackgroundExecutionEndsAndCancelsFromManyThreads() throws {
+            // Unhosted test bundles have no UIApplication, and one must never be created.
+            guard
+                let application = (UIApplication.self as AnyObject).value(forKey: "sharedApplication")
+                    as? UIApplication
+            else {
+                throw XCTSkip("This test bundle has no host UIApplication.")
+            }
+            let execution = OpenMedUIApplicationBackgroundExecution(application: application)
+            let expirations = OSAllocatedUnfairLock(initialState: 0)
+            let foregrounds = OSAllocatedUnfairLock(initialState: 0)
+            let assertion = execution.beginBackgroundExecution { expirations.withLock { $0 += 1 } }
+            let observation = execution.observeForeground { foregrounds.withLock { $0 += 1 } }
+            DispatchQueue.concurrentPerform(iterations: contention) { _ in
+                assertion.end()
+                observation.cancel()
+            }
+            NotificationCenter.default.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+            XCTAssertEqual(foregrounds.withLock { $0 }, 0)
+            XCTAssertEqual(expirations.withLock { $0 }, 0)
         }
     #endif
 
