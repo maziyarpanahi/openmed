@@ -368,7 +368,13 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     assert done["processed_count"] == 2
     assert done["failed_count"] == 0
     assert done["label_histogram"] == {"NAME": 2}
-    assert done["webhook"]["url_hash"].startswith("sha256:")
+    # The test profile without a configured key digests under a per-process key.
+    assert done["webhook"]["url_digest"]["alg"] == "hmac-sha256"
+    assert done["webhook"]["url_digest"]["key_id"].startswith("ephemeral-")
+    assert "url_hash" not in done["webhook"]
+    assert (
+        callbacks[0]["payload"]["schema_version"] == jobs.WEBHOOK_PAYLOAD_SCHEMA_VERSION
+    )
     delivery = dict(done["webhook_delivery"])
     assert str(delivery.pop("payload_ref")).startswith("jp_")
     assert delivery.pop("delivery_id") == callbacks[0]["delivery_id"]
