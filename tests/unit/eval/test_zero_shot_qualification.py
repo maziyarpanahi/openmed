@@ -24,6 +24,7 @@ from openmed.eval.export_qualification import (
 )
 from openmed.mlx.models import normalize_model_config
 from openmed.ner.families import zero_shot_export as zs
+from tests.fixtures.modernbert_export_stub import text_contains_sentinels
 from tests.fixtures.zero_shot_export_stub import (
     GLICLASS_LABELS,
     GLICLASS_MARKERS,
@@ -109,8 +110,7 @@ def _qualify(setup: SimpleNamespace, *candidates: VariantCandidate, **kwargs: An
 
 def _no_private_values(payload: Any, *extra: str) -> None:
     text = json.dumps(payload, ensure_ascii=False)
-    for value in SENTINELS:
-        assert value not in text
+    assert not text_contains_sentinels(text, SENTINELS)
     for value in extra:
         assert json.dumps(value) not in text
 

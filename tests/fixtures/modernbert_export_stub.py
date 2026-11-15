@@ -16,6 +16,7 @@ degraded candidate is caught by the recall and leakage gates.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import string
 from pathlib import Path
@@ -224,19 +225,30 @@ class NetworkGuard:
         return self
 
 
+def sentinel_pattern(sentinels: tuple[str, ...]) -> re.Pattern[str]:
+    """Match any sentinel surface form as a standalone token.
+
+    A sentinel inside a longer alphanumeric run is not a leak: numeric
+    identifiers such as ``7731`` occur by chance inside the SHA-256 hex digests
+    that reports and manifests carry, and those digests change with every
+    temporary directory.
+    """
+    alternatives = "|".join(re.escape(value) for value in sentinels)
+    return re.compile(rf"(?<![0-9A-Za-z])(?:{alternatives})(?![0-9A-Za-z])")
+
+
 def files_containing_sentinels(root: Path, sentinels: tuple[str, ...]) -> list[str]:
     """Return relative paths under *root* whose bytes contain a sentinel."""
-    needles = [value.encode("utf-8") for value in sentinels]
+    pattern = re.compile(sentinel_pattern(sentinels).pattern.encode("utf-8"))
     hits: list[str] = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
-        payload = path.read_bytes()
-        if any(needle in payload for needle in needles):
+        if pattern.search(path.read_bytes()):
             hits.append(path.relative_to(root).as_posix())
     return hits
 
 
 def text_contains_sentinels(text: str, sentinels: tuple[str, ...]) -> bool:
     """Return whether *text* contains any sentinel surface form."""
-    return any(value in text for value in sentinels)
+    return sentinel_pattern(sentinels).search(text) is not None

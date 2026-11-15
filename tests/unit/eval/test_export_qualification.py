@@ -23,6 +23,7 @@ from tests.fixtures.modernbert_export_stub import (
     LABELS,
     SENTINELS,
     rule_fixture_rows,
+    text_contains_sentinels,
     write_rule_fixtures,
 )
 
@@ -402,7 +403,7 @@ def test_identical_candidate_qualifies_and_report_is_value_free(tmp_path: Path) 
     assert payload["io_contract"]["input_names"] == ["input_ids", "attention_mask"]
     assert set(payload["artifacts"]) == {"id2label.json", "model.onnx"}
     serialized = json.dumps(payload)
-    assert not any(value in serialized for value in SENTINELS)
+    assert not text_contains_sentinels(serialized, SENTINELS)
     assert str(tmp_path) not in serialized
 
 
@@ -828,7 +829,7 @@ def test_sequence_sweep_catches_a_graph_that_ignores_global_attention(
     payload = report.to_dict()
     assert payload["limits"] == WINDOWED_LIMITS
     serialized = json.dumps(payload)
-    assert not any(value in serialized for value in SENTINELS)
+    assert not text_contains_sentinels(serialized, SENTINELS)
 
 
 def test_quantized_sweep_drift_is_recorded_but_not_gated(tmp_path: Path) -> None:
@@ -868,7 +869,7 @@ def test_long_documents_compare_document_global_spans_across_overlaps(
     )
     assert failed.long_document["new_critical_leaks_by_label"]["PERSON"] > 0
     serialized = json.dumps(report.to_dict())
-    assert not any(value in serialized for value in SENTINELS)
+    assert not text_contains_sentinels(serialized, SENTINELS)
 
 
 def test_long_document_runtime_failure_is_recorded_not_raised(
@@ -1014,7 +1015,7 @@ def test_binding_decoder_profile_and_default_suite_reach_the_report(
     assert eq.summarize_report(report)["decoder_profile_sha256"] == "cd" * 32
     assert set(decoded) == {row["text"] for row in rule_fixture_rows()}
     serialized = json.dumps(payload)
-    assert not any(value in serialized for value in SENTINELS)
+    assert not text_contains_sentinels(serialized, SENTINELS)
     # Reports without a profile keep their previous shape.
     plain = _qualify(tmp_path, _candidate(tmp_path)).to_dict()
     assert "decoder" not in plain
@@ -1047,7 +1048,19 @@ def test_span_integrity_gate_rejects_broken_decoders(tmp_path: Path) -> None:
             binding=eq.QualificationBinding(span_decoder=failing),
         )
     assert error.value.reason is ExportReason.INFERENCE_FAILED
-    assert not any(value in str(error.value) for value in SENTINELS)
+    assert not text_contains_sentinels(str(error.value), SENTINELS)
+
+
+def test_sentinel_check_flags_tokens_but_not_digest_hex() -> None:
+    identifier = next(value for value in SENTINELS if value.isdigit())
+    name = next(value for value in SENTINELS if not value.isdigit())
+
+    assert text_contains_sentinels(json.dumps({"text": identifier}), SENTINELS)
+    assert text_contains_sentinels(f"record {identifier}.", SENTINELS)
+    assert text_contains_sentinels(f"patient {name} seen", SENTINELS)
+    # A digest whose hex happens to contain the identifier's digits is no leak.
+    digest = f"sha256:ab{identifier}cd" + "0" * 50
+    assert not text_contains_sentinels(json.dumps({"sha256": digest}), SENTINELS)
 
 
 def test_span_integrity_counts_overlaps_and_empty_labels() -> None:
