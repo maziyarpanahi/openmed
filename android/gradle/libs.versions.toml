@@ -3,17 +3,17 @@ agp = "8.7.3"
 # NDK r28c. :openmedkit copies its libc++_shared.so into the AAR for the DJL
 # tokenizer and strips it with this NDK; CI installs it with sdkmanager.
 android-ndk = "28.2.13676358"
-kotlin = "2.0.21"
+kotlin = "2.4.21"
 # Build-time public API dump/check (apiDump, apiCheck); Apache-2.0.
-binary-compatibility-validator = "0.16.3"
-kotlinx-coroutines = "1.8.1"
-kotlinx-serialization-json = "1.5.1"
+binary-compatibility-validator = "0.18.2"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization-json = "1.13.0"
 mlkit-text-recognition = "16.0.1"
-onnxruntime = "1.25.1"
+onnxruntime = "1.31.1"
 djl-tokenizers = "0.33.0"
 icu4j = "78.3"
 junit = "4.13.2"
-robolectric = "4.11.1"
+robolectric = "4.17"
 androidx-test-runner = "1.6.2"
 
 [libraries]
