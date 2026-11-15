@@ -9,18 +9,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import ssl
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from importlib import import_module
 from typing import Any, Protocol, cast
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 from openmed.clinical.journey_contracts import canonical_digest
+from openmed.core.config import PROFILE_ENV_VAR
 
 from .local import (
     LocalStoreError,
@@ -43,6 +45,17 @@ from .protocols import (
 _SCHEMA_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 _CONSTRAINT_SQLSTATES = frozenset({"23502", "23503", "23505", "23514", "23P01"})
 _MIGRATION_LOCK_ID = 613_753_209
+
+# Only these explicitly named profiles may use plaintext PostgreSQL transport.
+# Every other profile, including an unset one, is treated as production so a
+# typo or a custom name fails closed.
+_DEVELOPMENT_PROFILES = frozenset({"dev", "test"})
+_DEFAULT_PROFILE = "prod"
+_TLS_FILE_OPTIONS = ("sslrootcert", "sslcert", "sslkey")
+_CONNECT_OPTIONS = frozenset({"connect_timeout", *_TLS_FILE_OPTIONS})
+_NON_VERIFYING_SSLMODES = frozenset({"allow", "prefer", "require", "verify-ca"})
+POSTGRES_TLS_REQUIRED_CODE = "postgres_tls_required"
+POSTGRES_TLS_CONFIG_INVALID_CODE = "postgres_tls_config_invalid"
 
 
 class DBAPICursor(Protocol):
@@ -456,6 +469,72 @@ class PostgresStoreError(LocalStoreError):
     """Value-safe PostgreSQL lifecycle or operation failure."""
 
 
+class _PostgresTLSRequired(ValueError):
+    """Production transport policy refused a plaintext or unverified DSN."""
+
+    def __init__(self, tls: str) -> None:
+        super().__init__("verified PostgreSQL TLS is required")
+        self.tls = tls
+
+
+class _PostgresTLSConfigInvalid(ValueError):
+    """The operator CA bundle or client certificate could not be loaded."""
+
+
+@dataclass(frozen=True, slots=True)
+class PostgresTransportPosture:
+    """Value-free PostgreSQL transport posture for deployment self-checks.
+
+    The posture never contains the DSN, host, database, user name, password,
+    certificate paths, or certificate contents.
+
+    Attributes:
+        production: Whether the resolved profile enforces verified TLS.
+        tls: ``"verify_full"`` when the connection verifies the server
+            certificate and host name, ``"disabled"`` for plaintext,
+            ``"unverified"`` for a refused non-verifying ``sslmode``, or
+            ``"unknown"`` when the DSN cannot be evaluated.
+        trust_anchor: ``"operator_ca_bundle"``, ``"system_trust_store"``, or
+            ``"none"``.
+        client_certificate: Whether a client certificate is configured.
+        code: Stable reason code, such as ``postgres_tls_verified``,
+            ``postgres_plaintext_development``, ``postgres_tls_required``, or
+            ``invalid_dsn``.
+    """
+
+    production: bool
+    tls: str
+    trust_anchor: str
+    client_certificate: bool
+    code: str
+
+    @property
+    def ok(self) -> bool:
+        """Return whether the transport is permitted for the resolved profile."""
+
+        return self.code in {"postgres_tls_verified", "postgres_plaintext_development"}
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the posture as a JSON-compatible, value-free mapping."""
+
+        return {
+            "production": self.production,
+            "tls": self.tls,
+            "trust_anchor": self.trust_anchor,
+            "client_certificate": self.client_certificate,
+            "code": self.code,
+            "ok": self.ok,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class _TransportPlan:
+    parameters: dict[str, Any] = field(repr=False)
+    production: bool
+    verify_tls: bool
+    tls_files: dict[str, str] = field(repr=False)
+
+
 class _CursorResult:
     def __init__(self, cursor: DBAPICursor) -> None:
         self._cursor: DBAPICursor | None = cursor
@@ -619,17 +698,53 @@ class PostgresJourneyStore(SQLiteJourneyStore):
         schema: str = "openmed_journey",
         policy: StoragePolicy | None = None,
         connect_options: Mapping[str, Any] | None = None,
+        profile: str | None = None,
     ) -> StoreResult["PostgresJourneyStore"]:
         """Connect lazily with pg8000 when the caller explicitly supplies a DSN.
 
-        The DSN and connection options are never stored, logged, or included in
-        result representations.
+        Production profiles require ``sslmode=verify-full`` or an operator CA
+        bundle and refuse plaintext or non-verifying DSNs before the driver is
+        imported or a socket is opened. Only the explicit ``dev`` and ``test``
+        profiles may connect in plaintext.
+
+        The DSN, connection options, certificate paths, and certificate
+        contents are never stored, logged, or included in result
+        representations.
+
+        Args:
+            dsn: ``postgresql://`` URL with an optional ``sslmode`` query of
+                ``verify-full`` or, outside production, ``disable``.
+            schema: Controlled PostgreSQL schema name.
+            policy: Optional storage policy.
+            connect_options: Optional ``connect_timeout`` in seconds plus the
+                ``sslrootcert`` CA bundle and optional ``sslcert`` and
+                ``sslkey`` client certificate paths. Any TLS file option
+                selects verified TLS.
+            profile: OpenMed profile name. Defaults to ``OPENMED_PROFILE``,
+                then ``prod``.
+
+        Returns:
+            The opened store, ``denied`` with ``postgres_tls_required`` when
+            production transport policy refuses the DSN, or ``failure`` with
+            ``invalid_dsn``, ``postgres_tls_config_invalid``, or
+            ``postgres_connect_failed``.
         """
 
         if not isinstance(dsn, str) or not dsn:
             return StoreResult.outcome(StoreState.FAILURE, "invalid_dsn")
         try:
-            parameters = _pg8000_connect_parameters(dsn, connect_options)
+            parameters = _pg8000_connect_parameters(
+                dsn,
+                connect_options,
+                profile=profile,
+            )
+        except _PostgresTLSRequired:
+            return StoreResult.outcome(StoreState.DENIED, POSTGRES_TLS_REQUIRED_CODE)
+        except _PostgresTLSConfigInvalid:
+            return StoreResult.outcome(
+                StoreState.FAILURE,
+                POSTGRES_TLS_CONFIG_INVALID_CODE,
+            )
         except (TypeError, ValueError):
             return StoreResult.outcome(StoreState.FAILURE, "invalid_dsn")
         try:
@@ -897,11 +1012,37 @@ def _sqlstate(error: Exception) -> str | None:
     return None
 
 
-def _pg8000_connect_parameters(
+def _resolve_production(profile: str | None) -> bool:
+    if profile is None:
+        profile = os.getenv(PROFILE_ENV_VAR) or _DEFAULT_PROFILE
+    if not isinstance(profile, str):
+        raise TypeError("profile must be a string")
+    return profile.strip().lower() not in _DEVELOPMENT_PROFILES
+
+
+def _tls_file_options(supplied: Mapping[str, Any]) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for name in _TLS_FILE_OPTIONS:
+        if name not in supplied:
+            continue
+        value = supplied[name]
+        if isinstance(value, os.PathLike):
+            value = os.fspath(value)
+        if not isinstance(value, str) or not value or "\x00" in value:
+            raise ValueError("invalid PostgreSQL TLS option")
+        files[name] = value
+    if "sslkey" in files and "sslcert" not in files:
+        raise ValueError("invalid PostgreSQL TLS option")
+    return files
+
+
+def _transport_plan(
     dsn: str,
     options: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    """Convert a simple PostgreSQL URL into bounded pg8000 arguments."""
+    *,
+    profile: str | None,
+) -> _TransportPlan:
+    """Validate a DSN and options without loading files or opening sockets."""
 
     parsed = urlsplit(dsn)
     if (
@@ -918,28 +1059,155 @@ def _pg8000_connect_parameters(
     if not 1 <= port <= 65535:
         raise ValueError("invalid PostgreSQL port")
     supplied = dict(options or {})
-    if set(supplied) - {"connect_timeout"}:
+    if set(supplied) - _CONNECT_OPTIONS:
         raise ValueError("unsupported PostgreSQL connection option")
     timeout = supplied.get("connect_timeout", 3)
     if type(timeout) not in {int, float} or not 0 < timeout <= 30:
         raise ValueError("invalid PostgreSQL connection timeout")
+    tls_files = _tls_file_options(supplied)
     # Python 3.10 treats an empty string as a malformed field in strict mode.
     query = (
         parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
         if parsed.query
         else []
     )
-    if len(query) > 1 or (query and query[0] != ("sslmode", "verify-full")):
+    if len(query) > 1 or (query and query[0][0] != "sslmode"):
         raise ValueError("unsupported PostgreSQL connection option")
+    sslmode = query[0][1] if query else None
+    production = _resolve_production(profile)
+    if sslmode in _NON_VERIFYING_SSLMODES:
+        if production:
+            raise _PostgresTLSRequired("unverified")
+        raise ValueError("unsupported PostgreSQL connection option")
+    if sslmode not in {None, "disable", "verify-full"}:
+        raise ValueError("unsupported PostgreSQL connection option")
+    if sslmode == "disable" and tls_files:
+        raise ValueError("conflicting PostgreSQL TLS options")
+    verify_tls = sslmode == "verify-full" or bool(tls_files)
+    if production and not verify_tls:
+        raise _PostgresTLSRequired("disabled")
+    return _TransportPlan(
+        parameters={
+            "database": unquote(parsed.path[1:]),
+            "host": parsed.hostname,
+            "password": (
+                unquote(parsed.password) if parsed.password is not None else None
+            ),
+            "port": port,
+            "timeout": timeout,
+            "user": unquote(parsed.username),
+        },
+        production=production,
+        verify_tls=verify_tls,
+        tls_files=tls_files,
+    )
+
+
+def _verified_tls_context(tls_files: Mapping[str, str]) -> ssl.SSLContext:
+    """Build a verify-full client context from operator-supplied files."""
+
+    try:
+        context = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH,
+            cafile=tls_files.get("sslrootcert"),
+        )
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = True
+        if "sslcert" in tls_files:
+            context.load_cert_chain(
+                tls_files["sslcert"],
+                tls_files.get("sslkey"),
+            )
+    except (OSError, ValueError, ssl.SSLError):
+        raise _PostgresTLSConfigInvalid(
+            "PostgreSQL TLS configuration cannot be loaded"
+        ) from None
+    return context
+
+
+def _pg8000_connect_parameters(
+    dsn: str,
+    options: Mapping[str, Any] | None,
+    *,
+    profile: str | None = None,
+) -> dict[str, Any]:
+    """Convert a simple PostgreSQL URL into bounded pg8000 arguments."""
+
+    plan = _transport_plan(dsn, options, profile=profile)
     return {
-        "database": unquote(parsed.path[1:]),
-        "host": parsed.hostname,
-        "password": unquote(parsed.password) if parsed.password is not None else None,
-        "port": port,
-        "ssl_context": ssl.create_default_context() if query else None,
-        "timeout": timeout,
-        "user": unquote(parsed.username),
+        **plan.parameters,
+        "ssl_context": (
+            _verified_tls_context(plan.tls_files) if plan.verify_tls else None
+        ),
     }
+
+
+def postgres_transport_posture(
+    dsn: str,
+    connect_options: Mapping[str, Any] | None = None,
+    *,
+    profile: str | None = None,
+) -> PostgresTransportPosture:
+    """Evaluate PostgreSQL transport security without connecting.
+
+    The check parses the DSN and options only; it neither loads certificate
+    files nor imports the driver nor opens a socket. It is intended for
+    deployment self-checks and readiness reports.
+
+    Args:
+        dsn: PostgreSQL URL accepted by ``PostgresJourneyStore.connect``.
+        connect_options: The same options passed to ``connect``.
+        profile: OpenMed profile name. Defaults to ``OPENMED_PROFILE``, then
+            ``prod``.
+
+    Returns:
+        A value-free ``PostgresTransportPosture``.
+    """
+
+    try:
+        production = _resolve_production(profile)
+    except TypeError:
+        production = True
+    try:
+        if not isinstance(dsn, str) or not dsn:
+            raise ValueError("invalid PostgreSQL connection URL")
+        plan = _transport_plan(dsn, connect_options, profile=profile)
+    except _PostgresTLSRequired as refusal:
+        return PostgresTransportPosture(
+            production=production,
+            tls=refusal.tls,
+            trust_anchor="none",
+            client_certificate=False,
+            code=POSTGRES_TLS_REQUIRED_CODE,
+        )
+    except (TypeError, ValueError):
+        return PostgresTransportPosture(
+            production=production,
+            tls="unknown",
+            trust_anchor="none",
+            client_certificate=False,
+            code="invalid_dsn",
+        )
+    if not plan.verify_tls:
+        return PostgresTransportPosture(
+            production=plan.production,
+            tls="disabled",
+            trust_anchor="none",
+            client_certificate=False,
+            code="postgres_plaintext_development",
+        )
+    return PostgresTransportPosture(
+        production=plan.production,
+        tls="verify_full",
+        trust_anchor=(
+            "operator_ca_bundle"
+            if "sslrootcert" in plan.tls_files
+            else "system_trust_store"
+        ),
+        client_certificate="sslcert" in plan.tls_files,
+        code="postgres_tls_verified",
+    )
 
 
 __all__ = [
@@ -947,9 +1215,13 @@ __all__ = [
     "LATEST_POSTGRES_MIGRATION_VERSION",
     "MigrationHealth",
     "POSTGRES_MIGRATIONS",
+    "POSTGRES_TLS_CONFIG_INVALID_CODE",
+    "POSTGRES_TLS_REQUIRED_CODE",
     "PostgresJourneyStore",
     "PostgresJourneyTransaction",
     "PostgresMigration",
     "PostgresMigrationReport",
     "PostgresStoreError",
+    "PostgresTransportPosture",
+    "postgres_transport_posture",
 ]

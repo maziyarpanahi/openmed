@@ -164,3 +164,35 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> Non
         "secret rotation",
     ):
         assert required_text in docs
+
+
+def test_bundle_requires_verified_postgres_tls_with_operator_ca() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+    ca_mount = (
+        "${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/ca.crt:"
+        "/run/openmed/postgres-tls/ca.crt:ro"
+    )
+
+    for name in ("journey-migrate", "journey-worker", "openmed", "journey-golden"):
+        environment = services[name]["environment"]
+        assert environment["OPENMED_PROFILE"] == "${OPENMED_PROFILE:-prod}"
+        assert environment["OPENMED_JOURNEY_POSTGRES_DSN"].endswith(
+            "@postgres:5432/openmed?sslmode=verify-full"
+        )
+        assert environment["OPENMED_JOURNEY_POSTGRES_SSLROOTCERT"] == (
+            "/run/openmed/postgres-tls/ca.crt"
+        )
+        assert ca_mount in services[name]["volumes"]
+
+    postgres = services["postgres"]
+    assert "ssl=on" in postgres["command"]
+    assert "ssl_min_protocol_version=TLSv1.2" in postgres["command"]
+    assert all(
+        volume.endswith(":ro")
+        for volume in postgres["volumes"]
+        if "/run/openmed/postgres-tls/" in volume
+    )
+    docs = DOCS_FILE.read_text(encoding="utf-8")
+    assert "OPENMED_POSTGRES_TLS_DIR" in docs
+    assert "postgres_tls_required" in docs

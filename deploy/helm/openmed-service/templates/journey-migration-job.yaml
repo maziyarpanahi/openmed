@@ -36,6 +36,9 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.journey.database.secretName | quote }}
                   key: {{ .Values.journey.database.secretKey | quote }}
+            {{- if .Values.journey.database.tls.secretName }}
+            {{- include "openmed-service.journeyDatabaseTLSEnv" . | nindent 12 }}
+            {{- end }}
             - name: OPENMED_JOURNEY_SCHEMA
               value: {{ .Values.journey.schema | quote }}
           resources:
@@ -46,4 +49,10 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
+          {{- if .Values.journey.database.tls.secretName }}
+          volumeMounts:
+            {{- include "openmed-service.journeyDatabaseTLSVolumeMount" . | nindent 12 }}
+      volumes:
+        {{- include "openmed-service.journeyDatabaseTLSVolume" . | nindent 8 }}
+          {{- end }}
 {{- end }}

@@ -34,6 +34,46 @@ The value is required; Compose fails before startup when it is absent. For a
 long-lived deployment, inject it from the host's secret service rather than a
 checked-in `.env` file. `HF_TOKEN` is not configured by this profile.
 
+## Prepare PostgreSQL TLS
+
+The Journey containers connect with `sslmode=verify-full` and verify the
+PostgreSQL server certificate and host name against an operator CA bundle at
+`/run/openmed/postgres-tls/ca.crt` (`OPENMED_JOURNEY_POSTGRES_SSLROOTCERT`).
+The production profile refuses a plaintext or non-verifying DSN before opening
+a socket and reports the value-free code `postgres_tls_required`.
+
+Point `OPENMED_POSTGRES_TLS_DIR` at a host directory containing:
+
+- `ca.crt`, the CA bundle that issued the server certificate;
+- `server.crt`, issued for the DNS name `postgres` (the Compose service name);
+- `server.key`, readable only by the PostgreSQL container user (uid `70` in
+  `postgres:17-alpine`, mode `0600`).
+
+Use the organization's certificate authority for long-lived deployments. A
+clean development machine can create a short-lived synthetic CA:
+
+```bash
+export OPENMED_POSTGRES_TLS_DIR="$PWD/postgres-tls"
+mkdir -p "$OPENMED_POSTGRES_TLS_DIR" && cd "$OPENMED_POSTGRES_TLS_DIR"
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -days 30 -subj "/CN=OpenMed Compose Development CA" \
+  -keyout ca.key -out ca.crt
+openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+  -subj "/CN=postgres" -keyout server.key -out server.csr
+printf '%s\n' "subjectAltName=DNS:postgres" \
+  "basicConstraints=critical,CA:FALSE" \
+  "keyUsage=critical,digitalSignature" \
+  "extendedKeyUsage=serverAuth" > server.ext
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -days 30 -extfile server.ext -out server.crt
+sudo chown 70:70 server.key && chmod 0600 server.key
+```
+
+Keep `ca.key` outside the Compose host and never commit any of these files.
+Only `ca.crt` is mounted into the OpenMed containers, read-only. Server-side
+`pg_hba.conf` enforcement, role management, and database encryption at rest
+remain operator responsibilities.
+
 ## Start and run the golden journey
 
 Start PostgreSQL, wait for it to become healthy, run the migration job, start

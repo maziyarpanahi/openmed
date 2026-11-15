@@ -23,6 +23,8 @@ from .postgres import (
     PostgresMigration,
     PostgresMigrationReport,
     PostgresStoreError,
+    PostgresTransportPosture,
+    postgres_transport_posture,
 )
 from .protocols import (
     LOCAL_STORE_SCHEMA_VERSION,
@@ -86,6 +88,7 @@ __all__ = [
     "PostgresMigration",
     "PostgresMigrationReport",
     "PostgresStoreError",
+    "PostgresTransportPosture",
     "ResolutionStore",
     "SQLiteJourneyStore",
     "SQLiteJourneyTransaction",
@@ -98,4 +101,5 @@ __all__ = [
     "StoreState",
     "StoredJourneyGraph",
     "TransactionalJourneyStore",
+    "postgres_transport_posture",
 ]
