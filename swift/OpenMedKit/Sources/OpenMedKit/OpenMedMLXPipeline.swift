@@ -103,7 +103,8 @@
             tokenTypeIDs: [Int],
             offsets: [(Int, Int)],
             text: String,
-            strategy: PostProcessing.AggregationStrategy = .average
+            strategy: PostProcessing.AggregationStrategy = .average,
+            checkpoint: OpenMedInferenceCheckpoint = OpenMedInferenceCheckpoint()
         ) throws -> [EntityPrediction] {
             let sequenceLength = inputIDs.count
 
@@ -120,6 +121,7 @@
                 attentionMask: attentionArray
             )
             eval(logits)
+            try checkpoint.check(.modelPrediction)
 
             let probabilities = softmax(logits[0], axis: -1)
             let predictions = probabilities.argMax(axis: -1)
