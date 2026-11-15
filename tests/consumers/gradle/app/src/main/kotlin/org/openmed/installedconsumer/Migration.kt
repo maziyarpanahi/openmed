@@ -12,6 +12,7 @@ import com.openmed.openmedkit.catalog.ModelCatalogEntry
 import com.openmed.openmedkit.download.ModelDownloadResult
 import com.openmed.openmedkit.download.ModelDownloader
 import com.openmed.openmedkit.download.ModelIntegrityException
+import com.openmed.openmedkit.policy.PolicyProfileException
 import com.openmed.openmedkit.policy.PolicyProfiles
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -54,11 +55,20 @@ object MigrationExamples {
     fun legacyStoreState(repoId: String, cacheDirectory: File): OpenMedMLXModelCacheState =
         OpenMedModelStore.mlxModelCacheState(repoId, cacheDirectory = cacheDirectory)
 
-    /** Map the documented typed incompatibilities to stable codes. */
-    fun incompatibilityCode(error: Throwable): String? = when (error) {
-        is ModelIntegrityException -> "integrity_mismatch"
-        is UnsupportedOperationException -> "unsupported_on_android"
-        is IllegalArgumentException -> "invalid_argument"
+    /**
+     * Map the documented typed incompatibilities to stable codes.
+     *
+     * `PolicyProfileException` is matched on its value-free `code`, never on
+     * its message.
+     */
+    fun incompatibilityCode(error: Throwable): String? = when {
+        error is ModelIntegrityException -> "integrity_mismatch"
+        error is UnsupportedOperationException -> "unsupported_on_android"
+        error is PolicyProfileException && error.code == "profile_unknown" ->
+            "unknown_policy_profile"
+        error is PolicyProfileException && error.code == "resource_missing" ->
+            "policy_resource_missing"
+        error is IllegalArgumentException -> "invalid_argument"
         else -> null
     }
 }

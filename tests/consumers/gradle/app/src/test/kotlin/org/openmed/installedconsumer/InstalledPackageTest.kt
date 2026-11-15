@@ -11,6 +11,7 @@ import com.openmed.openmedkit.download.HuggingFaceModelInfo
 import com.openmed.openmedkit.download.ModelDownloader
 import com.openmed.openmedkit.download.ModelIntegrity
 import com.openmed.openmedkit.download.ModelIntegrityException
+import com.openmed.openmedkit.policy.PolicyProfileException
 import com.openmed.openmedkit.policy.PolicyProfiles
 import java.io.File
 import java.nio.file.Files
@@ -51,10 +52,31 @@ class InstalledPackageTest {
 
     @Test
     fun unknownPolicyProfileIsATypedIncompatibility() {
-        val error = assertFailsWith<IllegalArgumentException> {
-            PolicyProfiles.load(contract.string("unknown_profile"))
+        val unknownProfile = contract.string("unknown_profile")
+        val error = assertFailsWith<PolicyProfileException> {
+            PolicyProfiles.load(unknownProfile)
         }
-        assertEquals("invalid_argument", MigrationExamples.incompatibilityCode(error))
+        assertEquals("profile_unknown", error.code, "unknown_profile_code")
+        assertEquals("$.name", error.fieldPath, "unknown_profile_field_path")
+        assertFalse(
+            error.message.orEmpty().contains(unknownProfile),
+            "unknown_profile_echoed",
+        )
+        assertTrue(
+            PolicyProfiles.DEFAULT_PROFILE in PolicyProfiles.bundledProfileNames,
+            "default_profile_not_bundled",
+        )
+        assertEquals("unknown_policy_profile", MigrationExamples.incompatibilityCode(error))
+        assertEquals(
+            "policy_resource_missing",
+            MigrationExamples.incompatibilityCode(
+                PolicyProfileException("resource_missing", "$.manifest"),
+            ),
+        )
+        assertEquals(
+            "invalid_argument",
+            MigrationExamples.incompatibilityCode(PolicyProfileException("profile_invalid")),
+        )
     }
 
     @Test

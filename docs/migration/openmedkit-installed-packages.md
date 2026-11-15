@@ -161,9 +161,10 @@ Typed incompatibilities:
 - `UnsupportedOperationException`: `OpenMedModelStore.downloadMLXModel` is
   called for a model that is not already marked ready. Android never downloads
   MLX snapshots, and `mlxModelCacheState` only inspects a marker file.
-- `IllegalArgumentException`: `PolicyProfiles.load` received an unknown
-  profile. Android bundles six profiles. `gdpr_art9_health`, `canada_pipeda`
-  and `australia_privacy_act` are currently Swift-only and fail here.
+- `PolicyProfileException`, an `IllegalArgumentException`, with `code`
+  `profile_unknown`: `PolicyProfiles.load` received a profile name that is not
+  bundled. Android and Swift bundle the same portable profiles. A Python-only
+  profile fails with `profile_not_portable` instead.
 
 ## JavaScript (`openmed` on npm)
 
