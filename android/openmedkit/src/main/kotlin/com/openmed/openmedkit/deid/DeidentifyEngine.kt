@@ -1,6 +1,7 @@
 package com.openmed.openmedkit.deid
 
 import java.nio.charset.StandardCharsets
+import java.security.SecureRandom
 import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -13,9 +14,18 @@ import kotlin.math.min
  * The engine accepts original-text offsets and applies replacements from
  * right to left, so each span is replaced at its original offsets even when
  * earlier spans expand or shrink the output.
+ *
+ * [DeidentifyMethod.HASH] replacements are HMAC-SHA256 digests keyed by
+ * [hashSalt]. When no key is supplied, each engine generates a random 32-byte
+ * key, so digests repeat within one engine but differ between engines and app
+ * launches. Pass a secret key of at least 32 random bytes to keep pseudonyms
+ * stable across runs. Store it outside the app bundle and source control,
+ * because anyone holding it can test guesses against the digests.
+ *
+ * @param hashSalt Secret HMAC key for hash replacements. Must not be empty.
  */
 class DeidentifyEngine(
-    hashSalt: ByteArray = DEFAULT_HASH_SALT.toByteArray(StandardCharsets.UTF_8),
+    hashSalt: ByteArray = generateHashKey(),
 ) {
     private val hashKey = hashSalt.copyOf()
 
@@ -227,9 +237,13 @@ class DeidentifyEngine(
     }
 
     companion object {
-        private const val DEFAULT_HASH_SALT = "openmed-android-deidentify-v1"
+        private const val GENERATED_HASH_KEY_BYTES = 32
         private const val HMAC_SHA256 = "HmacSHA256"
         private val HEX_CHARS = "0123456789abcdef".toCharArray()
+
+        private fun generateHashKey(): ByteArray {
+            return ByteArray(GENERATED_HASH_KEY_BYTES).also { SecureRandom().nextBytes(it) }
+        }
 
         fun normalizeLabel(label: String): String {
             val normalized = label.trim()

@@ -8,6 +8,7 @@ import java.util.logging.LogRecord
 import java.util.logging.Logger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,6 +88,33 @@ class DeidentifyEngineTest {
         assertTrue(first.matches(Regex("hmac-sha256:[0-9a-f]{64}")))
         assertFalse(result.redactedText.contains("12345"))
         assertFalse(result.toString().contains("12345"))
+    }
+
+    @Test
+    fun defaultEnginesUseIndependentRandomHashKeys() {
+        val text = "MRN 12345 matched MRN 12345."
+        val spans = listOf(
+            spanOf(text, "12345", "medical_record_number"),
+            spanOf(text, "12345", "medical_record_number", fromIndex = text.lastIndexOf("12345")),
+        )
+
+        val first = DeidentifyEngine().deidentify(text, spans, DeidentifyMethod.HASH)
+        val second = DeidentifyEngine().deidentify(text, spans, DeidentifyMethod.HASH)
+
+        assertEquals(first.actions[0].replacement, first.actions[1].replacement)
+        assertTrue(first.actions[0].replacement.matches(Regex("hmac-sha256:[0-9a-f]{64}")))
+        assertNotEquals(first.actions[0].replacement, second.actions[0].replacement)
+    }
+
+    @Test
+    fun defaultHashKeyIsNotThePublishedLegacySalt() {
+        val text = "MRN 12345."
+        val spans = listOf(spanOf(text, "12345", "medical_record_number"))
+        val legacy = DeidentifyEngine("openmed-android-deidentify-v1".toByteArray())
+            .deidentify(text, spans, DeidentifyMethod.HASH)
+        val generated = DeidentifyEngine().deidentify(text, spans, DeidentifyMethod.HASH)
+
+        assertNotEquals(legacy.actions[0].replacement, generated.actions[0].replacement)
     }
 
     @Test
