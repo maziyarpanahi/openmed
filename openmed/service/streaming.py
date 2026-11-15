@@ -395,6 +395,7 @@ async def _iterate_pii_extract_ndjson(
     except Exception:
         yield _ndjson_error("internal_error", "Internal server error", None)
 
+
 logger = logging.getLogger(__name__)
 
 # Strong references to core windows that outlived their stream after a timeout

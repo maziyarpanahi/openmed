@@ -20,8 +20,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from .request_id import is_valid_request_id
-
 from .egress import (
     EgressAdapter,
     EgressDataClass,
@@ -32,6 +30,7 @@ from .egress import (
     egress_http_client,
     egress_scope,
 )
+from .request_id import is_valid_request_id
 
 SERVICE_PRIVACY_GATEWAY_ENDPOINT_ENV_VAR = "OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT"
 DEFAULT_PRIVACY_GATEWAY_POLICY = "strict"

@@ -467,7 +467,6 @@ def test_service_cohort_route_rejects_reproduction_before_handler(
     }
 
 
-
 # --- Receive-time bounds -----------------------------------------------------
 
 CANARY = b"synthetic-body-canary-0042"

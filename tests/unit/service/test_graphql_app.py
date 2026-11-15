@@ -392,6 +392,7 @@ def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch
     assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
     assert app.state.runtime._loader is None
 
+
 def test_get_queries_are_rejected_before_any_resolver_runs(
     client: TestClient,
     caplog: pytest.LogCaptureFixture,

@@ -23,8 +23,6 @@ import httpx
 
 from openmed.__about__ import __version__
 
-from .secret_files import SecretSourceError, read_secret_setting
-
 from .egress import (
     EgressAdapter,
     EgressCredential,
@@ -37,6 +35,7 @@ from .egress import (
     egress_async_http_client,
     egress_scope,
 )
+from .secret_files import SecretSourceError, read_secret_setting
 
 OPENHIM_MEDIA_TYPE = "application/json+openhim"
 OPENHIM_MEDIATOR_PATH = "/openhim/deidentify"

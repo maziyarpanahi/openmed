@@ -953,7 +953,6 @@ def test_summary_carries_bounds_only_for_bounded_families(tmp_path: Path) -> Non
     assert not {"global_attention", "windowing", "limits"} & set(plain)
 
 
-
 def _multilingual_fixtures(tmp_path: Path) -> Path:
     rows = []
     for index, (language, text, name) in enumerate(

@@ -17,10 +17,10 @@ from strawberry.http.ides import GraphQL_IDE
 from strawberry.types import ExecutionResult
 from strawberry.types.unset import UNSET
 
-from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE
 from openmed.core.config import PROFILE_ENV_VAR
 
 from .admission import REASON_GLOBAL_LIMIT
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE
 from .graphql_limits import (
     GraphQLLimitCategory,
     GraphQLLimitError,

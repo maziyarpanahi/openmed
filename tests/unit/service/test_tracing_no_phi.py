@@ -337,7 +337,6 @@ def test_conforming_request_id_is_preserved_on_request_span(
     assert request_span.attributes["openmed.request_id"] == inbound
 
 
-
 def test_failed_stages_record_only_the_error_type(
     span_exporter: InMemorySpanExporter,
     monkeypatch: pytest.MonkeyPatch,

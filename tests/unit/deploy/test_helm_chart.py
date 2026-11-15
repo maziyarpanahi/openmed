@@ -402,7 +402,6 @@ def test_journey_database_tls_is_absent_until_a_secret_is_named():
     assert "journey-database-tls" not in rendered
 
 
-
 def _containers(manifests: list[dict]) -> list[dict]:
     return [
         container
@@ -755,7 +754,6 @@ def test_rendered_manifests_contain_no_secrets_or_host_access(render_args):
                     }
                 else:
                     assert set(item["valueFrom"]) == {"secretKeyRef"}
-
 
 
 def _configmap_data(*args: str) -> dict[str, str]:

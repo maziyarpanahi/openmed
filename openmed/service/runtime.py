@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import ipaddress
 import asyncio
 import contextvars
 import functools
+import ipaddress
 import logging
 import math
 import os

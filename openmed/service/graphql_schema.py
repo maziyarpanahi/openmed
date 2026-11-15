@@ -27,9 +27,9 @@ from .admission import (
     release_when_settled,
 )
 from .auth import AuthPrincipal, scopes_satisfy
+from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE, ServiceShuttingDownError
 from .graphql_limits import GraphQLLimitsExtension
 from .journey_access import JourneyAccessGate, JourneyAccessRequest
-from .drain import SHUTTING_DOWN, SHUTTING_DOWN_MESSAGE, ServiceShuttingDownError
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,

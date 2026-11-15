@@ -79,7 +79,6 @@ def test_docker_compose_app_healthcheck_probes_readyz(monkeypatch, status, exit_
     assert {"interval", "timeout", "start_period", "retries"} <= healthcheck.keys()
 
 
-
 def test_docker_compose_declares_single_replica_mode():
     service = _app_service(_load_compose())
 

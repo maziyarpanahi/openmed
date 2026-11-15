@@ -51,6 +51,8 @@ FIXTURE = ROOT / "tests" / "fixtures" / "service" / "decision-negotiation-v1.jso
 def _negotiation_test_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exercise request negotiation, not the production readiness self-check."""
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+
+
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 SERVED_MODEL = "openmed/deterministic-fixed-option"
 PRIVATE_INPUT = "Synthetic marker QX-7731 needs urgent review."
