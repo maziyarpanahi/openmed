@@ -118,6 +118,15 @@ tasks.register("verifyDependencyBoundary") {
     dependsOn("generatePomFileForReleasePublication")
     inputs.file(moduleManifest)
     inputs.file(boundaryPom)
+    // Declaring the dependency manifests as an input makes Gradle build them
+    // first, e.g. the core module's merged release manifest that the optional
+    // module's classpath carries; reading the view only in doLast does not.
+    val dependencyManifestView = project.configurations.getByName(boundaryClasspath)
+        .incoming.artifactView {
+            attributes { attribute(artifactTypeAttribute, "android-manifest") }
+            lenient(true)
+        }
+    inputs.files(dependencyManifestView.files).withPropertyName("dependencyManifests")
     outputs.file(boundaryReport)
     // The resolved dependency graph is the real input; never skip the gate.
     outputs.upToDateWhen { false }
@@ -152,10 +161,7 @@ tasks.register("verifyDependencyBoundary") {
         manifestEntries(moduleManifest.asFile, includeComponents = false).forEach {
             findings += "$it <- ${project.path}"
         }
-        val dependencyManifests = classpath.incoming.artifactView {
-            attributes { attribute(artifactTypeAttribute, "android-manifest") }
-            lenient(true)
-        }.artifacts.artifacts
+        val dependencyManifests = dependencyManifestView.artifacts.artifacts
         dependencyManifests.forEach { artifact ->
             val owner = when (val id = artifact.id.componentIdentifier) {
                 is ModuleComponentIdentifier -> "${id.group}:${id.module}:${id.version}"
