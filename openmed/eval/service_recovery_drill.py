@@ -517,28 +517,49 @@ def _blob_location(root: Path, content_hash: str) -> Path:
 
 
 def _corrupted_inject(context: DrillContext) -> DrillStepOutcome:
+    from openmed.core.key_provider import InMemoryKeyProvider
+    from openmed.structured.store import JOURNEY_KEY_PURPOSE, JourneyStoreEncryption
     from openmed.structured.store.local import LocalArtifactStore
 
     root = context.work_dir / "artifacts"
-    store = LocalArtifactStore(root)
+    # Seal the synthetic blobs with a throw-away key that never leaves this
+    # process, as a deployed store would be sealed, so the drill also runs
+    # under the production profile, which refuses plaintext Journey storage.
+    store = LocalArtifactStore(
+        root,
+        encryption=JourneyStoreEncryption.encrypted(
+            InMemoryKeyProvider.generate(JOURNEY_KEY_PURPOSE)
+        ),
+    )
     affected = _artifact(_SYNTHETIC_BLOB, "a")
     peer = _artifact(_SYNTHETIC_PEER_BLOB, "b")
     stored = store.put_bytes(affected, _SYNTHETIC_BLOB).ok
     stored = store.put_bytes(peer, _SYNTHETIC_PEER_BLOB).ok and stored
     blob = _blob_location(root, affected.content_hash)
     data = bytearray(blob.read_bytes())
-    data[0] ^= 0x01
+    # Flip a stored content bit rather than the envelope header, so the read
+    # fails its integrity check instead of being refused as a foreign format.
+    data[-1] ^= 0x01
     blob.chmod(0o600)
     blob.write_bytes(bytes(data))
     context.state.update(store=store, affected=affected, peer=peer)
     return _outcome(stored, "blob_bytes_corrupted")
 
 
+# Store codes that refuse a blob because its stored bytes fail verification:
+# a sealed blob fails envelope authentication, and a plaintext blob fails its
+# content digest. Any other refusal (a missing or unreadable blob) is not
+# detection of the corruption.
+_INTEGRITY_FAILURE_CODES: Final = frozenset(
+    {"artifact_integrity_failed", "envelope_authentication_failed"}
+)
+
+
 def _corrupted_detect(context: DrillContext) -> DrillStepOutcome:
     result = context.state["store"].get_bytes(context.state["affected"].content_hash)
     served = int(result.ok)
     return _outcome(
-        served == 0 and result.code == "artifact_integrity_failed",
+        served == 0 and result.code in _INTEGRITY_FAILURE_CODES,
         "integrity_failure_detected",
         corrupted_bytes_served=served,
     )
