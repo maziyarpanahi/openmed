@@ -11,6 +11,7 @@ on:
       - 'tests/mobile/flutter_ffi_support.dart'
       - 'tests/mobile/fixtures/flutter_ffi_*'
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/portable_bundle_calibration/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'examples/flutter/**'
   pull_request:
@@ -22,6 +23,7 @@ on:
       - 'tests/mobile/flutter_ffi_support.dart'
       - 'tests/mobile/fixtures/flutter_ffi_*'
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/portable_bundle_calibration/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'examples/flutter/**'
   workflow_dispatch:

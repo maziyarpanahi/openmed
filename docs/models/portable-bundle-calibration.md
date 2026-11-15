@@ -228,8 +228,10 @@ critical but not understood, non-critical, malformed, stale weights, and
 thresholds edited after signing), read cases for every structural and
 cross-reference failure, and resolve cases for every selection failure and
 malformed request. Python, Swift, Kotlin, and TypeScript tests all consume
-it. Verification cases are signed with the TEST-ONLY keys of the bundle
-corpus. To regenerate or check it:
+it. The Dart reader in `openmedkit_flutter` checks the extension only during
+bundle verification. Its tests run the verification cases and compare the
+content-check reason of every read case. Verification cases are signed with
+the TEST-ONLY keys of the bundle corpus. To regenerate or check it:
 
 ```bash
 python tests/fixtures/portable_bundle_calibration/generate_vectors.py

@@ -743,6 +743,22 @@ PortableBundleManifestView _validateManifest(
   );
 }
 
+/// Checks the content of every built-in extension the reader understands and
+/// the manifest carries; a malformed or inconsistent one is
+/// `extension_invalid`.
+void _validateBuiltinExtensions(
+  Map<String, dynamic> value,
+  Set<String> understood,
+) {
+  final Map<String, dynamic> extensions =
+      value['extensions'] as Map<String, dynamic>;
+  if (understood.contains(decisionCalibrationExtension) &&
+      extensions.containsKey(decisionCalibrationExtension) &&
+      decisionCalibrationFailure(value) != null) {
+    throw const _Refusal('extension_invalid');
+  }
+}
+
 /// Parses and validates canonical manifest bytes without checking signatures.
 ///
 /// Throws [PortableBundleException] with the first failing reason code.
@@ -760,6 +776,410 @@ Map<String, dynamic> parsePortableBundleManifest(
   } on _Refusal catch (refusal) {
     throw PortableBundleException(refusal.reason);
   }
+}
+
+// --------------------------------------------------------------------------
+// Built-in extension: org.openmed.decision_calibration
+// --------------------------------------------------------------------------
+//
+// Mirrors validate_decision_calibration_extension in
+// openmed/core/portable_bundle_calibration.py: the same checks run in the same
+// order and fail with the same reason code for
+// tests/fixtures/portable_bundle_calibration/vectors.json. Bundle verification
+// reports every failure as `extension_invalid`. Reasons are value-free codes;
+// no profile content, path, or digest is echoed.
+
+/// Manifest extension name that carries decision calibration profiles.
+const String decisionCalibrationExtension = 'org.openmed.decision_calibration';
+
+/// Extension `schema_version` this reader implements.
+const int decisionCalibrationExtensionVersion = 1;
+
+const int _calibrationPpm = 1000000;
+const int _maxCalibrationProfiles = 16;
+const int _maxCalibrationRuntimes = 32;
+const int _maxCalibrationPoints = 64;
+const int _maxCalibrationTemperature = 100000000;
+const int _maxCalibrationPlatt = 100000000;
+
+const List<String> _calibrationExtensionKeys = <String>[
+  'profiles',
+  'schema_version'
+];
+const List<String> _calibrationProfileKeys = <String>[
+  'calibration_id',
+  'decision_schema',
+  'method',
+  'model',
+  'parameters',
+  'profile_digest',
+  'provenance',
+  'scope',
+  'thresholds',
+  'version',
+];
+const Map<String, List<String>> _calibrationParameterKeys =
+    <String, List<String>>{
+  'deterministic_margin': <String>[],
+  'isotonic_regression': <String>['points'],
+  'platt_scaling': <String>['intercept_ppm', 'slope_ppm'],
+  'temperature_scaling': <String>['temperature_ppm'],
+};
+const List<String> _calibrationScopeKinds = <String>[
+  'labels',
+  'options',
+  'questions'
+];
+
+final RegExp _calibrationId = _whole(r'[a-z][a-z0-9_.:/-]{0,127}');
+// Any declared bundle path matches; whether it is declared is checked later.
+final RegExp _evaluationPath = _whole(r'[A-Za-z0-9_][A-Za-z0-9._+/-]{0,511}');
+
+class _CalibrationMalformed implements Exception {
+  const _CalibrationMalformed();
+}
+
+class _CalibrationUnsupported implements Exception {
+  const _CalibrationUnsupported();
+}
+
+class _CalibrationBinding {
+  const _CalibrationBinding(this.runtimeId, this.digest);
+
+  final String runtimeId;
+  final String digest;
+}
+
+class _CalibrationProfile {
+  const _CalibrationProfile({
+    required this.calibrationId,
+    required this.scopeKind,
+    required this.scopeDigest,
+    required this.modelId,
+    required this.modelRevision,
+    required this.runtimes,
+    required this.evaluationPath,
+    required this.evaluationSha256,
+    required this.profileDigest,
+  });
+
+  final String calibrationId;
+  final String scopeKind;
+  final String scopeDigest;
+  final String modelId;
+  final String? modelRevision;
+  final List<_CalibrationBinding> runtimes;
+  final String? evaluationPath;
+  final String? evaluationSha256;
+  final String profileDigest;
+}
+
+Map<String, dynamic> _calibrationObject(Object? value, List<String> keys) {
+  if (value is! Map<String, dynamic> ||
+      value.length != keys.length ||
+      !keys.every(value.containsKey)) {
+    throw const _CalibrationMalformed();
+  }
+  return value;
+}
+
+String _calibrationText(Object? value, RegExp pattern) {
+  if (value is! String || !pattern.hasMatch(value)) {
+    throw const _CalibrationMalformed();
+  }
+  return value;
+}
+
+int _calibrationInt(Object? value, int minimum, int maximum) {
+  if (value is! int || value < minimum || value > maximum) {
+    throw const _CalibrationMalformed();
+  }
+  return value;
+}
+
+int _compareCalibrationSemver(String left, String right) {
+  final List<int> a = left.split('.').map<int>(int.parse).toList();
+  final List<int> b = right.split('.').map<int>(int.parse).toList();
+  for (int index = 0; index < 3; ++index) {
+    if (a[index] != b[index]) {
+      return a[index] < b[index] ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+String _calibrationDigest(Object? value) =>
+    sha256Identity(utf8.encode(portableBundleCanonicalJson(value)));
+
+void _parseCalibrationParameters(String method, Object? value) {
+  final Map<String, dynamic> parameters =
+      _calibrationObject(value, _calibrationParameterKeys[method]!);
+  if (method == 'temperature_scaling') {
+    _calibrationInt(
+        parameters['temperature_ppm'], 1, _maxCalibrationTemperature);
+  } else if (method == 'platt_scaling') {
+    if (_calibrationInt(parameters['slope_ppm'], -_maxCalibrationPlatt,
+            _maxCalibrationPlatt) ==
+        0) {
+      throw const _CalibrationMalformed();
+    }
+    _calibrationInt(parameters['intercept_ppm'], -_maxCalibrationPlatt,
+        _maxCalibrationPlatt);
+  } else if (method == 'isotonic_regression') {
+    final Object? raw = parameters['points'];
+    if (raw is! List || raw.length < 2 || raw.length > _maxCalibrationPoints) {
+      throw const _CalibrationMalformed();
+    }
+    int? lastInput;
+    int? lastOutput;
+    for (final Object? item in raw) {
+      final Map<String, dynamic> point =
+          _calibrationObject(item, const <String>['input_ppm', 'output_ppm']);
+      final int input = _calibrationInt(point['input_ppm'], 0, _calibrationPpm);
+      final int output =
+          _calibrationInt(point['output_ppm'], 0, _calibrationPpm);
+      if (lastInput != null &&
+          lastOutput != null &&
+          (input <= lastInput || output < lastOutput)) {
+        throw const _CalibrationMalformed();
+      }
+      lastInput = input;
+      lastOutput = output;
+    }
+  }
+}
+
+_CalibrationProfile _parseCalibrationProfile(Object? value) {
+  final Map<String, dynamic> profile =
+      _calibrationObject(value, _calibrationProfileKeys);
+  final String calibrationId =
+      _calibrationText(profile['calibration_id'], _calibrationId);
+  _calibrationText(profile['version'], _semver);
+  final Object? method = profile['method'];
+  if (method is! String || !_calibrationParameterKeys.containsKey(method)) {
+    throw const _CalibrationMalformed();
+  }
+  _parseCalibrationParameters(method, profile['parameters']);
+
+  final Map<String, dynamic> thresholds =
+      _calibrationObject(profile['thresholds'], const <String>[
+    'minimum_confidence_ppm',
+    'minimum_margin_ppm',
+    'multi_label_threshold_ppm',
+  ]);
+  final int confidence =
+      _calibrationInt(thresholds['minimum_confidence_ppm'], 0, _calibrationPpm);
+  final int margin =
+      _calibrationInt(thresholds['minimum_margin_ppm'], 0, _calibrationPpm);
+  _calibrationInt(thresholds['multi_label_threshold_ppm'], 0, _calibrationPpm);
+  if (margin > confidence) {
+    throw const _CalibrationMalformed();
+  }
+
+  final Map<String, dynamic> scope =
+      _calibrationObject(profile['scope'], const <String>['digest', 'kind']);
+  final Object? kind = scope['kind'];
+  if (kind is! String || !_calibrationScopeKinds.contains(kind)) {
+    throw const _CalibrationMalformed();
+  }
+  final String scopeDigest = _calibrationText(scope['digest'], _sha256);
+
+  final Map<String, dynamic> model = _calibrationObject(
+      profile['model'], const <String>['id', 'revision', 'runtimes']);
+  final String modelId = _calibrationText(model['id'], _modelId);
+  final Object? revision = model['revision'];
+  final String? modelRevision =
+      revision == null ? null : _calibrationText(revision, _revision);
+  final Object? rawRuntimes = model['runtimes'];
+  if (rawRuntimes is! List ||
+      rawRuntimes.isEmpty ||
+      rawRuntimes.length > _maxCalibrationRuntimes) {
+    throw const _CalibrationMalformed();
+  }
+  final List<_CalibrationBinding> runtimes = <_CalibrationBinding>[];
+  for (final Object? item in rawRuntimes) {
+    final Map<String, dynamic> binding =
+        _calibrationObject(item, const <String>['digest', 'id']);
+    runtimes.add(_CalibrationBinding(
+      _calibrationText(binding['id'], _token),
+      _calibrationText(binding['digest'], _sha256),
+    ));
+  }
+  if (runtimes
+          .map((_CalibrationBinding item) => item.runtimeId)
+          .toSet()
+          .length !=
+      runtimes.length) {
+    throw const _CalibrationMalformed();
+  }
+
+  final Map<String, dynamic> range = _calibrationObject(
+    profile['decision_schema'],
+    const <String>['max_exclusive', 'min'],
+  );
+  final String schemaMin = _calibrationText(range['min'], _semver);
+  final String schemaMax = _calibrationText(range['max_exclusive'], _semver);
+  if (_compareCalibrationSemver(schemaMin, schemaMax) >= 0) {
+    throw const _CalibrationMalformed();
+  }
+
+  final Map<String, dynamic> provenance =
+      _calibrationObject(profile['provenance'], const <String>[
+    'dataset_digest',
+    'evaluation',
+    'in_domain_digest',
+    'out_of_domain_digest',
+  ]);
+  _calibrationText(provenance['dataset_digest'], _sha256);
+  _calibrationText(provenance['in_domain_digest'], _sha256);
+  _calibrationText(provenance['out_of_domain_digest'], _sha256);
+  String? evaluationPath;
+  String? evaluationSha256;
+  if (provenance['evaluation'] != null) {
+    final Map<String, dynamic> evaluation = _calibrationObject(
+        provenance['evaluation'], const <String>['path', 'sha256']);
+    evaluationPath = _calibrationText(evaluation['path'], _evaluationPath);
+    evaluationSha256 = _calibrationText(evaluation['sha256'], _sha256);
+  }
+
+  return _CalibrationProfile(
+    calibrationId: calibrationId,
+    scopeKind: kind,
+    scopeDigest: scopeDigest,
+    modelId: modelId,
+    modelRevision: modelRevision,
+    runtimes: runtimes,
+    evaluationPath: evaluationPath,
+    evaluationSha256: evaluationSha256,
+    profileDigest: _calibrationText(profile['profile_digest'], _sha256),
+  );
+}
+
+List<_CalibrationProfile> _parseCalibrationExtension(Object? raw) {
+  if (raw is! Map<String, dynamic> || raw['schema_version'] is! int) {
+    throw const _CalibrationMalformed();
+  }
+  if (raw['schema_version'] != decisionCalibrationExtensionVersion) {
+    throw const _CalibrationUnsupported();
+  }
+  _calibrationObject(raw, _calibrationExtensionKeys);
+  final Object? items = raw['profiles'];
+  if (items is! List ||
+      items.isEmpty ||
+      items.length > _maxCalibrationProfiles) {
+    throw const _CalibrationMalformed();
+  }
+  final List<_CalibrationProfile> profiles =
+      items.map<_CalibrationProfile>(_parseCalibrationProfile).toList();
+  final List<String> bindings = <String>[
+    for (final _CalibrationProfile profile in profiles)
+      for (final _CalibrationBinding binding in profile.runtimes)
+        '${profile.calibrationId}\n${binding.runtimeId}',
+  ];
+  if (bindings.toSet().length != bindings.length) {
+    throw const _CalibrationMalformed();
+  }
+  return profiles;
+}
+
+Map<String, String> _calibrationFileDigests(Map<String, dynamic> manifest) =>
+    <String, String>{
+      for (final Object? item in manifest['files'] as List<dynamic>)
+        (item as Map<String, dynamic>)['path'] as String:
+            item['sha256'] as String,
+    };
+
+String? _calibrationRuntimeDigest(
+    Map<String, dynamic> manifest, String runtimeId) {
+  Map<String, dynamic>? runtime;
+  for (final Object? item in manifest['runtimes'] as List<dynamic>) {
+    if ((item as Map<String, dynamic>)['id'] == runtimeId) {
+      runtime = item;
+      break;
+    }
+  }
+  if (runtime == null) {
+    return null;
+  }
+  final Map<String, String> digests = _calibrationFileDigests(manifest);
+  final List<Map<String, Object?>> files = <Map<String, Object?>>[];
+  for (final Object? path in runtime['files'] as List<dynamic>) {
+    final String? digest = digests[path];
+    if (digest == null) {
+      return null;
+    }
+    files.add(<String, Object?>{'path': path, 'sha256': digest});
+  }
+  return _calibrationDigest(<String, Object?>{
+    'entrypoint': runtime['entrypoint'],
+    'files': files,
+    'format': runtime['format'],
+    'id': runtimeId,
+    'precision': runtime['precision'],
+  });
+}
+
+/// Returns the first failing calibration reason code, or `null` when valid.
+///
+/// [manifest] must be a manifest value that already passed portable-bundle
+/// structural validation and carries the extension. Checks run in the
+/// normative order: the extension envelope, every profile's shape, unique
+/// `(calibration_id, runtime)` bindings, then for each profile its self
+/// digest, model identity, runtime digests, label-map scope, and evaluation
+/// evidence. The result is one of the `calibration_*` reason codes shared by
+/// every OpenMed calibration reader.
+String? decisionCalibrationFailure(Map<String, dynamic> manifest) {
+  final Object? raw = (manifest['extensions']
+      as Map<String, dynamic>)[decisionCalibrationExtension];
+  final List<_CalibrationProfile> profiles;
+  try {
+    profiles = _parseCalibrationExtension(raw);
+  } on _CalibrationUnsupported {
+    return 'calibration_version_unsupported';
+  } on _CalibrationMalformed {
+    return 'calibration_malformed';
+  }
+  final List<dynamic> items =
+      (raw as Map<String, dynamic>)['profiles'] as List<dynamic>;
+
+  final Map<String, dynamic> model = manifest['model'] as Map<String, dynamic>;
+  final Set<String> runtimeIds = <String>{
+    for (final Object? item in manifest['runtimes'] as List<dynamic>)
+      (item as Map<String, dynamic>)['id'] as String,
+  };
+  final Map<String, String> digests = _calibrationFileDigests(manifest);
+  final Object? labels = manifest['labels'];
+  for (int index = 0; index < profiles.length; ++index) {
+    final _CalibrationProfile profile = profiles[index];
+    final Map<String, dynamic> body =
+        Map<String, dynamic>.of(items[index] as Map<String, dynamic>)
+          ..remove('profile_digest');
+    if (_calibrationDigest(body) != profile.profileDigest) {
+      return 'calibration_digest_mismatch';
+    }
+    if (profile.modelId != model['id'] ||
+        profile.modelRevision != model['revision']) {
+      return 'calibration_model_mismatch';
+    }
+    for (final _CalibrationBinding binding in profile.runtimes) {
+      if (!runtimeIds.contains(binding.runtimeId) ||
+          _calibrationRuntimeDigest(manifest, binding.runtimeId) !=
+              binding.digest) {
+        return 'calibration_runtime_mismatch';
+      }
+    }
+    if (profile.scopeKind == 'labels' &&
+        (labels is! Map<String, dynamic> ||
+            digests[labels['path']] != profile.scopeDigest)) {
+      return 'calibration_scope_mismatch';
+    }
+    final String? evaluationPath = profile.evaluationPath;
+    if (evaluationPath != null &&
+        digests[evaluationPath] != profile.evaluationSha256) {
+      return 'calibration_evidence_mismatch';
+    }
+  }
+  return null;
 }
 
 // --------------------------------------------------------------------------
@@ -1050,10 +1470,12 @@ PortableBundleVerificationDetail verifyPortableBundleDetailed({
     }
     validSignatures =
         _checkSignatures(parsed.signatures, manifestBytes, trustPolicy, now);
+    final Set<String> understood = context.understoodExtensions.toSet();
     final PortableBundleManifestView validated = _validateManifest(
       _parseCanonical(manifestBytes),
-      context.understoodExtensions.toSet(),
+      understood,
     );
+    _validateBuiltinExtensions(validated.value, understood);
     int declaredBytes = 0;
     for (final Map<String, dynamic> item in validated.files) {
       declaredBytes += item['size_bytes'] as int;

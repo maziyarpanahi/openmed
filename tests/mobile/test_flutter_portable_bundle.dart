@@ -1,17 +1,39 @@
 // The Dart portable-bundle verifier against the shared golden vectors in
-// tests/fixtures/portable_bundle/vectors.json (Python reference results).
+// tests/fixtures/portable_bundle/vectors.json and the decision calibration
+// vectors in tests/fixtures/portable_bundle_calibration/vectors.json (Python
+// reference results).
 
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openmedkit_flutter/openmedkit.dart';
+import 'package:openmedkit_flutter/src/portable_bundle.dart'
+    show
+        decisionCalibrationExtension,
+        decisionCalibrationExtensionVersion,
+        decisionCalibrationFailure;
 
 import 'flutter_ffi_support.dart';
 
 Map<String, dynamic> _vectors() => readRepoJson(
       <String>['tests', 'fixtures', 'portable_bundle', 'vectors.json'],
     );
+
+Map<String, dynamic> _calibrationVectors() => readRepoJson(
+      <String>[
+        'tests',
+        'fixtures',
+        'portable_bundle_calibration',
+        'vectors.json',
+      ],
+    );
+
+/// Read-level calibration refusals that precede the extension content checks.
+const List<String> _calibrationReadReasons = <String>[
+  'calibration_bundle_unverified',
+  'calibration_extension_missing',
+];
 
 String _manifestText(Map<String, dynamic> vectors, String key) {
   final Map<String, dynamic> entry = (vectors['manifests']
@@ -28,22 +50,23 @@ String _manifestText(Map<String, dynamic> vectors, String key) {
       base.substring(at + delete);
 }
 
+PortableBundleTarget _target(Map<String, dynamic> target) =>
+    PortableBundleTarget(
+      platform: target['platform'] as String,
+      sdkName: target['sdk_name'] as String,
+      sdkVersion: target['sdk_version'] as String,
+      runtimes: (target['runtimes'] as List<dynamic>).cast<String>(),
+      osVersion: target['os_version'] as String?,
+      policyVersion: target['policy_version'] as int?,
+      memoryBytes: target['memory_bytes'] as int?,
+      storageBytes: target['storage_bytes'] as int?,
+    );
+
 PortableBundleContext _context(Map<String, dynamic> raw) {
   final Map<String, dynamic>? target = raw['target'] as Map<String, dynamic>?;
   return PortableBundleContext(
     now: raw['now'] as String,
-    target: target == null
-        ? null
-        : PortableBundleTarget(
-            platform: target['platform'] as String,
-            sdkName: target['sdk_name'] as String,
-            sdkVersion: target['sdk_version'] as String,
-            runtimes: (target['runtimes'] as List<dynamic>).cast<String>(),
-            osVersion: target['os_version'] as String?,
-            policyVersion: target['policy_version'] as int?,
-            memoryBytes: target['memory_bytes'] as int?,
-            storageBytes: target['storage_bytes'] as int?,
-          ),
+    target: target == null ? null : _target(target),
     sequenceFloors:
         (raw['sequence_floors'] as Map<String, dynamic>).cast<String, int>(),
     understoodExtensions:
@@ -279,5 +302,75 @@ void main() {
     } finally {
       await root.delete(recursive: true);
     }
+  });
+
+  test('decision calibration verification cases match the Python reference',
+      () {
+    final Map<String, dynamic> calibration = _calibrationVectors();
+    expect(calibration['synthetic_only'], isTrue);
+    expect(calibration['test_only_keys'], isTrue);
+    expect(calibration['extension'], decisionCalibrationExtension);
+    expect(
+      calibration['extension_version'],
+      decisionCalibrationExtensionVersion,
+    );
+    final PortableBundleTrustPolicy trustPolicy =
+        PortableBundleTrustPolicy.fromJson(calibration['trust_policy']);
+    final List<dynamic> cases =
+        calibration['verification_cases'] as List<dynamic>;
+    expect(cases.length, greaterThan(10));
+    for (final Object? entry in cases) {
+      final Map<String, dynamic> item = entry as Map<String, dynamic>;
+      final Map<String, List<int>> files = <String, List<int>>{};
+      for (final Object? file in <Object?>[
+        ...calibration['tree'] as List<dynamic>,
+        ...item['tree_set'] as List<dynamic>,
+      ]) {
+        final Map<String, dynamic> value = file as Map<String, dynamic>;
+        files[value['path'] as String] = utf8.encode(value['text'] as String);
+      }
+      final PortableBundleVerification result = PortableBundle.verify(
+        manifest: utf8.encode(
+          _manifestText(calibration, item['manifest'] as String),
+        ),
+        envelope: utf8.encode(item['envelope'] as String),
+        trustPolicy: trustPolicy,
+        context: PortableBundleContext(
+          now: calibration['now'] as String,
+          target: _target(calibration['target'] as Map<String, dynamic>),
+          understoodExtensions:
+              (item['understood_extensions'] as List<dynamic>).cast<String>(),
+        ),
+        files: files,
+      );
+      expect(result.toJson(), item['expected'], reason: item['id'] as String);
+    }
+  });
+
+  test('decision calibration content checks match the Python read reasons',
+      () {
+    final Map<String, dynamic> calibration = _calibrationVectors();
+    int checked = 0;
+    for (final Object? entry in calibration['read_cases'] as List<dynamic>) {
+      final Map<String, dynamic> item = entry as Map<String, dynamic>;
+      final Map<String, dynamic> expected =
+          item['expected'] as Map<String, dynamic>;
+      final Object? reason = expected['reason'];
+      if (_calibrationReadReasons.contains(reason)) {
+        continue;
+      }
+      final Map<String, dynamic> structural = PortableBundle.parseManifest(
+        utf8.encode(_manifestText(calibration, item['manifest'] as String)),
+        understoodExtensions: const <String>[decisionCalibrationExtension],
+      );
+      expect(
+        decisionCalibrationFailure(structural),
+        reason,
+        reason: item['id'] as String,
+      );
+      expect(expected['ok'], reason == null, reason: item['id'] as String);
+      checked += 1;
+    }
+    expect(checked, greaterThan(40));
   });
 }
