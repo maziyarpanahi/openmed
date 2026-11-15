@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator, Iterator, Mapping
 from typing import Any
 
@@ -21,6 +22,12 @@ MAX_DEIDENTIFY_STREAM_CHUNK_SIZE = 32768
 DEFAULT_DEIDENTIFY_STREAM_MAX_BUFFER = 4096
 
 _END_OF_STREAM = object()
+
+logger = logging.getLogger(__name__)
+
+# Strong references to core windows that outlived their stream after a timeout
+# or client disconnect. Their deferred cleanup releases the model reference.
+_ABANDONED_WINDOWS: set[asyncio.Future[Any]] = set()
 
 
 class PIIDeidentifyStreamRequest(PIIDeidentifyRequest):
@@ -66,6 +73,7 @@ async def _iterate_deidentify_ndjson(
     model_key: str | None = None
     error: BaseException | None = None
     iterator: Iterator[Any] | None = None
+    window: asyncio.Future[Any] | None = None
     chunk_index = 0
     timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
     loop = asyncio.get_running_loop()
@@ -102,7 +110,9 @@ async def _iterate_deidentify_ndjson(
         )
 
         while True:
-            event = await _next_with_deadline(iterator, deadline)
+            remaining = _remaining_seconds(deadline)
+            window = _start_window(iterator)
+            event = await _await_window(window, remaining)
             if event is _END_OF_STREAM:
                 break
             if bool(getattr(event, "final", False)):
@@ -174,26 +184,107 @@ async def _iterate_deidentify_ndjson(
             }
         )
     finally:
-        if iterator is not None:
-            close = getattr(iterator, "close", None)
-            if callable(close):
-                close()
-        if model_key is not None:
-            runtime.finish_model_request(model_key, payload.keep_alive, error)
+        _release_stream(
+            runtime,
+            model_key,
+            payload.keep_alive,
+            iterator=iterator,
+            window=window,
+            error=error,
+        )
 
 
-async def _next_with_deadline(
-    iterator: Iterator[Any],
-    deadline: float | None,
-) -> Any:
-    operation = run_in_threadpool(_next_or_end, iterator)
+def _start_window(iterator: Iterator[Any]) -> asyncio.Future[Any]:
+    """Advance the blocking core iterator by one window in the threadpool."""
+    return asyncio.ensure_future(run_in_threadpool(_next_or_end, iterator))
+
+
+def _remaining_seconds(deadline: float | None) -> float | None:
     if deadline is None:
-        return await operation
-
+        return None
     remaining = deadline - asyncio.get_running_loop().time()
     if remaining <= 0:
         raise asyncio.TimeoutError
-    return await asyncio.wait_for(operation, timeout=remaining)
+    return remaining
+
+
+async def _await_window(
+    window: asyncio.Future[Any],
+    remaining: float | None,
+) -> Any:
+    """Wait for one window without cancelling the worker that runs it.
+
+    A worker thread cannot be interrupted, so the shield keeps the window
+    future tracking that thread after a timeout or client disconnect.
+    """
+    if remaining is None:
+        return await asyncio.shield(window)
+    return await asyncio.wait_for(asyncio.shield(window), timeout=remaining)
+
+
+def _release_stream(
+    runtime: ServiceRuntime,
+    model_key: str | None,
+    keep_alive: Any,
+    *,
+    iterator: Iterator[Any] | None,
+    window: asyncio.Future[Any] | None,
+    error: BaseException | None,
+) -> None:
+    """Close the core iterator and release the model reference exactly once.
+
+    When the stream ends while a window is still executing in a worker thread,
+    the iterator cannot be closed yet and the model is still in use. Cleanup is
+    then deferred until that window returns; its result is discarded.
+    """
+
+    def release() -> None:
+        try:
+            if iterator is not None:
+                _close_iterator(iterator)
+        finally:
+            if model_key is not None:
+                runtime.finish_model_request(model_key, keep_alive, error)
+
+    if window is None or window.done():
+        if window is not None:
+            _discard_window_result(window)
+        release()
+        return
+
+    _ABANDONED_WINDOWS.add(window)
+
+    def release_after_window(future: asyncio.Future[Any]) -> None:
+        _ABANDONED_WINDOWS.discard(future)
+        _discard_window_result(future)
+        try:
+            release()
+        except Exception as exc:
+            logger.warning(
+                "Deferred streaming de-identification cleanup failed (%s)",
+                type(exc).__name__,
+            )
+
+    window.add_done_callback(release_after_window)
+
+
+def _discard_window_result(window: asyncio.Future[Any]) -> None:
+    """Mark a finished window's outcome as retrieved without surfacing it."""
+    if not window.cancelled():
+        window.exception()
+
+
+def _close_iterator(iterator: Iterator[Any]) -> None:
+    close = getattr(iterator, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception as exc:
+        logger.warning(
+            "Streaming de-identification iterator close failed (%s)",
+            type(exc).__name__,
+        )
 
 
 def _next_or_end(iterator: Iterator[Any]) -> Any:
