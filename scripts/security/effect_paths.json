@@ -501,6 +501,11 @@
       "module": "openmed.service.client"
     },
     {
+      "module": "openmed.service.client",
+      "function": "OpenMedClient.openai_decisions",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "DeidentifyJobQueue._discard_payload",
       "module": "openmed.service.jobs"
@@ -601,14 +606,29 @@
       "module": "openmed.structured.store.local"
     },
     {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._arm_sqlite_deadline",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "SQLiteJourneyStore._bind_encryption",
       "module": "openmed.structured.store.local"
     },
     {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._commit_before_deadline",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "SQLiteJourneyStore._complete_migration",
       "module": "openmed.structured.store.local"
+    },
+    {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._disarm_sqlite_deadline",
+      "classification": "operational"
     },
     {
       "classification": "operational",
@@ -681,9 +701,34 @@
       "module": "openmed.structured.store.postgres"
     },
     {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._bounded_unit",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._commit_or_report_unknown",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._reset_session",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "PostgresJourneyStore.transaction",
       "module": "openmed.structured.store.postgres"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "_PostgresConnectionAdapter._enforce_deadline",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "_PostgresConnectionAdapter.arm",
+      "classification": "operational"
     },
     {
       "classification": "operational",
@@ -803,6 +848,11 @@
     {
       "module": "openmed.service._rehearsal_worker",
       "function": "_sqlite_previous",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.graphql_app",
+      "function": "GraphQLPrivacyHeadersMiddleware.__call__.send_with_privacy_headers",
       "classification": "operational"
     },
     {
