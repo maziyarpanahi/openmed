@@ -8,6 +8,10 @@ import os
     import Tokenizers
 #endif
 
+#if canImport(CoreGraphics)
+    import CoreGraphics
+#endif
+
 // Concurrent-use coverage for every `@unchecked Sendable` type in OpenMedKit and
 // compile-time Sendable checks for public value types. Each test hits one shared
 // instance from many tasks or threads and asserts the invariant its lock exists
@@ -418,7 +422,7 @@ final class ConcurrencySafetyTests: XCTestCase {
                     _ = try OpenMed.loadTokenizer(
                         tokenizerName: "synthetic/offline", tokenizerFolderURL: nil,
                         allowNetworkAccess: false)
-                } catch TokenizerError.missingConfig {
+                } catch OpenMedTokenizerError.missingLocalAssets {
                     refusals.withLock { $0 += 1 }
                 } catch {}
             }
@@ -435,4 +439,85 @@ final class ConcurrencySafetyTests: XCTestCase {
         }
         XCTAssertEqual(stopped.withLock { $0 }, contention)
     }
+
+    #if canImport(CoreGraphics) && canImport(ImageIO)
+        func testDocumentIntakeImageReleaseIsAtomicUnderContention() async throws {
+            let context = try XCTUnwrap(
+                CGContext(
+                    data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 16,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            let image = CGDocumentIntakeImage(try XCTUnwrap(context.makeImage()))
+            await withTaskGroup(of: Void.self) { group in
+                for index in 0..<contention {
+                    group.addTask {
+                        if index.isMultiple(of: 8) { image.release() }
+                        // A reader sees the whole image or nothing, never a torn value.
+                        if let pixels = image.cgImage { XCTAssertEqual(pixels.width, 4) }
+                        _ = image.isReleased
+                    }
+                }
+            }
+            XCTAssertTrue(image.isReleased)
+            XCTAssertNil(image.cgImage)
+            XCTAssertEqual(image.pixelWidth, 4)
+        }
+
+        func testDocumentRedactionSessionRegistryKeepsEveryLiveSessionUnderContention() async throws {
+            let root = FileManager.default.temporaryDirectory.appending(
+                path: "openmed-registry-\(UUID().uuidString)", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let registry = DocumentRedactionSessionRegistry()
+            let names = (0..<contention).map { "session-\($0)" }
+            await withTaskGroup(of: Void.self) { group in
+                for name in names {
+                    group.addTask {
+                        // Register before creating the directory, like the exporter.
+                        registry.register(name, sweeping: root)
+                        try? FileManager.default.createDirectory(
+                            at: root.appending(path: name), withIntermediateDirectories: true)
+                    }
+                }
+            }
+            let live = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
+            XCTAssertEqual(live, Set(names))
+
+            let removed = Set(names.prefix(contention / 2))
+            await withTaskGroup(of: Void.self) { group in
+                for name in removed { group.addTask { registry.remove(name) } }
+            }
+            registry.register("session-sweeper", sweeping: root)
+            let remaining = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
+            XCTAssertEqual(remaining, Set(names).subtracting(removed))
+        }
+
+        func testDocumentRedactionExportersShareTheSessionRegistryUnderContention() async throws {
+            let root = FileManager.default.temporaryDirectory.appending(
+                path: "openmed-exporters-\(UUID().uuidString)", directoryHint: .isDirectory)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let exporters = try await withThrowingTaskGroup(of: DocumentRedactionExporter.self) { group in
+                for _ in 0..<16 {
+                    group.addTask {
+                        try DocumentRedactionExporter(recognizer: RefusingTextRecognizer(), directory: root)
+                    }
+                }
+                var made: [DocumentRedactionExporter] = []
+                for try await exporter in group { made.append(exporter) }
+                return made
+            }
+            // Concurrent sweeps never remove another live exporter's session.
+            let sessions = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            XCTAssertEqual(sessions.count, exporters.count)
+        }
+    #endif
 }
+
+#if canImport(CoreGraphics) && canImport(ImageIO)
+    /// Recognizer double for exporter construction; exports are never run.
+    private struct RefusingTextRecognizer: DocumentTextRecognizer {
+        func recognize(_ image: any DocumentIntakeImage) async throws -> DocumentRecognition {
+            throw CancellationError()
+        }
+    }
+#endif

@@ -260,6 +260,7 @@ def test_every_unchecked_sendable_source_type_has_a_concurrent_use_test() -> Non
     covered_by_owner = {
         "GeneratedDetectorBox": "GeneratedTextGuard",
         "ThermalNotificationSubscription": "AppleSystemThermalSource",
+        "VerifyingRecognizer": "DocumentRedactionExporter",
     }
 
     unchecked = _unchecked_sendable_types()
