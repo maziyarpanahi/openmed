@@ -28,6 +28,7 @@ on:
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
       - 'tests/fixtures/device_capabilities/**'
+      - 'tests/fixtures/bundle_cache/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -56,6 +57,7 @@ on:
   workflow_dispatch:
       - 'tests/fixtures/portable_bundle/**'
       - 'tests/fixtures/device_capabilities/**'
+      - 'tests/fixtures/bundle_cache/**'
 
 permissions:
   contents: read
