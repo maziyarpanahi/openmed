@@ -806,57 +806,61 @@ final class ConcurrencySafetyTests: XCTestCase {
             XCTAssertEqual(image.pixelWidth, 4)
         }
 
-        func testDocumentRedactionSessionRegistryKeepsEveryLiveSessionUnderContention() async throws {
-            let root = FileManager.default.temporaryDirectory.appending(
-                path: "openmed-registry-\(UUID().uuidString)", directoryHint: .isDirectory)
-            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-            defer { try? FileManager.default.removeItem(at: root) }
-            let registry = DocumentRedactionSessionRegistry()
-            let names = (0..<contention).map { "session-\($0)" }
-            await withTaskGroup(of: Void.self) { group in
-                for name in names {
-                    group.addTask {
-                        // Register before creating the directory, like the exporter.
-                        registry.register(name, sweeping: root)
-                        try? FileManager.default.createDirectory(
-                            at: root.appending(path: name), withIntermediateDirectories: true)
+        // The redaction exporter and its session registry need PDFKit, which
+        // watchOS lacks.
+        #if canImport(PDFKit)
+            func testDocumentRedactionSessionRegistryKeepsEveryLiveSessionUnderContention() async throws {
+                let root = FileManager.default.temporaryDirectory.appending(
+                    path: "openmed-registry-\(UUID().uuidString)", directoryHint: .isDirectory)
+                try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+                defer { try? FileManager.default.removeItem(at: root) }
+                let registry = DocumentRedactionSessionRegistry()
+                let names = (0..<contention).map { "session-\($0)" }
+                await withTaskGroup(of: Void.self) { group in
+                    for name in names {
+                        group.addTask {
+                            // Register before creating the directory, like the exporter.
+                            registry.register(name, sweeping: root)
+                            try? FileManager.default.createDirectory(
+                                at: root.appending(path: name), withIntermediateDirectories: true)
+                        }
                     }
                 }
-            }
-            let live = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
-            XCTAssertEqual(live, Set(names))
+                let live = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
+                XCTAssertEqual(live, Set(names))
 
-            let removed = Set(names.prefix(contention / 2))
-            await withTaskGroup(of: Void.self) { group in
-                for name in removed { group.addTask { registry.remove(name) } }
-            }
-            registry.register("session-sweeper", sweeping: root)
-            let remaining = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
-            XCTAssertEqual(remaining, Set(names).subtracting(removed))
-        }
-
-        func testDocumentRedactionExportersShareTheSessionRegistryUnderContention() async throws {
-            let root = FileManager.default.temporaryDirectory.appending(
-                path: "openmed-exporters-\(UUID().uuidString)", directoryHint: .isDirectory)
-            defer { try? FileManager.default.removeItem(at: root) }
-            let exporters = try await withThrowingTaskGroup(of: DocumentRedactionExporter.self) { group in
-                for _ in 0..<16 {
-                    group.addTask {
-                        try DocumentRedactionExporter(recognizer: RefusingTextRecognizer(), directory: root)
-                    }
+                let removed = Set(names.prefix(contention / 2))
+                await withTaskGroup(of: Void.self) { group in
+                    for name in removed { group.addTask { registry.remove(name) } }
                 }
-                var made: [DocumentRedactionExporter] = []
-                for try await exporter in group { made.append(exporter) }
-                return made
+                registry.register("session-sweeper", sweeping: root)
+                let remaining = Set(try FileManager.default.contentsOfDirectory(atPath: root.path))
+                XCTAssertEqual(remaining, Set(names).subtracting(removed))
             }
-            // Concurrent sweeps never remove another live exporter's session.
-            let sessions = try FileManager.default.contentsOfDirectory(atPath: root.path)
-            XCTAssertEqual(sessions.count, exporters.count)
-        }
+
+            func testDocumentRedactionExportersShareTheSessionRegistryUnderContention() async throws {
+                let root = FileManager.default.temporaryDirectory.appending(
+                    path: "openmed-exporters-\(UUID().uuidString)", directoryHint: .isDirectory)
+                defer { try? FileManager.default.removeItem(at: root) }
+                let exporters = try await withThrowingTaskGroup(of: DocumentRedactionExporter.self) { group in
+                    for _ in 0..<16 {
+                        group.addTask {
+                            try DocumentRedactionExporter(recognizer: RefusingTextRecognizer(), directory: root)
+                        }
+                    }
+                    var made: [DocumentRedactionExporter] = []
+                    for try await exporter in group { made.append(exporter) }
+                    return made
+                }
+                // Concurrent sweeps never remove another live exporter's session.
+                let sessions = try FileManager.default.contentsOfDirectory(atPath: root.path)
+                XCTAssertEqual(sessions.count, exporters.count)
+            }
+        #endif
     #endif
 }
 
-#if canImport(CoreGraphics) && canImport(ImageIO)
+#if canImport(CoreGraphics) && canImport(ImageIO) && canImport(PDFKit)
     /// Recognizer double for exporter construction; exports are never run.
     private struct RefusingTextRecognizer: DocumentTextRecognizer {
         func recognize(_ image: any DocumentIntakeImage) async throws -> DocumentRecognition {

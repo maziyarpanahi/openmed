@@ -1297,8 +1297,14 @@ public final class OpenMedBundleCache: @unchecked Sendable, CustomStringConverti
     }
 
     private func availableCapacity() -> Int64 {
-        let values = try? root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? Int64.max
+        #if os(watchOS)
+            // watchOS has no important-usage capacity key; it reports raw free space.
+            let values = try? root.resourceValues(forKeys: [.volumeAvailableCapacityKey])
+            return values?.volumeAvailableCapacity.map(Int64.init) ?? Int64.max
+        #else
+            let values = try? root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            return values?.volumeAvailableCapacityForImportantUsage ?? Int64.max
+        #endif
     }
 
     /// Moves `entry` out of reach with one rename, then deletes it.
