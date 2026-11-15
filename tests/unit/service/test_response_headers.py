@@ -328,9 +328,18 @@ def test_probe_responses_are_unchanged(client: TestClient) -> None:
         _assert_no_policy_headers(response, path)
 
 
-def test_static_documents_use_the_declared_cache_policy(client: TestClient) -> None:
-    for path in ("/openapi.json", "/docs", "/redoc"):
-        response = client.get(path)
+def test_static_documents_use_the_declared_cache_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only the development profile serves all three documents publicly.
+    monkeypatch.setenv("OPENMED_PROFILE", "dev")
+    with TestClient(
+        create_app(), base_url=LOOPBACK_BASE_URL, raise_server_exceptions=False
+    ) as dev_client:
+        responses = {
+            path: dev_client.get(path) for path in ("/openapi.json", "/docs", "/redoc")
+        }
+    for path, response in responses.items():
         assert response.status_code == 200, path
         assert response.headers.get_list("cache-control") == [
             STATIC_DOCUMENT_CACHE_CONTROL

@@ -102,6 +102,7 @@ class _FakeServer:
         self.bound: list[tuple[str, str]] = []
         self.started = False
         self.stopped = False
+        self.preloaded = False
 
     def add_insecure_port(self, address: str) -> Any:
         self.bound.append(("insecure", address))
@@ -114,6 +115,9 @@ class _FakeServer:
         if self.error is not None:
             raise self.error
         return self.port
+
+    def preload_runtime(self) -> None:
+        self.preloaded = True
 
     def start(self) -> None:
         self.started = True
@@ -248,6 +252,7 @@ def test_serve_default_binds_only_loopback(
     assert grpc_server.serve(runtime=runtime) is fake
     assert fake.bound == [("insecure", "127.0.0.1:50051")]
     assert fake.started is True
+    assert fake.preloaded is True
 
 
 def test_serve_default_answers_on_loopback(
