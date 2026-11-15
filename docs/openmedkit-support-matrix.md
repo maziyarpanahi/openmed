@@ -215,7 +215,7 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `python-mlx-off-apple-silicon` | linux | server-or-desktop | any | mlx >=0.22 | any | any | any | — | runtime-unavailable | — | OpenMed's MLX backends require Apple Silicon macOS. |
 | `python-gguf-token-classification` | any | server-or-desktop | any | any | cpu | any | any | — | runtime-unavailable | — | GGUF export is embedding-only; token-classification heads are rejected. |
-| `python-onnx-unexported-families` | any | any | any | onnxruntime >=1.16 | any | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `python-onnx-unexported-families` | any | any | any | onnxruntime >=1.16 | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
 
 ## Swift OpenMedKit
 
@@ -251,7 +251,7 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 | `swift-visionos-mlx` | visionos 1+ | apple-vision | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
 | `swift-watchos-coreml-non-nano` | watchos 10+ | apple-watch | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
 | `swift-visionos-coreml-non-nano` | visionos 1+ | apple-vision | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
-| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family, DeBERTa-v2, ModernBERT and Longformer only. |
+| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family, DeBERTa-v2, ModernBERT, Longformer and Privacy Filter only. |
 | `swift-mac-catalyst` | mac-catalyst | mac-catalyst | any | any | any | any | any | — | not-qualified | — | Package.swift declares no Mac Catalyst platform and no lane builds it. |
 
 ## Kotlin and Android OpenMedKit
@@ -280,7 +280,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 | `android-16kb-page-size` | android 26+ | android-device | arm64-v8a | onnxruntime 1.25.1 | any | any | any | page-size:16kb | not-qualified | #3927 | Native libraries are not yet verified to load with 16 KB pages. |
 | `android-armeabi-v7a` | android 26+ | android-device | armeabi-v7a | onnxruntime 1.25.1 | any | any | any | — | not-qualified | — |  |
 | `android-x86` | android 26+ | android-emulator | x86 | onnxruntime 1.25.1 | any | any | any | — | not-qualified | — |  |
-| `android-onnx-unexported-families` | android 26+ | any | any | onnxruntime 1.25.1 | any | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `android-onnx-unexported-families` | android 26+ | any | any | onnxruntime 1.25.1 | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
 
 ## React Native bridge
 
@@ -330,7 +330,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 | `web-webgpu-insecure-context` | any | desktop-browser | any | onnxruntime >=1.20.0 | webgpu | any | any | secure-context:absent | runtime-unavailable | — | WebGPU requires HTTPS or localhost. |
 | `web-threads-without-isolation` | any | desktop-browser | wasm32 | onnxruntime >=1.20.0 | wasm-simd-threads | any | any | cross-origin-isolation:absent | runtime-unavailable | — | Without COOP and COEP headers the loader uses single-threaded WASM. |
 | `web-mobile-browser` | any | mobile-browser | any | onnxruntime >=1.20.0 | any | any | any | — | not-qualified | — |  |
-| `web-unexported-families` | any | desktop-browser | any | onnxruntime >=1.20.0 | any | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `web-unexported-families` | any | desktop-browser | any | onnxruntime >=1.20.0 | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
 
 ## Shared document intake
 
@@ -398,7 +398,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `flutter-web` | any | desktop-browser | any | any | any | any | any | — | runtime-not-linked | — | pubspec.yaml declares no web platform for the plugin. |
 | `flutter-apple-coreml` | ios 13.0+ | iphone-ipad | any | coreml system | coreml | any | any | — | runtime-not-linked | — | The plugin links ONNX Runtime only; use Swift OpenMedKit for Core ML. |
-| `flutter-onnx-unexported-families` | any | any | any | any | any | openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
+| `flutter-onnx-unexported-families` | any | any | any | any | any | gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — |  |
 
 ## Electron integration
 

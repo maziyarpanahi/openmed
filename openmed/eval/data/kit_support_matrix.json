@@ -2137,7 +2137,6 @@
       "runtime": "onnxruntime-python",
       "provider": "*",
       "families": [
-        "openai-privacy-filter",
         "gliner-span",
         "gliclass",
         "gliner-token-relex"
@@ -2331,7 +2330,6 @@
       "runtime": "coreml-system",
       "provider": "coreml",
       "families": [
-        "openai-privacy-filter",
         "gliner-span",
         "gliclass",
         "gliner-token-relex"
@@ -2342,7 +2340,7 @@
       "status": "unsupported",
       "reason": "family-not-exported",
       "artifact": "coreml",
-      "note": "The Core ML converter allowlists BERT-family, DeBERTa-v2, ModernBERT and Longformer only."
+      "note": "The Core ML converter allowlists BERT-family, DeBERTa-v2, ModernBERT, Longformer and Privacy Filter only."
     },
     {
       "id": "swift-mac-catalyst",
@@ -2526,7 +2524,6 @@
       "runtime": "onnxruntime-android",
       "provider": "*",
       "families": [
-        "openai-privacy-filter",
         "gliner-span",
         "gliclass",
         "gliner-token-relex"
@@ -2674,7 +2671,6 @@
       "runtime": "onnxruntime-web",
       "provider": "*",
       "families": [
-        "openai-privacy-filter",
         "gliner-span",
         "gliclass",
         "gliner-token-relex"
@@ -2847,7 +2843,6 @@
       "runtime": "*",
       "provider": "*",
       "families": [
-        "openai-privacy-filter",
         "gliner-span",
         "gliclass",
         "gliner-token-relex"
