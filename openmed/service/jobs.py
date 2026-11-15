@@ -73,6 +73,7 @@ from .webhooks import (
     WEBHOOK_ERROR_SENDER,
     WebhookDeliveryResult,
     WebhookDispatcher,
+    authorize_webhook_destination,
     deliver_webhook,
     pending_delivery_metadata,
 )
@@ -740,6 +741,9 @@ class DeidentifyJobQueue:
     ) -> dict[str, Any]:
         """Submit one de-identification job and return its initial metadata.
 
+        A webhook URL is checked against the egress policy before the job is
+        accepted, so a refused callback is rejected at submission.
+
         Args:
             payload: The validated request. It is snapshotted immediately; the
                 caller may reuse or mutate it afterwards.
@@ -754,9 +758,12 @@ class DeidentifyJobQueue:
                 configured maximum or the model is not served.
             RuntimeError: If the queue is shutting down.
             EncryptionError: If the input payload cannot be retained.
+            EgressDenied: When the egress policy refuses the webhook URL.
         """
         snapshot = DeidentifyJobRequest(**_request_body(payload))
         self.runtime.validate_served_model(snapshot.model_name)
+        if snapshot.webhook is not None:
+            authorize_webhook_destination(snapshot.webhook.url)
         self._payload_retention_seconds(snapshot)
         with self._lock:
             if self._shutdown:

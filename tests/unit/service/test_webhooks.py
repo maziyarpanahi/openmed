@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import (
     ATTEMPT_HEADER,
     DELIVERY_ID_HEADER,
@@ -50,6 +51,17 @@ def _v1_summary(result: WebhookDeliveryResult) -> dict[str, Any]:
     summary.pop("signature_version", None)
     summary.pop("attempt_receipts", None)
     return summary
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [{"purposes": ["webhook"], "destination": "https://callbacks.example.test"}]
+        ),
+    )
 
 
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:

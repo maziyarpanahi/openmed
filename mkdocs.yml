@@ -164,6 +164,7 @@ nav:
       - Service Security-policy Generations: security/policy-generations.md
       - Service Security Profile: serving/security-profile.md
       - Deployment Security Posture Lane: deploy/security-posture.md
+      - Service Egress Policy: serving/egress-policy.md
       - Helm Deployment: deploy/helm.md
       - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md

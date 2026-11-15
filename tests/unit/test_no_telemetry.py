@@ -84,17 +84,17 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
+    "service/egress.py": (
+        "fail-closed egress policy: pinned clients only for allowlisted, "
+        "policy-authorized service destinations"
+    ),
     "service/workflow_client.py": (
         "explicit bounded workflow calls over the caller-configured REST client; "
         "no background polling, automatic mutation retries or telemetry"
     ),
-    "service/backends/remote_inference.py": (
-        "opt-in user-configured KServe V2 remote inference"
-    ),
     "service/openhim_mediator.py": (
         "opt-in OpenHIM mediator registration/heartbeat (user-configured)"
     ),
-    "service/privacy_gateway.py": "opt-in privacy-gateway forwarding (user-configured)",
     "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",

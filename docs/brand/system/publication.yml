@@ -239,6 +239,7 @@ classification:
     - security/policy-generations.md
     - serving/security-profile.md
     - deploy/security-posture.md
+    - serving/egress-policy.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md

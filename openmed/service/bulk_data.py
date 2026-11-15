@@ -25,6 +25,13 @@ from openmed.interop.fhir.bulk import (
     _safe_resource_type,
 )
 
+from .egress import EgressDenied, EgressPolicy
+from .idempotency import (
+    IdempotencyReservation,
+    IdempotentStartRequest,
+    StartIdempotencyStore,
+    StartOutcome,
+)
 from .job_bounds import (
     DEFAULT_MAX_RETAINED_JOBS,
     DEFAULT_MAX_RUNNING_JOBS,
@@ -34,17 +41,12 @@ from .job_bounds import (
     prune_job_records,
 )
 from .jobs import _parse_positive_int
-from .idempotency import (
-    IdempotencyReservation,
-    IdempotentStartRequest,
-    StartIdempotencyStore,
-    StartOutcome,
-)
 from .smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
     SMARTBackendError,
     SMARTBackendIngestionSummary,
+    authorize_smart_backend_config,
 )
 
 _PATH_CODES = frozenset(
@@ -373,6 +375,7 @@ class FHIRBulkJobManager:
         bounds: BulkJobBounds | None = None,
         clock: Callable[[], float] = time.time,
         idempotency: StartIdempotencyStore | None = None,
+        egress_policy: EgressPolicy | None = None,
     ) -> None:
         """Create an empty manager.
 
@@ -386,6 +389,7 @@ class FHIRBulkJobManager:
         self._client_assertion_builder = client_assertion_builder
         self._bounds = bounds if bounds is not None else BulkJobBounds()
         self._clock = clock
+        self._egress_policy = egress_policy
         self._jobs: dict[str, _JobRecord] = {}
         self._idempotency = (
             idempotency if idempotency is not None else StartIdempotencyStore()
@@ -575,6 +579,7 @@ class FHIRBulkJobManager:
                     transport=self._transport,
                     client_assertion_builder=self._client_assertion_builder,
                     deidentifier=deidentifier,
+                    egress_policy=self._egress_policy,
                 )
                 summary = await ingestor.run(job_id=job_id)
                 result = _report_from_smart_summary(summary)
@@ -600,13 +605,15 @@ class FHIRBulkJobManager:
         record.status.manifest = manifest
         record.status.updated_at = self._clock()
 
-    @staticmethod
-    def _validate_config(config: FHIRBulkJobConfig) -> None:
+    def _validate_config(self, config: FHIRBulkJobConfig) -> None:
         if config.is_local:
             if not str(config.input_dir).strip():
                 raise ValueError("input_dir must not be blank")
             return
-        config.to_smart_config()
+        authorize_smart_backend_config(
+            config.to_smart_config(),
+            egress_policy=self._egress_policy,
+        )
 
 
 def _manifest_from_local_report(report: FHIRBulkJobReport) -> dict[str, Any]:
@@ -700,6 +707,8 @@ def _safe_file_label(value: str | Path) -> str:
 def _safe_job_error(exc: BaseException) -> str:
     if isinstance(exc, SMARTBackendError):
         return str(exc)
+    if isinstance(exc, EgressDenied):
+        return f"egress policy denied the request: {exc.reason_code}"
     if isinstance(exc, (httpx.HTTPError, OSError)):
         return "remote SMART endpoint unavailable"
     if isinstance(exc, ValueError):

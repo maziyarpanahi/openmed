@@ -67,6 +67,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "circuit_breaker_open",
     "decision_media_unsupported",
     "decision_request_ambiguous",
+    "egress_denied",
     "forbidden",
     "grounding_invalid_request",
     "inbound_duplicate_mapping",
