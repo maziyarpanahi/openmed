@@ -32,6 +32,7 @@ from openmed.core.errors import (
     OpenMedError,
     PolicyError,
 )
+from openmed.core.key_provider import KeyProvider
 from openmed.processing import format_predictions
 from openmed.structured.decision import (
     DETERMINISTIC_DECISION_BACKEND,
@@ -588,7 +589,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     ):
         if existing_job_queue is not None:
             existing_job_queue.shutdown()
-        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
+        app.state.job_queue = DeidentifyJobQueue.from_env(
+            runtime,
+            key_provider=getattr(app.state, "job_payload_key_provider", None),
+        )
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -770,7 +774,10 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     queue = getattr(request.app.state, "job_queue", None)
     if queue is None:
         runtime = _get_service_runtime(request)
-        queue = DeidentifyJobQueue.from_env(runtime)
+        queue = DeidentifyJobQueue.from_env(
+            runtime,
+            key_provider=getattr(request.app.state, "job_payload_key_provider", None),
+        )
         request.app.state.job_queue = queue
     return queue
 
@@ -903,6 +910,7 @@ def create_app(
     workflow_policy: Optional[WorkflowHTTPPolicy] = None,
     workflow_clock: Optional[Callable[[], int]] = None,
     journey_access_context_provider: Optional[JourneyAccessContextProvider] = None,
+    job_payload_key_provider: Optional[KeyProvider] = None,
 ) -> FastAPI:
     """Create the REST app, optionally enabling single-asset preflight.
 
@@ -917,6 +925,9 @@ def create_app(
         journey_access_context_provider: Operator hook that resolves the
             authoritative Journey access context for authenticated principals.
             Defaults to the grants in ``OPENMED_SERVICE_JOURNEY_GRANTS``.
+        job_payload_key_provider: Caller-owned key provider that enables
+            encrypted retention of async job payloads. Without it, job payloads
+            stay in memory only.
 
     Returns:
         Configured application, without starting its lifespan or an effect executor.
@@ -1015,6 +1026,7 @@ def create_app(
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
+    app.state.job_payload_key_provider = job_payload_key_provider
     app.state.bulk_storage = BulkStoragePolicy.from_env()
     app.state.bulk_job_bounds = bulk_job_bounds_from_env()
     auth_config = parse_service_auth_config()
