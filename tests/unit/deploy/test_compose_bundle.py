@@ -125,6 +125,24 @@ def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() ->
     assert "secrets" not in service
 
 
+def test_bundle_bounds_every_openmed_service_without_dev_overrides() -> None:
+    services = _load_compose()["services"]
+
+    for name in (
+        "journey-migrate",
+        "journey-worker",
+        "openmed",
+        "journey-golden",
+        "mcp",
+    ):
+        service = services[name]
+        assert service["cpus"] and service["mem_limit"]
+        assert service["pids_limit"] == 512
+        assert "OPENMED_MCP_ALLOW_INSECURE_LOCALHOST" not in service["environment"]
+    assert services["openmed"]["cpus"] == "${OPENMED_CPU_LIMIT:-2}"
+    assert services["openmed"]["mem_limit"] == "${OPENMED_MEMORY_LIMIT:-4g}"
+
+
 def test_bundle_healthcheck_probes_readiness_with_bounded_timeout() -> None:
     healthcheck = _service(_load_compose())["healthcheck"]
     command = " ".join(healthcheck["test"])

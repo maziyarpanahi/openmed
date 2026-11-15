@@ -652,12 +652,46 @@ def _profile_environment(profile: str | None) -> Iterator[None]:
             os.environ[SECURITY_PROFILE_ENV_VAR] = previous
 
 
+_SERVICE_ENV_PREFIX: Final = "OPENMED_"
+
+
+@contextmanager
+def _service_environment(environ: Mapping[str, str] | None) -> Iterator[None]:
+    """Expose exactly one service environment to configuration parsers.
+
+    Every ``OPENMED_*`` variable of the current process is hidden and the
+    ``OPENMED_*`` entries of ``environ`` are applied for the duration; other
+    variables are left alone so third-party libraries keep their own settings.
+    The previous process environment is restored afterwards. Not thread-safe.
+    """
+    if environ is None:
+        yield
+        return
+    saved = {
+        name: value
+        for name, value in os.environ.items()
+        if name.startswith(_SERVICE_ENV_PREFIX)
+    }
+    try:
+        for name in saved:
+            os.environ.pop(name, None)
+        for name, value in environ.items():
+            if name.startswith(_SERVICE_ENV_PREFIX):
+                os.environ[name] = str(value)
+        yield
+    finally:
+        for name in [n for n in os.environ if n.startswith(_SERVICE_ENV_PREFIX)]:
+            os.environ.pop(name, None)
+        os.environ.update(saved)
+
+
 def run_service_preflight(
     *,
     profile: str | None = None,
     listen_host: str | None = None,
     listen_tls: bool | None = None,
     grpc_address: str | None = None,
+    environ: Mapping[str, str] | None = None,
 ) -> SecurityProfileReport:
     """Build the service app from the environment and run the self-check.
 
@@ -669,6 +703,10 @@ def run_service_preflight(
         listen_host: Listener host to check. Defaults to the launcher value.
         listen_tls: Whether that listener terminates TLS in-process.
         grpc_address: Optional gRPC listener address to include.
+        environ: Optional service environment to evaluate instead of the
+            process one, for example the environment a deployment manifest
+            renders. Its ``OPENMED_*`` entries replace every ``OPENMED_*``
+            process variable while the app is built and checked.
 
     Returns:
         The value-free report.
@@ -678,7 +716,7 @@ def run_service_preflight(
     """
     from .app import create_app
 
-    with _profile_environment(profile):
+    with _service_environment(environ), _profile_environment(profile):
         app = create_app()
         try:
             listener = listener_facts_from_env()

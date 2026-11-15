@@ -11,6 +11,12 @@ The default `config.profile: prod` selects the production
 [security profile](../serving/security-profile.md): pods stay unready with
 `security_profile_invalid` until `extraEnv` configures authentication. Run
 `openmed service preflight` against the same environment before installing.
+`deploy/posture/helm/production.yaml` is a validated production overlay, and
+the [deployment posture lane](security-posture.md)
+(`python -m openmed.deploy.posture`) checks rendered values against the
+production contract offline. The chart disables Hugging Face and library
+telemetry (`HF_HUB_DISABLE_TELEMETRY`, `DISABLE_TELEMETRY`, `DO_NOT_TRACK`) in
+every workload.
 
 ## Install
 

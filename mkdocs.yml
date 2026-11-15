@@ -159,6 +159,7 @@ nav:
       - Mutual TLS Authentication: serving/mtls.md
       - Service Security-policy Generations: security/policy-generations.md
       - Service Security Profile: serving/security-profile.md
+      - Deployment Security Posture Lane: deploy/security-posture.md
       - Helm Deployment: deploy/helm.md
       - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md

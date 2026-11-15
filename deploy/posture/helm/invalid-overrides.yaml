@@ -1,0 +1,22 @@
+# Negative control: contradictory and development settings through extraEnv.
+# The container env entry overrides the ConfigMap profile, telemetry is turned
+# back on, an outbound privacy gateway is configured and model integrity
+# verification is skipped.
+extraEnv:
+  - name: OPENMED_SERVICE_AUTH_ENABLED
+    value: "true"
+  - name: OPENMED_SERVICE_AUTH_API_KEYS
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: api-keys
+  - name: OPENMED_SERVICE_SERVED_MODELS
+    value: pii_detection_superclinical
+  - name: OPENMED_PROFILE
+    value: dev
+  - name: HF_HUB_DISABLE_TELEMETRY
+    value: "0"
+  - name: OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT
+    value: https://gateway.example.test/v1
+  - name: OPENMED_SKIP_MODEL_VERIFY
+    value: "1"
