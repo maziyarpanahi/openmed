@@ -149,4 +149,6 @@ Artifact reads independently verify their content digest.
 
 Backup and retention remain operator responsibilities. Do not copy a live
 database and omit its WAL files; close or checkpoint it first, or use SQLite's
-backup API.
+backup API. For a store that fails to open or fails its integrity check, follow
+the [store corruption runbook](../operations/runbooks/store-corruption.md) from
+the [service incident runbooks](../operations/runbooks/service-runbooks.md).
