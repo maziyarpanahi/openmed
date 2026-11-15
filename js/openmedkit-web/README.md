@@ -251,7 +251,7 @@ Cross-Origin-Embedder-Policy: require-corp
 
 | Directive | Why inference needs it |
 |---|---|
-| `script-src 'self' 'wasm-unsafe-eval'` | Same-origin runtime scripts. `'wasm-unsafe-eval'` is required to compile WebAssembly (ONNX Runtime Web WASM and WebGPU builds). Without it, compilation throws `CompileError` and a `script-src` violation is reported; there is no silent fallback. |
+| `script-src 'self' 'wasm-unsafe-eval'` | Same-origin runtime scripts. `'wasm-unsafe-eval'` is required to compile WebAssembly (ONNX Runtime Web WASM and WebGPU builds). Without it, compilation throws `CompileError` in every engine; Chromium and Firefox also report a `script-src` violation, while WebKit (Safari) dispatches none. There is no silent fallback. |
 | `worker-src 'self' blob:` | Same-origin workers and the blob workers ONNX Runtime Web uses for threads. |
 | `connect-src 'self' blob:` | Model and `.wasm` fetches from your own origin; any cross-origin request (including to a hosted API) is refused. Add the model host here only if you deliberately load models remotely. |
 | `default-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` | Deny everything else by default. |
@@ -268,7 +268,10 @@ as script, so WebGPU is not expected to need an extra directive, but that path
 is not covered by the CSP test (it needs a WebGPU-capable runner).
 Violations are observable through the `securitypolicyviolation` event; record
 only `effectiveDirective` and counts, never `blockedURI`, `sample` or request
-payloads, which can contain text or paths.
+payloads, which can contain text or paths. Do not rely on that event alone to
+detect a missing `'wasm-unsafe-eval'`: WebKit reports blocked requests such as
+`connect-src` but not blocked WebAssembly compilation, so also surface the
+`CompileError`.
 
 ## Inference Workers
 

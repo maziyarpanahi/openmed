@@ -72,7 +72,10 @@ test("documented profile: local inference works, cross-origin fetch is refused",
   expect(external).toEqual([]);
 });
 
-test("removing 'wasm-unsafe-eval' fails loudly, not silently", async ({ page }) => {
+test("removing 'wasm-unsafe-eval' fails loudly, not silently", async ({
+  browserName,
+  page,
+}) => {
   const csp = PROFILE_DIRECTIVES.map((d) =>
     d.startsWith("script-src") ? "script-src 'self'" : d,
   ).join("; ");
@@ -82,5 +85,10 @@ test("removing 'wasm-unsafe-eval' fails loudly, not silently", async ({ page }) 
   const result = await page.evaluate(() => (window as any).__run());
   expect(result.main.ok).toBe(false);
   expect(result.main.error).toBe("CompileError");
-  expect(result.violations).toContain("script-src");
+  // WebKit refuses the compile with the same CompileError but dispatches no
+  // securitypolicyviolation event for WebAssembly, so only Chromium and
+  // Firefox can report the blocked directive.
+  if (browserName !== "webkit") {
+    expect(result.violations).toContain("script-src");
+  }
 });
