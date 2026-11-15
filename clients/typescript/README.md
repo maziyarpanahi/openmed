@@ -131,6 +131,15 @@ if (decision.state === "success") {
   console.log(decision.state, decision.code);
 }
 
+// The same route accepts an OpenAI-compatible Decisions body and answers in
+// that shape. `model` must name the model the service decides with.
+const answers = await client.openaiDecisions({
+  model: "openmed/deterministic-fixed-option",
+  input: "Synthetic review priority is urgent.",
+  questions: [{ type: "predicate", name: "urgent" }],
+});
+console.log(answers.answers[0], answers.openmed?.review.required);
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```

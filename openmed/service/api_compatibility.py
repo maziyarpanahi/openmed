@@ -65,6 +65,8 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "bulk_jobs_saturated",
     "bulk_paths_disabled",
     "circuit_breaker_open",
+    "decision_media_unsupported",
+    "decision_request_ambiguous",
     "forbidden",
     "grounding_invalid_request",
     "inbound_duplicate_mapping",

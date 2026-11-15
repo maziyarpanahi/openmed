@@ -45,11 +45,14 @@ and
 
 Two differences matter when you bring an existing client:
 
-- Text is the default. Schema 1.1 also accepts verified local images or video
-  when the backend explicitly supports the media type (see [local images and video](#local-images-and-video)).
-- OpenMed's REST route `POST /v1/decisions` takes the OpenMed contract, not the
-  OpenAI-compatible Decisions body. A client written for that API cannot call
-  it unchanged; convert its body with the `decision_interop` helpers first.
+- Text is the default. Schema `1.2.0` also accepts verified local images or
+  video when the backend explicitly supports the media type (see
+  [local images and video](#local-images-and-video)).
+- OpenMed's REST route `POST /v1/decisions` accepts both the OpenMed contract
+  and the text-only OpenAI-compatible Decisions body, and answers in the shape
+  it received. An OpenAI-compatible body must name the model the service
+  decides with in `model`; see
+  [one route, two request shapes](api/fixed-option-decisions.md#one-route-two-request-shapes).
 
 ## How a decision runs
 
