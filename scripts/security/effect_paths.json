@@ -147,6 +147,21 @@
     },
     {
       "classification": "operational",
+      "function": "_network_contain",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
+      "function": "_network_inject",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
+      "function": "_network_resume",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
       "function": "CohortDefinitionServiceBridge.export",
       "module": "openmed.interop.bridges.cohort_definition"
     },
