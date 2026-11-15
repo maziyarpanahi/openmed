@@ -2135,7 +2135,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
-    from .graphql_app import mount_graphql
+    from .graphql_app import GraphQLPrivacyHeadersMiddleware, mount_graphql
 
     mount_graphql(
         app,
@@ -2180,6 +2180,9 @@ def create_app(
         minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
     app.add_middleware(WorkflowBoundaryMiddleware)
+    # Registered last so it is outermost: every /graphql response, including
+    # rejections raised by the middlewares above, carries the privacy headers.
+    app.add_middleware(GraphQLPrivacyHeadersMiddleware)
     validate_route_policies(app)
     return app
 
