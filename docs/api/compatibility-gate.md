@@ -132,5 +132,66 @@ fails `assert_api_compatibility()` unless `allow_skipped=True`.
 baseline and candidate pair directly. All of these APIs are local-only and
 deterministic.
 
+## Bundled JSON Schemas
+
+Every `*.schema.json` file shipped in the `openmed` package has one entry in
+`scripts/release/schema_fingerprints.json`, keyed by its package path (for
+example `openmed/core/schemas/json/decision_result.schema.json`). An entry
+records the declared `schema_version`, a SHA-256 fingerprint of the canonical
+schema JSON, and the record's `required` and `properties` field names. The
+snapshot lives under `scripts/release/` and is not part of the wheel; the
+smaller `schema-fingerprints.json` and `clinical-record-fingerprints.json`
+snapshots inside the package keep their current entries.
+
+Check the current schemas against the snapshot with:
+
+```bash
+python scripts/release/check_schema_fingerprints.py --check
+```
+
+The check reads the version a schema declares in any of the forms the bundled
+files use: a top-level `schema_version` keyword, a `const` or `enum` on the
+`schema_version` property (the highest `enum` value is the current version), or
+a trailing semver segment in `$id`. Integers compare numerically, semver
+strings by major, minor and patch (`1.10.0` is newer than `1.9.0`), and labels
+such as `openmed.reviewer_disagreement.v1` by their trailing `vN`. A schema
+whose root is a `oneOf` or `anyOf` of record variants is described by each
+variant's fields, qualified by the variant name (`definition.measure_id`).
+
+| Status | Meaning | Fails the check |
+| --- | --- | --- |
+| `unchanged` | Fingerprint matches the snapshot. | No |
+| `changed` | Fingerprint differs, but no field was removed, or the version was bumped. | No |
+| `breaking` | A required or declared field was removed without a newer `schema_version`. | Yes |
+| `removed` | A schema with a snapshot entry is no longer packaged. | Yes |
+| `missing_entry` | A packaged schema has no snapshot entry. | Yes |
+
+Each reported line carries only the status, the schema package path, the
+current and snapshot versions and fingerprints, and the removed field names.
+Pass `--json` for a machine-readable report or `--verbose` to list unchanged
+schemas as well.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | No breaking drift, and every packaged schema has an entry. |
+| `1` | Breaking drift, a removed schema, or a schema without an entry. |
+| `2` | The snapshot is missing or malformed. |
+
+After a schema change, regenerate the snapshot and commit it with the change:
+
+```bash
+python scripts/release/check_schema_fingerprints.py --write
+```
+
+The writer refuses to record breaking drift. Bump the schema's version, or pass
+`--allow-breaking` together with `--write` only for an approved break, so the
+removal stays visible in the snapshot diff under review. The unit test
+`tests/unit/core/test_schemas_versioning.py` fails when the committed snapshot
+does not match the current schemas or when a schema file has no entry.
+
+From Python, `openmed.core.schemas.packaged_schema_paths()` lists the bundled
+schema files, `build_packaged_schema_snapshot()` builds the snapshot, and
+`compare_packaged_schema_drift()` returns a `SchemaDriftResult` for one schema.
+
 The gate is a release-safety check, not a compliance certification or a
 clinical decision guarantee.
