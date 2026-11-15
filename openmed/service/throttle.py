@@ -293,9 +293,13 @@ class ConcurrencyGate:
             await semaphore.acquire()
             return True
 
+        # ``asyncio.timeout`` propagates a caller's cancellation. On Python 3.11
+        # ``wait_for`` returns the result instead when the acquire completes in
+        # the same step, so a cancelled request would keep its permit and run.
         try:
-            await asyncio.wait_for(semaphore.acquire(), timeout=self.wait_seconds)
-        except asyncio.TimeoutError:
+            async with asyncio.timeout(self.wait_seconds):
+                await semaphore.acquire()
+        except TimeoutError:
             return False
         return True
 
