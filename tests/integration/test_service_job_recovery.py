@@ -1074,7 +1074,12 @@ def test_killed_child_process_resumes_after_the_last_checkpoint(
         ),
         encoding="utf-8",
     )
-    environment = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    environment = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            filter(None, (str(REPO_ROOT), os.environ.get("PYTHONPATH")))
+        ),
+    }
     completed = subprocess.run(
         [sys.executable, str(script), str(state)],
         cwd=str(REPO_ROOT),

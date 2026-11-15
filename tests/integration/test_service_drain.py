@@ -1266,7 +1266,15 @@ def test_sigterm_runs_the_ordered_drain_before_the_process_exits(tmp_path):
             "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS": "1",
             "OPENMED_SERVICE_SHUTDOWN_RELEASE_SECONDS": "1",
             "OPENMED_SERVICE_JOBS_STORE_PATH": str(tmp_path / "jobs.json"),
-            "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+            "PYTHONPATH": os.pathsep.join(
+                filter(
+                    None,
+                    (
+                        str(Path(__file__).resolve().parents[2]),
+                        os.environ.get("PYTHONPATH"),
+                    ),
+                )
+            ),
         }
     )
     process = subprocess.Popen(

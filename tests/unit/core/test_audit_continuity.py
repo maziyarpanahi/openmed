@@ -969,7 +969,12 @@ def test_rotation_is_serialized_with_appends_from_other_processes(
     tmp_path: Path,
 ) -> None:
     store = _initialized(tmp_path)
-    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            filter(None, (str(ROOT), os.environ.get("PYTHONPATH")))
+        ),
+    }
     children = [
         subprocess.Popen(
             [

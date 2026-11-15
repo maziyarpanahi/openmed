@@ -411,7 +411,13 @@ def _run_snippet(code: str, env: dict[str, str]) -> subprocess.CompletedProcess:
         text=True,
         check=False,
         cwd=ROOT,
-        env={**os.environ, "PYTHONPATH": str(ROOT), **env},
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(ROOT), os.environ.get("PYTHONPATH")))
+            ),
+            **env,
+        },
         timeout=120,
     )
 
