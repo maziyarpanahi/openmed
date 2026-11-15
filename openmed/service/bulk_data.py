@@ -25,6 +25,15 @@ from openmed.interop.fhir.bulk import (
     _safe_resource_type,
 )
 
+from .job_bounds import (
+    DEFAULT_MAX_RETAINED_JOBS,
+    DEFAULT_MAX_RUNNING_JOBS,
+    DEFAULT_TERMINAL_TTL_SECONDS,
+    BulkJobBounds,
+    ensure_job_capacity,
+    prune_job_records,
+)
+from .jobs import _parse_positive_int
 from .smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
@@ -37,6 +46,9 @@ _PATH_CODES = frozenset(
 )
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+BULK_MAX_RUNNING_JOBS_ENV_VAR = "OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS"
+BULK_MAX_RETAINED_JOBS_ENV_VAR = "OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS"
+BULK_JOB_TTL_ENV_VAR = "OPENMED_SERVICE_BULK_JOB_TTL_SECONDS"
 
 
 class BulkPathError(ValueError):
@@ -135,6 +147,47 @@ class BulkStoragePolicy:
         except OSError:
             raise BulkPathError("path_invalid") from None
         return source, destination, destination / f".checkpoint-{job_id}.json"
+
+
+def bulk_job_bounds_from_env() -> BulkJobBounds:
+    """Read bulk and SMART job ceilings once, before handling requests.
+
+    Each manager applies the same ceilings independently. Values must be
+    positive integers, and the running ceiling must not exceed the retained
+    cap so admission can always make room for a new record.
+
+    Returns:
+        Validated admission and retention bounds.
+
+    Raises:
+        ValueError: If a value is malformed or the ceilings are inconsistent.
+    """
+
+    running = _parse_positive_int(
+        os.getenv(BULK_MAX_RUNNING_JOBS_ENV_VAR),
+        env_var=BULK_MAX_RUNNING_JOBS_ENV_VAR,
+        default=DEFAULT_MAX_RUNNING_JOBS,
+    )
+    retained = _parse_positive_int(
+        os.getenv(BULK_MAX_RETAINED_JOBS_ENV_VAR),
+        env_var=BULK_MAX_RETAINED_JOBS_ENV_VAR,
+        default=DEFAULT_MAX_RETAINED_JOBS,
+    )
+    ttl_seconds = _parse_positive_int(
+        os.getenv(BULK_JOB_TTL_ENV_VAR),
+        env_var=BULK_JOB_TTL_ENV_VAR,
+        default=int(DEFAULT_TERMINAL_TTL_SECONDS),
+    )
+    if running > retained:
+        raise ValueError(
+            f"{BULK_MAX_RUNNING_JOBS_ENV_VAR} must not exceed "
+            f"{BULK_MAX_RETAINED_JOBS_ENV_VAR}"
+        )
+    return BulkJobBounds(
+        max_running_jobs=running,
+        max_retained_jobs=retained,
+        terminal_ttl_seconds=ttl_seconds,
+    )
 
 
 def _relative_path_parts(value: str) -> tuple[str, ...]:
@@ -292,17 +345,44 @@ class _JobRecord:
 
 
 class FHIRBulkJobManager:
-    """Manage asynchronous local and SMART Bulk Data jobs in memory."""
+    """Manage asynchronous local and SMART Bulk Data jobs in memory.
+
+    Admission and retention are bounded by ``BulkJobBounds``: starts beyond
+    the running ceiling raise ``BulkJobsSaturatedError`` before a task is
+    created, and terminal records expire or are evicted oldest first.
+
+    Args:
+        transport: Optional injected HTTP transport for SMART requests.
+        client_assertion_builder: Optional injected client-assertion signer.
+        bounds: Running, retained and TTL ceilings; defaults apply when omitted.
+        clock: Seconds clock for job timestamps and terminal-record expiry.
+    """
 
     def __init__(
         self,
         *,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         client_assertion_builder: Any = None,
+        bounds: BulkJobBounds | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
+        self._bounds = bounds if bounds is not None else BulkJobBounds()
+        self._clock = clock
         self._jobs: dict[str, _JobRecord] = {}
+
+    @property
+    def bounds(self) -> BulkJobBounds:
+        """Return the admission and retention ceilings for this manager."""
+
+        return self._bounds
+
+    def ensure_capacity(self) -> None:
+        """Raise ``BulkJobsSaturatedError`` if no running slot is free."""
+
+        prune_job_records(self._jobs, self._bounds, self._clock())
+        ensure_job_capacity(self._jobs, self._bounds, kind="fhir_bulk")
 
     def start(
         self,
@@ -315,9 +395,12 @@ class FHIRBulkJobManager:
 
         self._validate_config(config)
         run_id = job_id or uuid.uuid4().hex
+        now = self._clock()
+        prune_job_records(self._jobs, self._bounds, now)
         if run_id in self._jobs:
             raise ValueError("job_id already exists")
-        now = time.time()
+        ensure_job_capacity(self._jobs, self._bounds, kind="fhir_bulk")
+        prune_job_records(self._jobs, self._bounds, now, reserve=1)
         status = FHIRBulkJobStatus(
             job_id=run_id,
             status="running",
@@ -334,8 +417,9 @@ class FHIRBulkJobManager:
         return status
 
     def get(self, job_id: str) -> FHIRBulkJobStatus:
-        """Return one job's current status."""
+        """Return one job's current status; expired jobs read as unknown."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
@@ -360,25 +444,27 @@ class FHIRBulkJobManager:
     async def cancel(self, job_id: str) -> FHIRBulkJobStatus:
         """Cancel one running job and remove any uncommitted local output."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
-        if not record.task.done() and record.status.status == "running":
-            record.cancel_event.set()
-            record.status.status = "cancelled"
-            record.status.updated_at = time.time()
-            record.task.cancel()
-            await asyncio.gather(record.task, return_exceptions=True)
-        return record.status
+        return await self._cancel_record(record)
 
     async def cancel_all(self) -> None:
         """Cancel all in-flight jobs during service shutdown."""
 
-        jobs = [
-            job_id for job_id, record in self._jobs.items() if not record.task.done()
-        ]
-        if jobs:
-            await asyncio.gather(*(self.cancel(job_id) for job_id in jobs))
+        records = [record for record in self._jobs.values() if not record.task.done()]
+        if records:
+            await asyncio.gather(*(self._cancel_record(record) for record in records))
+
+    async def _cancel_record(self, record: _JobRecord) -> FHIRBulkJobStatus:
+        if not record.task.done() and record.status.status == "running":
+            record.cancel_event.set()
+            record.status.status = "cancelled"
+            record.status.updated_at = self._clock()
+            record.task.cancel()
+            await asyncio.gather(record.task, return_exceptions=True)
+        return record.status
 
     async def _run(
         self,
@@ -422,23 +508,23 @@ class FHIRBulkJobManager:
         except asyncio.CancelledError:
             record.status.status = "cancelled"
             record.status.error = None
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
         except BulkJobCancelled:
             record.status.status = "cancelled"
             record.status.error = None
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
         except Exception as exc:
             record.status.status = "failed"
             record.status.error = _safe_job_error(exc)
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
 
         record.status.status = "succeeded"
         record.status.report = result
         record.status.manifest = manifest
-        record.status.updated_at = time.time()
+        record.status.updated_at = self._clock()
 
     @staticmethod
     def _validate_config(config: FHIRBulkJobConfig) -> None:
@@ -554,7 +640,11 @@ def _safe_job_error(exc: BaseException) -> str:
 
 
 __all__ = [
+    "BULK_JOB_TTL_ENV_VAR",
+    "BULK_MAX_RETAINED_JOBS_ENV_VAR",
+    "BULK_MAX_RUNNING_JOBS_ENV_VAR",
     "FHIRBulkJobConfig",
     "FHIRBulkJobManager",
     "FHIRBulkJobStatus",
+    "bulk_job_bounds_from_env",
 ]

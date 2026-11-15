@@ -49,6 +49,8 @@ from openmed.interop.fhir.smart_refresh import (
 from openmed.interop.fhir_operations import Deidentifier
 from openmed.interop.smart_scope_audit import _granted_scope_tokens
 
+from .job_bounds import BulkJobBounds, ensure_job_capacity, prune_job_records
+
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 DEFAULT_BACKEND_SERVICES_SCOPE = "system/*.read"
 DEFAULT_EXPORT_PATH = "$export"
@@ -771,17 +773,44 @@ class _JobRecord:
 
 
 class SMARTBackendJobManager:
-    """In-memory async job manager for REST-triggered ingestion runs."""
+    """In-memory async job manager for REST-triggered ingestion runs.
+
+    Admission and retention are bounded by ``BulkJobBounds``: starts beyond
+    the running ceiling raise ``BulkJobsSaturatedError`` before a task is
+    created, and terminal records expire or are evicted oldest first.
+
+    Args:
+        transport: Optional injected HTTP transport for SMART requests.
+        client_assertion_builder: Optional injected client-assertion signer.
+        bounds: Running, retained and TTL ceilings; defaults apply when omitted.
+        clock: Seconds clock for job timestamps and terminal-record expiry.
+    """
 
     def __init__(
         self,
         *,
         transport: httpx.AsyncBaseTransport | httpx.BaseTransport | None = None,
         client_assertion_builder: ClientAssertionBuilder | None = None,
+        bounds: BulkJobBounds | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
+        self._bounds = bounds if bounds is not None else BulkJobBounds()
+        self._clock = clock
         self._jobs: dict[str, _JobRecord] = {}
+
+    @property
+    def bounds(self) -> BulkJobBounds:
+        """Return the admission and retention ceilings for this manager."""
+
+        return self._bounds
+
+    def ensure_capacity(self) -> None:
+        """Raise ``BulkJobsSaturatedError`` if no running slot is free."""
+
+        prune_job_records(self._jobs, self._bounds, self._clock())
+        ensure_job_capacity(self._jobs, self._bounds, kind="smart_backend")
 
     def start(
         self,
@@ -793,9 +822,12 @@ class SMARTBackendJobManager:
         """Start one background ingestion job."""
 
         run_id = job_id or uuid.uuid4().hex
+        now = self._clock()
+        prune_job_records(self._jobs, self._bounds, now)
         if run_id in self._jobs:
             raise ValueError("job_id already exists")
-        now = time.time()
+        ensure_job_capacity(self._jobs, self._bounds, kind="smart_backend")
+        prune_job_records(self._jobs, self._bounds, now, reserve=1)
         status = SMARTBackendJobStatus(
             job_id=run_id,
             status="running",
@@ -807,8 +839,9 @@ class SMARTBackendJobManager:
         return status
 
     def get(self, job_id: str) -> SMARTBackendJobStatus:
-        """Return the current job status."""
+        """Return the current job status; expired jobs read as unknown."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
@@ -825,12 +858,13 @@ class SMARTBackendJobManager:
     async def cancel(self, job_id: str) -> SMARTBackendJobStatus:
         """Cancel one running ingestion job without exposing its credentials."""
 
+        prune_job_records(self._jobs, self._bounds, self._clock())
         record = self._jobs.get(job_id)
         if record is None:
             raise KeyError(job_id)
         if not record.task.done() and record.status.status == "running":
             record.status.status = "cancelled"
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             record.task.cancel()
             await asyncio.gather(record.task, return_exceptions=True)
         return record.status
@@ -864,16 +898,16 @@ class SMARTBackendJobManager:
         except asyncio.CancelledError:
             record.status.status = "cancelled"
             record.status.error = None
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
             return
         except Exception as exc:
             record.status.status = "failed"
             record.status.error = _sanitize_exception(exc)
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
         else:
             record.status.status = "succeeded"
             record.status.summary = summary
-            record.status.updated_at = time.time()
+            record.status.updated_at = self._clock()
 
 
 def build_client_assertion(
