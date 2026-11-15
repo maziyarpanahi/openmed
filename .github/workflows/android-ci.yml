@@ -56,12 +56,12 @@ on:
       - 'tests/fixtures/parity/document_intake_v1.json'
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
-  workflow_dispatch:
       - 'tests/fixtures/portable_bundle/**'
       - 'tests/fixtures/device_capabilities/**'
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
       - 'tests/fixtures/portable_bundle_calibration/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
