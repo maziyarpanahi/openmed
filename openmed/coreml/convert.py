@@ -45,6 +45,7 @@ from openmed.eval.export_qualification import (
     ExportQualificationError,
     ExportQualificationReport,
     ExportReason,
+    QualificationBinding,
     VariantCandidate,
     WindowingPolicy,
     global_attention_row,
@@ -76,6 +77,7 @@ SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = (
     "deberta-v2",
     "modernbert",
     "longformer",
+    "openai-privacy-filter",
 )
 
 COMPUTE_UNIT_CHOICES = ("all", "cpuAndNeuralEngine", "cpuOnly")
@@ -100,6 +102,7 @@ _CHEAP_CPU_OP_TOKENS = (
 )
 
 _ARCHITECTURE_TYPE_HINTS = (
+    ("OpenAIPrivacyFilter", "openai-privacy-filter"),
     ("ModernBert", "modernbert"),
     ("Longformer", "longformer"),
     ("DebertaV2", "deberta-v2"),
@@ -259,11 +262,11 @@ def convert(
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
 
-    Families with a registered export adapter (ModernBERT, Longformer) are
-    traced through that adapter, always use a static ``(1, max_seq_length)``
-    sequence bucket, and are qualified against the PyTorch reference
-    checkpoint on a synthetic PHI suite. Qualification needs Core ML
-    prediction, so it runs on macOS; a failing variant raises
+    Families with a registered export adapter (ModernBERT, Longformer, Privacy
+    Filter) are traced through that adapter, always use a static
+    ``(1, max_seq_length)`` sequence bucket, and are qualified against the
+    PyTorch reference checkpoint on a synthetic PHI suite. Qualification needs
+    Core ML prediction, so it runs on macOS; a failing variant raises
     :class:`ExportQualificationError` after the evidence is written, and
     unqualified packages are never published.
 
@@ -272,6 +275,11 @@ def convert(
     estimated attention working set fits the Core ML memory ceiling, and
     qualification additionally sweeps minimum, typical, attention-window
     boundary, and maximum lengths and checks windowed long documents.
+
+    Privacy Filter requests must also name an eligible checkpoint and a
+    pinned ``expected_source_revision``; the package ships a
+    ``<stem>_decoder_profile.json`` with the canonical decoder and threshold
+    profile.
 
     Args:
         model_id: HuggingFace model identifier.
@@ -373,6 +381,8 @@ def convert(
     graph_inputs: tuple[str, ...] = ("input_ids", "attention_mask")
     global_policy: str | None = None
     sequence_limits: Any = None
+    eligibility: dict[str, Any] | None = None
+    binding: QualificationBinding | None = None
     if adapter is None:
         if qualify:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
@@ -394,14 +404,29 @@ def convert(
             global_attention, runtime="coreml"
         )
         sequence_limits = adapter.limits_for(source_config, "coreml", compute_precision)
-        if qualify is not False:
-            qualification_source = source_identity(
+        eligibility = adapter.source_eligibility(
+            source_config,
+            model_id=model_id,
+            expected_revision=expected_source_revision,
+        )
+        if qualify is not False or eligibility is not None:
+            # Families with a source check verify the pin even without
+            # qualification, before any weights load.
+            resolved_source = source_identity(
                 model_id,
                 config=source_config,
                 expected_revision=expected_source_revision,
             )
+            if qualify is not False:
+                qualification_source = resolved_source
             if qualify and not _coreml_prediction_available(ct):
                 raise ExportQualificationError(ExportReason.RUNTIME_UNAVAILABLE)
+        binding = adapter.binding(source_config, model_id, cache_dir)
+    decoder_profile = (
+        dict(binding.decoder_profile)
+        if binding is not None and binding.decoder_profile is not None
+        else None
+    )
 
     # 1. Load model and tokenizer
     logger.info("Loading HuggingFace model %s ...", source.source_model_id)
@@ -417,11 +442,13 @@ def convert(
         model = AutoModelForTokenClassification.from_pretrained(
             load_reference,
             attn_implementation="eager",
+            trust_remote_code=False,
             **load_kwargs,
         )
     except TypeError:
         model = AutoModelForTokenClassification.from_pretrained(
             load_reference,
+            trust_remote_code=False,
             **load_kwargs,
         )
     to_float = getattr(model, "float", None)
@@ -484,6 +511,13 @@ def convert(
     ct_precision = (
         ct.precision.FLOAT16 if compute_precision == "float16" else ct.precision.FLOAT32
     )
+    fp32_ops = adapter.coreml_fp32_ops if adapter is not None else None
+    if fp32_ops and compute_precision == "float16":
+        # Keep the family's float32 reference sections (Privacy Filter's
+        # attention softmax) in float32 inside an otherwise fp16 program.
+        ct_precision = ct.transform.FP16ComputePrecision(
+            op_selector=lambda op: op.op_type not in fp32_ops
+        )
     ct_compute_units = _resolve_compute_units(ct, compute_units)
     if adapter is not None:
         # Adapter families are qualified on fixed buckets only.
@@ -506,6 +540,12 @@ def convert(
         if adapter is not None
         else {}
     )
+    if fp32_ops and compute_precision == "float16":
+        export_metadata["float32_ops"] = ",".join(sorted(fp32_ops))
+    if decoder_profile is not None:
+        export_metadata["decoder"] = str(decoder_profile["decoder"])
+        export_metadata["decoder_profile_sha256"] = str(decoder_profile["sha256"])
+        export_metadata["label_space"] = str(decoder_profile["label_space"])
 
     convert_kwargs: dict[str, Any] = {
         "inputs": [
@@ -555,6 +595,10 @@ def convert(
         output_path,
         compute_units=compute_units,
     )
+    decoder_profile_path: Path | None = None
+    if decoder_profile is not None:
+        decoder_profile_path = _decoder_profile_path(output_path)
+        _write_decoder_profile(decoder_profile_path, decoder_profile)
     variant_models: dict[str, Any] = {"coreml-fp16": mlmodel}
     variant_paths: dict[str, Path] = {"coreml-fp16": output_path}
 
@@ -678,6 +722,10 @@ def convert(
                 global_policy=global_policy,
                 sequence_limits=sequence_limits,
                 source_config=source_config,
+                binding=binding,
+                support_paths=(
+                    (decoder_profile_path,) if decoder_profile_path is not None else ()
+                ),
             )
             qualification_block = summarize_report(qualification_report)
         else:
@@ -703,6 +751,10 @@ def convert(
                 qualification_block["limits"] = sequence_limits.to_dict(
                     selected=max_seq_length
                 )
+            if decoder_profile is not None:
+                qualification_block["decoder_profile_sha256"] = decoder_profile[
+                    "sha256"
+                ]
 
     assert_source_unchanged(source)
     _write_coreml_conversion_manifest(
@@ -718,6 +770,20 @@ def convert(
         source=source,
         variant_paths=variant_paths,
         qualification=qualification_block,
+        eligibility=eligibility,
+        decoder_profile=(
+            {
+                "path": _artifact_relative_path(
+                    decoder_profile_path, manifest_path.parent
+                ),
+                "sha256": decoder_profile["sha256"],
+                "decoder": decoder_profile["decoder"],
+                "label_space": decoder_profile["label_space"],
+                "threshold_profile": decoder_profile["threshold_profile"],
+            }
+            if decoder_profile is not None and decoder_profile_path is not None
+            else None
+        ),
     )
     if qualification_report is not None:
         report_path = (
@@ -803,6 +869,17 @@ def _default_qualification_report_path(output_path: Path) -> Path:
     return output_path.with_name(f"{stem}_qualification.json")
 
 
+def _decoder_profile_path(output_path: Path) -> Path:
+    stem = output_path.stem if output_path.suffix else output_path.name
+    return output_path.with_name(f"{stem}_decoder_profile.json")
+
+
+def _write_decoder_profile(path: Path, profile: Mapping[str, Any]) -> None:
+    from openmed.torch.privacy_filter_export import write_decoder_profile
+
+    write_decoder_profile(profile, path)
+
+
 def _common_root(paths: Sequence[Path]) -> Path:
     parents = [str(Path(path).resolve().parent) for path in paths]
     return Path(os.path.commonpath(parents))
@@ -829,19 +906,14 @@ def _qualify_coreml_variants(
     global_policy: str | None = None,
     sequence_limits: Any = None,
     source_config: Any = None,
+    binding: QualificationBinding | None = None,
+    support_paths: Sequence[Path] = (),
 ) -> ExportQualificationReport:
     """Qualify every Core ML package against the stock PyTorch checkpoint."""
 
-    from transformers import AutoModelForTokenClassification
-
     from openmed.torch.export_adapters import torch_reference_runner
 
-    reference_model = AutoModelForTokenClassification.from_pretrained(
-        model_id,
-        cache_dir=cache_dir,
-    )
-    reference_model.to(dtype=torch.float32)
-    reference_model.eval()
+    reference_model = adapter.reference_model(torch, model_id, cache_dir)
     ct_compute_units = _resolve_compute_units(ct, compute_units)
     candidates = []
     for name, path in variant_paths.items():
@@ -887,6 +959,7 @@ def _qualify_coreml_variants(
         candidates=candidates,
         source=source,
         artifact_root=artifact_root,
+        artifact_paths=support_paths,
         fixtures_path=fixtures_path,
         exclude_artifact_names=(COREML_MANIFEST_FILENAME,),
         direct_identifier_recall_floor=direct_identifier_recall_floor,
@@ -900,6 +973,7 @@ def _qualify_coreml_variants(
             if sequence_limits is not None
             else None
         ),
+        binding=binding,
     )
 
 
@@ -1710,6 +1784,8 @@ def _write_coreml_conversion_manifest(
     source: SourceContext | None = None,
     variant_paths: Mapping[str, Path] | None = None,
     qualification: Mapping[str, Any] | None = None,
+    eligibility: Mapping[str, Any] | None = None,
+    decoder_profile: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write legacy observations outside packages and canonical package manifests."""
     source = source or context_from_metadata(model_id)
@@ -1759,6 +1835,10 @@ def _write_coreml_conversion_manifest(
         payload["segmenter"] = dict(segmenter)
     if qualification is not None:
         payload["qualification"] = dict(qualification)
+    if eligibility is not None:
+        payload["eligibility"] = dict(eligibility)
+    if decoder_profile is not None:
+        payload["decoder_profile"] = dict(decoder_profile)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True, allow_nan=False)

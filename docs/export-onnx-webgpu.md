@@ -155,6 +155,16 @@ fusions, so export with `--no-onnx-optimization`. Bounds and reason codes are
 in the
 [Export Format Support Matrix](export-matrix.md#longformer-runtime-support).
 
+## Privacy Filter Exports
+
+Privacy Filter checkpoints are qualified the same way through the family
+adapter in `openmed.torch.privacy_filter_export`. Requests must name a
+declared checkpoint and a pinned `--expected-source-revision`, and must pass
+`--no-onnx-optimization` because fused graphs leave the qualified operator set.
+The bundle gains `openmed-decoder-profile.json`, and `OnnxModel` decodes with
+that canonical Viterbi decoder instead of argmax. See
+[Privacy Filter runtime support](export-matrix.md#privacy-filter-runtime-support).
+
 ## Load with Python ONNX Runtime
 
 Install only the inference dependencies when export tooling is not needed:

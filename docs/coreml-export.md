@@ -46,6 +46,9 @@ The converter accepts these Hugging Face token-classification source families:
 - `modernbert` (qualification-gated, see below)
 - `longformer` (qualification-gated, bounded buckets, see below)
 
+- `openai-privacy-filter` (qualification-gated, declared checkpoints and a
+  pinned revision only, see below)
+
 Unsupported architectures fail before tracing with an error that lists the
 supported families and carries the stable `unsupported_family` reason code.
 
@@ -95,6 +98,18 @@ probe) and compares windowed long documents, with document-global offsets,
 against the windowed reference. Bounds, the memory estimate, and the windowing
 contract are in the
 [Export Format Support Matrix](export-matrix.md#longformer-runtime-support).
+
+## Privacy Filter Qualification
+
+Privacy Filter checkpoints go through the same qualification, with the family
+adapter in `openmed.torch.privacy_filter_export`. Only declared checkpoint
+families export, `--expected-source-revision` is required, and checkpoints
+that need repository code are rejected before weights load. Float16 packages
+keep the attention softmax in float32. Every package ships
+`<stem>_decoder_profile.json` with the canonical Viterbi decoder and threshold
+profile, and its digest is recorded in the package metadata, manifest, and
+qualification report. The declared checkpoints and rules are in the
+[Export Format Support Matrix](export-matrix.md#privacy-filter-runtime-support).
 
 ## Compute Units
 

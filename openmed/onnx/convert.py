@@ -41,6 +41,7 @@ from openmed.eval.export_qualification import (
     ExportQualificationError,
     ExportQualificationReport,
     ExportReason,
+    QualificationBinding,
     VariantCandidate,
     WindowingPolicy,
     qualify_export,
@@ -56,6 +57,7 @@ from openmed.onnx.android_profile import (
     ANDROID_ONNX_OPSET,
     ANDROID_PROFILE_NAME,
     export_android_fp16,
+    sort_graph_topologically,
     validate_android_profile,
 )
 from openmed.onnx.openvino_export import (
@@ -107,6 +109,10 @@ DEFAULT_DYNAMIC_VALIDATION_LENGTHS = DEFAULT_SHAPE_BUCKETS
 DEFAULT_EXECUTION_PROVIDERS = ("CPUExecutionProvider",)
 # Tensors smaller than this many bytes stay inline in the graph protobuf.
 EXTERNAL_DATA_SIZE_THRESHOLD = 1024
+# Canonical decoder and threshold profile shipped with adapter families that
+# declare one (Privacy Filter); kept in sync with
+# ``openmed.torch.privacy_filter_export.DECODER_PROFILE_FILENAME``.
+DECODER_PROFILE_FILENAME = "openmed-decoder-profile.json"
 
 _FUSION_OPTION_ATTRS = {
     "attention_fusion": ("enable_attention",),
@@ -238,8 +244,16 @@ def export_onnx(
     profile: str = DEFAULT_PROFILE_NAME,
     cache_dir: str | None = None,
     sample_text: str = DEFAULT_SAMPLE_TEXT,
+    expected_source_revision: str | None = None,
 ) -> Path:
-    """Export a Hugging Face token-classification checkpoint to ONNX."""
+    """Export a Hugging Face token-classification checkpoint to ONNX.
+
+    Families with a registered export adapter are validated from their
+    configuration before any weights load. Families whose adapter declares a
+    source check (Privacy Filter) also reject ineligible checkpoints,
+    repository code, unsupported configuration shapes, and an unpinned or
+    mismatched *expected_source_revision* at that point.
+    """
 
     profile = _normalize_profile(profile)
     resolved_opset = _resolve_opset(profile=profile, opset=opset)
@@ -258,6 +272,12 @@ def export_onnx(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    _preflight_export_source(
+        model_id,
+        cache_dir=cache_dir,
+        max_seq_length=max_seq_length,
+        expected_source_revision=expected_source_revision,
+    )
     tokenizer = get_tokenizer_with_loader(
         model_id,
         AutoTokenizer.from_pretrained,
@@ -266,6 +286,7 @@ def export_onnx(
     model = AutoModelForTokenClassification.from_pretrained(
         model_id,
         cache_dir=cache_dir,
+        trust_remote_code=False,
     )
     model.to(dtype=torch.float32)
     model.eval()
@@ -389,6 +410,7 @@ def export_webgpu(
         keep_io_types=keep_io_types,
     )
     _copy_missing_model_metadata(fp16_model, model)
+    sort_graph_topologically(fp16_model)
     onnx.save(fp16_model, str(output_path))
     _check_onnx_model(output_path)
     return output_path
@@ -430,16 +452,20 @@ def convert(
 ) -> OnnxConversionResult:
     """Export ONNX artifacts and optionally publish the resulting directory.
 
-    Families with a registered export adapter (ModernBERT, Longformer) are
-    traced through that adapter and qualified on ``CPUExecutionProvider``
-    against the stock PyTorch checkpoint on a synthetic PHI suite. The report
-    is written to ``openmed-export-qualification.json`` and summarized in the
-    manifest. The WebGPU fp16 graph is qualified on the CPU provider as a
-    numeric proxy and is recorded as ``cpu_proxy``, never as a WebGPU claim.
-    Undeclared profiles, providers, or bundles fail with
+    Families with a registered export adapter (ModernBERT, Longformer,
+    Privacy Filter) are traced through that adapter and qualified on
+    ``CPUExecutionProvider`` against the stock PyTorch checkpoint on a synthetic
+    PHI suite. The report is written to ``openmed-export-qualification.json``
+    and summarized in the manifest. The WebGPU fp16 graph is qualified on the
+    CPU provider as a numeric proxy and is recorded as ``cpu_proxy``, never as
+    a WebGPU claim. Undeclared profiles, providers, or bundles fail with
     :class:`ExportQualificationError` before any inference, a failing gate
     raises after the evidence is written, and unqualified artifacts are never
-    published.
+    published. Privacy Filter requests must name an eligible checkpoint and a
+    pinned ``expected_source_revision``, need ``optimize_onnx=False`` (fused
+    graphs fail with ``unsupported_operator``), and ship
+    ``openmed-decoder-profile.json`` with the canonical decoder and threshold
+    profile, which :class:`~openmed.onnx.inference.OnnxModel` applies.
 
     Args:
         qualify: ``None`` or ``True`` qualifies adapter families; ``False``
@@ -486,6 +512,7 @@ def convert(
             opset=opset,
             profile=profile,
             cache_dir=cache_dir,
+            expected_source_revision=expected_source_revision,
         )
         onnx_path = output_dir / DEFAULT_ONNX_FILENAME
     else:
@@ -496,6 +523,7 @@ def convert(
             opset=opset,
             profile=profile,
             cache_dir=cache_dir,
+            expected_source_revision=expected_source_revision,
         )
         unoptimized_path = None
         optimization_manifest = {
@@ -515,6 +543,9 @@ def convert(
     adapter = _resolve_export_adapter(config.get("model_type"))
     global_policy: str | None = None
     sequence_limits: Any = None
+    eligibility: dict[str, Any] | None = None
+    binding: QualificationBinding | None = None
+    decoder_profile: dict[str, Any] | None = None
     if adapter is None:
         if qualify:
             raise ExportQualificationError(ExportReason.UNSUPPORTED_FAMILY)
@@ -551,6 +582,18 @@ def convert(
                 )
             if validation_lengths is None:
                 validation_lengths = declared
+        eligibility = adapter.source_eligibility(
+            config, model_id=model_id, expected_revision=expected_source_revision
+        )
+        if should_optimize_onnx and adapter.onnx_operators is not None:
+            # Fused graphs leave the family's qualified operator set.
+            raise ExportQualificationError(ExportReason.UNSUPPORTED_OPERATOR)
+        binding = adapter.binding(config, model_id, cache_dir)
+        if binding is not None and binding.decoder_profile is not None:
+            decoder_profile = dict(binding.decoder_profile)
+            _write_decoder_profile(
+                output_dir / DECODER_PROFILE_FILENAME, decoder_profile
+            )
     segmenter = (
         package_segmenter_resources(output_dir, segmenter_id)
         if segmenter_id is not None
@@ -752,6 +795,8 @@ def convert(
             qualification_block["limits"] = sequence_limits.to_dict(
                 selected=max_seq_length
             )
+        if decoder_profile is not None:
+            qualification_block["decoder_profile_sha256"] = decoder_profile["sha256"]
 
     assert_source_unchanged(source)
     manifest_path = write_export_manifest(
@@ -769,6 +814,24 @@ def convert(
         source_context=source,
         qualification=qualification_block,
     )
+    if eligibility is not None or decoder_profile is not None:
+        _attach_manifest_blocks(
+            manifest_path,
+            {
+                "eligibility": eligibility,
+                "decoder_profile": (
+                    {
+                        "path": DECODER_PROFILE_FILENAME,
+                        "sha256": decoder_profile["sha256"],
+                        "decoder": decoder_profile["decoder"],
+                        "label_space": decoder_profile["label_space"],
+                        "threshold_profile": decoder_profile["threshold_profile"],
+                    }
+                    if decoder_profile is not None
+                    else None
+                ),
+            },
+        )
     if recall_report is not None:
         apply_int8_recall_certification(
             output_dir,
@@ -794,6 +857,7 @@ def convert(
             profile=profile,
             global_policy=global_policy,
             sequence_limits=sequence_limits,
+            binding=binding,
         )
         write_qualification_report(
             qualification_report,
@@ -854,11 +918,63 @@ def convert(
 def _attach_manifest_qualification(
     manifest_path: Path, qualification: Mapping[str, Any]
 ) -> None:
+    _attach_manifest_blocks(manifest_path, {"qualification": dict(qualification)})
+
+
+def _attach_manifest_blocks(
+    manifest_path: Path, blocks: Mapping[str, Mapping[str, Any] | None]
+) -> None:
     with manifest_path.open(encoding="utf-8") as handle:
         manifest = json.load(handle)
-    manifest["qualification"] = dict(qualification)
+    for key, value in blocks.items():
+        if value is not None:
+            manifest[key] = dict(value)
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
+
+
+def _write_decoder_profile(path: Path, profile: Mapping[str, Any]) -> None:
+    from openmed.torch.privacy_filter_export import write_decoder_profile
+
+    write_decoder_profile(profile, path)
+
+
+def _preflight_export_source(
+    model_id: str,
+    *,
+    cache_dir: str | None,
+    max_seq_length: int,
+    expected_source_revision: str | None,
+) -> None:
+    """Validate an adapter family from its configuration before weights load."""
+
+    try:
+        from transformers import AutoConfig
+    except ImportError:
+        return
+    source_config = AutoConfig.from_pretrained(
+        model_id, cache_dir=cache_dir, trust_remote_code=False
+    )
+    adapter = _resolve_export_adapter(getattr(source_config, "model_type", None))
+    if adapter is None:
+        return
+    adapter.validate_request(
+        runtime="onnx",
+        config=source_config,
+        max_sequence_length=max_seq_length,
+        shape_mode=SHAPE_MODE_DYNAMIC,
+    )
+    eligibility = adapter.source_eligibility(
+        source_config,
+        model_id=model_id,
+        expected_revision=expected_source_revision,
+    )
+    if eligibility is not None:
+        source_identity(
+            model_id,
+            config=source_config,
+            expected_revision=expected_source_revision,
+        )
 
 
 def _resolve_export_adapter(model_type: Any) -> Any:
@@ -883,17 +999,14 @@ def _qualify_onnx_artifacts(
     profile: str = DEFAULT_PROFILE_NAME,
     global_policy: str | None = None,
     sequence_limits: Any = None,
+    binding: QualificationBinding | None = None,
 ) -> ExportQualificationReport:
     """Qualify every exported ONNX graph against the stock PyTorch checkpoint."""
 
     try:
         import onnxruntime as ort
         import torch
-        from transformers import (
-            AutoConfig,
-            AutoModelForTokenClassification,
-            AutoTokenizer,
-        )
+        from transformers import AutoConfig, AutoTokenizer
     except ImportError as exc:
         raise_missing_backend("onnx", feature="ONNX export qualification", cause=exc)
 
@@ -910,24 +1023,28 @@ def _qualify_onnx_artifacts(
         AutoTokenizer.from_pretrained,
         cache_dir=cache_dir,
     )
-    reference_model = AutoModelForTokenClassification.from_pretrained(
-        model_id,
-        cache_dir=cache_dir,
-    )
-    reference_model.to(dtype=torch.float32)
-    reference_model.eval()
+    reference_model = adapter.reference_model(torch, model_id, cache_dir)
 
     candidates = [
         _onnx_variant_candidate(ort, artifact, output_dir=output_dir)
         for artifact in artifacts
     ]
     for candidate in candidates:
+        operators = candidate.evidence.get("operator_types")
         # Fail before inference when a graph kept an operator the family
-        # adapter exists to remove (for example Longformer's NonZero gathers).
-        adapter.check_operators(candidate.evidence.get("operator_types") or ())
+        # adapter exists to remove (for example Longformer's NonZero gathers)
+        # or left the family's qualified operator set.
+        adapter.check_operators(operators or ())
+        if operators is not None:
+            adapter.check_onnx_operators(operators)
     support_files = [
         output_dir / name
-        for name in ("config.json", "id2label.json", *tokenizer_files)
+        for name in (
+            "config.json",
+            "id2label.json",
+            DECODER_PROFILE_FILENAME,
+            *tokenizer_files,
+        )
         if (output_dir / name).is_file()
     ]
     buckets = tuple(
@@ -973,6 +1090,7 @@ def _qualify_onnx_artifacts(
             if sequence_limits is not None
             else None
         ),
+        binding=binding,
     )
 
 
