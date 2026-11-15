@@ -149,8 +149,43 @@ class MapleTask(str, Enum):
     SUMMARIZE = "summarize"
 
 
+MAPLE_RESPONSE_ERROR_CODES = frozenset(
+    {
+        "empty_response",
+        "non_text_response",
+        "unfinished_reasoning",
+        "invalid_json",
+        "trailing_text",
+        "non_object_json",
+        "invalid_keys",
+        "invalid_answer",
+        "invalid_span",
+        "unmatched_span",
+        "invalid_label",
+        "label_not_allowed",
+        "invalid_relation",
+        "unknown_relation_endpoint",
+        "invalid_uncertainty",
+        "invalid_response",
+    }
+)
+"""Closed set of stable ``MapleResponseError.code`` values."""
+
+
 class MapleResponseError(ValueError):
-    """Raised when Maple output violates the bounded task contract."""
+    """Raised when Maple output violates the bounded task contract.
+
+    ``code`` is a stable machine-readable reason drawn from
+    ``MAPLE_RESPONSE_ERROR_CODES`` so callers can map a failure to an
+    abstention without matching message text. Codes are never built from
+    model output; an unknown code falls back to ``invalid_response``.
+    """
+
+    default_code = "invalid_response"
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code if code in MAPLE_RESPONSE_ERROR_CODES else self.default_code
 
 
 @dataclass(frozen=True)
@@ -274,7 +309,9 @@ def parse_maple_task_response(
 
     resolved_task = _coerce_task(task)
     if not isinstance(response, str) or not response.strip():
-        raise MapleResponseError("Maple returned an empty response")
+        raise MapleResponseError(
+            "Maple returned an empty response", code="empty_response"
+        )
     if not isinstance(source_text, str):
         raise TypeError("source_text must be a string")
 
@@ -320,7 +357,9 @@ def parse_maple_task_response(
     _require_exact_keys(payload, {"answer", "uncertainties", "evidence"})
     answer = payload["answer"]
     if not isinstance(answer, str) or not answer.strip():
-        raise MapleResponseError("reasoning answer must be a non-empty string")
+        raise MapleResponseError(
+            "reasoning answer must be a non-empty string", code="invalid_answer"
+        )
     uncertainties = _parse_uncertainties(payload["uncertainties"])
     evidence = _parse_spans(
         payload["evidence"],
@@ -411,7 +450,9 @@ class MapleClinicalAssistant:
         if not isinstance(response, str):
             response = getattr(response, "text", None)
         if not isinstance(response, str):
-            raise MapleResponseError("Maple runtime returned a non-text response")
+            raise MapleResponseError(
+                "Maple runtime returned a non-text response", code="non_text_response"
+            )
         return parse_maple_task_response(resolved_task, response, source_text)
 
     def chat(
@@ -444,12 +485,15 @@ class MapleClinicalAssistant:
         if not isinstance(response, str):
             response = getattr(response, "text", None)
         if not isinstance(response, str):
-            raise MapleResponseError("Maple runtime returned a non-text response")
+            raise MapleResponseError(
+                "Maple runtime returned a non-text response", code="non_text_response"
+            )
         visible = visible_maple_response(response)
         if not visible:
             raise MapleResponseError(
                 "Maple stopped before completing its hidden reasoning; retry with "
-                "a larger max_tokens value"
+                "a larger max_tokens value",
+                code="unfinished_reasoning",
             )
         return visible
 
@@ -491,7 +535,8 @@ def _extract_json_object(response: str) -> dict[str, Any]:
         visible = response.strip()
         if not visible.startswith("{"):
             raise MapleResponseError(
-                "Maple stopped before emitting its final JSON object"
+                "Maple stopped before emitting its final JSON object",
+                code="unfinished_reasoning",
             )
     if visible.startswith("```json") and visible.endswith("```"):
         visible = visible[7:-3].strip()
@@ -500,12 +545,17 @@ def _extract_json_object(response: str) -> dict[str, Any]:
         payload, end = decoder.raw_decode(visible)
     except json.JSONDecodeError as exc:
         raise MapleResponseError(
-            "Maple response did not contain a valid final JSON object"
+            "Maple response did not contain a valid final JSON object",
+            code="invalid_json",
         ) from exc
     if visible[end:].strip():
-        raise MapleResponseError("Maple response contained text after its JSON object")
+        raise MapleResponseError(
+            "Maple response contained text after its JSON object", code="trailing_text"
+        )
     if not isinstance(payload, dict):
-        raise MapleResponseError("Maple final JSON value must be an object")
+        raise MapleResponseError(
+            "Maple final JSON value must be an object", code="non_object_json"
+        )
     return payload
 
 
@@ -519,7 +569,9 @@ def _require_exact_keys(payload: Mapping[str, Any], expected: set[str]) -> None:
             details.append("missing " + ", ".join(missing))
         if unexpected:
             details.append("unexpected " + ", ".join(unexpected))
-        raise MapleResponseError("invalid Maple response keys: " + "; ".join(details))
+        raise MapleResponseError(
+            "invalid Maple response keys: " + "; ".join(details), code="invalid_keys"
+        )
 
 
 def _parse_spans(
@@ -531,14 +583,16 @@ def _parse_spans(
     allowed_labels: frozenset[str] | None = None,
 ) -> tuple[MapleSpan, ...]:
     if not isinstance(value, list):
-        raise MapleResponseError("spans must be a JSON array")
+        raise MapleResponseError("spans must be a JSON array", code="invalid_span")
 
     parsed: list[MapleSpan] = []
     claimed_ranges: list[range] = []
     seen: set[tuple[int, int, str]] = set()
     for index, item in enumerate(value):
         if not isinstance(item, dict):
-            raise MapleResponseError(f"span {index} must be an object")
+            raise MapleResponseError(
+                f"span {index} must be an object", code="invalid_span"
+            )
         expected_keys = {"label", "text"} if require_label else {"text"}
         offset_keys = expected_keys | {"start", "end"}
         item_keys = frozenset(item)
@@ -548,7 +602,9 @@ def _parse_spans(
 
         surface = item.get("text")
         if not isinstance(surface, str) or not surface:
-            raise MapleResponseError(f"span {index} text must be a non-empty string")
+            raise MapleResponseError(
+                f"span {index} text must be a non-empty string", code="invalid_span"
+            )
 
         has_offsets = "start" in item
         start = item.get("start")
@@ -579,19 +635,27 @@ def _parse_spans(
                 cursor = source_text.find(surface, cursor + 1)
             if not matches or (has_offsets and len(matches) != 1):
                 raise MapleResponseError(
-                    f"span {index} offsets do not identify one exact source surface"
+                    f"span {index} offsets do not identify one exact source surface",
+                    code="unmatched_span",
                 )
             start, end = matches[0]
         assert isinstance(start, int) and isinstance(end, int)
 
         label = item.get("label", default_label)
         if not isinstance(label, str):
-            raise MapleResponseError(f"span {index} label must be a string")
+            raise MapleResponseError(
+                f"span {index} label must be a string", code="invalid_label"
+            )
         normalized_label = label.strip().upper().replace(" ", "_")
         if not _LABEL_RE.fullmatch(normalized_label):
-            raise MapleResponseError(f"span {index} label is invalid")
+            raise MapleResponseError(
+                f"span {index} label is invalid", code="invalid_label"
+            )
         if allowed_labels is not None and normalized_label not in allowed_labels:
-            raise MapleResponseError(f"span {index} label is not allowed for this task")
+            raise MapleResponseError(
+                f"span {index} label is not allowed for this task",
+                code="label_not_allowed",
+            )
 
         snapped_start, snapped_end = snap_span_to_grapheme_boundaries(
             start,
@@ -615,13 +679,17 @@ def _parse_relations(
     allowed_labels: frozenset[str] | None = None,
 ) -> tuple[MapleRelation, ...]:
     if not isinstance(value, list):
-        raise MapleResponseError("relations must be a JSON array")
+        raise MapleResponseError(
+            "relations must be a JSON array", code="invalid_relation"
+        )
 
     parsed: list[MapleRelation] = []
     seen: set[tuple[int, int, str]] = set()
     for index, item in enumerate(value):
         if not isinstance(item, dict):
-            raise MapleResponseError(f"relation {index} must be an object")
+            raise MapleResponseError(
+                f"relation {index} must be an object", code="invalid_relation"
+            )
         _require_exact_keys(item, {"source", "target", "label"})
         source = _resolve_relation_endpoint(
             item["source"], entities, source_text, index, "source"
@@ -630,18 +698,28 @@ def _parse_relations(
             item["target"], entities, source_text, index, "target"
         )
         if not 0 <= source < len(entities) or not 0 <= target < len(entities):
-            raise MapleResponseError(f"relation {index} references an unknown entity")
+            raise MapleResponseError(
+                f"relation {index} references an unknown entity",
+                code="unknown_relation_endpoint",
+            )
         if source == target:
-            raise MapleResponseError(f"relation {index} cannot be self-referential")
+            raise MapleResponseError(
+                f"relation {index} cannot be self-referential", code="invalid_relation"
+            )
         label = item["label"]
         if not isinstance(label, str):
-            raise MapleResponseError(f"relation {index} label must be a string")
+            raise MapleResponseError(
+                f"relation {index} label must be a string", code="invalid_label"
+            )
         normalized_label = label.strip().upper().replace(" ", "_")
         if not _LABEL_RE.fullmatch(normalized_label):
-            raise MapleResponseError(f"relation {index} label is invalid")
+            raise MapleResponseError(
+                f"relation {index} label is invalid", code="invalid_label"
+            )
         if allowed_labels is not None and normalized_label not in allowed_labels:
             raise MapleResponseError(
-                f"relation {index} label is not allowed for this task"
+                f"relation {index} label is not allowed for this task",
+                code="label_not_allowed",
             )
         key = (source, target, normalized_label)
         if key not in seen:
@@ -668,17 +746,22 @@ def _resolve_relation_endpoint(
         if len(matches) == 1:
             return matches[0]
     raise MapleResponseError(
-        f"relation {relation_index} {endpoint} must identify one extracted entity"
+        f"relation {relation_index} {endpoint} must identify one extracted entity",
+        code="unknown_relation_endpoint",
     )
 
 
 def _parse_uncertainties(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list):
-        raise MapleResponseError("uncertainties must be a JSON array")
+        raise MapleResponseError(
+            "uncertainties must be a JSON array", code="invalid_uncertainty"
+        )
     uncertainties: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str):
-            raise MapleResponseError(f"uncertainty {index} must be a string")
+            raise MapleResponseError(
+                f"uncertainty {index} must be a string", code="invalid_uncertainty"
+            )
         stripped = item.strip()
         if stripped:
             uncertainties.append(stripped)
@@ -732,6 +815,7 @@ __all__ = [
     "MAPLE_MEDICAL_DISCLAIMER",
     "MapleClinicalAssistant",
     "MapleRelation",
+    "MAPLE_RESPONSE_ERROR_CODES",
     "MapleResponseError",
     "MapleSpan",
     "MapleTask",

@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
+
 import pytest
 
+from openmed.mlx import maple as maple_module
 from openmed.mlx.maple import (
     MAPLE_MEDICAL_DISCLAIMER,
+    MAPLE_RESPONSE_ERROR_CODES,
     MapleClinicalAssistant,
     MapleRelation,
     MapleResponseError,
@@ -241,3 +246,187 @@ def test_non_reasoning_tasks_reject_question(subtests):
         with subtests.test(task=task):
             with pytest.raises(ValueError, match="only accepted"):
                 build_maple_task_messages(task, "synthetic note", question="Why?")
+
+
+_ASPIRIN_ENTITIES = (
+    '{"entities":['
+    '{"start":0,"end":7,"label":"MEDICATION","text":"Aspirin"},'
+    '{"start":15,"end":19,"label":"CONDITION","text":"pain"}'
+    "],"
+)
+_SENTINEL = "MODEL_OUTPUT_SENTINEL"
+_PARSER_CODE_CASES = [
+    ("empty_response", "pii", "   ", "A"),
+    ("unfinished_reasoning", "pii", "I should return a JSON object", "A"),
+    ("invalid_json", "pii", "</think>{not json", "A"),
+    ("trailing_text", "pii", '{"spans":[]} trailing words', "A"),
+    ("non_object_json", "pii", "</think>[1]", "A"),
+    ("invalid_keys", "pii", '{"spans":[],"' + _SENTINEL + '":1}', "A"),
+    (
+        "invalid_answer",
+        "reasoning",
+        '{"answer":"","uncertainties":[],"evidence":[]}',
+        "A",
+    ),
+    ("invalid_span", "pii", '{"spans":{}}', "A"),
+    ("invalid_span", "pii", '{"spans":[1]}', "A"),
+    ("invalid_span", "pii", '{"spans":[{"label":"NAME","text":""}]}', "A"),
+    ("unmatched_span", "pii", '{"spans":[{"label":"NAME","text":"Zed"}]}', "A"),
+    ("invalid_label", "pii", '{"spans":[{"label":5,"text":"A"}]}', "A"),
+    ("invalid_label", "pii", '{"spans":[{"label":"9bad","text":"A"}]}', "A"),
+    ("label_not_allowed", "pii", '{"spans":[{"label":"CONDITION","text":"A"}]}', "A"),
+    (
+        "invalid_relation",
+        "relations",
+        _ASPIRIN_ENTITIES + '"relations":{}}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "invalid_relation",
+        "relations",
+        _ASPIRIN_ENTITIES + '"relations":[1]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "invalid_relation",
+        "relations",
+        _ASPIRIN_ENTITIES + '"relations":[{"source":0,"target":0,"label":"TREATS"}]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "invalid_label",
+        "relations",
+        _ASPIRIN_ENTITIES + '"relations":[{"source":0,"target":1,"label":7}]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "label_not_allowed",
+        "relations",
+        _ASPIRIN_ENTITIES
+        + '"relations":[{"source":0,"target":1,"label":"'
+        + _SENTINEL
+        + '"}]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "unknown_relation_endpoint",
+        "relations",
+        _ASPIRIN_ENTITIES + '"relations":[{"source":0,"target":9,"label":"TREATS"}]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "unknown_relation_endpoint",
+        "relations",
+        _ASPIRIN_ENTITIES
+        + '"relations":[{"source":"'
+        + _SENTINEL
+        + '","target":1,"label":"TREATS"}]}',
+        "Aspirin treats pain.",
+    ),
+    (
+        "invalid_uncertainty",
+        "reasoning",
+        '{"answer":"x","uncertainties":{},"evidence":[]}',
+        "A",
+    ),
+    (
+        "invalid_uncertainty",
+        "reasoning",
+        '{"answer":"x","uncertainties":[1],"evidence":[]}',
+        "A",
+    ),
+]
+
+
+class _FixedRunner:
+    def __init__(self, response):
+        self.response = response
+
+    def generate(self, **kwargs):
+        return self.response
+
+
+def _runner_code_cases():
+    return [
+        (
+            "non_text_response",
+            lambda: MapleClinicalAssistant(runner=_FixedRunner(42)).complete_task(
+                "pii", "A"
+            ),
+        ),
+        (
+            "non_text_response",
+            lambda: MapleClinicalAssistant(runner=_FixedRunner(None)).chat(
+                [{"role": "user", "content": "Hi"}]
+            ),
+        ),
+        (
+            "unfinished_reasoning",
+            lambda: MapleClinicalAssistant(
+                runner=_FixedRunner("<think>" + _SENTINEL)
+            ).chat([{"role": "user", "content": "Hi"}]),
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("code", "task", "response", "source"),
+    _PARSER_CODE_CASES,
+    ids=[f"{case[0]}-{index}" for index, case in enumerate(_PARSER_CODE_CASES)],
+)
+def test_parser_errors_carry_stable_reason_codes(code, task, response, source):
+    with pytest.raises(MapleResponseError) as exc_info:
+        parse_maple_task_response(task, response, source)
+
+    assert exc_info.value.code == code
+    assert code in MAPLE_RESPONSE_ERROR_CODES
+
+
+def test_runtime_errors_carry_stable_reason_codes(subtests):
+    for code, call in _runner_code_cases():
+        with subtests.test(code=code):
+            with pytest.raises(MapleResponseError) as exc_info:
+                call()
+            assert exc_info.value.code == code
+
+
+def test_every_reason_code_except_fallback_is_reachable():
+    reached = {case[0] for case in _PARSER_CODE_CASES}
+    reached |= {code for code, _ in _runner_code_cases()}
+
+    assert reached == MAPLE_RESPONSE_ERROR_CODES - {"invalid_response"}
+
+
+def test_every_raise_site_sets_a_literal_code_from_the_closed_set():
+    tree = ast.parse(inspect.getsource(maple_module))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "MapleResponseError"
+    ]
+
+    assert len(calls) >= 25
+    for call in calls:
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords}
+        assert "code" in keywords, ast.unparse(call)
+        value = keywords["code"]
+        assert isinstance(value, ast.Constant), ast.unparse(call)
+        assert value.value in MAPLE_RESPONSE_ERROR_CODES, ast.unparse(call)
+
+
+def test_reason_codes_never_contain_model_output():
+    for code, task, response, source in _PARSER_CODE_CASES:
+        with pytest.raises(MapleResponseError) as exc_info:
+            parse_maple_task_response(task, response, source)
+        assert _SENTINEL not in exc_info.value.code
+        assert _SENTINEL.lower() not in exc_info.value.code
+
+
+def test_unknown_or_missing_code_falls_back_to_invalid_response():
+    assert MapleResponseError("legacy message").code == "invalid_response"
+    assert MapleResponseError("x", code=_SENTINEL).code == "invalid_response"
+    error = MapleResponseError("kept message", code="trailing_text")
+    assert str(error) == "kept message"
+    assert isinstance(error, ValueError)
