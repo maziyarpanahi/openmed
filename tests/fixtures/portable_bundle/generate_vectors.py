@@ -720,6 +720,19 @@ def build_cases() -> list[dict]:
         "unknown_critical_extension",
         manifest=critical,
     )
+    # Built-in extensions are validated only by readers that understand them.
+    builtin = mutated(
+        lambda value: value["extensions"].update(
+            {"org.openmed.decision_calibration": {"profiles": [], "schema_version": 1}}
+        )
+    )
+    case("builtin_extension_not_understood", None, manifest=builtin)
+    case(
+        "builtin_extension_invalid",
+        "extension_invalid",
+        manifest=builtin,
+        ctx=context(understood_extensions=["org.openmed.decision_calibration"]),
+    )
 
     # Paths and file inventory structure.
     def bad_path(path: str) -> Callable[[dict], None]:

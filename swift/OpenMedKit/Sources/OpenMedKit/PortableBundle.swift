@@ -38,6 +38,7 @@ public enum PortableBundleReason: String, CaseIterable, Sendable {
     case fileReferenceUndeclared = "file_reference_undeclared"
     case fallbackInvalid = "fallback_invalid"
     case unknownCriticalExtension = "unknown_critical_extension"
+    case extensionInvalid = "extension_invalid"
     case sizeLimitExceeded = "size_limit_exceeded"
     case bundleNotYetValid = "bundle_not_yet_valid"
     case bundleExpired = "bundle_expired"
@@ -362,7 +363,9 @@ public enum PortableBundle {
             guard same(declared, identity) else { throw Refusal(.contentIDMismatch) }
             guard !trustPolicy.revokedContentIDs.contains(identity) else { throw Refusal(.bundleRevoked) }
             validSignatures = try checkSignatures(signatures, manifest: manifest, policy: trustPolicy, now: context.now)
-            let validated = try validate(parseCanonical(manifest), understood: context.understoodExtensions)
+            let root = try parseCanonical(manifest)
+            let validated = try validate(root, understood: context.understoodExtensions)
+            try validateBuiltinExtensions(root, understood: context.understoodExtensions)
             let declaredBytes = validated.files.reduce(Int64(0)) { $0 + $1.size }
             guard validated.files.count <= context.maxFiles, declaredBytes <= context.maxTotalBytes else {
                 throw Refusal(.sizeLimitExceeded)

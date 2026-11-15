@@ -40,6 +40,7 @@ enum class PortableBundleReason(val code: String) {
     FILE_REFERENCE_UNDECLARED("file_reference_undeclared"),
     FALLBACK_INVALID("fallback_invalid"),
     UNKNOWN_CRITICAL_EXTENSION("unknown_critical_extension"),
+    EXTENSION_INVALID("extension_invalid"),
     SIZE_LIMIT_EXCEEDED("size_limit_exceeded"),
     BUNDLE_NOT_YET_VALID("bundle_not_yet_valid"),
     BUNDLE_EXPIRED("bundle_expired"),
@@ -304,7 +305,9 @@ object PortableBundle {
             if (declared != identity) throw Refusal(PortableBundleReason.CONTENT_ID_MISMATCH)
             if (identity in trustPolicy.revokedContentIds) throw Refusal(PortableBundleReason.BUNDLE_REVOKED)
             validSignatures = checkSignatures(signatures, manifest, trustPolicy, context.now, verifier)
-            val validated = validate(parseCanonical(manifest), context.understoodExtensions)
+            val root = parseCanonical(manifest)
+            val validated = validate(root, context.understoodExtensions)
+            validateBuiltinExtensions(root, context.understoodExtensions)
             val declaredBytes = validated.files.sumOf { it.size }
             if (validated.files.size > context.maxFiles || declaredBytes > context.maxTotalBytes) {
                 throw Refusal(PortableBundleReason.SIZE_LIMIT_EXCEEDED)
@@ -334,6 +337,33 @@ object PortableBundle {
             )
         }
         return PortableBundleVerification(true, null, contentId, validSignatures, eligible, checked, files != null)
+    }
+
+    /**
+     * Runs the content validator of every built-in extension the reader
+     * understands and the manifest carries; failures are `extension_invalid`.
+     */
+    private fun validateBuiltinExtensions(value: Json, understood: Set<String>) {
+        val name = PortableBundleCalibration.EXTENSION
+        val root = value as? Json.Obj ?: return
+        val extensions = root["extensions"] as? Json.Obj ?: return
+        if (name !in understood || extensions[name] == null) return
+        try {
+            PortableBundleCalibration.validateExtension(root)
+        } catch (error: DecisionCalibrationException) {
+            throw Refusal(PortableBundleReason.EXTENSION_INVALID)
+        }
+    }
+
+    /** Returns the root of structurally valid canonical manifest bytes, or `null`. */
+    internal fun structuralRoot(manifest: ByteArray): Json.Obj? = try {
+        val value = parseCanonical(manifest)
+        val critical = ((value as? Json.Obj)?.get("critical_extensions") as? Json.Arr)
+            ?.items?.mapNotNull { (it as? Json.Str)?.value }?.toSet() ?: emptySet()
+        validate(value, critical)
+        value as? Json.Obj
+    } catch (refusal: Refusal) {
+        null
     }
 
     internal class Refusal(val reason: PortableBundleReason) : Exception(reason.code)

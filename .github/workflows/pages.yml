@@ -22,6 +22,7 @@ on:
       - "tests/browser/brand/**"
       - "tests/browser/ort-lane/**"
       - "tests/fixtures/device_capabilities/**"
+      - "tests/fixtures/portable_bundle_calibration/**"
       - "tests/browser/privacy-playground.spec.ts"
       - "tests/integration/test_ort_browser_lane.py"
       - "tests/web/**"

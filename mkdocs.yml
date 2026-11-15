@@ -317,6 +317,7 @@ nav:
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Signed Portable Model Bundles: models/portable-bundle.md
       - Crash-safe Bundle Generation Caches: models/bundle-cache.md
+      - Decision Calibration in Bundles: models/portable-bundle-calibration.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
       - Model Registry: model-registry.md
       - NER Families: ner-families.md

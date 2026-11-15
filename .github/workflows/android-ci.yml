@@ -30,6 +30,7 @@ on:
       - 'tests/fixtures/device_capabilities/**'
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
+      - 'tests/fixtures/portable_bundle_calibration/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -60,6 +61,7 @@ on:
       - 'tests/fixtures/device_capabilities/**'
       - 'tests/fixtures/bundle_cache/**'
       - 'tests/fixtures/managed_import/**'
+      - 'tests/fixtures/portable_bundle_calibration/**'
 
 permissions:
   contents: read
