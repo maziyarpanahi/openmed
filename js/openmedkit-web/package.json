@@ -54,7 +54,7 @@
   "devDependencies": {
     "@huggingface/tokenizers": "0.2.0",
     "@types/node": "^22.10.2",
-    "tsup": "^8.3.5",
+    "tsup": "^9.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
