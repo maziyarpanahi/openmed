@@ -614,6 +614,7 @@ class BlockingStream:
 
     def __init__(self) -> None:
         self.release = threading.Event()
+        self.waiting = threading.Event()
         self.closed = threading.Event()
         self.fragments = 0
 
@@ -621,6 +622,7 @@ class BlockingStream:
         try:
             self.fragments += 1
             yield StreamingDeidentificationEvent(redacted_text="[A] ")
+            self.waiting.set()
             assert self.release.wait(WAIT_SECONDS)
             self.fragments += 1
             yield StreamingDeidentificationEvent(redacted_text="[B] ")
@@ -657,6 +659,9 @@ def test_stream_cancellation_releases_permits_once(
             request, timeout=0.5 if trigger == "client_deadline" else WAIT_SECONDS
         )
         assert next(call).redacted_text == "[A] "
+        # The worker thread pulls the next fragment and blocks holding the
+        # permit; cancelling before that would end the RPC between fragments.
+        assert blocking.waiting.wait(WAIT_SECONDS)
         if trigger == "cancel":
             call.cancel()
         with pytest.raises(grpc.RpcError) as excinfo:
