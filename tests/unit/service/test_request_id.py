@@ -110,7 +110,9 @@ def test_grammar_module_does_not_import_web_framework_dependencies() -> None:
 
 
 def test_service_and_proxy_share_one_request_id_grammar() -> None:
-    grammar = re.compile(r"A-Za-z0-9_\.:-")
+    # The request-ID grammar is the character class with its 128-character
+    # bound; other identifiers may share the characters with their own bound.
+    grammar = re.compile(r"A-Za-z0-9_\.:-\]\{1,128\}")
     owners = sorted(
         path.relative_to(REPO_ROOT).as_posix()
         for path in (REPO_ROOT / "openmed" / "service").rglob("*.py")

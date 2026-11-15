@@ -301,6 +301,7 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
         "BoundedRequestBodyMiddleware",
         "BoundedRequestBodyMiddleware",
         "_throttle_middleware",
+        "_admission_middleware",
         "_readiness_middleware",
     ]
 
