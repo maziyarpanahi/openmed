@@ -51,21 +51,6 @@ android {
     }
 }
 
-// DJL 0.33 pulls Java-17-era logging and annotation jars that the D8 shipped
-// with AGP 7.4 cannot dex. Downstream apps on that toolchain need the same
-// API-compatible pins the in-repo Maple demo uses; the migration guide
-// documents them.
-val d8CompatiblePins = mapOf(
-    ("org.slf4j" to "slf4j-api") to consumerProperty("consumerSlf4jVersion"),
-    ("com.google.errorprone" to "error_prone_annotations") to
-        consumerProperty("consumerErrorproneVersion"),
-)
-configurations.configureEach {
-    resolutionStrategy.eachDependency {
-        d8CompatiblePins[requested.group to requested.name]?.let { useVersion(it) }
-    }
-}
-
 dependencies {
     implementation(openmedkitCoordinates)
     // OpenMedKit's facade exposes suspend functions; the AAR declares

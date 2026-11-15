@@ -65,8 +65,6 @@ ANDROID_VERSION_KEYS = {
     "consumerSerializationVersion": "kotlinx-serialization-json",
     "consumerJunitVersion": "junit",
     "consumerRobolectricVersion": "robolectric",
-    "consumerSlf4jVersion": "slf4j-android-compatible",
-    "consumerErrorproneVersion": "errorprone-android-compatible",
 }
 REQUIRED_AAR_ENTRIES = (
     "AndroidManifest.xml",

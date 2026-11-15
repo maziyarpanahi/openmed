@@ -132,8 +132,9 @@ through its declared runtime dependencies.
 | `OpenMedModelStore.isMLXModelCached(...)` | `ModelCache(context).isAvailable(entry)`. A cache hit makes no network call |
 | Calling `suspend` APIs with only the AAR on the classpath | Add `org.jetbrains.kotlinx:kotlinx-coroutines-core` yourself. The AAR declares it as a runtime dependency only |
 
-On AGP 7.4, D8 cannot dex the logging and annotation jars that DJL 0.33 pulls.
-Pin the API-compatible versions from `android/gradle/libs.versions.toml`:
+OpenMedKit builds with AGP 8, whose D8 dexes the logging and annotation jars
+that DJL 0.33 pulls, so AGP 8 apps need no pins. On AGP 7.4, D8 cannot dex
+them; apps still on that toolchain must pin API-compatible versions:
 
 ```kotlin
 configurations.configureEach {
