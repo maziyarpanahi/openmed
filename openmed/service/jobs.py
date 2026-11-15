@@ -80,9 +80,11 @@ PAYLOAD_MODES = frozenset({PAYLOAD_MODE_MEMORY, PAYLOAD_MODE_ENCRYPTED})
 # Sender exceptions are recorded with the dispatcher's controlled code.
 WEBHOOK_SENDER_FAILED = WEBHOOK_ERROR_SENDER
 WEBHOOK_EVENT_UNAVAILABLE = "terminal_event_unavailable"
-JOB_STORE_SCHEMA_VERSION = 1
+# Version 2 adds the keyed submitting-principal digest to every record.
+JOB_STORE_SCHEMA_VERSION = 2
 """Version of the job metadata document; files without the field are version 1."""
 _JOB_STORE_FIELDS = frozenset({"jobs", "schema_version"})
+OWNER_DIGEST_FIELD = "owner_digest"
 
 
 WebhookSender = Callable[..., WebhookDeliveryResult]
@@ -342,7 +344,7 @@ class LocalJobStore:
             raise ValueError("Job metadata store must contain a JSON object")
         # Refuse before any write: a newer document, or one with fields this
         # binary does not know, would otherwise be silently rewritten.
-        version = raw.get("schema_version", JOB_STORE_SCHEMA_VERSION)
+        version = raw.get("schema_version", 1)
         if type(version) is not int or not 1 <= version <= JOB_STORE_SCHEMA_VERSION:
             raise JobStoreSchemaError("job_store_schema_unsupported")
         if set(raw) - _JOB_STORE_FIELDS:
@@ -352,7 +354,11 @@ class LocalJobStore:
             raise ValueError("Job metadata store must contain a jobs object")
         if any(not isinstance(record, dict) for record in jobs.values()):
             raise ValueError("Job metadata store contains an invalid job record")
-        return {str(job_id): dict(record) for job_id, record in jobs.items()}
+        records = {str(job_id): dict(record) for job_id, record in jobs.items()}
+        for record in records.values():
+            # Version 1 records predate ownership; mark them explicitly unowned.
+            record.setdefault(OWNER_DIGEST_FIELD, None)
+        return records
 
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -524,12 +530,19 @@ class DeidentifyJobQueue:
             payload_store=job_payload_store_from_env(key_provider=key_provider),
         )
 
-    def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
+    def submit(
+        self,
+        payload: DeidentifyJobRequest,
+        *,
+        owner_digest: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
         """Submit one de-identification job and return its initial metadata.
 
         Args:
             payload: The validated request. It is snapshotted immediately; the
                 caller may reuse or mutate it afterwards.
+            owner_digest: Keyed digest of the submitting principal, or ``None``
+                when authentication is disabled.
 
         Returns:
             The initial job record.
@@ -547,7 +560,7 @@ class DeidentifyJobQueue:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
             self._sweep_payloads()
-            record, item = self._stage(snapshot)
+            record, item = self._stage(snapshot, owner_digest=owner_digest)
             try:
                 self.store.create(record)
             except BaseException:
@@ -562,7 +575,10 @@ class DeidentifyJobQueue:
             return _copy_record(record)
 
     def _stage(
-        self, payload: DeidentifyJobRequest
+        self,
+        payload: DeidentifyJobRequest,
+        *,
+        owner_digest: Optional[dict[str, str]] = None,
     ) -> tuple[dict[str, Any], _JobWorkItem]:
         """Snapshot *payload* into an input payload and build its queued record.
 
@@ -586,6 +602,7 @@ class DeidentifyJobQueue:
             now=now,
             input_ref=input_ref,
             retention_seconds=retention,
+            owner_digest=owner_digest,
         )
         return record, _JobWorkItem(job_id, input_ref.ref)
 
@@ -661,6 +678,7 @@ class DeidentifyJobQueue:
         now: datetime,
         input_ref: PayloadRef,
         retention_seconds: int,
+        owner_digest: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         documents = [
             _document_metadata(index, document)
@@ -691,6 +709,7 @@ class DeidentifyJobQueue:
             "started_at": None,
             "completed_at": None,
             "expires_at": self._expiry_timestamp(now),
+            OWNER_DIGEST_FIELD: None if owner_digest is None else dict(owner_digest),
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
@@ -1221,8 +1240,13 @@ def job_response_payload(
     *,
     status_url: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Return the public REST representation of a job record."""
+    """Return the public REST representation of a job record.
+
+    The stored owner digest is internal authorization state and is never
+    returned to callers.
+    """
     payload = _copy_record(record)
+    payload.pop(OWNER_DIGEST_FIELD, None)
     if status_url is not None:
         payload["status_url"] = status_url
     return payload
