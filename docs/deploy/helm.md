@@ -157,7 +157,10 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `config.throttle.rateLimitBurst` | `0` | `OPENMED_SERVICE_RATE_LIMIT_BURST`. |
 | `config.throttle.maxConcurrency` | `0` | `OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY`; `0` disables concurrency limiting. |
 | `config.throttle.concurrencyWaitSeconds` | `0.05` | `OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS`. |
-| `config.throttle.keyBy` | `global` | `OPENMED_SERVICE_THROTTLE_KEY`. |
+| `config.throttle.keyBy` | `global` | `OPENMED_SERVICE_THROTTLE_KEY`; `x-forwarded-for` requires `trustedProxies`. |
+| `config.throttle.trustedProxies` | `[]` | Proxy addresses or CIDRs joined into `OPENMED_SERVICE_TRUSTED_PROXIES`; empty ignores `X-Forwarded-For`. |
+| `config.throttle.trustedProxyHops` | `1` | `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`; trusted proxy tiers in front of the pod. |
+| `config.throttle.maxTrackedKeys` | `10000` | `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`; per-limiter client identity bound. |
 | `extraEnv` | `[]` | Extra container env entries, typically secret references. |
 | `service.type` | `ClusterIP` | Kubernetes Service type. |
 | `service.port` | `8080` | Service port. |

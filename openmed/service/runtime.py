@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import threading
@@ -52,6 +53,9 @@ SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
 SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
 SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
+SERVICE_TRUSTED_PROXIES_ENV_VAR = "OPENMED_SERVICE_TRUSTED_PROXIES"
+SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR = "OPENMED_SERVICE_TRUSTED_PROXY_HOPS"
+SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR = "OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS"
 SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR = "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET"
 SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR = (
     "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS"
@@ -85,6 +89,8 @@ DEFAULT_SERVICE_BATCH_LOW_WATERMARK = DEFAULT_SERVICE_BATCH_HIGH_WATERMARK // 2
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_WAIT_MS = 1000.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
+DEFAULT_SERVICE_TRUSTED_PROXY_HOPS = 1
+DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS = 10_000
 DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
 DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS = 512
 DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN = 65_536
@@ -130,6 +136,29 @@ _THROTTLE_KEY_ALIASES = {
 }
 
 
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+@dataclass(frozen=True)
+class TrustedProxyConfig:
+    """Reverse proxies whose ``X-Forwarded-For`` entries may identify clients.
+
+    Attributes:
+        networks: Proxy addresses or CIDR networks. When empty, forwarding
+            headers are ignored and the direct peer identifies the client.
+        hops: Maximum number of trusted proxies, counting the direct peer,
+            skipped while reading ``X-Forwarded-For`` from right to left.
+    """
+
+    networks: tuple[IPNetwork, ...] = ()
+    hops: int = DEFAULT_SERVICE_TRUSTED_PROXY_HOPS
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether any forwarding header may be honored."""
+        return bool(self.networks)
+
+
 @dataclass(frozen=True)
 class ServiceBatchingConfig:
     """Dynamic batching settings for REST model-backed endpoints."""
@@ -159,6 +188,8 @@ class ServiceThrottleConfig:
     max_concurrency: int = 0
     concurrency_wait_seconds: float = DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS
     key_by: str = "global"
+    proxies: TrustedProxyConfig = TrustedProxyConfig()
+    max_tracked_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS
 
     @property
     def rate_limit_enabled(self) -> bool:
@@ -210,6 +241,16 @@ def _parse_non_negative_int(
     if parsed < 0:
         raise ValueError(f"{env_var} must be greater than or equal to 0")
     return parsed
+
+
+def _parse_positive_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int,
+) -> int:
+    parsed = _parse_optional_positive_int(raw_value, env_var=env_var, default=None)
+    return default if parsed is None else parsed
 
 
 def _parse_optional_positive_int(
@@ -553,6 +594,56 @@ def parse_service_throttle_key(raw_value: Optional[str]) -> str:
         ) from exc
 
 
+def parse_service_trusted_proxies(raw_value: Optional[str]) -> tuple[IPNetwork, ...]:
+    """Parse trusted reverse-proxy addresses and CIDR networks."""
+    if raw_value is None or not raw_value.strip():
+        return ()
+    # Imported lazily: mtls imports auth, which imports this module indirectly.
+    from .mtls import parse_trusted_proxies
+
+    return parse_trusted_proxies(raw_value, env_var=SERVICE_TRUSTED_PROXIES_ENV_VAR)
+
+
+def parse_service_trusted_proxy_hops(raw_value: Optional[str]) -> int:
+    """Parse the maximum number of trusted proxy hops to skip."""
+    return _parse_positive_int(
+        raw_value,
+        env_var=SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR,
+        default=DEFAULT_SERVICE_TRUSTED_PROXY_HOPS,
+    )
+
+
+def parse_service_throttle_max_tracked_keys(raw_value: Optional[str]) -> int:
+    """Parse the per-limiter bound on tracked client identities."""
+    return _parse_positive_int(
+        raw_value,
+        env_var=SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR,
+        default=DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    )
+
+
+def parse_service_trusted_proxy_config() -> TrustedProxyConfig:
+    """Read trusted reverse-proxy settings from the current process environment.
+
+    The request throttle and the authentication-failure limiter both use this
+    configuration, so a client resolves to the same identity in each.
+
+    Returns:
+        Trusted proxy networks and the hop bound; empty networks by default.
+
+    Raises:
+        ValueError: If a network or the hop count is invalid.
+    """
+    return TrustedProxyConfig(
+        networks=parse_service_trusted_proxies(
+            os.getenv(SERVICE_TRUSTED_PROXIES_ENV_VAR)
+        ),
+        hops=parse_service_trusted_proxy_hops(
+            os.getenv(SERVICE_TRUSTED_PROXY_HOPS_ENV_VAR)
+        ),
+    )
+
+
 def parse_service_throttle_config() -> ServiceThrottleConfig:
     """Read throttling settings from the current process environment."""
     return ServiceThrottleConfig(
@@ -569,6 +660,10 @@ def parse_service_throttle_config() -> ServiceThrottleConfig:
             os.getenv(SERVICE_CONCURRENCY_WAIT_ENV_VAR)
         ),
         key_by=parse_service_throttle_key(os.getenv(SERVICE_THROTTLE_KEY_ENV_VAR)),
+        proxies=parse_service_trusted_proxy_config(),
+        max_tracked_keys=parse_service_throttle_max_tracked_keys(
+            os.getenv(SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR)
+        ),
     )
 
 

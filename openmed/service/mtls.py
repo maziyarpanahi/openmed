@@ -123,8 +123,24 @@ def parse_service_mtls_config() -> ServiceMTLSConfig:
     )
 
 
-def parse_trusted_proxies(raw_value: Optional[str]) -> tuple[IPNetwork, ...]:
-    """Parse comma-separated trusted proxy addresses and CIDR networks."""
+def parse_trusted_proxies(
+    raw_value: Optional[str],
+    *,
+    env_var: str = SERVICE_MTLS_TRUSTED_PROXIES_ENV_VAR,
+) -> tuple[IPNetwork, ...]:
+    """Parse comma-separated trusted proxy addresses and CIDR networks.
+
+    Args:
+        raw_value: Comma-separated addresses or CIDR networks, or ``None``.
+        env_var: Setting name reported when a value is invalid. The invalid
+            value itself is never echoed.
+
+    Returns:
+        Parsed networks in configuration order; empty when unset.
+
+    Raises:
+        ValueError: If any entry is not an address or network.
+    """
     if raw_value is None or not raw_value.strip():
         return ()
 
@@ -137,8 +153,7 @@ def parse_trusted_proxies(raw_value: Optional[str]) -> tuple[IPNetwork, ...]:
             parsed.append(ipaddress.ip_network(value, strict=False))
         except ValueError as exc:
             raise ValueError(
-                f"{SERVICE_MTLS_TRUSTED_PROXIES_ENV_VAR} contains an invalid "
-                f"address or network"
+                f"{env_var} contains an invalid address or network"
             ) from exc
     return tuple(parsed)
 

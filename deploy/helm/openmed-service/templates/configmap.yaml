@@ -28,6 +28,9 @@ data:
   OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY: {{ .Values.config.throttle.maxConcurrency | quote }}
   OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS: {{ .Values.config.throttle.concurrencyWaitSeconds | quote }}
   OPENMED_SERVICE_THROTTLE_KEY: {{ .Values.config.throttle.keyBy | quote }}
+  OPENMED_SERVICE_TRUSTED_PROXIES: {{ join "," .Values.config.throttle.trustedProxies | quote }}
+  OPENMED_SERVICE_TRUSTED_PROXY_HOPS: {{ .Values.config.throttle.trustedProxyHops | quote }}
+  OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS: {{ .Values.config.throttle.maxTrackedKeys | quote }}
   {{- if .Values.journey.enabled }}
   OPENMED_JOURNEY_SCHEMA: {{ .Values.journey.schema | quote }}
   OPENMED_JOURNEY_ARTIFACT_ROOT: {{ .Values.journey.artifacts.mountPath | quote }}
