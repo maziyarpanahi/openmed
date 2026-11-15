@@ -1013,20 +1013,96 @@ def _check_journey_store_tls(context: SecurityCheckContext) -> CheckOutcome:
     return _fail("postgres_tls_not_verified")
 
 
-def _check_configured_egress(context: SecurityCheckContext) -> CheckOutcome:
-    tracing_config = getattr(context.state("tracing"), "config", None)
-    openhim = context.state("openhim_settings")
-    configured = (
-        bool(context.env(PRIVACY_GATEWAY_ENDPOINT_ENV_VAR))
-        or bool(
-            getattr(tracing_config, "enabled", False)
-            and getattr(tracing_config, "otlp_endpoint", None)
-        )
-        or bool(getattr(openhim, "enabled", False))
+def _configured_egress_requests(context: SecurityCheckContext) -> list[Any]:
+    """Return one representative egress request per configured adapter.
+
+    Each request mirrors what the adapter asks the egress policy for at run
+    time: its purpose, data class and credential class, and its destination.
+    """
+    from .egress import (
+        EgressAdapter,
+        EgressCredential,
+        EgressDataClass,
+        EgressPurpose,
+        EgressRequest,
     )
-    if not configured:
+
+    requests: list[Any] = []
+    gateway = context.env(PRIVACY_GATEWAY_ENDPOINT_ENV_VAR)
+    if gateway:
+        requests.append(
+            EgressRequest(
+                adapter=EgressAdapter.PRIVACY_GATEWAY.value,
+                purpose=EgressPurpose.PRIVACY_GATEWAY.value,
+                destination=gateway,
+                data_class=EgressDataClass.DEIDENTIFIED_TEXT.value,
+            )
+        )
+    tracing_config = getattr(context.state("tracing"), "config", None)
+    endpoint = getattr(tracing_config, "otlp_endpoint", None)
+    if getattr(tracing_config, "enabled", False) and endpoint:
+        headers = getattr(tracing_config, "otlp_headers", None)
+        requests.append(
+            EgressRequest(
+                adapter=EgressAdapter.TRACING.value,
+                purpose=EgressPurpose.TRACE_EXPORT.value,
+                destination=str(endpoint),
+                data_class=EgressDataClass.TELEMETRY.value,
+                credential=(
+                    EgressCredential.HEADER if headers else EgressCredential.NONE
+                ).value,
+            )
+        )
+    openhim = context.state("openhim_settings")
+    if getattr(openhim, "enabled", False):
+        basic = getattr(openhim, "auth_mode", "basic") == "basic"
+        requests.append(
+            EgressRequest(
+                adapter=EgressAdapter.OPENHIM.value,
+                purpose=EgressPurpose.OPENHIM.value,
+                destination=f"{getattr(openhim, 'api_url', '')}/mediators",
+                data_class=EgressDataClass.METADATA.value,
+                credential=(
+                    EgressCredential.BASIC if basic else EgressCredential.HEADER
+                ).value,
+            )
+        )
+    return requests
+
+
+# Policy decisions that keep every configured adapter in-process.
+_EGRESS_DISABLED_REASONS: Final = frozenset({"egress_disabled", "offline_mode"})
+_EGRESS_RULE_MISSING_REASONS: Final = frozenset(
+    {"no_matching_rule", "allowed_permissive", "insecure_transport"}
+)
+
+
+def _check_configured_egress(context: SecurityCheckContext) -> CheckOutcome:
+    requests = _configured_egress_requests(context)
+    if not requests:
         return _not_applicable("egress_adapters_disabled")
-    return _not_implemented()
+    from .egress import EgressConfigurationError, EgressPolicy
+
+    try:
+        policy = EgressPolicy.from_env(
+            context.environ, receipt_sink=lambda _receipt: None
+        )
+    except EgressConfigurationError:
+        return _fail("egress_policy_invalid")
+    # Evaluated without DNS: hostnames are re-checked when the adapter
+    # connects, so this only proves an operator rule authorizes each adapter.
+    reasons = [policy.authorize(request).reason_code for request in requests]
+    if all(reason in _EGRESS_DISABLED_REASONS for reason in reasons):
+        return _pass("egress_disabled")
+    for reason in reasons:
+        if reason in _EGRESS_DISABLED_REASONS or reason == "allowed_by_rule":
+            continue
+        if reason in _EGRESS_RULE_MISSING_REASONS:
+            return _fail("egress_rule_missing")
+        if reason == "credentials_not_permitted":
+            return _fail("egress_credentials_not_permitted")
+        return _fail("egress_destination_denied")
+    return _pass("egress_rules_cover_adapters")
 
 
 _REQUEST_TARGET_ROUTES: Final = (

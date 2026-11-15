@@ -54,6 +54,10 @@ _ENV_VARS = (
     "OPENMED_SERVICE_OTLP_ENDPOINT",
     "OPENMED_OPENHIM_MEDIATOR_ENABLED",
     "OPENMED_JOURNEY_POSTGRES_DSN",
+    "OPENMED_EGRESS_MODE",
+    "OPENMED_EGRESS_RULES",
+    "OPENMED_EGRESS_RULES_FILE",
+    "OPENMED_OFFLINE",
 )
 
 
@@ -419,7 +423,7 @@ _JOURNEY_STUBS = {"journey.encryption_at_rest"}
         (
             {"OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT": "https://llm.example.test"},
             "egress.configured_adapters",
-            "control_not_implemented",
+            "egress_rule_missing",
             {"egress.configured_adapters"},
         ),
     ],
@@ -554,21 +558,38 @@ def test_undeclared_route_policy_blocks(monkeypatch: pytest.MonkeyPatch) -> None
     assert (result.reason, result.blocking) == ("route_policy_undeclared", True)
 
 
+_OPENHIM_CORE_URL = "https://openhim-core.example.test:8080"
+_OTLP_ENDPOINT = "https://otel.example.test"
+
+
+def _openhim_state(auth_mode: str = "basic") -> dict[str, Any]:
+    return {
+        "openhim_settings": SimpleNamespace(
+            enabled=True, api_url=_OPENHIM_CORE_URL, auth_mode=auth_mode
+        )
+    }
+
+
+def _otlp_state() -> dict[str, Any]:
+    return {
+        "tracing": SimpleNamespace(
+            config=SimpleNamespace(
+                enabled=True, otlp_endpoint=_OTLP_ENDPOINT, otlp_headers={}
+            )
+        )
+    }
+
+
+def _egress_rule(purpose: str, destination: str, **extra: Any) -> dict[str, Any]:
+    return {"purposes": [purpose], "destination": destination, **extra}
+
+
 @pytest.mark.parametrize(
     "state",
-    [
-        {"openhim_settings": SimpleNamespace(enabled=True)},
-        {
-            "tracing": SimpleNamespace(
-                config=SimpleNamespace(
-                    enabled=True, otlp_endpoint="https://otel.example.test"
-                )
-            )
-        },
-    ],
+    [_openhim_state(), _otlp_state()],
     ids=["openhim-mediator", "otlp-exporter"],
 )
-def test_enabled_feature_without_its_control_blocks(
+def test_enabled_adapter_without_an_egress_rule_blocks(
     monkeypatch: pytest.MonkeyPatch, state: dict[str, Any]
 ) -> None:
     _configure_production(monkeypatch)
@@ -578,10 +599,103 @@ def test_enabled_feature_without_its_control_blocks(
 
     report = _evaluate(app)
 
-    assert len(report.blocking_checks) == 1
-    result = _result(report, report.blocking_checks[0])
-    assert result.status is sp.CheckStatus.NOT_IMPLEMENTED
+    assert report.blocking_checks == ("egress.configured_adapters",)
+    result = _result(report, "egress.configured_adapters")
+    assert (result.status, result.reason) == (
+        sp.CheckStatus.FAIL,
+        "egress_rule_missing",
+    )
     assert result.tracking_issue == 3581
+
+
+@pytest.mark.parametrize(
+    ("state", "rules"),
+    [
+        (
+            _openhim_state(),
+            [_egress_rule("openhim", _OPENHIM_CORE_URL, allow_credentials=True)],
+        ),
+        (_otlp_state(), [_egress_rule("trace_export", _OTLP_ENDPOINT)]),
+    ],
+    ids=["openhim-mediator", "otlp-exporter"],
+)
+def test_enabled_adapter_covered_by_an_egress_rule_passes(
+    monkeypatch: pytest.MonkeyPatch,
+    state: dict[str, Any],
+    rules: list[dict[str, Any]],
+) -> None:
+    _configure_production(monkeypatch)
+    monkeypatch.setenv("OPENMED_EGRESS_RULES", json.dumps(rules))
+    app = create_app()
+    for name, value in state.items():
+        setattr(app.state, name, value)
+
+    report = _evaluate(app)
+
+    result = _result(report, "egress.configured_adapters")
+    assert (result.status, result.reason) == (
+        sp.CheckStatus.PASS,
+        "egress_rules_cover_adapters",
+    )
+    assert not report.blocking
+
+
+@pytest.mark.parametrize(
+    ("environ", "reason"),
+    [
+        (
+            {
+                "OPENMED_EGRESS_RULES": json.dumps(
+                    [_egress_rule("openhim", _OPENHIM_CORE_URL)]
+                )
+            },
+            "egress_credentials_not_permitted",
+        ),
+        (
+            {
+                "OPENMED_EGRESS_RULES": json.dumps(
+                    [_egress_rule("webhook", _OPENHIM_CORE_URL)]
+                )
+            },
+            "egress_rule_missing",
+        ),
+        ({"OPENMED_EGRESS_RULES": "not-json"}, "egress_policy_invalid"),
+        (
+            {"OPENMED_PROFILE": "dev", "OPENMED_SERVICE_SECURITY_PROFILE": "prod"},
+            "egress_rule_missing",
+        ),
+    ],
+    ids=["credentials-not-allowed", "wrong-purpose", "invalid-rules", "permissive"],
+)
+def test_egress_rule_must_authorize_the_adapter_request(
+    monkeypatch: pytest.MonkeyPatch, environ: dict[str, str], reason: str
+) -> None:
+    _configure_production(monkeypatch)
+    for name, value in environ.items():
+        monkeypatch.setenv(name, value)
+    app = create_app()
+    app.state.openhim_settings = _openhim_state()["openhim_settings"]
+
+    result = _result(_evaluate(app), "egress.configured_adapters")
+
+    assert (result.status, result.reason, result.blocking) == (
+        sp.CheckStatus.FAIL,
+        reason,
+        True,
+    )
+
+
+def test_disabled_egress_satisfies_the_configured_adapter_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_production(monkeypatch)
+    monkeypatch.setenv("OPENMED_EGRESS_MODE", "deny")
+    app = create_app()
+    app.state.openhim_settings = _openhim_state()["openhim_settings"]
+
+    result = _result(_evaluate(app), "egress.configured_adapters")
+
+    assert (result.status, result.reason) == (sp.CheckStatus.PASS, "egress_disabled")
 
 
 def test_journey_records_are_bound_by_the_access_gate(

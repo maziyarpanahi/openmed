@@ -144,7 +144,7 @@ terminate TLS and enforce budgets in front of the service.
 | `journey.principal_binding` | required | Journey access is bound to the authenticated principal | #3549 |
 | `journey.encryption_at_rest` | required | Journey storage is encrypted | #3550 |
 | `journey.store_tls` | required | the Journey DSN uses `sslmode=verify-full` | |
-| `egress.configured_adapters` | required | an egress policy covers the privacy gateway, OTLP and OpenHIM | #3581 |
+| `egress.configured_adapters` | required | an operator egress rule authorizes each configured privacy gateway, OTLP and OpenHIM destination, including its credentials, or egress is disabled | #3581 |
 | `egress.request_targets` | advisory | an egress policy covers webhook and FHIR URLs | #3581 |
 | `grpc.transport` | required | with `--grpc-address`: loopback, or TLS for remote binds | #3546 |
 | `grpc.auth` | required | with `--grpc-address`: gRPC authentication | #3547 |

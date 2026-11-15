@@ -158,7 +158,7 @@ targets:
         why: negative_control
       - workload: Deployment/api
         check: egress.configured_adapters
-        reason: control_not_implemented
+        reason: egress_rule_missing
         why: negative_control
 
   - id: helm-invalid-resources
