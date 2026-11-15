@@ -224,6 +224,7 @@ classification:
     - serving/graphql.md
     - serving/response-headers.md
     - serving/authentication.md
+    - security/auth-verifier-generations.md
     - serving/load-testing.md
     - evaluation/resource-soak.md
     - serving/mtls.md

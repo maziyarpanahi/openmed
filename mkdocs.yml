@@ -150,6 +150,7 @@ nav:
       - GraphQL Service: serving/graphql.md
       - REST Response Headers: serving/response-headers.md
       - REST Authentication: serving/authentication.md
+      - API-key and JWT Verifier Generations: security/auth-verifier-generations.md
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Resource Recovery Soak: evaluation/resource-soak.md
       - Mutual TLS Authentication: serving/mtls.md
