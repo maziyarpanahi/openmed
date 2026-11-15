@@ -48,6 +48,7 @@ from openmed.service.operational import (
     OperationalEvent,
     OperationalState,
 )
+from openmed.structured.store import LATEST_MIGRATION_VERSION
 from tests.fixtures.diagnostic_state import (
     SENTINEL_KEY,
     SENTINEL_MRN,
@@ -575,7 +576,9 @@ def test_registry_v1_state_requires_migration(state: FrozenState) -> None:
 def test_journey_migration_states_are_classified(state: FrozenState) -> None:
     database = state.journey_store_root / "journey.sqlite3"
     connection = sqlite3.connect(database)
-    connection.execute("DELETE FROM schema_migrations WHERE version = 3")
+    connection.execute(
+        "DELETE FROM schema_migrations WHERE version = ?", (LATEST_MIGRATION_VERSION,)
+    )
     connection.execute(
         "UPDATE schema_migrations SET checksum = 'changed' WHERE version = 1"
     )
@@ -983,7 +986,9 @@ def test_verifier_rejects_non_json_and_oversized_input() -> None:
 def test_recovery_guidance_distinguishes_every_kind(state: FrozenState) -> None:
     state.jobs_store_path.write_text("{")
     connection = sqlite3.connect(state.journey_store_root / "journey.sqlite3")
-    connection.execute("DELETE FROM schema_migrations WHERE version = 3")
+    connection.execute(
+        "DELETE FROM schema_migrations WHERE version = ?", (LATEST_MIGRATION_VERSION,)
+    )
     connection.commit()
     connection.close()
     document = json.loads(state.audit_chain_path.read_text())

@@ -19,6 +19,7 @@ import pytest
 
 from openmed.core.audit import AuditReport, AuditSpan, DetectorInfo, hash_text
 from openmed.core.audit_chain import AuditChain
+from openmed.structured.store import JourneyStoreEncryption
 from openmed.structured.store.local import SQLiteJourneyStore
 
 # Every sentinel contains "sentinel" (case-insensitively), so one scan finds all.
@@ -154,7 +155,11 @@ def build_journey_store(root: Path) -> None:
 
     root.mkdir(parents=True, exist_ok=True)
     database = root / "journey.sqlite3"
-    SQLiteJourneyStore(database).close()
+    # The schema comes from the store; sentinel rows are then written directly,
+    # in plaintext, so the bundle can be checked for leaks.
+    SQLiteJourneyStore(
+        database, encryption=JourneyStoreEncryption.development_plaintext()
+    ).close()
     connection = sqlite3.connect(database)
     try:
         payload = json.dumps({"name": SENTINEL_NAME, "mrn": SENTINEL_MRN})
