@@ -161,7 +161,8 @@ does not inherit uv project overrides, so ordinary pip cannot resolve the
 
 ## Android dependency locking and verification
 
-Every Android Gradle module (the `:openmedkit` library and each demo app)
+Every Android Gradle module (the `:openmedkit` library, the optional
+`:openmedkit-mlkit` module, the `:consumer-r8-smoke` app and each demo app)
 locks its resolvable configurations in a committed `gradle.lockfile`.
 `android/gradle/dependency-locking.gradle.kts` applies this to every
 subproject in STRICT mode. A dependency added or upgraded without a lockfile
@@ -183,7 +184,7 @@ already-verified dependency to the library's release classpath through an init
 script and requires the build to fail on the lock state.
 
 After an intentional dependency change, regenerate both files on the same
-branch from `android/` with JDK 11 and the Android SDK:
+branch from `android/` with JDK 17 and the Android SDK:
 
 ```bash
 ./gradlew verifyDependencyLocks --write-locks
