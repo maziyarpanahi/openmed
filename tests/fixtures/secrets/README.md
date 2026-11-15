@@ -32,3 +32,35 @@ detector must not report. One JSON object per line:
 `base64_image_fragment`, `base64_document_fragment`, `phi_placeholder`,
 `template_placeholder`, `public_key_block`, `certificate_block`, `ulid`,
 `nanoid`, and `etag`.
+
+## How the current values were generated
+
+Every value is a pure function of a short label, so it can be rebuilt or
+extended without inventing new entropy, and a diff stays readable because only
+the label changes.
+
+- UUIDs are UUIDv5 in the URL namespace over
+  `https://synthetic.openmed.invalid/<label>`, except the nil UUID, which is
+  written out literally.
+- Git object IDs are the SHA-1 hex digest of a fixed label such as
+  `first synthetic commit`, `synthetic tree` or `synthetic merge base`. The
+  third one is truncated to 12 characters so abbreviated IDs are covered too.
+- `sha256:` fingerprints and OCI layer digests are the SHA-256 hex digest of a
+  fixed label.
+- SRI integrity values are the base64 encoding of a SHA-512 or SHA-384 digest
+  of a fixed label.
+- The base64 image control is a one-pixel PNG. Its second form is the first 44
+  characters of the same base64 string followed by an ellipsis.
+- The base64 document controls are the base64 encoding of fixed literal JSON
+  and YAML bytes.
+- The `<<OPENMED_PHI_...>>` values, the template placeholders and the nil UUID
+  are literal documented placeholder forms.
+- Public-key and certificate blocks are base64 of a fixed label inside the
+  matching PEM header and footer lines. They are not real key material.
+- ULIDs are the first 16 bytes of a SHA-256 digest mapped onto the Crockford
+  base32 alphabet in the 26 character form. Nanoids are the digest mapped onto
+  the nanoid alphabet in the 21 character form.
+- ETag values are the quoted SHA-1 hex digest of a fixed label.
+
+To add a control for an existing kind, pick a new label and compute the value
+the same way, so the file stays reproducible from this file alone.
