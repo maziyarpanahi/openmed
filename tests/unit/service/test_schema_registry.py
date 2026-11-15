@@ -293,12 +293,12 @@ def test_observers_report_versions_without_values(tmp_path: Path) -> None:
     jobs.write_text(json.dumps({"jobs": {"job-1": {"label": "SECRET"}}}))
     legacy = observe_job_store(jobs)
     assert (legacy.state, legacy.version, legacy.attributes["layout"]) == (
-        ObservedState.CURRENT,
+        ObservedState.UPGRADE_PENDING,
         1,
         "legacy",
     )
     assert "SECRET" not in json.dumps(legacy.to_dict())
-    jobs.write_text(json.dumps({"jobs": {}, "schema_version": 2}))
+    jobs.write_text(json.dumps({"jobs": {}, "schema_version": 3}))
     assert observe_job_store(jobs).code == "job_store_schema_unsupported"
     jobs.write_text(json.dumps({"jobs": {}, "shadow": {}}))
     assert observe_job_store(jobs).code == "job_store_unknown_fields"

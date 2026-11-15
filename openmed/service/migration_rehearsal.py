@@ -1322,12 +1322,19 @@ class _JobStore(_Adapter):
     def seed(self, root: Path, version: int) -> None:
         if version == 0:
             return
-        # The previous release's layout: no ``schema_version`` field.
+        if version == 1:
+            # The previous release's layout: no ``schema_version`` field.
+            document: dict[str, Any] = {"jobs": _synthetic_jobs()}
+        else:
+            # Version 2 records carry an owner digest; unowned ones hold None.
+            jobs = {
+                job_id: {**record, "owner_digest": None}
+                for job_id, record in _synthetic_jobs().items()
+            }
+            document = {"jobs": jobs, "schema_version": version}
         _write_private(
             self._path(root),
-            json.dumps({"jobs": _synthetic_jobs()}, indent=2, sort_keys=True).encode(
-                "ascii"
-            ),
+            json.dumps(document, indent=2, sort_keys=True).encode("ascii"),
         )
 
     def migrate(self, root: Path) -> _Probe:

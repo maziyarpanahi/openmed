@@ -31,7 +31,7 @@ def test_previous_release_layout_is_read_and_rewritten_explicitly(
     store.update("job-0001", status="done")
 
     persisted = json.loads(path.read_text(encoding="utf-8"))
-    assert persisted["schema_version"] == jobs.JOB_STORE_SCHEMA_VERSION == 1
+    assert persisted["schema_version"] == jobs.JOB_STORE_SCHEMA_VERSION
     assert set(persisted) == {"jobs", "schema_version"}
     assert jobs.LocalJobStore(path).get("job-0001") is not None
 
@@ -39,7 +39,7 @@ def test_previous_release_layout_is_read_and_rewritten_explicitly(
 @pytest.mark.parametrize(
     ("document", "code"),
     [
-        ({"jobs": {}, "schema_version": 2}, "job_store_schema_unsupported"),
+        ({"jobs": {}, "schema_version": 3}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": 0}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": True}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": "1"}, "job_store_schema_unsupported"),

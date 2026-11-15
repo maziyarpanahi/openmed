@@ -929,6 +929,7 @@ def test_preflight_evaluates_an_explicit_environment_and_restores_the_process(
         "OPENMED_SERVICE_AUTH_API_KEYS": _api_keys(),
         "OPENMED_SERVICE_SERVED_MODELS": "pii_detection_superclinical",
         "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY": "2",
+        "OPENMED_SERVICE_DIGEST_KEY": "synthetic-preflight-digest-key-" + "0" * 32,
         "SYNTHETIC_NON_SERVICE_SETTING": "1",
     }
     monkeypatch.delenv("SYNTHETIC_NON_SERVICE_SETTING", raising=False)

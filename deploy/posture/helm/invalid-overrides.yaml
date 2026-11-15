@@ -10,6 +10,11 @@ extraEnv:
       secretKeyRef:
         name: openmed-service-auth
         key: api-keys
+  - name: OPENMED_SERVICE_DIGEST_KEY
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: digest-key
   - name: OPENMED_SERVICE_SERVED_MODELS
     value: pii_detection_superclinical
   - name: OPENMED_PROFILE

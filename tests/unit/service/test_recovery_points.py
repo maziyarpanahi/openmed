@@ -26,6 +26,7 @@ from openmed.service import recovery
 from openmed.service.recovery import (
     BACKUP_KEY_PURPOSE,
     EXCLUDED_STATE,
+    JOB_STORE_LAYOUT_VERSION,
     JOB_STORE_PATH,
     JOURNEY_DATABASE_PATH,
     RECOVERY_METADATA_DIRECTORY,
@@ -185,7 +186,7 @@ def test_inventory_is_category_only_and_classifies_excluded_state(
     assert entries["journey_encryption"]["schema_version"] == 1
     assert entries["model_registry"]["schema_version"] == 2
     assert entries["audit_chain"]["schema_version"] == 1
-    assert entries["job_metadata"]["schema_version"] == 1
+    assert entries["job_metadata"]["schema_version"] == JOB_STORE_LAYOUT_VERSION
     for name, disposition in EXCLUDED_STATE.items():
         assert entries[name]["disposition"] == disposition.value
         assert entries[name]["objects"] == 0

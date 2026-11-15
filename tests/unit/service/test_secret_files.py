@@ -300,6 +300,7 @@ def test_credential_settings_match_their_owning_modules() -> None:
         openhim_mediator.OPENHIM_PASSWORD_ENV_VAR,
         sidecar.SIDECAR_HASH_SECRET_ENV_VAR,
         "OPENMED_JOURNEY_POSTGRES_DSN",
+        "OPENMED_SERVICE_DIGEST_KEY",
     }
     assert auth.SERVICE_AUTH_API_KEYS_FILE_ENV_VAR == (
         f"{auth.SERVICE_AUTH_API_KEYS_ENV_VAR}_FILE"

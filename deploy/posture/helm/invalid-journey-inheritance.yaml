@@ -11,5 +11,10 @@ extraEnv:
       secretKeyRef:
         name: openmed-service-auth
         key: api-keys
+  - name: OPENMED_SERVICE_DIGEST_KEY
+    valueFrom:
+      secretKeyRef:
+        name: openmed-service-auth
+        key: digest-key
   - name: OPENMED_JOURNEY_SCHEMA
     value: openmed_journey_api_only

@@ -93,7 +93,13 @@ def _api_container(**extra: Any) -> dict[str, Any]:
                 "valueFrom": {
                     "secretKeyRef": {"name": SENTINELS["secret"], "key": "api-keys"}
                 },
-            }
+            },
+            {
+                "name": "OPENMED_SERVICE_DIGEST_KEY",
+                "valueFrom": {
+                    "secretKeyRef": {"name": SENTINELS["secret"], "key": "digest-key"}
+                },
+            },
         ],
         "securityContext": copy.deepcopy(HARDENED_CONTAINER),
         "resources": copy.deepcopy(LIMITS),
@@ -316,7 +322,11 @@ def test_file_settings_on_secret_mounts_count_as_secrets() -> None:
         {
             "name": "OPENMED_SERVICE_AUTH_JWKS_FILE",
             "value": "/var/run/secrets/openmed/jwks.json",
-        }
+        },
+        {
+            "name": "OPENMED_SERVICE_DIGEST_KEY_FILE",
+            "value": "/var/run/secrets/openmed/digest-key",
+        },
     ]
     pod = {"volumes": [{"name": "auth", "secret": {"secretName": SENTINELS["secret"]}}]}
     data = _api_data(
@@ -591,6 +601,7 @@ def _compose_service(**overrides: Any) -> dict[str, Any]:
             "OPENMED_PROFILE": "${OPENMED_PROFILE:-prod}",
             "OPENMED_SERVICE_AUTH_ENABLED": "true",
             "OPENMED_SERVICE_AUTH_API_KEYS": "${API_KEYS:?set API_KEYS}",
+            "OPENMED_SERVICE_DIGEST_KEY": "${DIGEST_KEY:?set DIGEST_KEY}",
             **TELEMETRY_OFF,
         },
         "healthcheck": {"test": ["CMD", "probe", "http://127.0.0.1:8080/readyz"]},

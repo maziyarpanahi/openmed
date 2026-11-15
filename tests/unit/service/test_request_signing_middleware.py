@@ -584,7 +584,8 @@ class _SpyJobQueue:
         self.submitted: list[Any] = []
         self.lookups: list[str] = []
 
-    def submit(self, payload: Any) -> dict[str, Any]:
+    def submit(self, payload: Any, *, owner_digest: Any = None) -> dict[str, Any]:
+        del owner_digest
         self.submitted.append(payload)
         return {"id": "synthetic-job", "status": "queued"}
 

@@ -174,6 +174,7 @@ inspection and process environments; secret files are not.
 | `OPENMED_OPENHIM_PASSWORD` | `OPENMED_OPENHIM_PASSWORD_FILE` | OpenHIM management API |
 | `OPENMED_SIDECAR_HASH_SECRET` | `OPENMED_SIDECAR_HASH_SECRET_FILE` | Desktop sidecar request-ID HMAC |
 | `OPENMED_JOURNEY_POSTGRES_DSN` | `OPENMED_JOURNEY_POSTGRES_DSN_FILE` | `openmed-journey` migrate, worker, probe, golden |
+| `OPENMED_SERVICE_DIGEST_KEY` | `OPENMED_SERVICE_DIGEST_KEY_FILE` | Keyed principal and owner digests (required with production authentication) |
 
 The file rules are the same for every setting:
 

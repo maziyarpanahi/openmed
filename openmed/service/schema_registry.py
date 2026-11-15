@@ -410,6 +410,8 @@ _NEW_STEP_CLASSES: Mapping[tuple[str, int], RollbackClass] = {
     (JOURNEY_ARTIFACT_MARKER, 1): RollbackClass.RESTORE_REQUIRED,
     # The 3.2.0 binary never reads recovery points.
     (RECOVERY_MANIFEST, 1): RollbackClass.BACKWARD_COMPATIBLE,
+    # The previous binary ignores schema_version and the owner digest field.
+    (JOB_STORE, 2): RollbackClass.BACKWARD_COMPATIBLE,
 }
 
 
@@ -552,7 +554,7 @@ def durable_schemas() -> tuple[DurableSchema, ...]:
             owner="openmed.service.jobs.LocalJobStore",
             recovery_category="job_metadata",
             current_version=JOB_STORE_LAYOUT_VERSION,
-            source_versions=(0, JOB_STORE_LAYOUT_VERSION),
+            source_versions=(0, 1, JOB_STORE_LAYOUT_VERSION),
             readable_versions=(JOB_STORE_LAYOUT_VERSION,),
             restorable_versions=(JOB_STORE_LAYOUT_VERSION,),
             previous_release_version=1,
@@ -565,7 +567,9 @@ def durable_schemas() -> tuple[DurableSchema, ...]:
                 "drift": "job_store_unknown_fields",
                 "unknown_version": "job_store_schema_unsupported",
             },
-            steps=_document_steps(JOB_STORE, ((1, "jobs_object"),), 1),
+            steps=_document_steps(
+                JOB_STORE, ((1, "jobs_object"), (2, "owner_digest")), 1
+            ),
         ),
         DurableSchema(
             component=MODEL_REGISTRY,
@@ -1100,7 +1104,7 @@ def observe_job_store(path: Path | None) -> ComponentObservation:
             JOB_STORE, ObservedState.INVALID, None, "job_store_invalid"
         )
     records = len(document["jobs"])
-    version = document.get("schema_version", JOB_STORE_LAYOUT_VERSION)
+    version = document.get("schema_version", 1)
     layout = "explicit" if "schema_version" in document else "legacy"
     digest = _digest(_canonical_json({"fields": sorted(document), "version": version}))
     if type(version) is not int or version < 1:
@@ -1125,9 +1129,15 @@ def observe_job_store(path: Path | None) -> ComponentObservation:
             digest,
             {"records": records},
         )
+    # Older layouts are rewritten automatically on the store's next write.
+    state = (
+        ObservedState.CURRENT
+        if version == JOB_STORE_LAYOUT_VERSION
+        else ObservedState.UPGRADE_PENDING
+    )
     return ComponentObservation(
         JOB_STORE,
-        ObservedState.CURRENT,
+        state,
         version,
         None,
         digest,

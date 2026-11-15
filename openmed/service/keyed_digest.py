@@ -217,8 +217,9 @@ def resolve_service_digest_key(
 ) -> ServiceDigestKey:
     """Resolve the deployment digest key from the environment.
 
-    ``OPENMED_SERVICE_DIGEST_KEY`` supplies the secret (its UTF-8 bytes, at
-    least 32) and ``OPENMED_SERVICE_DIGEST_KEY_ID`` an optional public key id.
+    ``OPENMED_SERVICE_DIGEST_KEY`` (or a file named by
+    ``OPENMED_SERVICE_DIGEST_KEY_FILE``) supplies the secret (its UTF-8 bytes,
+    at least 32) and ``OPENMED_SERVICE_DIGEST_KEY_ID`` an optional public key id.
     Without a configured key the service uses a random per-process key, except
     when *required* is set outside the ``dev`` and ``test`` profiles.
 
@@ -235,8 +236,11 @@ def resolve_service_digest_key(
         DigestKeyError: If the configured key is invalid, or missing when
             required outside the development profiles.
     """
+    from .secret_files import read_secret_setting
+
     env = os.environ if environ is None else environ
-    raw_secret = env.get(SERVICE_DIGEST_KEY_ENV_VAR)
+    # The key may be inline or mounted as OPENMED_SERVICE_DIGEST_KEY_FILE.
+    raw_secret = read_secret_setting(SERVICE_DIGEST_KEY_ENV_VAR, environ=env)
     if raw_secret is not None and raw_secret.strip():
         raw_key_id = env.get(SERVICE_DIGEST_KEY_ID_ENV_VAR)
         key_id = raw_key_id.strip() if raw_key_id and raw_key_id.strip() else None

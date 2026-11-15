@@ -518,6 +518,7 @@ def _resolve_file_settings(
 
 
 _OTLP_HEADERS: Final = "OPENMED_SERVICE_OTLP_HEADERS"
+_DIGEST_KEY: Final = "OPENMED_SERVICE_DIGEST_KEY"
 
 
 def _stand_in(name: str) -> str:
@@ -544,6 +545,8 @@ def _stand_in(name: str) -> str:
         return "postgresql://posture-lane.invalid/openmed"
     if name == _OTLP_HEADERS:
         return "authorization=posture-lane"
+    if name == _DIGEST_KEY:
+        return secrets.token_urlsafe(32)
     return _GENERIC_STAND_IN
 
 

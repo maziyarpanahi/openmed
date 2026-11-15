@@ -504,7 +504,15 @@ class _RecordingManager:
     def ensure_capacity(self) -> None:
         return None
 
-    def start(self, config: Any, *, deidentifier: Any = None, job_id: Any = None):
+    def start(
+        self,
+        config: Any,
+        *,
+        deidentifier: Any = None,
+        job_id: Any = None,
+        owner_digest: Any = None,
+    ):
+        del owner_digest
         self.configs.append(config)
         status_type = (
             FHIRBulkJobStatus if self.kind == "bulk" else SMARTBackendJobStatus

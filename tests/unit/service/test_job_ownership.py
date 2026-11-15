@@ -532,7 +532,7 @@ def test_job_store_writes_schema_version_and_rejects_unknown_versions(
         store_path.write_text(
             json.dumps({"jobs": {}, "schema_version": version}), encoding="utf-8"
         )
-        with pytest.raises(ValueError, match="unsupported schema version"):
+        with pytest.raises(ValueError, match="job_store_schema_unsupported"):
             jobs.LocalJobStore(store_path)
 
 
