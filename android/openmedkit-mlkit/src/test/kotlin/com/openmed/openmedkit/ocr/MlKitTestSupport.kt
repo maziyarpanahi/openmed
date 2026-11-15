@@ -1,4 +1,4 @@
-package com.openmed.openmedkit
+package com.openmed.openmedkit.ocr
 
 import android.content.Context
 import com.google.mlkit.common.MlKit

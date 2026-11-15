@@ -2,9 +2,8 @@ package com.openmed.openmedkit.intake
 
 import android.content.Context
 import android.net.Uri
-import com.google.mlkit.vision.common.InputImage
-import com.openmed.openmedkit.ocr.MlKitOcrAdapter
 import com.openmed.openmedkit.ocr.OcrAdapter
+import com.openmed.openmedkit.ocr.OcrImage
 import com.openmed.openmedkit.ocr.OcrResult
 import com.openmed.openmedkit.ocr.OcrToken
 import java.util.Locale
@@ -66,12 +65,23 @@ data class DocumentIntakeResult(
 
 /**
  * On-device document intake for Android OpenMedKit.
+ *
+ * The core artifact ships no OCR engine, so callers pass an [OcrAdapter]: the
+ * ML Kit adapter from the optional `openmedkit-mlkit` artifact, another
+ * on-device engine, or `FakeOcrAdapter` in tests.
+ *
+ * @param context Context used to resolve document URIs.
+ * @param ocrAdapter On-device OCR engine that receives each page as an [OcrImage].
+ * @param pdfPageSource Renders PDF pages to bitmaps.
+ * @param pageSeparator Text inserted between pages in the document-level text.
+ * @param imageSource Decodes image URIs to bitmaps plus EXIF rotation.
  */
 class DocumentIntake(
     private val context: Context,
-    private val ocrAdapter: OcrAdapter = MlKitOcrAdapter(),
+    private val ocrAdapter: OcrAdapter,
     private val pdfPageSource: PdfPageSource = PdfPageRenderer(),
     private val pageSeparator: String = "\n\n",
+    private val imageSource: DocumentImageSource = BitmapDocumentImageSource(),
 ) {
     suspend fun extract(uri: Uri): DocumentIntakeResult =
         when (detectInputKind(uri)) {
@@ -82,7 +92,7 @@ class DocumentIntake(
     private suspend fun extractPdf(uri: Uri): DocumentIntakeResult {
         val builder = ResultBuilder(pageSeparator = pageSeparator)
         pdfPageSource.renderEach(context, uri) { renderedPage ->
-            val image = InputImage.fromBitmap(renderedPage.bitmap, 0)
+            val image = OcrImage.fromBitmap(renderedPage.bitmap)
             val result = ocrAdapter.recognize(image)
             builder.appendPage(
                 page = renderedPage.page,
@@ -95,15 +105,21 @@ class DocumentIntake(
     }
 
     private suspend fun extractImage(uri: Uri): DocumentIntakeResult {
-        val image = InputImage.fromFilePath(context, uri)
-        val result = ocrAdapter.recognize(image)
+        val image = imageSource.load(context, uri)
+        val width = image.uprightWidth
+        val height = image.uprightHeight
+        val result = try {
+            ocrAdapter.recognize(image)
+        } finally {
+            image.bitmap.recycle()
+        }
         return ResultBuilder(pageSeparator = pageSeparator)
             .apply {
                 appendPage(
                     page = 0,
                     result = result,
-                    width = image.width,
-                    height = image.height,
+                    width = width,
+                    height = height,
                 )
             }
             .build(inputKind = DocumentInputKind.IMAGE)

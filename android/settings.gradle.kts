@@ -34,6 +34,7 @@ rootProject.name = "openmed-android"
 include(":OpenMedScanDemo:app")
 include(":OpenMedMapleDemo:app")
 include(":openmedkit")
+include(":openmedkit-mlkit")
 include(":OpenMedDemo:app")
 // R8-minified consumer of the release AAR; not a demo (see android/README.md).
 include(":consumer-r8-smoke")

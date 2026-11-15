@@ -88,6 +88,11 @@ armeabi-v7a and 56 MB to x86 or x86_64, almost all of it native libraries (ONNX
 Runtime, the DJL tokenizer and ML Kit text recognition). Ship ABI splits or an
 Android App Bundle so each device downloads one ABI.
 
+The core artifact has no OCR engine and requests no network permission. Add
+the optional ML Kit OCR adapter only if you need it; see
+[Optional ML Kit OCR module](android-integration.md#optional-ml-kit-ocr-module)
+for the license and network permissions it adds.
+
 ## Quick Start: Kotlin
 
 The snippet below discovers a model in the on-device catalog, resolves its

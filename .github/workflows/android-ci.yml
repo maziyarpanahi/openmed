@@ -93,9 +93,20 @@ jobs:
           android/gradle/wrapper/gradle-wrapper.properties
           android/**/build.gradle*
 
-    - name: Assemble OpenMedKit debug library
+    - name: Assemble OpenMedKit debug libraries
       working-directory: android
-      run: ./gradlew :openmedkit:assembleDebug --stacktrace
+      run: ./gradlew :openmedkit:assembleDebug :openmedkit-mlkit:assembleDebug --stacktrace
+
+    - name: Verify core dependency boundary
+      working-directory: android
+      run: >-
+        ./gradlew :openmedkit:verifyDependencyBoundary
+        :openmedkit-mlkit:verifyDependencyBoundary
+        --stacktrace
+
+    - name: Run optional ML Kit OCR module tests
+      working-directory: android
+      run: ./gradlew :openmedkit-mlkit:testDebugUnitTest --stacktrace
 
     # Fails on any difference from api/openmedkit.api; run `apiDump` to refresh.
     - name: Check OpenMedKit public API baseline
@@ -331,4 +342,8 @@ jobs:
         path: |
           android/openmedkit/build/reports/emulator-lane/
           android/openmedkit/build/reports/androidTests/connected/
+          android/openmedkit/build/reports/dependency-boundary/
+          android/openmedkit-mlkit/build/reports/dependency-boundary/
+          android/openmedkit-mlkit/build/reports/tests/testDebugUnitTest/
+          android/openmedkit-mlkit/build/test-results/testDebugUnitTest/
         if-no-files-found: ignore
