@@ -5,8 +5,10 @@ Every test runs the public ``/jobs`` queue against real files: a
 synthetic key. A "process" is one queue built from those files. A crash is a
 ``SimulatedCrash`` (a ``BaseException``) raised from the queue's fault hook at
 a durability boundary, which unwinds the worker like a kill; the queue object
-is then abandoned without shutdown and a fresh one is built from disk. One
-test kills a real child process with ``os._exit``.
+is then abandoned without shutdown and a fresh one is built from disk. Job
+work and terminal webhooks run on manual doubles of the worker pool and of the
+bounded webhook dispatcher, so a crash can land on either side of a delivery.
+One test kills a real child process with ``os._exit``.
 
 Documents, webhook targets, and secrets carry synthetic sentinels; each test
 scans the metadata file, the payload directory, decision receipts, recovery
@@ -35,6 +37,8 @@ from hypothesis import strategies as st
 
 from openmed.core.key_provider import DATA_KEY_BYTES, InMemoryKeyProvider, KeyState
 from openmed.service import jobs
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
+from openmed.service.idempotency import IdempotencyError
 from openmed.service.job_payloads import (
     JOB_PAYLOAD_KEY_PURPOSE,
     EncryptedJobPayloadStore,
@@ -42,13 +46,12 @@ from openmed.service.job_payloads import (
 from openmed.service.job_recovery import (
     FAULT_BOUNDARIES,
     JOB_STATUSES,
-    IdempotencyConflictError,
-    IdempotencyKeyError,
     JobReplayAuthorization,
     ReplayRefusedError,
     RetryPolicy,
     StaleLeaseError,
 )
+from openmed.service.keyed_digest import ServiceDigestKey
 from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 from openmed.service.webhooks import WebhookDeliveryResult
 
@@ -70,6 +73,10 @@ STEP_SECONDS = 120
 REVIEWER = "sha256:" + "a" * 64
 EVIDENCE = "sha256:" + "b" * 64
 DOCUMENT_BOUNDARIES = {"document.processed", "checkpoint.committed"}
+# A durable digest key, so keyed idempotency survives a restart.
+DIGEST_SECRET = b"z" * 32
+DIGEST_KEY_ID = "recovery-digests"
+OWNER_B = {"alg": "hmac-sha256", "key_id": DIGEST_KEY_ID, "value": "b" * 64}
 
 
 class SimulatedCrash(BaseException):
@@ -105,6 +112,33 @@ class ManualExecutor:
         if cancel_futures:
             for _operation, _item, future in self.work:
                 future.cancel()
+
+
+class ManualDispatcher:
+    """Webhook dispatcher double: holds deliveries until a test runs them."""
+
+    max_delivery_seconds = 300.0
+
+    def __init__(self, **_: Any) -> None:
+        self.pending: list[tuple[Callable[..., Any], Callable[..., Any]]] = []
+        self.closed = False
+
+    def submit(self, deliver: Callable[..., Any], settle: Callable[..., Any]) -> None:
+        if self.closed:
+            settle(WebhookDeliveryResult(success=False, attempts=0, error="cancelled"))
+            return
+        self.pending.append((deliver, settle))
+
+    def wait_idle(self, timeout: Optional[float] = None) -> bool:
+        del timeout
+        return not self.pending
+
+    def shutdown(self, drain_seconds: Optional[float] = None) -> None:
+        del drain_seconds
+        self.closed = True
+        while self.pending:
+            _deliver, settle = self.pending.pop(0)
+            settle(WebhookDeliveryResult(success=False, attempts=0, error="cancelled"))
 
 
 class RecordingSender:
@@ -173,6 +207,18 @@ class Harness:
     def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self.root = tmp_path
         self.monkeypatch = monkeypatch
+        # Webhook egress is deny-by-default; allow only the synthetic origin.
+        monkeypatch.setenv(
+            EGRESS_RULES_ENV_VAR,
+            json.dumps(
+                [
+                    {
+                        "purposes": ["webhook"],
+                        "destination": "https://zqrecovery.example.test",
+                    }
+                ]
+            ),
+        )
         self.clock = Clock()
         self.sender = RecordingSender()
         self.model = Deidentifier()
@@ -205,12 +251,21 @@ class Harness:
         store = jobs.LocalJobStore(self.store_path, clock=self.clock)
         with self.monkeypatch.context() as patched:
             patched.setattr(jobs, "ThreadPoolExecutor", ManualExecutor)
+            patched.setattr(jobs, "WebhookDispatcher", ManualDispatcher)
             queue = jobs.DeidentifyJobQueue(
                 SimpleNamespace(validate_served_model=lambda _name: None),
                 store=store,
                 clock=self.clock,
                 payload_store=payloads,
                 webhook_sender=self.sender,
+                digests=jobs.JobDigestPolicy(
+                    key=ServiceDigestKey.from_secret(
+                        DIGEST_SECRET, key_id=DIGEST_KEY_ID
+                    )
+                ),
+                # Checkpoint after every document so each boundary is a
+                # resume point.
+                progress_interval_seconds=0,
                 retry_policy=retry_policy
                 or RetryPolicy(
                     max_attempts=3, base_delay_seconds=5, max_delay_seconds=60
@@ -225,19 +280,28 @@ class Harness:
 
 
 def drain(queue: jobs.DeidentifyJobQueue) -> bool:
-    """Run recorded work in order; return ``True`` if the process crashed."""
+    """Run recorded jobs, then webhook deliveries; ``True`` if the process crashed."""
 
     executor = queue._executor
+    dispatcher = queue._webhooks
     assert isinstance(executor, ManualExecutor)
-    while executor.work:
-        operation, item, future = executor.work.pop(0)
-        if not future.set_running_or_notify_cancel():
-            continue
-        try:
-            operation(item)
-        except SimulatedCrash:
-            return True
-        future.set_result(None)
+    assert isinstance(dispatcher, ManualDispatcher)
+    while executor.work or dispatcher.pending:
+        while executor.work:
+            operation, item, future = executor.work.pop(0)
+            if not future.set_running_or_notify_cancel():
+                continue
+            try:
+                operation(item)
+            except SimulatedCrash:
+                return True
+            future.set_result(None)
+        if dispatcher.pending:
+            deliver, settle = dispatcher.pending.pop(0)
+            try:
+                settle(deliver(threading.Event(), dispatcher.max_delivery_seconds))
+            except SimulatedCrash:
+                return True
     return False
 
 
@@ -364,11 +428,11 @@ def test_crash_at_every_boundary_resumes_without_duplicate_effects(
     assert all(body == bodies[0] for body in bodies)
     assert bodies[0]["status"] == "done" and len(bodies[0]["spans"]) == 3
     # Only a document whose result was never committed is processed again.
-    expected_calls = (
-        ["d0", "d1", "d1", "d2"]
-        if boundary == "document.processed"
-        else ["d0", "d1", "d2"]
-    )
+    # The last document's result is committed with the terminal state.
+    expected_calls = {
+        "document.processed": ["d0", "d1", "d1", "d2"],
+        "terminal.sealed": ["d0", "d1", "d2", "d2"],
+    }.get(boundary, ["d0", "d1", "d2"])
     assert harness.model.calls == expected_calls
     # Nothing protected is left behind once the webhook was delivered.
     assert list((tmp_path / "payloads").iterdir()) == []
@@ -735,7 +799,9 @@ def test_durable_shutdown_keeps_queued_work_and_refunds_drained_attempts(
     queue._executor.work.clear()
     claimed = queue._claim(running_id)
     assert claimed is not None
-    queue._active[running_id] = claimed[0].epoch
+    # A live worker of this process holds the lease.
+    queue._leases[running_id] = claimed[0].epoch
+    queue._active[running_id] = "running"
 
     queue.shutdown()
 
@@ -826,25 +892,27 @@ def test_idempotent_submission_survives_restart_and_detects_conflicts(
     assert queue.payloads.retained_count() == 1
     assert len(queue._executor.work) == 1
 
-    with pytest.raises(IdempotencyConflictError):
+    with pytest.raises(IdempotencyError) as conflict:
         queue.submit_job(_request(method="remove"), idempotency_key=key)
-    # The date shift never enters metadata; the retained snapshot still
+    assert conflict.value.code == "idempotency_key_conflict"
+    # The date shift never enters metadata; the keyed request digest still
     # detects that its value changed.
     shift_key = "7d2b6f0e-93a1-4e58-b4d3-0c6a9e1f2a77"
     queue.submit_job(
         _request(method="shift_dates", date_shift_days=7),
         idempotency_key=shift_key,
     )
-    with pytest.raises(IdempotencyConflictError):
+    with pytest.raises(IdempotencyError):
         queue.submit_job(
             _request(method="shift_dates", date_shift_days=11),
             idempotency_key=shift_key,
         )
-    scoped = queue.submit_job(_request(), idempotency_key=key, idempotency_scope="b")
+    # Keys are scoped to the submitting principal's owner digest.
+    scoped = queue.submit_job(_request(), idempotency_key=key, owner_digest=OWNER_B)
     assert scoped.created is True and scoped.record["id"] != first.record["id"]
-    with pytest.raises(IdempotencyKeyError):
-        queue.submit_job(_request(), idempotency_key="short")
-    assert isinstance(IdempotencyKeyError(), ValueError)
+    with pytest.raises(IdempotencyError) as malformed:
+        queue.submit_job(_request(), idempotency_key="contains space")
+    assert malformed.value.code == "idempotency_key_invalid"
 
     restarted = harness.start()
     replayed = restarted.submit_job(_request(), idempotency_key=key)
@@ -852,7 +920,7 @@ def test_idempotent_submission_survives_restart_and_detects_conflicts(
     stored = json.loads(harness.store_path.read_text(encoding="utf-8"))
     assert key not in json.dumps(stored)
     digests = {
-        record["idempotency"]["key_digest"]
+        record["idempotency"]["scope_digest"]
         for record in stored["jobs"].values()
         if record.get("idempotency")
     }
@@ -861,8 +929,9 @@ def test_idempotent_submission_survives_restart_and_detects_conflicts(
     assert drain(restarted) is False
     done = restarted.submit_job(_request(), idempotency_key=key)
     assert done.created is False and done.record["status"] == "done"
-    # After the input is consumed, the metadata digest still detects changes.
-    with pytest.raises(IdempotencyConflictError):
+    # After the input is consumed, the keyed request digest still detects
+    # changes.
+    with pytest.raises(IdempotencyError):
         restarted.submit_job(_request(keep_year=True), idempotency_key=key)
     _assert_value_free(harness, restarted)
 
@@ -890,6 +959,7 @@ def test_killed_child_process_resumes_after_the_last_checkpoint(
                 JOB_PAYLOAD_KEY_PURPOSE,
                 EncryptedJobPayloadStore,
             )
+            from openmed.service.keyed_digest import ServiceDigestKey
             from openmed.service.schemas import DeidentifyJobRequest
 
             root = Path(sys.argv[1])
@@ -914,6 +984,12 @@ def test_killed_child_process_resumes_after_the_last_checkpoint(
                 max_workers=1,
                 lease_seconds={LEASE_SECONDS},
                 fault_hook=kill,
+                digests=jobs.JobDigestPolicy(
+                    key=ServiceDigestKey.from_secret(
+                        {DIGEST_SECRET!r}, key_id={DIGEST_KEY_ID!r}
+                    )
+                ),
+                progress_interval_seconds=0,
             )
             queue._deidentify_document = lambda _request, document: (
                 SimpleNamespace(pii_entities=[])

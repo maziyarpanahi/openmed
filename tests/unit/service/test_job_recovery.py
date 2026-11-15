@@ -19,8 +19,9 @@ from openmed.interop.ingest import load_ingestion_schema
 from openmed.service import job_recovery, jobs
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
+from openmed.service.idempotency import IdempotencyError
 from openmed.service.job_recovery import (
-    IdempotencyKeyError,
     JobDecisionReceipt,
     JobRecoveryError,
     JobReplayAuthorization,
@@ -28,10 +29,10 @@ from openmed.service.job_recovery import (
     RetryPolicy,
     classify_document_failure,
     classify_input_failure,
-    idempotency_key_digest,
     public_recovery_view,
     validate_recovery,
 )
+from openmed.service.keyed_digest import ServiceDigestKey
 from openmed.service.resilience import CircuitBreakerOpenError
 from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 from openmed.service.webhooks import WebhookDeliveryResult
@@ -40,6 +41,20 @@ START = datetime(2026, 4, 1, tzinfo=timezone.utc)
 TEXT_SENTINEL = "ZQUNITRECOVERYSENTINEL Synthetic Patient"
 KEY = "6c1f0a2e-8f3b-4d7e-9a10-5b2c3d4e5f60"
 LOOPBACK_BASE_URL = "http://127.0.0.1"
+DIGEST_KEY = ServiceDigestKey.from_secret(b"r" * 32, key_id="synthetic-recovery")
+OWNER_A = {"alg": "hmac-sha256", "key_id": "synthetic-owner", "value": "a" * 64}
+OWNER_B = {"alg": "hmac-sha256", "key_id": "synthetic-owner", "value": "b" * 64}
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [{"purposes": ["webhook"], "destination": "https://synthetic.example.test"}]
+        ),
+    )
 
 
 class Clock:
@@ -59,11 +74,18 @@ class ManualExecutor:
     """Executor double that records work without running it."""
 
     def __init__(self, **_: Any) -> None:
-        self.work: list[tuple[Callable[[Any], None], Any]] = []
+        self.work: list[tuple[Callable[[Any], None], Any, Future[None]]] = []
 
     def submit(self, operation: Callable[[Any], None], item: Any) -> Future[None]:
-        self.work.append((operation, item))
-        return Future()
+        future: Future[None] = Future()
+        self.work.append((operation, item, future))
+        return future
+
+    def run_next(self) -> None:
+        operation, item, future = self.work.pop(0)
+        assert future.set_running_or_notify_cancel()
+        operation(item)
+        future.set_result(None)
 
     def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
         del wait, cancel_futures
@@ -73,12 +95,15 @@ def _queue(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, clock: Clock, **kwargs: Any
 ) -> jobs.DeidentifyJobQueue:
     store = jobs.LocalJobStore(tmp_path / "jobs.json", clock=clock)
+    # Checkpoint after every document so each boundary is observable.
+    kwargs.setdefault("progress_interval_seconds", 0)
     with monkeypatch.context() as patched:
         patched.setattr(jobs, "ThreadPoolExecutor", ManualExecutor)
         queue = jobs.DeidentifyJobQueue(
             SimpleNamespace(validate_served_model=lambda _name: None),
             store=store,
             clock=clock,
+            digests=jobs.JobDigestPolicy(key=DIGEST_KEY),
             **kwargs,
         )
     queue._deidentify_document = lambda _request, _document: SimpleNamespace(  # type: ignore[method-assign]
@@ -163,18 +188,31 @@ def test_input_failures_are_classified_by_controlled_code(
     assert " " not in decision.reason_code
 
 
-def test_idempotency_key_digest_is_scoped_and_value_free() -> None:
-    anonymous = idempotency_key_digest(KEY)
+def test_idempotency_scope_is_keyed_owner_bound_and_value_free(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    queue = _queue(monkeypatch, tmp_path, Clock())
+    first = queue._idempotency_identity(_request(), KEY, owner_digest=None)
 
-    assert anonymous.startswith("sha256:") and KEY not in anonymous
-    assert idempotency_key_digest(KEY, scope=None) == anonymous
-    assert idempotency_key_digest(KEY, scope="api_key:a") != anonymous
-    assert idempotency_key_digest(KEY, scope="api_key:a") != idempotency_key_digest(
-        KEY, scope="api_key:b"
+    assert first == queue._idempotency_identity(_request(), KEY, owner_digest=None)
+    assert KEY not in first.scope_digest and len(first.scope_digest) == 64
+    owned = queue._idempotency_identity(_request(), KEY, owner_digest=OWNER_A)
+    other = queue._idempotency_identity(_request(), KEY, owner_digest=OWNER_B)
+    assert len({first.scope_digest, owned.scope_digest, other.scope_digest}) == 3
+    changed = queue._idempotency_identity(
+        _request(method="remove"), KEY, owner_digest=None
     )
-    for bad in ("short", "x" * 129, "contains space here!!", "", 7):
-        with pytest.raises(IdempotencyKeyError) as caught:
-            idempotency_key_digest(bad)  # type: ignore[arg-type]
+    assert changed.scope_digest == first.scope_digest
+    assert changed.request_digest != first.request_digest
+    # The webhook secret is a credential: rotating it names the same request.
+    hooked = {"url": "https://synthetic.example.test/hook", "secret": "a" * 16}
+    rotated = {**hooked, "secret": "b" * 16}
+    assert queue._idempotency_identity(
+        _request(webhook=hooked), KEY, owner_digest=None
+    ) == queue._idempotency_identity(_request(webhook=rotated), KEY, owner_digest=None)
+    for bad in ("contains space", "", "x" * 256, 'quote"inside'):
+        with pytest.raises(IdempotencyError) as caught:
+            queue._idempotency_identity(_request(), bad, owner_digest=None)
         assert caught.value.code == "idempotency_key_invalid"
 
 
@@ -325,11 +363,13 @@ def test_public_view_omits_worker_lease_and_request_identity(
     assert public["recovery"]["lease"]["epoch"] == 1
     assert set(public["recovery"]["lease"]) == {"epoch", "acquired_at", "expires_at"}
     assert "idempotency" not in public
+    assert "sha256:" not in encoded
     for internal in (
         queue.worker_id,
         record["recovery"]["lease"]["lease_id"],
         record["recovery"]["request_digest"],
-        record["idempotency"]["key_digest"],
+        record["idempotency"]["scope_digest"],
+        record["idempotency"]["request_digest"],
         KEY,
         TEXT_SENTINEL,
     ):
@@ -346,18 +386,30 @@ def test_stores_on_one_path_share_transitions_and_receipts(tmp_path: Path) -> No
     first.create({"id": "synthetic-a", "status": "queued", "state_version": 1})
 
     def promote(record: dict[str, Any]) -> list[dict[str, Any]]:
-        record["status"] = "running"
+        assert record["status"] == "queued"
         return [{"action": "lease_reclaimed", "reason_code": "lease_expired"}]
 
-    stored = second.transition("synthetic-a", promote)
+    stored = second.update_if(
+        "synthetic-a", expected_statuses=("queued",), mutate=promote, status="running"
+    )
 
     assert stored is not None and stored["state_version"] == 2
     assert first.get("synthetic-a")["status"] == "running"
     assert first.decisions() == [
         {"action": "lease_reclaimed", "reason_code": "lease_expired"}
     ]
-    assert second.transition("synthetic-a", lambda _record: None) is None
-    assert second.transition("missing", promote) is None
+    assert (
+        second.update_if(
+            "synthetic-a", expected_statuses=None, mutate=lambda _record: None
+        )
+        is None
+    )
+    # The status fence refuses a stale expectation before the mutation runs.
+    assert (
+        second.update_if("synthetic-a", expected_statuses=("queued",), mutate=promote)
+        is None
+    )
+    assert second.update_if("missing", expected_statuses=None, mutate=promote) is None
     on_disk = json.loads(path.read_text(encoding="utf-8"))
     assert on_disk["jobs"]["synthetic-a"]["status"] == "running"
     assert len(on_disk["decisions"]) == 1
@@ -381,7 +433,7 @@ def test_failed_transition_leaves_memory_and_disk_unchanged(
     with monkeypatch.context() as patched:
         patched.setattr(jobs.os, "replace", fail)
         with pytest.raises(OSError, match="synthetic publication failure"):
-            store.transition("synthetic-a", change)
+            store.update_if("synthetic-a", expected_statuses=None, mutate=change)
 
     assert path.read_bytes() == before
     assert store.get("synthetic-a")["status"] == "queued"
@@ -515,7 +567,7 @@ def test_rest_idempotency_key_returns_the_existing_job_or_409(
             headers={"Idempotency-Key": KEY},
         )
         malformed = client.post(
-            "/jobs", json=body, headers={"Idempotency-Key": "short"}
+            "/jobs", json=body, headers={"Idempotency-Key": "contains space"}
         )
         job_id = first.json()["id"]
         for _ in range(200):
@@ -526,13 +578,16 @@ def test_rest_idempotency_key_returns_the_existing_job_or_409(
 
     assert first.status_code == 202 and again.status_code == 202
     assert again.json()["id"] == job_id
-    assert "idempotent-replayed" not in first.headers
-    assert again.headers["Idempotent-Replayed"] == "true"
+    # /jobs answers like the FHIR bulk starts, through the shared contract.
+    assert "idempotency-replayed" not in first.headers
+    assert again.headers["Idempotency-Replayed"] == "true"
     assert changed.status_code == 409
     assert changed.json()["error"]["code"] == "idempotency_key_conflict"
     assert malformed.status_code == 400
+    assert malformed.json()["error"]["code"] == "idempotency_key_invalid"
     assert status["status"] == "done"
-    assert status["state_version"] >= 4
+    # Submission, claim, and the terminal write with the final checkpoint.
+    assert status["state_version"] >= 3
     assert status["recovery"]["checkpoint"]["sequence"] == 1
     transitions = [
         (item["from"], item["to"]) for item in status["recovery"]["transitions"]
