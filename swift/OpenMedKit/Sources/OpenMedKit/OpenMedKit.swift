@@ -52,7 +52,12 @@
         /// large on-device models can first drop their runtime references, then call
         /// this helper so MLX returns cached Metal buffers instead of carrying them
         /// into the next model load.
+        ///
+        /// This is a no-op where MLX cannot run, such as the iOS Simulator, so
+        /// CoreML-only callers (for example the share extension) never reach
+        /// the MLX allocator there.
         public static func clearRuntimeMemoryCache() {
+            guard OpenMedMLXRuntimeSupport.isSupported else { return }
             Memory.clearCache()
         }
 
@@ -232,6 +237,7 @@
                 self.maxSeqLength = maxSeqLength
 
             case .mlx(let modelDirectoryURL):
+                try OpenMedMLXRuntimeSupport.requireSupported()
                 let artifact = try artifact ?? OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
                 if artifact.family == .openaiPrivacyFilter {
                     let pipeline = try OpenMedPrivacyFilterPipeline(

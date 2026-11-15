@@ -171,6 +171,7 @@ final class OpenMedMapleTests: XCTestCase {
         }
 
         private func requireUsableMLXRuntime() throws {
+            try skipUnlessMLXCanRun()
             guard !Bundle(for: OpenMedMapleTests.self).bundlePath.contains("/.build/") else {
                 throw XCTSkip(
                     "SwiftPM CLI tests cannot load the mlx-swift default Metal library."

@@ -1339,6 +1339,7 @@
         }
 
         private func requireUsableMLXRuntime() throws {
+            try skipUnlessMLXCanRun()
             guard !Self.isSwiftPMCLI else {
                 throw XCTSkip("MLX runtime resources are not loadable from the SwiftPM CLI test bundle.")
             }
