@@ -39,7 +39,10 @@ def test_registry_prints_the_matrix(capsys: pytest.CaptureFixture[str]) -> None:
     assert payload["command"] == "migrations registry"
     components = {item["component"]: item for item in payload["data"]["components"]}
     assert components["journey_sqlite"]["rollback_class"] == "restore_required"
-    assert components["protected_payload_store"]["presence"] == "not_present"
+    assert components["protected_payload_store"]["presence"] == "present"
+    assert components["protected_payload_store"]["rollback_class"] == (
+        "backward_compatible"
+    )
     assert payload["data"]["findings"] == []
 
     assert main(["migrations", "registry"]) == 0

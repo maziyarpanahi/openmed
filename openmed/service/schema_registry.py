@@ -466,6 +466,12 @@ _NEW_STEP_CLASSES: Mapping[tuple[str, int], RollbackClass] = {
     # The previous binary reads keyed digests as opaque metadata; the removed
     # unkeyed hashes are not needed to roll back.
     (JOB_STORE, 3): RollbackClass.BACKWARD_COMPATIBLE,
+    # The 3.2.0 binary never reads sealed job payload files.
+    (PROTECTED_PAYLOADS, 1): RollbackClass.BACKWARD_COMPATIBLE,
+    # The 3.2.0 binary never reads the model activation root.
+    (MODEL_ACTIVATION, 1): RollbackClass.BACKWARD_COMPATIBLE,
+    # The 3.2.0 binary never reads continuity manifests beside audit chains.
+    (AUDIT_CONTINUITY, 1): RollbackClass.BACKWARD_COMPATIBLE,
 }
 
 
@@ -690,24 +696,72 @@ def durable_schemas() -> tuple[DurableSchema, ...]:
         ),
         DurableSchema(
             component=PROTECTED_PAYLOADS,
-            owner="openmed.service.job_payloads",
-            presence=Presence.NOT_PRESENT,
-            tracking_issue=4918,
-            pending_module="openmed.service.job_payloads",
+            owner="openmed.service.job_payloads.EncryptedJobPayloadStore",
+            current_version=JOB_PAYLOAD_SCHEMA_VERSION,
+            source_versions=(0, JOB_PAYLOAD_SCHEMA_VERSION),
+            readable_versions=(JOB_PAYLOAD_SCHEMA_VERSION,),
+            previous_release_version=None,
+            previous_binary=PreviousBinary.IGNORES,
+            trigger=MigrationTrigger.NONE,
+            command=(
+                "written by the encrypted job payload store per job and removed "
+                "at its retention deadline; never migrated in place"
+            ),
+            posture=DeploymentPosture.MIXED_VERSION_SAFE,
+            recovery_point=RecoveryPointKind.NOT_REQUIRED,
+            refusal_codes={
+                "drift": "payload_damaged",
+                "unknown_version": "payload_damaged",
+            },
+            steps=_document_steps(
+                PROTECTED_PAYLOADS, ((1, "sealed_payload_v1"),), None
+            ),
         ),
         DurableSchema(
             component=MODEL_ACTIVATION,
-            owner="openmed.service.model_activation",
-            presence=Presence.NOT_PRESENT,
-            tracking_issue=5066,
-            pending_module="openmed.service.model_activation",
+            owner="openmed.service.model_activation.ModelActivationManager",
+            current_version=_ACTIVATION_VERSION,
+            source_versions=(0, _ACTIVATION_VERSION),
+            readable_versions=(_ACTIVATION_VERSION,),
+            previous_release_version=None,
+            previous_binary=PreviousBinary.IGNORES,
+            trigger=MigrationTrigger.NONE,
+            command=(
+                "written by ModelActivationManager; start resolves interrupted "
+                "journals; never migrated in place"
+            ),
+            posture=DeploymentPosture.MIXED_VERSION_SAFE,
+            recovery_point=RecoveryPointKind.NOT_REQUIRED,
+            refusal_codes={
+                "drift": "state_unreadable",
+                "unknown_version": "state_unreadable",
+            },
+            steps=_document_steps(
+                MODEL_ACTIVATION, ((1, "activation_journal_v1"),), None
+            ),
         ),
         DurableSchema(
             component=AUDIT_CONTINUITY,
-            owner="openmed.core.audit_continuity",
-            presence=Presence.NOT_PRESENT,
-            tracking_issue=3599,
-            pending_module="openmed.core.audit_continuity",
+            owner="openmed.core.audit_continuity.AuditContinuityStore",
+            current_version=CONTINUITY_VERSION,
+            source_versions=(0, CONTINUITY_VERSION),
+            readable_versions=(CONTINUITY_VERSION,),
+            previous_release_version=None,
+            previous_binary=PreviousBinary.IGNORES,
+            trigger=MigrationTrigger.NONE,
+            command=(
+                "written beside each audit chain by AuditContinuityStore, which "
+                "adopts an existing chain; never migrated in place"
+            ),
+            posture=DeploymentPosture.MIXED_VERSION_SAFE,
+            recovery_point=RecoveryPointKind.NOT_REQUIRED,
+            refusal_codes={
+                "drift": "malformed_manifest",
+                "unknown_version": "unsupported_version",
+            },
+            steps=_document_steps(
+                AUDIT_CONTINUITY, ((1, "continuity_manifest_v1"),), None
+            ),
         ),
     )
 

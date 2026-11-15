@@ -21,11 +21,14 @@ from openmed.service.recovery import (
 )
 from openmed.service.schema_registry import (
     AUDIT_CHAIN,
+    AUDIT_CONTINUITY,
     JOB_STORE,
     JOURNEY_ARTIFACT_MARKER,
     JOURNEY_POSTGRES,
     JOURNEY_SQLITE,
+    MODEL_ACTIVATION,
     MODEL_REGISTRY,
+    PROTECTED_PAYLOADS,
     RECOVERY_MANIFEST,
     RELEASED_CHECKSUMS,
     DurableSchema,
@@ -136,6 +139,29 @@ def test_job_store_version_matches_the_recovery_layout() -> None:
 
     assert JOB_STORE_SCHEMA_VERSION == JOB_STORE_LAYOUT_VERSION
     assert get_schema(JOB_STORE).current_version == JOB_STORE_SCHEMA_VERSION
+
+
+def test_components_new_in_this_release_follow_their_modules() -> None:
+    from openmed.core.audit_continuity import CONTINUITY_VERSION
+    from openmed.service.job_payloads import JOB_PAYLOAD_SCHEMA_VERSION
+    from openmed.service.model_activation import (
+        JOURNAL_SCHEMA_VERSION,
+        STATE_SCHEMA_VERSION,
+    )
+
+    activation = get_schema(MODEL_ACTIVATION)
+    assert get_schema(PROTECTED_PAYLOADS).current_version == (
+        JOB_PAYLOAD_SCHEMA_VERSION
+    )
+    assert get_schema(AUDIT_CONTINUITY).current_version == CONTINUITY_VERSION
+    for identifier in (STATE_SCHEMA_VERSION, JOURNAL_SCHEMA_VERSION):
+        assert identifier.endswith(f".v{activation.current_version}")
+    for component in (PROTECTED_PAYLOADS, MODEL_ACTIVATION, AUDIT_CONTINUITY):
+        schema = get_schema(component)
+        assert schema.previous_release_version is None
+        assert schema.previous_binary is PreviousBinary.IGNORES
+        assert schema.rollback_class is RollbackClass.BACKWARD_COMPATIBLE
+        assert schema.recovery_category is None
 
 
 def _schema(**changes: Any) -> DurableSchema:
@@ -599,3 +625,38 @@ def test_plan_names_explicit_and_unrestorable_migrations(tmp_path: Path) -> None
     assert action.trigger == "explicit_command"
     assert plan.admission == "migration_required"
     assert not plan.ready
+
+
+def test_service_state_observes_the_components_new_in_this_release(
+    tmp_path: Path,
+) -> None:
+    from openmed.core.audit_continuity import AuditContinuityStore
+
+    root = tmp_path / "state"
+    chain = root / "audit" / "chain-0000.json"
+    AuditContinuityStore(
+        chain, key_provider={"synthetic-epoch-0": bytes(range(32))}
+    ).initialize(key_id="synthetic-epoch-0")
+    sources = ServiceStateSources.from_state_root(root)
+    assert sources.audit_chains == (chain,)
+
+    observed = {
+        item.component: item for item in schema_registry.observe_service_state(sources)
+    }
+
+    assert observed[AUDIT_CONTINUITY].state is ObservedState.CURRENT
+    assert observed[PROTECTED_PAYLOADS].code == "payload_directory_not_supplied"
+    assert observed[MODEL_ACTIVATION].code == "activation_root_not_supplied"
+    plan = plan_service_migrations(
+        sources,
+        state_root=root,
+        job_payload_directory=tmp_path / "payloads",
+        model_activation_root=tmp_path / "activation",
+    )
+    states = {item.component: item.state for item in plan.observations}
+    assert states[PROTECTED_PAYLOADS] is ObservedState.ABSENT
+    assert states[MODEL_ACTIVATION] is ObservedState.ABSENT
+    assert plan.admission == "ready", plan.to_dict()
+    _rewrite(chain.with_name("chain-0000.continuity.json"), version=2)
+    blocked = plan_service_migrations(sources, state_root=root)
+    assert blocked.blocking_codes == ("unsupported_version",)
