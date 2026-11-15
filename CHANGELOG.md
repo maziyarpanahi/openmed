@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added versioned JSON Schemas for the async job record, the terminal webhook
+  payload, and the REST error envelope, registered in the bundled schema
+  fingerprint snapshot, with drift tests that fail when a required field is
+  removed or an undeclared field appears (#3925).
+- Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
+- Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
+- Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
+- Recheck authorization for queued service work and long-lived streams: bind work to an authorization epoch, revalidate before protected output, resume, effects and declared checkpoints, and stop or quarantine with honest effect reconciliation (#3700).
+- Add post-restore authorization reconciliation that opens a new recovery epoch, burns pre-restore approval nonces, rechecks recorded authority against current status, and holds or requires fresh review instead of reviving spent or revoked authority (#3707).
+- Add fail-closed required audit for declared service operations: durable intent/commit receipts on the action ledger, denied or reconcile-required outcomes when audit storage fails, and exactly-once reconciliation that never re-runs a committed effect (#3708).
+- Declare the v3.4 reference deployment, supported transports with their security posture, replica modes, durable components with recovery objectives, and unsupported deployments in a schema-validated file with a matching docs page (#3919).
+- Add a local `openmed service-recovery` operator CLI with read-only inspect, plan and verify commands and explicit apply commands that bind single-use approvals to the exact plan, active generation and state digest (#3703).
+- Add validated service security-policy generations: complete non-secret limit, authorization-policy and egress candidates activate atomically or are rejected with controlled findings, in-flight work stays pinned to one generation, and emergency tighten-only reloads apply at declared checkpoints (#3704).
+- Add service incident runbooks for leaked API keys, JWKS or webhook secrets, compromised client certificates, full disks and damaged job or Journey stores, with source-checked settings, commands and reason codes (#3926).
+
+### Changed
+
+- The GraphQL endpoint now executes operations over `POST` only, keeps the
+  GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
+  and returns `Cache-Control: no-store`, `Pragma: no-cache` and
+  `Referrer-Policy: no-referrer` on every `/graphql` response (#3544).
+
 ### Fixed
 
 - Keep exact container runtime packages available through a signed Debian
@@ -16,6 +40,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Python 3.11.5 or newer, matching its supported Python patch level.
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
+- Restored the Transformers.js runtime environment exactly after concurrent
+  model loads, so overlapping local and remote loads no longer leave
+  `allowLocalModels` or `allowRemoteModels` behind on the shared module object
+  (#3953).
+- Stop rewriting the local async job store after every document. Progress is
+  saved in coalesced checkpoints (at most 100 per job, at least 1 second
+  apart) while status changes and terminal results are saved immediately, so
+  bytes written grow linearly with job size. Failed writes roll back only the
+  affected record and still leave the previous store and no temporary file
+  (#3904).
+- Release the model reference when a streaming de-identification response
+  times out or the client disconnects mid-window. Cleanup no longer fails with
+  `generator already executing`; a still-running window keeps the reference
+  until it returns, then its output is discarded and the timeout or
+  cancellation is recorded as the request outcome (#3901).
+- Deliver async job webhooks on a bounded background executor so failing
+  receivers no longer hold job workers for hours. Delivery is recorded as
+  `pending` until it settles, capped by a server-side wall-time ceiling, and
+  backoff waits are cancelled on shutdown, which settles unfinished deliveries
+  as `abandoned` within a drain bound. `webhook_delivery` now stores only
+  controlled error codes, attempt counts and status codes (#3899).
+- Key service throttles by trusted proxy hops: `X-Forwarded-For` is honored only
+  from `OPENMED_SERVICE_TRUSTED_PROXIES` peers and resolved to the rightmost
+  untrusted address within `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`, so rotated
+  leftmost values no longer bypass rate or authentication-failure limits.
+  Without trusted proxies the header is ignored and the direct peer is used.
+  The authentication-failure limiter shares this resolution by default. Bound
+  limiter state with `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`, evicting only
+  fully refilled buckets and idle semaphores and falling back to a shared
+  overflow bucket; Helm exposes the new settings (#3900).
+- Enforce the declared JSON depth, node and longest-string limits on REST and
+  GraphQL request bodies with a streaming structural pre-scan in the shared
+  request-limit middleware. Violations return `json_structure_exceeded` with
+  only the limit category and ceiling before JSON decoding, Pydantic validation
+  or the route handler runs; `/cohort/resolve` documents a 250,000-value
+  ceiling for concept hierarchies (#3906).
+- Require verified PostgreSQL TLS for Journey stores in the production
+  profile. `PostgresJourneyStore.connect` and `openmed-journey` accept an
+  operator CA bundle and optional client certificate and key
+  (`sslrootcert`/`sslcert`/`sslkey`, `OPENMED_JOURNEY_POSTGRES_SSL*`), build a
+  verify-full context with host-name checks, and refuse plaintext or
+  non-verifying DSNs with `postgres_tls_required` before opening a socket.
+  Plaintext now needs an explicit `OPENMED_PROFILE=dev` or `test`; the Compose
+  bundle and Helm chart mount the CA bundle, and a value-free transport posture
+  is exported for deployment self-checks (#3915).
+- Reuse and explicitly dispose package-owned web inference pipelines. Release
+  settled and pending ONNX Runtime Web cached sessions once, draining active
+  native runs and preserving caller pipeline ownership (#3935).
 
 ### Security
 
@@ -27,16 +99,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one, they raise `ValueError` before any fixture or detector runs. Treat
   reports signed with the old built-in keys as unsigned.
 - **Breaking (Android):** `DeidentifyEngine` no longer keys `HASH`
-  replacements with the published `openmed-android-deidentify-v1` salt.
-  Without `hashSalt`, each engine generates a random 32-byte key, so digests
-  repeat within one engine but differ between engines and app launches. Pass
-  a secret key to keep pseudonyms stable across runs.
+  replacements or span digests with the published
+  `openmed-android-deidentify-v1` salt. Hashing is keyed through an
+  `OpenMedSecretProvider` such as `AndroidKeystoreSecretProvider`, so the key
+  never sits in app memory. An engine built without a provider omits span
+  digests and refuses `HASH` with `OpenMedSecretException`. Pass
+  `LEGACY_PUBLIC_HASH_SALT` with `HashKeyPolicy.ALLOW_LEGACY_PUBLIC_SALT` only
+  to reproduce digests made before 4.0.
 - **Breaking:** the public biomedical NER corpus loaders never run dataset
   code from a repository. JNLPBA, Species-800 and BC2GM load Parquet files
   pinned to a commit through the packaged `parquet` builder. BC5CDR and NCBI
   Disease are published only as loading scripts, which `datasets` 4 and later
   already refuse, so they need a local export. `BiomedicalNerSource` drops
   `trust_remote_code` and gains `revision` and `data_dir`.
+- Bound inbound `X-Request-ID` values to `^[A-Za-z0-9_.:-]{1,128}$` in the REST
+  service. Oversized, non-ASCII or separator-bearing ids are replaced with a
+  random UUID before they reach response headers, error envelopes, access logs
+  or spans. The privacy proxy, privacy gateway and filters, and `OpenMedClient`
+  now share the one grammar in `openmed.service.request_id` (#3913).
+- Apply the shared trusted-host allowlist (loopback by default), opt-in API-key
+  or JWT auth and operational request-byte bound to the local privacy proxy
+  before any body parsing. Bound message count, total text characters and
+  streaming duration before redaction or transport calls, with controlled
+  `privacy_proxy_limit_exceeded` and `privacy_proxy_timeout` codes; refusals
+  carry no message text, placeholders or mappings (#3898).
+- Reject revoked REST mTLS client certificates from operator-supplied local CRL
+  files. CRL signatures are verified against the configured CA bundle at
+  startup, revocation and `nextUpdate` freshness (with a configurable grace
+  period) are checked per request before principal mapping, and invalid or
+  stale CRLs fail closed outside the `dev` and `test` profiles. Errors and logs
+  use only `client_certificate_revoked`, `crl_stale` and `crl_invalid`, never
+  subjects, SANs, serial numbers or file paths (#3922).
+- Hide REST discovery surfaces from unauthenticated production callers. Swagger
+  UI, ReDoc and the live `/openapi.json` are served only in the `dev` profile;
+  `OPENMED_SERVICE_OPENAPI_ENABLED=true` serves only `/openapi.json` behind
+  authentication elsewhere. Outside `dev`, `/health` returns status and service
+  name only, and version and profile move to the authenticated
+  `GET /service/metadata` route. The reference launcher no longer sends a
+  `server` header (#3911).
+- Add opt-in inbound HMAC signature enforcement for configured REST route
+  templates. Checks run after body limits and before routing, load the secret
+  from a file, fail closed at startup on bad settings and return value-free
+  `401` codes (`signature_missing`, `signature_invalid`, `signature_stale`,
+  `signature_replayed`); replay protection is per process (#3924).
+- Send `Cache-Control: no-store`, `Pragma: no-cache`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`
+  on every non-probe REST response, including NDJSON streams and error
+  envelopes for unhandled exceptions. Probe routes are unchanged, the
+  generated API documents declare `Cache-Control: no-cache`, and headers
+  already set, such as on `/graphql`, are never duplicated (#3912).
 
 ## [3.3.0] - 2026-11-08
 
