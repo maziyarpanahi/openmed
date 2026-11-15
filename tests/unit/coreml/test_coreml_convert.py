@@ -358,8 +358,8 @@ def test_convert_rejects_unsupported_architecture(monkeypatch, tmp_path):
 
     state = _install_conversion_stubs(
         monkeypatch,
-        model_type="longformer",
-        architectures=["LongformerForTokenClassification"],
+        model_type="gpt2",
+        architectures=["GPT2ForTokenClassification"],
     )
     output_path = tmp_path / "unsupported.mlpackage"
 

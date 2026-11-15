@@ -136,6 +136,25 @@ unqualified variant, provider, or sequence length before it opens a session.
 Gates, tolerances, and the offline reproduction command are in the
 [Export Format Support Matrix](export-matrix.md#modernbert-runtime-support).
 
+## Longformer Exports
+
+Longformer checkpoints use the same adapter path and qualification. The
+default profile graph takes `input_ids`, `attention_mask`, and an explicit
+`global_attention_mask`; its `sequence` axis is dynamic but bounded by
+`--max-seq-length`, which must be a multiple of the largest attention window
+whose estimated attention working set fits the ONNX memory ceiling. The
+Android profile keeps its two-input contract, so global attention is fixed off
+in that graph and only `--global-attention none` is accepted. Qualification
+additionally sweeps minimum, typical, attention-window boundary, and maximum
+lengths and compares windowed long documents against the windowed reference.
+`OnnxModel` fills `global_attention_mask` from the qualified policy, defaults
+to the qualified window and overlap, keeps document-global offsets, and
+refuses (never truncates) documents above the declared bound with
+`sequence_too_long`. ONNX Runtime's transformer optimizer has no Longformer
+fusions, so export with `--no-onnx-optimization`. Bounds and reason codes are
+in the
+[Export Format Support Matrix](export-matrix.md#longformer-runtime-support).
+
 ## Load with Python ONNX Runtime
 
 Install only the inference dependencies when export tooling is not needed:
