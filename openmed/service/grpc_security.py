@@ -44,6 +44,7 @@ GRPC_REASON_TLS_KEY_MISMATCH = "grpc_tls_key_mismatch"
 GRPC_REASON_TLS_CERTIFICATE_EXPIRED = "grpc_tls_certificate_expired"
 GRPC_REASON_TLS_CERTIFICATE_NOT_YET_VALID = "grpc_tls_certificate_not_yet_valid"
 GRPC_REASON_BIND_FAILED = "grpc_bind_failed"
+GRPC_REASON_AUTH_REQUIRED = "grpc_auth_required"
 
 GRPC_STARTUP_REASON_CODES = frozenset(
     {
@@ -58,6 +59,7 @@ GRPC_STARTUP_REASON_CODES = frozenset(
         GRPC_REASON_TLS_CERTIFICATE_EXPIRED,
         GRPC_REASON_TLS_CERTIFICATE_NOT_YET_VALID,
         GRPC_REASON_BIND_FAILED,
+        GRPC_REASON_AUTH_REQUIRED,
     }
 )
 
@@ -158,6 +160,9 @@ class GrpcServerCredentials:
         certificate_not_valid_after: Expiry of the served leaf certificate.
         client_ca_sha256: Fingerprints of the trusted client CA certificates.
         require_client_cert: Whether the listener requires mutual TLS.
+        client_ca_certificates: Parsed client CA certificates, kept so the RPC
+            interceptor can re-verify peer certificates and map them to
+            principals. Public certificates only; never key material.
     """
 
     server_credentials: grpc.ServerCredentials = field(repr=False, compare=False)
@@ -165,6 +170,9 @@ class GrpcServerCredentials:
     certificate_not_valid_after: datetime
     client_ca_sha256: tuple[str, ...] = ()
     require_client_cert: bool = False
+    client_ca_certificates: tuple[x509.Certificate, ...] = field(
+        default=(), repr=False, compare=False
+    )
 
     @property
     def transport(self) -> str:
@@ -299,13 +307,15 @@ def load_grpc_server_credentials(
         )
 
     client_ca_bytes: Optional[bytes] = None
-    client_ca_sha256: tuple[str, ...] = ()
+    client_ca_certificates: tuple[x509.Certificate, ...] = ()
     if client_ca_path is not None:
         client_ca_bytes = _read_credential_file(client_ca_path, CATEGORY_CLIENT_CA)
-        client_ca_sha256 = tuple(
-            certificate_sha256(certificate)
-            for certificate in _load_certificates(client_ca_bytes, CATEGORY_CLIENT_CA)
+        client_ca_certificates = tuple(
+            _load_certificates(client_ca_bytes, CATEGORY_CLIENT_CA)
         )
+    client_ca_sha256 = tuple(
+        certificate_sha256(certificate) for certificate in client_ca_certificates
+    )
 
     try:
         server_credentials = grpc.ssl_server_credentials(
@@ -325,6 +335,7 @@ def load_grpc_server_credentials(
         certificate_not_valid_after=leaf.not_valid_after_utc,
         client_ca_sha256=client_ca_sha256,
         require_client_cert=require_client_cert,
+        client_ca_certificates=client_ca_certificates,
     )
 
 
@@ -577,6 +588,7 @@ __all__ = [
     "CATEGORY_PRIVATE_KEY",
     "GRPC_CREDENTIAL_CATEGORIES",
     "GRPC_REASON_ADDRESS_INVALID",
+    "GRPC_REASON_AUTH_REQUIRED",
     "GRPC_REASON_BIND_FAILED",
     "GRPC_REASON_INSECURE_DEV_OVERRIDE_REJECTED",
     "GRPC_REASON_INSECURE_REMOTE_BIND",

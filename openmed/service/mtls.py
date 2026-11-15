@@ -289,7 +289,7 @@ def parse_principal_mappings(
 
 def verify_client_certificate_chain(
     client_cert_chain: Sequence[str],
-    ca_bundle: str | Path,
+    ca_bundle: str | Path | Store,
     *,
     crl_checker: Optional[LocalCRLChecker] = None,
 ) -> MTLSClientIdentity:
@@ -297,7 +297,8 @@ def verify_client_certificate_chain(
 
     Args:
         client_cert_chain: Leaf-first PEM client certificate chain.
-        ca_bundle: PEM bundle containing one or more trusted CA certificates.
+        ca_bundle: PEM bundle containing one or more trusted CA certificates,
+            or a pre-built trust store so long-lived servers parse it once.
         crl_checker: Optional offline revocation checker applied to the
             verified chain before the identity is returned.
 
@@ -309,6 +310,8 @@ def verify_client_certificate_chain(
             revoked, or a relevant CRL is stale and the checker fails closed.
         ValueError: If the chain or CA bundle is invalid or untrusted.
     """
+    if isinstance(ca_bundle, Store):
+        return _verify_client_certificate_chain(client_cert_chain, ca_bundle)
     ca_path = Path(ca_bundle)
     try:
         ca_certificates = x509.load_pem_x509_certificates(ca_path.read_bytes())
@@ -451,6 +454,45 @@ class LocalCRLChecker:
         )
 
 
+def principal_for_mtls_identity(
+    identity: MTLSClientIdentity,
+    mappings: Sequence[MTLSPrincipalMapping],
+) -> AuthPrincipal:
+    """Map a verified certificate identity to the shared service principal.
+
+    REST and gRPC both use this mapping, so one certificate resolves to the
+    same subject and scopes on every transport.
+
+    Args:
+        identity: Identity returned by :func:`verify_client_certificate_chain`.
+        mappings: Exact subject/SAN-to-principal mappings, first match wins.
+
+    Returns:
+        An ``mtls`` principal. Unmapped certificates get a fingerprint-derived
+        subject and no scopes, so scoped routes stay denied.
+    """
+    identifiers = set(identity.identifiers)
+    for mapping in mappings:
+        if identifiers.intersection(mapping.identities):
+            principal = mapping.principal
+            scopes = mapping.scopes
+            break
+    else:
+        principal = f"mtls:{identity.fingerprint_sha256}"
+        scopes = ()
+
+    return AuthPrincipal(
+        subject=principal,
+        credential_type="mtls",
+        scopes=scopes,
+        claims={
+            "certificate_subject": identity.subject,
+            "certificate_sans": identity.sans,
+            "certificate_sha256": identity.fingerprint_sha256,
+        },
+    )
+
+
 class ServiceMTLS:
     """Verify and attach an mTLS client principal to each HTTP request."""
 
@@ -552,26 +594,7 @@ class ServiceMTLS:
         raise client_certificate_required()
 
     def _principal_for(self, identity: MTLSClientIdentity) -> AuthPrincipal:
-        identifiers = set(identity.identifiers)
-        for mapping in self.config.principals:
-            if identifiers.intersection(mapping.identities):
-                principal = mapping.principal
-                scopes = mapping.scopes
-                break
-        else:
-            principal = f"mtls:{identity.fingerprint_sha256}"
-            scopes = ()
-
-        return AuthPrincipal(
-            subject=principal,
-            credential_type="mtls",
-            scopes=scopes,
-            claims={
-                "certificate_subject": identity.subject,
-                "certificate_sans": identity.sans,
-                "certificate_sha256": identity.fingerprint_sha256,
-            },
-        )
+        return principal_for_mtls_identity(identity, self.config.principals)
 
     def _authentication_failure(self, exc: MTLSAuthenticationError) -> Response:
         return self._error_response(
@@ -895,5 +918,6 @@ __all__ = [
     "parse_principal_mappings",
     "parse_service_mtls_config",
     "parse_trusted_proxies",
+    "principal_for_mtls_identity",
     "verify_client_certificate_chain",
 ]

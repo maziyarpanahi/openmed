@@ -95,6 +95,9 @@ def test_grpc_denies_request_selected_paths_before_loading(monkeypatch):
         pass
 
     class Context:
+        def set_trailing_metadata(self, metadata):
+            assert tuple(metadata) == (("openmed-reason", "model_not_served"),)
+
         def abort(self, code, details):
             assert code == grpc.StatusCode.INVALID_ARGUMENT
             assert details == "model_not_served"
