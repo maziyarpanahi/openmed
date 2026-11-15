@@ -54,13 +54,22 @@ BASE_CAPABILITY = "jobs.deidentify.v1"
 NEXT_CAPABILITY = "jobs.deidentify.v2"
 
 OLD = CURRENT_CONTRACT
+# Future generations are one schema step ahead of whatever this build writes.
+_JOBS = CURRENT_CONTRACT.durable_schemas["jobs"]
+_JOURNEY = CURRENT_CONTRACT.durable_schemas["journey_local"]
+JOBS_NEXT = _JOBS.write + 1
+JOURNEY_NEXT = _JOURNEY.write + 1
 EXPAND = CompatibilityDescriptor(
     contract_generation=2,
     min_peer_generation=1,
     durable_schemas={
         **CURRENT_CONTRACT.durable_schemas,
-        "jobs": SchemaRange(read_min=1, read_max=2, write=1),
-        "journey_local": SchemaRange(read_min=3, read_max=4, write=3),
+        "jobs": SchemaRange(
+            read_min=_JOBS.read_min, read_max=JOBS_NEXT, write=_JOBS.write
+        ),
+        "journey_local": SchemaRange(
+            read_min=_JOURNEY.read_min, read_max=JOURNEY_NEXT, write=_JOURNEY.write
+        ),
     },
     capabilities=CURRENT_CONTRACT.capabilities | {NEXT_CAPABILITY},
 )
@@ -69,8 +78,12 @@ CONTRACT = CompatibilityDescriptor(
     min_peer_generation=2,
     durable_schemas={
         **CURRENT_CONTRACT.durable_schemas,
-        "jobs": SchemaRange(read_min=1, read_max=2, write=2),
-        "journey_local": SchemaRange(read_min=3, read_max=4, write=4),
+        "jobs": SchemaRange(
+            read_min=_JOBS.read_min, read_max=JOBS_NEXT, write=JOBS_NEXT
+        ),
+        "journey_local": SchemaRange(
+            read_min=_JOURNEY.read_min, read_max=JOURNEY_NEXT, write=JOURNEY_NEXT
+        ),
     },
     capabilities=EXPAND.capabilities,
 )
@@ -629,7 +642,7 @@ def test_rolling_upgrade_drains_and_hands_off_without_lost_or_duplicate_work() -
     assert {node.generation for node in fleet.live()} == {2}
     assert new_b.ready()
     _assert_exactly_once(shared, job_ids)
-    assert shared.schemas == {"jobs": 1, "journey_local": 3}
+    assert shared.schemas == {"jobs": _JOBS.write, "journey_local": _JOURNEY.write}
     document = evidence.to_dict()
     assert document["counts"]["checkpointed"] == 1
     assert document["counts"]["streams_completed"] == 1
@@ -685,7 +698,7 @@ def test_rollback_outside_the_window_is_refused_until_a_backup_is_restored() -> 
     contract_a = fleet.join(CONTRACT)
     expand_a.drain()
     second = contract_a.submit("synthetic-after", via=expand_b)
-    assert shared.schemas == {"jobs": 2, "journey_local": 4}
+    assert shared.schemas == {"jobs": JOBS_NEXT, "journey_local": JOURNEY_NEXT}
     fleet.run_until_idle()
     fleet.assert_serving()
     _assert_exactly_once(shared, [first, second])

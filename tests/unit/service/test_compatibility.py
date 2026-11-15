@@ -51,6 +51,9 @@ from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
 from openmed.structured.store import LATEST_MIGRATION_VERSION
 from openmed.structured.store.postgres import LATEST_POSTGRES_MIGRATION_VERSION
 
+#: A job-store schema version one step past what this build reads.
+AHEAD = compat.JOB_STORE_SCHEMA_VERSION + 1
+
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _TOKEN = re.compile(r"[a-z0-9_.\-/]+\Z")
@@ -295,7 +298,11 @@ def test_work_claim_checks_generation_schema_capability_and_model() -> None:
             "work_generation_outside_window",
             None,
         ),
-        (_envelope(schema_versions={"jobs": 2}), "work_schema_outside_window", "jobs"),
+        (
+            _envelope(schema_versions={"jobs": AHEAD}),
+            "work_schema_outside_window",
+            "jobs",
+        ),
         (
             _envelope(schema_versions={"ledger": 1}),
             "work_component_unknown",
@@ -435,7 +442,7 @@ def test_gate_caches_reports_and_treats_failing_probes_as_unknown() -> None:
         clock=lambda: now[0],
     )
     assert gate.report().ready
-    versions[0] = 2
+    versions[0] = AHEAD
     assert gate.report().ready and len(calls) == 1
     now[0] = 5.0
     assert not gate.report().ready and len(calls) == 2
@@ -540,27 +547,18 @@ def test_job_store_outside_the_window_is_never_loaded_or_overwritten(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "jobs.json"
-    contents = '{"schema_version": 2, "jobs": {"synthetic": {"id": "synthetic"}}}'
+    contents = json.dumps(
+        {"schema_version": AHEAD, "jobs": {"synthetic": {"id": "synthetic"}}}
+    )
     path.write_text(contents, encoding="utf-8")
-    store = jobs.LocalJobStore(path)
-    assert store.compatibility.code == "schema_ahead_of_window"
-    operations = [
-        lambda: store.create({"id": "synthetic-new", "status": "queued"}),
-        lambda: store.get("synthetic"),
-        lambda: store.update("synthetic", status="running"),
-        store.cleanup_expired,
-    ]
-    for operation in operations:
-        with pytest.raises(IncompatibleStateError) as raised:
-            operation()
-        assert raised.value.to_details() == {
-            "components": {
-                "jobs": {"state": "incompatible", "reason": "schema_ahead_of_window"}
-            }
-        }
+    # A store outside the window is refused when it is opened.
+    with pytest.raises(jobs.JobStoreSchemaError) as refused:
+        jobs.LocalJobStore(path)
+    assert refused.value.code == "job_store_schema_unsupported"
+    assert refused.value.compatibility_reason == "schema_ahead_of_window"
     assert path.read_text(encoding="utf-8") == contents
     path.write_text('{"schema_version": "2", "jobs": {}}', encoding="utf-8")
-    with pytest.raises(ValueError, match="schema version is invalid"):
+    with pytest.raises(ValueError, match="job_store_schema_unsupported"):
         jobs.LocalJobStore(path)
 
 
@@ -570,7 +568,7 @@ def test_job_store_refuses_to_replace_a_file_a_newer_build_rewrote(
     path = tmp_path / "jobs.json"
     store = jobs.LocalJobStore(path)
     store.create({"id": "synthetic-a", "status": "queued"})
-    newer = '{"schema_version": 2, "jobs": {}, "leases": {}}'
+    newer = json.dumps({"schema_version": AHEAD, "jobs": {}, "leases": {}})
     path.write_text(newer, encoding="utf-8")
     with pytest.raises(IncompatibleStateError):
         store.update("synthetic-a", status="running")
@@ -598,11 +596,11 @@ def test_job_queue_stamps_and_checks_the_contract_before_claiming(
         documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic text")],
         model_name="OpenMed/synthetic-pii-v1",
     )
-    record = queue._new_record(payload)
+    record, item = queue._stage(payload)
     assert record["compatibility"] == {
         "contract_generation": 1,
         "min_peer_generation": 1,
-        "schema_versions": {"jobs": 1},
+        "schema_versions": {"jobs": compat.JOB_STORE_SCHEMA_VERSION},
         "required_capabilities": ["jobs.deidentify.v1"],
         "model_generation": model_generation_ref("OpenMed/synthetic-pii-v1"),
     }
@@ -613,7 +611,7 @@ def test_job_queue_stamps_and_checks_the_contract_before_claiming(
         queue, "_deidentify_document", lambda *_: processed.append("document")
     )
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(item)
     finally:
         queue.shutdown()
     refused = store.get(record["id"])
@@ -689,7 +687,7 @@ def test_compatibility_route_requires_its_scope(
 def test_readiness_and_job_admission_fail_closed_on_newer_persisted_state(
     service_env: Path,
 ) -> None:
-    contents = '{"schema_version": 2, "jobs": {}}'
+    contents = json.dumps({"schema_version": AHEAD, "jobs": {}})
     service_env.write_text(contents, encoding="utf-8")
     with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
         ready = client.get("/readyz")
@@ -716,7 +714,9 @@ def test_readiness_follows_a_peer_migrating_the_shared_store(service_env: Path) 
     app = create_app()
     with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
         assert client.get("/readyz").status_code == 200
-        service_env.write_text('{"schema_version": 2, "jobs": {}}', encoding="utf-8")
+        service_env.write_text(
+            json.dumps({"schema_version": AHEAD, "jobs": {}}), encoding="utf-8"
+        )
         app.state.compatibility.report(force=True)
         assert client.get("/readyz").json()["error"]["code"] == "incompatible_state"
         service_env.write_text('{"schema_version": 1, "jobs": {}}', encoding="utf-8")
