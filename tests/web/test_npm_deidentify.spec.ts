@@ -186,7 +186,9 @@ test("overlapping model loads serialize shared environment settings", async () =
   const remoteEntered = new Promise<void>((resolve) => {
     signalRemoteEntered = resolve;
   });
-  const env = { allowRemoteModels: undefined as boolean | undefined };
+  const env: NonNullable<RawTransformersRuntime["env"]> = {
+    allowRemoteModels: undefined,
+  };
   const observed: Array<[string, boolean | undefined, boolean | undefined]> = [];
   const runtime: RawTransformersRuntime = {
     env,
