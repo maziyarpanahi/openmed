@@ -204,7 +204,7 @@ final class PHISentinelSweepTests: XCTestCase {
         XCTAssertEqual(deepEnough.findings.map(\.location), [.fileContent])
     }
 
-    func testTimeBoundUsesInjectedClockAndSkipsRemainingReaders() throws {
+    func testTimeBoundUsesInjectedClockAndReadsLogsBeforeCuttingTheFileSweep() throws {
         let sentinel = try PHISentinel(identifier: "record.id", value: "OMS-SLOW-VALUE-0042")
         let root = try directory("tmp")
         for index in 0..<10 {
@@ -216,7 +216,7 @@ final class PHISentinelSweepTests: XCTestCase {
         let report = try PHISentinelSweep(
             sentinels: [sentinel],
             roots: [SweepRoot(url: root, storageClass: .temporary)],
-            logReaders: [CapturedLogReader(lines: [sentinel.plantedValue])],
+            logReaders: [CapturedLogReader(lines: ["value-free log line"])],
             bounds: bounds,
             clock: {
                 ticks += 1
@@ -224,9 +224,10 @@ final class PHISentinelSweepTests: XCTestCase {
             }
         ).run()
 
+        // The log is read first, so a slow storage root cannot starve it.
+        XCTAssertEqual(report.logs.map(\.status), [.read])
         XCTAssertEqual(report.boundsReached, [.maxDuration])
         XCTAssertLessThan(report.filesScanned, 10)
-        XCTAssertEqual(report.logs.map(\.status), [.skipped])
         XCTAssertTrue(report.clean)
         XCTAssertFalse(report.exhaustive)
     }

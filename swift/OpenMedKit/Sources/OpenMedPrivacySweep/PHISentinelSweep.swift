@@ -70,11 +70,13 @@ public struct PHISentinelSweep {
             allowList: allowList,
             clock: clock
         )
-        for root in roots {
-            run.sweep(root)
-        }
+        // The process log is read first: it is small and bounded on its own,
+        // and a large storage root must not use up the time bound before it.
         for reader in logReaders {
             run.sweep(reader)
+        }
+        for root in roots {
+            run.sweep(root)
         }
         return run.report()
     }
