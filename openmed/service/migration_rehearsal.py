@@ -1326,6 +1326,25 @@ def _synthetic_jobs() -> dict[str, dict[str, Any]]:
     }
 
 
+def _new_job_record() -> dict[str, Any]:
+    """Return a synthetic record in the shape this binary writes for a new job."""
+
+    from openmed.service.jobs import (
+        DIGESTS_FIELD,
+        JOB_STORE_SCHEMA_VERSION,
+        OWNER_DIGEST_FIELD,
+        JobDigestPolicy,
+    )
+
+    return {
+        **next(iter(_synthetic_jobs().values())),
+        "schema_version": JOB_STORE_SCHEMA_VERSION,
+        OWNER_DIGEST_FIELD: None,
+        # No digest key is configured for the synthetic store.
+        DIGESTS_FIELD: JobDigestPolicy().descriptor(),
+    }
+
+
 class _JobStore(_Adapter):
     component = JOB_STORE
 
@@ -1367,8 +1386,10 @@ class _JobStore(_Adapter):
                 path, clock=lambda: datetime(2026, 1, 1, tzinfo=timezone.utc)
             )
             if not path.exists():
-                # A clean install creates the store on its first write.
-                store.create(next(iter(_synthetic_jobs().values())))
+                # A clean install creates the store on its first write, of a
+                # record this binary submitted, so the next open migrates
+                # nothing.
+                store.create(_new_job_record())
         except JobStoreSchemaError as exc:
             return _Probe(False, exc.code)
         except ValueError:
