@@ -43,9 +43,33 @@ The converter accepts these Hugging Face token-classification source families:
 - `roberta`
 - `xlm-roberta`
 - `deberta-v2`
+- `modernbert` (qualification-gated, see below)
 
 Unsupported architectures fail before tracing with an error that lists the
-supported families.
+supported families and carries the stable `unsupported_family` reason code.
+
+## ModernBERT Qualification
+
+ModernBERT is traced through the family adapter in
+`openmed.torch.export_adapters`, always with one static
+`(1, max_seq_length)` sequence bucket. Dynamic shapes
+(`--disable-ane-static-shapes`), sequences longer than
+`max_position_embeddings`, and Transformers 4.x are rejected before any
+weights load. After conversion, every package (float and each `--quantize`
+variant) is qualified against the PyTorch reference checkpoint on the
+committed synthetic PHI suite: logit parity, span parity, direct-identifier
+recall, critical leakage, and the INT8/INT4 recall-delta limits. The report is
+written to `<stem>_qualification.json`, summarized under `qualification` in
+the conversion manifest, and packages also carry `export_family`,
+`export_adapter_version`, `sequence_shape_mode`, and `sequence_buckets`
+metadata. A failing gate raises after the evidence is written, and
+`--publish-to-hub` refuses unqualified packages.
+
+Qualification runs Core ML predictions, so it needs macOS. Pass `--qualify`
+to require it, or `--no-qualify` to skip it; elsewhere the manifest records
+`status: not_run`. Gate tolerances, reason codes, and the offline reproduction
+command are in the
+[Export Format Support Matrix](export-matrix.md#modernbert-runtime-support).
 
 ## Compute Units
 
