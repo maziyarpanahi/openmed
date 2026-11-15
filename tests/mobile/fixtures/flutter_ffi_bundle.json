@@ -1,0 +1,54 @@
+{
+  "content_id": "sha256:c50b66a65ba4cb3fee23571ca94353aa7254552a59bab3dc08b20e6d75f50d0f",
+  "envelope": "{\"content_id\":\"sha256:c50b66a65ba4cb3fee23571ca94353aa7254552a59bab3dc08b20e6d75f50d0f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-flutter-ffi\",\"sig\":\"Dwe43Sn8Pn9gW2OnQzdx-L6KTMLxeQKLpRytW94p0n5JsISWWfBsgyXo6MyZfAcoCEIb6oHwVhwFtpyl3gm_AQ\"}]}",
+  "manifest": "{\"bundle\":{\"expires_at\":\"2031-01-01T00:00:00Z\",\"id\":\"openmed.synthetic.flutter-ffi\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":3,\"version\":\"1.0.0\"},\"calibration\":null,\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-flutter\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[],\"extensions\":{},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:2700f41d7c73a2d98e4ab9b5c0603e0059c9332286920922c222c2264c7a26fd\",\"size_bytes\":59},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:580bc660f918294d17946b752ec7674c73a9cb769c7dc1188628a679769c83bb\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:3ddb0a3ac63166a95d43da2795aab527d7eead9310096df53702c85db51076de\",\"size_bytes\":87},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:9de3746070a9387c27ed785333202d21504db7129ad66e06aadf5afb60b91e35\",\"size_bytes\":50},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:40c3869c561a9f1eb28cb3077dba15882d85b404c7f1fa4c01bd11b31cbc677b\",\"size_bytes\":50},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35}],\"labels\":{\"count\":6,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-flutter-ffi\",\"languages\":[\"en\"],\"revision\":null,\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":null},\"provenance\":{\"export_record\":null,\"source_digest\":null},\"runtimes\":[{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"13.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"windows\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"13.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"windows\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":null,\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\"],\"kind\":\"wordpiece\"}}",
+  "notice": "TEST-ONLY bundle. The key derives from a public label in generate_flutter_ffi_bundle.py; never trust it in production.",
+  "now": "2026-11-07T00:00:00Z",
+  "schema": "openmed.flutter_ffi.bundle_fixture",
+  "synthetic_only": true,
+  "test_only_keys": true,
+  "tree": [
+    {
+      "path": "LICENSE",
+      "text": "Synthetic Flutter FFI bundle fixture.\nLicensed Apache-2.0.\n"
+    },
+    {
+      "path": "config.json",
+      "text": "{\"model_type\":\"bert\",\"num_labels\":6,\"synthetic\":true}\n"
+    },
+    {
+      "path": "id2label.json",
+      "text": "{\"0\":\"O\",\"1\":\"B-PERSON\",\"2\":\"B-DATE_OF_BIRTH\",\"3\":\"B-EMAIL\",\"4\":\"B-NAME\",\"5\":\"I-NAME\"}\n"
+    },
+    {
+      "path": "onnx/model.onnx",
+      "text": "synthetic fp32 onnx graph placeholder for flutter\n"
+    },
+    {
+      "path": "onnx/model_int8.onnx",
+      "text": "synthetic int8 onnx graph placeholder for flutter\n"
+    },
+    {
+      "path": "tokenizer.json",
+      "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+    }
+  ],
+  "trust_policy": {
+    "keys": [
+      {
+        "crv": "Ed25519",
+        "kid": "openmed-test-flutter-ffi",
+        "kty": "OKP",
+        "not_after": "2031-01-01T00:00:00Z",
+        "not_before": "2026-01-01T00:00:00Z",
+        "status": "active",
+        "x": "C3xHlD-fxdV3E7xEHoydoVF4RVRNiykA3Ffk-lf_5LE"
+      }
+    ],
+    "revoked_content_ids": [],
+    "schema": "openmed.portable_bundle.trust_policy",
+    "schema_version": 1,
+    "threshold": 1
+  },
+  "version": 1
+}
