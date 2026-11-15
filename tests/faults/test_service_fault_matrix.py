@@ -29,8 +29,10 @@ from tests.faults.runner import main, run_case, run_plan, validate_manifest
 from tests.faults.scenarios import CANARIES
 
 PLAN = FaultPlan.load()
-# Closed bug reports whose behaviour the owning issue now covers.
-FOLDED_REPORTS = {"jobs-queue.shutdown-cancels-queued": "#3467 folded into #3574"}
+# Closed bug reports whose behaviour the owning issue now covers, keyed by the
+# known-gap case that still pins them. #3467 (folded into #3574) is no longer
+# a gap: jobs-queue.shutdown-cancels-queued passes.
+FOLDED_REPORTS: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module")

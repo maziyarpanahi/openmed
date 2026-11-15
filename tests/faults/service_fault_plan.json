@@ -219,11 +219,7 @@
       "trigger": {
         "at_call": 1
       },
-      "expected_outcome": "committed_exactly_once",
-      "known_gap": {
-        "issue": 3574,
-        "reason_code": "cancelled_job_left_queued"
-      }
+      "expected_outcome": "committed_exactly_once"
     },
     {
       "case_id": "jobs-queue.cancel-running",
@@ -235,11 +231,7 @@
       "trigger": {
         "at_call": 1
       },
-      "expected_outcome": "committed_exactly_once",
-      "known_gap": {
-        "issue": 3574,
-        "reason_code": "cancelled_job_left_running"
-      }
+      "expected_outcome": "committed_exactly_once"
     },
     {
       "case_id": "jobs-queue.kill-running-restart",
@@ -251,11 +243,7 @@
       "trigger": {
         "at_call": 1
       },
-      "expected_outcome": "committed_exactly_once",
-      "known_gap": {
-        "issue": 3574,
-        "reason_code": "restart_leaves_job_running"
-      }
+      "expected_outcome": "committed_exactly_once"
     },
     {
       "case_id": "jobs-queue.disk-full-worker",
@@ -268,11 +256,7 @@
         "at_call": 1,
         "persistent": true
       },
-      "expected_outcome": "committed_exactly_once",
-      "known_gap": {
-        "issue": 3574,
-        "reason_code": "worker_disk_failure_strands_job"
-      }
+      "expected_outcome": "committed_exactly_once"
     },
     {
       "case_id": "webhook.refused-first-attempt",
