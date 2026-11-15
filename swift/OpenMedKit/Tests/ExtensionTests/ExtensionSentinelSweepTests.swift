@@ -19,7 +19,7 @@ final class ExtensionSentinelSweepTests: XCTestCase {
                 "Follow-up for \(person.plantedValue)",
             ]
             let handler = ExtensionRedactionHandler { text, policy in
-                OpenMed.deidentify(text, entities: Self.entities(in: text, values: [person, birthDate]), policy: policy)
+                try OpenMed.deidentify(text, entities: Self.entities(in: text, values: [person, birthDate]), policy: policy)
             }
 
             for text in texts {

@@ -39,7 +39,7 @@ final class ContainerSentinelSweepTests: XCTestCase {
         for name in Policy.bundledProfileNames {
             let policy = try Policy(named: name)
             #if canImport(MLX) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
-                let result = OpenMed.deidentify(text, entities: entities, policy: policy)
+                let result = try OpenMed.deidentify(text, entities: entities, policy: policy)
                 XCTAssertEqual(result.policyName, policy.name)
             #else
                 XCTAssertEqual(entities.map { policy.action(for: $0.label) }.count, entities.count)
