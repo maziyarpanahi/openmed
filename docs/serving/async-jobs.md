@@ -96,6 +96,37 @@ JSON body. Each delivery attempt is signed independently with a fresh nonce, so
 retries remain compatible with receiver-side replay protection. Non-2xx
 responses and transport errors are retried with exponential backoff.
 
+## Published Contracts
+
+The service payloads that clients and webhook receivers depend on are published
+as versioned JSON Schemas in the `openmed.core.schemas.json` package and
+registered in the bundled fingerprint snapshot:
+
+| Contract | Schema |
+| --- | --- |
+| `POST /jobs` and `GET /jobs/{job_id}` response | `service_job_record.schema.json` |
+| Terminal webhook body | `service_webhook_payload.schema.json` |
+| REST error envelope | `service_error_envelope.schema.json` |
+
+Load and validate a response locally:
+
+```python
+from jsonschema import Draft202012Validator
+
+from openmed.core.schemas import load_schema
+
+record = client.get(f"/jobs/{job_id}").json()
+Draft202012Validator(load_schema("service_job_record")).validate(record)
+```
+
+Each schema sets `additionalProperties: false` and lists every field the service
+currently emits, so removing a required field or adding an undeclared field
+fails validation instead of drifting silently. The payloads themselves carry no
+`schema_version` field; the contract version is the registered schema version in
+`openmed/core/schemas/json/schema-fingerprints.json`, which
+`tests/unit/core/test_schemas_versioning.py` and
+`tests/unit/service/test_contract_schemas.py` pin against live service output.
+
 ## Local Store Configuration
 
 The default metadata store is
