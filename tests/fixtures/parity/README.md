@@ -4,7 +4,8 @@ The JSON files in this directory are cross-runtime contract vectors. Python,
 Swift (OpenMedKit) and Android (`android/openmedkit`) tests read the same bytes,
 so a change here changes what every listed runtime must accept. Every file in
 this directory must have a row in the table below;
-`tests/unit/test_parity_fixture_readme.py` fails when one is missing.
+`tests/unit/test_parity_fixture_readme.py` fails when one is missing. The
+`tokenizer/` subdirectory has a row of its own.
 
 | Fixture | Version | Python test | Swift test | Android test | Workflow path filter | How to update |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -14,11 +15,16 @@ this directory must have a row in the table below;
 | `speech_contract_v1.json` | `version: 1` | `tests/unit/multimodal/test_apple_speech_contract.py` | `SpeechContractParityTests.swift` | none | `swift-test.yml` | Edit by hand |
 | `date_shift_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/core/test_date_shift_vectors.py` | none yet | none yet | none | Edit by hand; the Python test recomputes every digest, offset and shifted date |
 | `identifier_validators_v1.json` | `version: 1`, `synthetic: true` | `tests/unit/core/test_identifier_vectors.py` | none yet | none yet | none | Edit by hand; the Python test checks every value against its reference validator |
+| `decision_encoder_v1.json` | `schema_version: openmed.tests.decision_encoder_parity.v1`, `synthetic: true` | `tests/unit/structured/test_decision_encoder_parity.py` | `DecisionRuntimeParityTests.swift` | `DecisionRuntimeParityTest.kt` | none | Regenerate with `python -m tests.unit.structured.test_decision_encoder_parity --write` |
+| `document_intake_v1.json` | `version: 1`, `synthetic_only: true` | `tests/unit/multimodal/test_native_intake.py` | `DocumentIntakeParityTests.swift`, `DocumentRedactionExportTests.swift` | `DocumentEvidenceParityTest.kt`, `DocumentRedactionExportTest.kt` | `swift-test.yml`, `android-ci.yml` | Regenerate with `python -m tests.fixtures.multimodal.document_intake` |
+| `kit_parity_vectors.json` | `version: 1` | `tests/unit/parity/test_kit_parity_vectors.py` | `KitParityVectorTests.swift` | `KitParityVectorTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit the cases by hand, then refresh derived fields and digests with `python scripts/parity/update_native_span_fixture.py --write` |
+| `portable_policy_vectors.json` | `version: 1` | `tests/unit/parity/test_portable_policy.py` | `PortablePolicyVectorTests.swift` | `PortablePolicyVectorTest.kt` | `swift-test.yml`, `android-ci.yml` | Edit the cases by hand, then derive the expected blocks with `python scripts/parity/generate_portable_policies.py --write` |
+| `tokenizer/` | `version: 1`, `contract_version: openmed.tokenizer-conformance.v1` | `tests/unit/eval/test_tokenizer_conformance.py` | `TokenizerConformanceTests.swift` | `TokenizerConformanceTest.kt` | `swift-test.yml`, `android-ci.yml` (`tokenizer/**`) | Regenerate with `python scripts/eval/generate_tokenizer_conformance.py`; `tokenizer_runtime_support_v1.json` is edited by hand and only validated |
 | `README.md` | n/a | `tests/unit/test_parity_fixture_readme.py` | none | none | none | This file |
 
 Swift tests live in `swift/OpenMedKit/Tests/OpenMedKitTests/` and resolve the
-file from the repository root. Android tests live in
-`android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/` and load the
+file from the repository root. Android tests live under
+`android/openmedkit/src/test/kotlin/com/openmed/openmedkit/` and load the
 file by name from the test classpath: `android/openmedkit/build.gradle.kts`
 adds this directory, `fixtures/parity/` and `tests/fixtures/processing/` as
 test resource roots, so file names must stay unique across the three.
@@ -26,6 +32,20 @@ test resource roots, so file names must stay unique across the three.
 The workflows only start for the exact paths listed in their `paths:` filters
 (both `push` and `pull_request`). `tests/unit/android/test_android_icu_parity_policy.py`
 also asserts that `android-ci.yml` lists `offset_contract.json`.
+`decision_encoder_v1.json` is in neither filter, and `android-ci.yml` does not
+run `DecisionRuntimeParityTest`; the full Android unit run in
+`android-publish.yml` and the full `swift test` step in `swift-test.yml`
+execute its native consumers. `android-ci.yml` also does not run
+`DocumentRedactionExportTest`, so the `document_intake_v1.json` export checks
+run on Android only in the full unit run of `android-publish.yml`. Every other
+Android test in the table is in the `--tests` list of `android-ci.yml`, and
+`swift-test.yml` runs every Swift test in a full `swift test` step.
+
+The kit-parity, portable policy, decision and tokenizer vectors are also
+replayed by the web kits under `tests/web/`; see
+[`docs/swift-kotlin-parity.md`](../../../docs/swift-kotlin-parity.md),
+[`docs/decision-models.md`](../../../docs/decision-models.md) and
+[`docs/tokenizer-conformance.md`](../../../docs/tokenizer-conformance.md).
 
 Regenerate `multimodal_contract_v1.json` after changing its source contracts:
 
@@ -35,11 +55,13 @@ Regenerate `multimodal_contract_v1.json` after changing its source contracts:
 
 ## Related fixtures
 
-- `fixtures/parity/synthetic_clinical_note.txt` and
-  `fixtures/parity/expected_spans.json`: the Swift-Kotlin span fixture, read by
-  Android `SpanEquivalenceTest.kt` (see `docs/swift-kotlin-parity.md`). No
-  workflow `paths:` filter lists it; the full Android unit run in
-  `android-publish.yml` executes it.
+- `fixtures/parity/`: the Swift-Kotlin span fixture (`expected_spans.json`,
+  `synthetic_clinical_note.txt` and the digest manifest
+  `span_parity_manifest.json`), read by Swift `SpanEquivalenceParityTests.swift`,
+  Android `SpanEquivalenceTest.kt` and Python
+  `tests/unit/parity/test_native_span_fixture.py`. Both `swift-test.yml` and
+  `android-ci.yml` list `fixtures/parity/**`; see
+  `docs/swift-kotlin-parity.md` for its update command.
 - `android/openmedkit/src/test/resources/parity/android_span_parity.json`:
   documented in its own `README.md` and generated by
   `scripts/android/generate_parity_fixtures.py`.
