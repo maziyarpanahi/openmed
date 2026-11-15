@@ -512,6 +512,11 @@
     },
     {
       "classification": "operational",
+      "function": "DeidentifyJobQueue.submit_job",
+      "module": "openmed.service.jobs"
+    },
+    {
+      "classification": "operational",
       "function": "CorrelationIdMiddleware.__call__.send_with_request_id",
       "module": "openmed.service.logging"
     },
