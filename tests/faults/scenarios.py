@@ -34,9 +34,14 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
 )
 from openmed.clinical.journey_contracts import sha256_digest as journey_digest
+from openmed.core.key_provider import InMemoryKeyProvider, KeyState
 from openmed.core.offline import HF_OFFLINE_ENV_VARS, network_blocked_if_offline
 from openmed.service import jobs
-from openmed.service.egress import EgressPolicy
+from openmed.service.egress import EGRESS_RULES_ENV_VAR, EgressPolicy
+from openmed.service.job_payloads import (
+    JOB_PAYLOAD_KEY_PURPOSE,
+    EncryptedJobPayloadStore,
+)
 from openmed.service.resilience import (
     CircuitBreakerOpenError,
     ResilienceManager,
@@ -95,6 +100,8 @@ URL_CANARY = "http://127.0.0.1:9/hooks/synthetic-url-canary"
 _PLAINTEXT = JourneyStoreEncryption.development_plaintext()
 # Upper bound for a terminal webhook delivery to settle on the dispatcher.
 _WEBHOOK_SETTLE_SECONDS = 10.0
+# Synthetic payload key for the durable job queue; it never protects real data.
+_PAYLOAD_KEY = bytes(range(32))
 CONTENT_CANARY = b"SYNTHETIC-JOURNEY-CANARY clinical note bytes"
 CANARIES = (TEXT_CANARY, SIGNING_CANARY, "synthetic-url-canary", "SYNTHETIC-JOURNEY")
 
@@ -325,6 +332,7 @@ class _ControlledExecutor:
 
     def __init__(self, **_kwargs: Any) -> None:
         self.work: list[tuple[Future[Any], Callable[..., Any], tuple[Any, ...]]] = []
+        self._next = 0
 
     def submit(self, fn: Callable[..., Any], *args: Any) -> Future[Any]:
         future: Future[Any] = Future()
@@ -332,7 +340,10 @@ class _ControlledExecutor:
         return future
 
     def run_pending(self) -> None:
-        for future, fn, args in self.work:
+        # Work queued while running (a reclaimed job, say) runs in this pass.
+        while self._next < len(self.work):
+            future, fn, args = self.work[self._next]
+            self._next += 1
             if future.set_running_or_notify_cancel():
                 future.set_result(fn(*args))
 
@@ -387,6 +398,68 @@ def _restart_record(path: Path, job_id: str) -> dict[str, Any]:
         queue.shutdown()
 
 
+class _RestartClock:
+    """Wall clock of a restarted process, set past the crashed worker's lease."""
+
+    def __init__(self) -> None:
+        self.now = WALL_START + timedelta(seconds=jobs.DEFAULT_LEASE_SECONDS + 1)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+def _durable_payloads(root: Path, clock: Callable[[], datetime]) -> Any:
+    """Return the encrypted payload store jobs resume from after a restart."""
+    provider = InMemoryKeyProvider()
+    provider.add_key(
+        "synthetic-fault-key",
+        _PAYLOAD_KEY,
+        purpose=JOB_PAYLOAD_KEY_PURPOSE,
+        state=KeyState.ACTIVE,
+    )
+    return EncryptedJobPayloadStore(
+        root / "payloads",
+        key_provider=provider,
+        max_retention_seconds=3600,
+        clock=clock,
+    )
+
+
+def _restart_and_resume(
+    root: Path, job_id: str, sender: Callable[..., Any]
+) -> dict[str, Any]:
+    """Restart the queue as a new process and let it finish resumable work.
+
+    The restarted clock is past the lease of a worker that stopped without
+    shutdown, so the startup reconcile reclaims its job; one more reconcile
+    after the retry backoff dispatches it, and any terminal webhook settles on
+    the dispatcher before the record is read.
+    """
+    clock = _RestartClock()
+    original_executor = jobs.ThreadPoolExecutor
+    jobs.ThreadPoolExecutor = _ControlledExecutor
+    try:
+        queue = jobs.DeidentifyJobQueue(
+            SimpleNamespace(),
+            store=jobs.LocalJobStore(root / "jobs.json", clock=clock),
+            webhook_sender=sender,
+            clock=clock,
+            payload_store=_durable_payloads(root, clock),
+        )
+    finally:
+        jobs.ThreadPoolExecutor = original_executor
+    queue._deidentify_document = _fake_deidentify  # noqa: SLF001
+    executor: _ControlledExecutor = queue._executor  # noqa: SLF001
+    try:
+        clock.now += timedelta(seconds=jobs.DEFAULT_RETRY_MAX_SECONDS)
+        queue.reconcile()
+        executor.run_pending()
+        queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
+        return queue.get(job_id) or {}
+    finally:
+        queue.shutdown()
+
+
 def _webhook_egress(url: str) -> EgressPolicy:
     """Allow plain HTTP to one synthetic loopback receiver.
 
@@ -419,7 +492,14 @@ def _permit_leaked(gate: Any) -> bool:
     },
 )
 def run_jobs_queue(session: FaultSession) -> Observation:
-    """Run one job through the worker and observe the restarted record."""
+    """Run one job through the worker and observe it after a restart.
+
+    The queue retains payloads encrypted, the configuration in which jobs
+    resume across restarts (memory-only payloads fail an in-flight job closed
+    instead). After the fault, a restarted queue reclaims the lease of a
+    worker that stopped without shutdown, resumes the job and delivers its
+    terminal webhook, so the observation covers the recovery path.
+    """
     if session.case.injection_point == "queue.shutdown":
         return _jobs_queue_shutdown(session)
     path = session.state_dir / "jobs.json"
@@ -444,6 +524,7 @@ def run_jobs_queue(session: FaultSession) -> Observation:
             store=store,
             webhook_sender=sender,
             clock=_fixed_wall,
+            payload_store=_durable_payloads(session.state_dir, _fixed_wall),
         )
         payload = _job_payload()
         record, item = queue._stage(payload)  # noqa: SLF001
@@ -455,22 +536,25 @@ def run_jobs_queue(session: FaultSession) -> Observation:
     queue._deidentify_document = model_call  # noqa: SLF001
     interrupted = False
     try:
-        with disk_faults(session, session.state_dir):
-            queue._run_job(item)  # noqa: SLF001
-            # Terminal webhooks go to the bounded dispatcher; let the delivery
-            # settle under the same faults before shutdown abandons it.
-            queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
-    except (OSError, SimulatedProcessKill, asyncio.CancelledError):
-        interrupted = True
-    finally:
-        queue.shutdown()
-        client.close()
+        try:
+            with disk_faults(session, session.state_dir):
+                queue._run_job(item)  # noqa: SLF001
+                # Terminal webhooks go to the bounded dispatcher; let the
+                # delivery settle under the same faults before shutdown
+                # abandons it.
+                queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
+        except (OSError, SimulatedProcessKill, asyncio.CancelledError):
+            interrupted = True
+        finally:
+            queue.shutdown()
 
-    with session.suspended():
-        root = session.crash_dir if session.crashed else session.state_dir
-        if _canary_persisted(root):
-            return Observation(AMBIGUOUS, "canary_persisted")
-        persisted = _restart_record(root / "jobs.json", record["id"])
+        with session.suspended():
+            root = session.crash_dir if session.crashed else session.state_dir
+            if _canary_persisted(root):
+                return Observation(AMBIGUOUS, "canary_persisted")
+            persisted = _restart_and_resume(root, record["id"], sender)
+    finally:
+        client.close()
     status = persisted.get("status")
     if status not in jobs.TERMINAL_STATUSES:
         reason = "job_left_non_terminal" if interrupted else "job_not_terminal"
@@ -490,6 +574,7 @@ def run_jobs_queue(session: FaultSession) -> Observation:
 
 
 def _jobs_queue_shutdown(session: FaultSession) -> Observation:
+    """Shut down a memory-only queue before or after its job ran."""
     path = session.state_dir / "jobs.json"
     runtime = SimpleNamespace(validate_served_model=lambda _name: None)
     original_executor = jobs.ThreadPoolExecutor
@@ -509,9 +594,17 @@ def _jobs_queue_shutdown(session: FaultSession) -> Observation:
         jobs.ThreadPoolExecutor = original_executor
     queue._deidentify_document = _fake_deidentify  # noqa: SLF001
     executor: _ControlledExecutor = queue._executor  # noqa: SLF001
-    submitted = queue.submit(_job_payload())
+    # Submission authorizes the callback against the deny-by-default egress
+    # policy, so allow the scenario's own loopback receiver.
+    with _preserved_environ((EGRESS_RULES_ENV_VAR,)):
+        origin = urlsplit(URL_CANARY)
+        os.environ[EGRESS_RULES_ENV_VAR] = json.dumps(
+            [{"purposes": ["webhook"], "destination": f"http://{origin.netloc}"}]
+        )
+        submitted = queue.submit(_job_payload())
     if not session.trip("queue.shutdown"):
         executor.run_pending()
+        queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
     queue.shutdown()
     with session.suspended():
         if _canary_persisted(session.state_dir):

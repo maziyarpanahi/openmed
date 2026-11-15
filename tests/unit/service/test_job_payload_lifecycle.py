@@ -561,9 +561,14 @@ def test_terminal_event_write_failure_skips_delivery_with_a_code(
     assert list((tmp_path / "payloads").iterdir()) == []
 
 
-def test_unreadable_input_fails_closed_and_keeps_the_payload(
+def test_unreadable_input_is_quarantined_and_keeps_the_payload(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """An unauthenticated input fails closed into quarantine (#3574).
+
+    It is never promoted into a result and the payload is kept, so an
+    authorized replay can run it once the right key is configured.
+    """
     clock = Clock()
     queue = _queue(
         monkeypatch,
@@ -585,12 +590,14 @@ def test_unreadable_input_fails_closed_and_keeps_the_payload(
     _run_and_settle(wrong, item)
 
     record = wrong.get(job_id)
-    assert record["status"] == "failed"
+    assert record["status"] == "quarantined"
     assert record["error"] == {
         "code": "envelope_authentication_failed",
         "type": "JobPayloadError",
         "message": "Job input payload could not be read",
     }
+    assert record["recovery"]["quarantine"]["classification"] == "malformed"
+    assert record["completed_at"] is None
     assert record["payloads"]["input"]["state"] == "retained"
     assert _all_bytes(tmp_path / "payloads") == before
     assert wrong.webhook_sender.calls == []

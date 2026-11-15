@@ -4156,6 +4156,20 @@
     "/jobs": {
       "post": {
         "operationId": "create_job_jobs_post",
+        "parameters": [
+          {
+            "description": "Optional client key that makes retries of this start return the original job instead of starting another one. Scoped to the authenticated principal; reusing it with a different request body returns 409 idempotency_key_conflict.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:~+/=-]+$",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4177,7 +4191,24 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Job accepted, or the replayed original submission.",
+            "headers": {
+              "Idempotency-Replayed": {
+                "description": "`true` when the response returns the job that first used this Idempotency-Key.",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed Idempotency-Key (`idempotency_key_invalid`)."
+          },
+          "409": {
+            "description": "Idempotency-Key reused for a different request (`idempotency_key_conflict`)."
           },
           "422": {
             "content": {

@@ -507,12 +507,12 @@
     },
     {
       "classification": "operational",
-      "function": "DeidentifyJobQueue._discard_payload",
+      "function": "DeidentifyJobQueue._delete_payload",
       "module": "openmed.service.jobs"
     },
     {
       "classification": "operational",
-      "function": "DeidentifyJobQueue.submit",
+      "function": "DeidentifyJobQueue.submit_job",
       "module": "openmed.service.jobs"
     },
     {

@@ -582,7 +582,13 @@ def test_job_store_refuses_to_replace_a_file_a_newer_build_rewrote(
     (tmp_path / "other.json").write_text(
         '{"schema_version": 1, "jobs": {}}', encoding="utf-8"
     )
-    compatible_writer.update("synthetic-b", status="running")
+    # A compatible rewrite does not block the store; it is reloaded, so the
+    # next write builds on the committed file instead of overwriting it.
+    assert compatible_writer.get("synthetic-b") is None
+    compatible_writer.create({"id": "synthetic-c", "status": "queued"})
+    rewritten = json.loads((tmp_path / "other.json").read_text(encoding="utf-8"))
+    assert rewritten["schema_version"] == compat.JOB_STORE_SCHEMA_VERSION
+    assert set(rewritten["jobs"]) == {"synthetic-c"}
 
 
 def test_job_queue_stamps_and_checks_the_contract_before_claiming(

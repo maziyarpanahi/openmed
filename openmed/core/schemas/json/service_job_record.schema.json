@@ -295,6 +295,253 @@
       "minimum": 0,
       "type": "number"
     },
+    "recovery": {
+      "additionalProperties": false,
+      "description": "Value-free durable recovery state; never worker, lease or request identity.",
+      "properties": {
+        "attempt": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "checkpoint": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_at": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+              "type": "string"
+            },
+            "sequence": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "completed_at",
+            "sequence"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "completed_documents": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "execution": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "lease": {
+          "additionalProperties": false,
+          "properties": {
+            "acquired_at": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+              "type": "string"
+            },
+            "epoch": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "expires_at": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "acquired_at",
+            "epoch",
+            "expires_at"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "lease_epoch": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_attempts": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "quarantine": {
+          "additionalProperties": false,
+          "properties": {
+            "classification": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            "created_at": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+              "type": "string"
+            },
+            "quarantine_id": {
+              "pattern": "^quarantine_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "reason_code": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "classification",
+            "created_at",
+            "quarantine_id",
+            "reason_code"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "retry": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "classification": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            "reason_code": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "type": "string"
+            },
+            "retry_after": {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "attempt",
+            "classification",
+            "reason_code",
+            "retry_after"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "schema_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "transitions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "at": {
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+                "type": "string"
+              },
+              "attempt": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "execution": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "from": {
+                "enum": [
+                  "queued",
+                  "running",
+                  "done",
+                  "failed",
+                  "cancelled",
+                  "quarantined",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "lease_epoch": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reason": {
+                "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                "type": "string"
+              },
+              "state_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "to": {
+                "enum": [
+                  "queued",
+                  "running",
+                  "done",
+                  "failed",
+                  "cancelled",
+                  "quarantined"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "state_version",
+              "from",
+              "to",
+              "reason",
+              "at",
+              "execution",
+              "attempt",
+              "lease_epoch"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "webhook": {
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "enum": [
+                "pending",
+                "delivered",
+                "failed",
+                "unavailable"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "execution",
+        "attempt",
+        "max_attempts",
+        "lease_epoch",
+        "lease",
+        "checkpoint",
+        "completed_documents",
+        "retry",
+        "quarantine",
+        "webhook",
+        "transitions"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
     "schema_version": {
       "const": 1,
       "type": "integer"
@@ -373,13 +620,19 @@
         "null"
       ]
     },
+    "state_version": {
+      "description": "Incremented by every committed write of the record.",
+      "minimum": 1,
+      "type": "integer"
+    },
     "status": {
       "enum": [
         "queued",
         "running",
         "done",
         "failed",
-        "cancelled"
+        "cancelled",
+        "quarantined"
       ],
       "type": "string"
     },

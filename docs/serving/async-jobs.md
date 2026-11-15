@@ -36,6 +36,22 @@ curl -s http://127.0.0.1:8080/jobs \
 The response uses HTTP `202` and includes `id`, `status`, `progress_percent`,
 `document_count`, and `status_url`.
 
+To make a retried submission safe, send an `Idempotency-Key` header, as for
+the
+[FHIR Bulk Data and SMART ingestion starts](../interop/fhir-bulk-data.md#idempotent-starts):
+a single value of 1-255 letters, digits, or `._:~+/=-` characters (a random UUID
+works). A repeat with the same key and the same request returns the existing
+job with HTTP `202` and `Idempotency-Replayed: true` instead of creating a
+second one, and consumes no capacity. Reusing the key for a different request
+returns HTTP `409` with error code `idempotency_key_conflict`; a malformed key
+returns HTTP `400` with `idempotency_key_invalid`. The key is scoped to the
+route and the authenticated principal and stored only as a keyed digest, and
+the request is compared through a keyed digest of every field except the
+webhook `secret`. A key is remembered for as long as its job record is
+retained. Across a restart it is honoured only with a durable
+`OPENMED_SERVICE_DIGEST_KEY` (see [Keyed Digests](#keyed-digests)); without
+one, a retry after a restart creates a new job.
+
 ## Capacity Limits
 
 Each pending job keeps its raw documents in memory until a worker finishes it,
@@ -86,8 +102,10 @@ unlabelled aggregate gauges:
 - `openmed_service_job_queue_text_bytes`: UTF-8 bytes of document text held by
   those jobs.
 
-Capacity is returned when a job finishes, fails, or is cancelled at shutdown,
-so both gauges return to `0` once the queue drains.
+Capacity is returned when a job finishes, fails, is cancelled, or is
+quarantined, so both gauges return to `0` once the queue drains. A job waiting
+for a retry backoff still holds its capacity. Jobs resumed after a restart and
+operator replays are not counted against these ceilings.
 
 ## Poll Status
 
@@ -96,14 +114,18 @@ curl -s http://127.0.0.1:8080/jobs/<job-id>
 ```
 
 Status moves from `queued` to `running` and then to `done` or `failed`. A job
+can also end `cancelled`, or wait in `quarantined` until an operator replays it
+(see [Durability and Recovery](#durability-and-recovery)). A retried job goes
+back to `queued` until its backoff elapses. With memory-only payloads, a job
 whose work never started when the service shut down is recorded as `cancelled`
 with error code `cancelled_on_shutdown`; running and finished jobs keep their
 own states. Status changes and terminal results are saved as soon as they
 happen. Progress (`progress_percent`, counts, `label_histogram`, and `spans`)
 is saved in coalesced checkpoints rather than after every document; see
-[Progress checkpoints](#progress-checkpoints). Every record carries
-`schema_version` (currently `3`) and a `digests` marker. Terminal records
-include:
+[Progress checkpoints](#progress-checkpoints). Every write increments
+`state_version`, and `recovery` carries the value-free recovery metadata
+described in [Durability and Recovery](#durability-and-recovery). Every record
+carries a `digests` marker. Terminal records include:
 
 - `processed_count` and `failed_count`
 - `label_histogram`
@@ -350,7 +372,8 @@ ciphertext (it is `null` in memory-only mode), never a digest of the content.
 Lifecycle:
 
 - The input payload is created at submission and deleted (`consumed`) when the
-  job reaches a terminal state, or (`cancelled`) when shutdown cancels the job.
+  job reaches a terminal state, or (`cancelled`) when the job is cancelled. A
+  quarantined job keeps its input until a replay or the retention deadline.
 - The terminal-event payload holds the webhook body plus its delivery target.
   It is deleted after a successful delivery (`delivered`). In encrypted mode a
   failed delivery keeps it until its deadline so a later retry can reference
@@ -395,8 +418,11 @@ A missing, retired, revoked, or wrong key, a damaged envelope, a full disk, or
 an interrupted write fails closed with a controlled code (for example
 `envelope_authentication_failed`, `key_unavailable`, `payload_damaged`,
 `payload_storage_full`, `payload_write_failed`) and leaves the last verified
-payload untouched. A job whose input cannot be read fails with that code in
-`error.code`.
+payload untouched. A job whose input cannot be read carries that code in
+`error.code`: a deleted, expired, or missing input fails the job, an
+unavailable key or storage error retries it with backoff, and a damaged,
+unauthenticated, or policy-blocked input quarantines it with its payload kept
+for an authorized replay.
 
 Callers may request a shorter retention with `payload_retention_seconds` in the
 `POST /jobs` body. A value above the service maximum is rejected with HTTP 400.
@@ -406,6 +432,87 @@ Each lifecycle transition (`created`, `read`, `read_refused`, `expired`,
 reference, payload kind, ciphertext digest, timestamp, and a controlled reason
 code. `DeidentifyJobQueue.payloads.lifecycle_evidence()` returns recent
 receipts and per-event counts for audit evidence.
+
+## Durability and Recovery
+
+The queue is durable: the input payload reference, the request digest, and the
+keyed idempotency digest are written to the job store before a job is handed
+to a worker. The recovery records reuse the Journey ingestion contracts
+(lease, checkpoint, retry, cancellation, quarantine result, and quarantine
+promotion from `openmed.interop.ingest.contracts`), adapted in
+`openmed.service.job_recovery`.
+
+- **Leases.** A worker claims a job with an expiring lease
+  (`OPENMED_SERVICE_JOBS_LEASE_SECONDS`, default 60). Each claim increments the
+  lease epoch, and every progress, retry, quarantine, and terminal write goes
+  through the store's fenced write and checks that epoch, so two workers can
+  never hold a valid lease for the same epoch and a worker that lost its
+  lease, or whose job was cancelled, cannot commit. Workers renew the lease
+  when they checkpoint, and the periodic reconcile pass renews leases held by
+  live workers, so only a lease whose worker stopped expires and is reclaimed.
+- **Checkpoints.** Progress is committed in coalesced checkpoints (see
+  [Progress checkpoints](#progress-checkpoints)), each with a chained output
+  digest. A document's output counts as done only once a checkpoint covering
+  it is committed: a job that is resumed after a crash or a lease reclaim
+  starts after the last committed checkpoint and processes the documents after
+  it again, so committed results are never duplicated.
+- **Terminal state and webhook intent.** The terminal state, the final
+  checkpoint, the reference to the sealed terminal-event payload, and a
+  pending webhook intent are committed in one write. Delivery runs on the
+  bounded webhook dispatcher (see
+  [Webhook Delivery Status](#webhook-delivery-status)). A pending intent left
+  by a crash, or a delivery abandoned at shutdown with encrypted payloads, is
+  delivered again once its delivery claim expires, from the same immutable
+  payload and with the same delivery id. Delivery is at-least-once: a crash
+  after the HTTP request but before its result is recorded can repeat a
+  webhook with an identical body and delivery id.
+- **Retries and backoff.** Transient, resource, contention, and dependency
+  failures release the job for a retry with capped exponential backoff
+  (`OPENMED_SERVICE_JOBS_RETRY_BASE_SECONDS`, default 5, up to
+  `OPENMED_SERVICE_JOBS_RETRY_MAX_SECONDS`, default 300). Other document errors
+  are recorded as failed documents, as before.
+- **Poison quarantine.** A job that fails or loses its lease on
+  `OPENMED_SERVICE_JOBS_MAX_ATTEMPTS` attempts (default 3), or whose input
+  payload is damaged, fails authentication, or does not match the submission,
+  moves to `quarantined` with a value-free reason code and keeps its input
+  payload. It never runs again on its own.
+- **Replay.** `DeidentifyJobQueue.replay(job_id, JobReplayAuthorization(...))`
+  re-queues a quarantined job as a new, linked execution with a fresh attempt
+  budget. The authorization carries only a reviewer digest, an evidence digest,
+  and a reason code; an optional `replay_authorizer` hook can enforce your own
+  policy. The quarantine result and every earlier transition stay in the
+  record. The service ships no replay route: expose replay to remote callers
+  only behind your own authorization.
+- **Cancellation.** `DeidentifyJobQueue.cancel(job_id)` is committed before
+  anything else and fences a running worker. A cancelled job never returns to
+  `queued`.
+- **Startup reconcile.** When the queue starts, and every
+  `OPENMED_SERVICE_JOBS_RECONCILE_SECONDS` (default 5; `0` disables the
+  background pass), it reclaims expired leases, resumes queued work whose
+  backoff has elapsed, quarantines jobs that exhausted their attempts, fails
+  queued jobs whose input expired or (in memory-only mode) did not survive the
+  restart, and re-drives expired webhook intents. A record whose recovery state
+  is corrupt or ambiguous, or an in-flight record written before durable
+  recovery (`legacy_job_not_resumable`), fails closed and never becomes a
+  success.
+- **Shutdown and drain.** The service drain closes admission, lets running
+  jobs finish until its settle deadline, then stops them at their next
+  document boundary and fences whatever is left so a stale worker can never
+  commit. With memory-only payloads those jobs are `cancelled` with the
+  retryable `shutting_down` code, because their input cannot survive the
+  process. With encrypted payloads they are checkpointed and left `queued`
+  (counted as `checkpointed` in the drain report) and resume at the next
+  start; an interrupted job does not use up an attempt.
+
+Restart-safe resume needs encrypted payload retention; memory-only payloads
+are lost with the process. Recovery metadata never contains payload content,
+worker identity, lease identifiers, storage paths, or secrets. Append-only
+decision receipts for quarantine, lease reclaim, cancellation, recovery
+failure, and replay are written to the store's `decisions` array (present once
+a receipt exists, within store schema version 3) and are available from
+`DeidentifyJobQueue.decision_receipts()`;
+`DeidentifyJobQueue.recovery_evidence()` returns value-free counts and receipts
+for audit evidence.
 
 ## Keyed Digests
 
@@ -510,12 +617,20 @@ conditions hold:
 - at least 1% of the job's documents (rounded up to a whole document) have
   finished, successfully or not, since the previous checkpoint.
 
-A job therefore writes at most 100 progress checkpoints regardless of its
-document count, plus one write each for submission, the `running` transition,
-the terminal result, and the consumed input payload, and one more for webhook
-delivery status when a webhook is configured. The bytes a job writes grow linearly with its document
-count. The last document's progress is saved with the terminal result rather
-than as a separate checkpoint.
+A job therefore writes at most 100 coalesced progress checkpoints regardless
+of its document count, plus one write each for submission, the `running`
+transition, and the terminal result (which also records the consumed input
+payload and the webhook intent), and one more for webhook delivery status when
+a webhook is configured. The periodic reconcile pass renews the lease of a
+live worker between checkpoints. The bytes a job writes grow linearly with its document count. The last document's
+progress is saved with the terminal result rather than as a separate
+checkpoint.
+
+Checkpoints are also the resume points: after a crash or a lease reclaim the
+job continues after the last committed checkpoint, and documents after it are
+processed again. A retry release and a drain stop are writes of their own, so
+they also commit the documents finished since the last checkpoint. Set `progress_interval_seconds=0` on `DeidentifyJobQueue` to
+checkpoint after every document, up to `max_progress_writes`.
 
 `GET /jobs/{job_id}` returns the most recently saved record, so polled
 progress can trail the worker by up to one checkpoint. Counts, label
@@ -535,5 +650,17 @@ Payload retention is configured separately:
 | `OPENMED_SERVICE_JOBS_PAYLOAD_DIR` | `~/.cache/openmed/service-job-payloads` | Directory for encrypted payload files, created with mode `0700`. |
 | `OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS` | `86400` | Maximum payload retention; also the default when a job requests none. |
 
-Payload retention does not make jobs restart-safe by itself: queued work is
-still process-local, and a restart does not resume interrupted jobs.
+Recovery is configured with these variables:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `OPENMED_SERVICE_JOBS_LEASE_SECONDS` | `60` | Lease duration; a crashed worker's job is reclaimed after it. |
+| `OPENMED_SERVICE_JOBS_MAX_ATTEMPTS` | `3` | Attempts per execution before poison quarantine. |
+| `OPENMED_SERVICE_JOBS_RETRY_BASE_SECONDS` | `5` | Backoff before the second attempt; it doubles per attempt. |
+| `OPENMED_SERVICE_JOBS_RETRY_MAX_SECONDS` | `300` | Backoff ceiling. |
+| `OPENMED_SERVICE_JOBS_RECONCILE_SECONDS` | `5` | Interval of the background reconcile pass; `0` disables it. |
+
+Jobs resume across restarts only with encrypted payload retention. Metadata
+writes replace the store file atomically, so they survive a process crash. The
+store serves one service process; it does not coordinate writers across
+processes.

@@ -147,18 +147,41 @@ _CANDIDATE_SHA256 = {
 
 
 def _scannable_store_text(path: Path) -> str:
-    """Return the stored job document without work-envelope model references.
+    """Return the stored job document without its digest-bearing internals.
 
     The mixed-version work envelope pins a job to the served model generation
     with a digest of the public, served model identifier. It is never derived
-    from request text, so it is the one digest these guards do not inspect.
+    from request text, so these guards do not inspect it.
+
+    The durable recovery block and the store's decision receipts embed the
+    ingestion contracts' ``sha256:`` fingerprints (checkpoint, quarantine and
+    actor digests). They are computed only over opaque references, counters
+    and the record's own keyed (or omitted) digests, never over request text,
+    and :func:`_assert_recovery_value_free` checks them separately.
     """
     document = json.loads(path.read_text(encoding="utf-8"))
+    _assert_recovery_value_free(document)
     for record in document.get("jobs", {}).values():
         envelope = record.get("compatibility")
         if isinstance(envelope, dict):
             envelope.pop("model_generation", None)
+        record.pop("recovery", None)
+    document.pop("decisions", None)
     return json.dumps(document, indent=2, sort_keys=True)
+
+
+def _assert_recovery_value_free(document: dict[str, Any]) -> None:
+    """Recovery fingerprints carry no raw value and no enumerable digest."""
+    recovery = [record.get("recovery") for record in document.get("jobs", {}).values()]
+    rendered = json.dumps([recovery, document.get("decisions", [])])
+    assert _enumerated(rendered) == set()
+    assert _raw_leaks(rendered) == []
+
+
+def _without_recovery(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return *payload* without its recovery block, checked on its own."""
+    _assert_recovery_value_free({"jobs": {"record": payload}})
+    return {name: value for name, value in payload.items() if name != "recovery"}
 
 
 def _enumerated(rendered: str) -> set[str]:
@@ -166,8 +189,8 @@ def _enumerated(rendered: str) -> set[str]:
     return set(_HEX64.findall(rendered)) & _CANDIDATE_SHA256
 
 
-def _sentinel_leaks(rendered: str) -> list[str]:
-    """Return raw values, secrets or legacy hash markers present in *rendered*."""
+def _raw_leaks(rendered: str) -> list[str]:
+    """Return raw identifiers, text, callback URLs or secrets in *rendered*."""
     # Token boundaries keep short numeric identifiers from matching inside hex.
     leaks = [
         value
@@ -180,11 +203,14 @@ def _sentinel_leaks(rendered: str) -> list[str]:
         SYNTHETIC_WEBHOOK_SECRET,
         SYNTHETIC_DIGEST_KEY,
         SYNTHETIC_ROTATED_KEY,
-        "sha256:",
-        '"text_hash"',
-        '"url_hash"',
     ]
     return leaks + [sentinel for sentinel in sentinels if sentinel in rendered]
+
+
+def _sentinel_leaks(rendered: str) -> list[str]:
+    """Return raw values, secrets or legacy hash markers present in *rendered*."""
+    markers = ["sha256:", '"text_hash"', '"url_hash"']
+    return _raw_leaks(rendered) + [marker for marker in markers if marker in rendered]
 
 
 def _key(secret: str = SYNTHETIC_DIGEST_KEY, key_id: str = SYNTHETIC_KEY_ID):
@@ -550,7 +576,7 @@ def test_job_digests_are_stable_across_jobs_and_change_after_rotation(
         SYNTHETIC_ROTATED_KEY_ID
     }
     for payload in (first, first_webhook, rotated, rotated_webhook):
-        rendered = json.dumps(payload)
+        rendered = json.dumps(_without_recovery(payload))
         assert _enumerated(rendered) == set()
         assert _sentinel_leaks(rendered) == []
 

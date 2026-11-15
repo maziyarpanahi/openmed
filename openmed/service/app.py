@@ -325,6 +325,27 @@ _IDEMPOTENT_START_RESPONSES: Dict[int | str, Dict[str, Any]] = {
         )
     },
 }
+_IDEMPOTENT_JOB_RESPONSES: Dict[int | str, Dict[str, Any]] = {
+    202: {
+        "description": "Job accepted, or the replayed original submission.",
+        "headers": {
+            IDEMPOTENCY_REPLAYED_HEADER: {
+                "description": (
+                    "`true` when the response returns the job that first used "
+                    "this Idempotency-Key."
+                ),
+                "schema": {"type": "string", "enum": ["true"]},
+            }
+        },
+    },
+    400: {"description": "Malformed Idempotency-Key (`idempotency_key_invalid`)."},
+    409: {
+        "description": (
+            "Idempotency-Key reused for a different request "
+            "(`idempotency_key_conflict`)."
+        )
+    },
+}
 _DECISION_PATH = "/v1/decisions"
 _MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
 _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
@@ -2968,14 +2989,30 @@ def create_app(
                 detail="ingestion job not found",
             ) from exc
 
-    @app.post("/jobs", status_code=202, dependencies=async_jobs_gate)
+    @app.post(
+        "/jobs",
+        status_code=202,
+        dependencies=async_jobs_gate,
+        responses=_IDEMPOTENT_JOB_RESPONSES,
+        openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA,
+    )
     async def create_job(
         payload: DeidentifyJobRequest,
         request: Request,
+        response: Response,
     ) -> Dict[str, Any]:
         _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
-        record = queue.submit(payload, owner_digest=_submitting_owner_digest(request))
+        submission = queue.submit_job(
+            payload,
+            owner_digest=_submitting_owner_digest(request),
+            idempotency_key=parse_idempotency_key(
+                request.headers.getlist(IDEMPOTENCY_KEY_HEADER)
+            ),
+        )
+        record = submission.record
+        if not submission.created:
+            response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
 
     @app.get("/jobs/{job_id}", dependencies=async_jobs_gate)
