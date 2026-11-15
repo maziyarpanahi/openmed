@@ -2,22 +2,29 @@
     import Foundation
     import MLX
 
-    enum OpenMedPrivacyFilterError: LocalizedError {
-        case unsupportedArtifact(String)
-        case missingTokenizer(URL)
-        case invalidTokenizer(URL)
-        case unknownToken(String)
+    /// Value-free Privacy Filter failures.
+    ///
+    /// Cases carry closed vocabularies or token indices only. They never hold
+    /// input text, byte-level token pieces, file names or paths.
+    enum OpenMedPrivacyFilterError: LocalizedError, Equatable {
+        case unsupportedArtifact(task: OpenMedMLXTask, family: OpenMedMLXFamily)
+        case missingTokenizer
+        case unreadableTokenizer
+        case invalidTokenizer
+        case unknownToken(index: Int)
 
         var errorDescription: String? {
             switch self {
-            case .unsupportedArtifact(let family):
-                return "Expected OpenAI Privacy Filter MLX artifact, got \(family)."
-            case .missingTokenizer(let url):
-                return "Privacy Filter tokenizer.json was not found at \(url.path)."
-            case .invalidTokenizer(let url):
-                return "Privacy Filter tokenizer.json is not a supported byte-level BPE tokenizer: \(url.path)."
-            case .unknownToken(let token):
-                return "Privacy Filter tokenizer could not map token piece: \(token)."
+            case .unsupportedArtifact(let task, let family):
+                return "Expected an OpenAI Privacy Filter token-classification MLX artifact, got \(task.rawValue)/\(family.rawValue)."
+            case .missingTokenizer:
+                return "The Privacy Filter artifact has no tokenizer.json."
+            case .unreadableTokenizer:
+                return "The Privacy Filter tokenizer.json could not be read."
+            case .invalidTokenizer:
+                return "The Privacy Filter tokenizer.json is not a supported byte-level BPE tokenizer."
+            case .unknownToken(let index):
+                return "The Privacy Filter vocabulary has no entry for the token at index \(index)."
             }
         }
     }
@@ -103,13 +110,25 @@
         init(directoryURL: URL) throws {
             let tokenizerURL = directoryURL.appending(path: "tokenizer.json")
             guard FileManager.default.fileExists(atPath: tokenizerURL.path) else {
-                throw OpenMedPrivacyFilterError.missingTokenizer(tokenizerURL)
+                throw OpenMedPrivacyFilterError.missingTokenizer
             }
 
-            let data = try Data(contentsOf: tokenizerURL)
-            let tokenizer = try JSONDecoder().decode(TokenizerJSON.self, from: data)
+            // Foundation read and decode errors can carry the file path or
+            // content fragments, so only a controlled case leaves this init.
+            let data: Data
+            do {
+                data = try Data(contentsOf: tokenizerURL)
+            } catch {
+                throw OpenMedPrivacyFilterError.unreadableTokenizer
+            }
+            let tokenizer: TokenizerJSON
+            do {
+                tokenizer = try JSONDecoder().decode(TokenizerJSON.self, from: data)
+            } catch {
+                throw OpenMedPrivacyFilterError.invalidTokenizer
+            }
             guard tokenizer.model.type.lowercased() == "bpe" else {
-                throw OpenMedPrivacyFilterError.invalidTokenizer(tokenizerURL)
+                throw OpenMedPrivacyFilterError.invalidTokenizer
             }
 
             self.vocab = tokenizer.model.vocab
@@ -147,7 +166,8 @@
                 let byteLevelPiece = piece.utf8.map { byteEncoder[$0, default: ""] }.joined()
                 for token in bytePairEncode(byteLevelPiece) {
                     guard let id = vocab[token] else {
-                        throw OpenMedPrivacyFilterError.unknownToken(token)
+                        // Report the position only; the piece is input-derived.
+                        throw OpenMedPrivacyFilterError.unknownToken(index: tokenIDs.count)
                     }
                     tokenIDs.append(id)
                     if tokenIDs.count >= maxTokens {
@@ -646,7 +666,10 @@
             guard artifact.task == .tokenClassification,
                 artifact.family == .openaiPrivacyFilter
             else {
-                throw OpenMedPrivacyFilterError.unsupportedArtifact(artifact.manifest.family)
+                throw OpenMedPrivacyFilterError.unsupportedArtifact(
+                    task: artifact.task,
+                    family: artifact.family
+                )
             }
 
             self.artifact = artifact

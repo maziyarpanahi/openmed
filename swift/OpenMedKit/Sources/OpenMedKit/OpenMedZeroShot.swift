@@ -59,8 +59,11 @@
         }
     }
 
+    /// Zero-shot failures. Task and family payloads are normalized values from
+    /// OpenMedKit's closed MLX vocabularies, never raw manifest strings.
     public enum OpenMedZeroShotError: LocalizedError {
         case unsupportedArtifact(expectedTask: String, expectedFamily: String, actualTask: String, actualFamily: String)
+        /// Payload is a fixed `prompt_spec` field name from the artifact schema.
         case missingPromptSpec(String)
         case emptyInput
 
@@ -93,8 +96,8 @@
                 throw OpenMedZeroShotError.unsupportedArtifact(
                     expectedTask: OpenMedMLXTask.zeroShotNER.rawValue,
                     expectedFamily: OpenMedMLXFamily.glinerUniEncoderSpan.rawValue,
-                    actualTask: artifact.manifest.task,
-                    actualFamily: artifact.manifest.family
+                    actualTask: artifact.task.rawValue,
+                    actualFamily: artifact.family.rawValue
                 )
             }
 
@@ -219,8 +222,8 @@
                 throw OpenMedZeroShotError.unsupportedArtifact(
                     expectedTask: OpenMedMLXTask.zeroShotSequenceClassification.rawValue,
                     expectedFamily: OpenMedMLXFamily.gliclassUniEncoder.rawValue,
-                    actualTask: artifact.manifest.task,
-                    actualFamily: artifact.manifest.family
+                    actualTask: artifact.task.rawValue,
+                    actualFamily: artifact.family.rawValue
                 )
             }
 
@@ -318,8 +321,8 @@
                 throw OpenMedZeroShotError.unsupportedArtifact(
                     expectedTask: OpenMedMLXTask.zeroShotRelationExtraction.rawValue,
                     expectedFamily: OpenMedMLXFamily.glinerUniEncoderTokenRelex.rawValue,
-                    actualTask: artifact.manifest.task,
-                    actualFamily: artifact.manifest.family
+                    actualTask: artifact.task.rawValue,
+                    actualFamily: artifact.family.rawValue
                 )
             }
 

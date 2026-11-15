@@ -87,10 +87,11 @@ final class ShareRedactionTests: XCTestCase {
                 tokenizerFolderURL: local.appending(path: "tokenizer")
             )
         ) { error in
-            guard case ExtensionRedactionError.nonLocalAsset(let url) = error else {
+            guard case ExtensionRedactionError.nonLocalAsset(let role) = error else {
                 return XCTFail("Unexpected error: \(error)")
             }
-            XCTAssertEqual(url, remote)
+            XCTAssertEqual(role, .model)
+            XCTAssertFalse(String(reflecting: error).contains("example.invalid"))
         }
     }
 
