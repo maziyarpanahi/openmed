@@ -243,3 +243,95 @@ def test_span_attribute_guard_drops_unapproved_text_keys() -> None:
         "openmed.entity.count": 1,
         "openmed.entity.labels": ["NAME"],
     }
+
+
+# Synthetic MRN-like sentinel embedded in every rejected request id.
+REQUEST_ID_SENTINEL = "MRN-SYNTH-884213"
+
+
+def _rendered_span_text(spans: list[Any]) -> str:
+    lines = []
+    for span in spans:
+        lines.append(span.name)
+        lines.extend(f"{key}={value}" for key, value in span.attributes.items())
+        for event in span.events:
+            lines.append(event.name)
+            lines.extend(
+                f"{key}={value}" for key, value in (event.attributes or {}).items()
+            )
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize(
+    "inbound",
+    [
+        REQUEST_ID_SENTINEL + "-" + "x" * 8010,
+        REQUEST_ID_SENTINEL + "-" + "b" * 112,
+        (REQUEST_ID_SENTINEL + "-\u00e9").encode("utf-8"),
+        REQUEST_ID_SENTINEL + "\r\nX-Injected: 1",
+        "req-ok," + REQUEST_ID_SENTINEL,
+        "req-ok " + REQUEST_ID_SENTINEL,
+    ],
+    ids=["oversized", "one_over_limit", "non_ascii", "crlf", "comma", "space"],
+)
+def test_non_conforming_request_id_never_reaches_span_attributes(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+    inbound: str | bytes,
+) -> None:
+    def fake_analyze(text: str, **kwargs: Any) -> dict[str, Any]:
+        del text
+        return {"text": "", "entities": [], "model_name": kwargs["model_name"]}
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/analyze",
+            headers={REQUEST_ID_HEADER: inbound},
+            json={"text": "short synthetic note", "model_name": "test-model"},
+        )
+
+    assert response.status_code == 200
+    request_id = response.headers[REQUEST_ID_HEADER]
+    spans = list(span_exporter.get_finished_spans())
+    request_span = _span_by_name(spans, "openmed.service.request")
+    assert request_span.attributes["openmed.request_id"] == request_id
+    assert REQUEST_ID_SENTINEL not in request_id
+    assert REQUEST_ID_SENTINEL not in _rendered_span_text(spans)
+
+
+def test_conforming_request_id_is_preserved_on_request_span(
+    span_exporter: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inbound = "req-" + "a" * 124
+
+    def fake_analyze(text: str, **kwargs: Any) -> dict[str, Any]:
+        del text
+        return {"text": "", "entities": [], "model_name": kwargs["model_name"]}
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.post(
+            "/analyze",
+            headers={REQUEST_ID_HEADER: inbound},
+            json={"text": "short synthetic note", "model_name": "test-model"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers[REQUEST_ID_HEADER] == inbound
+    request_span = _span_by_name(
+        list(span_exporter.get_finished_spans()),
+        "openmed.service.request",
+    )
+    assert request_span.attributes["openmed.request_id"] == inbound

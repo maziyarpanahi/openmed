@@ -20,11 +20,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from .request_id import is_valid_request_id
+
 SERVICE_PRIVACY_GATEWAY_ENDPOINT_ENV_VAR = "OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT"
 DEFAULT_PRIVACY_GATEWAY_POLICY = "strict"
 DEFAULT_PRIVACY_GATEWAY_MIN_CONFIDENCE = 0.85
 _ZERO_HASH = "0" * 64
-_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
 _PLACEHOLDER_CANDIDATE_PATTERN = re.compile(r"<<OPENMED_PHI_[^<>\s]+>>")
 _PLACEHOLDER_FRAGMENT_PATTERN = re.compile(r"OPENMED[_-]PHI", re.IGNORECASE)
@@ -739,7 +740,7 @@ def coerce_request_id(request_id: Optional[str]) -> str:
     """Return a generated or validated request id for in-memory map lookup."""
     if request_id is None:
         return str(uuid.uuid4())
-    if not _REQUEST_ID_PATTERN.match(request_id):
+    if not is_valid_request_id(request_id):
         raise ValueError("request_id contains unsupported characters")
     return request_id
 
