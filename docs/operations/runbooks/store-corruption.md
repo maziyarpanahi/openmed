@@ -206,7 +206,11 @@ so the database file, its `-wal` file and its `-shm` file belong together.
 ### Detection signals
 
 - `SQLiteJourneyStore.open` returns `store_open_failed` or
-  `schema_unsupported`.
+  `schema_unsupported`, or an encryption code: `encryption_required` (no
+  encryption configuration was passed), `key_check_failed` (the key does not
+  match the store's key verifier), `store_encrypted` (a plaintext configuration
+  was passed for an encrypted store) or `store_migration_required` (a key was
+  passed for a plaintext store).
 - `integrity_check()` returns `sqlite_integrity_failed`,
   `foreign_key_integrity_failed`, `stored_payload_invalid` or
   `payload_hash_mismatch`.
@@ -221,22 +225,51 @@ so the database file, its `-wal` file and its `-shm` file belong together.
 
 1. Stop the process that writes the store. Do not delete the `-wal` file.
 2. Check a copy, never the original. Opening a store applies pending
-   migrations. This snippet copies the database through the SQLite backup API,
-   which includes committed write-ahead log content, and checks the copy. It
-   prints only states, codes and row counts:
+   migrations and needs the store's encryption configuration. This snippet
+   reads the Journey key from `JOURNEY_KEY` as `KEY_ID=FILE`, where the file
+   holds 32 raw bytes or 64 hexadecimal characters, the same form that
+   `openmed recovery activate --journey-key` takes. For a development store
+   created with `JourneyStoreEncryption.development_plaintext()`, set
+   `JOURNEY_PLAINTEXT_DEV=1` instead. The snippet copies the database through
+   the SQLite backup API, which includes committed write-ahead log content, and
+   checks the copy. It prints only states, codes and row counts:
 
 ```bash
 JOURNEY_SQLITE_PATH=<store-file> JOURNEY_CHECK_COPY=<quarantine-dir>/check.sqlite3 \
+JOURNEY_KEY=<key-id>=<key-file> \
   python - <<'PY'
 import os
 import sqlite3
 from pathlib import Path
 
-from openmed.structured.store import SQLiteJourneyStore
+from openmed.core.key_provider import EncryptionError, InMemoryKeyProvider, KeyState
+from openmed.structured.store import (
+    JOURNEY_KEY_PURPOSE,
+    JourneyStoreEncryption,
+    SQLiteJourneyStore,
+)
+
+
+def journey_encryption():
+    if os.environ.get("JOURNEY_PLAINTEXT_DEV") == "1":
+        return JourneyStoreEncryption.development_plaintext()
+    key_id, _, key_file = os.environ["JOURNEY_KEY"].partition("=")
+    raw = Path(key_file).read_bytes()
+    material = raw if len(raw) == 32 else bytes.fromhex(raw.decode("ascii"))
+    provider = InMemoryKeyProvider()
+    provider.add_key(
+        key_id, material, purpose=JOURNEY_KEY_PURPOSE, state=KeyState.ACTIVE
+    )
+    return JourneyStoreEncryption.encrypted(provider)
+
 
 os.umask(0o077)
 source = Path(os.environ["JOURNEY_SQLITE_PATH"]).resolve()
 copy = Path(os.environ["JOURNEY_CHECK_COPY"])
+try:
+    encryption = journey_encryption()
+except (KeyError, OSError, ValueError, EncryptionError):
+    raise SystemExit("key: unavailable or invalid") from None
 try:
     reader = sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True)
     writer = sqlite3.connect(copy)
@@ -246,7 +279,7 @@ try:
 except sqlite3.Error:
     print("copy: failed")
 else:
-    opened = SQLiteJourneyStore.open(copy)
+    opened = SQLiteJourneyStore.open(copy, encryption=encryption)
     if not opened.ok:
         print(f"open: {opened.state.value} {opened.code}")
     else:

@@ -595,22 +595,53 @@ def test_job_store_check_snippet_reports_fixed_outcomes_without_content(
 def test_sqlite_journey_check_snippet_works_on_a_copy_without_content(
     tmp_path: Path,
 ) -> None:
-    from openmed.structured.store import SQLiteJourneyStore
+    from openmed.core.key_provider import InMemoryKeyProvider, KeyState
+    from openmed.structured.store import (
+        JOURNEY_KEY_PURPOSE,
+        JourneyStoreEncryption,
+        SQLiteJourneyStore,
+    )
 
     code = _heredoc_python(
         _block_containing(RUNBOOK_DIR / "store-corruption.md", "reader.backup(")
     )
+    # Local Journey stores require an explicit encryption configuration.
+    key = bytes(range(32))
+    key_file = tmp_path / "journey.key"
+    key_file.write_text(key.hex(), encoding="ascii")
+    provider = InMemoryKeyProvider()
+    provider.add_key(
+        "journey-test", key, purpose=JOURNEY_KEY_PURPOSE, state=KeyState.ACTIVE
+    )
     source = tmp_path / "journey.sqlite3"
-    SQLiteJourneyStore(source).close()
+    SQLiteJourneyStore(
+        source, encryption=JourneyStoreEncryption.encrypted(provider)
+    ).close()
     before = source.read_bytes()
     env = {
         "JOURNEY_SQLITE_PATH": str(source),
         "JOURNEY_CHECK_COPY": str(tmp_path / "check.sqlite3"),
+        "JOURNEY_KEY": f"journey-test={key_file}",
     }
 
     healthy = _run_snippet(code, env)
     assert healthy.returncode == 0, healthy.stderr
     assert healthy.stdout.splitlines()[0] == "integrity: success"
+    assert source.read_bytes() == before
+
+    wrong_key = tmp_path / "wrong.key"
+    wrong_key.write_bytes(bytes(32))
+    mismatched = _run_snippet(
+        code,
+        {
+            **env,
+            "JOURNEY_CHECK_COPY": str(tmp_path / "check-wrong-key.sqlite3"),
+            "JOURNEY_KEY": f"journey-test={wrong_key}",
+        },
+    )
+    assert mismatched.returncode == 0, mismatched.stderr
+    assert mismatched.stdout.strip() == "open: failure key_check_failed"
+    assert key.hex() not in mismatched.stdout + mismatched.stderr
     assert source.read_bytes() == before
 
     sentinel = b"SENTINEL-PATIENT-NAME-9031"
