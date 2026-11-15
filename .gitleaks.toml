@@ -32,6 +32,78 @@ regexTarget = "line"
 paths = ['''^docs/interop/identity-resolution\.md$''']
 regexes = ['''^\s*(selected_)?canonical_key="patient_0123456789abcdef",\s*$''']
 
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic sentinels in the security profile redaction test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/service/test_security_profile\.py$''']
+regexes = ['''^\s*"(secret|db_password)": "(jwk-secret-sentinel-d54|dbpass-sentinel-j90)",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic sentinels in the deployment posture test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/deploy/test_deploy_posture\.py$''']
+regexes = ['''^\s*"(key|api_key)": "sentinel-(secret|api)-key-4471",\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic sentinel key in the diagnostic state fixture"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/fixtures/diagnostic_state\.py$''']
+regexes = ['''^\s*SENTINEL_KEY = "sk-live-SENTINEL-KEY-9000"\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic query sentinel in the egress policy test"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/service/test_egress_policy\.py$''']
+regexes = ['''^\s*SENTINEL_QUERY = "token=synthetic-secret-91f2"\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic bundle key in the portable bundle cache and managed import vectors"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/fixtures/(bundle_cache|managed_import)/vectors\.json$''']
+regexes = ['''^\s*"bundle_key": "b-0892313f735f0f3038b881cade3a0677",?\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Byte-sequence test key in the portable policy parity vectors"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/fixtures/parity/portable_policy_vectors\.json$''']
+regexes = ['''^\s*"synthetic_test_key_long": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",?\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Documented example Idempotency-Key UUID for bulk starts"
+condition = "AND"
+regexTarget = "line"
+paths = ['''(docs/interop/fhir-bulk-data\.md|openmed/service/idempotency\.py|tests/unit/service/test_start_idempotency\.py)$''']
+regexes = ['''^\s*(-H "Idempotency-Key: 8e03978e-40d5-43e8-bc93-6894a57f9324" \\|``Idempotency-Key: "8e03978e-40d5-43e8-bc93-6894a57f9324"``\.|uuid_key = "8e03978e-40d5-43e8-bc93-6894a57f9324")\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Credential watcher argument names, not credential values"
+condition = "AND"
+regexTarget = "line"
+paths = ['''openmed/service/mtls\.py$''']
+regexes = ['''^\s*self\.credentials, interval_seconds=interval\s*$''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Ledger key variable name in the webhook replay test, not a key value"
+condition = "AND"
+regexTarget = "line"
+paths = ['''tests/unit/service/test_webhook_replay\.py$''']
+regexes = ['''^\s*tmp_path / "l\.json", integrity_key=LEDGER_KEY, delivery_ttl_seconds=(0|60)\s*$''']
+
 [extend]
 useDefault = true
 
