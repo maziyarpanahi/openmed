@@ -1,0 +1,25 @@
+{
+  "body": "SYNTHETIC-BODY-SENTINEL",
+  "extensions": {},
+  "note_id": "note-0001",
+  "provenance": {
+    "author": "SYNTHETIC-AUTHOR-SENTINEL"
+  },
+  "schema_version": "1.1.0",
+  "sections": [
+    {
+      "kind": "free_text",
+      "offset": 0,
+      "title": "SYNTHETIC-SECTION-SENTINEL-A"
+    },
+    {
+      "kind": "free_text",
+      "offset": 24,
+      "title": "SYNTHETIC-SECTION-SENTINEL-B"
+    }
+  ],
+  "tags": [
+    "SYNTHETIC-TAG-SENTINEL-1",
+    "SYNTHETIC-TAG-SENTINEL-2"
+  ]
+}
