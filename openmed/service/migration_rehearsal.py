@@ -470,7 +470,9 @@ class _DoubleCursor:
         head = " ".join(sql.split()[:3]).upper()
         self.description = None
         self._rows = []
-        if head.startswith(("CREATE SCHEMA", "SET ", "LOCK TABLE", "DROP SCHEMA")):
+        if head.startswith(
+            ("CREATE SCHEMA", "SET ", "LOCK TABLE", "DROP SCHEMA", "RESET ")
+        ):
             return
         if head.startswith("SELECT PG_ADVISORY_XACT_LOCK"):
             self.description = [("pg_advisory_xact_lock",)]
@@ -518,12 +520,21 @@ class _DoubleCursor:
         self._rows = []
 
 
+def _set_config(name: Any, value: Any, is_local: Any) -> Any:
+    del name, is_local
+    return value
+
+
 class _DoubleConnection:
     def __init__(self, path: Path) -> None:
         self._sqlite = sqlite3.connect(
             path, isolation_level=None, check_same_thread=False, timeout=5.0
         )
         self._sqlite.execute("PRAGMA foreign_keys = ON")
+        # The engine arms transaction-local timeouts through set_config(); the
+        # double returns the new value like PostgreSQL does and leaves deadline
+        # enforcement to the engine.
+        self._sqlite.create_function("set_config", 3, _set_config, deterministic=True)
         self._closed = False
         self.autocommit = False
 
@@ -558,8 +569,10 @@ class SQLitePostgresDouble:
     Each double is one emulated PostgreSQL schema stored in a SQLite file.
     It emulates the control statements the Journey PostgreSQL engine issues
     (``CREATE SCHEMA``, ``SET [LOCAL] search_path``, ``pg_advisory_xact_lock``,
-    ``LOCK TABLE``, explicit ``BEGIN``/``COMMIT``/``ROLLBACK``) and the
-    ``information_schema.tables`` listing, ignores schema qualification, and
+    ``LOCK TABLE``, explicit ``BEGIN``/``COMMIT``/``ROLLBACK``, the
+    ``set_config`` calls that arm statement and lock timeouts, and the
+    ``RESET ALL`` session reset) and the ``information_schema.tables``
+    listing, ignores schema qualification, and
     runs the engine's DDL and DML on SQLite.  Closing a connection mid
     transaction aborts it, as a server does for a dropped session.  It proves
     the engine's control flow (history checks, drift and version refusal,
