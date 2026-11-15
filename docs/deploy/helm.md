@@ -85,6 +85,15 @@ pod, and sets `OPENMED_JOURNEY_POSTGRES_SSLROOTCERT` (plus
 chains to the image trust store. Server-side `pg_hba.conf` enforcement, role
 management, and encryption at rest remain operator responsibilities.
 
+The chart mounts the `dsn` key read-only at
+`/var/run/secrets/openmed/journey-database/dsn` in the migration Job, worker,
+and API pods and sets `OPENMED_JOURNEY_POSTGRES_DSN_FILE`, so the DSN never
+appears in a container environment. Kubernetes presents the file as root-owned
+`0440` with the pod `fsGroup` (`65532`), which the service accepts under the
+`prod` profile. Set `journey.database.source=env` only for images that predate
+`_FILE` support; it restores the `secretKeyRef` mapping of
+`OPENMED_JOURNEY_POSTGRES_DSN`.
+
 For an external database, keep `databasePodSelector` empty and supply a
 reviewed `journey.networkPolicy.additionalEgress` IP block. Do not disable the
 whole policy merely to make an unknown destination reachable. DNS is the only
@@ -134,8 +143,33 @@ allowlist.
 
 ## Secrets
 
-Do not put tokens or other secrets in `values.yaml`. Reference an existing
-Kubernetes Secret through `extraEnv`:
+Do not put tokens or other secrets in `values.yaml`. Mount OpenMed
+credentials from an existing Kubernetes Secret with `secretFiles`; each entry
+mounts one key read-only and sets the setting's `_FILE` companion, so the value
+stays out of the container environment and `kubectl describe`:
+
+```yaml
+secretFiles:
+  - env: OPENMED_SERVICE_AUTH_API_KEYS
+    secretName: openmed-service-auth
+    secretKey: api-keys.json
+  - env: OPENMED_SERVICE_OTLP_HEADERS
+    secretName: openmed-otlp
+    secretKey: headers
+```
+
+This renders `OPENMED_SERVICE_AUTH_API_KEYS_FILE` pointing at
+`/var/run/secrets/openmed/openmed-service-auth-api-keys/value`. Supported
+settings are `OPENMED_SERVICE_AUTH_API_KEYS`, `OPENMED_SERVICE_AUTH_JWKS`,
+`OPENMED_SERVICE_OTLP_HEADERS`, and `OPENMED_OPENHIM_PASSWORD`; do not also set
+the inline variable. The files are root-owned `0440`, so outside the Journey
+profile set `podSecurityContext.fsGroup` to the container's group unless the
+container runs as root. See
+[mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files)
+for the file rules and error codes.
+
+Third-party variables without a `_FILE` form can still reference a Secret
+through `extraEnv`:
 
 ```yaml
 extraEnv:
@@ -193,7 +227,9 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `config.throttle.trustedProxies` | `[]` | Proxy addresses or CIDRs joined into `OPENMED_SERVICE_TRUSTED_PROXIES`; empty ignores `X-Forwarded-For`. |
 | `config.throttle.trustedProxyHops` | `1` | `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`; trusted proxy tiers in front of the pod. |
 | `config.throttle.maxTrackedKeys` | `10000` | `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`; per-limiter client identity bound. |
-| `extraEnv` | `[]` | Extra container env entries, typically secret references. |
+| `extraEnv` | `[]` | Extra container env entries, such as third-party secret references. |
+| `secretFiles` | `[]` | OpenMed credential settings mounted from Secret keys as `<env>_FILE`. |
+| `secretFilesMountPath` | `/var/run/secrets/openmed` | Parent directory for `secretFiles` mounts. |
 | `service.type` | `ClusterIP` | Kubernetes Service type. |
 | `service.port` | `8080` | Service port. |
 | `service.targetPort` | `8080` | Container port. |
@@ -234,6 +270,8 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `journey.database.tls.clientCertKey` | `""` | Optional client certificate key; exported as `OPENMED_JOURNEY_POSTGRES_SSLCERT`. |
 | `journey.database.tls.clientKeyKey` | `""` | Optional client key; exported as `OPENMED_JOURNEY_POSTGRES_SSLKEY`. |
 | `journey.database.tls.mountPath` | `/etc/openmed/postgres-tls` | Read-only mount path for the TLS Secret. |
+| `journey.database.source` | `file` | `file` mounts the DSN and sets `OPENMED_JOURNEY_POSTGRES_DSN_FILE`; `env` uses a `secretKeyRef` value. |
+| `journey.database.mountPath` | `/var/run/secrets/openmed/journey-database` | Read-only DSN Secret mount for `source: file`. |
 | `journey.artifacts.existingClaim` | `""` | Existing artifact PVC; empty creates one. |
 | `journey.artifacts.size` | `20Gi` | Requested content-addressed artifact capacity. |
 | `journey.worker.replicas` | `1` | Operational worker replicas. |

@@ -27,6 +27,7 @@ Set the following variables on the OpenMed service:
 | `OPENMED_OPENHIM_CORE_URL` | when enabled | none | OpenHIM management API URL, including its API port, such as `https://openhim-core:8080`. |
 | `OPENMED_OPENHIM_USERNAME` | when enabled | none | OpenHIM administrative API username. |
 | `OPENMED_OPENHIM_PASSWORD` | when enabled | none | OpenHIM administrative API password. Supply it through a secret store, not the JSON config. |
+| `OPENMED_OPENHIM_PASSWORD_FILE` | instead of the password | none | Mounted secret file holding the password. Mutually exclusive with `OPENMED_OPENHIM_PASSWORD`; see [mounted secret files](../security/key-management.md#service-credentials-from-mounted-secret-files). |
 | `OPENMED_OPENHIM_AUTH_MODE` | no | `basic` | Management API authentication: `basic`, or the deprecated OpenHIM `token` handshake for older deployments. |
 | `OPENMED_OPENHIM_POLICY` | no | `hipaa_safe_harbor` | Bundled policy applied to mediator payloads. Validated once at startup. |
 | `OPENMED_OPENHIM_METHOD` | no | `replace` | De-identification method applied to mediator payloads. Validated once at startup. |
@@ -56,7 +57,7 @@ docker compose -f examples/openhim-mediator/docker-compose.yml \
   up --build openmed-mediator
 ```
 
-The compose service mounts `mediator-config.json` read-only at `/etc/openmed/mediator-config.json`. If OpenHIM resolves the service under a different hostname, update `host` in both the channel route and endpoint before starting the mediator.
+The compose file passes the host `OPENMED_OPENHIM_PASSWORD` to the container as an owner-only Compose secret at `/run/secrets/openmed_openhim_password` and sets `OPENMED_OPENHIM_PASSWORD_FILE`; the container environment never carries the password. The compose service mounts `mediator-config.json` read-only at `/etc/openmed/mediator-config.json`. If OpenHIM resolves the service under a different hostname, update `host` in both the channel route and endpoint before starting the mediator.
 
 After registration, open the mediator in the OpenHIM Console and install the **OpenMed De-identification** default channel. The channel matches `POST /openmed/deidentify` on the OpenHIM router and forwards it to the mediator's `/openhim/deidentify` route.
 

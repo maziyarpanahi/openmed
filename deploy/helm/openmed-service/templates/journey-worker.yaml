@@ -42,11 +42,7 @@ spec:
             - --interval-seconds
             - {{ .Values.journey.worker.intervalSeconds | quote }}
           env:
-            - name: OPENMED_JOURNEY_POSTGRES_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.journey.database.secretName | quote }}
-                  key: {{ .Values.journey.database.secretKey | quote }}
+            {{- include "openmed-service.journeyDatabaseEnv" . | nindent 12 }}
             {{- if .Values.journey.database.tls.secretName }}
             {{- include "openmed-service.journeyDatabaseTLSEnv" . | nindent 12 }}
             {{- end }}
@@ -80,6 +76,9 @@ spec:
               mountPath: {{ .Values.journey.artifacts.mountPath | quote }}
             - name: tmp
               mountPath: /tmp
+            {{- with (include "openmed-service.journeyDatabaseVolumeMount" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- if .Values.journey.database.tls.secretName }}
             {{- include "openmed-service.journeyDatabaseTLSVolumeMount" . | nindent 12 }}
             {{- end }}
@@ -90,6 +89,9 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        {{- with (include "openmed-service.journeyDatabaseVolume" .) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if .Values.journey.database.tls.secretName }}
         {{- include "openmed-service.journeyDatabaseTLSVolume" . | nindent 8 }}
         {{- end }}
