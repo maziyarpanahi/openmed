@@ -8,6 +8,10 @@ import type {
 } from "./types";
 
 const TRANSFORMERS_JS_MODULE = "@huggingface/transformers";
+
+// Transformers.js environment settings are shared by every pipeline created
+// from the same runtime, so initialization must be serialized per instance.
+const runtimeInitializationQueues = new WeakMap<RawTransformersRuntime, Promise<void>>();
 const ONNX_MODEL_FILENAMES = {
   int8: "model_int8",
   fp32: "model",
@@ -38,15 +42,8 @@ export async function loadTokenClassificationPipeline(
   const localReference = isLocalModelReference(model);
   const localFilesOnly = options.localFilesOnly ?? localReference;
   const allowRemoteModels = options.allowRemoteModels ?? !localFilesOnly;
-  const previousAllowRemote = runtime.env?.allowRemoteModels;
-  const previousAllowLocal = runtime.env?.allowLocalModels;
 
-  if (runtime.env) {
-    runtime.env.allowLocalModels = true;
-    runtime.env.allowRemoteModels = allowRemoteModels;
-  }
-
-  try {
+  return withRuntimeEnvironment(runtime, allowRemoteModels, async () => {
     const pipelineOptions: Record<string, unknown> = {
       ...(options.revision === undefined ? {} : { revision: options.revision }),
       ...(options.quantized === undefined ? {} : { quantized: options.quantized }),
@@ -79,18 +76,55 @@ export async function loadTokenClassificationPipeline(
           : value;
       },
     }) as TokenClassificationPipeline;
+  });
+}
+
+async function withRuntimeEnvironment<T>(
+  runtime: RawTransformersRuntime,
+  allowRemoteModels: boolean,
+  initialize: () => Promise<T>,
+): Promise<T> {
+  if (!runtime.env) {
+    return initialize();
+  }
+
+  const previous = runtimeInitializationQueues.get(runtime) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  runtimeInitializationQueues.set(runtime, current);
+
+  await previous;
+  const hadAllowRemote = Object.prototype.hasOwnProperty.call(
+    runtime.env,
+    "allowRemoteModels",
+  );
+  const previousAllowRemote = runtime.env.allowRemoteModels;
+  const hadAllowLocal = Object.prototype.hasOwnProperty.call(
+    runtime.env,
+    "allowLocalModels",
+  );
+  const previousAllowLocal = runtime.env.allowLocalModels;
+
+  try {
+    runtime.env.allowLocalModels = true;
+    runtime.env.allowRemoteModels = allowRemoteModels;
+    return await initialize();
   } finally {
-    if (runtime.env) {
-      if (previousAllowRemote === undefined) {
-        delete runtime.env.allowRemoteModels;
-      } else {
-        runtime.env.allowRemoteModels = previousAllowRemote;
-      }
-      if (previousAllowLocal === undefined) {
-        delete runtime.env.allowLocalModels;
-      } else {
-        runtime.env.allowLocalModels = previousAllowLocal;
-      }
+    if (hadAllowRemote) {
+      runtime.env.allowRemoteModels = previousAllowRemote;
+    } else {
+      delete runtime.env.allowRemoteModels;
+    }
+    if (hadAllowLocal) {
+      runtime.env.allowLocalModels = previousAllowLocal;
+    } else {
+      delete runtime.env.allowLocalModels;
+    }
+    release();
+    if (runtimeInitializationQueues.get(runtime) === current) {
+      runtimeInitializationQueues.delete(runtime);
     }
   }
 }
