@@ -125,8 +125,9 @@ declares them in `android/openmedkit/build.gradle.kts`.
 | `js/openmedkit-flutter` | `ffi` | `>=1.1.2 <3.0.0` | `BSD-3-Clause` | pub cache `LICENSE` (2.2.0) | Flutter apps |
 | `js/openmedkit-flutter` | `onnxruntime-android` (Gradle), `onnxruntime-c` (CocoaPods) | 1.20.0 | To confirm | Not in the local caches; the ONNX Runtime 1.25.1 POM declares MIT | Flutter Android, iOS and macOS apps |
 | `js/openmedkit-tauri` | `@tauri-apps/api` | Peer `>=2.0.0` (lockfile 2.11.1) | `Apache-2.0 OR MIT` | `js/openmedkit-tauri/package-lock.json` | The Tauri front end |
-| `js/openmedkit-tauri` | `tauri`, `tauri-plugin-shell` | `2` (locked 2.11.5, 2.3.5) | `Apache-2.0 OR MIT` | cargo registry manifests | The trusted Rust host |
+| `js/openmedkit-tauri` | `tauri` | `2` (locked 2.11.5) | `Apache-2.0 OR MIT` | cargo registry manifest | The trusted Rust host |
 | `js/openmedkit-tauri` | `serde`, `serde_json`, `tokio` | `1` (locked 1.0.229, 1.0.150, 1.53.0) | `MIT OR Apache-2.0`, `MIT OR Apache-2.0`, `MIT` | cargo registry manifests (serde_json read from cached 1.0.132) | The trusted Rust host |
+| `js/openmedkit-tauri` | `sha2` | `0.10` (locked 0.10.9) | `MIT OR Apache-2.0` | cargo registry manifest | The trusted Rust host, which hashes the sidecar and model files against the pinned manifest |
 | `js/openmedkit-tauri` | PyInstaller, used to freeze the sidecar in the Tauri example | Not pinned | To confirm | Not in the local caches | The frozen sidecar binary embeds its bootloader; review before distributing |
 
 The Tauri sidecar runs the Python OpenMed runtime with the `hf` extra, so the
@@ -255,7 +256,7 @@ After they exist, inference makes no network request.
 | Electron | The Transformers.js files above in a local model directory; inference uses the `onnxruntime-node` native binary | The utility process sets `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` and blocks network APIs. See [Electron In-Process De-identification](../runtimes/electron.md). |
 | React Native | iOS: the MLX artifact (default backend), or a Core ML model with `id2LabelPath` and `tokenizerFolderPath`. Android: `model.onnx`, `tokenizer.json` and `id2label.json` or `id2LabelPath`. | Pass `tokenizerFolderPath` for Core ML, otherwise the bridge's default allows a tokenizer fetch. |
 | Flutter | `id2label.json`, `tokenizer.json`, and one of `model_int8.onnx`, `model.onnx` or `model_fp16.onnx`; an app-supplied tokenizer adapter; ONNX Runtime 1.20.0 native libraries | The plugin never downloads models. |
-| Tauri | The frozen sidecar binary for each target under `src-tauri/binaries/`, and a pre-provisioned Hugging Face model directory pinned by the Rust host or `OPENMED_SIDECAR_MODEL` | The sidecar always enables local-only mode; a missing model fails closed. |
+| Tauri | The frozen sidecar binary for each target under `src-tauri/binaries/`, a pre-provisioned model directory, and the versioned artifact manifest that pins both by SHA-256 (`js/openmedkit-tauri/src-tauri/sidecar_manifest.rs`) | The host verifies the manifest, the executable and every model file before each start, then passes the verified directory in `OPENMED_SIDECAR_MODEL` with offline settings; a missing or changed artifact fails closed. See `examples/tauri/redact-app.md`. |
 
 ## Related pages
 
