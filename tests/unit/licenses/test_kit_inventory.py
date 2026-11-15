@@ -931,6 +931,39 @@ def test_unresolvable_gradle_declarations_fail_closed(tmp_path: Path) -> None:
         assert str(root) not in str(error.value)
 
 
+def test_only_the_r8_consumer_may_consume_first_party_aar_build_outputs(
+    tmp_path: Path,
+) -> None:
+    (manifest,) = kit.FIRST_PARTY_LOCAL_BINARY_MANIFESTS
+    module = PurePosixPath(manifest).parent.name
+    for label, declaration, accepted in [
+        ("build-output", '"aarImplementation"(files(aar).builtBy(makeAar))', True),
+        ("quoted-path", 'implementation(files("libs/vendor.aar"))', False),
+        ("file-tree", "implementation(fileTree(aarDirectory))", False),
+    ]:
+        root = tmp_path / label
+        inventory_path = build_repo(root)
+        settings = root / "android/settings.gradle.kts"
+        settings.write_text(
+            settings.read_text(encoding="utf-8") + f'include(":{module}")\n',
+            encoding="utf-8",
+        )
+        write(
+            root,
+            manifest,
+            'plugins {\n    id("com.android.application")\n}\n\n'
+            f"dependencies {{\n    {declaration}\n}}\n",
+        )
+
+        if accepted:
+            audit = kit.audit_kits(root, inventory_path, SYNTHETIC_MANIFESTS)
+            assert not audit.failures, label
+            continue
+        with pytest.raises(kit.KitManifestError, match="local binary") as error:
+            kit.audit_kits(root, inventory_path, SYNTHETIC_MANIFESTS)
+        assert error.value.manifest == manifest, label
+
+
 def test_review_table_rejects_duplicate_and_unknown_rows(tmp_path: Path) -> None:
     header = "| Ecosystem | Package | License expression |\n| --- | --- | --- |\n"
     for label, rows, reason in [

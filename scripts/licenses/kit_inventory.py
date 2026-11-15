@@ -203,6 +203,18 @@ SCOPED_KIT_EXCEPTIONS: tuple[KitLicenseException, ...] = (
 )
 
 
+# The R8-minified consumer app (#5485) verifies the OpenMedKit release AAR
+# itself, so it consumes that first-party AAR (built from this checkout or
+# passed by path) and a copy without one keep rule as ``files(...)`` of build
+# outputs.  Only there, and only ``files(...)`` of build variables, is a local
+# binary accepted: a quoted path or ``fileTree(...)`` can name a vendored
+# binary and still fails, as does a local binary in any other module.  Every
+# third-party runtime dependency of that app comes from the reviewed catalog.
+FIRST_PARTY_LOCAL_BINARY_MANIFESTS: frozenset[str] = frozenset(
+    {"android/consumer-r8-smoke/build.gradle.kts"}
+)
+
+
 @dataclass(frozen=True)
 class KitRecord:
     """A dependency occurrence plus its fail-closed license decision."""
@@ -591,7 +603,7 @@ _GRADLE_USE_MODULE_RE = re.compile(
 _GRADLE_INCLUDE_RE = re.compile(
     r"\binclude(?![A-Za-z0-9_])\s*\(?(?P<arguments>[^)\n]*)\)?"
 )
-_GRADLE_LOCAL_BINARY_RE = re.compile(r"\b(?:files|fileTree)\s*\(")
+_GRADLE_LOCAL_BINARY_RE = re.compile(r"\b(?P<function>files|fileTree)\s*\(")
 _GRADLE_DEVELOPMENT_CONFIGS = frozenset(
     {"annotationprocessor", "classpath", "detektplugins", "lintchecks", "lintpublish"}
 )
@@ -680,6 +692,23 @@ def _gradle_configuration(text: str, position: int) -> str:
     return match["config"] if match else ""
 
 
+def _check_local_binaries(body: str, manifest: str) -> None:
+    """Fail closed on local binary dependencies outside the first-party case."""
+
+    for match in _GRADLE_LOCAL_BINARY_RE.finditer(_blank_strings(body)):
+        open_index = match.end() - 1
+        arguments = body[open_index + 1 : _balanced_end(body, open_index, "(", ")")]
+        first_party = (
+            manifest in FIRST_PARTY_LOCAL_BINARY_MANIFESTS
+            and match["function"] == "files"
+            and next(_string_literals(arguments), None) is None
+        )
+        if not first_party:
+            raise KitManifestError(
+                "Gradle module declares a local binary dependency", manifest
+            )
+
+
 def _add_plugin(discovery: KitDiscovery, plugin_id: str, manifest: str) -> None:
     # Unqualified ids are Gradle core plugins or legacy aliases whose artifact
     # is reviewed through its ``classpath`` coordinate.
@@ -718,10 +747,7 @@ def _parse_gradle_build(
         discovery.add("gradle", coordinate, Usage.DEVELOPMENT, manifest)
 
     for _start, body in _blocks(text, "dependencies"):
-        if _GRADLE_LOCAL_BINARY_RE.search(_blank_strings(body)):
-            raise KitManifestError(
-                "Gradle module declares a local binary dependency", manifest
-            )
+        _check_local_binaries(body, manifest)
         for start, _end, value in _string_literals(body):
             if not _GRADLE_COORDINATE_LIKE_RE.fullmatch(value.strip()):
                 continue

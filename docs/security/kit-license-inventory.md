@@ -88,6 +88,15 @@ The gate fails, naming only the manifest, ecosystem and package, when:
   a Gradle coordinate built from variables in its group or artifact, or a
   `files(...)` or `fileTree(...)` binary dependency.
 
+The one local binary the gate accepts is first-party. The R8-minified consumer
+app in `android/consumer-r8-smoke` verifies the OpenMedKit release AAR itself,
+so it consumes that AAR, built from this checkout or passed by path, and a copy
+without one keep rule as `files(...)` of build outputs. Only that build file,
+listed in `FIRST_PARTY_LOCAL_BINARY_MANIFESTS`, and only `files(...)` of build
+variables qualify: a quoted path or `fileTree(...)` still fails there, as does
+a local binary in any other module. Every third-party runtime dependency of
+that app comes from the reviewed version catalog.
+
 Reports contain ecosystems, package names, repository-relative manifest paths,
 usage classes and decision codes. They never contain license text, versions,
 URLs or local paths.
