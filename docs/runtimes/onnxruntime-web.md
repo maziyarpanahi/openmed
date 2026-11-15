@@ -105,3 +105,8 @@ COOP/COEP. See [Content-Security-Policy profile](../../js/openmedkit-web/README.
 for the full header set and what each directive is for. Removing
 `'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
 rather than falling back silently.
+
+
+The [OpenMedKit portable-kit threat model](../security/openmedkit-threat-model.md)
+lists the browser, Electron and Tauri trust boundaries, the controls this loader
+provides and the gaps that are still open.

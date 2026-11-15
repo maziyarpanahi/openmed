@@ -907,6 +907,7 @@ classification:
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/threat-model-multimodal-ambient.md
+    - security/openmedkit-threat-model.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
     - security/policy-migrations.md

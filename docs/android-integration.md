@@ -475,3 +475,6 @@ KVM-accelerated `ubuntu-latest` runners:
   artifacts.
 - [Android Span Parity](android-parity.md) defines cross-platform offset and
   label guarantees.
+- [OpenMedKit portable-kit threat model](security/openmedkit-threat-model.md)
+  maps download, cache, logging and key-handling threats to controls and
+  owning issues.
