@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlinx.binary.compatibility.validator) apply false
 }
 
 // Uncompressed native libraries must start on a 16 KB boundary inside an APK

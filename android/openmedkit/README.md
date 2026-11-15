@@ -20,6 +20,11 @@ repository and dependency declarations.
   libraries. See the
   [emulator lane guide](../../docs/android-integration.md#emulator-lane).
 
+- `api/openmedkit.api` is the committed public API baseline. CI runs
+  `./gradlew :openmedkit:apiCheck`; after an intended API change run
+  `./gradlew :openmedkit:apiDump` and see the
+  [baseline policy](../../docs/swift-kotlin-parity.md#public-api-baselines).
+
 ## Platform Baseline
 
 The module sets `minSdk` to 26. Android 8.0 is a practical baseline for an

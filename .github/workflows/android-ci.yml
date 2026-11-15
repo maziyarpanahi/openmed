@@ -12,6 +12,7 @@ on:
       - 'scripts/android/check_elf_page_alignment.py'
       - 'scripts/android/generate_emulator_lane_fixture.py'
       - 'scripts/android/run_emulator_lane.sh'
+      - 'scripts/release/check_native_api_migration.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
@@ -32,6 +33,7 @@ on:
       - 'scripts/android/check_elf_page_alignment.py'
       - 'scripts/android/generate_emulator_lane_fixture.py'
       - 'scripts/android/run_emulator_lane.sh'
+      - 'scripts/release/check_native_api_migration.py'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contracts_v1.json'
       - 'tests/fixtures/parity/kit_parity_vectors.json'
@@ -51,6 +53,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  api-migration-policy:
+    name: Require migration notes for Kotlin API breaks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+    # A pull_request checkout is the merge commit; HEAD^1 is the base tip.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: 2
+
+    - name: Compare Kotlin API baseline with docs/migration
+      run: >-
+        python3 scripts/release/check_native_api_migration.py
+        --platform kotlin --base HEAD^1 --head HEAD
+
   build-and-test:
     name: Build & Test Android OpenMedKit
     runs-on: ubuntu-latest
@@ -74,6 +92,11 @@ jobs:
     - name: Assemble OpenMedKit debug library
       working-directory: android
       run: ./gradlew :openmedkit:assembleDebug --stacktrace
+
+    # Fails on any difference from api/openmedkit.api; run `apiDump` to refresh.
+    - name: Check OpenMedKit public API baseline
+      working-directory: android
+      run: ./gradlew :openmedkit:apiCheck --stacktrace
 
     - name: Run Android contract parity suites
       working-directory: android
