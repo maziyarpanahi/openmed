@@ -749,7 +749,11 @@ def test_rest_refuses_incompatible_peers_before_processing(service_env: Path) ->
     assert probe.status_code == 200
     assert descriptor.status_code == 200
     assert accepted.status_code == 202
-    assert accepted.json()["compatibility"]["contract_generation"] == 1
+    # The work envelope is stored with the job, never returned to callers.
+    assert "compatibility" not in accepted.json()
+    stored = json.loads(service_env.read_text(encoding="utf-8"))
+    record = stored["jobs"][accepted.json()["id"]]
+    assert record["compatibility"]["contract_generation"] == 1
 
 
 def test_grpc_refuses_incompatible_peers_before_loading(

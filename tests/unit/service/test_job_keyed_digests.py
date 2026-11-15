@@ -146,6 +146,21 @@ _CANDIDATE_SHA256 = {
 }
 
 
+def _scannable_store_text(path: Path) -> str:
+    """Return the stored job document without work-envelope model references.
+
+    The mixed-version work envelope pins a job to the served model generation
+    with a digest of the public, served model identifier. It is never derived
+    from request text, so it is the one digest these guards do not inspect.
+    """
+    document = json.loads(path.read_text(encoding="utf-8"))
+    for record in document.get("jobs", {}).values():
+        envelope = record.get("compatibility")
+        if isinstance(envelope, dict):
+            envelope.pop("model_generation", None)
+    return json.dumps(document, indent=2, sort_keys=True)
+
+
 def _enumerated(rendered: str) -> set[str]:
     """Return plain SHA-256 digests of dictionary values found in *rendered*."""
     return set(_HEX64.findall(rendered)) & _CANDIDATE_SHA256
@@ -308,7 +323,7 @@ def _run_api_job(
         )
         done = client.get(path, headers=headers).json()
     assert len(callbacks) == 1
-    return done, callbacks[0], store_path.read_text(encoding="utf-8")
+    return done, callbacks[0], _scannable_store_text(store_path)
 
 
 # --- policy ----------------------------------------------------------------
