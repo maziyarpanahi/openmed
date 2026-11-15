@@ -12,9 +12,10 @@ version:
     Run the migration again; nothing changes.
 ``interrupted``
     Kill the migrating process mid-migration (a child process dies inside
-    the SQLite transaction or at the atomic publish), drop the PostgreSQL
-    connection mid-transaction, or inject a fault mid-write; the schema stays
-    at the source version, readiness stays false, and a retry completes.
+    the SQLite transaction, at the atomic publish, or at a journaled model
+    activation boundary), drop the PostgreSQL connection mid-transaction, or
+    inject a fault mid-write; the schema stays at the source version,
+    readiness stays false, and a retry completes.
 ``drift``
     Tamper with the recorded migration history; the engine refuses with its
     controlled code before mutating anything.
@@ -89,12 +90,15 @@ from openmed.service.recovery import (
 )
 from openmed.service.schema_registry import (
     AUDIT_CHAIN,
+    AUDIT_CONTINUITY,
     JOB_STORE,
     JOURNEY_ARTIFACT_MARKER,
     JOURNEY_POSTGRES,
     JOURNEY_SQLITE,
+    MODEL_ACTIVATION,
     MODEL_REGISTRY,
     PREVIOUS_RELEASE,
+    PROTECTED_PAYLOADS,
     RECOVERY_MANIFEST,
     RELEASED_CHECKSUMS,
     ComponentObservation,
@@ -108,9 +112,12 @@ from openmed.service.schema_registry import (
     get_schema,
     observe_artifact_marker,
     observe_audit_chains,
+    observe_audit_continuity,
+    observe_job_payloads,
     observe_job_store,
     observe_journey_postgres,
     observe_journey_sqlite,
+    observe_model_activation,
     observe_model_registry,
     observe_recovery_point,
     plan_service_migrations,
@@ -138,6 +145,16 @@ SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _COMMITTED_AT = "2026-01-01T00:00:00Z"
 _SEEDED_REVISIONS = 3
 _WORKER_TIMEOUT_SECONDS = 300
+_PAYLOAD_JOB = "job-0000"
+_PAYLOAD_RETENTION_SECONDS = 3600
+_PAYLOAD_NAME_RE = re.compile(r"jp_[0-9a-f]{32}\.payload\.json\Z")
+_PAYLOAD_TEMP_RE = re.compile(r"\.jp_[0-9a-f]{32}\.[A-Za-z0-9_]+\.tmp\Z")
+_ACTIVATION_SLOT = "synthetic-rehearsal"
+_ACTIVATION_MODEL = "OpenMed/OpenMed-Synthetic-Activation-v1"
+# The activation manager's process lock file is ownership, not state.
+_ACTIVATION_LOCK = ".owner.lock"
+_CONTINUITY_KEY_ID = "rehearsal-epoch-0"
+_CONTINUITY_CHAIN_ID = "chain-rehearsal"
 _KEY_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _CODE_RE = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 _PG_HISTORY_DDL = """
@@ -757,6 +774,7 @@ class _Runner:
 
     def __init__(self, workspace: Path, postgres: Any) -> None:
         from openmed.core.key_provider import InMemoryKeyProvider
+        from openmed.service.job_payloads import JOB_PAYLOAD_KEY_PURPOSE
         from openmed.structured.store import (
             JOURNEY_KEY_PURPOSE,
             JourneyStoreEncryption,
@@ -769,6 +787,8 @@ class _Runner:
             InMemoryKeyProvider.generate(JOURNEY_KEY_PURPOSE)
         )
         self.backup_provider = InMemoryKeyProvider.generate(BACKUP_KEY_PURPOSE)
+        self.payload_provider = InMemoryKeyProvider.generate(JOB_PAYLOAD_KEY_PURPOSE)
+        self.continuity_keys = {_CONTINUITY_KEY_ID: secrets.token_bytes(32)}
         package_root = Path(openmed.__file__).resolve().parent.parent
         existing = os.environ.get("PYTHONPATH")
         self._env = {
@@ -1608,6 +1628,16 @@ def _synthetic_audit_report(index: int) -> Any:
     )
 
 
+def _write_synthetic_chain(path: Path, entries: int) -> None:
+    from openmed.core.audit_chain import AuditChain
+
+    chain = AuditChain()
+    for index in range(entries):
+        chain.append(_synthetic_audit_report(index))
+    _private_dir(path.parent)
+    chain.write(path)
+
+
 class _AuditChain(_Adapter):
     component = AUDIT_CHAIN
 
@@ -1615,13 +1645,7 @@ class _AuditChain(_Adapter):
         return root / AUDIT_CHAIN_DIRECTORY / "chain-0000.json"
 
     def _write(self, root: Path, entries: int) -> None:
-        from openmed.core.audit_chain import AuditChain
-
-        chain = AuditChain()
-        for index in range(entries):
-            chain.append(_synthetic_audit_report(index))
-        _private_dir(self._path(root).parent)
-        chain.write(self._path(root))
+        _write_synthetic_chain(self._path(root), entries)
 
     def seed(self, root: Path, version: int) -> None:
         if version >= 1:
@@ -1772,6 +1796,388 @@ class _RecoveryManifest(_Adapter):
         )
 
 
+def _rehearsal_clock() -> datetime:
+    return datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def _killed(status: int, payload: Mapping[str, Any]) -> _Probe:
+    """Map a worker that was told to die mid-write to an interruption probe."""
+
+    if status == KILL_EXIT_CODE:
+        return _Probe(
+            False, "migration_killed", evidence="killed_process", interrupted=True
+        )
+    return _Probe(
+        False,
+        _controlled(payload.get("code")) or "fault_not_reached",
+        evidence="killed_process",
+    )
+
+
+class _ProtectedPayloads(_Adapter):
+    """Encrypted job payload files, sealed under an ephemeral key."""
+
+    component = PROTECTED_PAYLOADS
+    interruptible = frozenset({0})
+
+    def _directory(self, root: Path) -> Path:
+        return root / "jobs" / "payloads"
+
+    def _files(self, root: Path) -> list[Path]:
+        directory = self._directory(root)
+        if not directory.is_dir():
+            return []
+        return sorted(
+            item
+            for item in directory.iterdir()
+            if _PAYLOAD_NAME_RE.fullmatch(item.name)
+        )
+
+    def _store(self, root: Path) -> Any:
+        from openmed.service.job_payloads import EncryptedJobPayloadStore
+
+        return EncryptedJobPayloadStore(
+            self._directory(root),
+            key_provider=self.runner.payload_provider,
+            clock=_rehearsal_clock,
+        )
+
+    def _submit(self, store: Any) -> str:
+        from openmed.service.job_payloads import PAYLOAD_KIND_INPUT
+
+        return str(
+            store.create(
+                PAYLOAD_KIND_INPUT,
+                _PAYLOAD_JOB,
+                {"documents": [{"text": "synthetic rehearsal document"}]},
+                retention_seconds=_PAYLOAD_RETENTION_SECONDS,
+            ).ref
+        )
+
+    def seed(self, root: Path, version: int) -> None:
+        if version >= 1:
+            self._submit(self._store(root))
+
+    def migrate(self, root: Path) -> _Probe:
+        from openmed.core.key_provider import EncryptionError
+        from openmed.service.job_payloads import PAYLOAD_KIND_INPUT
+
+        # Every retained payload belongs to a live synthetic job record.
+        refs = [path.name.split(".", 1)[0] for path in self._files(root)]
+        try:
+            store = self._store(root)
+            # A restart reconciles payloads with the job records that still
+            # reference them, which also removes crash remnants.
+            store.recover(refs)
+            if not refs:
+                # A clean install retains a payload when its first job arrives.
+                refs = [self._submit(store)]
+            for ref in refs:
+                store.read(ref, job_id=_PAYLOAD_JOB, kind=PAYLOAD_KIND_INPUT)
+        except EncryptionError as exc:
+            return _Probe(False, _controlled(exc.code) or "job_payload_failed")
+        return _Probe(True, None, self.observe(root).version)
+
+    def observe(self, root: Path) -> ComponentObservation:
+        return observe_job_payloads(self._directory(root))
+
+    def fingerprint(self, root: Path) -> str:
+        return _digest(
+            _canonical_json(
+                [[path.name, _file_digest(path)] for path in self._files(root)]
+            )
+        )
+
+    def tamper(self, root: Path, version: int) -> bool:
+        files = self._files(root)
+        if version < 1 or not files:
+            return False
+        document = json.loads(files[0].read_text(encoding="ascii"))
+        document["shadow_field"] = {}
+        _write_private(files[0], json.dumps(document, sort_keys=True).encode("ascii"))
+        return True
+
+    def future(self, root: Path, version: int) -> None:
+        from openmed.service.job_payloads import (
+            JOB_PAYLOAD_FILE_FORMAT,
+            PAYLOAD_KIND_INPUT,
+        )
+
+        files = self._files(root)
+        documents = [json.loads(path.read_text(encoding="ascii")) for path in files]
+        if not files:
+            ref = f"jp_{secrets.token_hex(16)}"
+            files = [self._directory(root) / f"{ref}.payload.json"]
+            documents = [
+                {
+                    "created_at": _COMMITTED_AT,
+                    "digest": "sha256:" + "0" * 64,
+                    "envelope": "",
+                    "expires_at": "2099-01-01T00:00:00Z",
+                    "format": JOB_PAYLOAD_FILE_FORMAT,
+                    "job_id": _PAYLOAD_JOB,
+                    "kind": PAYLOAD_KIND_INPUT,
+                    "ref": ref,
+                }
+            ]
+        for path, document in zip(files, documents, strict=True):
+            document["schema_version"] = self.current + 1
+            _write_private(path, json.dumps(document, sort_keys=True).encode("ascii"))
+
+    def interrupt(self, root: Path, version: int) -> _Probe:
+        return _killed(
+            *self.runner.worker("replace-kill", "payload", str(self._directory(root)))
+        )
+
+    def count_strays(self, root: Path) -> int:
+        directory = self._directory(root)
+        if not directory.is_dir():
+            return 0
+        return sum(
+            1 for item in directory.iterdir() if _PAYLOAD_TEMP_RE.fullmatch(item.name)
+        )
+
+
+class _SyntheticGenerationLoader:
+    """Serve a verified synthetic generation without loading any model."""
+
+    def load(self, context: Any) -> Any:
+        return context.generation
+
+    def warm(self, handle: Any, context: Any) -> None:
+        del handle, context
+
+    def unload(self, handle: Any, context: Any) -> None:
+        del handle, context
+
+
+class _ModelActivation(_Adapter):
+    """Model activation root that activates a synthetic local bundle."""
+
+    component = MODEL_ACTIVATION
+    interruptible = frozenset({0})
+
+    def _root(self, root: Path) -> Path:
+        return root / "models" / "activation"
+
+    def _state(self, root: Path) -> Path:
+        return self._root(root) / "state.json"
+
+    def _bundle(self, root: Path) -> Path:
+        from openmed.core.model_integrity import write_local_artifact_manifest
+
+        bundle = root.parent / "activation-inputs" / "bundle"
+        if not bundle.exists():
+            _write_private(bundle / "config.json", b'{"model_type": "synthetic"}\n')
+            _write_private(bundle / "model.safetensors", b"synthetic-weights")
+            write_local_artifact_manifest(
+                bundle,
+                model_id=_ACTIVATION_MODEL,
+                reproducibility_hash="sha256:" + "ab" * 32,
+            )
+        return bundle
+
+    def seed(self, root: Path, version: int) -> None:
+        if version >= 1:
+            self.migrate(root)
+
+    def migrate(self, root: Path) -> _Probe:
+        from openmed.service.model_activation import (
+            ActivationOutcome,
+            LocalBundleSource,
+            ModelActivationError,
+            ModelActivationManager,
+            ModelReference,
+        )
+
+        manager = ModelActivationManager(
+            self._root(root),
+            loader=_SyntheticGenerationLoader(),
+            clock=_rehearsal_clock,
+        )
+        try:
+            # Start resolves interrupted journals and reverifies the active
+            # generation before it serves.
+            results = manager.start()
+            refused = next(
+                (item for item in results if item.outcome is ActivationOutcome.REFUSED),
+                None,
+            )
+            if refused is not None:
+                return _Probe(
+                    False, refused.reason.value if refused.reason else "refused"
+                )
+            if manager.status(_ACTIVATION_SLOT)["active_generation"] is None:
+                # A clean install activates its first model.
+                result = manager.activate(
+                    _ACTIVATION_SLOT,
+                    ModelReference(_ACTIVATION_MODEL),
+                    source=LocalBundleSource(self._bundle(root)),
+                )
+                if not result.ok:
+                    return _Probe(
+                        False,
+                        result.reason.value if result.reason else result.outcome.value,
+                    )
+        except ModelActivationError as exc:
+            return _Probe(False, exc.reason.value)
+        finally:
+            manager.close()
+        return _Probe(True, None, self.observe(root).version)
+
+    def observe(self, root: Path) -> ComponentObservation:
+        return observe_model_activation(self._root(root))
+
+    def fingerprint(self, root: Path) -> str:
+        return _tree_digest(self._root(root), exclude=frozenset({_ACTIVATION_LOCK}))
+
+    def tamper(self, root: Path, version: int) -> bool:
+        state = self._state(root)
+        if version < 1 or not state.exists():
+            return False
+        document = json.loads(state.read_text(encoding="utf-8"))
+        # A slot key the manager never writes, as a hand edit would leave.
+        document["slots"] = {
+            "Synthetic Rehearsal": entry for entry in document["slots"].values()
+        }
+        _write_private(state, json.dumps(document, sort_keys=True).encode("ascii"))
+        return True
+
+    def future(self, root: Path, version: int) -> None:
+        state = self._state(root)
+        document = (
+            json.loads(state.read_text(encoding="utf-8"))
+            if state.exists()
+            else {"slots": {}}
+        )
+        document["schema_version"] = (
+            f"openmed.model_activation.state.v{self.current + 1}"
+        )
+        _write_private(state, json.dumps(document, sort_keys=True).encode("ascii"))
+
+    def interrupt(self, root: Path, version: int) -> _Probe:
+        return _killed(
+            *self.runner.worker(
+                "activation-kill",
+                str(self._root(root)),
+                str(self._bundle(root)),
+                _ACTIVATION_SLOT,
+                _ACTIVATION_MODEL,
+            )
+        )
+
+    def count_strays(self, root: Path) -> int:
+        base = self._root(root)
+        staging = base / "staging"
+        strays = sum(1 for _ in staging.iterdir()) if staging.is_dir() else 0
+        for directory in (base, base / "journal"):
+            if directory.is_dir():
+                strays += sum(1 for _ in directory.glob(".*.tmp"))
+        return strays
+
+
+class _AuditContinuity(_Adapter):
+    """Continuity manifest beside an audit chain, signed with ephemeral keys."""
+
+    component = AUDIT_CONTINUITY
+    interruptible = frozenset({0})
+
+    def _chain(self, root: Path) -> Path:
+        return root / AUDIT_CHAIN_DIRECTORY / "chain-0000.json"
+
+    def _manifest(self, root: Path) -> Path:
+        # AuditContinuityStore's default manifest path beside the chain.
+        return self._chain(root).with_name("chain-0000.continuity.json")
+
+    def _store(self, root: Path) -> Any:
+        from openmed.core.audit_continuity import AuditContinuityStore
+
+        return AuditContinuityStore(
+            self._chain(root), key_provider=self.runner.continuity_keys
+        )
+
+    def seed(self, root: Path, version: int) -> None:
+        # The previous release already wrote audit chains, without manifests.
+        _write_synthetic_chain(self._chain(root), 2)
+        if version >= 1:
+            self._store(root).initialize(
+                key_id=_CONTINUITY_KEY_ID, chain_id=_CONTINUITY_CHAIN_ID
+            )
+
+    def migrate(self, root: Path) -> _Probe:
+        from openmed.core.audit_continuity import AuditContinuityError
+
+        store = self._store(root)
+        try:
+            if not self._manifest(root).exists():
+                # The first continuity-aware run adopts the existing chain.
+                store.initialize(
+                    key_id=_CONTINUITY_KEY_ID, chain_id=_CONTINUITY_CHAIN_ID
+                )
+            # Complete any interrupted transition and remove crash remnants.
+            store.recover()
+            report = store.verify()
+        except AuditContinuityError as exc:
+            return _Probe(False, exc.code)
+        if not report.valid:
+            return _Probe(False, report.code)
+        return _Probe(True, None, self.observe(root).version)
+
+    def observe(self, root: Path) -> ComponentObservation:
+        manifest = self._manifest(root)
+        return observe_audit_continuity((manifest,) if manifest.exists() else ())
+
+    def fingerprint(self, root: Path) -> str:
+        return _digest(
+            _canonical_json(
+                [_file_digest(self._chain(root)), _file_digest(self._manifest(root))]
+            )
+        )
+
+    def tamper(self, root: Path, version: int) -> bool:
+        manifest = self._manifest(root)
+        if version < 1 or not manifest.exists():
+            return False
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+        document["shadow_field"] = {}
+        _write_private(manifest, json.dumps(document, sort_keys=True).encode("ascii"))
+        return True
+
+    def future(self, root: Path, version: int) -> None:
+        from openmed.core.audit_continuity import CONTINUITY_FORMAT
+
+        manifest = self._manifest(root)
+        document = (
+            json.loads(manifest.read_text(encoding="utf-8"))
+            if manifest.exists()
+            else {
+                "chain_id": _CONTINUITY_CHAIN_ID,
+                "events": [],
+                "format": CONTINUITY_FORMAT,
+            }
+        )
+        document["version"] = self.current + 1
+        _write_private(manifest, json.dumps(document, sort_keys=True).encode("ascii"))
+
+    def interrupt(self, root: Path, version: int) -> _Probe:
+        return _killed(
+            *self.runner.worker(
+                "replace-kill",
+                "continuity",
+                str(self._chain(root)),
+                _CONTINUITY_KEY_ID,
+                _CONTINUITY_CHAIN_ID,
+            )
+        )
+
+    def count_strays(self, root: Path) -> int:
+        directory = self._chain(root).parent
+        if not directory.is_dir():
+            return 0
+        pattern = f".{self._manifest(root).name}.*.tmp"
+        return sum(1 for _ in directory.glob(pattern))
+
+
 _ADAPTERS: Mapping[str, type[_Adapter]] = {
     JOURNEY_SQLITE: _JourneySQLite,
     JOURNEY_POSTGRES: _JourneyPostgres,
@@ -1780,6 +2186,9 @@ _ADAPTERS: Mapping[str, type[_Adapter]] = {
     MODEL_REGISTRY: _ModelRegistry,
     AUDIT_CHAIN: _AuditChain,
     RECOVERY_MANIFEST: _RecoveryManifest,
+    PROTECTED_PAYLOADS: _ProtectedPayloads,
+    MODEL_ACTIVATION: _ModelActivation,
+    AUDIT_CONTINUITY: _AuditContinuity,
 }
 
 
@@ -2305,11 +2714,13 @@ def _controlled(value: Any) -> str | None:
     return None
 
 
-def _tree_digest(root: Path) -> str:
+def _tree_digest(root: Path, exclude: frozenset[str] = frozenset()) -> str:
     if not root.exists():
         return "absent"
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
+        if path.name in exclude:
+            continue
         if path.is_file() and not path.is_symlink():
             digest.update(path.relative_to(root).as_posix().encode("utf-8"))
             digest.update(b"\0")

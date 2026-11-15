@@ -11,8 +11,12 @@ then runs a component's native engine:
   released migration chain of the previous release, which is what that
   release's binary does when it opens a store.
 * ``replace-kill`` kills the process at the atomic ``os.replace`` that would
-  publish a migrated document (the artifact encryption marker or the model
-  registry state).
+  publish a migrated or first document (the artifact encryption marker, the
+  model registry state, a sealed job payload, or an audit continuity
+  manifest).
+* ``activation-kill`` kills the process at the first model-activation
+  pointer-state write, after the candidate generation was staged and
+  verified and its journal recorded.
 
 The worker prints one JSON line of controlled fields and never prints paths,
 values, or exception text.
@@ -124,7 +128,63 @@ def _replace_kill(component: str, arguments: list[str]) -> int:
             baseline_path=Path(arguments[2]),
         )
         return _emit({"state": "not_killed", "code": None})
+    if component == "payload":
+        from openmed.core.key_provider import InMemoryKeyProvider
+        from openmed.service.job_payloads import (
+            JOB_PAYLOAD_KEY_PURPOSE,
+            PAYLOAD_KIND_INPUT,
+            EncryptedJobPayloadStore,
+        )
+
+        # The remnant stays sealed under a key that dies with this process.
+        EncryptedJobPayloadStore(
+            Path(arguments[0]),
+            key_provider=InMemoryKeyProvider.generate(JOB_PAYLOAD_KEY_PURPOSE),
+        ).create(
+            PAYLOAD_KIND_INPUT, "job-0000", {"synthetic": True}, retention_seconds=60
+        )
+        return _emit({"state": "not_killed", "code": None})
+    if component == "continuity":
+        import secrets
+
+        from openmed.core.audit_continuity import AuditContinuityStore
+
+        AuditContinuityStore(
+            Path(arguments[0]), key_provider={arguments[1]: secrets.token_bytes(32)}
+        ).initialize(key_id=arguments[1], chain_id=arguments[2])
+        return _emit({"state": "not_killed", "code": None})
     return _emit({"state": "failed", "code": "worker_operation_invalid"})
+
+
+class _NullLoader:
+    def load(self, context: Any) -> Any:
+        return context.generation
+
+    def warm(self, handle: Any, context: Any) -> None:
+        del handle, context
+
+    def unload(self, handle: Any, context: Any) -> None:
+        del handle, context
+
+
+def _activation_kill(root: Path, bundle: Path, slot: str, model_id: str) -> int:
+    from openmed.service.model_activation import (
+        LocalBundleSource,
+        ModelActivationManager,
+        ModelReference,
+    )
+
+    def crash(point: str) -> None:
+        # The first pointer-state write allocates the verified candidate's
+        # generation; nothing has been published yet.
+        if point == "state.write":
+            os._exit(KILL_EXIT_CODE)
+
+    manager = ModelActivationManager(root, loader=_NullLoader(), fault_hook=crash)
+    manager.start()
+    manager.activate(slot, ModelReference(model_id), source=LocalBundleSource(bundle))
+    manager.close()
+    return _emit({"state": "not_killed", "code": None})
 
 
 def main(argv: list[str]) -> int:
@@ -146,6 +206,8 @@ def main(argv: list[str]) -> int:
             return _sqlite_previous(Path(argv[1]), int(argv[2]))
         if operation == "replace-kill":
             return _replace_kill(argv[1], argv[2:])
+        if operation == "activation-kill":
+            return _activation_kill(Path(argv[1]), Path(argv[2]), argv[3], argv[4])
     except Exception:
         return _emit({"state": "failed", "code": "worker_failed"})
     return _emit({"state": "failed", "code": "worker_operation_invalid"})
