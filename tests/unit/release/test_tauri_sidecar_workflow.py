@@ -96,9 +96,9 @@ def test_host_tests_consume_the_shared_reference_vectors() -> None:
     assert "tests/unit/service/fixtures/sidecar_stdio_golden.json" in lane
 
 
-def test_only_the_windows_fake_process_lane_is_non_blocking() -> None:
-    # Issue #5562: the Windows lane hangs; Linux and macOS must keep gating.
+def test_every_fake_process_lane_gates_including_windows() -> None:
+    # Issue #5562: the Windows lane used to hang and briefly ran non-blocking.
     job = _workflow()["jobs"]["fake-process"]
 
-    assert job["continue-on-error"] == "${{ matrix.os == 'windows-2022' }}"
+    assert "continue-on-error" not in job
     assert set(job["strategy"]["matrix"]["os"]) == DECLARED_PLATFORMS

@@ -124,12 +124,19 @@ fn state_for(bundle: SidecarBundle) -> OpenMedSidecarState {
 }
 
 fn run<F: Future>(future: F) -> F::Output {
-    tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
-        .expect("runtime")
-        .block_on(future)
+        .expect("runtime");
+    let output = runtime.block_on(future);
+    // On Windows tokio reads child pipes on blocking threads, and dropping a
+    // runtime waits for every blocking thread. A test's state can still own a
+    // running sidecar that is waiting on its stdin, so those reads never end
+    // and the drop deadlocks. Shut down without waiting; dropping the state
+    // afterwards kills the sidecar and closes its pipes.
+    runtime.shutdown_background();
+    output
 }
 
 fn note(text: &str, doc_id: Option<&str>) -> SidecarDeidentifyRequest {
