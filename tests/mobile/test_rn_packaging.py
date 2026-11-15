@@ -401,16 +401,13 @@ def test_native_rejections_and_logs_never_carry_caller_values() -> None:
     assert len(re.findall(r"\breject\(", swift)) == 1
 
     assert "error.message" not in kotlin
-    assert kotlin.count("promise.reject(") == 4
-    assert (
-        len(
-            re.findall(
-                r'promise\.reject\("openmedkit_\w+", valueFreeMessage\(error\)\)',
-                kotlin,
-            )
-        )
-        == 4
-    )
+    # Every Kotlin rejection settles once through launchOperation: runtime
+    # errors carry only their controlled code, cancellation a fixed message,
+    # and every other failure the bridge's value-free message.
+    assert kotlin.count("promise.reject(") == 3
+    assert kotlin.count("valueFreeMessage(error),") == 1
+    assert '"OpenMedKit runtime: ${error.code}"' in kotlin
+    assert len(re.findall(r'launchOperation\(promise, "openmedkit_\w+"\)', kotlin)) == 4
 
     swift_messages = re.findall(
         r'return "([^"]*)"', swift.split("private enum BridgeError")[1]
