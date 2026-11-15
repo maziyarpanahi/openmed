@@ -133,3 +133,7 @@ subprojects {
         }
     }
 }
+
+subprojects {
+    apply(from = rootProject.file("gradle/dependency-locking.gradle.kts"))
+}
