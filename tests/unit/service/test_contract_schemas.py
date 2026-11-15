@@ -101,7 +101,7 @@ def _run_synthetic_job(
         webhook_sender=_recording_sender(delivered),
     )
     payload = _synthetic_job_payload(webhook)
-    queued = queue._new_record(payload)
+    queued, item = queue._stage(payload)
     store.create(queued)
     processed = {"count": 0}
 
@@ -127,7 +127,7 @@ def _run_synthetic_job(
 
     monkeypatch.setattr(queue, "_deidentify_document", process)
     try:
-        queue._run_job(jobs._JobWorkItem(queued["id"], payload))
+        queue._run_job(item)
     finally:
         queue.shutdown()
 

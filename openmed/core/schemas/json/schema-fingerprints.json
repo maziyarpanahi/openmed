@@ -173,7 +173,27 @@
     "schema_version": 1
   },
   "service_job_record": {
-    "fingerprint": "sha256:ff385791e6002f68300e657d6d9ea00732f6bead986a5f8646cc1e6e7e16c241",
+    "schema_version": 1,
+    "fingerprint": "sha256:ba830da14cc08f50bf4d0b435e3d3e8c2647d1b6904573546c717312d6b82121",
+    "required": [
+      "completed_at",
+      "created_at",
+      "document_count",
+      "documents",
+      "error",
+      "expires_at",
+      "failed_count",
+      "id",
+      "label_histogram",
+      "processed_count",
+      "progress_percent",
+      "spans",
+      "started_at",
+      "status",
+      "updated_at",
+      "webhook",
+      "webhook_delivery"
+    ],
     "properties": [
       "completed_at",
       "created_at",
@@ -184,6 +204,7 @@
       "failed_count",
       "id",
       "label_histogram",
+      "payloads",
       "processed_count",
       "progress_percent",
       "schema_version",
@@ -194,30 +215,25 @@
       "updated_at",
       "webhook",
       "webhook_delivery"
-    ],
+    ]
+  },
+  "service_webhook_payload": {
+    "schema_version": 1,
+    "fingerprint": "sha256:d165a2820040566cce89933df5ccb9221daa85cb4537ed5b959157dfdfb73a17",
     "required": [
       "completed_at",
-      "created_at",
       "document_count",
       "documents",
       "error",
-      "expires_at",
+      "event",
       "failed_count",
-      "id",
+      "job_id",
       "label_histogram",
       "processed_count",
       "progress_percent",
       "spans",
-      "started_at",
-      "status",
-      "updated_at",
-      "webhook",
-      "webhook_delivery"
+      "status"
     ],
-    "schema_version": 1
-  },
-  "service_webhook_payload": {
-    "fingerprint": "sha256:2251e9de44ad8d7d2469926ee7ef87edddbe7d512fc214804ba02c7d25759350",
     "properties": [
       "completed_at",
       "document_count",
@@ -232,22 +248,7 @@
       "schema_version",
       "spans",
       "status"
-    ],
-    "required": [
-      "completed_at",
-      "document_count",
-      "documents",
-      "error",
-      "event",
-      "failed_count",
-      "job_id",
-      "label_histogram",
-      "processed_count",
-      "progress_percent",
-      "spans",
-      "status"
-    ],
-    "schema_version": 1
+    ]
   },
   "span": {
     "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",

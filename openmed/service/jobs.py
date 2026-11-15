@@ -513,39 +513,52 @@ class DeidentifyJobQueue:
         """
         snapshot = DeidentifyJobRequest(**_request_body(payload))
         self.runtime.validate_served_model(snapshot.model_name)
-        retention = self._payload_retention_seconds(snapshot)
+        self._payload_retention_seconds(snapshot)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
             self._sweep_payloads()
-            now = self.clock()
-            job_id = uuid.uuid4().hex
-            input_ref = self.payloads.create(
-                PAYLOAD_KIND_INPUT,
-                job_id,
-                _request_body(snapshot),
-                retention_seconds=retention,
-                now=now,
-            )
-            record = self._new_record(
-                snapshot,
-                job_id=job_id,
-                now=now,
-                input_ref=input_ref,
-                retention_seconds=retention,
-            )
+            record, item = self._stage(snapshot)
             try:
                 self.store.create(record)
             except BaseException:
-                self.payloads.delete(input_ref.ref, reason="submission_failed")
+                self.payloads.delete(item.input_ref, reason="submission_failed")
                 raise
-            future = self._executor.submit(
-                self._run_job, _JobWorkItem(job_id, input_ref.ref)
-            )
+            future = self._executor.submit(self._run_job, item)
             with self._futures_lock:
-                self._futures[job_id] = future
-            future.add_done_callback(functools.partial(self._forget_future, job_id))
+                self._futures[item.job_id] = future
+            future.add_done_callback(
+                functools.partial(self._forget_future, item.job_id)
+            )
             return _copy_record(record)
+
+    def _stage(
+        self, payload: DeidentifyJobRequest
+    ) -> tuple[dict[str, Any], _JobWorkItem]:
+        """Snapshot *payload* into an input payload and build its queued record.
+
+        The record is not stored and no worker is scheduled; :meth:`submit`
+        does both.
+        """
+        snapshot = DeidentifyJobRequest(**_request_body(payload))
+        retention = self._payload_retention_seconds(snapshot)
+        now = self.clock()
+        job_id = uuid.uuid4().hex
+        input_ref = self.payloads.create(
+            PAYLOAD_KIND_INPUT,
+            job_id,
+            _request_body(snapshot),
+            retention_seconds=retention,
+            now=now,
+        )
+        record = self._new_record(
+            snapshot,
+            job_id=job_id,
+            now=now,
+            input_ref=input_ref,
+            retention_seconds=retention,
+        )
+        return record, _JobWorkItem(job_id, input_ref.ref)
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
         """Return persisted job metadata."""

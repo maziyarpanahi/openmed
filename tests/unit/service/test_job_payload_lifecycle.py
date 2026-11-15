@@ -115,6 +115,12 @@ def _provider(material: bytes = KEY_ONE) -> InMemoryKeyProvider:
     return provider
 
 
+def _run_and_settle(queue: jobs.DeidentifyJobQueue, item: Any) -> None:
+    """Run one job, then wait for its webhook to settle on the dispatcher."""
+    queue._run_job(item)
+    assert queue._webhooks.wait_idle(5.0)
+
+
 def _runtime() -> SimpleNamespace:
     return SimpleNamespace(validate_served_model=lambda _model_name: None)
 
@@ -234,7 +240,7 @@ def test_worker_runs_the_snapshot_not_the_mutated_request(
     payload.documents[0].text = "mutated synthetic text"
     payload.method = "remove"
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     assert seen == [("mask", "original synthetic text")]
     queue.shutdown()
@@ -279,7 +285,7 @@ def test_shutdown_leaves_running_and_finished_jobs_alone(
     running_future, done_future, _queued_future = queue._executor.futures
     assert running_future.set_running_or_notify_cancel()
     queue.store.update(running_id, status="running")
-    queue._run_job(queue._executor.work[1])
+    _run_and_settle(queue, queue._executor.work[1])
     assert done_future.set_running_or_notify_cancel()
     done_future.set_result(None)
 
@@ -323,7 +329,7 @@ def test_cancelled_job_is_not_started_by_a_late_worker(
     job_id = queue.submit(_request())["id"]
     queue.shutdown()
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     assert queue.get(job_id)["status"] == "cancelled"
     assert queue.webhook_sender.calls == []
@@ -336,7 +342,7 @@ def test_memory_mode_leaves_no_payload_artifact_after_completion(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=sender)
     job_id = queue.submit(_request())["id"]
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "done"
@@ -365,7 +371,7 @@ def test_memory_mode_drops_failed_delivery_payloads(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=sender)
     job_id = queue.submit(_request())["id"]
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["webhook_delivery"]["success"] is False
@@ -385,7 +391,7 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
         monkeypatch, tmp_path, clock=clock, payload_store=payload_store, sender=sender
     )
     job_id = queue.submit(_request())["id"]
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
     record = queue.get(job_id)
     terminal = record["payloads"]["terminal_event"]
     first_body = sender.calls[0]["payload"]
@@ -395,6 +401,7 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
     queue.store.update(job_id, label_histogram={"MUTATED": 9}, status="failed")
     retry_ref = payload_store._index[terminal["ref"]]
     queue._deliver_terminal_event(job_id, retry_ref)
+    assert queue._webhooks.wait_idle(5.0)
 
     assert sender.calls[1]["payload"] == first_body
     assert sender.calls[1]["payload"]["label_histogram"] == {}
@@ -414,12 +421,12 @@ def test_sender_exception_is_recorded_as_a_value_free_code(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=explode)
     job_id = queue.submit(_request())["id"]
     with caplog.at_level(logging.DEBUG):
-        queue._run_job(queue._executor.work[0])
+        _run_and_settle(queue, queue._executor.work[0])
 
     delivery = queue.get(job_id)["webhook_delivery"]
     assert delivery["success"] is False
     assert delivery["attempts"] == 0
-    assert delivery["error"] == "webhook_sender_failed"
+    assert delivery["error"] == "sender_error"
     _assert_no_sentinels(_all_bytes(tmp_path))
     _assert_no_sentinels(caplog.text)
 
@@ -440,11 +447,12 @@ def test_terminal_event_write_failure_skips_delivery_with_a_code(
 
     with monkeypatch.context() as patched:
         patched.setattr(job_payloads.os, "fsync", disk_full)
-        queue._run_job(queue._executor.work[0])
+        _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "done"
     assert record["webhook_delivery"] == {
+        "status": "failed",
         "success": False,
         "attempts": 0,
         "status_code": None,
@@ -500,7 +508,7 @@ def test_input_expiring_while_queued_fails_the_job(
     job_id = queue.submit(_request(payload_retention_seconds=30))["id"]
     clock.advance(30)
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "failed"
@@ -591,7 +599,7 @@ def test_restart_recovers_encrypted_input_and_terminal_event_until_expiry(
     input_ref = record["payloads"]["input"]["ref"]
     recovered = second.payloads.read(input_ref, job_id=job_id, kind=PAYLOAD_KIND_INPUT)
     assert recovered["documents"][0]["text"] == TEXT_SENTINEL
-    second._run_job(jobs._JobWorkItem(job_id, input_ref))
+    _run_and_settle(second, jobs._JobWorkItem(job_id, input_ref))
     record = second.get(job_id)
     terminal = record["payloads"]["terminal_event"]
     assert record["status"] == "done"

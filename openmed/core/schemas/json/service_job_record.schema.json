@@ -47,6 +47,10 @@
     "error": {
       "additionalProperties": false,
       "properties": {
+        "code": {
+          "minLength": 1,
+          "type": "string"
+        },
         "message": {
           "type": "string"
         },
@@ -81,6 +85,145 @@
         "minimum": 0,
         "type": "integer"
       },
+      "type": "object"
+    },
+    "payloads": {
+      "additionalProperties": false,
+      "description": "Opaque payload references and their lifecycle; never payload content.",
+      "properties": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ref": {
+              "pattern": "^jp_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "schema_version": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "state": {
+              "enum": [
+                "retained",
+                "deleted",
+                "expired"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref",
+            "schema_version",
+            "state"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "memory",
+            "encrypted"
+          ],
+          "type": "string"
+        },
+        "retention_seconds": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "terminal_event": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expires_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ref": {
+              "pattern": "^jp_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "schema_version": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "state": {
+              "enum": [
+                "retained",
+                "deleted",
+                "expired"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "ref",
+            "schema_version",
+            "state"
+          ],
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "mode",
+        "retention_seconds",
+        "input",
+        "terminal_event"
+      ],
       "type": "object"
     },
     "processed_count": {
@@ -153,7 +296,8 @@
         "queued",
         "running",
         "done",
-        "failed"
+        "failed",
+        "cancelled"
       ],
       "type": "string"
     },
@@ -211,6 +355,22 @@
             "null"
           ]
         },
+        "payload_ref": {
+          "pattern": "^jp_[0-9a-f]{32}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "delivered",
+            "failed",
+            "abandoned"
+          ],
+          "type": "string"
+        },
         "status_code": {
           "type": [
             "integer",
@@ -218,7 +378,10 @@
           ]
         },
         "success": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [

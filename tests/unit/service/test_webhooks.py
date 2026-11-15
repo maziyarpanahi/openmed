@@ -136,7 +136,7 @@ def test_deliver_webhook_reports_failure_after_attempts() -> None:
 def test_deliver_webhook_records_value_free_transport_error_codes() -> None:
     sentinel_url = "https://zqtransportsentinel.example.test/hook?token=zq-secret"
     for error, code in [
-        (httpx.ConnectError(f"cannot reach {sentinel_url}"), "transport_error"),
+        (httpx.ConnectError(f"cannot reach {sentinel_url}"), "connect"),
         (httpx.ReadTimeout(f"timed out reading {sentinel_url}"), "timeout"),
     ]:
 

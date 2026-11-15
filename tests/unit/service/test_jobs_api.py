@@ -367,7 +367,9 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     assert done["failed_count"] == 0
     assert done["label_histogram"] == {"NAME": 2}
     assert done["webhook"]["url_hash"].startswith("sha256:")
-    assert done["webhook_delivery"] == {
+    delivery = dict(done["webhook_delivery"])
+    assert str(delivery.pop("payload_ref")).startswith("jp_")
+    assert delivery == {
         "status": "delivered",
         "success": True,
         "attempts": 1,
@@ -587,7 +589,7 @@ def _run_synthetic_job(
         **queue_kwargs,
     )
     payload = _synthetic_job_payload(document_count)
-    record = queue._new_record(payload)
+    record, item = queue._stage(payload)
     calls = [0]
 
     def process(_payload: DeidentifyJobRequest, document: DeidentifyJobDocument):
@@ -614,7 +616,7 @@ def _run_synthetic_job(
     spy = _StoreWriteSpy(monkeypatch)
     store.create(record)
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(item)
     finally:
         queue.shutdown()
     return spy, store, record["id"]
@@ -719,7 +721,8 @@ def test_job_progress_writes_skip_checkpoints_before_interval_elapses(
     )
 
     statuses = [snapshot["status"] for snapshot in spy.job_snapshots(job_id)]
-    assert statuses == ["queued", "running", "done"]
+    # The second "done" write records the consumed input payload as deleted.
+    assert statuses == ["queued", "running", "done", "done"]
     final = store.get(job_id)
     assert final is not None
     assert final["processed_count"] == 30
@@ -745,7 +748,8 @@ def test_job_progress_without_coalescing_writes_after_each_document(
         if snapshot["status"] == "running"
     ]
     assert progress == list(range(12))
-    assert spy.count == 14
+    # Submission, running, 11 checkpoints, terminal result, consumed input.
+    assert spy.count == 15
 
 
 def test_coalesced_progress_keeps_counts_and_never_persists_raw_text(
@@ -817,7 +821,7 @@ def test_failed_progress_write_leaves_previous_store_without_temp_files(
         progress_interval_seconds=1.0,
     )
     payload = _synthetic_job_payload(6)
-    record = queue._new_record(payload)
+    record, item = queue._stage(payload)
     store.create(record)
     calls = [0]
 
@@ -839,7 +843,7 @@ def test_failed_progress_write_leaves_previous_store_without_temp_files(
     monkeypatch.setattr(jobs.os, "replace", fail_second_checkpoint)
     try:
         with pytest.raises(OSError, match="synthetic disk full"):
-            queue._run_job(jobs._JobWorkItem(record["id"], payload))
+            queue._run_job(item)
     finally:
         queue.shutdown()
 

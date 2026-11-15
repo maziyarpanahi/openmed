@@ -387,6 +387,19 @@ class WebhookDispatcher:
         if closed:
             self._settle(item, _unattempted(WEBHOOK_ERROR_CANCELLED))
 
+    def wait_idle(self, timeout: Optional[float] = None) -> bool:
+        """Block until every submitted delivery has settled.
+
+        Args:
+            timeout: Maximum seconds to wait; ``None`` waits without a bound.
+
+        Returns:
+            ``True`` when no delivery is queued or in flight, ``False`` if the
+            timeout elapsed first.
+        """
+        with self._condition:
+            return self._condition.wait_for(lambda: not self._unsettled, timeout)
+
     def shutdown(self, drain_seconds: Optional[float] = None) -> None:
         """Cancel backoff waits and settle every delivery within a drain bound.
 

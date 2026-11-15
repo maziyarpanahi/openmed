@@ -337,8 +337,8 @@ conditions hold:
 
 A job therefore writes at most 100 progress checkpoints regardless of its
 document count, plus one write each for submission, the `running` transition,
-and the terminal result, and one more for webhook delivery status when a
-webhook is configured. The bytes a job writes grow linearly with its document
+the terminal result, and the consumed input payload, and one more for webhook
+delivery status when a webhook is configured. The bytes a job writes grow linearly with its document
 count. The last document's progress is saved with the terminal result rather
 than as a separate checkpoint.
 

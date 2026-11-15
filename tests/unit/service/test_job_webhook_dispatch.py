@@ -74,9 +74,22 @@ def _request(webhook: Optional[dict[str, Any]] = None) -> Any:
     )
 
 
+def _without_payload_ref(
+    delivery: Optional[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    """Drop the opaque terminal-event reference after checking its form."""
+    if delivery is None:
+        return None
+    delivery = dict(delivery)
+    ref = delivery.pop("payload_ref", None)
+    # A settled delivery names the sealed terminal-event payload it read.
+    assert ref is None or (isinstance(ref, str) and ref.startswith("jp_"))
+    return delivery
+
+
 def _delivery(store: jobs.LocalJobStore, job_id: str) -> Optional[dict[str, Any]]:
     record = store.get(job_id)
-    return None if record is None else record.get("webhook_delivery")
+    return None if record is None else _without_payload_ref(record.get("webhook_delivery"))
 
 
 def _settled(store: jobs.LocalJobStore, job_id: str) -> bool:
@@ -354,7 +367,7 @@ def test_successful_delivery_is_pending_until_settled_and_keeps_signed_bytes(
 
     final = store.get(created["id"])
     assert final is not None
-    assert final["webhook_delivery"] == {
+    assert _without_payload_ref(final["webhook_delivery"]) == {
         "status": "delivered",
         "success": True,
         "attempts": 1,
@@ -411,11 +424,11 @@ def test_delivery_scheduled_after_shutdown_settles_abandoned(tmp_path: Path) -> 
 
     queue, store = _make_queue(tmp_path, sender)
     payload = _request(SCHEMA_MAX_WEBHOOK)
-    record = queue._new_record(payload)
+    record, item = queue._stage(payload)
     store.create(record)
     queue.shutdown()
 
-    queue._run_job(jobs._JobWorkItem(record["id"], payload))
+    queue._run_job(item)
 
     assert calls == []
     assert _delivery(store, record["id"]) == {
