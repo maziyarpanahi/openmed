@@ -67,13 +67,15 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "bulk_jobs_saturated",
     "bulk_paths_disabled",
     "circuit_breaker_open",
+    "client_certificate_revoked",
+    "component_disabled",
+    "crl_invalid",
+    "crl_stale",
     "decision_media_unsupported",
     "decision_request_ambiguous",
     "egress_denied",
-    "component_disabled",
     "forbidden",
     "grounding_invalid_request",
-    "incompatible_state",
     "inbound_duplicate_mapping",
     "inbound_duplicate_placeholder",
     "inbound_duplicate_response_key",
@@ -83,6 +85,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "inbound_restoration_limit",
     "inbound_unknown_placeholder",
     "inbound_unsupported_response",
+    "incompatible_state",
     "internal_error",
     "invalid_credentials",
     "job_queue_full",
@@ -93,15 +96,15 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "mtls_certificate_required",
     "not_ready",
     "offline_snapshot_unavailable",
-    "payload_too_large",
-    "peer_contract_malformed",
-    "peer_incompatible",
     "outbound_privacy_error",
     "outbound_redaction_failed",
     "outbound_redactor_required",
     "path_exists",
     "path_invalid",
     "path_outside_root",
+    "payload_too_large",
+    "peer_contract_malformed",
+    "peer_incompatible",
     "privacy_gateway_blocked",
     "privacy_gateway_error",
     "privacy_gateway_not_configured",
@@ -119,10 +122,10 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "replacement_state_error",
     "replacement_state_limit",
     "replacement_state_not_found",
+    "replica_unsafe_state",
+    "request_body_timeout",
     "request_size_exceeded",
     "request_size_invalid",
-    "request_body_timeout",
-    "replica_unsafe_state",
     "restricted_terminology_unconfigured",
     "service_busy",
     "signature_invalid",
@@ -1531,11 +1534,49 @@ def _resolve_pointer(document: Mapping[str, Any], pointer: str) -> Mapping[str, 
     return value
 
 
+def _module_string_constants(tree: ast.AST) -> dict[str, str]:
+    """Return top-level ``NAME = "literal"`` constants of one module."""
+    constants: dict[str, str] = {}
+    for node in getattr(tree, "body", ()):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        value = node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    constants[target.id] = value.value
+    return constants
+
+
 def _error_categories_from_ast(tree: ast.AST) -> set[str]:
     categories: set[str] = set()
+    constants = _module_string_constants(tree)
+
+    def literal(value: ast.AST) -> str | None:
+        # Codes are passed as literals or as module-level string constants.
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+        if isinstance(value, ast.Name):
+            return constants.get(value.id)
+        return None
+
     for node in ast.walk(tree):
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            # The bounded-body middleware maps each rejection code constant to
+            # its status in ``_REJECTION_STATUS`` and rejects through that table.
+            if any(
+                isinstance(target, ast.Name) and target.id == "_REJECTION_STATUS"
+                for target in targets
+            ) and isinstance(node.value, ast.Dict):
+                for key in node.value.keys:
+                    code = literal(key) if key is not None else None
+                    if code is not None:
+                        categories.add(code)
             if any(
                 isinstance(target, ast.Name) and target.id == "error_code"
                 for target in targets
@@ -1559,9 +1600,10 @@ def _error_categories_from_ast(tree: ast.AST) -> set[str]:
         if function_name in {"_error_response", "_limit_response"} and (
             len(node.args) > 1
         ):
-            value = node.args[1]
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                categories.add(value.value)
+            code = literal(node.args[1])
+            if code is not None:
+                categories.add(code)
+
         if function_name == "BulkPathError" and node.args:
             value = node.args[0]
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
