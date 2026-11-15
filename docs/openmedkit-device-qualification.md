@@ -284,8 +284,9 @@ values are never printed. The script refuses to write `--proposed-matrix`
 over the matrix it read or over the packaged matrix.
 
 `--require-qualified` exits with status 1 unless every planned cell is
-qualified. The portable-kit release gate (#3932) is expected to use this
-report.
+qualified. The [v4.0 kit release gate](release/v4.0-kit-release-gate.md)
+binds this report into its signed packet and requires every supported
+inference cell to be qualified by physical-device evidence.
 
 After reviewing a proposed matrix, copy it over
 `openmed/eval/data/kit_support_matrix.json` and commit the referenced

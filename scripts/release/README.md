@@ -106,6 +106,28 @@ download, or mutate release inputs. See
 `docs/release/v3.0-journey-release-gate.md` for the complete manifest,
 performance, licensing, exception, signing, and verification contracts.
 
+## V4.0 OpenMedKit release packet
+
+The portable-kit gate (planned as v3.5, folded into v4.0) binds one candidate
+commit to the kit artifacts, the frozen support matrix, the device
+qualification report, bundle, parity, license and threat-model digests,
+test-lane results and moved P1/P2 items, then writes a signed value-free
+packet with the Journey gate's canonicalization and HMAC signing. Set
+`OPENMED_KIT_RELEASE_KEY` from a secret manager or pass `--signing-key-file`.
+
+```bash
+python scripts/release/kit_release_gate.py \
+  --manifest kit-release-manifest.json \
+  --output kit-release-packet.json
+python scripts/release/kit_release_gate.py \
+  --verify kit-release-packet.json --require-ready
+```
+
+A build returns `0` only for `READY`, `1` for a signed `NOT_READY` packet and
+`2` when no safe decision can be produced; `--verify` returns `0` only for a
+valid packet. Neither mode tags, publishes or promotes. See
+`docs/release/v4.0-kit-release-gate.md` for evidence kinds and reason codes.
+
 ## Retraining recipe proposals
 
 `retrain_queue.py` consumes the committed aggregate-only input contract at
