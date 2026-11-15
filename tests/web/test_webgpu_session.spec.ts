@@ -207,6 +207,66 @@ test("rejects remote model variants before runtime creation", async () => {
   assert.equal(runtime.createCalls.length, 0);
 });
 
+test("typed external-data shards reach the WebGPU and wasm fallback attempts", async () => {
+  const fixture = await loadFixture();
+  const runtime = createRuntime(fixture.reference_logits, {
+    failWebGpuCreate: true,
+  });
+  const create = runtime.InferenceSession.create;
+  const forwarded: unknown[] = [];
+  runtime.InferenceSession.create = (modelPath, sessionOptions) => {
+    forwarded.push(sessionOptions?.externalData);
+    return create(modelPath, sessionOptions);
+  };
+  const session = await loadWebGpuTokenClassificationSession({
+    modelPath: "/models/synthetic/model.onnx",
+    assetPath: "/runtime/ort/",
+    runtime,
+    capabilities: webGpuProfile,
+    externalData: {
+      shards: [
+        {
+          path: "model.onnx.data.000",
+          location: "/models/synthetic/model.onnx.data.000",
+          byteLength: 1024,
+        },
+      ],
+    },
+    cache: new Map(),
+  });
+
+  const expected = [
+    { path: "model.onnx.data.000", data: "/models/synthetic/model.onnx.data.000" },
+  ];
+  assert.equal(session.backend, "wasm-basic");
+  assert.deepEqual(forwarded, [expected, expected]);
+  await session.dispose();
+});
+
+test("rejects untyped external data before WebGPU session creation", async () => {
+  const fixture = await loadFixture();
+  const runtime = createRuntime(fixture.reference_logits);
+  await assert.rejects(
+    () =>
+      loadWebGpuTokenClassificationSession({
+        modelPath: "/models/synthetic/model.onnx",
+        assetPath: "/runtime/ort/",
+        runtime,
+        capabilities: webGpuProfile,
+        sessionOptions: {
+          externalData: [
+            {
+              path: "model.onnx.data",
+              data: "https://models.example.invalid/model.onnx.data",
+            },
+          ],
+        },
+      }),
+    /^Error: ONNX Runtime Web external data must use the typed externalData option\.$/,
+  );
+  assert.equal(runtime.createCalls.length, 0);
+});
+
 test("Python reference logits pass fixed-tolerance span and recall gates", async () => {
   const fixture = await loadFixture();
   const reference = fixtureLogits(fixture);

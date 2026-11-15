@@ -24,6 +24,7 @@ from openmed.core.model_integrity import (
     sha256_file,
     verify_artifact_manifest,
     verify_manifest_signature,
+    write_local_artifact_manifest,
 )
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "model_integrity"
@@ -329,3 +330,77 @@ def test_sigstore_bundle_rejects_tampered_manifest(tmp_path: Path) -> None:
     with pytest.raises(ModelIntegrityError) as raised:
         verify_manifest_signature(tampered, bundle)
     assert raised.value.expected_sha256 != raised.value.actual_sha256
+
+
+def test_integrity_errors_carry_value_free_codes(tmp_path: Path) -> None:
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "model.safetensors").write_bytes(b"synthetic weights")
+    sidecar = _write_integrity_manifest(model_dir)
+
+    with pytest.raises(ModelIntegrityError) as wrong_model:
+        verify_artifact_manifest(sidecar, expected_model_id="OpenMed/other")
+    assert wrong_model.value.code == "manifest_model_mismatch"
+
+    with pytest.raises(ModelIntegrityError) as wrong_revision:
+        verify_artifact_manifest(
+            sidecar, expected_reproducibility_hash="sha256:" + "2" * 64
+        )
+    assert wrong_revision.value.code == "manifest_revision_mismatch"
+
+    (model_dir / "model.safetensors").write_bytes(b"tampered weights")
+    with pytest.raises(ModelIntegrityError) as tampered:
+        verify_artifact_manifest(sidecar)
+    assert tampered.value.code == "artifact_digest_mismatch"
+
+    (model_dir / "model.safetensors").unlink()
+    with pytest.raises(ModelIntegrityError) as missing:
+        verify_artifact_manifest(sidecar)
+    assert missing.value.code == "artifact_missing"
+
+    sidecar.write_text("{broken", encoding="utf-8")
+    with pytest.raises(ModelIntegrityError) as invalid:
+        verify_artifact_manifest(sidecar)
+    assert invalid.value.code == "manifest_invalid"
+    assert ModelIntegrityError("m", expected_sha256="a", actual_sha256="b").code == (
+        "integrity_failed"
+    )
+
+
+def test_local_artifact_manifest_is_relocatable(tmp_path: Path) -> None:
+    tree = tmp_path / "bundle"
+    (tree / "nested").mkdir(parents=True)
+    (tree / "model.safetensors").write_bytes(b"synthetic weights")
+    (tree / "nested" / "tokenizer.json").write_text("{}", encoding="utf-8")
+
+    sidecar = write_local_artifact_manifest(
+        tree,
+        model_id="OpenMed/local-fixture",
+        reproducibility_hash="sha256:" + "3" * 64,
+    )
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert payload["artifact_root"] == "."
+    assert [entry["path"] for entry in payload["artifacts"]] == [
+        "model.safetensors",
+        "nested/tokenizer.json",
+    ]
+
+    moved = tree.rename(tmp_path / "moved")
+    result = verify_artifact_manifest(
+        moved / ARTIFACT_MANIFEST_FILENAME, expected_model_id="OpenMed/local-fixture"
+    )
+    assert result.files_checked == 2
+    assert result.artifact_root == moved / "."
+
+    with pytest.raises(ValueError):
+        write_local_artifact_manifest(
+            tmp_path / "absent", model_id="m", reproducibility_hash="sha256:" + "3" * 64
+        )
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(ValueError):
+        write_local_artifact_manifest(
+            empty, model_id="m", reproducibility_hash="sha256:" + "3" * 64
+        )
+    with pytest.raises(ValueError):
+        write_local_artifact_manifest(moved, model_id="m", reproducibility_hash="md5:x")

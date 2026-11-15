@@ -17,9 +17,10 @@ import warnings
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
-from typing import Any, TypeVar, cast
+from typing import Any, ClassVar, TypeVar, cast
 
 from openmed.multimodal.dicom_transfer_syntax import read_dicom_transfer_syntax
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 from openmed.multimodal.vision.providers.base import (
     EdgeVLMProvider,
     ImageInput,
@@ -747,6 +748,10 @@ class SampledFrameInference:
 @dataclass(frozen=True, slots=True)
 class SampledSeriesInference:
     """Actual provider results whose evidence scope cannot include unseen frames."""
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[
+        NoticeKind.VISUAL_DESCRIPTION
+    ]
 
     plan: SeriesSamplingPlan
     frames: tuple[SampledFrameInference, ...] = field(repr=False)

@@ -11,11 +11,18 @@ import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, ClassVar, Mapping, Sequence
 
 from openmed.multimodal.generated_text_guard import (
     AssetIdentifierDigest,
     GeneratedTextGuard,
+)
+from openmed.multimodal.notices import (
+    NOTICE_CATALOG,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
 )
 from openmed.multimodal.provider_result import ProviderResultEnvelope
 
@@ -51,17 +58,72 @@ class CompassPreparedInput:
 
 
 @dataclass(frozen=True)
-class VisionLanguageGeneration:
-    """Text plus deterministic generation and performance metadata."""
+class VisionLanguageGeneration(NoticeBoundOutput):
+    """Protected visual text and metadata with a mandatory review notice."""
 
+    NOTICE_KIND: ClassVar[NoticeKind] = NoticeKind.VISUAL_DESCRIPTION
+    SCHEMA_VERSION: ClassVar[str] = "openmed.multimodal.vision_generation.v1"
     text: str = field(repr=False)
-    token_ids: tuple[int, ...]
+    token_ids: tuple[int, ...] = field(repr=False)
     prompt_tokens: int
     generation_tokens: int
     prompt_seconds: float
     generation_seconds: float
     peak_memory_gb: float
-    release_envelope: ProviderResultEnvelope | None = None
+    notice: MultimodalNotice = field(
+        init=False, default=NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION]
+    )
+    release_envelope: ProviderResultEnvelope | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        self._validate_notice()
+        if not isinstance(self.text, str):
+            raise MultimodalNoticeError("vision output text must be a string")
+        if not isinstance(self.token_ids, (tuple, list)) or any(
+            type(token) is not int or not 0 <= token < 2**31 for token in self.token_ids
+        ):
+            raise MultimodalNoticeError("vision token IDs are invalid")
+        if any(
+            type(count) is not int or count < 0
+            for count in (self.prompt_tokens, self.generation_tokens)
+        ):
+            raise MultimodalNoticeError("vision token counts are invalid")
+        for value in (
+            self.prompt_seconds,
+            self.generation_seconds,
+            self.peak_memory_gb,
+        ):
+            if (
+                type(value) not in (int, float)
+                or value < 0
+                or value > 1e12
+                or not math.isfinite(value)
+            ):
+                raise MultimodalNoticeError("vision performance metadata is invalid")
+        object.__setattr__(self, "token_ids", tuple(self.token_ids))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Encode the shared generation contract, with release evidence kept separate."""
+        result = super().to_dict()
+        del result["release_envelope"]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> VisionLanguageGeneration:
+        """Decode the shared notice contract without accepting release evidence."""
+        if not isinstance(data, Mapping) or "release_envelope" in data:
+            raise MultimodalNoticeError("result fields are invalid")
+        return super().from_dict({**data, "release_envelope": None})
+
+    def __str__(self) -> str:
+        return f"[{self.notice.identifier}] {self.notice.text}"
+
+    def render_text(self) -> str:
+        """Render protected generated text together with its review notice."""
+        self.__post_init__()
+        return f"[{self.notice.identifier}] {self.notice.text}\n\n{self.text}"
 
 
 def smart_resize(
@@ -514,7 +576,8 @@ class OpenMedMLXVisionLanguageModel:
             identifiers: Digest-only OCR/header/region identifier evidence.
 
         Returns:
-            The decoded assistant response.
+            The screened assistant response. Use ``generate_with_metadata``
+            and render its review notice when displaying the result.
         """
 
         return self.generate_with_metadata(
@@ -611,7 +674,7 @@ class OpenMedMLXVisionLanguageModel:
             asset_digest=asset_digest or "0" * 64,
             identifiers=identifiers,
         )
-        return VisionLanguageGeneration(
+        result = VisionLanguageGeneration(
             text=guarded.text or "",
             # Original token IDs can reconstruct PHI even after text redaction.
             token_ids=(),
@@ -620,8 +683,9 @@ class OpenMedMLXVisionLanguageModel:
             prompt_seconds=prompt_seconds,
             generation_seconds=generation_seconds,
             peak_memory_gb=float(mx.get_peak_memory()) / 1e9,
-            release_envelope=guarded.envelope,
         )
+        object.__setattr__(result, "release_envelope", guarded.envelope)
+        return result
 
 
 def generate_vision_text(

@@ -14,6 +14,13 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Literal
 
+from .code_regions import (
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+)
 from .render_pdf import _append_page, _import_optional, _page_content
 
 
@@ -251,6 +258,8 @@ def render_redacted_raster_pages(
     max_regions: int = 25_000,
     max_output_bytes: int = 32_000_000,
     cancel_check: Callable[[], bool] | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
 ) -> RasterExportResult:
     """Burn selected pixels and encode fresh, verified PDF or PNG bytes in memory.
 
@@ -264,6 +273,8 @@ def render_redacted_raster_pages(
         max_regions: Maximum input rectangles across pages, including duplicates.
         max_output_bytes: Maximum encoded file size, enforced during writing.
         cancel_check: Optional cooperative cancellation callback.
+        code_detector: Local code provider, or optional ZXing by default.
+        code_detection_policy: Reject unavailable detection or record incomplete coverage.
 
     Returns:
         Verified file bytes and coordinate/count/hash evidence. The PDF has no
@@ -333,16 +344,40 @@ def render_redacted_raster_pages(
                 )
             ):
                 raise RasterExportError("raster_invalid_page_size")
-            regions = _rectangles(
-                page.regions, width, height, padding_pixels, max_regions - total_regions
+            if (
+                not isinstance(page.regions, Sequence)
+                or len(page.regions) > max_regions - total_regions
+            ):
+                raise RasterExportError("raster_region_limit")
+            code_coverage = detect_code_regions(
+                page.image,
+                detector=code_detector,
+                policy=code_detection_policy,
+                page=index,
+                max_regions=max(1, max_regions - total_regions),
             )
-            total_regions += len(page.regions)
+            all_regions = tuple(page.regions) + tuple(
+                region.bbox for region in code_coverage.regions
+            )
+            regions = _rectangles(
+                all_regions, width, height, padding_pixels, max_regions - total_regions
+            )
+            total_regions += len(all_regions)
             with _rgb_copy(page.image, image_module) as source:
                 with source.copy() as redacted:
                     _burn(redacted, regions)
                     _verify_pixels(source, redacted, regions)
+                    residual_codes = detect_code_regions(
+                        redacted,
+                        detector=code_detector,
+                        policy=code_detection_policy,
+                        page=index,
+                    )
+                    assert_no_residual_codes(residual_codes)
                     record = {
                         "page": index,
+                        "code_coverage": code_coverage.to_dict(),
+                        "residual_code_coverage": residual_codes.to_dict(),
                         "size_pixels": [width, height],
                         "size_points": list(points) if output_format == "pdf" else None,
                         "regions_pixels": [list(bbox) for bbox in regions],
@@ -384,7 +419,7 @@ def render_redacted_raster_pages(
         return RasterExportResult(
             content, "application/pdf" if pikepdf else "image/png", tuple(records)
         )
-    except RasterExportError:
+    except (RasterExportError, CodeDetectionError):
         raise
     except Exception:
         raise RasterExportError("raster_export_failed") from None

@@ -40,6 +40,8 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
+import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -496,6 +498,36 @@ def run_shadow_comparison(
     return tuple(comparisons)
 
 
+def _write_text_atomic(path: Path, text: str) -> Path:
+    """Write *text* to *path* through a same-directory temporary file.
+
+    A crash or full disk mid-write must never leave a truncated document at
+    *path*: the payload lands in a temporary sibling, is flushed and fsynced,
+    then moved into place with :func:`os.replace`. The temporary file is
+    removed when anything fails.
+    """
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            dir=path.parent,
+            encoding="utf-8",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    return path
+
+
 @dataclass
 class RolloutStateMachine:
     """Guarded shadow/canary/stable state machine over rollout keys."""
@@ -896,10 +928,7 @@ class RolloutStateMachine:
     def save(self, path: str | Path = ROLLOUT_STATE_PATH) -> Path:
         """Write the machine to ``path`` with deterministic formatting."""
 
-        state_path = Path(path)
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(self.to_json(), encoding="utf-8")
-        return state_path
+        return _write_text_atomic(Path(path), self.to_json())
 
     def copy(self) -> "RolloutStateMachine":
         """Return a deep copy of the machine, sharing the clock callable."""
@@ -924,13 +953,10 @@ class RolloutStateMachine:
     def save_audit(self, path: str | Path) -> Path:
         """Write rollout audit evidence with deterministic formatting."""
 
-        audit_path = Path(path)
-        audit_path.parent.mkdir(parents=True, exist_ok=True)
-        audit_path.write_text(
+        return _write_text_atomic(
+            Path(path),
             json.dumps(self.audit_to_dict(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
         )
-        return audit_path
 
 
 @dataclass

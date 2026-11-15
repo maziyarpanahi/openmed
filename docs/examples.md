@@ -105,6 +105,7 @@ content-security policy blocks the optional inline styling.
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
 | `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
 | `examples/v3_golden_journey.py` | Executes the offline five-source v3 conformance Journey and prints a compact receipt derived from real library contracts. |
+| `examples/federated_round_walkthrough.py` | Walks through an offline synthetic metadata-only round: update validation, schema grouping, metric suppression, and JSON or Markdown status; see the [federated round walkthrough](./training/federated-round-lifecycle.md#offline-round-walkthrough). |
 | [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) | Runs section-scoped SDOH extraction, explicitly anchored temporal normalization and a timeline on embedded synthetic data; prints controlled labels, offsets and states only. |
 | [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) | Runs explicit development NLI and a synthetic calibration double, then binds diagnosis/treatment and procedure/indication candidates to evidence and human-review queue bands. |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
@@ -237,7 +238,7 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-The OpenMed `3.2.0` candidate retains release-critical Apple, Android, browser,
+The OpenMed `3.3.0` candidate retains release-critical Apple, Android, browser,
 and service entry points. Native feature coverage differs by platform:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts

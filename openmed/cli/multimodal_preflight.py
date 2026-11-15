@@ -413,13 +413,16 @@ def _options(parser: argparse.ArgumentParser) -> None:
 
 
 def add_multimodal_preflight_command(subparsers: Any) -> None:
-    """Register discoverable preflight help on the installed argparse CLI."""
-    group = subparsers.add_parser("multimodal", help="Offline multimodal admission.")
+    """Register the offline multimodal group and its commands."""
+    from .multimodal_inference import add_multimodal_inference_commands
+
+    group = subparsers.add_parser("multimodal", help="Offline multimodal commands.")
     commands = group.add_subparsers(dest="multimodal_command")
     command = commands.add_parser(
         "preflight", help="Bounded local headers and admission."
     )
     _options(command)
+    add_multimodal_inference_commands(commands)
 
 
 def run_multimodal_preflight_cli(argv: Sequence[str]) -> int:

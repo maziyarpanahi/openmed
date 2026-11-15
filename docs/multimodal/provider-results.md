@@ -5,6 +5,10 @@ or ASR provider call without copying its clinical output into logs or summary
 artifacts. The envelope contains stable identifiers, SHA-256 digests, timing,
 and bounded aggregate counts only.
 
+Clinical output is carried separately with its mandatory
+[multimodal review notice](notices.md). This operational envelope is not itself a
+clinical measurement or draft and does not attest to output validity.
+
 ```python
 from openmed.multimodal.provider_result import (
     ProviderResultEnvelope,
@@ -47,6 +51,12 @@ An abstention code is selected from a closed vocabulary:
 - `phi_uncertainty`
 - `speaker_uncertainty`
 - `temporal_instability`
+- `consent_unavailable`
+- `consent_withdrawn`
+- `capture_interrupted`
+- `language_unsupported`
+- `language_uncertain`
+- `policy_refused`
 
 Provider unavailability has its own terminal outcome and therefore is not an
 abstention code in this envelope.
@@ -101,3 +111,19 @@ result, verify digest content, or attest to output quality.
 Duration bounds are checked before float conversion, including oversized Python
 integers. Unknown enum values and malformed JSON produce value-free failures
 without retaining the original exception or submitted content in a cause chain.
+
+
+## Versioned abstention vocabulary
+
+Legacy codes and all non-abstention outcomes retain
+`openmed.multimodal.provider_result.v1`. Only the six consent, capture, language
+and policy codes use `openmed.multimodal.provider_result.v2`. Constructors select
+the version automatically when it is omitted; supplied versions must match the
+code. Parsers require an explicit string version, rejecting null, unknown and
+mismatched versions. `PROVIDER_RESULT_SCHEMA_VERSION` continues to identify
+v1 for existing callers. Read the envelope’s `schema_version` for its wire version.
+
+The envelope has no stage field: stage validation belongs to `AbstentionRecord`.
+See [abstention reasons](abstention-reasons.md) for each code's stage and meaning,
+v1 compatibility guarantees and JSON Schema drift expectations. Neither version
+adds any free-text fields. Provider unavailability remains its separate outcome.

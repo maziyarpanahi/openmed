@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import zlib
 from typing import Any
 
 import pytest
@@ -14,94 +13,14 @@ from openmed.multimodal.pdf_geometry import (
     PdfGeometryStatus,
     read_pdf_geometry,
 )
+from tests.fixtures.pdf_inventory import (
+    _classic_pdf,
+    _object_stream_pdf,
+    _single_page,
+    _stream_object,
+)
 
 _SENTINEL = "Synthetic Patient Jane Roe MRN 000123"
-
-
-def _classic_pdf(
-    objects: dict[int, str], *, version: str = "1.7", trailer: str = ""
-) -> bytes:
-    """Build a synthetic PDF with a classic cross-reference table."""
-    output = bytearray(f"%PDF-{version}\n%\xe2\xe3\xcf\xd3\n".encode("latin-1"))
-    offsets: dict[int, int] = {}
-    for number in sorted(objects):
-        offsets[number] = len(output)
-        output += f"{number} 0 obj\n{objects[number]}\nendobj\n".encode("latin-1")
-    size = max(objects) + 1
-    xref = len(output)
-    output += f"xref\n0 {size}\n0000000000 65535 f \n".encode("ascii")
-    for number in range(1, size):
-        if number in offsets:
-            output += f"{offsets[number]:010d} 00000 n \n".encode("ascii")
-        else:
-            output += b"0000000000 65535 f \n"
-    output += (
-        f"trailer\n<< /Size {size} /Root 1 0 R {trailer}>>\nstartxref\n{xref}\n%%EOF\n"
-    ).encode("latin-1")
-    return bytes(output)
-
-
-def _stream_object(dictionary: str, payload: bytes) -> bytes:
-    return (
-        f"<< {dictionary} /Length {len(payload)} >>\nstream\n".encode("latin-1")
-        + payload
-        + b"\nendstream"
-    )
-
-
-def _object_stream_pdf(
-    compressed: dict[int, str],
-    direct: dict[int, str],
-    *,
-    filter_name: str | None = "FlateDecode",
-    corrupt: bool = False,
-) -> bytes:
-    """Build a synthetic PDF 1.5 file with an object stream and an xref stream."""
-    numbers = sorted(compressed)
-    bodies = [compressed[number].encode("latin-1") for number in numbers]
-    offsets: list[int] = []
-    position = 0
-    for body in bodies:
-        offsets.append(position)
-        position += len(body) + 1
-    index = " ".join(f"{number} {offset}" for number, offset in zip(numbers, offsets))
-    header = (index + "\n").encode("ascii")
-    payload = header + b"\n".join(bodies) + b"\n"
-    encoded = zlib.compress(payload) if filter_name == "FlateDecode" else payload
-    if corrupt:
-        encoded = b"\x00not-zlib" + encoded[8:]
-    filter_entry = f"/Filter /{filter_name}" if filter_name else ""
-    stream_number = max([*compressed, *direct]) + 1
-    output = bytearray(b"%PDF-1.5\n")
-    for number in sorted(direct):
-        output += f"{number} 0 obj\n{direct[number]}\nendobj\n".encode("latin-1")
-    output += f"{stream_number} 0 obj\n".encode("ascii")
-    output += _stream_object(
-        f"/Type /ObjStm /N {len(numbers)} /First {len(header)} {filter_entry}",
-        encoded,
-    )
-    output += b"\nendobj\n"
-    xref_number = stream_number + 1
-    xref_offset = len(output)
-    output += f"{xref_number} 0 obj\n".encode("ascii")
-    output += _stream_object(
-        f"/Type /XRef /Size {xref_number + 1} /Root 1 0 R /W [1 4 2]",
-        b"",
-    )
-    output += f"\nendobj\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
-    return bytes(output)
-
-
-def _single_page(**page_entries: str) -> dict[int, str]:
-    entries = " ".join(f"/{key} {value}" for key, value in page_entries.items())
-    return {
-        1: "<< /Type /Catalog /Pages 2 0 R >>",
-        2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        3: f"<< /Type /Page /Parent 2 0 R {entries} /Contents 4 0 R >>",
-        4: _stream_object("", f"BT ({_SENTINEL}) Tj ET".encode("latin-1")).decode(
-            "latin-1"
-        ),
-    }
 
 
 def test_single_page_letter_geometry_is_readable() -> None:

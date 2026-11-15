@@ -8,6 +8,9 @@ import re
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from statistics import median
+from typing import ClassVar
+
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from .signal_quality import (
     AcquisitionEvidence,
@@ -262,6 +265,8 @@ class TimingCandidate:
     not a probability. Abstention contains no selected measurement or confidence.
     """
 
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.MEASUREMENT]
+
     kind: TimingKind
     state: CandidateState
     leads: tuple[str, ...]
@@ -281,6 +286,8 @@ class IntervalCandidates:
     to_report_json() is intended for value-free audit output. Sample i refers to
     source-relative time start_offset_seconds + i / sample_rate_hz.
     """
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.MEASUREMENT]
 
     source_digest: str
     waveform_digest: str

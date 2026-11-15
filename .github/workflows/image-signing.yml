@@ -21,6 +21,7 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   OIDC_ISSUER: https://token.actions.githubusercontent.com
+  SYFT_VERSION: "1.42.3"
   SIGNER_IDENTITY_RE: '^https://github.com/${{ github.repository }}/\.github/workflows/image-signing\.yml@refs/(heads/master|tags/v.*)$'
 
 jobs:
@@ -38,11 +39,61 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Install pinned Cosign
+        env:
+          COSIGN_LINUX_X64_ASSET_ID: "390331694" # v3.0.6
+          COSIGN_SHA256: "c956e5dfcac53d52bcf058360d579472f0c1d2d9b69f55209e256fe7783f4c74"
+          COSIGN_BUNDLE_ASSET_ID: "390332772"
+          COSIGN_BUNDLE_SHA256: "b3a04913f3a3f4a38e4a7a42b8d590834b8791de99ddeaad66c608b6aa8e02a4"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign_dir="$(mktemp -d "$RUNNER_TEMP/openmed-cosign.XXXXXX")"
+          curl --fail --fail-early --silent --show-error --location \
+            --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+            --header 'Accept: application/octet-stream' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --output "$cosign_dir/cosign" \
+            "https://api.github.com/repos/sigstore/cosign/releases/assets/$COSIGN_LINUX_X64_ASSET_ID" \
+            --output "$cosign_dir/cosign.sigstore.json" \
+            "https://api.github.com/repos/sigstore/cosign/releases/assets/$COSIGN_BUNDLE_ASSET_ID"
+          printf '%s  %s\n' "$COSIGN_SHA256" "$cosign_dir/cosign" \
+            "$COSIGN_BUNDLE_SHA256" "$cosign_dir/cosign.sigstore.json" \
+            | sha256sum --check --strict
+          chmod 0755 "$cosign_dir/cosign"
+          "$cosign_dir/cosign" verify-blob \
+            --bundle "$cosign_dir/cosign.sigstore.json" \
+            --certificate-identity "keyless@projectsigstore.iam.gserviceaccount.com" \
+            --certificate-oidc-issuer "https://accounts.google.com" \
+            "$cosign_dir/cosign"
+          echo "$cosign_dir" >> "$GITHUB_PATH"
+
+      - name: Cache pinned Syft
+        env:
+          SYFT_LINUX_X64_ASSET_ID: "377338300"
+          SYFT_SHA256: "0d6be741479eddd2c8644a288990c04f3df0d609bbc1599a005532a9dff63509"
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/syft-$SYFT_VERSION.tar.gz"
+          curl --fail --silent --show-error --location \
+            --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            --header 'Accept: application/octet-stream' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --output "$archive" \
+            "https://api.github.com/repos/anchore/syft/releases/assets/$SYFT_LINUX_X64_ASSET_ID"
+          echo "$SYFT_SHA256  $archive" | sha256sum --check --status
+          # The pinned download action looks up this exact version in the tool cache.
+          syft_dir="$RUNNER_TOOL_CACHE/syft/$SYFT_VERSION/x64"
+          mkdir -p "$syft_dir"
+          tar --extract --gzip --file "$archive" --directory "$syft_dir" syft
+          "$syft_dir/syft" version
+          touch "$syft_dir.complete"
 
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3

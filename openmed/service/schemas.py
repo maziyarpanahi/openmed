@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 from pydantic import StrictStr
 
@@ -42,6 +42,15 @@ from openmed.structured.decision import (
 from openmed.structured.decision import (
     MIN_TIMEOUT_MS as DECISION_MIN_TIMEOUT_MS,
 )
+from openmed.structured.decision_interop import (
+    MAX_MODEL_ID_CHARS as DECISION_MAX_MODEL_ID_CHARS,
+)
+from openmed.structured.decision_interop import (
+    DecisionRequestShape,
+    DecisionRequestShapeError,
+    decision_request_shape,
+    openai_decisions_request_schema,
+)
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
@@ -54,13 +63,23 @@ from .keep_alive import parse_keep_alive
 from .limits import get_max_text_length
 
 try:
-    from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+    from pydantic import (
+        BaseModel,
+        ConfigDict,
+        Discriminator,
+        Field,
+        Tag,
+        field_validator,
+        model_validator,
+    )
 
     PYDANTIC_V2 = True
 except ImportError:  # pragma: no cover
     from pydantic import BaseModel, Field, root_validator, validator
 
     ConfigDict = None  # type: ignore[assignment]
+    Discriminator = None  # type: ignore[assignment]
+    Tag = None  # type: ignore[assignment]
     field_validator = None  # type: ignore[assignment]
     model_validator = None  # type: ignore[assignment]
     PYDANTIC_V2 = False
@@ -73,6 +92,14 @@ _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 _DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
+# Server-owned ceilings for caller-tuned bulk and SMART job settings. Callers
+# may lower these, never raise them: they bound parallel downloads, buffered
+# resources and how often a remote FHIR server is polled.
+BULK_MAX_INFLIGHT_DOWNLOADS = 16
+BULK_MAX_BUFFERED_RESOURCES = 1000
+BULK_MIN_POLL_INTERVAL_SECONDS = 1.0
+BULK_MAX_POLL_INTERVAL_SECONDS = 300.0
+BULK_MAX_REQUEST_TIMEOUT_SECONDS = 300.0
 
 
 def _normalize_text(value: Any) -> str:
@@ -141,6 +168,15 @@ def _normalize_webhook_url(value: Any) -> str:
         raise ValueError("Webhook URL must not be blank")
     if not normalized.startswith(("http://", "https://")):
         raise ValueError("Webhook URL must start with http:// or https://")
+    from .egress import EgressDestinationError, parse_destination
+
+    try:
+        parse_destination(normalized)
+    except EgressDestinationError as exc:
+        raise ValueError(
+            "Webhook URL must be an absolute URL with a valid host and port and "
+            f"no user information ({exc.reason_code})"
+        ) from None
     return normalized
 
 
@@ -452,9 +488,17 @@ if PYDANTIC_V2:
         key_id: Optional[str] = None
         scope: str = "system/*.read"
         export_path: str = "$export"
-        max_inflight_downloads: int = Field(default=2, ge=1)
-        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        max_inflight_downloads: int = Field(
+            default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS
+        )
+        poll_interval_seconds: float = Field(
+            default=1.0,
+            ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+            le=BULK_MAX_POLL_INTERVAL_SECONDS,
+        )
+        request_timeout_seconds: float = Field(
+            default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+        )
         policy: Optional[str] = "hipaa_safe_harbor"
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
         model_name: str = _DEFAULT_PII_MODEL
@@ -825,9 +869,17 @@ else:
         key_id: Optional[str] = None
         scope: str = "system/*.read"
         export_path: str = "$export"
-        max_inflight_downloads: int = Field(default=2, ge=1)
-        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        max_inflight_downloads: int = Field(
+            default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS
+        )
+        poll_interval_seconds: float = Field(
+            default=1.0,
+            ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+            le=BULK_MAX_POLL_INTERVAL_SECONDS,
+        )
+        request_timeout_seconds: float = Field(
+            default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+        )
         policy: Optional[str] = "hipaa_safe_harbor"
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
         model_name: str = _DEFAULT_PII_MODEL
@@ -1105,7 +1157,7 @@ class FixedOptionDecisionRequest(_StrictModel):
         ge=DECISION_MIN_TIMEOUT_MS,
         le=DECISION_MAX_TIMEOUT_MS,
     )
-    schema_version: Optional[Literal["1.0.0", "1.1.0"]] = None
+    schema_version: Optional[Literal["1.0.0", "1.1.0", "1.2.0"]] = None
     compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
     question_id: Optional[str] = None
     instructions: Optional[str] = None
@@ -1151,6 +1203,86 @@ class FixedOptionDecisionRequest(_StrictModel):
                 values.get("max_input_chars"),
             )
             return values
+
+
+class OpenAIDecisionsRequest(_StrictModel):
+    """Text-only OpenAI-compatible Decisions body for ``POST /v1/decisions``.
+
+    The OpenAPI component is the canonical OpenAI-compatible request schema.
+    The converter performs the full validation of each question; the service
+    applies the default policy fields and input bound.
+    """
+
+    model: str = Field(min_length=1, max_length=DECISION_MAX_MODEL_ID_CHARS)
+    input: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS, repr=False)
+    questions: list[dict[str, Any]] = Field(
+        repr=False,
+        **(
+            {"min_length": 1, "max_length": DECISION_MAX_QUESTIONS}
+            if PYDANTIC_V2
+            else {"min_items": 1, "max_items": DECISION_MAX_QUESTIONS}
+        ),
+    )
+
+    if PYDANTIC_V2:
+        model_config = ConfigDict(
+            extra="forbid",
+            json_schema_extra=openai_decisions_request_schema(),
+        )
+    else:  # pragma: no cover
+
+        class Config:
+            extra = "forbid"
+            schema_extra = openai_decisions_request_schema()
+
+
+_DECISION_REQUEST_MODELS: dict[DecisionRequestShape, type[_StrictModel]] = {
+    DecisionRequestShape.OPENMED: FixedOptionDecisionRequest,
+    DecisionRequestShape.OPENAI_DECISIONS: OpenAIDecisionsRequest,
+}
+
+
+def _decision_body_shape(value: Any) -> Optional[str]:
+    """Return the ``POST /v1/decisions`` union tag of a body or parsed model.
+
+    ``None`` marks a body without one recognisable shape; the route refuses
+    those bodies with a controlled error before validation reaches this tag.
+    """
+
+    for shape, model in _DECISION_REQUEST_MODELS.items():
+        if isinstance(value, model):
+            return shape.value
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        return decision_request_shape(value).value
+    except DecisionRequestShapeError:
+        return None
+
+
+if PYDANTIC_V2:
+    DecisionsRequestBody = Annotated[
+        Union[
+            Annotated[
+                FixedOptionDecisionRequest,
+                Tag(DecisionRequestShape.OPENMED.value),
+            ],
+            Annotated[
+                OpenAIDecisionsRequest,
+                Tag(DecisionRequestShape.OPENAI_DECISIONS.value),
+            ],
+        ],
+        Discriminator(
+            _decision_body_shape,
+            custom_error_type="decision_body_type",
+            custom_error_message="Input should be a decision request object",
+        ),
+    ]
+else:  # pragma: no cover
+    DecisionsRequestBody = Union[  # type: ignore[misc]
+        FixedOptionDecisionRequest,
+        OpenAIDecisionsRequest,
+    ]
 
 
 class GroundCandidateResponse(_StrictModel):
@@ -1223,10 +1355,16 @@ class FHIRBulkExportRequest(_StrictModel):
     checkpoint_path: Optional[str] = None
     policy: str = "hipaa_safe_harbor"
     method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
-    max_buffered_resources: int = Field(default=1, ge=1)
-    max_inflight_downloads: int = Field(default=2, ge=1)
-    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    max_buffered_resources: int = Field(default=1, ge=1, le=BULK_MAX_BUFFERED_RESOURCES)
+    max_inflight_downloads: int = Field(default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS)
+    poll_interval_seconds: float = Field(
+        default=1.0,
+        ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+        le=BULK_MAX_POLL_INTERVAL_SECONDS,
+    )
+    request_timeout_seconds: float = Field(
+        default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+    )
     fhir_base_url: Optional[str] = None
     token_url: Optional[str] = None
     client_id: Optional[str] = None

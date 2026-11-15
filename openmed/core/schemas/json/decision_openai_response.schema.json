@@ -1,0 +1,476 @@
+{
+  "$id": "https://openmed.dev/schemas/decision-openai-response/1.2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "answers": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "probability": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "abstained",
+                  "partial",
+                  "unknown",
+                  "conflict",
+                  "unsupported",
+                  "denied",
+                  "failure"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "const": "predicate"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "probability"
+            ]
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "choice": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "code": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "probabilities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "probability": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "probability"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              "state": {
+                "enum": [
+                  "abstained",
+                  "partial",
+                  "unknown",
+                  "conflict",
+                  "unsupported",
+                  "denied",
+                  "failure"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "const": "choice"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "choice",
+              "confidence"
+            ]
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confidence": {
+                "maximum": 1,
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "probabilities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "probability": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "value": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "value",
+                    "probability"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "type": "array"
+              },
+              "score": {
+                "minimum": 0,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "abstained",
+                  "partial",
+                  "unknown",
+                  "conflict",
+                  "unsupported",
+                  "denied",
+                  "failure"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "const": "score"
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "score",
+              "confidence"
+            ]
+          }
+        ],
+        "type": "object"
+      },
+      "maxItems": 32,
+      "type": "array"
+    },
+    "model": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    },
+    "openmed": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "additionalProperties": false,
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "code": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "namespace": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "policy_version": {
+              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+              "type": "string"
+            },
+            "purpose": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "allowed",
+            "code",
+            "namespace",
+            "purpose",
+            "policy_version"
+          ],
+          "type": "object"
+        },
+        "advisory": {
+          "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+          "type": "string"
+        },
+        "autonomous_action": {
+          "const": false,
+          "type": "boolean"
+        },
+        "backend": {
+          "additionalProperties": false,
+          "properties": {
+            "backend_id": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "deterministic": {
+              "type": "boolean"
+            },
+            "kind": {
+              "enum": [
+                "deterministic",
+                "encoder",
+                "cross_encoder",
+                "specialist"
+              ],
+              "type": "string"
+            },
+            "license_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
+              "type": "string"
+            },
+            "license_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "local": {
+              "const": true,
+              "type": "boolean"
+            },
+            "model_id": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "revision": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "runtime": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend_id",
+            "kind",
+            "runtime",
+            "model_id",
+            "revision",
+            "license_id",
+            "local",
+            "deterministic"
+          ],
+          "type": "object"
+        },
+        "calibration": {
+          "additionalProperties": false,
+          "properties": {
+            "calibration_id": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "in_domain_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "method": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "minimum_confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "minimum_margin": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "multi_label_threshold": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "out_of_domain_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "version": {
+              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "calibration_id",
+            "version",
+            "method",
+            "minimum_confidence",
+            "minimum_margin",
+            "multi_label_threshold",
+            "in_domain_digest",
+            "out_of_domain_digest"
+          ],
+          "type": "object"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility_policy": {
+          "const": "same_major",
+          "type": "string"
+        },
+        "review": {
+          "additionalProperties": false,
+          "properties": {
+            "reasons": {
+              "items": {
+                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true
+            },
+            "required": {
+              "const": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "required",
+            "reasons"
+          ],
+          "type": "object"
+        },
+        "schema_version": {
+          "enum": [
+            "1.0.0",
+            "1.1.0",
+            "1.2.0"
+          ],
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "success",
+            "abstained",
+            "partial",
+            "unknown",
+            "conflict",
+            "unsupported",
+            "denied",
+            "failure"
+          ],
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "state",
+        "code",
+        "warnings",
+        "review",
+        "advisory",
+        "autonomous_action",
+        "calibration",
+        "backend",
+        "access",
+        "schema_version",
+        "compatibility_policy"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "model",
+    "answers"
+  ],
+  "title": "OpenAI-compatible Decisions Response",
+  "type": "object"
+}

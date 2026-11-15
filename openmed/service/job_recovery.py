@@ -59,8 +59,6 @@ __all__ = [
     "SYSTEM_ACTOR_DIGEST",
     "TERMINAL_STATUSES",
     "FailureDecision",
-    "IdempotencyConflictError",
-    "IdempotencyKeyError",
     "JobDecisionReceipt",
     "JobRecoveryError",
     "JobReplayAuthorization",
@@ -69,7 +67,6 @@ __all__ = [
     "StaleLeaseError",
     "classify_document_failure",
     "classify_input_failure",
-    "idempotency_key_digest",
     "public_recovery_view",
 ]
 
@@ -126,8 +123,6 @@ _CONTENTION_ERRORS = (
 _CODE_RE = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _SERVICE_JOB_ID_RE = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
-_IDEMPOTENCY_KEY_RE = re.compile(r"[A-Za-z0-9._~:-]{16,128}\Z")
-_IDEMPOTENCY_DOMAIN = "openmed.service.jobs.idempotency.v1"
 
 SYSTEM_ACTOR_DIGEST = canonical_digest({"actor": "openmed.service.jobs"})
 
@@ -136,12 +131,6 @@ _ERROR_MESSAGES = {
     "job_not_found": "job was not found",
     "job_state_conflict": "job is not in a state that allows this operation",
     "lease_fenced": "job lease is no longer held by this worker",
-    "idempotency_key_invalid": (
-        "idempotency key must be 16-128 characters of letters, digits, or ._~:-"
-    ),
-    "idempotency_key_conflict": (
-        "idempotency key was already used for a different request"
-    ),
     "job_not_quarantined": "job is not quarantined",
     "replay_unauthorized": "job replay was not authorized",
     "replay_input_unavailable": "quarantined job input is no longer available",
@@ -167,20 +156,6 @@ class StaleLeaseError(JobRecoveryError):
 
     def __init__(self) -> None:
         super().__init__("lease_fenced")
-
-
-class IdempotencyKeyError(JobRecoveryError, ValueError):
-    """Raised for an idempotency key outside the accepted format."""
-
-    def __init__(self) -> None:
-        super().__init__("idempotency_key_invalid")
-
-
-class IdempotencyConflictError(JobRecoveryError):
-    """Raised when an idempotency key is reused for a different request."""
-
-    def __init__(self) -> None:
-        super().__init__("idempotency_key_conflict")
 
 
 class ReplayRefusedError(JobRecoveryError):
@@ -381,35 +356,6 @@ class JobDecisionReceipt:
             "evidence_digest": self.evidence_digest,
             "schema_version": self.schema_version,
         }
-
-
-def idempotency_key_digest(key: str, *, scope: Optional[str] = None) -> str:
-    """Return the scoped, value-free digest of a client idempotency key.
-
-    The key is never stored. Its digest is domain-separated and bound to the
-    caller's scope (for example the authenticated principal), so the same key
-    from two principals names two logical jobs.
-
-    Args:
-        key: Client-generated key; use a random UUID.
-        scope: Opaque caller scope; ``None`` for unauthenticated callers.
-
-    Returns:
-        A ``sha256:`` digest.
-
-    Raises:
-        IdempotencyKeyError: If the key is outside the accepted format.
-    """
-
-    if not isinstance(key, str) or _IDEMPOTENCY_KEY_RE.fullmatch(key) is None:
-        raise IdempotencyKeyError()
-    return canonical_digest(
-        {
-            "domain": _IDEMPOTENCY_DOMAIN,
-            "key": key,
-            "scope": scope if isinstance(scope, str) and scope else "anonymous",
-        }
-    )
 
 
 def isoformat(value: datetime) -> str:
@@ -804,7 +750,8 @@ def public_recovery_view(recovery: Any) -> Optional[dict[str, Any]]:
     """Return the public, value-free projection of a recovery block.
 
     Lease identifiers, worker identifiers, payload references, request
-    digests, and promotion reviewer digests are omitted.
+    and output digests, and promotion reviewer digests are omitted, so the
+    public view carries no digest at all.
 
     Args:
         recovery: The record's recovery block, or ``None``.
@@ -848,7 +795,6 @@ def _public_view(recovery: Mapping[str, Any]) -> dict[str, Any]:
             else {
                 "sequence": checkpoint["sequence"],
                 "completed_at": checkpoint["completed_at"],
-                "output_digest": checkpoint["output_digest"],
             }
         ),
         "completed_documents": recovery.get("completed_documents"),

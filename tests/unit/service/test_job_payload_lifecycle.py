@@ -25,6 +25,7 @@ from openmed.core.key_provider import (
     KeyState,
 )
 from openmed.service import job_payloads, jobs
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.job_payloads import (
     JOB_PAYLOAD_KEY_PURPOSE,
     PAYLOAD_KIND_INPUT,
@@ -42,6 +43,22 @@ SECRET_SENTINEL = "ZQQUEUESECRETSENTINEL19"
 URL_SENTINEL = "https://zqqueuecallback.example.test/hook"
 SENTINELS = (TEXT_SENTINEL, SECRET_SENTINEL, URL_SENTINEL)
 START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["webhook"],
+                    "destination": "https://zqqueuecallback.example.test",
+                },
+            ]
+        ),
+    )
 
 
 class Clock:
@@ -94,6 +111,7 @@ class RecordingSender:
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
         self.calls.append(
             {
@@ -102,6 +120,7 @@ class RecordingSender:
                 "secret": secret,
                 "max_attempts": max_attempts,
                 "backoff_seconds": backoff_seconds,
+                "delivery_id": delivery_id,
             }
         )
         return self.result
@@ -113,6 +132,12 @@ def _provider(material: bytes = KEY_ONE) -> InMemoryKeyProvider:
         "jobs-key-1", material, purpose=JOB_PAYLOAD_KEY_PURPOSE, state=KeyState.ACTIVE
     )
     return provider
+
+
+def _run_and_settle(queue: jobs.DeidentifyJobQueue, item: Any) -> None:
+    """Run one job, then wait for its webhook to settle on the dispatcher."""
+    queue._run_job(item)
+    assert queue._webhooks.wait_idle(5.0)
 
 
 def _runtime() -> SimpleNamespace:
@@ -206,12 +231,14 @@ def test_submission_snapshot_ignores_later_request_mutation(
     )
     assert metadata["document_count"] == 1
     assert len(queued.documents) == 1
-    assert metadata["documents"][0]["text_hash"] == jobs.hash_text(
-        queued.documents[0].text
+    assert metadata["documents"][0]["text_digest"] == queue.digests.digest(
+        jobs.DOCUMENT_TEXT_DIGEST_DOMAIN, queued.documents[0].text
     )
     assert queued.method == "mask"
     assert queued.webhook is not None and queued.webhook.url == URL_SENTINEL
-    assert metadata["webhook"]["url_hash"] == jobs.hash_text(URL_SENTINEL)
+    assert metadata["webhook"]["url_digest"] == queue.digests.digest(
+        jobs.WEBHOOK_URL_DIGEST_DOMAIN, URL_SENTINEL
+    )
     assert metadata["payloads"]["input"]["ref"] == item.input_ref
     queue.shutdown()
 
@@ -234,7 +261,7 @@ def test_worker_runs_the_snapshot_not_the_mutated_request(
     payload.documents[0].text = "mutated synthetic text"
     payload.method = "remove"
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     assert seen == [("mask", "original synthetic text")]
     queue.shutdown()
@@ -279,7 +306,7 @@ def test_shutdown_leaves_running_and_finished_jobs_alone(
     running_future, done_future, _queued_future = queue._executor.futures
     assert running_future.set_running_or_notify_cancel()
     queue.store.update(running_id, status="running")
-    queue._run_job(queue._executor.work[1])
+    _run_and_settle(queue, queue._executor.work[1])
     assert done_future.set_running_or_notify_cancel()
     done_future.set_result(None)
 
@@ -299,14 +326,15 @@ def test_shutdown_surfaces_persistence_failures_without_values(
     queue = _queue(monkeypatch, tmp_path, clock=Clock())
     broken_id = queue.submit(_request())["id"]
     other_id = queue.submit(_request())["id"]
-    original_transition = queue.store.transition
+    original_update_if = queue.store.update_if
 
-    def transition(job_id: str, apply: Any) -> Optional[dict[str, Any]]:
-        if job_id == broken_id:
+    # Cancellation commits through the fenced lifecycle write.
+    def update_if(job_id: str, **changes: Any) -> Optional[dict[str, Any]]:
+        if job_id == broken_id and changes.get("status") == "cancelled":
             raise OSError(f"synthetic failure writing {tmp_path}")
-        return original_transition(job_id, apply)
+        return original_update_if(job_id, **changes)
 
-    monkeypatch.setattr(queue.store, "transition", transition)
+    monkeypatch.setattr(queue.store, "update_if", update_if)
     with pytest.raises(RuntimeError) as caught:
         queue.shutdown()
 
@@ -323,7 +351,7 @@ def test_cancelled_job_is_not_started_by_a_late_worker(
     job_id = queue.submit(_request())["id"]
     queue.shutdown()
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     assert queue.get(job_id)["status"] == "cancelled"
     assert queue.webhook_sender.calls == []
@@ -336,7 +364,7 @@ def test_memory_mode_leaves_no_payload_artifact_after_completion(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=sender)
     job_id = queue.submit(_request())["id"]
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "done"
@@ -365,7 +393,7 @@ def test_memory_mode_drops_failed_delivery_payloads(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=sender)
     job_id = queue.submit(_request())["id"]
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["webhook_delivery"]["success"] is False
@@ -385,7 +413,7 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
         monkeypatch, tmp_path, clock=clock, payload_store=payload_store, sender=sender
     )
     job_id = queue.submit(_request())["id"]
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
     record = queue.get(job_id)
     terminal = record["payloads"]["terminal_event"]
     first_body = sender.calls[0]["payload"]
@@ -395,6 +423,7 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
     queue.store.update(job_id, label_histogram={"MUTATED": 9}, status="failed")
     retry_ref = payload_store._index[terminal["ref"]]
     queue._deliver_terminal_event(job_id, retry_ref)
+    assert queue._webhooks.wait_idle(5.0)
 
     assert sender.calls[1]["payload"] == first_body
     assert sender.calls[1]["payload"]["label_histogram"] == {}
@@ -402,6 +431,80 @@ def test_webhook_delivery_uses_the_immutable_terminal_event(
     retry_metadata = json.dumps(queue.get(job_id)["webhook_delivery"])
     _assert_no_sentinels(retry_metadata)
     assert "label_histogram" not in retry_metadata
+    queue.shutdown()
+
+
+def test_retries_and_restarts_reuse_the_sealed_delivery_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clock = Clock()
+    sender = RecordingSender(
+        WebhookDeliveryResult(
+            success=False,
+            attempts=2,
+            status_code=503,
+            delivery_id="dlv_sender_supplied_value",
+        )
+    )
+    first = _queue(
+        monkeypatch,
+        tmp_path,
+        clock=clock,
+        payload_store=_encrypted_store(tmp_path, clock),
+        sender=sender,
+    )
+    job_id = first.submit(_request())["id"]
+    _run_and_settle(first, first._executor.work[0])
+    record = first.get(job_id)
+    terminal_ref = record["payloads"]["terminal_event"]["ref"]
+    delivery_id = record["webhook_delivery"]["delivery_id"]
+    assert delivery_id.startswith("dlv_")
+    assert sender.calls[0]["delivery_id"] == delivery_id
+
+    first._deliver_terminal_event(job_id, first.payloads._index[terminal_ref])
+    assert first._webhooks.wait_idle(5.0)
+    assert sender.calls[1]["delivery_id"] == delivery_id
+    first.shutdown = lambda: None  # type: ignore[method-assign]
+
+    # After a restart the terminal event, and so the delivery id, is reread.
+    second = _queue(
+        monkeypatch,
+        tmp_path,
+        clock=clock,
+        payload_store=_encrypted_store(tmp_path, clock),
+        sender=sender,
+    )
+    second._deliver_terminal_event(job_id, second.payloads._index[terminal_ref])
+    assert second._webhooks.wait_idle(5.0)
+
+    assert sender.calls[2]["delivery_id"] == delivery_id
+    delivery = second.get(job_id)["webhook_delivery"]
+    assert delivery["delivery_id"] == delivery_id
+    assert delivery["payload_ref"] == terminal_ref
+    _assert_no_sentinels(json.dumps(delivery))
+    _assert_no_sentinels(_all_bytes(tmp_path))
+    second.shutdown()
+
+
+def test_a_terminal_event_without_a_valid_delivery_id_is_damaged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    queue = _queue(monkeypatch, tmp_path, clock=Clock())
+    event = {
+        "delivery": {
+            "url": URL_SENTINEL,
+            "secret": SECRET_SENTINEL,
+            "max_attempts": 1,
+            "backoff_seconds": 0,
+            "delivery_id": "not a delivery id",
+        },
+        "body": {"event": "job.done"},
+    }
+
+    with pytest.raises(job_payloads.JobPayloadError) as damaged:
+        queue._send_webhook(event)
+    assert damaged.value.code == "payload_damaged"
+    assert queue.webhook_sender.calls == []
     queue.shutdown()
 
 
@@ -414,12 +517,12 @@ def test_sender_exception_is_recorded_as_a_value_free_code(
     queue = _queue(monkeypatch, tmp_path, clock=Clock(), sender=explode)
     job_id = queue.submit(_request())["id"]
     with caplog.at_level(logging.DEBUG):
-        queue._run_job(queue._executor.work[0])
+        _run_and_settle(queue, queue._executor.work[0])
 
     delivery = queue.get(job_id)["webhook_delivery"]
     assert delivery["success"] is False
     assert delivery["attempts"] == 0
-    assert delivery["error"] == "webhook_sender_failed"
+    assert delivery["error"] == "sender_error"
     _assert_no_sentinels(_all_bytes(tmp_path))
     _assert_no_sentinels(caplog.text)
 
@@ -440,11 +543,12 @@ def test_terminal_event_write_failure_skips_delivery_with_a_code(
 
     with monkeypatch.context() as patched:
         patched.setattr(job_payloads.os, "fsync", disk_full)
-        queue._run_job(queue._executor.work[0])
+        _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "done"
     assert record["webhook_delivery"] == {
+        "status": "failed",
         "success": False,
         "attempts": 0,
         "status_code": None,
@@ -483,7 +587,7 @@ def test_unreadable_input_is_quarantined_and_keeps_the_payload(
         clock=clock,
         payload_store=_encrypted_store(tmp_path, clock, material=KEY_TWO),
     )
-    wrong._run_job(item)
+    _run_and_settle(wrong, item)
 
     record = wrong.get(job_id)
     assert record["status"] == "quarantined"
@@ -507,7 +611,7 @@ def test_input_expiring_while_queued_fails_the_job(
     job_id = queue.submit(_request(payload_retention_seconds=30))["id"]
     clock.advance(30)
 
-    queue._run_job(queue._executor.work[0])
+    _run_and_settle(queue, queue._executor.work[0])
 
     record = queue.get(job_id)
     assert record["status"] == "failed"
@@ -598,7 +702,7 @@ def test_restart_recovers_encrypted_input_and_terminal_event_until_expiry(
     input_ref = record["payloads"]["input"]["ref"]
     recovered = second.payloads.read(input_ref, job_id=job_id, kind=PAYLOAD_KIND_INPUT)
     assert recovered["documents"][0]["text"] == TEXT_SENTINEL
-    second._run_job(jobs._JobWorkItem(job_id, input_ref))
+    _run_and_settle(second, jobs._JobWorkItem(job_id, input_ref))
     record = second.get(job_id)
     terminal = record["payloads"]["terminal_event"]
     assert record["status"] == "done"

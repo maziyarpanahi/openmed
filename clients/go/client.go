@@ -53,6 +53,9 @@ const (
 	pathSMARTBackendIngestionSummary = "/fhir/smart-backend/ingestions/{job_id}/summary"
 )
 
+// idempotencyKeyHeader deduplicates retried job starts on the service.
+const idempotencyKeyHeader = "Idempotency-Key"
+
 // AggregationStrategy selects how token-level predictions are grouped by the
 // /analyze endpoint.
 type AggregationStrategy string
@@ -354,9 +357,10 @@ type PrivacyGatewayRequest struct {
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
 }
 
-// FixedOptionDecisionRequest is the request body for POST /v1/decisions.
-// The fields after CompatibilityPolicy are optional schema 1.1.0 fields;
-// Questions holds named question objects for DecisionQuestionSet requests.
+// FixedOptionDecisionRequest is the OpenMed request body for POST
+// /v1/decisions. The fields after CompatibilityPolicy are optional extension
+// fields (schema 1.1.0, and 1.2.0 for Media); Questions holds named question
+// objects for DecisionQuestionSet requests.
 type FixedOptionDecisionRequest struct {
 	Mode                DecisionMode `json:"mode"`
 	InputText           string       `json:"input_text"`
@@ -375,6 +379,15 @@ type FixedOptionDecisionRequest struct {
 	Media               []JSONObject `json:"media,omitempty"`
 	InputFormat         string       `json:"input_format,omitempty"`
 	MaxInputChars       int          `json:"max_input_chars,omitempty"`
+}
+
+// OpenAIDecisionsRequest is the text-only OpenAI-compatible Decisions body
+// for POST /v1/decisions. Model must name the model the service decides with;
+// Questions holds predicate, choice or score question objects.
+type OpenAIDecisionsRequest struct {
+	Model     string       `json:"model"`
+	Input     string       `json:"input"`
+	Questions []JSONObject `json:"questions"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -638,8 +651,8 @@ type DecisionQuestionResult struct {
 }
 
 // FixedOptionDecisionResult is the calibrated, explicitly review-only result
-// returned by POST /v1/decisions. Schema 1.1.0 results also carry
-// LevelScores, ExpectedLevel and Questions.
+// returned by POST /v1/decisions for an OpenMed request. Schema 1.1.0 and
+// later results also carry LevelScores, ExpectedLevel and Questions.
 type FixedOptionDecisionResult struct {
 	Mode                DecisionMode             `json:"mode"`
 	State               DecisionState            `json:"state"`
@@ -666,7 +679,33 @@ type FixedOptionDecisionResult struct {
 	Extensions          JSONObject               `json:"extensions"`
 }
 
-// HealthResponse is returned by /health.
+// OpenAIDecisionsAnswer is one answer of an OpenAI-compatible Decisions
+// response. Predicate answers set Probability, choice answers Choice and
+// score answers Score; a question that did not succeed carries a nil
+// selection plus its OpenMed State and Code.
+type OpenAIDecisionsAnswer struct {
+	Type          string         `json:"type"`
+	Name          string         `json:"name"`
+	Probability   *float64       `json:"probability,omitempty"`
+	Choice        *string        `json:"choice,omitempty"`
+	Score         *float64       `json:"score,omitempty"`
+	Confidence    *float64       `json:"confidence,omitempty"`
+	Probabilities []JSONObject   `json:"probabilities,omitempty"`
+	State         *DecisionState `json:"state,omitempty"`
+	Code          *string        `json:"code,omitempty"`
+}
+
+// OpenAIDecisionsResponse is returned by POST /v1/decisions for an
+// OpenAI-compatible body. OpenMed carries the review requirement, advisory,
+// calibration, backend provenance and schema version of the result.
+type OpenAIDecisionsResponse struct {
+	Model   string                  `json:"model"`
+	Answers []OpenAIDecisionsAnswer `json:"answers"`
+	OpenMed JSONObject              `json:"openmed,omitempty"`
+}
+
+// HealthResponse is returned by /health. Version and Profile are reported
+// only by the dev profile; other profiles leave them empty.
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`
@@ -742,43 +781,78 @@ type SMARTBackendJobStatus struct {
 	Error     *string                       `json:"error"`
 }
 
+// KeyedDigest is a keyed, domain-separated HMAC-SHA256 digest. Values are
+// comparable only between digests that share a KeyID.
+type KeyedDigest struct {
+	Alg   string `json:"alg"`
+	KeyID string `json:"key_id"`
+	Value string `json:"value"`
+}
+
+// JobDigests describes how the digests in a job record were made. Mode is
+// "keyed" (Alg and KeyID are set) or "omitted" (Reason is
+// "digest_key_unconfigured" or "legacy_digests_removed", and every digest in
+// the record is nil).
+type JobDigests struct {
+	Mode   string  `json:"mode"`
+	Alg    *string `json:"alg"`
+	KeyID  *string `json:"key_id"`
+	Reason *string `json:"reason"`
+}
+
 // JobDocumentMetadata describes one document in a job response. Document text
-// is represented by its length and hash. ID echoes the caller-supplied
-// identifier, so callers should keep document identifiers free of PHI.
+// is represented by its length and a keyed digest, which is nil when digests
+// are omitted. ID echoes the caller-supplied identifier, so callers should
+// keep document identifiers free of PHI.
 type JobDocumentMetadata struct {
-	ID       string `json:"id"`
-	Length   int    `json:"length"`
-	TextHash string `json:"text_hash"`
+	ID         string       `json:"id"`
+	Length     int          `json:"length"`
+	TextDigest *KeyedDigest `json:"text_digest"`
 }
 
-// JobSpan is a detected span in a job response, carrying offsets and a hash
-// instead of plaintext. DocumentID echoes the caller-supplied document ID.
+// JobSpan is a detected span in a job response, carrying offsets and a keyed
+// digest instead of plaintext; TextDigest is nil when digests are omitted.
+// DocumentID echoes the caller-supplied document ID.
 type JobSpan struct {
-	DocumentID string   `json:"document_id"`
-	Start      int      `json:"start"`
-	End        int      `json:"end"`
-	Label      string   `json:"label"`
-	TextHash   string   `json:"text_hash"`
-	Confidence *float64 `json:"confidence"`
+	DocumentID string       `json:"document_id"`
+	Start      int          `json:"start"`
+	End        int          `json:"end"`
+	Label      string       `json:"label"`
+	TextDigest *KeyedDigest `json:"text_digest"`
+	Confidence *float64     `json:"confidence"`
 }
 
-// JobWebhookMetadata reports webhook configuration on a job.
+// JobWebhookMetadata reports webhook configuration on a job. The callback URL
+// is represented only by a keyed digest, nil when digests are omitted.
 type JobWebhookMetadata struct {
-	Configured     bool    `json:"configured"`
-	URLHash        string  `json:"url_hash"`
-	MaxAttempts    int     `json:"max_attempts"`
-	BackoffSeconds float64 `json:"backoff_seconds"`
+	Configured     bool         `json:"configured"`
+	URLDigest      *KeyedDigest `json:"url_digest"`
+	MaxAttempts    int          `json:"max_attempts"`
+	BackoffSeconds float64      `json:"backoff_seconds"`
+}
+
+// JobWebhookAttemptReceipt is the value-free record of one delivery attempt.
+// KeyID is a public signing key id, never key material.
+type JobWebhookAttemptReceipt struct {
+	Attempt    int     `json:"attempt"`
+	KeyID      *string `json:"key_id"`
+	SignedAt   *int64  `json:"signed_at"`
+	StatusCode *int    `json:"status_code"`
+	Error      *string `json:"error"`
 }
 
 // JobWebhookDelivery reports the outcome of a webhook delivery attempt.
-// Error is a value-free code; PayloadRef names the immutable terminal-event
-// payload the delivery used.
+// Error is a value-free code; DeliveryID is the opaque id sent on every retry;
+// PayloadRef names the immutable terminal-event payload the delivery used.
 type JobWebhookDelivery struct {
-	Success    bool    `json:"success"`
-	Attempts   int     `json:"attempts"`
-	StatusCode *int    `json:"status_code"`
-	Error      *string `json:"error"`
-	PayloadRef *string `json:"payload_ref,omitempty"`
+	Success          bool                       `json:"success"`
+	Attempts         int                        `json:"attempts"`
+	StatusCode       *int                       `json:"status_code"`
+	Error            *string                    `json:"error"`
+	DeliveryID       *string                    `json:"delivery_id,omitempty"`
+	SignatureVersion *string                    `json:"signature_version,omitempty"`
+	AttemptReceipts  []JobWebhookAttemptReceipt `json:"attempt_receipts,omitempty"`
+	PayloadRef       *string                    `json:"payload_ref,omitempty"`
 }
 
 // JobErrorSummary describes a job-level error with a value-free code.
@@ -808,8 +882,10 @@ type JobPayloads struct {
 	TerminalEvent    *JobPayloadRef `json:"terminal_event"`
 }
 
-// JobResponse is returned by POST /jobs and GET /jobs/{job_id}.
+// JobResponse is returned by POST /jobs and GET /jobs/{job_id}. SchemaVersion
+// is 3 for records that carry keyed digests.
 type JobResponse struct {
+	SchemaVersion   int                   `json:"schema_version"`
 	ID              string                `json:"id"`
 	Status          JobStatus             `json:"status"`
 	ProgressPercent float64               `json:"progress_percent"`
@@ -817,6 +893,7 @@ type JobResponse struct {
 	ProcessedCount  int                   `json:"processed_count"`
 	FailedCount     int                   `json:"failed_count"`
 	LabelHistogram  map[string]int        `json:"label_histogram"`
+	Digests         *JobDigests           `json:"digests"`
 	Spans           []JobSpan             `json:"spans"`
 	Documents       []JobDocumentMetadata `json:"documents"`
 	Error           *JobErrorSummary      `json:"error"`
@@ -1456,9 +1533,19 @@ func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest) (*JSONObje
 	return &out, nil
 }
 
-// Decision calls POST /v1/decisions.
+// Decision calls POST /v1/decisions with an OpenMed decision request.
 func (c *Client) Decision(ctx context.Context, req FixedOptionDecisionRequest) (*FixedOptionDecisionResult, error) {
 	var out FixedOptionDecisionResult
+	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// OpenAIDecisions calls POST /v1/decisions with an OpenAI-compatible
+// Decisions body; the service answers in the same shape.
+func (c *Client) OpenAIDecisions(ctx context.Context, req OpenAIDecisionsRequest) (*OpenAIDecisionsResponse, error) {
+	var out OpenAIDecisionsResponse
 	if err := c.post(ctx, "/v1/decisions", req, &out); err != nil {
 		return nil, err
 	}
@@ -1613,6 +1700,27 @@ func (c *Client) StartSMARTBackendIngestion(ctx context.Context, req SMARTBacken
 	return &out, nil
 }
 
+// StartSMARTBackendIngestionWithIdempotencyKey calls
+// POST /fhir/smart-backend/ingestions with an Idempotency-Key header. Retrying
+// with the same key and request returns the original job instead of starting
+// another export; reusing the key for a different request fails with HTTP 409.
+func (c *Client) StartSMARTBackendIngestionWithIdempotencyKey(
+	ctx context.Context,
+	req SMARTBackendIngestionRequest,
+	idempotencyKey string,
+) (*SMARTBackendJobStatus, error) {
+	if strings.TrimSpace(idempotencyKey) == "" {
+		return nil, errors.New("openmed: idempotency key must not be empty")
+	}
+	var out SMARTBackendJobStatus
+	header := http.Header{}
+	header.Set(idempotencyKeyHeader, idempotencyKey)
+	if err := c.postWithHeader(ctx, "/fhir/smart-backend/ingestions", req, &out, header); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // SMARTBackendIngestionStatus calls GET /fhir/smart-backend/ingestions/{job_id}.
 func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) (*SMARTBackendJobStatus, error) {
 	path, err := fillJobID(pathSMARTBackendIngestionStatus, jobID)
@@ -1660,6 +1768,19 @@ func (c *Client) post(ctx context.Context, path string, in, out any) error {
 	return decodeInto(path, body, out)
 }
 
+func (c *Client) postWithHeader(
+	ctx context.Context,
+	path string,
+	in, out any,
+	header http.Header,
+) error {
+	body, err := c.rawWithHeader(ctx, http.MethodPost, path, in, "application/json", header)
+	if err != nil {
+		return err
+	}
+	return decodeInto(path, body, out)
+}
+
 // fillJobID substitutes the {job_id} placeholder in a path template with the
 // URL-escaped job identifier.
 func fillJobID(template, jobID string) (string, error) {
@@ -1699,7 +1820,17 @@ func (c *Client) rawWithAccept(
 	in any,
 	accept string,
 ) ([]byte, error) {
-	resp, err := c.do(ctx, method, path, in, accept)
+	return c.rawWithHeader(ctx, method, path, in, accept, nil)
+}
+
+func (c *Client) rawWithHeader(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+	header http.Header,
+) ([]byte, error) {
+	resp, err := c.doWithHeader(ctx, method, path, in, accept, header)
 	if err != nil {
 		return nil, err
 	}
@@ -1725,6 +1856,16 @@ func (c *Client) do(
 	in any,
 	accept string,
 ) (*http.Response, error) {
+	return c.doWithHeader(ctx, method, path, in, accept, nil)
+}
+
+func (c *Client) doWithHeader(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+	header http.Header,
+) (*http.Response, error) {
 	label := endpointLabel(path)
 	var reader io.Reader
 	if in != nil {
@@ -1738,6 +1879,11 @@ func (c *Client) do(
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
 		return nil, fmt.Errorf("openmed: build %s request", label)
+	}
+	for name, values := range header {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	req.Header.Set("Accept", accept)
 	if in != nil {

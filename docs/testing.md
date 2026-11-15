@@ -7,7 +7,8 @@ summarizes what already exists so you can extend it confidently.
 
 The core SDK supports **CPython 3.11, 3.12 and 3.13** on Linux, Windows
 and macOS. These versions and OS families are declared in `pyproject.toml`'s
-classifiers. `requires-python >=3.11` is an installation floor, not a promise
+classifiers. CI selects current hosted-runner patch releases within each minor.
+`requires-python >=3.11.5` is an installation floor, not a promise
 that an unlisted future interpreter or alternative Python implementation is
 qualified. Adding one requires a reviewed metadata, CI and documentation change.
 Python 3.10 reached end of life in October 2026 and is no longer supported. Every
@@ -94,6 +95,96 @@ python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 
 `tests/run-tests.sh` stitches together lint, format checks, unit tests, and slow smoke checks. Use it as the baseline
 for CI.
+
+## Lightweight multimodal CI lane
+
+`multimodal-tests` runs on Linux and macOS with Python 3.11, independently of
+model backend qualification. Both jobs must succeed before the CI build gate
+can pass. It executes all of `tests/unit/multimodal`, the synthetic multimodal
+release and clinical validation gates, DICOM and DICOM SR eval suites, OCR routing
+eval tests, and bounded format-parser fuzz targets. It uses synthetic fixtures
+and runs without datasets or model weights.
+DocTR, EasyOCR and PaddleOCR adapter contracts use injected fakes.
+
+Install Tesseract (`sudo apt-get install tesseract-ocr` on Linux or
+`brew install tesseract` on macOS), then run from the repository root:
+
+```bash
+uv sync --frozen --extra dev --python 3.11
+.venv/bin/python -m scripts.testing.multimodal_ci --requirements > /tmp/openmed-multimodal-requirements.txt
+uv export --frozen --no-default-groups --no-emit-project --no-hashes \
+  --extra dev --extra multimodal --output-file /tmp/openmed-multimodal-constraints.txt
+uv pip install --python .venv/bin/python --only-binary :all: \
+  --constraint /tmp/openmed-multimodal-constraints.txt \
+  --requirement /tmp/openmed-multimodal-requirements.txt
+make test-multimodal
+```
+
+The requirements command selects fsspec, Jinja2, NumPy, openpyxl, pdfplumber,
+python-docx, python-pptx, Pillow, piexif, pikepdf, pydicom, pytesseract and
+markdown-it-py with the exact bounds from `pyproject.toml`'s `multimodal` extra.
+It checks each against the release license allow-list. The exported constraints
+pin direct and transitive versions to the project lockfile. The lane excludes
+Torch, ONNX, python-doctr, EasyOCR and PaddleOCR; no new dependency extra or
+license exception is introduced. Do not install the entire `multimodal` extra
+for this lane. The `--no-sync --offline` Make target preserves the installed
+lightweight dependencies and prevents dependency resolution during testing.
+
+Before collection, every required import and the Tesseract executable must be
+available. For example, removing pydicom produces exit code 2 and
+`multimodal-ci: missing or unusable required resources: pydicom`. The gate also
+fails any collection-time `importorskip` or setup/call/teardown skip with
+`multimodal-ci: zero-skip gate failed; skipped reports=N`. It has no skip
+allow-list. Missing resources and gate summaries contain only controlled names
+and counts, never import exception values or source payloads.
+
+Tests run with offline model flags and blocked outbound sockets in the pytest
+process. Parser fuzz workers use the existing synthetic corpus and bounded
+`fuzz-default` profile (40 examples), without networking or heavy providers.
+No network is needed after dependency installation. This lane does not qualify
+model accuracy, clinical safety or platform-specific inference backends.
+
+The enforced budget is **20 minutes per job**, including installation, with
+**10 minutes for tests** and a 120-second per-test timeout. These are limits,
+not measured performance claims. Hosted Linux/macOS durations must be checked
+on the first CI run; a timeout is a failure and must be investigated rather
+than converted to a skip. Failures exposed in existing media implementations
+are follow-up work, outside the lane's CI-wiring boundary.
+
+## Service fault-injection matrix
+
+`tests/faults/` holds a test-only harness that injects disk (ENOSPC, EIO,
+partial write, fsync failure), clock (skew, forward and backward jumps,
+monotonic stall), process (kill and restart from a crash image), network
+(refused, timeout, reset, egress denied), cancellation and corrupted-state
+(truncated or garbled store files) faults at documented adapter boundaries.
+
+- `tests/faults/service_fault_plan.json` is the seeded matrix. It validates
+  against `openmed/core/schemas/json/service_fault_plan.schema.json`; each case
+  names a component, a fault, an injection point, a phase relative to the
+  component's commit point, a trigger (an explicit call or a seeded range) and
+  one documented outcome: `no_effect`, `retryable`, `quarantined`,
+  `rolled_back` or `committed_exactly_once`.
+- Every case runs twice. The control run must pass through the seam and reach
+  the component's baseline; the fault run must fire and reach the declared
+  outcome. Cancellation and kill cases can also require that no temp file,
+  orphaned blob or permit is left behind.
+- The runner emits a value-free manifest (case IDs and digests, adapter names,
+  states, counts and reason codes) that validates against
+  `service_fault_manifest.schema.json`. The same plan and seed always give the
+  same bytes:
+  `OPENMED_PROFILE=test python -m tests.faults.runner --output manifest.json`.
+- Master behaviour that misses a documented outcome is recorded in the plan as
+  a `known_gap` with its owning issue, and pinned by an `xfail(strict=True)`
+  test so the matrix fails as soon as that issue lands.
+- The harness never ships in the wheel. It refuses to import when
+  `OPENMED_PROFILE=prod` and arms only under `OPENMED_PROFILE=test`. No
+  environment variable, config key or endpoint can turn a fault on.
+
+To cover a new component, register an adapter in `tests/faults/scenarios.py`
+(its commit point, supported fault and injection-point pairs, and baseline
+outcome), then add cases to the plan. The seams, runner and manifest are
+shared.
 
 ## Docs & API checks
 

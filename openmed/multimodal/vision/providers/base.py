@@ -14,9 +14,10 @@ import math
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 
 from openmed.multimodal.abstention import AbstentionRecord, AbstentionStage
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 __all__ = [
     "NON_DIAGNOSTIC_NOTICE",
@@ -315,6 +316,10 @@ class VLMResult:
         confidence: Uncalibrated overall confidence or explicit unknown.
         abstention: Shared inference-stage abstention with no free-text reason.
     """
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[
+        NoticeKind.VISUAL_DESCRIPTION
+    ]
 
     request_digest: str
     runtime: RuntimeMetadata

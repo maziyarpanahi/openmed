@@ -147,6 +147,21 @@
     },
     {
       "classification": "operational",
+      "function": "_network_contain",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
+      "function": "_network_inject",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
+      "function": "_network_resume",
+      "module": "openmed.eval.service_recovery_drill"
+    },
+    {
+      "classification": "operational",
       "function": "CohortDefinitionServiceBridge.export",
       "module": "openmed.interop.bridges.cohort_definition"
     },
@@ -486,6 +501,11 @@
       "module": "openmed.service.client"
     },
     {
+      "module": "openmed.service.client",
+      "function": "OpenMedClient.openai_decisions",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "DeidentifyJobQueue._delete_payload",
       "module": "openmed.service.jobs"
@@ -512,6 +532,11 @@
     },
     {
       "classification": "operational",
+      "function": "ResponseHeadersMiddleware.__call__.send_with_headers",
+      "module": "openmed.service.response_headers"
+    },
+    {
+      "classification": "operational",
       "function": "ServiceRuntime.run_model_request",
       "module": "openmed.service.runtime"
     },
@@ -524,6 +549,16 @@
       "classification": "operational",
       "function": "SMARTBackendBulkIngestor._fetch_access_token",
       "module": "openmed.service.smart_backend"
+    },
+    {
+      "classification": "operational",
+      "function": "StreamWriteGuard._expire",
+      "module": "openmed.service.streaming"
+    },
+    {
+      "classification": "operational",
+      "function": "StreamWriteGuard.wrap.bounded_send",
+      "module": "openmed.service.streaming"
     },
     {
       "classification": "operational",
@@ -566,14 +601,29 @@
       "module": "openmed.structured.store.local"
     },
     {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._arm_sqlite_deadline",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "SQLiteJourneyStore._bind_encryption",
       "module": "openmed.structured.store.local"
     },
     {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._commit_before_deadline",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "SQLiteJourneyStore._complete_migration",
       "module": "openmed.structured.store.local"
+    },
+    {
+      "module": "openmed.structured.store.local",
+      "function": "SQLiteJourneyStore._disarm_sqlite_deadline",
+      "classification": "operational"
     },
     {
       "classification": "operational",
@@ -646,9 +696,34 @@
       "module": "openmed.structured.store.postgres"
     },
     {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._bounded_unit",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._commit_or_report_unknown",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "PostgresJourneyStore._reset_session",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "PostgresJourneyStore.transaction",
       "module": "openmed.structured.store.postgres"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "_PostgresConnectionAdapter._enforce_deadline",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.store.postgres",
+      "function": "_PostgresConnectionAdapter.arm",
+      "classification": "operational"
     },
     {
       "classification": "operational",
@@ -763,6 +838,81 @@
     {
       "module": "openmed.structured.cohort.resolver",
       "function": "CohortResolver._count",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service._rehearsal_worker",
+      "function": "_sqlite_previous",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.graphql_app",
+      "function": "GraphQLPrivacyHeadersMiddleware.__call__.send_with_privacy_headers",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_DoubleConnection.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_DoubleConnection.commit",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_DoubleConnection.rollback",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_DoubleCursor.execute",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_DoubleCursor.executemany",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_FaultingConnection.commit",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_FaultingCursor.execute",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_FaultingCursor.executemany",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_JourneySQLite.future",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_JourneySQLite.tamper",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_pg_execute",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.migration_rehearsal",
+      "function": "_seed_sqlite_chain",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.service.schema_registry",
+      "function": "_pg_rows",
       "classification": "operational"
     }
   ],

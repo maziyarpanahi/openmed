@@ -1,0 +1,350 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "[PAD]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "[UNK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "[CLS]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "[SEP]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 4,
+      "content": "[MASK]",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": {
+    "type": "BertNormalizer",
+    "clean_text": true,
+    "handle_chinese_chars": true,
+    "strip_accents": null,
+    "lowercase": true
+  },
+  "pre_tokenizer": {
+    "type": "BertPreTokenizer"
+  },
+  "post_processor": {
+    "type": "TemplateProcessing",
+    "single": [
+      {
+        "SpecialToken": {
+          "id": "[CLS]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 0
+        }
+      }
+    ],
+    "pair": [
+      {
+        "SpecialToken": {
+          "id": "[CLS]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "B",
+          "type_id": 1
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "[SEP]",
+          "type_id": 1
+        }
+      }
+    ],
+    "special_tokens": {
+      "[CLS]": {
+        "id": "[CLS]",
+        "ids": [
+          2
+        ],
+        "tokens": [
+          "[CLS]"
+        ]
+      },
+      "[SEP]": {
+        "id": "[SEP]",
+        "ids": [
+          3
+        ],
+        "tokens": [
+          "[SEP]"
+        ]
+      }
+    }
+  },
+  "decoder": {
+    "type": "WordPiece",
+    "prefix": "##",
+    "cleanup": true
+  },
+  "model": {
+    "type": "WordPiece",
+    "unk_token": "[UNK]",
+    "continuing_subword_prefix": "##",
+    "max_input_chars_per_word": 100,
+    "vocab": {
+      "[PAD]": 0,
+      "[UNK]": 1,
+      "[CLS]": 2,
+      "[SEP]": 3,
+      "[MASK]": 4,
+      "!": 5,
+      "\"": 6,
+      "'": 7,
+      "(": 8,
+      ")": 9,
+      ",": 10,
+      "-": 11,
+      ".": 12,
+      ":": 13,
+      ";": 14,
+      "?": 15,
+      "[": 16,
+      "]": 17,
+      "a": 18,
+      "c": 19,
+      "d": 20,
+      "e": 21,
+      "f": 22,
+      "g": 23,
+      "h": 24,
+      "i": 25,
+      "k": 26,
+      "l": 27,
+      "m": 28,
+      "n": 29,
+      "o": 30,
+      "p": 31,
+      "r": 32,
+      "s": 33,
+      "t": 34,
+      "u": 35,
+      "v": 36,
+      "w": 37,
+      "y": 38,
+      "\u05d4": 39,
+      "\u05d5": 40,
+      "\u05d7": 41,
+      "\u05dc": 42,
+      "\u0627": 43,
+      "\u0629": 44,
+      "\u062f": 45,
+      "\u0631": 46,
+      "\u0636": 47,
+      "\u0639": 48,
+      "\u0641": 49,
+      "\u0644": 50,
+      "\u0645": 51,
+      "\u064a": 52,
+      "\u0915": 53,
+      "\u0917": 54,
+      "\u0928": 55,
+      "\u092e": 56,
+      "\u0930": 57,
+      "\u0932": 58,
+      "\u093f": 59,
+      "\u0940": 60,
+      "\u094b": 61,
+      "\u0997": 62,
+      "\u09b0": 63,
+      "\u09be": 64,
+      "\u09c0": 65,
+      "\u09c7": 66,
+      "\u0ba8": 67,
+      "\u0baf": 68,
+      "\u0bb3": 69,
+      "\u0bbe": 70,
+      "\u0bbf": 71,
+      "\u0bc7": 72,
+      "\u2695": 73,
+      "\u3002": 74,
+      "\u4eca": 75,
+      "\u533b": 76,
+      "\u590d": 77,
+      "\u60a3": 78,
+      "\u65e5": 79,
+      "\u8005": 80,
+      "\u8bca": 81,
+      "\u9662": 82,
+      "\uff1a": 83,
+      "\ud83c\uddf8": 84,
+      "\ud83c\uddfa": 85,
+      "\ud83c\udffd": 86,
+      "\ud83d\udc4d": 87,
+      "\ud83d\udc69": 88,
+      "\ud83d\ude00": 89,
+      "\ud840\udc00": 90,
+      "##!": 91,
+      "##\"": 92,
+      "##'": 93,
+      "##(": 94,
+      "##)": 95,
+      "##,": 96,
+      "##-": 97,
+      "##.": 98,
+      "##:": 99,
+      "##;": 100,
+      "##?": 101,
+      "##[": 102,
+      "##]": 103,
+      "##a": 104,
+      "##c": 105,
+      "##d": 106,
+      "##e": 107,
+      "##f": 108,
+      "##g": 109,
+      "##h": 110,
+      "##i": 111,
+      "##k": 112,
+      "##l": 113,
+      "##m": 114,
+      "##n": 115,
+      "##o": 116,
+      "##p": 117,
+      "##r": 118,
+      "##s": 119,
+      "##t": 120,
+      "##u": 121,
+      "##v": 122,
+      "##w": 123,
+      "##y": 124,
+      "##\u05d4": 125,
+      "##\u05d5": 126,
+      "##\u05d7": 127,
+      "##\u05dc": 128,
+      "##\u0627": 129,
+      "##\u0629": 130,
+      "##\u062f": 131,
+      "##\u0631": 132,
+      "##\u0636": 133,
+      "##\u0639": 134,
+      "##\u0641": 135,
+      "##\u0644": 136,
+      "##\u0645": 137,
+      "##\u064a": 138,
+      "##\u0915": 139,
+      "##\u0917": 140,
+      "##\u0928": 141,
+      "##\u092e": 142,
+      "##\u0930": 143,
+      "##\u0932": 144,
+      "##\u093f": 145,
+      "##\u0940": 146,
+      "##\u094b": 147,
+      "##\u0997": 148,
+      "##\u09b0": 149,
+      "##\u09be": 150,
+      "##\u09c0": 151,
+      "##\u09c7": 152,
+      "##\u0ba8": 153,
+      "##\u0baf": 154,
+      "##\u0bb3": 155,
+      "##\u0bbe": 156,
+      "##\u0bbf": 157,
+      "##\u0bc7": 158,
+      "##\u2695": 159,
+      "##\u3002": 160,
+      "##\u4eca": 161,
+      "##\u533b": 162,
+      "##\u590d": 163,
+      "##\u60a3": 164,
+      "##\u65e5": 165,
+      "##\u8005": 166,
+      "##\u8bca": 167,
+      "##\u9662": 168,
+      "##\uff1a": 169,
+      "##\ud83c\uddf8": 170,
+      "##\ud83c\uddfa": 171,
+      "##\ud83c\udffd": 172,
+      "##\ud83d\udc4d": 173,
+      "##\ud83d\udc69": 174,
+      "##\ud83d\ude00": 175,
+      "##\ud840\udc00": 176,
+      "synth": 177,
+      "##etic": 178,
+      "patient": 179,
+      "visit": 180,
+      "##ed": 181,
+      "the": 182,
+      "clinic": 183,
+      "for": 184,
+      "routine": 185,
+      "follow": 186,
+      "up": 187,
+      "review": 188,
+      "note": 189,
+      "dose": 190,
+      "chart": 191,
+      "cafe": 192,
+      "naive": 193,
+      "resume": 194,
+      "\u0645\u0631\u064a\u0636": 195,
+      "\u0627\u0644\u0639\u064a\u0627\u062f\u0629": 196,
+      "\u05d7\u05d5\u05dc\u05d4": 197,
+      "\u0930\u094b\u0917\u0940": 198,
+      "\u0915\u0932\u093f\u0928\u093f\u0915": 199
+    }
+  }
+}

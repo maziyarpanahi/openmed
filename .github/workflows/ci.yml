@@ -75,9 +75,17 @@ jobs:
       run: |
         python scripts/release/check_repo_policy.py
 
+    - name: Enforce Apple privacy manifests
+      run: |
+        python scripts/release/check_privacy_manifests.py
+
     - name: Enforce dependency license policy
       run: |
         python scripts/release/check_license_policy.py
+
+    - name: Enforce OpenMedKit dependency license inventory
+      run: |
+        python scripts/licenses/kit_inventory.py
 
     - name: Assert built wheel contains no restricted vocabulary data
       run: |
@@ -159,8 +167,12 @@ jobs:
 
     - name: Fetch pinned HL7 FHIR validator
       run: |
-        curl --fail --location --retry 3 \
-          https://github.com/hapifhir/org.hl7.fhir.core/releases/download/6.8.1/validator_cli.jar \
+        # HL7 FHIR validator CLI 6.8.1.
+        curl --fail --silent --show-error --location \
+          --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+          --header 'Accept: application/octet-stream' \
+          --header 'X-GitHub-Api-Version: 2022-11-28' \
+          https://api.github.com/repos/hapifhir/org.hl7.fhir.core/releases/assets/358670016 \
           --output "$RUNNER_TEMP/validator_cli.jar"
         echo "7d05b31196557a8ed2748d3c8a1646deba9b6600f5b6946be598949bd11eefe2  $RUNNER_TEMP/validator_cli.jar" \
           | sha256sum --check --strict
@@ -238,6 +250,10 @@ jobs:
     - name: Check classified effects and legacy-writer boundaries
       run: |
         uv run python scripts/security/check_effect_paths.py --check
+
+    - name: Check generated portable policy resources are current
+      run: |
+        uv run python scripts/parity/generate_portable_policies.py --check
 
     - name: Enforce public API backwards-compatibility policy
       run: |
@@ -359,6 +375,52 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  multimodal-tests:
+    needs: [repo-policy, lint]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: "3.11"
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Install Tesseract on Linux
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+    - name: Install Tesseract on macOS
+      if: runner.os == 'macOS'
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+      run: brew install tesseract
+    - name: Export frozen multimodal constraints
+      shell: bash
+      run: >-
+        uv export --frozen --no-default-groups --no-emit-project --no-hashes
+        --extra dev --extra multimodal
+        --output-file "$RUNNER_TEMP/multimodal-constraints.txt"
+    - name: Install lightweight multimodal test dependencies
+      shell: bash
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+        .venv/bin/python -m scripts.testing.multimodal_ci --requirements > "$RUNNER_TEMP/multimodal-requirements.txt"
+        uv pip install --python .venv/bin/python --only-binary :all: \
+          --constraint "$RUNNER_TEMP/multimodal-constraints.txt" \
+          --requirement "$RUNNER_TEMP/multimodal-requirements.txt"
+    - name: Run synthetic multimodal tests, eval suites and parser fuzz targets
+      timeout-minutes: 10
+      run: make test-multimodal
 
   sdk-compatibility:
     # Bounded core contracts and installed artifacts on every advertised lane.
@@ -546,6 +608,34 @@ jobs:
       run: |
         uv run pytest tests/unit/interop/test_spacy_component.py -q
 
+  openmedkit-kit-parity:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Set up Node.js
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: |
+          js/openmedkit-web/package-lock.json
+          js/openmedkit-react-native/package-lock.json
+          js/openmedkit-electron/package-lock.json
+
+    - name: Install OpenMedKit JavaScript package dependencies
+      run: |
+        npm ci --prefix js/openmedkit-web
+        npm ci --prefix js/openmedkit-react-native
+        npm ci --prefix js/openmedkit-electron
+
+    - name: Run web, React Native, and Electron kit-parity gates
+      run: |
+        npm --prefix js/openmedkit-web test
+        npm --prefix js/openmedkit-react-native test
+        npm --prefix js/openmedkit-electron test
+
   browser-extension:
     needs: repo-policy
     runs-on: ubuntu-latest
@@ -641,6 +731,7 @@ jobs:
     - repo-policy
     - lint
     - test
+    - multimodal-tests
     - security
     - spacy-integration
     - yasbd-integration
@@ -652,6 +743,7 @@ jobs:
       needs.repo-policy.result == 'success' &&
       needs.lint.result == 'success' &&
       needs.test.result == 'success' &&
+      needs.multimodal-tests.result == 'success' &&
       needs.security.result == 'success' &&
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
@@ -787,3 +879,93 @@ jobs:
       with:
         name: wheel-size-baseline
         path: ${{ runner.temp }}/openmed-baseline-dist/
+
+  tauri-paths:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.paths.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect changes to the Tauri client and validation
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            js/openmedkit-tauri tests/desktop .github/workflows/ci.yml)
+          if [[ -n "$changed" ]]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  tauri-client:
+    needs: tauri-paths
+    if: needs.tauri-paths.outputs.changed == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Get the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux helpers Tauri needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+
+      - name: Install Rust 1.99.1
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup default 1.99.1
+
+      - name: Install Node 22.14.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22.14.0"
+
+      - name: Run the TypeScript tests
+        working-directory: js/openmedkit-tauri
+        run: |
+          npm ci
+          npm --offline test
+
+      - name: Download the Rust parts
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: cargo fetch --locked
+
+      - name: Check and test the Rust code
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: |
+          cargo check --locked --offline
+          cargo test --locked --offline
+
+  tauri-ci:
+    name: Tauri CI
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: [tauri-paths, tauri-client]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require Tauri validation when its paths changed
+        env:
+          DETECTION: ${{ needs.tauri-paths.result }}
+          CHANGED: ${{ needs.tauri-paths.outputs.changed }}
+          VALIDATION: ${{ needs.tauri-client.result }}
+        run: |
+          case "$DETECTION:$CHANGED:$VALIDATION" in
+            success:false:skipped|success:true:success) exit 0 ;;
+            *) echo 'Tauri path detection or validation did not succeed.' >&2; exit 1 ;;
+          esac

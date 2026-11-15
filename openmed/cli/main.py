@@ -589,6 +589,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .multimodal_preflight import add_multimodal_preflight_command
 
     add_multimodal_preflight_command(subparsers)
+    from .service_preflight import add_service_preflight_command
+
+    add_service_preflight_command(subparsers)
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
@@ -601,6 +604,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
+    from .service_recovery import add_service_recovery_command
+
+    add_service_recovery_command(subparsers)
     _add_policy_command(subparsers)
     _add_export_command(subparsers)
     _add_fhir_command(subparsers)
@@ -633,13 +639,25 @@ def build_parser() -> argparse.ArgumentParser:
     _add_completion_command(subparsers)
     _add_init_command(subparsers)
     add_airgap_command(subparsers)
+    from .recovery import add_recovery_command
+
+    add_recovery_command(subparsers)
+    from .migrations import add_migrations_command
+
+    add_migrations_command(subparsers)
     add_active_learning_command(subparsers)
     add_annotation_interchange_command(subparsers)
     _add_doctor_command(subparsers)
+    from .service_diagnostics import add_service_command
+
+    add_service_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    from .multimodal_notice import add_multimodal_notice_command
+
+    add_multimodal_notice_command(subparsers)
     add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
@@ -2707,6 +2725,13 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     config_set.set_defaults(handler=_handle_config_set)
 
+    config_provenance = config_sub.add_parser(
+        "provenance",
+        help="Show which source supplied each configuration setting, "
+        "without printing values.",
+    )
+    config_provenance.set_defaults(handler=_handle_config_provenance)
+
     # Profile management subcommands
     profile_list = config_sub.add_parser(
         "profiles", help="List available configuration profiles."
@@ -3302,13 +3327,19 @@ def main(
             command_position += 1
         else:
             break
+    multimodal_help = arguments in (["multimodal", "-h"], ["multimodal", "--help"])
     if arguments[command_position : command_position + 1] == ["multimodal"]:
+        from .multimodal_inference import LocalTask
         from .multimodal_preflight import run_multimodal_preflight_cli
 
-        # No ambient configuration, parser error text or input paths enter reports.
-        return run_multimodal_preflight_cli(
-            ["invalid"] if command_position else arguments[1:]
+        local_task = not command_position and arguments[1:2] in (
+            [task.value] for task in LocalTask
         )
+        if not local_task and not multimodal_help:
+            # Preserve the guarded preflight parser and reject ambient configuration.
+            return run_multimodal_preflight_cli(
+                ["invalid"] if command_position else arguments[1:]
+            )
     if command_position > 0 and arguments[command_position : command_position + 2] == [
         "agents",
         "workflow",
@@ -3324,8 +3355,15 @@ def main(
         return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
     from .clinical import parse_clinical_args
+    from .multimodal_inference import protect_multimodal_diagnostics
 
-    args = parse_clinical_args(parser, argv)
+    protect_multimodal_diagnostics(parser, arguments)
+    try:
+        args = parse_clinical_args(parser, arguments)
+    except SystemExit as exc:
+        if multimodal_help and exc.code == 0:
+            return 0
+        raise
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
@@ -7970,6 +8008,32 @@ def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
         )
 
     return emit(args, json.loads(report.to_json()), human=report.to_json())
+
+
+def _handle_config_provenance(args: argparse.Namespace) -> int:
+    from ..core.config_provenance import (
+        ConfigurationResolutionError,
+        audit_configuration,
+    )
+
+    config_path = resolve_config_path(getattr(args, "config_path", None))
+    # A missing file is not an error: audit defaults + environment only.
+    file_config = config_path if config_path.exists() else None
+    try:
+        report = audit_configuration(
+            file_config=file_config,
+            environment=dict(os.environ),
+        )
+    except ConfigurationResolutionError as exc:
+        raise CliError(
+            str(exc), code="invalid_configuration", exit_code=EXIT_USAGE
+        ) from exc
+
+    human = "\n".join(
+        f"{key}  {entry['source_class']}  {entry['conflict_category']}"
+        for key, entry in report["keys"].items()
+    )
+    return emit(args, report, human=human)
 
 
 def _handle_config_show(args: argparse.Namespace) -> int:

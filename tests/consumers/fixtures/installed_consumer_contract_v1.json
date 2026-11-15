@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "fixture": "openmed.installed_consumer_contract",
+  "synthetic": true,
+  "offset_unit": "unicode_scalar",
+  "offset_cases": [
+    {
+      "id": "ascii-person",
+      "text": "Patient Jane arrived",
+      "start": 8,
+      "end": 12,
+      "utf16_start": 8,
+      "utf16_end": 12,
+      "scalar_length": 20,
+      "utf16_length": 20,
+      "replacement": "[PERSON]",
+      "expected_redacted": "Patient [PERSON] arrived"
+    },
+    {
+      "id": "cjk-extension-b-astral",
+      "text": "患者𠀀𠀁今日复诊",
+      "start": 2,
+      "end": 4,
+      "utf16_start": 2,
+      "utf16_end": 6,
+      "scalar_length": 8,
+      "utf16_length": 10,
+      "replacement": "[NAME]",
+      "expected_redacted": "患者[NAME]今日复诊"
+    },
+    {
+      "id": "emoji-zwj-prefix",
+      "text": "👩‍⚕️ Ana Lima",
+      "start": 5,
+      "end": 8,
+      "utf16_start": 6,
+      "utf16_end": 9,
+      "scalar_length": 13,
+      "utf16_length": 14,
+      "replacement": "[PERSON]",
+      "expected_redacted": "👩‍⚕️ [PERSON] Lima"
+    },
+    {
+      "id": "combining-marks",
+      "text": "José Nuñez",
+      "start": 6,
+      "end": 12,
+      "utf16_start": 6,
+      "utf16_end": 12,
+      "scalar_length": 12,
+      "utf16_length": 12,
+      "replacement": "[PERSON]",
+      "expected_redacted": "José [PERSON]"
+    }
+  ],
+  "policy_cases": [
+    {
+      "profile": "hipaa_safe_harbor",
+      "label_actions": {
+        "PERSON": "mask",
+        "DATE": "mask",
+        "CONDITION": "mask"
+      }
+    },
+    {
+      "profile": "clinical_minimal_redaction",
+      "label_actions": {
+        "PERSON": "mask",
+        "DATE": "keep",
+        "CONDITION": "keep"
+      }
+    }
+  ],
+  "profile_aliases": {
+    "gdpr": "gdpr_pseudonymization"
+  },
+  "unknown_profile": "installed_consumer_unknown_profile",
+  "redaction_cases": [
+    {
+      "id": "hipaa-default",
+      "profile": "hipaa_safe_harbor",
+      "text": "Patient Jane seen 2026-01-05 for asthma",
+      "entities": [
+        {
+          "label": "PERSON",
+          "start": 8,
+          "end": 12,
+          "utf16_start": 8,
+          "utf16_end": 12,
+          "confidence": 0.99
+        },
+        {
+          "label": "DATE",
+          "start": 18,
+          "end": 28,
+          "utf16_start": 18,
+          "utf16_end": 28,
+          "confidence": 0.99
+        },
+        {
+          "label": "CONDITION",
+          "start": 33,
+          "end": 39,
+          "utf16_start": 33,
+          "utf16_end": 39,
+          "confidence": 0.99
+        }
+      ],
+      "expected_redacted": "Patient [PERSON] seen [DATE] for [CONDITION]"
+    },
+    {
+      "id": "clinical-minimal",
+      "profile": "clinical_minimal_redaction",
+      "text": "Patient Jane seen 2026-01-05 for asthma",
+      "entities": [
+        {
+          "label": "PERSON",
+          "start": 8,
+          "end": 12,
+          "utf16_start": 8,
+          "utf16_end": 12,
+          "confidence": 0.99
+        },
+        {
+          "label": "DATE",
+          "start": 18,
+          "end": 28,
+          "utf16_start": 18,
+          "utf16_end": 28,
+          "confidence": 0.99
+        },
+        {
+          "label": "CONDITION",
+          "start": 33,
+          "end": 39,
+          "utf16_start": 33,
+          "utf16_end": 39,
+          "confidence": 0.99
+        }
+      ],
+      "expected_redacted": "Patient [PERSON] seen 2026-01-05 for asthma"
+    }
+  ],
+  "kit_divergences": {
+    "npm_web": {
+      "redaction_case": "hipaa-default",
+      "reason": "pii_only_canonical_labels",
+      "expected_redacted": "Patient [PERSON] seen [DATE] for [OTHER]"
+    }
+  },
+  "model_fixture": {
+    "repo_id": "OpenMed/installed-consumer-synthetic",
+    "revision": "main",
+    "revision_sha": "0123456789abcdef0123456789abcdef01234567",
+    "released": "2026-01-01",
+    "onnx_files": [
+      {
+        "path": "config.json",
+        "content": "{\"model_type\":\"synthetic\"}",
+        "size_bytes": 26,
+        "sha256": "3553b39a3e93b97d91dbb218c6f2abb19418f33f5acfb2f3be08d3f6c5796c88"
+      },
+      {
+        "path": "model.onnx",
+        "content": "openmed-installed-consumer-synthetic-onnx",
+        "size_bytes": 41,
+        "sha256": "e86b5cb2ab2964669f082ce1121cce780ee04284abb6fd00cf728c0f776aa149"
+      },
+      {
+        "path": "tokenizer.json",
+        "content": "{\"version\":\"synthetic\"}",
+        "size_bytes": 23,
+        "sha256": "f106417375d46a2dd0302ba019be72462d99ad8b51e121b27a52a2e24c9adec3"
+      }
+    ],
+    "mlx_legacy_files": [
+      {
+        "path": "config.json",
+        "content": "{\"model_type\":\"bert\"}",
+        "size_bytes": 21,
+        "sha256": "7b5017c2bd719d8fee6106f62db9f686d79f1b86b2efb14fcbd581f41dd637d2"
+      },
+      {
+        "path": "weights.safetensors",
+        "content": "openmed-installed-consumer-synthetic",
+        "size_bytes": 36,
+        "sha256": "029330ce1b0e90d358322ee08bd0602cbb565bd041425d8186e6b7e820f319e3"
+      }
+    ],
+    "unsafe_manifest_config_path": "../../escaped-config.json"
+  }
+}

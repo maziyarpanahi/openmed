@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
 
 import openmed.multimodal.base as base
 import openmed.multimodal.ocr as ocr_mod
 from openmed.multimodal import ExtractedDocument, redact_document
 from openmed.multimodal.ocr import FakeOcrEngine, OcrResult, OcrWord, ocr
+from tests.fixtures.multimodal.redaction_assets import png
 
 WORDS = [
     OcrWord("Patient", (10.0, 10.0, 80.0, 30.0), 0.99, page=0),
@@ -53,7 +56,9 @@ def test_redact_document_bridges_image_through_ocr(monkeypatch):
         ocr_mod, "resolve_engine", lambda engine=None: FakeOcrEngine(WORDS)
     )
 
-    doc = redact_document("scan.png")
+    source = BytesIO(png())
+    source.name = "scan.png"
+    doc = redact_document(source)
     assert isinstance(doc, ExtractedDocument)
     # A detected PHI word projects back to its source pixel bbox.
     span = doc.location_at(doc.text.index("John"))

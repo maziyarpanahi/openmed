@@ -23,6 +23,7 @@ from time import perf_counter
 from types import SimpleNamespace
 from typing import Any, Callable, Mapping, TextIO
 
+from openmed.service.secret_files import SecretSourceError, read_secret_setting
 from openmed.utils.gateway import (
     DEFAULT_MAX_TEXT_BYTES,
     DEFAULT_MAX_TEXT_CHARS,
@@ -33,6 +34,7 @@ from openmed.utils.gateway import (
 
 PROTOCOL_VERSION = 1
 SIDECAR_HASH_SECRET_ENV_VAR = "OPENMED_SIDECAR_HASH_SECRET"
+SIDECAR_HASH_SECRET_FILE_ENV_VAR = "OPENMED_SIDECAR_HASH_SECRET_FILE"
 DEFAULT_MODEL_ENV_VAR = "OPENMED_SIDECAR_MODEL"
 MAX_REQUEST_ID_LENGTH = 128
 MAX_DOC_ID_LENGTH = 256
@@ -537,7 +539,7 @@ def _reject_json_constant(_value: str) -> Any:
 
 
 def _sidecar_hash_secret() -> bytes:
-    configured = os.getenv(SIDECAR_HASH_SECRET_ENV_VAR)
+    configured = read_secret_setting(SIDECAR_HASH_SECRET_ENV_VAR)
     if configured:
         return configured.encode("utf-8")
     return secrets.token_bytes(32)
@@ -644,6 +646,10 @@ def main() -> int:
     try:
         runtime = SidecarRuntime()
         server = SidecarServer(runtime)
+    except SecretSourceError:
+        _write_terminal_error("SIDECAR_SECRET_INVALID")
+        logging.disable(previous_logging_level)
+        return 1
     except Exception:
         _write_terminal_error("SIDECAR_START_FAILED")
         logging.disable(previous_logging_level)

@@ -46,6 +46,20 @@ class UnsupportedDocumentError(ValueError):
     """Raised when no handler is registered for a document's file type."""
 
 
+class ArchiveDocumentError(UnsupportedDocumentError):
+    """Reject a ZIP document using a stable reason code and count only.
+
+    Args:
+        reason_code: Controlled archive-admission reason.
+        count: Number of findings for that reason.
+    """
+
+    def __init__(self, reason_code: str, count: int = 1) -> None:
+        self.reason_code = reason_code
+        self.count = count
+        super().__init__(f"{reason_code}: {count}")
+
+
 class DocumentGraphError(ValueError):
     """Raised when a document cannot be converted into a safe graph."""
 

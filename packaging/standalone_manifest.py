@@ -26,7 +26,7 @@ from typing import Final, Protocol, TypeVar
 MANIFEST_FORMAT: Final = "openmed-standalone-redactor"
 MANIFEST_SCHEMA_VERSION: Final = "1.0"
 STANDALONE_PACKAGE_NAME: Final = "openmed-redactor-standalone"
-STANDALONE_PACKAGE_VERSION: Final = "3.2.0"
+STANDALONE_PACKAGE_VERSION: Final = "3.3.0"
 STANDALONE_LICENSE: Final = "Apache-2.0"
 PLATFORM_ANY: Final = "any"
 _MAX_TEXT_LENGTH: Final = 512
@@ -331,7 +331,7 @@ class StandalonePackageManifest:
     optional_dependencies: tuple[DependencySpec, ...]
     restricted_dependencies: tuple[DependencySpec, ...]
     restricted_assets: tuple[RestrictedAssetSpec, ...]
-    python_requires: str = ">=3.11"
+    python_requires: str = ">=3.11.5"
     platforms: tuple[str, ...] = (PLATFORM_ANY,)
     network_egress: bool = False
     schema_version: str = MANIFEST_SCHEMA_VERSION
@@ -541,7 +541,7 @@ def validate_manifest(
         issues.append(_issue("version", "package version is out of sync"))
     if manifest.license != STANDALONE_LICENSE:
         issues.append(_issue("license", "package license is out of sync"))
-    if manifest.python_requires != ">=3.11":
+    if manifest.python_requires != ">=3.11.5":
         issues.append(_issue("python_requires", "Python requirement is out of sync"))
     if manifest.platforms != (PLATFORM_ANY,):
         issues.append(_issue("platforms", "manifest must be platform-neutral"))

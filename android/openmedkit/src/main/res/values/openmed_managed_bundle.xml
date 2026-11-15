@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Titles, descriptions, and choices of the managed configuration keys
+         in @xml/openmed_managed_bundle_restrictions. -->
+    <string name="openmed_managed_bundle_config_version_title" translatable="false">OpenMed bundle configuration version</string>
+    <string name="openmed_managed_bundle_config_version_description" translatable="false">Managed configuration version. Set to 1.</string>
+    <string name="openmed_managed_bundle_trust_policy_title" translatable="false">OpenMed bundle trust policy</string>
+    <string name="openmed_managed_bundle_trust_policy_description" translatable="false">Trust policy JSON (openmed.portable_bundle.trust_policy v1) with the Ed25519 public keys that sign model bundles.</string>
+    <string name="openmed_managed_bundle_key_pins_title" translatable="false">OpenMed bundle key pins</string>
+    <string name="openmed_managed_bundle_key_pins_description" translatable="false">Optional sha256 fingerprints of the raw public keys, separated by spaces or commas.</string>
+    <string name="openmed_managed_bundle_location_title" translatable="false">OpenMed bundle location</string>
+    <string name="openmed_managed_bundle_location_description" translatable="false">Optional local location of the delivered bundle: a content URI of an approved authority, or a path inside an approved app directory.</string>
+    <string name="openmed_managed_bundle_expected_id_title" translatable="false">OpenMed expected bundle id</string>
+    <string name="openmed_managed_bundle_expected_id_description" translatable="false">Optional bundle id the delivered bundle must carry.</string>
+    <string name="openmed_managed_bundle_expected_content_id_title" translatable="false">OpenMed expected bundle content id</string>
+    <string name="openmed_managed_bundle_expected_content_id_description" translatable="false">Optional sha256 content identity of the exact manifest to activate.</string>
+    <string name="openmed_managed_bundle_min_sequence_title" translatable="false">OpenMed minimum bundle sequence</string>
+    <string name="openmed_managed_bundle_min_sequence_description" translatable="false">Optional anti-rollback floor for the bundle sequence.</string>
+    <string name="openmed_managed_bundle_activation_title" translatable="false">OpenMed bundle activation</string>
+    <string name="openmed_managed_bundle_activation_description" translatable="false">activate, probation, or stage.</string>
+
+    <string-array name="openmed_managed_bundle_activation_entries" translatable="false">
+        <item>Activate</item>
+        <item>Activate on probation</item>
+        <item>Stage only</item>
+    </string-array>
+    <string-array name="openmed_managed_bundle_activation_values" translatable="false">
+        <item>activate</item>
+        <item>probation</item>
+        <item>stage</item>
+    </string-array>
+</resources>

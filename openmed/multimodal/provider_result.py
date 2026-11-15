@@ -16,9 +16,12 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, cast
 
+from .abstention import AbstentionReason
+
 __all__ = [
     "MAX_PROVIDER_RESULT_JSON_BYTES",
     "PROVIDER_RESULT_SCHEMA_VERSION",
+    "PROVIDER_RESULT_SCHEMA_VERSION_V2",
     "ProviderAbstentionCode",
     "ProviderResultEnvelope",
     "ProviderResultError",
@@ -26,6 +29,7 @@ __all__ = [
 ]
 
 PROVIDER_RESULT_SCHEMA_VERSION: Final = "openmed.multimodal.provider_result.v1"
+PROVIDER_RESULT_SCHEMA_VERSION_V2: Final = "openmed.multimodal.provider_result.v2"
 MAX_PROVIDER_RESULT_JSON_BYTES: Final = 64 * 1024
 
 _MAX_COUNT: Final = (1 << 63) - 1
@@ -86,6 +90,18 @@ class ProviderAbstentionCode(str, Enum):
     PHI_UNCERTAINTY = "phi_uncertainty"
     SPEAKER_UNCERTAINTY = "speaker_uncertainty"
     TEMPORAL_INSTABILITY = "temporal_instability"
+    CONSENT_UNAVAILABLE = AbstentionReason.CONSENT_UNAVAILABLE.value
+    CONSENT_WITHDRAWN = AbstentionReason.CONSENT_WITHDRAWN.value
+    CAPTURE_INTERRUPTED = AbstentionReason.CAPTURE_INTERRUPTED.value
+    LANGUAGE_UNSUPPORTED = AbstentionReason.LANGUAGE_UNSUPPORTED.value
+    LANGUAGE_UNCERTAIN = AbstentionReason.LANGUAGE_UNCERTAIN.value
+    POLICY_REFUSED = AbstentionReason.POLICY_REFUSED.value
+
+    @property
+    def _wire_version(self) -> str:
+        if AbstentionReason(self.value).schema_version == 2:
+            return PROVIDER_RESULT_SCHEMA_VERSION_V2
+        return PROVIDER_RESULT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -101,7 +117,8 @@ class ProviderResultEnvelope:
         count_metadata: Closed, bounded mapping of aggregate counters.
         output_digest: Required only for a successful result.
         abstention_code: Required only for an abstention result.
-        schema_version: Exact supported envelope schema identifier.
+        schema_version: Omit to select v2 only for new abstention codes, otherwise
+            v1. An explicit identifier must match that required version.
         guard_metadata: Optional closed generated-text release decision and digests.
     """
 
@@ -113,16 +130,10 @@ class ProviderResultEnvelope:
     count_metadata: Mapping[str, int] = field(default_factory=dict)
     output_digest: str | None = None
     abstention_code: ProviderAbstentionCode | None = None
-    schema_version: str = PROVIDER_RESULT_SCHEMA_VERSION
+    schema_version: str | None = None
     guard_metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if (
-            type(self.schema_version) is not str
-            or self.schema_version != PROVIDER_RESULT_SCHEMA_VERSION
-        ):
-            raise ProviderResultError("provider result schema is unsupported")
-
         provider_id = _identifier(self.provider_id, "provider")
         model_id = _identifier(self.model_id, "model")
         input_digest = _digest(self.input_digest, required=True)
@@ -155,6 +166,17 @@ class ProviderResultEnvelope:
             ):
                 raise ProviderResultError("guard decision conflicts with outcome")
 
+        version = (
+            abstention_code._wire_version
+            if abstention_code is not None
+            else PROVIDER_RESULT_SCHEMA_VERSION
+        )
+        if self.schema_version is not None and (
+            type(self.schema_version) is not str or self.schema_version != version
+        ):
+            raise ProviderResultError("provider result schema is unsupported")
+
+        object.__setattr__(self, "schema_version", version)
         object.__setattr__(self, "provider_id", provider_id)
         object.__setattr__(self, "model_id", model_id)
         object.__setattr__(self, "input_digest", input_digest)
@@ -207,6 +229,8 @@ class ProviderResultEnvelope:
             _REQUIRED_FIELDS | _OPTIONAL_FIELDS
         ):
             raise ProviderResultError("provider result fields are invalid")
+        if type(payload["schema_version"]) is not str:
+            raise ProviderResultError("provider result schema is unsupported")
         return cls(
             schema_version=payload["schema_version"],
             provider_id=payload["provider_id"],

@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
-from typing import Any, Protocol, cast
+from typing import Any, ClassVar, Protocol, cast
 
 from openmed.clinical.claim_conflicts import (
     AssertionRecord,
@@ -28,6 +28,7 @@ from openmed.clinical.reviewed_local_evidence import (
     admit_reviewed_local_evidence,
     reviewed_source_digest,
 )
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 
 from ..privacy.withholding_buffer import (
     LocalPhiScreener,
@@ -435,6 +436,8 @@ class NliNoteVerifier:
 class AmbientNoteDraft:
     """Protected note and a separate value-free review packet; not an export permit."""
 
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.DRAFT]
+
     text: str = field(repr=False)
     data_json: str = field(repr=False)
     review_packet: ReviewedLocalEvidence
@@ -448,6 +451,8 @@ class AmbientNoteDraft:
 @dataclass(frozen=True, slots=True)
 class ReviewedAmbientNote:
     """Explicitly clinician-reviewed output; returned locally, never sent to an EHR."""
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.DRAFT]
 
     text: str = field(repr=False)
     data_json: str = field(repr=False)

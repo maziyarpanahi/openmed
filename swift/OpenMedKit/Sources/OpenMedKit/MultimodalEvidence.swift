@@ -106,6 +106,22 @@ public enum MultimodalAbstention: String, Sendable, CaseIterable {
     case phiUncertainty = "phi_uncertainty"
     case speakerUncertainty = "speaker_uncertainty"
     case temporalInstability = "temporal_instability"
+    case consentUnavailable = "consent_unavailable"
+    case consentWithdrawn = "consent_withdrawn"
+    case captureInterrupted = "capture_interrupted"
+    case languageUnsupported = "language_unsupported"
+    case languageUncertain = "language_uncertain"
+    case policyRefused = "policy_refused"
+
+    fileprivate var wireVersion: String {
+        switch self {
+        case .consentUnavailable, .consentWithdrawn, .captureInterrupted,
+            .languageUnsupported, .languageUncertain, .policyRefused:
+            return "openmed.multimodal.provider_result.v2"
+        default:
+            return "openmed.multimodal.provider_result.v1"
+        }
+    }
 }
 
 public struct MultimodalProviderResult: Sendable, Equatable {
@@ -218,6 +234,53 @@ public struct MultimodalPacket: Sendable, Equatable {
             try Wire.check(try Wire.hash(identity) == digest, .provenance)
             try Wire.check(try ClinicalBrief.canonical(root) == data)
             return MultimodalPacket(projection: projection, evidenceDigest: digest, wire: data)
+        } catch let refusal as MultimodalContractRefusal { throw refusal } catch { throw MultimodalContractRefusal.invalid }
+    }
+}
+
+extension MultimodalPacket {
+    /// Builds a visual packet from source coordinates, deriving the display geometry.
+    ///
+    /// The packet is serialized canonically and then admitted through `fromJSON`,
+    /// so it passes exactly the checks applied to packets produced by Python.
+    public static func visual(
+        nodeRef: String, sourceDigest: String, kind: MultimodalVisualKind, page: Int64,
+        width: Double, height: Double, unit: MultimodalSpatialUnit,
+        sourceBox: MultimodalRectangle?, scalarSpan: MultimodalInterval?, rotation: Int64
+    ) throws -> MultimodalPacket {
+        let quarter = rotation == 90 || rotation == 270
+        var displayBox: Any = NSNull()
+        if let box = sourceBox {
+            let coordinates: [Double]
+            switch rotation {
+            case 0: coordinates = [box.left, box.top, box.right, box.bottom]
+            case 90: coordinates = [height - box.bottom, box.left, height - box.top, box.right]
+            case 180: coordinates = [width - box.right, height - box.bottom, width - box.left, height - box.top]
+            case 270: coordinates = [box.top, width - box.right, box.bottom, width - box.left]
+            default: throw MultimodalContractRefusal.transform
+            }
+            displayBox = coordinates.map(Wire.bits)
+        }
+        let payload: [String: Any] = [
+            "source_schema": "openmed.multimodal.fused-evidence.v1",
+            "node_ref": nodeRef,
+            "source_digest": sourceDigest,
+            "kind": kind.rawValue,
+            "page": NSNumber(value: page),
+            "width_f64": Wire.bits(width),
+            "height_f64": Wire.bits(height),
+            "unit": unit.rawValue,
+            "box_f64": sourceBox.map { [$0.left, $0.top, $0.right, $0.bottom].map(Wire.bits) } ?? NSNull(),
+            "span": scalarSpan.map { [NSNumber(value: $0.start), NSNumber(value: $0.end)] } ?? NSNull(),
+            "rotation": NSNumber(value: rotation),
+            "display_width_f64": Wire.bits(quarter ? height : width),
+            "display_height_f64": Wire.bits(quarter ? width : height),
+            "display_box_f64": displayBox,
+        ]
+        var root: [String: Any] = ["schema_version": schema, "kind": MultimodalProjectionKind.visual.rawValue, "payload": payload]
+        do {
+            root["evidence_digest"] = try Wire.hash(root)
+            return try fromJSON(try ClinicalBrief.canonical(root))
         } catch let refusal as MultimodalContractRefusal { throw refusal } catch { throw MultimodalContractRefusal.invalid }
     }
 }
@@ -455,7 +518,8 @@ private enum Wire {
 
     static func provider(_ p: [String: Any]) throws -> MultimodalProviderResult {
         _ = try object(p, "schema_version provider_id model_id input_digest output_digest outcome abstention_code duration_f64 count_metadata")
-        try check(p["schema_version"] as? String == "openmed.multimodal.provider_result.v1", .schema)
+        let version = p["schema_version"] as? String
+        try check(version == "openmed.multimodal.provider_result.v1" || version == "openmed.multimodal.provider_result.v2", .schema)
         let providerID = try identifier(p["provider_id"])
         let modelID = try identifier(p["model_id"])
         let input = try hex(p["input_digest"])
@@ -479,6 +543,7 @@ private enum Wire {
             try check(p["abstention_code"] is NSNull)
             abstention = nil
         }
+        try check(version == (abstention?.wireVersion ?? "openmed.multimodal.provider_result.v1"), .schema)
         guard let rawCounts = p["count_metadata"] as? [String: Any] else { throw MultimodalContractRefusal.invalid }
         let allowed = Set(["detection_count", "frame_count", "input_bytes", "input_items", "output_items", "page_count", "sample_count", "segment_count", "token_count"])
         try check(Set(rawCounts.keys).isSubset(of: allowed))

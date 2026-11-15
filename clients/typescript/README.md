@@ -131,6 +131,15 @@ if (decision.state === "success") {
   console.log(decision.state, decision.code);
 }
 
+// The same route accepts an OpenAI-compatible Decisions body and answers in
+// that shape. `model` must name the model the service decides with.
+const answers = await client.openaiDecisions({
+  model: "openmed/deterministic-fixed-option",
+  input: "Synthetic review priority is urgent.",
+  questions: [{ type: "predicate", name: "urgent" }],
+});
+console.log(answers.answers[0], answers.openmed?.review.required);
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```
@@ -151,6 +160,17 @@ const status = await client.smartBackendIngestionStatus(job.job_id);
 const summary = await client.smartBackendIngestionSummary(job.job_id);
 ```
 
+Pass `{ idempotencyKey }` as the second argument to make a retried start
+return the original job instead of starting a second export. Keep one key per
+logical start, for example a UUID generated before the first attempt:
+
+```ts
+const retryKey = crypto.randomUUID();
+const job = await client.startSmartBackendIngestion(request, {
+  idempotencyKey: retryKey,
+});
+```
+
 Use `loadedModels()` to inspect cached model resources:
 
 ```ts
@@ -167,6 +187,22 @@ const client = new OpenMedClient({
   baseUrl: "http://localhost:8080",
   fetch: async (input, init) => fetch(input, init),
 });
+```
+
+## Example
+
+[`examples/deidentify.mjs`](examples/deidentify.mjs) exports `run({ fetch })`,
+which de-identifies one note and turns an `OpenMedApiError` into a result keyed
+by its `code` (for example `validation_error`, or `rate_limited`,
+`service_busy` and `timeout`, which are worth retrying). Pass any `fetch`, such
+as a stub in tests, or run it against a local service after building the
+client:
+
+```bash
+cd clients/typescript
+npm run build
+OPENMED_BASE_URL=http://localhost:8080 node examples/deidentify.mjs
+node --test tests/example.test.mjs  # offline, stubbed fetch
 ```
 
 ## Error Handling

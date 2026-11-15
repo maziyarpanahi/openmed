@@ -9,9 +9,10 @@ import re
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from fractions import Fraction
-from typing import Any
+from typing import Any, ClassVar
 
 from openmed.multimodal.evidence import EvidenceNode, NodeKind, PageGeometry
+from openmed.multimodal.notices import NOTICE_CATALOG, MultimodalNotice, NoticeKind
 from openmed.multimodal.vision.pathology.slide_tiler import (
     MAX_SLIDE_SIDE,
     MAX_TILES,
@@ -337,6 +338,8 @@ def _lineage(result: TileFeatures, plan: SlideTilePlan) -> dict[str, Any]:
 @dataclass(frozen=True, slots=True)
 class SlideAggregation:
     """Protected computed feature mean with complete content-free source lineage."""
+
+    review_notice: ClassVar[MultimodalNotice] = NOTICE_CATALOG[NoticeKind.MEASUREMENT]
 
     features: tuple[float, ...] = field(repr=False)
     report_json: str

@@ -3,8 +3,14 @@
 
 import PackageDescription
 
+// Mirror of the consumer-facing root Package.swift, used by the demos and the
+// simulator CI lanes. Keep dependencies, requirements, products, platforms and
+// target conditions identical; only target source paths may differ. CI enforces
+// this with scripts/release/check_swift_manifest_drift.py.
+
 let package = Package(
     name: "OpenMedKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
@@ -34,13 +40,10 @@ let package = Package(
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         // swift-transformers for HuggingFace-compatible tokenization
         .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.0.0"),
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.6"),
-        // Includes upstream #419, which preserves multimodal RoPE state from
-        // prefill into autoregressive decode. Pin until the next tagged release.
-        .package(
-            url: "https://github.com/ml-explore/mlx-swift-lm.git",
-            revision: "42f08a872075fd07f9f1f40ec1a5e191e6aad86e"
-        ),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.32.3"),
+        // 3.32.3 is the first tag that contains upstream #419, which preserves
+        // multimodal RoPE state from prefill into autoregressive decode.
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", exact: "3.32.3"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
     ],
     targets: [
@@ -94,21 +97,38 @@ let package = Package(
         ),
         .target(
             name: "OpenMedExtensionSupport",
-            dependencies: ["OpenMedKit"]
+            dependencies: ["OpenMedKit"],
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMedShareExtension",
             dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
-            path: "Sources/ShareExtension"
+            path: "Sources/ShareExtension",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMedActionExtension",
             dependencies: ["OpenMedExtensionSupport"],
-            path: "Sources/ActionExtension"
+            path: "Sources/ActionExtension",
+            resources: [
+                .process("Resources")
+            ]
+        ),
+        // Test support only: no product exposes this target, so apps never link it.
+        .target(
+            name: "OpenMedPrivacySweep",
+            path: "Sources/OpenMedPrivacySweep",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "OpenMedKitTests",
-            dependencies: ["OpenMedKit"]
+            dependencies: ["OpenMedKit", "OpenMedPrivacySweep"]
         ),
         .testTarget(
             name: "ExtensionTests",
@@ -117,6 +137,7 @@ let package = Package(
                 "OpenMedExtensionSupport",
                 "OpenMedShareExtension",
                 "OpenMedActionExtension",
+                "OpenMedPrivacySweep",
             ]
         ),
     ]

@@ -221,6 +221,320 @@ test("default model is a public -onnx-android repo loaded through loadOnnxModel"
   assert.equal(result.spans[0]?.metadata.model, api.DEFAULT_MODEL_ID);
 });
 
+test("default path requests only the pinned model revision", async () => {
+  const api = await loadApi();
+  assert.match(api.DEFAULT_MODEL_REVISION, /^[0-9a-f]{40}$/);
+
+  const requests: Array<{ model: string; revision: unknown }> = [];
+  const runtime: RawTransformersRuntime = {
+    pipeline: async (_task, model, options) => {
+      requests.push({ model, revision: options?.revision });
+      return transformersJsFixturePipeline;
+    },
+  };
+  await api.deidentify(goldenText, { loaderOptions: { runtime } });
+  await api.extractPii(goldenText, {
+    model: api.DEFAULT_MODEL_ID,
+    loaderOptions: { runtime },
+  });
+  await api.extractPii(goldenText, {
+    loaderOptions: { runtime, revision: "a".repeat(40) },
+  });
+  await api.extractPii(goldenText, {
+    model: "OpenMed/example-v1-onnx-android",
+    loaderOptions: { runtime },
+  });
+  assert.deepEqual(requests, [
+    { model: api.DEFAULT_MODEL_ID, revision: api.DEFAULT_MODEL_REVISION },
+    { model: api.DEFAULT_MODEL_ID, revision: api.DEFAULT_MODEL_REVISION },
+    { model: api.DEFAULT_MODEL_ID, revision: "a".repeat(40) },
+    { model: "OpenMed/example-v1-onnx-android", revision: undefined },
+  ]);
+
+  let loaderRevision: unknown;
+  await api.extractPii(goldenText, {
+    modelLoader: async (_model: string, options?: { revision?: string }) => {
+      loaderRevision = options?.revision;
+      return () => [];
+    },
+  });
+  assert.equal(loaderRevision, api.DEFAULT_MODEL_REVISION);
+});
+
+test("offline-only mode refuses Hub IDs and URLs before any loader runs", async () => {
+  const api = await loadApi();
+  const recorder = recordingRuntime();
+  const remoteModels = [
+    undefined,
+    api.DEFAULT_MODEL_ID,
+    "OpenMed/example-v1-onnx-android",
+    "https://models.example.invalid/openmed",
+  ];
+  const attempts = (offlineOnly: boolean | undefined) =>
+    remoteModels.flatMap((model) => [
+      () =>
+        api.deidentify(goldenText, {
+          ...(model === undefined ? {} : { model }),
+          ...(offlineOnly === undefined ? {} : { offlineOnly }),
+          modelLoader: recorder.modelLoader,
+        }),
+      () =>
+        api.extractPii(goldenText, {
+          ...(model === undefined ? {} : { model }),
+          loaderOptions: {
+            runtime: recorder.runtimeProvider,
+            ...(offlineOnly === undefined ? {} : { offlineOnly }),
+          },
+        }),
+      () =>
+        api.loadOnnxModel(model ?? api.DEFAULT_MODEL_ID, {
+          runtime: recorder.runtimeProvider,
+          ...(offlineOnly === undefined ? {} : { offlineOnly }),
+        }),
+      () =>
+        api.loadTokenClassificationPipeline(model ?? api.DEFAULT_MODEL_ID, {
+          runtime: recorder.runtimeProvider,
+          ...(offlineOnly === undefined ? {} : { offlineOnly }),
+        }),
+    ]);
+
+  for (const attempt of attempts(true)) {
+    await assertOfflineError(api, attempt(), "remote_model_refused");
+  }
+  assert.equal(api.isOfflineOnly(), false);
+  api.setOfflineOnly(true);
+  try {
+    assert.equal(api.isOfflineOnly(), true);
+    // A call cannot opt back out of the package-wide setting.
+    for (const attempt of [...attempts(undefined), ...attempts(false)]) {
+      await assertOfflineError(api, attempt(), "remote_model_refused");
+    }
+  } finally {
+    api.setOfflineOnly(false);
+  }
+  assert.deepEqual(recorder.calls, []);
+});
+
+test("offline-only mode refuses remote WASM and model-path settings", async () => {
+  const api = await loadApi();
+  const cdnWasmPaths = {
+    mjs: "https://cdn.example.invalid/ort/ort-wasm-simd-threaded.asyncify.mjs",
+    wasm: "https://cdn.example.invalid/ort/ort-wasm-simd-threaded.asyncify.wasm",
+  };
+  const remoteSettings = [
+    { env: { backends: { onnx: { wasm: { wasmPaths: cdnWasmPaths } } } } },
+    { env: { backends: { onnx: { wasm: { wasmPaths: "//cdn.example.invalid/" } } } } },
+    {
+      env: {
+        backends: {
+          onnx: { wasm: { wasmPaths: new URL("https://cdn.example.invalid/") } },
+        },
+      },
+    },
+    { env: { localModelPath: "https://models.example.invalid/" } },
+    { env: {}, wasmPaths: "https://cdn.example.invalid/ort/" },
+    { env: {}, wasmPaths: "/\\cdn.example.invalid/ort/" },
+    { env: {}, wasmPaths: { wasm: "https://cdn.example.invalid/ort.wasm" } },
+  ];
+  for (const { env, wasmPaths } of remoteSettings as Array<{
+    env: Record<string, unknown>;
+    wasmPaths?: unknown;
+  }>) {
+    const recorder = recordingRuntime(env);
+    await assertOfflineError(
+      api,
+      api.loadOnnxModel("/models/openmed", {
+        runtime: recorder.runtime,
+        offlineOnly: true,
+        ...(wasmPaths === undefined ? {} : { wasmPaths }),
+      }),
+      "remote_asset_refused",
+    );
+    assert.deepEqual(recorder.calls, []);
+  }
+
+  // A remote override is refused even when offline-only mode is off.
+  await assertOfflineError(
+    api,
+    api.loadTokenClassificationPipeline("/models/openmed", {
+      runtime: recordingRuntime().runtime,
+      wasmPaths: "https://cdn.example.invalid/ort/",
+    }),
+    "remote_asset_refused",
+  );
+
+  // Local WebAssembly assets replace the CDN default before the runtime loads.
+  for (const [wasmPaths, expected] of [
+    ["/assets/onnxruntime", "/assets/onnxruntime/"],
+    [
+      { mjs: "/assets/ort.mjs", wasm: "/assets/ort.wasm" },
+      { mjs: "/assets/ort.mjs", wasm: "/assets/ort.wasm" },
+    ],
+  ] as const) {
+    const recorder = recordingRuntime({
+      backends: { onnx: { wasm: { wasmPaths: cdnWasmPaths } } },
+    });
+    await api.loadOnnxModel("/models/openmed", {
+      runtime: recorder.runtime,
+      offlineOnly: true,
+      wasmPaths,
+    });
+    assert.deepEqual(recorder.calls, [
+      {
+        model: "/models/openmed",
+        localFilesOnly: true,
+        allowRemoteModels: false,
+        wasmPaths: expected,
+      },
+    ]);
+  }
+});
+
+test("explicit local paths stay local-only in every mode", async () => {
+  const api = await loadApi();
+  const recorder = recordingRuntime();
+  for (const offlineOnly of [false, true]) {
+    await api.loadTokenClassificationPipeline("/models/openmed", {
+      runtime: recorder.runtime,
+      localFilesOnly: false,
+      allowRemoteModels: true,
+      offlineOnly,
+    });
+    await api.deidentify(goldenText, {
+      model: "./models/openmed",
+      offlineOnly,
+      loaderOptions: {
+        runtime: recorder.runtime,
+        localFilesOnly: false,
+        allowRemoteModels: true,
+      },
+    });
+  }
+  assert.deepEqual(
+    recorder.calls.map(({ localFilesOnly, allowRemoteModels }) => ({
+      localFilesOnly,
+      allowRemoteModels,
+    })),
+    Array(4).fill({ localFilesOnly: true, allowRemoteModels: false }),
+  );
+
+  // Paths that only look local but resolve to another host are refused.
+  for (const model of [
+    "//models.example.invalid/openmed",
+    "/\\models.example.invalid/openmed",
+    "file://models.example.invalid/openmed",
+  ]) {
+    await assertOfflineError(
+      api,
+      api.loadTokenClassificationPipeline(model, { runtime: recorder.runtime }),
+      "remote_model_refused",
+    );
+  }
+  assert.equal(recorder.calls.length, 4);
+});
+
+test("offline-only loads fail closed with value-free errors on missing assets", async () => {
+  const api = await loadApi();
+  const secretPath = "/private/synthetic-patient-dir/model_int8.onnx";
+  const failingRuntime: RawTransformersRuntime = {
+    env: {},
+    pipeline: async () => {
+      throw new Error(`file was not found locally at "${secretPath}"`);
+    },
+  };
+  await assert.rejects(
+    api.loadOnnxModel("/models/openmed", { runtime: failingRuntime }),
+    (error: Error) => error.message.includes(secretPath),
+  );
+  await assertOfflineError(
+    api,
+    api.loadOnnxModel("/models/openmed", {
+      runtime: failingRuntime,
+      offlineOnly: true,
+    }),
+    "local_assets_unavailable",
+    [secretPath, "synthetic-patient-dir"],
+  );
+  await assertOfflineError(
+    api,
+    api.deidentify("Patient Synthetic Person", {
+      model: "/models/openmed",
+      offlineOnly: true,
+      loaderOptions: { runtime: failingRuntime },
+    }),
+    "local_assets_unavailable",
+    [secretPath, "Synthetic Person"],
+  );
+
+  // The ONNX Runtime Web loader is local-only in every mode; offline-only mode
+  // also replaces its load failures with the typed error.
+  const createCalls: string[] = [];
+  const ortRuntime = {
+    env: {},
+    InferenceSession: {
+      create: (modelPath: string) => {
+        createCalls.push(modelPath);
+        throw new Error(`failed to load model from ${secretPath}`);
+      },
+    },
+  };
+  const ortOptions = {
+    modelPath: secretPath,
+    assetPath: "/assets/onnxruntime/",
+    runtime: ortRuntime,
+    capabilities: {
+      webgpu: false,
+      wasm: true,
+      wasmSimd: true,
+      sharedArrayBuffer: false,
+      crossOriginIsolated: false,
+      hardwareConcurrency: 1,
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (() => {
+    fetchCalls += 1;
+    throw new Error("network fetch is not allowed in this test");
+  }) as typeof fetch;
+  api.setOfflineOnly(true);
+  try {
+    await assertOfflineError(
+      api,
+      api.loadOrtWebSession({ ...ortOptions, cache: new Map() }),
+      "local_assets_unavailable",
+      [secretPath, "synthetic-patient-dir"],
+    );
+    await assertOfflineError(
+      api,
+      api.loadWebGpuTokenClassificationSession({
+        ...ortOptions,
+        cache: new Map(),
+        probeAdapter: false,
+      }),
+      "local_assets_unavailable",
+      [secretPath, "synthetic-patient-dir"],
+    );
+    await assert.rejects(
+      api.loadOrtWebSession({
+        ...ortOptions,
+        modelPath: "https://models.example.invalid/model.onnx",
+        cache: new Map(),
+      }),
+      /local\/offline/,
+    );
+  } finally {
+    api.setOfflineOnly(false);
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(createCalls, [secretPath, secretPath]);
+  assert.equal(fetchCalls, 0);
+  await assert.rejects(
+    api.loadOrtWebSession({ ...ortOptions, cache: new Map() }),
+    (error: Error) => error.message.includes(secretPath),
+  );
+});
+
 test("extractPii keeps O tokens so offset alignment sees the full sequence", async () => {
   const api = await loadApi();
   let seenOptions: Record<string, unknown> | undefined;
@@ -470,6 +784,58 @@ async function loadApi() {
   return import(distUrl);
 }
 
+// Records every runtime, loader and pipeline request a load makes.
+function recordingRuntime(env: Record<string, unknown> = {}) {
+  const calls: Array<Record<string, unknown>> = [];
+  const runtime: RawTransformersRuntime = {
+    env: env as RawTransformersRuntime["env"],
+    pipeline: async (_task, model, options) => {
+      const backends = env.backends as
+        | { onnx?: { wasm?: { wasmPaths?: unknown } } }
+        | undefined;
+      calls.push({
+        model,
+        localFilesOnly: options?.local_files_only,
+        allowRemoteModels: env.allowRemoteModels,
+        wasmPaths: backends?.onnx?.wasm?.wasmPaths,
+      });
+      return transformersJsFixturePipeline;
+    },
+  };
+  return {
+    calls,
+    runtime,
+    runtimeProvider: async () => {
+      calls.push({ runtimeProvider: true });
+      return runtime;
+    },
+    modelLoader: async (model: string) => {
+      calls.push({ modelLoader: model });
+      return transformersJsFixturePipeline;
+    },
+  };
+}
+
+async function assertOfflineError(
+  api: Awaited<ReturnType<typeof loadApi>>,
+  promise: Promise<unknown>,
+  code: string,
+  forbidden: string[] = [],
+) {
+  await assert.rejects(promise, (error: Error & { code?: string }) => {
+    assert.ok(error instanceof api.OpenMedOfflineError);
+    assert.equal(error.name, "OpenMedOfflineError");
+    assert.equal(error.code, code);
+    assert.equal("cause" in error, false);
+    // Controlled messages carry no paths, URLs, schemes or source text.
+    assert.doesNotMatch(error.message, /[\\/:]/);
+    for (const value of forbidden) {
+      assert.equal(String(error).includes(value), false);
+    }
+    return true;
+  });
+}
+
 const goldenText =
   "Patient Alice Nguyen, DOB 1979-04-12, email alice@example.org.";
 const goldenRedactedText =
@@ -567,3 +933,122 @@ function assertSpansClose(actual: OpenMedSpan[], expected: OpenMedSpan[]) {
     assert.ok(Math.abs(actualScore - expectedScore) <= 1e-12);
   }
 }
+
+test("default pipelines reuse equivalent options and drain before disposal", async () => {
+  const api = await loadApi();
+  let created = 0;
+  let disposed = 0;
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const runtime = {
+    pipeline() {
+      created++;
+      return Object.assign(async () => { await gate; return []; }, {
+        dispose() { disposed++; },
+      });
+    },
+  };
+  const options = { model: "/models/synthetic", loaderOptions: { runtime } };
+  const first = api.extractPii("synthetic", options);
+  const second = api.extractPii("synthetic", { ...options, loaderOptions: { runtime } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(created, 1);
+  const clearing = api.disposeDefaultPipelines();
+  assert.equal(disposed, 0);
+  finish();
+  await Promise.all([first, second, clearing]);
+  assert.equal(disposed, 1);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 1);
+  await api.extractPii("synthetic", options);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 2);
+});
+
+test("caller pipelines stay caller-owned and failed package pipelines are disposed", async () => {
+  const api = await loadApi();
+  let callerDisposed = 0;
+  const caller = Object.assign(() => [], { dispose() { callerDisposed++; } });
+  await api.extractPii("synthetic", { pipeline: caller });
+  await api.disposeDefaultPipelines();
+  assert.equal(callerDisposed, 0);
+  let created = 0;
+  let disposed = 0;
+  const runtime = {
+    pipeline() {
+      created++;
+      return Object.assign(() => { throw new Error("synthetic failure"); }, {
+        dispose() { disposed++; },
+      });
+    },
+  };
+  for (let count = 0; count < 2; count++) {
+    await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime } }), /synthetic failure/);
+  }
+  assert.equal(created, 2);
+  assert.equal(disposed, 2);
+});
+
+test("default loader cache separates loader identity and loader options", async () => {
+  const api = await loadApi();
+  let created = 0;
+  const runtime = { pipeline() { created++; return () => []; } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "one", pipelineOptions: { a: 1, b: 2 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "one", pipelineOptions: { b: 2, a: 1 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "two" } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime: { ...runtime }, revision: "two" } });
+  assert.equal(created, 3);
+  await api.disposeDefaultPipelines();
+});
+
+test("pipeline release failures expose only a controlled error", async () => {
+  const api = await loadApi();
+  const runtime = { pipeline() { return Object.assign(() => [], {
+    dispose() { throw new Error("synthetic-private-path-token"); },
+  }); } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime } });
+  await assert.rejects(api.disposeDefaultPipelines(), error => {
+    assert.equal(String(error), "Error: OpenMed pipeline disposal failed");
+    assert.equal((error as Error).cause, undefined);
+    return true;
+  });
+});
+
+test("default disposal drains a pending load without removing a replacement", async () => {
+  const api = await loadApi();
+  let finish!: (pipeline: TokenClassificationPipeline) => void;
+  let created = 0;
+  let disposed = 0;
+  const pending = new Promise<TokenClassificationPipeline>(resolve => { finish = resolve; });
+  const modelLoader = async () => {
+    created++;
+    return created === 1 ? pending : Object.assign(() => [], { dispose() { disposed++; } });
+  };
+  const options = { model: "/models/pending", modelLoader, hashSecret: "synthetic-secret" };
+  const first = api.extractPii("synthetic", options);
+  await new Promise(resolve => setImmediate(resolve));
+  const clearing = api.disposeDefaultPipelines();
+  await api.extractPii("synthetic", options);
+  finish(Object.assign(() => [], { dispose() { disposed++; } }));
+  await Promise.all([first, clearing]);
+  assert.equal(created, 2);
+  assert.equal(disposed, 1);
+  await api.extractPii("synthetic", options);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 2);
+});
+
+test("loader option keys distinguish signed zero and reject symbol semantics before loading", async () => {
+  const api = await loadApi();
+  let created = 0;
+  const runtime = { pipeline() { created++; return () => []; } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { bias: 0 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { bias: -0 } } });
+  assert.equal(created, 2);
+  await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { opaque: Symbol("synthetic") } } }), /do not support symbol values/);
+  await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { [Symbol("synthetic")]: true } } }), /do not support symbol keys/);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+});

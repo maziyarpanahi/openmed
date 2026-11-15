@@ -446,6 +446,20 @@ def fixture():
         ),
         "invalid_multimodal_transform",
     )
+    for case_id, wrong_version in (
+        (
+            "provider_abstention_consent_withdrawn",
+            "openmed.multimodal.provider_result.v1",
+        ),
+        ("provider_abstention_resource_limit", "openmed.multimodal.provider_result.v2"),
+    ):
+        original = next(row for row in cases if row["id"] == case_id)
+        reject(
+            case_id + "_wrong_version",
+            MultimodalPacket(original["wire"].encode()),
+            lambda data: data["payload"].update(schema_version=wrong_version),
+            "unsupported_multimodal_schema",
+        )
     negatives.append(
         {
             "id": "duplicate_key",

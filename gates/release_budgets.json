@@ -16,9 +16,9 @@
     "package::openmed::wheel": {
       "key": "package::openmed::wheel",
       "metrics": {
-        "baseline_bytes": 7848985,
+        "baseline_bytes": 8678579,
         "headroom_percent": 10,
-        "maximum_bytes": 8633884
+        "maximum_bytes": 9546437
       }
     }
   },

@@ -18,9 +18,24 @@ from pathlib import Path
 from typing import Any, BinaryIO, Iterable, Mapping, Sequence
 
 from .base import ExtractedDocument, SourceSpan, register_handler
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionPolicy,
+    CodeRegionDetector,
+    assert_no_residual_codes,
+    detect_code_regions,
+    merge_code_coverage,
+)
 from .documents_pdf import ProjectedRectangle, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 from .ocr import OcrEngine, OcrResult, ocr
+from .redaction_admission import (
+    RedactionAdmissionError,
+    admit_image,
+    check_geometry,
+    check_limit,
+    redaction_limit_profile,
+)
 
 _PILLOW_HINT = 'Install with: pip install "openmed[multimodal]".'
 _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
@@ -104,6 +119,7 @@ class ResidualPhiReport:
     residual_phi: tuple[ResidualPhi, ...] = ()
     frame_count: int = 0
     word_count: int = 0
+    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
 
     @property
     def residual_count(self) -> int:
@@ -113,9 +129,9 @@ class ResidualPhiReport:
 
     @property
     def clean(self) -> bool:
-        """Whether verification found no residual PHI."""
+        """Whether verification found no residual PHI or code regions."""
 
-        return self.residual_count == 0
+        return self.residual_count == 0 and not self.code_coverage.regions
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable PHI-safe report."""
@@ -126,6 +142,7 @@ class ResidualPhiReport:
             "residual_count": self.residual_count,
             "frame_count": self.frame_count,
             "word_count": self.word_count,
+            "code_coverage": self.code_coverage.to_dict(),
             "residual_phi": [residual.to_dict() for residual in self.residual_phi],
         }
 
@@ -156,6 +173,7 @@ class RedactedImage:
     metadata_report: ImageMetadataReport
     residual_report: ResidualPhiReport | None = None
     output_path: Path | None = None
+    code_coverage: CodeCoverageReport = field(default_factory=CodeCoverageReport)
 
     @property
     def modified_pixels(self) -> bool:
@@ -182,6 +200,7 @@ class RedactedImage:
                     "changed_pixels_by_frame": list(self.changed_pixels_by_frame),
                 },
                 "metadata_report": self.metadata_report.to_dict(),
+                "code_coverage": self.code_coverage.to_dict(),
                 "redacted_image_sha256": hashlib.sha256(
                     self.redacted_bytes
                 ).hexdigest(),
@@ -208,6 +227,9 @@ def redact_image(
     lang: str | None = None,
     ocr_engine: str | OcrEngine | None = None,
     verification_ocr_engine: str | OcrEngine | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
+    verification_code_detector: CodeRegionDetector | None = None,
     box_color: tuple[int, int, int] = (0, 0, 0),
     verify: bool | None = None,
 ) -> RedactedImage:
@@ -217,7 +239,9 @@ def redact_image(
         path: Source raster image path or named seekable binary stream.
         output_path: Optional destination path or writable binary stream. When
             omitted, the redacted bytes are returned without writing a file.
-        policy: Optional policy marker copied into result metadata.
+        policy: Optional policy marker copied into result metadata. Its
+            ``asset_limit_profile`` selects a validated LimitProfile; the
+            conservative mobile profile applies by default.
         models: Supplied OpenMed PII model object or mapping. Detector callables
             are resolved from keys/attributes such as ``detector``,
             ``extract_pii``, or ``analyze_text``. Optional ``ocr_engine``,
@@ -225,9 +249,13 @@ def redact_image(
         lang: Optional OpenMed language code forwarded to OCR and detection.
         ocr_engine: OCR engine name or instance for the first OCR pass.
         verification_ocr_engine: Optional engine for the re-OCR pass.
+        code_detector: Local code provider; defaults to optional ZXing. Also
+            resolved from ``models["code_detector"]`` for document dispatch.
+        code_detection_policy: Fail closed or report unavailable code coverage.
+        verification_code_detector: Optional independent residual provider.
         box_color: RGB fill for opaque redaction rectangles.
-        verify: Whether to re-OCR the redacted output. Defaults to true when a
-            detector is available.
+        verify: Whether to check residual OCR PHI and codes. Defaults to true;
+            OCR verification runs only when a text detector is available.
 
     Returns:
         A :class:`RedactedImage` with redacted bytes, pixel-diff counts, boxes,
@@ -240,8 +268,15 @@ def redact_image(
     target = (
         Path(output_path) if output_path is not None and output_stream is None else None
     )
-    image_module, image_chops, image_draw, image_sequence = _import_pillow()
+    limit_profile = redaction_limit_profile(policy)
+    declared_frames = admit_image(path, limit_profile)
+    image_module, image_chops, image_draw, _ = _import_pillow()
     detector = _resolve_detector(models)
+    if code_detector is None:
+        code_detector = _model_option(models, "code_detector")
+    code_detection_policy = (
+        _policy_value(policy, "code_detection_policy") or code_detection_policy
+    )
     first_pass_engine = (
         ocr_engine if ocr_engine is not None else _model_option(models, "ocr_engine")
     )
@@ -253,13 +288,26 @@ def redact_image(
     if verification_engine is None:
         verification_engine = first_pass_engine
     if verify is None:
-        verify = bool(_model_option(models, "verify", default=detector is not None))
+        verify = bool(_model_option(models, "verify", default=True))
 
     languages = [lang] if lang else None
     with _open_image(path, image_module) as image:
         source_format = _image_format(image, source)
         output_format = _output_format(target or source, source_format)
-        frames = [frame.copy() for frame in image_sequence.Iterator(image)]
+        frame_count = int(getattr(image, "n_frames", 1))
+        check_limit(limit_profile, "frames", frame_count)
+        if frame_count != declared_frames:
+            raise RedactionAdmissionError("frame_count_mismatch", observed=frame_count)
+        frames = []
+        total_pixels = 0
+        for frame_index in range(frame_count):
+            # Check the index before seeking/copying the next frame.
+            check_limit(limit_profile, "frames", frame_index + 1)
+            image.seek(frame_index)
+            check_geometry(limit_profile, image.width, image.height)
+            total_pixels += image.width * image.height
+            check_limit(limit_profile, "total_pixels", total_pixels)
+            frames.append(image.copy())
 
     if len(frames) > 1 and output_format != "TIFF":
         raise ValueError("multi-frame images can only be redacted to TIFF output")
@@ -280,7 +328,16 @@ def redact_image(
         )
 
     entities = _iter_entities(_detect_entities(document, detector, lang))
-    boxes = project_text_spans(document, entities)
+    code_coverage = merge_code_coverage(
+        detect_code_regions(
+            frame, detector=code_detector, policy=code_detection_policy, page=index
+        )
+        for index, frame in enumerate(frames)
+    )
+    boxes = project_text_spans(document, entities) + tuple(
+        ProjectedRectangle(0, 0, region.page, region.bbox, label="CODE_REGION")
+        for region in code_coverage.regions
+    )
     redacted_frames = [
         _prepare_frame_for_output(frame, output_format) for frame in frames
     ]
@@ -290,6 +347,22 @@ def redact_image(
         for original, redacted in zip(frames, redacted_frames)
     )
     redacted_bytes = _encode_frames(redacted_frames, output_format)
+
+    metadata_report = verify_image_metadata(redacted_bytes)
+    residual_report = None
+    if verify:
+        residual_report = verify_image_redaction(
+            redacted_bytes,
+            models=models,
+            lang=lang,
+            ocr_engine=verification_engine,
+            code_detector=verification_code_detector
+            if verification_code_detector is not None
+            else code_detector,
+            code_detection_policy=code_detection_policy,
+        )
+        assert_no_residual_phi(residual_report)
+
     if target is not None:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(redacted_bytes)
@@ -305,23 +378,13 @@ def redact_image(
         except (AttributeError, OSError):
             pass
 
-    metadata_report = verify_image_metadata(redacted_bytes)
-    residual_report = None
-    if verify:
-        residual_report = verify_image_redaction(
-            redacted_bytes,
-            models=models,
-            lang=lang,
-            ocr_engine=verification_engine,
-        )
-        assert_no_residual_phi(residual_report)
-
     return RedactedImage(
         source_path=source,
         output_path=target,
         redacted_bytes=redacted_bytes,
         extracted_document=document,
         redaction_boxes=boxes,
+        code_coverage=code_coverage,
         frame_count=len(frames),
         image_format=output_format,
         changed_pixel_count=sum(changed_by_frame),
@@ -337,19 +400,29 @@ def verify_image_redaction(
     models: Any | None,
     lang: str | None = None,
     ocr_engine: str | OcrEngine | None = None,
+    code_detector: CodeRegionDetector | None = None,
+    code_detection_policy: CodeDetectionPolicy = "coverage_incomplete",
 ) -> ResidualPhiReport:
     """Re-OCR a redacted image and report any detected residual PHI."""
 
     image_module, _, _, image_sequence = _import_pillow()
     detector = _resolve_detector(models)
-    if detector is None:
-        return ResidualPhiReport()
+    if code_detector is None:
+        code_detector = _model_option(models, "code_detector")
 
     languages = [lang] if lang else None
     with _open_image(image, image_module) as opened:
         image_format = _image_format_from_loaded(opened)
         frames = [frame.copy() for frame in image_sequence.Iterator(opened)]
 
+    code_coverage = merge_code_coverage(
+        detect_code_regions(
+            frame, detector=code_detector, policy=code_detection_policy, page=index
+        )
+        for index, frame in enumerate(frames)
+    )
+    if detector is None:
+        return ResidualPhiReport(frame_count=len(frames), code_coverage=code_coverage)
     frame_results = tuple(
         ocr(frame, engine=ocr_engine, languages=languages) for frame in frames
     )
@@ -364,12 +437,14 @@ def verify_image_redaction(
         residual_phi=tuple(residual for residual in residuals if residual is not None),
         frame_count=len(frames),
         word_count=len(document.spans),
+        code_coverage=code_coverage,
     )
 
 
 def assert_no_residual_phi(report: ResidualPhiReport) -> ResidualPhiReport:
     """Raise if a residual PHI verification report is not clean."""
 
+    assert_no_residual_codes(report.code_coverage)
     if not report.clean:
         raise ImageRedactionVerificationError(report)
     return report
@@ -737,7 +812,12 @@ def _image_handler(
         "redacted_path",
         "destination_path",
     )
-    if detector is None and output_path is None:
+    if (
+        detector is None
+        and output_path is None
+        and _model_option(models, "code_detector") is None
+    ):
+        admit_image(path, redaction_limit_profile(policy))
         languages = [lang] if lang else None
         return ocr(
             path,

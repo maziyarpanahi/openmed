@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import {
   BrowserContext,
   ConsoleMessage,
+  Locator,
   Page,
   TestInfo,
   expect,
@@ -1188,13 +1189,15 @@ test("docs drawer traps focus and returns it on Escape", async ({
   expectCleanAudit(audit);
 });
 
+function docsSearchReadyState(page: Page): Locator {
+  return page
+    .locator('[data-md-component="search-result"] .md-search-result__meta')
+    .filter({ hasText: /^\s*Type to start searching\s*$/u });
+}
+
 async function expectDocsSearchReady(page: Page): Promise<void> {
-  // These flows audit search as well as navigation. Leaving a page before its
-  // worker initializes cancels importScripts in WebKit under route interception.
-  // Require the real ready state instead of filtering its console errors.
-  await expect(
-    page.locator('[data-md-component="search-result"] .md-search-result__meta'),
-  ).toHaveText("Type to start searching");
+  // Keep the page open until its worker is ready, within the test's deadline.
+  await docsSearchReadyState(page).waitFor({ state: "attached" });
 }
 
 test("docs navigation readiness refuses a missing search dependency", async ({
@@ -1212,7 +1215,8 @@ test("docs navigation readiness refuses a missing search dependency", async ({
   });
   await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
   await expect.poll(() => intercepted).toBeGreaterThan(0);
-  await expect(expectDocsSearchReady(page)).rejects.toThrow();
+  const readiness = expect(docsSearchReadyState(page)).toBeAttached();
+  await expect(readiness).rejects.toThrow();
 });
 
 const governedDocRoutes = [
@@ -1269,34 +1273,33 @@ for (const width of [390, 1440]) {
   }
 }
 
+const clinicalOverview = "/docs/clinical/clinical-brief/";
 const clinicalDocRoutes = [
-  ["Clinical NLI", "/docs/clinical/nli-label-contract/", "", ""],
-  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "Clinical NLI", "/docs/clinical/nli-label-contract/"],
-  ["Social Determinants", "/docs/clinical/sdoh-extraction/", "", ""],
-  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
-  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", "", ""],
-  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "Context, Grounding and Journey", "/docs/clinical/journey-contracts/"],
+  ["Clinical NLI", "/docs/clinical/nli-label-contract/", clinicalOverview],
+  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "/docs/clinical/nli-label-contract/"],
+  ["Social Determinants", "/docs/clinical/sdoh-extraction/", clinicalOverview],
+  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "/docs/clinical/sdoh-extraction/"],
+  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", clinicalOverview],
+  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "/docs/clinical/journey-contracts/"],
 ] as const;
 
-for (const [name, route, group, groupRoute] of clinicalDocRoutes) {
+for (const [name, route, parentRoute] of clinicalDocRoutes) {
   test(`docs clinical topics expose ${name}`, async ({ baseURL, page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await prepareTheme(page, "light");
     const audit = monitorPage(page, baseURL);
-    await page.goto("/docs/clinical/clinical-brief/", { waitUntil: "domcontentloaded" });
+    await page.goto(parentRoute, { waitUntil: "domcontentloaded" });
     await expectDocsSearchReady(page);
-    const navigation = page.locator(".md-sidebar--primary");
-    const follow = async (linkName: string, expectedRoute: string): Promise<void> => {
-      await navigation.getByRole("link", { name: linkName, exact: true }).click();
-      await expect(page).toHaveURL(new URL(expectedRoute, baseURL).href);
-      await expect(page.locator("h1")).toBeVisible();
-      await expectDocsSearchReady(page);
-      await expectNoPageOverflow(page);
-    };
-    if (group) await follow(group, groupRoute);
-    await follow(name, route);
+    await page
+      .locator(".md-sidebar--primary")
+      .getByRole("link", { name, exact: true })
+      .click();
+    await expect(page).toHaveURL(new URL(route, baseURL).href);
+    await expect(page.locator("h1")).toBeVisible();
+    await expectDocsSearchReady(page);
+    await expectNoPageOverflow(page);
     expectCleanAudit(audit);
   });
 }

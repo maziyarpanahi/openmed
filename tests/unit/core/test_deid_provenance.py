@@ -72,7 +72,7 @@ def test_deidentify_audit_report_records_ml_and_safety_sweep_provenance(mock_ext
     assert by_label["NAME"].sources == ["ml"]
     assert by_label["NAME"].canonical_label == "PERSON"
     assert by_label["NAME"].threshold == 0.7
-    assert by_label["NAME"].surrogate == "[NAME]"
+    assert by_label["NAME"].surrogate == "[PERSON]"
 
     email_span = by_label["email"]
     assert email_span.sources == [SAFETY_SWEEP_SOURCE]
@@ -182,4 +182,4 @@ def test_regular_deidentify_keeps_provenance_on_entities(mock_extract):
     assert result.pii_entities[0].sources == ["ml"]
     assert result.pii_entities[0].evidence["model_id"] == "unit-test-model"
     assert result.pii_entities[0].action == "mask"
-    assert result.pii_entities[0].surrogate == "[NAME]"
+    assert result.pii_entities[0].surrogate == "[PERSON]"

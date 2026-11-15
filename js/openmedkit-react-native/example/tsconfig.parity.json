@@ -1,0 +1,19 @@
+{
+  "//": "Type-checks the React Native-free parity core and CI scripts. Runs from the bridge package's own toolchain, so it needs no React Native install.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/parity/**/*.ts", "scripts/**/*.ts"]
+}

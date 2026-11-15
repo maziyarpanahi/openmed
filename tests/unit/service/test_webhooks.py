@@ -3,23 +3,73 @@
 from __future__ import annotations
 
 import json
+import threading
+from typing import Any
 
 import httpx
+import pytest
 
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import (
+    ATTEMPT_HEADER,
+    DELIVERY_ID_HEADER,
+    EVENT_HEADER,
     NONCE_HEADER,
+    WEBHOOK_SIGNATURE_HEADER,
     NonceCache,
+    SignedWebhookHeaders,
+    parse_webhook_headers,
     sign_request,
     verify_request_signature,
+    webhook_signature_digest,
+    webhook_signing_string,
+)
+from openmed.service.signing_keys import (
+    SigningKeyError,
+    SigningKeyring,
+    derive_key_id,
 )
 from openmed.service.webhooks import (
     DEFAULT_WEBHOOK_TIMEOUT_SECONDS,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
+    WebhookDeliveryResult,
     canonical_json_bytes,
     deliver_webhook,
     sign_webhook_payload,
 )
+
+SENTINEL = "SYNTHETIC-SENTINEL-3899"
+SENTINEL_URL = f"https://receiver.invalid/{SENTINEL}/hook?token={SENTINEL}"
+
+
+def _v1_summary(result: WebhookDeliveryResult) -> dict[str, Any]:
+    """Return the delivery summary without the version 2 delivery fields."""
+    summary = result.to_dict()
+    delivery_id = summary.pop("delivery_id", None)
+    assert delivery_id is None or str(delivery_id).startswith("dlv_")
+    summary.pop("signature_version", None)
+    summary.pop("attempt_receipts", None)
+    return summary
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origins.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {"purposes": ["webhook"], "destination": origin}
+                for origin in (
+                    "https://callbacks.example.test",
+                    "https://receiver.invalid",
+                    "https://zqcallbacksentinel.example.test",
+                    "https://zqtransportsentinel.example.test",
+                )
+            ]
+        ),
+    )
 
 
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:
@@ -117,13 +167,20 @@ def test_deliver_webhook_reports_failure_after_attempts() -> None:
     assert result.success is False
     assert result.attempts == 2
     assert result.status_code == 500
-    assert result.error == "HTTP 500"
+    assert result.error == "http_status"
+    assert _v1_summary(result) == {
+        "status": "failed",
+        "success": False,
+        "attempts": 2,
+        "status_code": 500,
+        "error": "http_status",
+    }
 
 
 def test_deliver_webhook_records_value_free_transport_error_codes() -> None:
     sentinel_url = "https://zqtransportsentinel.example.test/hook?token=zq-secret"
     for error, code in [
-        (httpx.ConnectError(f"cannot reach {sentinel_url}"), "transport_error"),
+        (httpx.ConnectError(f"cannot reach {sentinel_url}"), "connect"),
         (httpx.ReadTimeout(f"timed out reading {sentinel_url}"), "timeout"),
     ]:
 
@@ -273,3 +330,362 @@ def test_deliver_webhook_leaves_the_supplied_client_ownership_alone() -> None:
     assert client.is_closed is False
     assert client.timeout.connect == 30.0
     client.close()
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        (httpx.ConnectError(f"refused {SENTINEL_URL}"), "connect"),
+        (httpx.ConnectTimeout(f"connect timed out {SENTINEL_URL}"), "timeout"),
+        (httpx.ReadTimeout(f"read timed out {SENTINEL_URL}"), "timeout"),
+        (httpx.RemoteProtocolError(f"protocol {SENTINEL_URL}"), "transport"),
+    ],
+    ids=["connect", "connect-timeout", "read-timeout", "transport"],
+)
+def test_deliver_webhook_reports_controlled_transport_codes(
+    failure: Exception,
+    code: str,
+) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise failure
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    result = deliver_webhook(
+        SENTINEL_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        max_attempts=2,
+        backoff_seconds=0,
+        client=client,
+    )
+
+    assert _v1_summary(result) == {
+        "status": "failed",
+        "success": False,
+        "attempts": 2,
+        "status_code": None,
+        "error": code,
+    }
+    assert SENTINEL not in json.dumps(result.to_dict())
+
+
+def test_delivery_result_never_serializes_free_form_errors() -> None:
+    result = WebhookDeliveryResult(
+        success=False,
+        attempts=1,
+        status_code=500,
+        error=f"HTTP 500 from {SENTINEL_URL}",
+    )
+
+    assert result.to_dict()["error"] == "sender_error"
+    assert SENTINEL not in json.dumps(result.to_dict())
+
+
+def test_deliver_webhook_backoff_wait_is_cancellable() -> None:
+    cancel = threading.Event()
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        cancel.set()
+        return httpx.Response(500)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    results: list[WebhookDeliveryResult] = []
+    worker = threading.Thread(
+        target=lambda: results.append(
+            deliver_webhook(
+                "https://callbacks.example.test/openmed",
+                {"event": "job.done", "job_id": "abc", "status": "done"},
+                secret="secret",
+                max_attempts=10,
+                backoff_seconds=60.0,
+                client=client,
+                cancel_event=cancel,
+            )
+        ),
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert calls == 1
+    assert _v1_summary(results[0]) == {
+        "status": "abandoned",
+        "success": False,
+        "attempts": 1,
+        "status_code": 500,
+        "error": "cancelled",
+    }
+
+
+def test_deliver_webhook_stops_at_the_total_wall_time_ceiling() -> None:
+    now = [0.0]
+    delays: list[float] = []
+    timeouts: list[dict[str, float]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        timeouts.append(dict(request.extensions["timeout"]))
+        return httpx.Response(500)
+
+    def sleeper(delay: float) -> None:
+        delays.append(delay)
+        now[0] += delay
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    result = deliver_webhook(
+        "https://callbacks.example.test/openmed",
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        max_attempts=10,
+        backoff_seconds=60.0,
+        client=client,
+        sleeper=sleeper,
+        max_total_seconds=100.0,
+        monotonic=lambda: now[0],
+    )
+
+    assert delays == [60.0]
+    assert timeouts == [
+        _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
+        _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
+    ]
+    assert _v1_summary(result) == {
+        "status": "abandoned",
+        "success": False,
+        "attempts": 2,
+        "status_code": 500,
+        "error": "deadline_exceeded",
+    }
+
+
+def test_deliver_webhook_caps_attempt_timeout_at_the_remaining_budget() -> None:
+    seen: list[dict[str, float]] = []
+    client = httpx.Client(transport=_recording_transport(seen))
+    result = deliver_webhook(
+        "https://callbacks.example.test/openmed",
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        client=client,
+        max_attempts=1,
+        max_total_seconds=2.5,
+        monotonic=lambda: 0.0,
+    )
+
+    assert result.success is True
+    assert seen == [_timeout_extensions(2.5)]
+
+
+# --- Version 2 delivery contract (#3573) -----------------------------------
+
+V2_SECRET_SENTINEL = "zq-v2-webhook-secret-sentinel-0123456789"
+V2_URL = "https://zqcallbacksentinel.example.test/openmed?source=jobs"
+
+
+class _MutableResolver:
+    """Key resolver double whose generation can change between attempts."""
+
+    def __init__(self, keyring: SigningKeyring) -> None:
+        self.keyring = keyring
+        self.calls = 0
+
+    def current(self) -> SigningKeyring:
+        self.calls += 1
+        return self.keyring
+
+
+class _BrokenResolver:
+    def current(self) -> SigningKeyring:
+        raise SigningKeyError("keyring_unreadable")
+
+
+def _verify_v2(request: httpx.Request, secret: str) -> SignedWebhookHeaders:
+    signed = parse_webhook_headers(request.headers)
+    expected = webhook_signature_digest(
+        secret,
+        webhook_signing_string(
+            request.method,
+            request.url.raw_path.decode("ascii"),
+            signed.timestamp,
+            signed.nonce,
+            request.content,
+            key_id=signed.signature.key_id,
+            event=signed.event,
+            delivery_id=signed.delivery_id,
+            attempt=signed.attempt,
+        ),
+    )
+    assert expected == signed.signature.digest
+    return signed
+
+
+def test_retries_keep_the_delivery_id_with_fresh_attempt_identity() -> None:
+    seen: list[SignedWebhookHeaders] = []
+    statuses = [503, 502, 204]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(_verify_v2(request, V2_SECRET_SENTINEL))
+        return httpx.Response(statuses[len(seen) - 1])
+
+    result = deliver_webhook(
+        V2_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret=V2_SECRET_SENTINEL,
+        max_attempts=3,
+        backoff_seconds=0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        clock=lambda: 1_800_000_000.75,
+    )
+
+    assert result.success is True
+    assert {item.delivery_id for item in seen} == {result.delivery_id}
+    assert result.delivery_id is not None and result.delivery_id.startswith("dlv_")
+    assert [item.attempt for item in seen] == [1, 2, 3]
+    assert len({item.nonce for item in seen}) == 3
+    assert {item.event for item in seen} == {"job.done"}
+    assert {item.timestamp for item in seen} == {1_800_000_000}
+    assert {item.signature.version for item in seen} == {"v2"}
+    assert {item.signature.key_id for item in seen} == {
+        derive_key_id(V2_SECRET_SENTINEL)
+    }
+    assert [receipt.status_code for receipt in result.attempt_receipts] == [
+        503,
+        502,
+        204,
+    ]
+    assert [receipt.error for receipt in result.attempt_receipts] == [
+        "http_status",
+        "http_status",
+        None,
+    ]
+    summary = json.dumps(result.to_dict())
+    assert result.to_dict()["signature_version"] == "v2"
+    assert V2_SECRET_SENTINEL not in summary
+    assert "zqcallbacksentinel" not in summary
+
+
+def test_an_explicit_delivery_id_and_key_id_are_reused_verbatim() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(500)
+
+    result = deliver_webhook(
+        V2_URL,
+        {"event": "job.failed", "job_id": "abc", "status": "failed"},
+        secret=V2_SECRET_SENTINEL,
+        key_id="callbacks-2026-11",
+        delivery_id="dlv_synthetic_fixed_0001",
+        max_attempts=2,
+        backoff_seconds=0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert result.success is False
+    assert result.delivery_id == "dlv_synthetic_fixed_0001"
+    for request in seen:
+        signed = _verify_v2(request, V2_SECRET_SENTINEL)
+        assert signed.delivery_id == "dlv_synthetic_fixed_0001"
+        assert signed.signature.key_id == "callbacks-2026-11"
+        assert request.headers[EVENT_HEADER] == "job.failed"
+        assert request.headers[DELIVERY_ID_HEADER] == "dlv_synthetic_fixed_0001"
+    assert [request.headers[ATTEMPT_HEADER] for request in seen] == ["1", "2"]
+
+
+def test_a_retry_after_rotation_signs_with_the_newly_active_key() -> None:
+    old_secret = "o" * 32
+    new_secret = "n" * 32
+    resolver = _MutableResolver(SigningKeyring.single(old_secret, key_id="k-old"))
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        signed = parse_webhook_headers(request.headers)
+        seen.append(signed.signature.key_id)
+        secret = old_secret if signed.signature.key_id == "k-old" else new_secret
+        _verify_v2(request, secret)
+        # Rotate between attempt 1 and attempt 2.
+        resolver.keyring = SigningKeyring.single(
+            new_secret, key_id="k-new", generation=2
+        )
+        return httpx.Response(503 if len(seen) == 1 else 204)
+
+    result = deliver_webhook(
+        V2_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        keyring=resolver,
+        max_attempts=2,
+        backoff_seconds=0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert result.success is True
+    assert seen == ["k-old", "k-new"]
+    assert [receipt.key_id for receipt in result.attempt_receipts] == [
+        "k-old",
+        "k-new",
+    ]
+    assert resolver.calls == 2
+
+
+def test_an_unavailable_signing_key_sends_nothing_and_records_a_code() -> None:
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(204)
+
+    result = deliver_webhook(
+        V2_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        keyring=_BrokenResolver(),
+        max_attempts=2,
+        backoff_seconds=0,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert calls == 0
+    assert result.success is False
+    assert result.attempts == 2
+    assert result.error == "signing_key_unavailable"
+    assert [receipt.key_id for receipt in result.attempt_receipts] == [None, None]
+
+
+def test_the_legacy_v1_header_can_be_turned_off() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(204)
+
+    deliver_webhook(
+        V2_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret=V2_SECRET_SENTINEL,
+        include_legacy_signature=False,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert SIGNATURE_HEADER not in seen[0].headers
+    assert WEBHOOK_SIGNATURE_HEADER in seen[0].headers
+    _verify_v2(seen[0], V2_SECRET_SENTINEL)
+
+
+def test_deliver_webhook_requires_exactly_one_key_source() -> None:
+    payload = {"event": "job.done", "job_id": "abc", "status": "done"}
+    keyring = SigningKeyring.single(V2_SECRET_SENTINEL)
+    with pytest.raises(ValueError):
+        deliver_webhook(V2_URL, payload)
+    with pytest.raises(ValueError):
+        deliver_webhook(V2_URL, payload, secret=V2_SECRET_SENTINEL, keyring=keyring)
+    with pytest.raises(ValueError):
+        deliver_webhook(V2_URL, payload, keyring=keyring, key_id="k1")
+    with pytest.raises(ValueError):
+        deliver_webhook(
+            V2_URL, payload, secret=V2_SECRET_SENTINEL, delivery_id="bad id"
+        )
+    with pytest.raises(ValueError):
+        deliver_webhook(V2_URL, {"event": "bad event"}, secret=V2_SECRET_SENTINEL)

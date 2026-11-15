@@ -47,6 +47,7 @@ from openmed.eval.release_gates import (
     RELEASABLE,
     GateReport,
 )
+from openmed.eval.rollout import _write_text_atomic
 
 #: Labels whose recall is treated as safety-critical for promotion. Sourced from
 #: the release-gate definition so the two never drift.
@@ -417,10 +418,7 @@ class ChampionPointer:
     def save(self, path: str | Path = CHAMPION_POINTER_PATH) -> Path:
         """Write the store to *path* with deterministic formatting."""
 
-        pointer_path = Path(path)
-        pointer_path.parent.mkdir(parents=True, exist_ok=True)
-        pointer_path.write_text(self.to_json(), encoding="utf-8")
-        return pointer_path
+        return _write_text_atomic(Path(path), self.to_json())
 
 
 @dataclass(frozen=True)

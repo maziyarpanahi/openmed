@@ -3,6 +3,7 @@ import type {
   TokenClassificationOutput,
   TokenClassificationPipeline,
 } from "../types";
+import { isOfflineOnly, OpenMedOfflineError } from "../offline";
 import {
   detectOrtWebCapabilities,
   selectOrtWebBackend,
@@ -12,6 +13,8 @@ import {
 } from "./capability";
 
 const ONNXRUNTIME_WEB_MODULE = "onnxruntime-web";
+// Browsers cap a single ArrayBuffer near 2 GiB, so each shard must stay below it.
+const DEFAULT_ORT_WEB_MAX_SHARD_BYTES = 2 ** 31 - 1;
 
 export type OrtExecutionProvider = "webgpu" | "wasm";
 
@@ -70,6 +73,23 @@ export type OrtWebRuntimeProvider =
   | OrtWebRuntime
   | (() => Promise<OrtWebRuntime> | OrtWebRuntime);
 
+export interface OrtWebExternalDataShard {
+  /** File name the ONNX graph references, such as `model.onnx.data.000`. */
+  path: string;
+  /** Local or same-origin relative location ONNX Runtime Web loads. */
+  location: string;
+  /** Declared shard size, checked against the limits before loading. */
+  byteLength: number;
+}
+
+export interface OrtWebExternalDataOptions {
+  shards: readonly OrtWebExternalDataShard[];
+  /** Defaults to 2 GiB minus one byte. */
+  maxShardBytes?: number;
+  /** Unbounded by default. */
+  maxTotalBytes?: number;
+}
+
 export interface OrtWebLoaderOptions {
   modelPath: string;
   assetPath: string;
@@ -77,6 +97,7 @@ export interface OrtWebLoaderOptions {
   capabilities?: Partial<OrtWebCapabilityProfile>;
   globalScope?: CapabilityDetectionOptions["globalScope"];
   sessionOptions?: OrtSessionCreateOptions;
+  externalData?: OrtWebExternalDataOptions;
   cache?: OrtWebSessionCache;
 }
 
@@ -116,11 +137,18 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (trimmed.length === 0) {
     throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
   }
-  if (trimmed.startsWith("//") || trimmed.startsWith("\\\\")) {
+  // Browsers strip C0 controls (leading NUL..US, tab/CR/LF anywhere) and read "/\"
+  // or "\/" as "//", which would turn the path into a remote URL.
+  if (/[\u0000-\u001f]/.test(trimmed) || /^[\\/]{2}/.test(trimmed)) {
     throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
     return trimmed;
+  }
+  // URL parsers fold "\" into "/" and drop tab/CR/LF, so outside Windows drive
+  // paths these characters make a path non-canonical; refuse them outright.
+  if (/[\\\u0000-\u001f\u007f]/.test(trimmed)) {
+    throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)) {
     if (!trimmed.startsWith("file://")) {
@@ -156,19 +184,77 @@ export function normalizeOrtAssetPath(path: string): string {
   return `${localPath}/`;
 }
 
+export function assertOfflineExternalData(
+  options: Pick<OrtWebLoaderOptions, "externalData" | "sessionOptions">,
+): { path: string; data: string; byteLength: number }[] | undefined {
+  if (options.sessionOptions?.externalData !== undefined) {
+    throw new Error(
+      "ONNX Runtime Web external data must use the typed externalData option.",
+    );
+  }
+  const externalData = options.externalData;
+  if (externalData === undefined) {
+    return undefined;
+  }
+  const maxShardBytes = positiveByteCount(
+    externalData.maxShardBytes ?? DEFAULT_ORT_WEB_MAX_SHARD_BYTES,
+    "external data maxShardBytes",
+  );
+  const maxTotalBytes =
+    externalData.maxTotalBytes === undefined
+      ? Number.POSITIVE_INFINITY
+      : positiveByteCount(
+          externalData.maxTotalBytes,
+          "external data maxTotalBytes",
+        );
+  const paths = new Set<string>();
+  let totalBytes = 0;
+  const files = externalData.shards.map((shard, index) => {
+    const label = `external data shard ${index}`;
+    const file = {
+      path: assertOfflineShardLocation(shard.path, `${label} path`),
+      data: assertOfflineShardLocation(shard.location, `${label} location`),
+    };
+    if (paths.has(file.path)) {
+      throw new Error("ONNX Runtime Web external data contains duplicate shard paths.");
+    }
+    paths.add(file.path);
+    const byteLength = positiveByteCount(shard.byteLength, `${label} byteLength`);
+    if (byteLength > maxShardBytes) {
+      throw new Error(
+        `ONNX Runtime Web ${label} exceeds the per-shard byte limit.`,
+      );
+    }
+    totalBytes += byteLength;
+    return { ...file, byteLength };
+  });
+  if (totalBytes > maxTotalBytes) {
+    throw new Error("ONNX Runtime Web external data exceeds the total byte limit.");
+  }
+  return files;
+}
+
 export async function loadOrtWebSession(
   options: OrtWebLoaderOptions,
 ): Promise<OrtWebLoadedSession> {
   const modelPath = assertOfflineAssetPath(options.modelPath, "model path");
   const assetPath = normalizeOrtAssetPath(options.assetPath);
+  const sessionOverrides = { ...options.sessionOptions };
+  const externalData = assertOfflineExternalData({
+    ...options,
+    sessionOptions: sessionOverrides,
+  });
   const capabilities = resolveCapabilities(options);
   const backend = selectOrtWebBackend(capabilities);
   const cache = options.cache ?? DEFAULT_ORT_WEB_SESSION_CACHE;
   const sessionOptions: OrtSessionCreateOptions = {
     graphOptimizationLevel: "all",
-    ...(options.sessionOptions ?? {}),
+    ...sessionOverrides,
     executionProviders: backend.executionProviders,
   };
+  if (externalData !== undefined) {
+    sessionOptions.externalData = externalData.map(({ path, data }) => ({ path, data }));
+  }
   const cacheKey = stableStringify({
     modelPath,
     assetPath,
@@ -178,6 +264,7 @@ export async function loadOrtWebSession(
       wasm: backend.wasm,
     },
     sessionOptions,
+    externalDataByteLengths: externalData?.map(({ byteLength }) => byteLength) ?? [],
   });
   const cached = cache.get(cacheKey);
   if (cached !== undefined) {
@@ -195,34 +282,63 @@ export async function loadOrtWebSession(
     if (cache.get(cacheKey) === promise) {
       cache.delete(cacheKey);
     }
-    throw error;
+    throw isOfflineOnly()
+      ? new OpenMedOfflineError("local_assets_unavailable")
+      : error;
   });
   cache.set(cacheKey, promise);
   return promise;
 }
 
+const pipelineOwners = new WeakMap<OrtWebLoadedSession, number>();
+
 export async function loadOrtWebTokenClassificationPipeline(
   options: OrtWebTokenClassificationPipelineOptions,
 ): Promise<TokenClassificationPipeline> {
   const loaded = await loadOrtWebSession(options);
-  return async (
+  pipelineOwners.set(loaded, (pipelineOwners.get(loaded) ?? 0) + 1);
+  const cache = options.cache ?? DEFAULT_ORT_WEB_SESSION_CACHE;
+  const ownedPending = cache.get(loaded.cacheKey);
+  let active = 0;
+  let closed = false;
+  let drained: (() => void) | undefined;
+  let disposal: Promise<void> | undefined;
+  const pipeline: TokenClassificationPipeline = async (
     text: string,
     callOptions?: TokenClassificationCallOptions,
   ): Promise<TokenClassificationOutput> => {
-    const inputs = await options.tokenize(text);
-    const outputs = await loaded.session.run(inputs, options.runOptions);
-    const context: OrtTokenClassificationDecodeContext = {
-      text,
-      inputs,
-      outputs,
-      session: loaded.session,
-      backend: loaded.backend,
-    };
-    if (callOptions !== undefined) {
-      context.callOptions = callOptions;
+    if (closed) throw new Error("OpenMed pipeline is disposed");
+    active++;
+    try {
+      const inputs = await options.tokenize(text);
+      const outputs = await loaded.session.run(inputs, options.runOptions);
+      const context: OrtTokenClassificationDecodeContext = {
+        text,
+        inputs,
+        outputs,
+        session: loaded.session,
+        backend: loaded.backend,
+      };
+      if (callOptions !== undefined) context.callOptions = callOptions;
+      return await options.decode(context);
+    } finally {
+      if (--active === 0) drained?.();
     }
-    return options.decode(context);
   };
+  pipeline.dispose = () => {
+    closed = true;
+    return disposal ??= (async () => {
+      if (active > 0) await new Promise<void>(resolve => { drained = resolve; });
+      const owners = (pipelineOwners.get(loaded) ?? 1) - 1;
+      pipelineOwners.set(loaded, owners);
+      if (owners > 0) return;
+      if (ownedPending !== undefined && cache.get(loaded.cacheKey) === ownedPending) {
+        cache.delete(loaded.cacheKey);
+      }
+      await loaded.session.release?.();
+    })();
+  };
+  return pipeline;
 }
 
 export function configureOrtWebRuntime(
@@ -238,8 +354,18 @@ export function configureOrtWebRuntime(
   wasm.proxy = false;
 }
 
-export function clearOrtWebSessionCache(cache = DEFAULT_ORT_WEB_SESSION_CACHE) {
+/** Drain and release all cached sessions, including pending creations. */
+export async function clearOrtWebSessionCache(cache = DEFAULT_ORT_WEB_SESSION_CACHE): Promise<void> {
+  const pending = [...cache.values()];
   cache.clear();
+  const results = await Promise.allSettled(pending.map(async promise => {
+    let loaded;
+    try { loaded = await promise; } catch { return; }
+    await loaded.session.release?.();
+  }));
+  if (results.some(result => result.status === "rejected")) {
+    throw new Error("OpenMed session release failed");
+  }
 }
 
 async function createOrtWebSession(
@@ -251,10 +377,31 @@ async function createOrtWebSession(
 ): Promise<OrtWebLoadedSession> {
   const runtime = await resolveOrtRuntime(options.runtime);
   configureOrtWebRuntime(runtime, options.backend, options.assetPath);
-  const session = await runtime.InferenceSession.create(
+  const rawSession = await runtime.InferenceSession.create(
     options.modelPath,
     options.sessionOptions,
   );
+  let active = 0;
+  let closing = false;
+  let drained: (() => void) | undefined;
+  let disposal: Promise<void> | undefined;
+  const session: OrtInferenceSession = {
+    async run(feeds, runOptions) {
+      if (closing) throw new Error("OpenMed session is disposed");
+      active++;
+      try { return await rawSession.run(feeds, runOptions); }
+      finally { if (--active === 0) drained?.(); }
+    },
+    release() {
+      closing = true;
+      return disposal ??= (async () => {
+        if (active > 0) await new Promise<void>(resolve => { drained = resolve; });
+        try { await rawSession.release?.(); } catch {
+          throw new Error("OpenMed session release failed");
+        }
+      })();
+    },
+  };
   return {
     session,
     runtime,
@@ -295,6 +442,21 @@ function resolveCapabilities(
     detectionOptions.overrides = options.capabilities;
   }
   return detectOrtWebCapabilities(detectionOptions);
+}
+
+function assertOfflineShardLocation(path: string, label: string): string {
+  const location = assertOfflineAssetPath(path, label);
+  if (location.includes("?")) {
+    throw new Error(`ONNX Runtime Web ${label} must not include a query string.`);
+  }
+  return location;
+}
+
+function positiveByteCount(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`ONNX Runtime Web ${label} must be a positive integer.`);
+  }
+  return value;
 }
 
 function stableStringify(value: unknown): string {

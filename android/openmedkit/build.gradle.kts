@@ -1,10 +1,14 @@
 import java.util.Properties
 import java.util.zip.ZipFile
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.gradle.api.tasks.testing.Test
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    // Public API baseline: `apiDump` writes api/openmedkit.api, `apiCheck` gates it.
+    alias(libs.plugins.kotlinx.binary.compatibility.validator)
     `maven-publish`
     signing
 }
@@ -84,27 +88,32 @@ val generateAndroidModelCatalog by tasks.registering(Exec::class) {
 
 android {
     namespace = "org.openmed.openmedkit"
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         // Android 8.0+ keeps on-device inference support aligned with current
         // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
-        targetSdk = 33
         consumerProguardFiles("consumer-rules.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // The build runs on JDK 17 (required by AGP 8), while the published
+    // bytecode stays at Java 11 so consumer apps keep the same floor.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
+    testOptions {
+        // AGP 8 deprecates targetSdk in a library's defaultConfig; it only ever
+        // applied to the library's own test APK and lint, never to consumers.
+        targetSdk = 35
+        unitTests.isIncludeAndroidResources = true
     }
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
+    lint {
+        targetSdk = 35
     }
 
     sourceSets {
@@ -113,9 +122,15 @@ android {
             resources.srcDir("src/main/assets")
         }
         getByName("test") {
+            // PHI sentinel sweep test support, shared with instrumented tests and
+            // never compiled into the release AAR.
+            java.srcDir("src/sharedTest/kotlin")
             resources.srcDir(repoRoot.resolve("fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/parity"))
             resources.srcDir(repoRoot.resolve("tests/fixtures/processing"))
+        }
+        getByName("androidTest") {
+            java.srcDir("src/sharedTest/kotlin")
         }
     }
 
@@ -128,8 +143,43 @@ android {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
+    }
 }
+
+// Deliberate packaging fault for the emulator lane's negative control
+// (scripts/android/run_emulator_lane.sh). `missing-native-libraries` strips the
+// ONNX Runtime and tokenizer shared libraries from every ABI of the instrumented
+// test APK, so no ABI the device supports can load them and the lane must fail
+// with `native_library_unloadable`. It never changes the library or its AAR.
+val nativePackagingFault = providers.gradleProperty("openmedNativePackagingFault")
+    .orElse("none")
+    .get()
+val faultyNativeLibraries = when (nativePackagingFault) {
+    "none" -> emptyList()
+    "missing-native-libraries" -> listOf(
+        "**/libonnxruntime.so",
+        "**/libonnxruntime4j_jni.so",
+        "**/libdjl_tokenizer.so",
+    )
+    else -> throw GradleException(
+        "Unknown openmedNativePackagingFault '$nativePackagingFault'; " +
+            "expected none or missing-native-libraries.",
+    )
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.androidTest?.packaging?.jniLibs?.excludes?.addAll(faultyNativeLibraries)
+    }
+}
+
+// The core AAR must stay free of vendor OCR, Play services, and telemetry
+// artifacts; ML Kit OCR lives in the optional :openmedkit-mlkit module.
+extra["openmedkitDependencyBoundary"] = "core"
+apply(from = rootProject.file("gradle/dependency-boundary.gradle.kts"))
 
 tasks.matching { it.name.endsWith("Assets") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
@@ -173,6 +223,7 @@ val verifyReleaseConsumerRules by tasks.registering {
 tasks.matching { it.name.startsWith("test") }.configureEach {
     dependsOn(generateAndroidModelCatalog)
     dependsOn(verifyReleaseConsumerRules)
+    dependsOn("verifyDependencyBoundary")
 }
 
 tasks.withType<Test>().configureEach {
@@ -181,6 +232,10 @@ tasks.withType<Test>().configureEach {
     )
 
     inputs.file(budgetPropertiesFile)
+    // EmulatorLaneFixtureContractTest reads the instrumented-test fixture by path.
+    inputs.dir(layout.projectDirectory.dir("src/androidTest/assets/emulator-lane"))
+        .withPropertyName("emulatorLaneFixture")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(coldStartBudgetReport)
 
     doFirst {
@@ -237,10 +292,62 @@ val verifyReleaseAarSize by tasks.registering {
     }
 }
 
+// Android 15+ devices with 16 KB memory pages can only map 64-bit native
+// libraries whose ELF LOAD segments are aligned to at least 16 KB. OpenMedKit
+// ships no native code of its own, so the gate reads the release AAR together
+// with every resolved runtime dependency archive that packages `.so` files.
+// Reviewed, expiring exceptions live in gradle/native-page-alignment-allowlist.toml.
+val nativeAlignmentScript = repoRoot.resolve("scripts/android/check_elf_page_alignment.py")
+val nativeAlignmentAllowlist = rootProject.layout.projectDirectory.file(
+    "gradle/native-page-alignment-allowlist.toml",
+)
+val releaseRuntimeNativeArchives = objects.fileCollection()
+
+androidComponents {
+    onVariants(selector().withName("release")) { variant ->
+        releaseRuntimeNativeArchives.from(
+            variant.runtimeConfiguration.incoming.artifactView {
+                attributes {
+                    attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "aar")
+                }
+            }.files,
+        )
+    }
+}
+
+val verifyReleaseNativeLibraryAlignment by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Fails when a 64-bit native library in the release AAR or its " +
+        "runtime dependencies has ELF LOAD alignment below 16 KB."
+    dependsOn("bundleReleaseAar")
+    inputs.file(nativeAlignmentScript)
+    inputs.file(nativeAlignmentAllowlist)
+    inputs.file(releaseAar)
+    inputs.files(releaseRuntimeNativeArchives)
+    executable(pythonExecutable.get())
+    args(
+        nativeAlignmentScript.absolutePath,
+        "--min-alignment-kb",
+        "16",
+        "--allowlist",
+        nativeAlignmentAllowlist.asFile.absolutePath,
+        "--strict-allowlist",
+        "--require-native-libraries",
+    )
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(releaseAar.get().asFile.absolutePath) +
+                releaseRuntimeNativeArchives.files.map { it.absolutePath }.sorted()
+        },
+    )
+}
+
 tasks.register("verifyAndroidBudgets") {
     group = "verification"
-    description = "Runs the release AAR size and offline cold-start budget gates."
+    description = "Runs the release AAR size, 16 KB native alignment and offline " +
+        "cold-start budget gates."
     dependsOn(verifyReleaseAarSize, "testDebugUnitTest")
+    dependsOn(verifyReleaseNativeLibraryAlignment)
 }
 
 val verifyReleasePublicationVersion by tasks.registering {
@@ -353,7 +460,6 @@ afterEvaluate {
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.mlkit.text.recognition)
     implementation(libs.onnxruntime.android)
     implementation(libs.djl.tokenizers)
     implementation(libs.djl.tokenizer.native.android)
@@ -364,4 +470,7 @@ dependencies {
     testImplementation(libs.icu4j)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.junit)
 }

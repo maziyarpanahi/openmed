@@ -44,6 +44,9 @@ FIXTURE = ROOT / "tests" / "fixtures" / "structured" / "decision_calibration.jso
 COMPAT_FIXTURE = (
     ROOT / "tests" / "fixtures" / "structured" / "decision_compat_v1_0_0.json"
 )
+COMPAT_FIXTURE_1_1 = (
+    ROOT / "tests" / "fixtures" / "structured" / "decision_compat_v1_1_0.json"
+)
 
 
 def _request(
@@ -423,6 +426,98 @@ def test_1_0_0_compatibility_fixtures_validate_and_decide_exactly_as_before() ->
             current_result.validate(result)
 
 
+def test_1_1_0_compatibility_fixtures_validate_and_decide_exactly_as_before() -> None:
+    frozen = json.loads(COMPAT_FIXTURE_1_1.read_text(encoding="utf-8"))
+    frozen_request = Draft202012Validator(frozen["request_schema"])
+    frozen_result = Draft202012Validator(frozen["result_schema"])
+    current_request = Draft202012Validator(decision_request_schema())
+    current_result = Draft202012Validator(decision_result_schema())
+    assert frozen["request_schema"]["$id"].endswith("/1.1.0")
+    assert len(frozen["cases"]) >= 8
+
+    for case in frozen["cases"]:
+        declared = case["request"]
+        undeclared = {
+            key: value for key, value in declared.items() if key != "schema_version"
+        }
+        for payload in (declared, undeclared):
+            frozen_request.validate(payload)
+            current_request.validate(payload)
+            request = DecisionRequest.from_dict(payload)
+            assert request.schema_version == "1.1.0", case["name"]
+            assert request.to_dict() == declared
+            result = decide(request).to_dict()
+            assert result == case["result"], case["name"]
+            frozen_result.validate(result)
+            current_result.validate(result)
+
+
+def test_undeclared_requests_resolve_to_the_lowest_carrying_version() -> None:
+    media = {
+        "media_type": "image/png",
+        "sha256": "0" * 64,
+        "byte_size": 1,
+        "data": "AA==",
+    }
+    validator = Draft202012Validator(decision_request_schema())
+    base = _request().to_dict()
+    base.pop("schema_version")
+
+    assert DecisionRequest.from_dict(base).schema_version == "1.0.0"
+    assert (
+        DecisionRequest.from_dict({**base, "question_id": "q"}).schema_version
+        == "1.1.0"
+    )
+    for declared in (None, "1.2.0"):
+        payload = {**base, "media": [media]}
+        if declared is not None:
+            payload["schema_version"] = declared
+        assert validator.is_valid(payload)
+    for declared in ("1.0.0", "1.1.0"):
+        payload = {**base, "media": [media], "schema_version": declared}
+        assert not validator.is_valid(payload)
+        with pytest.raises(DecisionError, match="1.2.0"):
+            DecisionRequest(
+                mode=DecisionMode.FIXED_CHOICE,
+                input_text="Synthetic review priority is urgent.",
+                options=("urgent", "routine"),
+                schema_version=declared,
+                media=(_png_media(),),
+            )
+
+
+def _png_media() -> Any:
+    from io import BytesIO
+
+    from PIL import Image
+
+    from openmed.structured.decision_media import DecisionMedia
+
+    output = BytesIO()
+    Image.new("RGB", (2, 2)).save(output, format="PNG")
+    data = output.getvalue()
+    return DecisionMedia(
+        data,
+        media_type="image/png",
+        byte_size=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
+
+
+def test_media_requests_resolve_to_1_2_0_and_keep_question_fields() -> None:
+    request = DecisionRequest(
+        mode=DecisionMode.FIXED_CHOICE,
+        input_text="Synthetic review priority is urgent.",
+        options=("urgent", "routine"),
+        question_id="priority",
+        media=(_png_media(),),
+    )
+
+    assert request.schema_version == "1.2.0"
+    assert request.contract_version == "1.2.0"
+    assert decide(request).to_dict()["schema_version"] == "1.2.0"
+
+
 def test_1_0_0_requests_cannot_use_1_1_fields() -> None:
     validator = Draft202012Validator(decision_request_schema())
     for field_name, value in (
@@ -562,11 +657,14 @@ def test_migration_moves_1_1_fields_through_1_0_0_without_loss() -> None:
 
     legacy = frozen["cases"][0]["result"]
     lifted = migrate_decision_result(legacy)
-    assert lifted["schema_version"] == "1.1.0"
+    assert lifted["schema_version"] == "1.2.0"
     assert lifted["questions"] == lifted["level_scores"] == []
     assert lifted["expected_level"] is None
     Draft202012Validator(decision_result_schema()).validate(lifted)
     assert migrate_decision_result(lifted, target_version="1.0.0") == legacy
+    relabelled = migrate_decision_result(lifted, target_version="1.1.0")
+    assert relabelled == {**lifted, "schema_version": "1.1.0"}
+    assert migrate_decision_result(relabelled) == lifted
 
     question_set = decide(
         {

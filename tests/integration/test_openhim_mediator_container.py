@@ -36,6 +36,23 @@ def test_openhim_container_example_mounts_registration_config() -> None:
     assert compose["services"]["openhim-fixture"]["profiles"] == ["fixture"]
 
 
+def test_openhim_container_example_reads_password_from_secret_file() -> None:
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    mediator = compose["services"]["openmed-mediator"]
+    environment = mediator["environment"]
+
+    assert "OPENMED_OPENHIM_PASSWORD" not in environment
+    assert environment["OPENMED_OPENHIM_PASSWORD_FILE"] == (
+        "/run/secrets/openmed_openhim_password"
+    )
+    assert mediator["secrets"] == [
+        {"source": "openmed_openhim_password", "mode": 0o400}
+    ]
+    assert compose["secrets"] == {
+        "openmed_openhim_password": {"environment": "OPENMED_OPENHIM_PASSWORD"}
+    }
+
+
 def test_openhim_dockerfile_probes_local_heartbeat() -> None:
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
@@ -115,6 +132,16 @@ def test_compose_example_registers_and_serves_heartbeat() -> None:
         "OPENMED_OPENHIM_USERNAME": "openhim@example.org",
         "OPENMED_OPENHIM_PASSWORD": "synthetic-password",
         "OPENMED_OPENHIM_ALLOW_INSECURE_HTTP": "true",
+        "OPENMED_EGRESS_RULES": json.dumps(
+            [
+                {
+                    "purposes": ["openhim"],
+                    "destination": "http://openhim-fixture:8081",
+                    "cidrs": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+                    "allow_credentials": True,
+                }
+            ]
+        ),
     }
     compose = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
 

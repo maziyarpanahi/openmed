@@ -34,14 +34,28 @@ else:
 | `manifest` | `AssetManifest` | A malformed manifest (`malformed_manifest`). Preflight ends here; the source is never touched and no submitted value is reflected. |
 | `media_type` | `detect_media_type` | The type detected from at most 132 leading bytes disagrees with the declared type (`mismatch`), or cannot be detected at all (`unknown`). An undetectable prefix is never treated as a match. |
 | `metadata` | `validate_manifest_metadata` | The declared modality's manifest profile rejects the metadata fields (the profile's own reason codes), or the media type has no profile (`unsupported_modality`, currently `application/dicom+json`). |
-| `limits` | `evaluate_asset_limits` | A resource ceiling is exceeded (`limit_exceeded`) or cannot be evaluated (`insufficient_metadata`). |
+| `limits` | `evaluate_asset_limits` | A resource ceiling is exceeded (`limit_exceeded`), cannot be evaluated (`insufficient_metadata`), or waveform arithmetic saturates (`arithmetic_saturated`). |
 | `digest` | `digest_asset` | The hashed byte count disagrees with the declared size (`byte_count_mismatch`), the digest disagrees (`sha256_mismatch`), or hashing was skipped (`not_evaluated`). |
 
 The modality is derived from the declared media type: `application/pdf`,
 `application/dicom`, any `image/` type, and any `audio/` type map to the
 `PDF_V1`, `DICOM_V1`, `IMAGE_V1`, and `AUDIO_V1` manifest profiles. The limit
 profile defaults to `DESKTOP_V1`; pass `limit_profile=` to apply `MOBILE_V1`
-or a caller-owned profile.
+or a caller-owned profile. Waveform declarations (`application/edf`,
+`application/wfdb`, or DICOM with `dicom_subprofile="waveform"`) select
+`WAVEFORM_V1` and default to `DESKTOP_V1_1`. An explicit waveform limit profile
+must be v1.1, otherwise `PreflightError("waveform_limit_profile_required")` is
+raised before reading the source. DICOM `non_pixel` selects
+`DICOM_NON_PIXEL_V1` and uses byte limits only; absent sub-profiles retain pixel
+DICOM behavior. See [manifest profiles](manifest-profiles.md).
+
+The bounded detector recognizes EDF/EDF+ version-zero prefixes (`0` followed by
+seven spaces, with at least 132 prefix bytes). This is identification only and
+never proves header or signal conformance. WFDB has no unambiguous magic marker:
+its manifests pass waveform metadata and limit checks, but byte preflight
+abstains with `media_type/unknown` for undetectable headers. No filename, text
+header, or provider assertion is treated as evidence of a match. Waveform file
+reading and lead interpretation remain outside this slice.
 
 The digest pass reads at most one byte past the declared size, and it runs
 only when the byte-size ceiling was evaluated and passed. Otherwise it is
