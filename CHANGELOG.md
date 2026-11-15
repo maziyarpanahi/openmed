@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Document which optional extras install on Python 3.14 on Linux and macOS,
+  with the date and commands used (#5426).
+
 ### Fixed
 
 - Keep exact container runtime packages available through a signed Debian
