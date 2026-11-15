@@ -584,10 +584,18 @@ class _SpyJobQueue:
         self.submitted: list[Any] = []
         self.lookups: list[str] = []
 
-    def submit(self, payload: Any, *, owner_digest: Any = None) -> dict[str, Any]:
-        del owner_digest
+    def submit_job(
+        self,
+        payload: Any,
+        *,
+        owner_digest: Any = None,
+        idempotency_key: Any = None,
+    ) -> Any:
+        from openmed.service.jobs import JobSubmission
+
+        del owner_digest, idempotency_key
         self.submitted.append(payload)
-        return {"id": "synthetic-job", "status": "queued"}
+        return JobSubmission({"id": "synthetic-job", "status": "queued"}, True)
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
         self.lookups.append(job_id)

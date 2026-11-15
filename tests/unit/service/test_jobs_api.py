@@ -735,8 +735,8 @@ def test_job_progress_writes_skip_checkpoints_before_interval_elapses(
     )
 
     statuses = [snapshot["status"] for snapshot in spy.job_snapshots(job_id)]
-    # The second "done" write records the consumed input payload as deleted.
-    assert statuses == ["queued", "running", "done", "done"]
+    # The terminal write also records the consumed input payload as deleted.
+    assert statuses == ["queued", "running", "done"]
     final = store.get(job_id)
     assert final is not None
     assert final["processed_count"] == 30
@@ -762,8 +762,9 @@ def test_job_progress_without_coalescing_writes_after_each_document(
         if snapshot["status"] == "running"
     ]
     assert progress == list(range(12))
-    # Submission, running, 11 checkpoints, terminal result, consumed input.
-    assert spy.count == 15
+    # Submission, running, 11 checkpoints, and the terminal result, which
+    # also records the consumed input.
+    assert spy.count == 14
 
 
 def test_coalesced_progress_keeps_counts_and_never_persists_raw_text(
