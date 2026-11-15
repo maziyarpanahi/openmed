@@ -1230,7 +1230,8 @@ def observe_job_store(path: Path | None) -> ComponentObservation:
             digest,
             {"records": records},
         )
-    if set(document) - {"jobs", "schema_version"}:
+    # ``decisions`` holds the value-free recovery receipts of version 3.
+    if set(document) - {"decisions", "jobs", "schema_version"}:
         return ComponentObservation(
             JOB_STORE,
             ObservedState.DRIFTED,

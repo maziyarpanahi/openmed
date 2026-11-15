@@ -61,8 +61,12 @@ MIN_PEER_GENERATION = 1
 #: unversioned layout written before this contract existed is version 1.
 #: Version 2 adds the keyed submitting-principal digest to every record.
 #: Version 3 replaces unkeyed SHA-256 span, document and webhook URL hashes with
-#: keyed digests and records how the digests were produced. Older versions are
-#: migrated forward when the store is opened.
+#: keyed digests and records how the digests were produced. Version 3 records
+#: may also carry a value-free durable ``recovery`` block, versioned by its own
+#: ``recovery.schema_version``, and the document an optional ``decisions`` array
+#: of recovery receipts; both landed before version 3 was first released, so
+#: they need no version of their own. Older versions are migrated forward when
+#: the store is opened.
 JOB_STORE_SCHEMA_VERSION = 3
 
 PEER_CONTRACT_HEADER = "X-OpenMed-Peer-Contract"
