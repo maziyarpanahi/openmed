@@ -127,10 +127,12 @@ export interface TokenClassificationCallOptions {
   [key: string]: unknown;
 }
 
-export type TokenClassificationPipeline = (
+export type TokenClassificationPipeline = ((
   text: string,
   options?: TokenClassificationCallOptions,
-) => TokenClassificationOutput | Promise<TokenClassificationOutput>;
+) => TokenClassificationOutput | Promise<TokenClassificationOutput>) & {
+  dispose?: () => Promise<void> | void;
+};
 
 export type RawTokenClassificationPipeline = (
   text: string,

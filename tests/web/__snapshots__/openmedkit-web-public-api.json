@@ -22,6 +22,7 @@
     "decodeWebGpuTokenSpans",
     "deidentify",
     "detectOrtWebCapabilities",
+    "disposeDefaultPipelines",
     "evaluateWebGpuRecallGate",
     "extractPii",
     "flattenTokenClassificationOutput",

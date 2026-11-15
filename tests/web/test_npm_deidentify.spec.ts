@@ -567,3 +567,122 @@ function assertSpansClose(actual: OpenMedSpan[], expected: OpenMedSpan[]) {
     assert.ok(Math.abs(actualScore - expectedScore) <= 1e-12);
   }
 }
+
+test("default pipelines reuse equivalent options and drain before disposal", async () => {
+  const api = await loadApi();
+  let created = 0;
+  let disposed = 0;
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const runtime = {
+    pipeline() {
+      created++;
+      return Object.assign(async () => { await gate; return []; }, {
+        dispose() { disposed++; },
+      });
+    },
+  };
+  const options = { model: "/models/synthetic", loaderOptions: { runtime } };
+  const first = api.extractPii("synthetic", options);
+  const second = api.extractPii("synthetic", { ...options, loaderOptions: { runtime } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(created, 1);
+  const clearing = api.disposeDefaultPipelines();
+  assert.equal(disposed, 0);
+  finish();
+  await Promise.all([first, second, clearing]);
+  assert.equal(disposed, 1);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 1);
+  await api.extractPii("synthetic", options);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 2);
+});
+
+test("caller pipelines stay caller-owned and failed package pipelines are disposed", async () => {
+  const api = await loadApi();
+  let callerDisposed = 0;
+  const caller = Object.assign(() => [], { dispose() { callerDisposed++; } });
+  await api.extractPii("synthetic", { pipeline: caller });
+  await api.disposeDefaultPipelines();
+  assert.equal(callerDisposed, 0);
+  let created = 0;
+  let disposed = 0;
+  const runtime = {
+    pipeline() {
+      created++;
+      return Object.assign(() => { throw new Error("synthetic failure"); }, {
+        dispose() { disposed++; },
+      });
+    },
+  };
+  for (let count = 0; count < 2; count++) {
+    await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime } }), /synthetic failure/);
+  }
+  assert.equal(created, 2);
+  assert.equal(disposed, 2);
+});
+
+test("default loader cache separates loader identity and loader options", async () => {
+  const api = await loadApi();
+  let created = 0;
+  const runtime = { pipeline() { created++; return () => []; } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "one", pipelineOptions: { a: 1, b: 2 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "one", pipelineOptions: { b: 2, a: 1 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, revision: "two" } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime: { ...runtime }, revision: "two" } });
+  assert.equal(created, 3);
+  await api.disposeDefaultPipelines();
+});
+
+test("pipeline release failures expose only a controlled error", async () => {
+  const api = await loadApi();
+  const runtime = { pipeline() { return Object.assign(() => [], {
+    dispose() { throw new Error("synthetic-private-path-token"); },
+  }); } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime } });
+  await assert.rejects(api.disposeDefaultPipelines(), error => {
+    assert.equal(String(error), "Error: OpenMed pipeline disposal failed");
+    assert.equal((error as Error).cause, undefined);
+    return true;
+  });
+});
+
+test("default disposal drains a pending load without removing a replacement", async () => {
+  const api = await loadApi();
+  let finish!: (pipeline: TokenClassificationPipeline) => void;
+  let created = 0;
+  let disposed = 0;
+  const pending = new Promise<TokenClassificationPipeline>(resolve => { finish = resolve; });
+  const modelLoader = async () => {
+    created++;
+    return created === 1 ? pending : Object.assign(() => [], { dispose() { disposed++; } });
+  };
+  const options = { model: "/models/pending", modelLoader, hashSecret: "synthetic-secret" };
+  const first = api.extractPii("synthetic", options);
+  await new Promise(resolve => setImmediate(resolve));
+  const clearing = api.disposeDefaultPipelines();
+  await api.extractPii("synthetic", options);
+  finish(Object.assign(() => [], { dispose() { disposed++; } }));
+  await Promise.all([first, clearing]);
+  assert.equal(created, 2);
+  assert.equal(disposed, 1);
+  await api.extractPii("synthetic", options);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+  assert.equal(disposed, 2);
+});
+
+test("loader option keys distinguish signed zero and reject symbol semantics before loading", async () => {
+  const api = await loadApi();
+  let created = 0;
+  const runtime = { pipeline() { created++; return () => []; } };
+  await api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { bias: 0 } } });
+  await api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { bias: -0 } } });
+  assert.equal(created, 2);
+  await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { opaque: Symbol("synthetic") } } }), /do not support symbol values/);
+  await assert.rejects(api.extractPii("synthetic", { loaderOptions: { runtime, pipelineOptions: { [Symbol("synthetic")]: true } } }), /do not support symbol keys/);
+  assert.equal(created, 2);
+  await api.disposeDefaultPipelines();
+});
