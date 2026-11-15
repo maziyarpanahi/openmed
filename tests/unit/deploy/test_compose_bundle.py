@@ -202,8 +202,11 @@ def test_bundle_requires_verified_postgres_tls_with_operator_ca() -> None:
     for name in ("journey-migrate", "journey-worker", "openmed", "journey-golden"):
         environment = services[name]["environment"]
         assert environment["OPENMED_PROFILE"] == "${OPENMED_PROFILE:-prod}"
-        assert environment["OPENMED_JOURNEY_POSTGRES_DSN"].endswith(
-            "@postgres:5432/openmed?sslmode=verify-full"
+        # The operator DSN reaches the container only as a secret file; the
+        # production Journey store refuses it unless it uses verify-full TLS.
+        assert "OPENMED_JOURNEY_POSTGRES_DSN" not in environment
+        assert environment["OPENMED_JOURNEY_POSTGRES_DSN_FILE"] == (
+            "/run/secrets/openmed_journey_postgres_dsn"
         )
         assert environment["OPENMED_JOURNEY_POSTGRES_SSLROOTCERT"] == (
             "/run/openmed/postgres-tls/ca.crt"

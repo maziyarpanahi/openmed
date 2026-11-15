@@ -517,6 +517,9 @@ def _resolve_file_settings(
     return resolved, tuple(contradictions)
 
 
+_OTLP_HEADERS: Final = "OPENMED_SERVICE_OTLP_HEADERS"
+
+
 def _stand_in(name: str) -> str:
     """Return a synthetic, well-formed value for a secret-sourced setting."""
     if name == _AUTH_API_KEYS:
@@ -539,6 +542,8 @@ def _stand_in(name: str) -> str:
         )
     if name == JOURNEY_POSTGRES_DSN_ENV_VAR:
         return "postgresql://posture-lane.invalid/openmed"
+    if name == _OTLP_HEADERS:
+        return "authorization=posture-lane"
     return _GENERIC_STAND_IN
 
 

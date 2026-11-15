@@ -468,6 +468,47 @@ def _evaluate(app: Any, **kwargs: Any) -> sp.SecurityProfileReport:
     return sp.evaluate_service_security_profile(app, **kwargs)
 
 
+@pytest.mark.parametrize(
+    ("dsn", "status", "reason"),
+    [
+        (
+            "postgresql://u@db.example.test/openmed?sslmode=verify-full",
+            sp.CheckStatus.PASS,
+            "postgres_tls_verified",
+        ),
+        (
+            "postgresql://u@db.example.test/openmed",
+            sp.CheckStatus.FAIL,
+            "postgres_tls_not_configured",
+        ),
+        (None, sp.CheckStatus.FAIL, "postgres_dsn_unreadable"),
+    ],
+    ids=["verified-file", "plaintext-file", "missing-file"],
+)
+def test_journey_store_tls_reads_the_dsn_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    dsn: str | None,
+    status: sp.CheckStatus,
+    reason: str,
+) -> None:
+    _configure_production(monkeypatch)
+    dsn_file = tmp_path / "dsn"
+    if dsn is not None:
+        dsn_file.write_text(dsn + "\n", encoding="utf-8")
+        dsn_file.chmod(0o600)
+    monkeypatch.delenv(sp.JOURNEY_POSTGRES_DSN_ENV_VAR, raising=False)
+    monkeypatch.setenv(f"{sp.JOURNEY_POSTGRES_DSN_ENV_VAR}_FILE", str(dsn_file))
+    app = create_app()
+
+    result = _result(_evaluate(app), "journey.store_tls")
+
+    assert (result.status, result.reason) == (status, reason)
+    assert result.blocking is (status is not sp.CheckStatus.PASS)
+    if dsn is not None:
+        assert dsn not in repr(result)
+
+
 def test_unbounded_jwt_lifetime_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     _configure_production(monkeypatch)
     monkeypatch.setenv("OPENMED_SERVICE_AUTH_JWKS", _jwks())

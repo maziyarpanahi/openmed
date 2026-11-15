@@ -87,13 +87,6 @@ targets:
       - helm/journey.yaml
     expect:
       - *default-auth
-      - &journey-binding
-        workload: Deployment/api
-        check: journey.principal_binding
-        reason: control_not_implemented
-        why: known
-        owner_pr: 4437
-        issue: 3549
       - &journey-encryption
         workload: Deployment/api
         check: journey.encryption_at_rest
@@ -117,7 +110,6 @@ targets:
       - helm/production.yaml
       - helm/journey.yaml
     expect:
-      - *journey-binding
       - *journey-encryption
 
   # --- Helm negative controls (each layered on the production example) ------
@@ -281,8 +273,11 @@ targets:
       - helm/journey.yaml
       - helm/invalid-journey-inheritance.yaml
     expect:
-      - *journey-binding
       - *journey-encryption
+      - workload: Deployment/api
+        check: journey.principal_binding
+        reason: journey_anonymous_access_allowed
+        why: negative_control
       - workload: Deployment/api
         check: deploy.environment
         reason: setting_contradictory
@@ -324,13 +319,6 @@ targets:
         check: auth.enabled
         reason: auth_disabled
         why: fail_closed
-      - &compose-binding
-        workload: openmed
-        check: journey.principal_binding
-        reason: control_not_implemented
-        why: known
-        owner_pr: 4437
-        issue: 3549
       - &compose-encryption
         workload: openmed
         check: journey.encryption_at_rest
@@ -338,13 +326,6 @@ targets:
         why: known
         owner_pr: 4441
         issue: 3550
-      - &compose-store-tls
-        workload: openmed
-        check: journey.store_tls
-        reason: postgres_tls_not_configured
-        why: known
-        owner_pr: 4146
-        issue: 3915
 
   - id: compose-invalid-dev-profile
     platform: compose
@@ -355,9 +336,11 @@ targets:
       OPENMED_PROFILE: dev
     expect:
       - *compose-auth
-      - *compose-binding
       - *compose-encryption
-      - *compose-store-tls
+      - workload: openmed
+        check: journey.principal_binding
+        reason: journey_anonymous_access_allowed
+        why: negative_control
       - workload: openmed
         check: deploy.profile
         reason: development_profile_selected

@@ -945,7 +945,28 @@ def _check_graphql_mounted(context: SecurityCheckContext) -> CheckOutcome:
 
 
 def _journey_store_configured(context: SecurityCheckContext) -> bool:
-    return bool(context.env(JOURNEY_POSTGRES_DSN_ENV_VAR))
+    from .secret_files import secret_file_setting
+
+    return bool(
+        context.env(JOURNEY_POSTGRES_DSN_ENV_VAR)
+        or context.env(secret_file_setting(JOURNEY_POSTGRES_DSN_ENV_VAR))
+    )
+
+
+def _journey_dsn(context: SecurityCheckContext) -> tuple[str, str | None]:
+    """Return the Journey DSN, read inline or from its ``_FILE`` setting.
+
+    Returns:
+        The stripped DSN (empty when unset) and a failure reason when a
+        configured DSN file cannot be used. The DSN is never logged.
+    """
+    from .secret_files import SecretSourceError, read_secret_setting
+
+    try:
+        dsn = read_secret_setting(JOURNEY_POSTGRES_DSN_ENV_VAR, environ=context.environ)
+    except SecretSourceError:
+        return "", "postgres_dsn_unreadable"
+    return (dsn or "").strip(), None
 
 
 def _check_journey_principal_binding(context: SecurityCheckContext) -> CheckOutcome:
@@ -970,9 +991,13 @@ def _check_journey_encryption(context: SecurityCheckContext) -> CheckOutcome:
 
 
 def _check_journey_store_tls(context: SecurityCheckContext) -> CheckOutcome:
-    dsn = context.env(JOURNEY_POSTGRES_DSN_ENV_VAR)
-    if not dsn:
+    if not _journey_store_configured(context):
         return _not_applicable("journey_store_disabled")
+    dsn, failure = _journey_dsn(context)
+    if failure is not None:
+        return _fail(failure)
+    if not dsn:
+        return _fail("postgres_dsn_invalid")
     try:
         parsed = urlsplit(dsn)
         query = parse_qsl(parsed.query, keep_blank_values=True)

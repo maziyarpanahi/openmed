@@ -570,7 +570,8 @@ def test_journey_dsn_loads_from_file(
     )
     seen: list[str] = []
 
-    def fake_migrations(value: str, *, schema: str) -> _ReadyReport:
+    def fake_migrations(value: str, *, schema: str, **_: Any) -> _ReadyReport:
+        # The migrate command also forwards the verified PostgreSQL transport.
         del schema
         seen.append(value)
         return _ReadyReport()
