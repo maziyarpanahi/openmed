@@ -355,7 +355,7 @@ No reviewer, date or approval is inferred from passing tests.
 | `zh` | Selected Simplified and Traditional Chinese cues | Draft; fluent review pending; not all regional forms |
 | `hi` | Devanagari, selected Roman Hindi and mixed-script cues | Draft; fluent review pending; not general Indic coverage |
 | `am, ar, as, bn, cs, da, el, fa, gu, he, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zu` | No native cue pack | Default PII routes; authority controls only for uncovered native cues |
-| `ne` | No native cue pack | Caller-supplied PII model route; authority controls only |
+| `ne, si` | No native cue pack | Caller-supplied PII model routes; authority controls only |
 | `af, bg, et, fi, ha, hr, hu, ig, lv, ms, rw, sk, sr, tl, yo` | No native cue pack | Deterministic national-ID-only routes; authority controls only |
 
 English strings and shared machine delimiters can still match in an uncovered
