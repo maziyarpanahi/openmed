@@ -1958,8 +1958,8 @@ def job_response_payload(
 ) -> dict[str, Any]:
     """Return the public REST representation of a job record.
 
-    The stored owner digest is internal authorization state and is never
-    returned to callers. Records are returned in the current schema, so a
+    The stored owner digest and the mixed-version work envelope are internal
+    state and are never returned to callers. Records are returned in the current schema, so a
     legacy unkeyed hash is never echoed.
     """
     payload = _copy_record(record)
@@ -1968,6 +1968,8 @@ def job_response_payload(
     # The storage schema version drives migration only; the published
     # service_job_record contract is versioned by its registered schema.
     payload.pop("schema_version", None)
+    # The work envelope is internal routing state for mixed-version workers.
+    payload.pop("compatibility", None)
     if status_url is not None:
         payload["status_url"] = status_url
     return payload
