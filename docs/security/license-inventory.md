@@ -65,6 +65,7 @@ a dependency also declared in another extra.
 | `gliner2` | `gliner2`; reviewed wheel LICENSE (2.1.0) | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
+| `grpcio-health-checking` | `service` | `Apache-2.0` |
 | `h2` | `beam, prefect` | `MIT` |
 | `hanlp` | `zh-hanlp` | `Apache-2.0` |
 | `haystack-ai` | `haystack` | `Apache-2.0` |
