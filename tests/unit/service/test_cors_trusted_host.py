@@ -298,7 +298,7 @@ def test_middleware_stack_validates_host_cors_and_auth_before_bodies(
         "WorkflowBoundaryMiddleware",
         "CorrelationIdMiddleware",
         "BoundedRequestBodyMiddleware",
-        "_BoundedRequestBodyMiddleware",
+        "BoundedRequestBodyMiddleware",
         "_throttle_middleware",
         "_readiness_middleware",
     ]

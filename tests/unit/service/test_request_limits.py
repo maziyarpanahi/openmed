@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import importlib
 import json
 import logging
 import tracemalloc
+import weakref
 from dataclasses import replace
 from typing import Any
-import gc
-import json
-import weakref
 
 import pytest
 from fastapi import FastAPI, Request
@@ -22,12 +21,9 @@ from starlette.types import Message, Scope
 
 from openmed.guard.operational_limits import OperationalLimits
 from openmed.service.request_limits import (
-    JSON_STRUCTURE_ROUTE_OVERRIDES,
-    BoundedRequestBodyMiddleware,
-)
-from openmed.service.request_limits import (
     BODY_TIMEOUT_DEADLINE,
     BODY_TIMEOUT_MIN_RATE,
+    JSON_STRUCTURE_ROUTE_OVERRIDES,
     REQUEST_BODY_GRACE_ENV_VAR,
     REQUEST_BODY_MIN_RATE_ENV_VAR,
     REQUEST_BODY_TIMEOUT,

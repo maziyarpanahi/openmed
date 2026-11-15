@@ -395,7 +395,7 @@ class BoundedRequestBodyMiddleware:
             or scope.get("method") not in _BODY_METHODS
             or (
                 self.limited_paths is not None
-                and scope.get("path") not in self.limited_paths
+                and _relative_path(scope).rstrip("/") not in self.limited_paths
             )
         ):
             await self.app(scope, receive, send)
@@ -418,7 +418,7 @@ class BoundedRequestBodyMiddleware:
 
         scanner = (
             JsonStructureScanner(
-                self.json_route_limits.get(scope.get("path", ""), self.limits)
+                self.json_route_limits.get(_relative_path(scope), self.limits)
             )
             if self.scan_json and _is_json_body(headers.get("content-type"))
             else None
@@ -652,6 +652,16 @@ def _env_int(
     if not minimum <= value <= maximum:
         raise ValueError(f"{name} must be an integer from {minimum} to {maximum}")
     return value
+
+
+def _relative_path(scope: Scope) -> str:
+    """Return the request path relative to a mounted app's ``root_path``."""
+
+    path = scope.get("path", "")
+    root = scope.get("root_path", "")
+    if root and path.startswith(root + "/"):
+        return path[len(root) :]
+    return path
 
 
 def _route_limits(
