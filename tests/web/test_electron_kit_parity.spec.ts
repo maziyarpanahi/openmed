@@ -19,6 +19,7 @@ import {
   redactTextWithSpans,
   toRendererKitParityResult,
   type ElectronDeidentifyRequest,
+  type ElectronDeidentifyResponse,
   type RendererOpenMedSpan,
 } from "../../js/openmedkit-electron/src/index";
 
@@ -108,11 +109,14 @@ test("Electron renderer projection passes every renderer-representable vector", 
     const client = createElectronDeidentifyClient({
       async invoke(_channel, request) {
         requests.push(request as ElectronDeidentifyRequest);
-        return {
+        const response: ElectronDeidentifyResponse = {
           schemaVersion: OPENMED_ELECTRON_SCHEMA_VERSION,
           requestId: (request as ElectronDeidentifyRequest).requestId,
+          ok: true,
           spans: rendererSpans(vector),
+          bundle: null,
         };
+        return response;
       },
     });
 
