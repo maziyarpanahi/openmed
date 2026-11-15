@@ -39,6 +39,24 @@ import openmed
 from openmed.core.config import PROFILE_ENV_VAR
 from openmed.core.key_provider import EncryptionError, KeyProvider
 
+from .compatibility import (
+    CURRENT_CONTRACT,
+    JOB_DEIDENTIFY_CAPABILITY,
+    JOB_STORE_COMPONENT,
+    JOB_STORE_SCHEMA_VERSION,
+    JOB_WEBHOOK_CAPABILITY,
+    CompatibilityDescriptor,
+    CompatibilityState,
+    ComponentCompatibility,
+    IncompatibleStateError,
+    SchemaObservation,
+    WorkEnvelope,
+    check_work,
+    evaluate_component,
+    job_store_observation,
+    local_descriptor,
+    model_generation_ref,
+)
 from .drain import SHUTTING_DOWN, ServiceShuttingDownError
 from .job_admission import (
     DEFAULT_MAX_DOCUMENTS_PER_JOB,
@@ -108,11 +126,8 @@ PAYLOAD_MODES = frozenset({PAYLOAD_MODE_MEMORY, PAYLOAD_MODE_ENCRYPTED})
 # Sender exceptions are recorded with the dispatcher's controlled code.
 WEBHOOK_SENDER_FAILED = WEBHOOK_ERROR_SENDER
 WEBHOOK_EVENT_UNAVAILABLE = "terminal_event_unavailable"
-# Version 2 adds the keyed submitting-principal digest to every record.
-# Version 3 replaces unkeyed SHA-256 span, document and webhook URL hashes with
-# keyed digests and records how the digests were produced.
-JOB_STORE_SCHEMA_VERSION = 3
-"""Version of the job metadata document; files without the field are version 1."""
+# JOB_STORE_SCHEMA_VERSION comes from openmed.service.compatibility, which
+# documents each version and the window of versions this build reads.
 _JOB_STORE_FIELDS = frozenset({"jobs", "schema_version"})
 OWNER_DIGEST_FIELD = "owner_digest"
 DIGESTS_FIELD: Final = "digests"
@@ -511,6 +526,17 @@ def _replace_legacy_hash(item: dict[str, Any], legacy: str, current: str) -> boo
     return changed
 
 
+_FileSignature = tuple[int, int, int]
+
+
+def _file_signature(path: Path) -> Optional[_FileSignature]:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+
+
 class LocalJobStore:
     """Durable local metadata store for async jobs.
 
@@ -519,6 +545,12 @@ class LocalJobStore:
     :class:`~openmed.service.job_payloads.JobPayloadStore` and appear here only
     as opaque references with their lifecycle state and retention deadline. Stores written by older schema versions are migrated when loaded and
     rewritten at once, so removed unkeyed hashes do not linger on disk.
+
+    The file records its schema version. A store outside this build's
+    compatibility window is refused when it is opened, and if another process
+    replaces the file with one outside the window while this store is open,
+    every later operation raises :class:`IncompatibleStateError` before any
+    mutation.
     """
 
     def __init__(
@@ -532,15 +564,31 @@ class LocalJobStore:
         self.ttl_seconds = int(ttl_seconds)
         self.clock = clock
         self._lock = threading.RLock()
+        self._schema = CURRENT_CONTRACT.durable_schemas[JOB_STORE_COMPONENT]
+        self._blocked: Optional[ComponentCompatibility] = None
+        self._published_signature: Optional[_FileSignature] = None
         records, migrated = self._load()
         self._records: dict[str, dict[str, Any]] = records
         if migrated:
             with self._lock:
                 self._persist_locked()
 
+    @property
+    def compatibility(self) -> ComponentCompatibility:
+        """Return the value-free compatibility of the persisted store."""
+        with self._lock:
+            if self._blocked is not None:
+                return self._blocked
+            if self._published_signature is None:
+                return evaluate_component(self._schema, SchemaObservation.absent())
+            return evaluate_component(
+                self._schema, SchemaObservation.at(JOB_STORE_SCHEMA_VERSION)
+            )
+
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         """Persist a new job record."""
         with self._lock:
+            self._require_compatible_locked()
             previous = self._remove_expired_locked()
             job_id = str(record["id"])
             previous.setdefault(job_id, self._records.get(job_id))
@@ -551,6 +599,7 @@ class LocalJobStore:
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
         """Return one job record, if present."""
         with self._lock:
+            self._require_compatible_locked()
             self.cleanup_expired_locked()
             record = self._records.get(job_id)
             return None if record is None else _copy_record(record)
@@ -558,12 +607,14 @@ class LocalJobStore:
     def records(self) -> list[dict[str, Any]]:
         """Return copies of every unexpired job record."""
         with self._lock:
+            self._require_compatible_locked()
             self.cleanup_expired_locked()
             return [_copy_record(record) for record in self._records.values()]
 
     def update(self, job_id: str, **changes: Any) -> dict[str, Any]:
         """Apply changes to a job record and persist them."""
         with self._lock:
+            self._require_compatible_locked()
             current = self._records[job_id]
             # Build the new record from a shallow copy so the current record
             # stays untouched and serves as the rollback snapshot. Changes only
@@ -597,6 +648,7 @@ class LocalJobStore:
             The updated record, or ``None`` when the fence refused the change.
         """
         with self._lock:
+            self._require_compatible_locked()
             current = self._records.get(job_id)
             if current is None or current.get("status") not in expected_statuses:
                 return None
@@ -612,6 +664,7 @@ class LocalJobStore:
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
+            self._require_compatible_locked()
             previous = self._remove_expired_locked()
             if previous:
                 self._publish_locked(previous)
@@ -655,9 +708,28 @@ class LocalJobStore:
         migrated = version != JOB_STORE_SCHEMA_VERSION
         for record in records.values():
             migrated |= _migrate_record(record)
+        self._published_signature = _file_signature(self.path)
         return records, migrated
 
+    def _require_compatible_locked(self) -> None:
+        if self._blocked is not None:
+            raise IncompatibleStateError(JOB_STORE_COMPONENT, self._blocked.code)
+
+    def _verify_on_disk_schema_locked(self) -> None:
+        """Refuse to replace a file another build rewrote outside the window."""
+        signature = _file_signature(self.path)
+        if signature is None or signature == self._published_signature:
+            return
+        compatibility = evaluate_component(
+            self._schema, job_store_observation(self.path)
+        )
+        if compatibility.usable:
+            return
+        self._blocked = compatibility
+        raise IncompatibleStateError(JOB_STORE_COMPONENT, compatibility.code)
+
     def _persist_locked(self) -> None:
+        self._verify_on_disk_schema_locked()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"jobs": self._records, "schema_version": JOB_STORE_SCHEMA_VERSION}
         temp_name: str | None = None
@@ -672,6 +744,7 @@ class LocalJobStore:
                 json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
                 handle.write("\n")
             os.replace(temp_name, self.path)
+            self._published_signature = _file_signature(self.path)
         except BaseException:
             if temp_name is not None:
                 try:
@@ -730,6 +803,10 @@ class DeidentifyJobQueue:
     before any metadata is persisted, so pending jobs, their queued text bytes
     and documents per job stay within configured ceilings.
 
+    Every record is stamped with a :class:`WorkEnvelope` naming the contract
+    and model generation it was admitted under, and a worker checks that
+    envelope with :func:`check_work` before it marks the job running.
+
     Args:
         runtime: Service runtime that executes model requests.
         store: Local metadata store for job records.
@@ -776,6 +853,7 @@ class DeidentifyJobQueue:
         payload_store: Optional[JobPayloadStore] = None,
         digests: Optional[JobDigestPolicy] = None,
         admission: Optional[JobAdmission] = None,
+        descriptor: Optional[CompatibilityDescriptor] = None,
     ) -> None:
         if not progress_interval_seconds >= 0:
             raise ValueError("progress_interval_seconds must be non-negative")
@@ -803,6 +881,9 @@ class DeidentifyJobQueue:
             JobAdmission(metrics=getattr(runtime, "metrics", None))
             if admission is None
             else admission
+        )
+        self.descriptor = (
+            descriptor if descriptor is not None else local_descriptor(runtime)
         )
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
@@ -1130,7 +1211,68 @@ class DeidentifyJobQueue:
             "completed_at": None,
             "expires_at": self._expiry_timestamp(now),
             OWNER_DIGEST_FIELD: None if owner_digest is None else dict(owner_digest),
+            "compatibility": self._work_envelope(payload).to_dict(),
         }
+
+    def _work_envelope(self, payload: DeidentifyJobRequest) -> WorkEnvelope:
+        capabilities = {JOB_DEIDENTIFY_CAPABILITY}
+        if payload.webhook is not None:
+            capabilities.add(JOB_WEBHOOK_CAPABILITY)
+        # Pin the model generation whenever this node publishes the generations
+        # it serves, so a claimant that does not serve it refuses the job.
+        model_generation = (
+            model_generation_ref(payload.model_name)
+            if self.descriptor.model_generations
+            else None
+        )
+        return WorkEnvelope.for_work(
+            self.descriptor,
+            components=(JOB_STORE_COMPONENT,),
+            required_capabilities=capabilities,
+            model_generation=model_generation,
+        )
+
+    def _incompatible_work_refusal(self, item: _JobWorkItem) -> Optional[bool]:
+        """Fail a job this worker cannot handle before claiming it.
+
+        Returns:
+            ``None`` when this worker may claim the job. Otherwise the job is
+            gone or was refused, and the value says whether its terminal
+            callback went to the webhook dispatcher.
+        """
+        record = self.store.get(item.job_id)
+        if record is None:
+            return False
+        decision = check_work(self.descriptor, record.get("compatibility"))
+        if decision.compatible:
+            return None
+        try:
+            request: Optional[DeidentifyJobRequest] = _request_from_body(
+                self.payloads.read(
+                    item.input_ref,
+                    job_id=item.job_id,
+                    kind=PAYLOAD_KIND_INPUT,
+                )
+            )
+        except (EncryptionError, TypeError, ValueError):
+            request = None
+        completed_at = self.clock()
+        final_record = self.store.update_if(
+            item.job_id,
+            expected_statuses=("queued",),
+            status="failed",
+            error={
+                "type": "IncompatibleWork",
+                "message": "Job was refused before processing",
+                "code": decision.code,
+            },
+            completed_at=_isoformat(completed_at),
+            expires_at=self._expiry_timestamp(completed_at),
+            **_pending_webhook_delivery(None if request is None else request.webhook),
+        )
+        if final_record is None or request is None:
+            return False
+        return self._finish_job(item, request, final_record)
 
     def _run_job(self, item: _JobWorkItem) -> None:
         handed_off = False
@@ -1149,6 +1291,9 @@ class DeidentifyJobQueue:
                 item.job_id, expected=("queued",), error=_shutdown_error()
             )
             return False
+        refusal = self._incompatible_work_refusal(item)
+        if refusal is not None:
+            return refusal
         started_at = self.clock()
         started = self.store.update_if(
             item.job_id,

@@ -81,6 +81,17 @@ from .bulk_data import (
     bulk_job_bounds_from_env,
 )
 from .coalesce import RequestCoalescer, coalescing_key
+from .compatibility import (
+    CURRENT_CONTRACT,
+    JOB_STORE_COMPONENT,
+    PEER_CONTRACT_HEADER,
+    CompatibilityGate,
+    IncompatibleStateError,
+    SchemaObservation,
+    job_store_observation,
+    local_descriptor,
+    peer_contract_decision,
+)
 from .drain import (
     BackgroundJobsDrainParticipant,
     BatcherDrainParticipant,
@@ -112,6 +123,7 @@ from .jobs import (
     OWNER_DIGEST_FIELD,
     DeidentifyJobQueue,
     JobDigestPolicy,
+    JobStoreSchemaError,
     job_response_payload,
 )
 from .journey_access import (
@@ -317,6 +329,7 @@ _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
 _MANIFEST_HEADER = "X-OpenMed-Manifest"
 _MAX_MANIFEST_HEADER_BYTES = 8192
 _SYSTEM_ONE_PATH = "/v1/systemone"
+_COMPATIBILITY_PATH = "/v1/compatibility"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -1087,6 +1100,74 @@ def _get_journey_access_gate(request: Request) -> JourneyAccessGate:
     return gate
 
 
+def _create_compatibility_gate(
+    app: FastAPI, runtime: ServiceRuntime
+) -> CompatibilityGate:
+    """Gate readiness on the persisted state this process shares with peers."""
+
+    def job_store_probe() -> SchemaObservation:
+        queue = getattr(app.state, "job_queue", None)
+        if queue is None:
+            return SchemaObservation.absent()
+        return job_store_observation(queue.store.path)
+
+    return CompatibilityGate(
+        local_descriptor(runtime),
+        {JOB_STORE_COMPONENT: job_store_probe},
+    )
+
+
+def _get_compatibility_gate(request: Request) -> CompatibilityGate:
+    gate = getattr(request.app.state, "compatibility", None)
+    if gate is None:
+        gate = _create_compatibility_gate(request.app, _get_service_runtime(request))
+        request.app.state.compatibility = gate
+    return gate
+
+
+def _incompatible_state_response(blocking: Mapping[str, Any]) -> JSONResponse:
+    return _error_response(
+        503,
+        "incompatible_state",
+        "Persisted state is outside this build's compatibility window",
+        details={
+            "components": {
+                name: {"state": item.state.value, "reason": item.code}
+                for name, item in sorted(blocking.items())
+            }
+        },
+    )
+
+
+def _peer_contract_rejection(request: Request) -> Optional[JSONResponse]:
+    """Refuse an announced peer outside the window before any processing."""
+    values = request.headers.getlist(PEER_CONTRACT_HEADER)
+    if not values or request.url.path == _COMPATIBILITY_PATH:
+        return None
+    policy = ROUTE_POLICIES.get(route_key_for_request(request))
+    if policy is None or policy.admission == "probe":
+        return None
+    decision = peer_contract_decision(CURRENT_CONTRACT, values)
+    if decision.compatible:
+        return None
+    if decision.code == "peer_contract_malformed":
+        return _error_response(
+            400,
+            "peer_contract_malformed",
+            "Peer contract header is malformed",
+            details=None,
+        )
+    return _error_response(
+        409,
+        "peer_incompatible",
+        "Peer build is outside this build's compatibility window",
+        details={
+            "reason": decision.code,
+            "peer_contract": CURRENT_CONTRACT.peer_contract,
+        },
+    )
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -1334,6 +1415,10 @@ def create_app(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.compatibility = _create_compatibility_gate(
+            fastapi_app, runtime
+        )
+        await run_in_threadpool(fastapi_app.state.compatibility.report, force=True)
         bulk_job_bounds = getattr(fastapi_app.state, "bulk_job_bounds", None)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
             fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager(
@@ -1525,6 +1610,9 @@ def create_app(
             return _security_profile_invalid_response(
                 _security_profile_report(request.app), include_details=False
             )
+        peer_rejection = _peer_contract_rejection(request)
+        if peer_rejection is not None:
+            return peer_rejection
         if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
@@ -1654,6 +1742,35 @@ def create_app(
             "This component keeps replica-local state that multi-replica mode "
             "has not accepted",
             details={"component": exc.category, "replica_mode": "multi"},
+        )
+
+    @app.exception_handler(JobStoreSchemaError)
+    async def _job_store_schema_handler(
+        _: Request,
+        exc: JobStoreSchemaError,
+    ) -> JSONResponse:
+        # A store outside this build's window is refused when it is opened.
+        return _error_response(
+            503,
+            "incompatible_state",
+            "Persisted state is outside this build's compatibility window",
+            details={
+                "components": {
+                    JOB_STORE_COMPONENT: {"state": "incompatible", "reason": exc.code}
+                }
+            },
+        )
+
+    @app.exception_handler(IncompatibleStateError)
+    async def _incompatible_state_handler(
+        _: Request,
+        exc: IncompatibleStateError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "incompatible_state",
+            "Persisted state is outside this build's compatibility window",
+            details=exc.to_details(),
         )
 
     @app.exception_handler(BackpressureError)
@@ -1927,7 +2044,24 @@ def create_app(
                 "Replica-local service state is not safe behind multiple replicas",
                 details=report.readiness_details(),
             )
+        compatibility = await run_in_threadpool(_get_compatibility_gate(request).report)
+        if not compatibility.ready:
+            return _incompatible_state_response(compatibility.blocking())
         return {"status": "ready", "service": SERVICE_NAME}
+
+    @app.get(_COMPATIBILITY_PATH, include_in_schema=False)
+    async def compatibility(request: Request) -> Dict[str, Any]:
+        """Publish the value-free contract and persisted-state compatibility."""
+        snapshot = await run_in_threadpool(_get_compatibility_gate(request).snapshot)
+        return {
+            **snapshot,
+            "service": SERVICE_NAME,
+            "admission": (
+                "draining"
+                if getattr(request.app.state, "shutting_down", False)
+                else "open"
+            ),
+        }
 
     @app.get(
         "/v1/journey/resources",

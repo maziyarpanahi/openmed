@@ -38,7 +38,9 @@ truth for exact request and response schemas. Its current public operations are:
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled. The authenticated
 `/service/metadata` operator route is excluded the same way; see
-[service metadata](#get-servicemetadata).
+[service metadata](#get-servicemetadata). The operator `/v1/compatibility`
+route is also excluded from the generated schema; it publishes the value-free
+upgrade contract described in [Zero-Downtime Upgrades](deploy/upgrades.md).
 
 Swagger UI (`/docs`), ReDoc (`/redoc`), and the live `/openapi.json` are served
 only in the `dev` profile. Other profiles do not register them; the committed
@@ -1017,6 +1019,10 @@ Before startup readiness, `/readyz` returns `503` with `error.code` set to
 component is neither disabled nor accepted; `error.details.components` lists
 the categories. See
 [Replica-local state](deploy/autoscaling.md#replica-local-state-and-safe-topologies).
+When persisted shared state is outside this build's compatibility window,
+`/readyz` returns `503` with `error.code` set to `incompatible_state` and
+value-free per-component reasons; see
+[Zero-Downtime Upgrades](deploy/upgrades.md).
 
 ### `GET /models/loaded`
 

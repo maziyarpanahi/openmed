@@ -175,6 +175,7 @@ nav:
           - Client Certificate Compromise: operations/runbooks/client-certificate-compromise.md
           - Disk Exhaustion: operations/runbooks/disk-exhaustion.md
           - Job and Journey Store Corruption: operations/runbooks/store-corruption.md
+      - Zero-Downtime Upgrades: deploy/upgrades.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
