@@ -618,8 +618,8 @@
 
     private struct OpenMedMapleTokenizerLoader: TokenizerLoader {
         func load(from directory: URL) async throws -> any MLXLMCommon.Tokenizer {
-            let tokenizer = try OpenMed.loadTokenizer(
-                tokenizerName: directory.path,
+            let tokenizer = try await OpenMed.loadTokenizerAsync(
+                tokenizerName: nil,
                 tokenizerFolderURL: directory
             )
             return OpenMedMapleTokenizerAdapter(tokenizer: tokenizer)

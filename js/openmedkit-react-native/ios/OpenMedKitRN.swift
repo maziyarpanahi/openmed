@@ -168,15 +168,14 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
             return .mlx(modelDirectoryURL: URL(fileURLWithPath: modelPath))
         case "coreml":
             let id2LabelPath = try requiredString(options, "id2LabelPath")
-            let tokenizerName =
-                string(options, "tokenizerName")
-                ?? "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
-            let tokenizerFolderPath = string(options, "tokenizerFolderPath")
+            // Tokenizer assets must ship with the model: OpenMedKit loads them
+            // offline and fails closed when tokenizerFolderPath is missing.
             return .coreML(
                 modelURL: URL(fileURLWithPath: modelPath),
                 id2labelURL: URL(fileURLWithPath: id2LabelPath),
-                tokenizerName: tokenizerName,
-                tokenizerFolderURL: tokenizerFolderPath.map(URL.init(fileURLWithPath:))
+                tokenizerName: string(options, "tokenizerName"),
+                tokenizerFolderURL: string(options, "tokenizerFolderPath")
+                    .map(URL.init(fileURLWithPath:))
             )
         default:
             throw BridgeError.unsupportedBackend(backendName)

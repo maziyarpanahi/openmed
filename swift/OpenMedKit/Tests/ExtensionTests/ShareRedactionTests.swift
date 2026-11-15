@@ -107,7 +107,9 @@ final class ShareRedactionTests: XCTestCase {
                     tokenizerFolderURL: missingFolder,
                     allowNetworkAccess: false
                 )
-            )
+            ) { error in
+                XCTAssertEqual(error as? OpenMedTokenizerError, .missingLocalAssets)
+            }
         }
     #endif
 
