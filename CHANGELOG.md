@@ -17,6 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require OpenTelemetry API 1.45.2 or newer to reject oversized trace context
   headers before parsing.
 
+### Security
+
+- **Breaking:** evaluation reports no longer fall back to signing keys
+  published in the source, which let anyone forge a signature that verifies.
+  `run_relation_suite`, `run_suite(suite="relations")` and
+  `run_federated_leakage_eval` need `signing_key` or
+  `OPENMED_RELATION_SCORECARD_KEY` / `OPENMED_FEDERATED_EVAL_KEY`. Without
+  one, they raise `ValueError` before any fixture or detector runs. Treat
+  reports signed with the old built-in keys as unsigned.
+- **Breaking (Android):** `DeidentifyEngine` no longer keys `HASH`
+  replacements with the published `openmed-android-deidentify-v1` salt.
+  Without `hashSalt`, each engine generates a random 32-byte key, so digests
+  repeat within one engine but differ between engines and app launches. Pass
+  a secret key to keep pseudonyms stable across runs.
+- **Breaking:** the public biomedical NER corpus loaders never run dataset
+  code from a repository. JNLPBA, Species-800 and BC2GM load Parquet files
+  pinned to a commit through the packaged `parquet` builder. BC5CDR and NCBI
+  Disease are published only as loading scripts, which `datasets` 4 and later
+  already refuse, so they need a local export. `BiomedicalNerSource` drops
+  `trust_remote_code` and gains `revision` and `data_dir`.
+
 ## [3.3.0] - 2026-11-08
 
 See the [3.3.0 release notes](docs/release/v3.3.0.md) and [3.2-to-3.3 migration guide](docs/migration/3.2-to-3.3.md).

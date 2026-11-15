@@ -63,8 +63,8 @@ PipelineStageRunner = Callable[
     "PipelineStageOutput | Mapping[str, Any] | Iterable[Any]",
 ]
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
-_DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
-_DEFAULT_RELATION_SCORECARD_SIGNING_KEY = "openmed-relation-scorecard-local-key"
+_FEDERATED_EVAL_KEY_ENV = "OPENMED_FEDERATED_EVAL_KEY"
+_RELATION_SCORECARD_KEY_ENV = "OPENMED_RELATION_SCORECARD_KEY"
 RELATION_SCORECARD_ARTIFACT = "openmed.eval.relation_scorecard"
 RELATION_SCORECARD_SCHEMA_VERSION = 1
 DUA_RELATION_PROMOTION_CORPORA = frozenset({"biored", "n2c2-2018", "n2c2-2022"})
@@ -2117,7 +2117,18 @@ def run_relation_suite(
     A failing gate is still serialized to requested output paths before
     :class:`RelationGateFailure` is raised, so automation can archive the
     signed failure evidence without treating the run as successful.
+
+    The scorecard is signed with ``signing_key`` or, when that is ``None``,
+    the ``OPENMED_RELATION_SCORECARD_KEY`` environment variable. There is no
+    built-in key: without either, a :class:`ValueError` is raised before any
+    fixture runs.
     """
+
+    active_signing_key = _resolve_report_signing_key(
+        signing_key,
+        env_var=_RELATION_SCORECARD_KEY_ENV,
+        artifact="relation scorecard",
+    )
 
     from openmed.core.baseline import (
         BASELINE_PATH,
@@ -2211,14 +2222,6 @@ def run_relation_suite(
         "relation_suite": relation_suite_metadata(),
         "trap_summary": trap_summary,
     }
-    active_signing_key = (
-        signing_key
-        if signing_key is not None
-        else os.environ.get(
-            "OPENMED_RELATION_SCORECARD_KEY",
-            _DEFAULT_RELATION_SCORECARD_SIGNING_KEY,
-        )
-    )
     scorecard = RelationScorecard(
         suite=report.suite,
         model_name=report.model_name,
@@ -2687,9 +2690,19 @@ def run_federated_leakage_eval(
     fixture path and output path through environment variables, writes
     predictions to that output JSON, and any stdout/stderr/side files are
     treated as monitored egress. Gold spans are never passed to the child.
+
+    The report is signed with ``signing_key`` or, when that is ``None``, the
+    ``OPENMED_FEDERATED_EVAL_KEY`` environment variable. There is no built-in
+    key: without either, a :class:`ValueError` is raised before the detector
+    is started.
     """
     from openmed.eval.attacks.reid import probe_span_timing_side_channel
 
+    key = _resolve_report_signing_key(
+        signing_key,
+        env_var=_FEDERATED_EVAL_KEY_ENV,
+        artifact="federated leakage report",
+    )
     _validate_unique_fixture_ids(fixtures)
     spec = _coerce_federated_spec(detector)
     script_path = Path(spec.script_path).expanduser().resolve()
@@ -2751,10 +2764,6 @@ def run_federated_leakage_eval(
             "protocol": "openmed.federated-detector.v1",
             "detector_path_hash": _path_hash(script_path),
         },
-    )
-    key = signing_key or os.environ.get(
-        "OPENMED_FEDERATED_EVAL_KEY",
-        _DEFAULT_FEDERATED_SIGNING_KEY,
     )
     return report.sign(key, key_id=key_id)
 
@@ -4176,6 +4185,29 @@ def _canonical_json(data: Any) -> str:
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _resolve_report_signing_key(
+    signing_key: bytes | str | None,
+    *,
+    env_var: str,
+    artifact: str,
+) -> bytes | str:
+    """Return the caller's signing key, falling back only to *env_var*.
+
+    OpenMed ships no default report key: a key published in the source would
+    let anyone produce a signature that verifies.
+    """
+    key: bytes | str | None = signing_key
+    if key is None:
+        key = os.environ.get(env_var) or None
+    if key is None:
+        raise ValueError(
+            f"{artifact} signing requires a key: pass signing_key or set "
+            f"{env_var}; OpenMed has no built-in signing key"
+        )
+    _key_bytes(key)
+    return key
 
 
 def _key_bytes(key: bytes | str) -> bytes:
