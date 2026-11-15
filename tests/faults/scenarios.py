@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from starlette.responses import Response
@@ -35,6 +36,7 @@ from openmed.clinical.journey_contracts import (
 from openmed.clinical.journey_contracts import sha256_digest as journey_digest
 from openmed.core.offline import HF_OFFLINE_ENV_VARS, network_blocked_if_offline
 from openmed.service import jobs
+from openmed.service.egress import EgressPolicy
 from openmed.service.resilience import (
     CircuitBreakerOpenError,
     ResilienceManager,
@@ -56,6 +58,7 @@ from openmed.service.signing import (
 from openmed.service.throttle import ConcurrencyGate, ServiceThrottle
 from openmed.service.webhooks import canonical_json_bytes, deliver_webhook
 from openmed.structured.store import (
+    JourneyStoreEncryption,
     LocalArtifactStore,
     LocalJourneyStore,
     SQLiteJourneyStore,
@@ -88,6 +91,10 @@ from .seams import (
 TEXT_CANARY = "SYNTHETIC-PHI-CANARY Maria Example 555-0100"
 SIGNING_CANARY = "synthetic-signing-canary-aaaaaaaa"
 URL_CANARY = "http://127.0.0.1:9/hooks/synthetic-url-canary"
+# Fault cases exercise plaintext stores; local stores need the explicit opt-in.
+_PLAINTEXT = JourneyStoreEncryption.development_plaintext()
+# Upper bound for a terminal webhook delivery to settle on the dispatcher.
+_WEBHOOK_SETTLE_SECONDS = 10.0
 CONTENT_CANARY = b"SYNTHETIC-JOURNEY-CANARY clinical note bytes"
 CANARIES = (TEXT_CANARY, SIGNING_CANARY, "synthetic-url-canary", "SYNTHETIC-JOURNEY")
 
@@ -380,6 +387,24 @@ def _restart_record(path: Path, job_id: str) -> dict[str, Any]:
         queue.shutdown()
 
 
+def _webhook_egress(url: str) -> EgressPolicy:
+    """Allow plain HTTP to one synthetic loopback receiver.
+
+    Webhook egress is deny-by-default, and plain HTTP needs an explicit rule
+    for the exact origin, so each scenario allows only its own receiver.
+    """
+    origin = urlsplit(url)
+    return EgressPolicy.from_rules(
+        [{"purposes": ["webhook"], "destination": f"http://{origin.netloc}"}]
+    )
+
+
+def _permit_leaked(gate: Any) -> bool:
+    """Return whether the global slot still holds a permit after release."""
+    slot = gate._slots.get("global")  # noqa: SLF001
+    return slot is not None and slot.semaphore.locked()
+
+
 @_register(
     "service.jobs.queue",
     commit_point="jobs.terminal_update",
@@ -404,7 +429,12 @@ def run_jobs_queue(session: FaultSession) -> Observation:
 
     def sender(url: str, payload: dict[str, Any], **kwargs: Any) -> Any:
         return deliver_webhook(
-            url, payload, client=client, sleeper=sleeps.append, **kwargs
+            url,
+            payload,
+            client=client,
+            sleeper=sleeps.append,
+            egress_policy=_webhook_egress(url),
+            **kwargs,
         )
 
     with session.suspended():
@@ -416,7 +446,7 @@ def run_jobs_queue(session: FaultSession) -> Observation:
             clock=_fixed_wall,
         )
         payload = _job_payload()
-        record = queue._new_record(payload)  # noqa: SLF001
+        record, item = queue._stage(payload)  # noqa: SLF001
         store.create(record)
 
     def model_call(job_payload: Any, document: DeidentifyJobDocument) -> Any:
@@ -426,7 +456,10 @@ def run_jobs_queue(session: FaultSession) -> Observation:
     interrupted = False
     try:
         with disk_faults(session, session.state_dir):
-            queue._run_job(jobs._JobWorkItem(record["id"], payload))  # noqa: SLF001
+            queue._run_job(item)  # noqa: SLF001
+            # Terminal webhooks go to the bounded dispatcher; let the delivery
+            # settle under the same faults before shutdown abandons it.
+            queue._webhooks.wait_idle(_WEBHOOK_SETTLE_SECONDS)  # noqa: SLF001
     except (OSError, SimulatedProcessKill, asyncio.CancelledError):
         interrupted = True
     finally:
@@ -517,6 +550,7 @@ def run_webhook_delivery(session: FaultSession) -> Observation:
             backoff_seconds=0.5,
             client=client,
             sleeper=sleeps.append,
+            egress_policy=_webhook_egress(URL_CANARY),
         )
     expected_sleeps = [0.5 * (2**index) for index in range(result.attempts - 1)]
     if sleeps != expected_sleeps or result.attempts > 3:
@@ -567,9 +601,19 @@ def run_offline_guard(session: FaultSession) -> Observation:
             if session.trip(NETWORK_EGRESS):
                 with network_blocked_if_offline(local_only=True):
                     return deliver_webhook(
-                        url, payload, sleeper=lambda _s: None, **kwargs
+                        url,
+                        payload,
+                        sleeper=lambda _s: None,
+                        egress_policy=_webhook_egress(url),
+                        **kwargs,
                     )
-            return deliver_webhook(url, payload, sleeper=lambda _s: None, **kwargs)
+            return deliver_webhook(
+                url,
+                payload,
+                sleeper=lambda _s: None,
+                egress_policy=_webhook_egress(url),
+                **kwargs,
+            )
 
         with session.suspended():
             store = jobs.LocalJobStore(path, clock=_fixed_wall)
@@ -581,10 +625,10 @@ def run_offline_guard(session: FaultSession) -> Observation:
             )
             queue._deidentify_document = _fake_deidentify  # noqa: SLF001
             payload = _job_payload(url=receiver.url)
-            record = queue._new_record(payload)  # noqa: SLF001
+            record, item = queue._stage(payload)  # noqa: SLF001
             store.create(record)
         try:
-            queue._run_job(jobs._JobWorkItem(record["id"], payload))  # noqa: SLF001
+            queue._run_job(item)  # noqa: SLF001
         finally:
             queue.shutdown()
         received = receiver.received
@@ -798,8 +842,7 @@ async def _gate_waiting_acquire(session: FaultSession) -> Observation:
         if second is None:
             return Observation(AMBIGUOUS, "waiter_not_admitted")
         second.release()
-    semaphore = gate._semaphores["global"]  # noqa: SLF001
-    if semaphore.locked():
+    if _permit_leaked(gate):
         return Observation(AMBIGUOUS, "permit_leaked")
     if cancelled:
         return Observation("no_effect", "cancelled_waiter_released")
@@ -831,8 +874,7 @@ async def _gate_admitted_request(session: FaultSession) -> Observation:
     except asyncio.CancelledError:
         cancelled = True
     follow_up = await throttle.dispatch(request, plain)
-    semaphore = throttle.concurrency_gate._semaphores["global"]  # noqa: SLF001
-    if follow_up.status_code != 200 or semaphore.locked():
+    if follow_up.status_code != 200 or _permit_leaked(throttle.concurrency_gate):
         return Observation(AMBIGUOUS, "permit_leaked")
     if cancelled:
         return Observation("rolled_back", "cancelled_request_released_permit")
@@ -887,10 +929,19 @@ def _blob_path(root: Path) -> Path:
     return root / "blobs" / "sha256" / digest[:2] / digest
 
 
+# Durable store state an artifact root keeps across writes; never residue.
+_ARTIFACT_STORE_STATE = frozenset({"encryption.json"})
+
+
 def _artifact_residue(root: Path, *, blob_expected: bool) -> int:
     """Count staged temp files, plus the blob when no commit references it."""
     blob = _blob_path(root)
-    stray = [path for path in _files(root) if path != blob]
+    stray = [
+        path
+        for path in _files(root)
+        if path != blob
+        and not (path.parent == root and path.name in _ARTIFACT_STORE_STATE)
+    ]
     return len(stray) + int(blob.exists() and not blob_expected)
 
 
@@ -915,7 +966,7 @@ def run_artifact_store(session: FaultSession) -> Observation:
     reading = session.case.injection_point in {DISK_READ, STATE_RESTART}
     with disk_faults(session, session.state_dir):
         with session.suspended():
-            store = LocalArtifactStore(root)
+            store = LocalArtifactStore(root, encryption=_PLAINTEXT)
         interrupted = False
         if reading:
             with session.suspended():
@@ -939,7 +990,9 @@ def run_artifact_store(session: FaultSession) -> Observation:
         corrupted = session.checkpoint(STATE_RESTART, target=_blob_path(restart_root))
         with session.suspended():
             restart_bytes = _blob_path(restart_root).read_bytes()
-        reopened = LocalArtifactStore(restart_root)
+            # Reopening reads the store's encryption marker; the case targets
+            # the artifact read that follows a restart.
+            reopened = LocalArtifactStore(restart_root, encryption=_PLAINTEXT)
         first = reopened.get_bytes(_ARTIFACT_HASH)
         second = first if first.ok else reopened.get_bytes(_ARTIFACT_HASH)
     with session.suspended():
@@ -1000,7 +1053,7 @@ def run_journey_store(session: FaultSession) -> Observation:
     if session.case.injection_point == STATE_RESTART:
         return _journey_store_corruption(session)
     operation = session.case.token("operation", "ingest_graph")
-    store = LocalJourneyStore(session.state_dir)
+    store = LocalJourneyStore(session.state_dir, encryption=_PLAINTEXT)
     outcome: Any = None
     escaped: str | None = None
     try:
@@ -1019,7 +1072,7 @@ def run_journey_store(session: FaultSession) -> Observation:
         store.close()
 
     root = session.crash_dir if escaped == "process_kill" else session.state_dir
-    reopened = LocalJourneyStore(root)
+    reopened = LocalJourneyStore(root, encryption=_PLAINTEXT)
     try:
         residue = _orphan_blobs(reopened, root)
         revision = reopened.metadata.latest_revision
@@ -1057,7 +1110,7 @@ def run_journey_store(session: FaultSession) -> Observation:
 
 def _journey_store_corruption(session: FaultSession) -> Observation:
     with session.suspended():
-        store = LocalJourneyStore(session.state_dir)
+        store = LocalJourneyStore(session.state_dir, encryption=_PLAINTEXT)
         committed = _ingest(store)
         store.close()
     if not committed.ok:
@@ -1065,7 +1118,7 @@ def _journey_store_corruption(session: FaultSession) -> Observation:
     database = session.state_dir / "journey.sqlite3"
     corrupted = session.checkpoint(STATE_RESTART, target=database)
     restart_bytes = database.read_bytes()
-    opened = SQLiteJourneyStore.open(database)
+    opened = SQLiteJourneyStore.open(database, encryption=_PLAINTEXT)
     preserved = database.read_bytes() == restart_bytes
     if opened.ok and opened.value is not None:
         revision = opened.value.latest_revision
