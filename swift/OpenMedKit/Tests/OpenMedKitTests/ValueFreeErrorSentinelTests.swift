@@ -1,4 +1,5 @@
 import Foundation
+import OpenMedPrivacySweep
 import XCTest
 
 @testable import OpenMedKit
@@ -26,10 +27,73 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         "ExtensionRedactionError": "swept by ExtensionTests/ExtensionErrorSentinelTests",
     ]
 
-    /// Struct errors whose codes reach `init(_:)` through one forwarding helper.
-    private static let structCodeForwarders: [String: String] = [
-        "OpenMedAECGError": "reject(parser, "
+    /// Private, payload-free markers caught inside their own file. The sweep
+    /// cannot construct them, so the scan proves they stay private and empty.
+    private static let privateMarkerTypes: Set<String> = [
+        "DocumentRedactionPDF.Malformed",
+        "ExecutionPlanResolver.MetadataInvalid",
     ]
+
+    /// Struct errors that store a `String` code: each keeps a file-private code
+    /// initializer and is constructed only from fixed literals, unless it is
+    /// one of the `pathCodeStructErrors`.
+    private static let codeStructErrors: Set<String> = [
+        "BigTiffPreflightError", "EDFError", "KitParityError", "OpenMedAECGError",
+        "PolicyError", "SlideDeidError", "WFDBError",
+    ]
+
+    /// Struct errors whose stored strings never render, by those fields. Each
+    /// conforms to the description and reflection protocols with fixed
+    /// renderings and mentions the fields only where it declares them.
+    private static let unrenderedStructErrors: [String: [String]] = [
+        "OpenMedBundleCacheCrash": ["checkpoint"]
+    ]
+
+    /// Struct errors with a public `(code, fieldPath)` initializer. Every
+    /// construction across Sources passes a fixed code and a structural JSON path.
+    private static let pathCodeStructErrors: Set<String> = ["KitParityError", "PolicyError"]
+
+    /// Reviewed path segments that are neither path variables nor integer
+    /// offsets: the helpers that bind them, and why they stay value-free. Every
+    /// helper call passes a fixed literal or relays the segment unchanged.
+    private static let reviewedPathSegments: [String: (segment: String, helpers: [String], reason: String)] = [
+        "KitParityError": (
+            "key",
+            ["field", "requiredString", "optionalString", "requiredInteger", "optionalInteger", "requiredArray"],
+            "fixed schema keys; unknown keys are reported at the enclosing object path"
+        )
+    ]
+
+    /// Struct errors that store only closed reason enums, or nothing at all.
+    private static let reasonStructErrors: Set<String> = [
+        "DecisionCalibrationError", "DocumentRedactionPDF.Malformed", "ExecutionPlanResolver.MetadataInvalid",
+        "OpenMedBundleArchive.Failure", "OpenMedBundleCacheError", "OpenMedManagedImportError",
+        "PortableBundle.Refusal", "PortableBundleCalibration.Malformed", "PortableBundleError",
+        "PortableBundleJSON.Invalid",
+    ]
+
+    /// How a struct error's codes reach its initializer through helpers.
+    private struct CodeForwarder {
+        /// Helpers that take a `code` parameter and pass it on.
+        let helpers: [String]
+        /// Literal the forwarding construction prepends to `code`.
+        var prefix = ""
+        /// Constructions and helper calls that pass `code` on instead of a literal.
+        let forwardingSites: Int
+        /// Helper calls that pass a fixed literal; pinned so new sites get reviewed.
+        let literalCallers: Int
+    }
+
+    /// Struct errors whose codes reach their initializer through forwarding helpers.
+    private static let structCodeForwarders: [String: CodeForwarder] = [
+        "OpenMedAECGError": CodeForwarder(helpers: ["reject"], forwardingSites: 1, literalCallers: 7),
+        "SlideDeidError": CodeForwarder(helpers: ["fail"], prefix: "slide_", forwardingSites: 1, literalCallers: 38),
+        "WFDBError": CodeForwarder(helpers: ["exact", "discard"], forwardingSites: 3, literalCallers: 8),
+    ]
+
+    /// A stored `let` or `var` whose declared type mentions `String`.
+    private static let storedStringPattern =
+        #"(?m)^[ \t]*(?:(?:public|package|internal|fileprivate|private)[ \t]+)*(?:let|var)[ \t]+\w+[ \t]*:[^={\n]*\bString\b[^={\n]*(?:=[^{\n]*)?$"#
 
     private var sentinelDirectory: URL!
 
@@ -53,8 +117,14 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     func testEveryDeclaredErrorTypeAndCaseIsSwept() throws {
         let declared = try Self.declaredErrors()
         XCTAssertGreaterThanOrEqual(declared.count, 25, "the source scan found too few error types")
-        let catalogue = Dictionary(declared.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        let catalogue = Dictionary(declared.map { ($0.qualifiedName, $0) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(catalogue.count, declared.count, "error type names must be unique for the sweep")
+
+        for name in Self.privateMarkerTypes {
+            let item = try XCTUnwrap(catalogue[name], "\(name) was not found in Sources")
+            XCTAssertTrue(item.isPrivate, "\(name) must stay private to its file")
+            XCTAssertTrue(item.body.allSatisfy(\.isWhitespace), "\(name) must stay payload-free")
+        }
 
         var samples = try Self.samples(catalogue: catalogue)
         for (name, errors) in try drivenStructErrors() {
@@ -63,6 +133,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
 
         let expected = Set(catalogue.keys)
             .subtracting(Self.delegatedTypes.keys)
+            .subtracting(Self.privateMarkerTypes)
             .subtracting(Self.typesCompiledOutOfThisBuild)
         XCTAssertEqual(
             Set(samples.keys).subtracting(expected),
@@ -76,11 +147,11 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         )
 
         for item in declared where item.kind != "struct" {
-            guard let errors = samples[item.name] else { continue }
+            guard let errors = samples[item.qualifiedName] else { continue }
             XCTAssertEqual(
-                Set(errors.map(Self.caseLabel)),
+                Set(errors.map { Self.caseLabel(of: $0, in: item) }),
                 Set(item.cases.map(\.name)),
-                "\(item.name) has cases without a sentinel sample"
+                "\(item.qualifiedName) has cases without a sentinel sample"
             )
         }
         for errors in samples.values {
@@ -93,31 +164,154 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     func testStructErrorCodesAreFixedLiterals() throws {
         let structs = try Self.declaredErrors().filter { $0.kind == "struct" }
         XCTAssertEqual(
-            Set(structs.map(\.name)),
-            ["BigTiffPreflightError", "EDFError", "OpenMedAECGError"]
+            Set(structs.map(\.qualifiedName)),
+            Self.codeStructErrors.union(Self.reasonStructErrors).union(Self.unrenderedStructErrors.keys)
         )
         for item in structs {
-            XCTAssertTrue(
-                item.body.contains("fileprivate init(_ code: String)"),
+            let storesString = Self.count(of: Self.storedStringPattern, in: item.body) > 0
+            if let fields = Self.unrenderedStructErrors[item.qualifiedName] {
+                XCTAssertTrue(storesString, "\(item.qualifiedName) no longer stores a string; move it to the reason structs")
+                try assertFixedRendering(item, hiding: fields)
+                continue
+            }
+            guard Self.codeStructErrors.contains(item.qualifiedName) else {
+                XCTAssertFalse(storesString, "\(item.qualifiedName) must store only closed reason enums")
+                continue
+            }
+            XCTAssertTrue(storesString, "\(item.qualifiedName) no longer stores a code")
+            if Self.pathCodeStructErrors.contains(item.qualifiedName) {
+                try assertStructuralPathCodes(item)
+                continue
+            }
+            XCTAssertGreaterThan(
+                Self.count(of: #"fileprivate init\((?:_ )?\w+: String\)"#, in: item.body),
+                0,
                 "\(item.name) must keep its code initializer file-private"
             )
             let constructions = Self.count(of: #"\b\#(item.name)\("#, in: item.fileContents)
-            let literals = Self.count(of: #"\b\#(item.name)\("[a-z0-9_]+"\)"#, in: item.fileContents)
-            if let forwarder = Self.structCodeForwarders[item.name] {
-                let escaped = NSRegularExpression.escapedPattern(for: forwarder)
-                XCTAssertEqual(constructions, literals + 1, "\(item.name) may forward codes only once")
-                let forwarded = Self.count(of: escaped, in: item.fileContents)
-                XCTAssertGreaterThan(forwarded, 0)
+            let literals = Self.count(
+                of: #"\b\#(item.name)\(\s*(?:\w+:\s*)?"[a-z0-9_]+"\s*\)"#,
+                in: item.fileContents
+            )
+            if let forwarder = Self.structCodeForwarders[item.qualifiedName] {
+                let code =
+                    forwarder.prefix.isEmpty
+                    ? "code" : #""\#(NSRegularExpression.escapedPattern(for: forwarder.prefix))"\s*\+\s*code"#
+                let forwarded = Self.count(of: #"\b\#(item.name)\((?:\w+:\s*)?\#(code)\)"#, in: item.fileContents)
+                XCTAssertEqual(constructions, literals + forwarded, "\(item.name) may forward only a `code` parameter")
+                var relayed = 0
+                var literalCallers = 0
+                for helper in forwarder.helpers {
+                    let call = #"(?<!func )\b\#(helper)\("#
+                    let calls = Self.count(of: call, in: item.fileContents)
+                    let fixed = Self.count(of: call + #"[^"\n]*"[a-z0-9_]+"\)"#, in: item.fileContents)
+                    let relays = Self.count(of: call + #"[^"\n]*\bcode\)"#, in: item.fileContents)
+                    XCTAssertGreaterThan(fixed, 0, "\(item.name) forwarder \(helper) is unused")
+                    XCTAssertEqual(calls, fixed + relays, "\(item.name) forwarder call sites must pass fixed literals")
+                    relayed += relays
+                    literalCallers += fixed
+                }
+                XCTAssertEqual(forwarded + relayed, forwarder.forwardingSites, "\(item.name) changed how often it forwards codes")
                 XCTAssertEqual(
-                    Self.count(of: escaped + "\"[a-z0-9_]+\"\\)", in: item.fileContents),
-                    forwarded,
-                    "\(item.name) forwarder call sites must pass fixed literals"
+                    literalCallers,
+                    forwarder.literalCallers,
+                    "\(item.name) forwarder call sites changed; review them and update the count"
                 )
             } else {
                 XCTAssertEqual(constructions, literals, "\(item.name) codes must be fixed literals")
             }
-            XCTAssertGreaterThan(literals, 0)
+            XCTAssertGreaterThan(literals, 0, "\(item.name) has no fixed-literal construction in its file")
         }
+    }
+
+    /// A struct error whose stored strings never render: it conforms to the
+    /// description and reflection protocols with fixed literals and an empty
+    /// mirror, gains no extension, and names the hidden fields only once.
+    private func assertFixedRendering(_ item: DeclaredError, hiding fields: [String]) throws {
+        let name = item.qualifiedName
+        for conformance in ["CustomStringConvertible", "CustomDebugStringConvertible", "CustomReflectable"] {
+            XCTAssertTrue(item.conformances.contains(conformance), "\(name) must conform to \(conformance)")
+        }
+        for property in ["description", "debugDescription"] {
+            XCTAssertEqual(
+                Self.count(of: #"\bvar \#(property): String \{\s*"[A-Za-z0-9_ ]*"\s*\}"#, in: item.body),
+                1,
+                "\(name).\(property) must be a fixed literal"
+            )
+        }
+        XCTAssertEqual(
+            Self.count(of: #"\bvar customMirror: Mirror \{\s*Mirror\(self, children: \[:\]\)\s*\}"#, in: item.body),
+            1,
+            "\(name).customMirror must have no children"
+        )
+        for field in fields {
+            XCTAssertEqual(
+                Self.count(of: #"\b\#(field)\b"#, in: item.body),
+                1,
+                "\(name) may mention \(field) only in its declaration"
+            )
+        }
+        let extensions = try Self.sourceFiles().reduce(0) { total, file in
+            total + Self.count(of: #"\bextension\s+(?:\w+\.)*\#(item.name)\b"#, in: file.contents)
+        }
+        XCTAssertEqual(extensions, 0, "\(name) must not gain renderings through an extension")
+    }
+
+    /// Every construction of a public `(code, fieldPath)` struct error across
+    /// Sources passes a fixed code and a structural JSON path: `$`-rooted or
+    /// path-variable strings built from literal segments, `enumerated()`
+    /// offsets and reviewed segments whose helpers only receive literals.
+    private func assertStructuralPathCodes(_ item: DeclaredError) throws {
+        let reviewed = Self.reviewedPathSegments[item.qualifiedName]
+        let path = Self.structuralPath(reviewed: reviewed.map { [$0.segment] } ?? [])
+        let allowed = #"\b\#(item.name)\(\s*"[a-z0-9_]+"\s*(?:,\s*\#(path))?\s*\)"#
+        var constructions = 0
+        for (file, contents) in try Self.sourceFiles() {
+            let sites = Self.count(of: #"\b\#(item.name)(?:\.init)?\("#, in: contents)
+            guard sites > 0 else { continue }
+            constructions += sites
+            XCTAssertEqual(
+                Self.count(of: allowed, in: contents),
+                sites,
+                "\(item.name) in \(file) needs a fixed code and a structural path"
+            )
+            let assignment = #"\b(?:let|var)\s+(?:path|fieldPath)\s*="#
+            XCTAssertEqual(
+                Self.count(of: #"(?m)\#(assignment)\s*\#(path)[ \t]*$"#, in: contents),
+                Self.count(of: assignment, in: contents),
+                "\(file) assigns a path variable that is not a structural path"
+            )
+            XCTAssertTrue(
+                Self.indexInterpolationsAreOffsets(in: contents),
+                "\(file) interpolates an index that is not an enumerated() offset"
+            )
+            guard let reviewed, Self.count(of: #"\\\(\#(reviewed.segment)\)"#, in: contents) > 0 else { continue }
+            let segment = reviewed.segment
+            XCTAssertEqual(
+                Self.count(of: #"\b\#(segment)\s*:"#, in: contents),
+                reviewed.helpers.count,
+                "\(file) binds `\(segment)` outside its reviewed helpers"
+            )
+            XCTAssertEqual(
+                Self.count(of: #"\b(?:let|var|for)\s+\(?\s*\#(segment)\b|\(\s*\#(segment)\s*,"#, in: contents),
+                0,
+                "\(file) binds `\(segment)` from a local value"
+            )
+            var literalKeys = 0
+            for helper in reviewed.helpers {
+                let call = #"(?<!func )\b\#(helper)\([^,()\n]+,\s*"#
+                let fixed = Self.count(of: call + #""[a-z0-9_]+","#, in: contents)
+                let relays = Self.count(of: call + #"\#(segment),"#, in: contents)
+                XCTAssertEqual(
+                    Self.count(of: #"(?<!func )\b\#(helper)\("#, in: contents),
+                    fixed + relays,
+                    "\(file) calls \(helper) with a `\(segment)` that is not a fixed literal"
+                )
+                literalKeys += fixed
+            }
+            XCTAssertGreaterThan(literalKeys, 0, "\(file) no longer passes fixed `\(segment)` literals")
+        }
+        XCTAssertGreaterThan(constructions, 0, "\(item.name) is never constructed in Sources")
     }
 
     func testSweepFlagsTheErrorShapesItReplaces() throws {
@@ -312,6 +506,20 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         }
     }
 
+    func testBundleCacheCrashNeverRendersItsCheckpoint() {
+        let crash = OpenMedBundleCacheCrash(checkpoint: "checkpoint-\(Self.sentinel)")
+        XCTAssertEqual(crash.checkpoint, "checkpoint-\(Self.sentinel)", "the test seam still carries the name")
+        let renderings = [
+            ("String(describing:)", String(describing: crash)),
+            ("String(reflecting:)", String(reflecting: crash)),
+            ("NSError description", (crash as NSError).description),
+        ]
+        for (label, rendering) in renderings {
+            XCTAssertFalse(rendering.contains(Self.sentinel), "\(label) renders the checkpoint")
+        }
+        assertValueFree(crash)
+    }
+
     #if canImport(MLX) && !os(watchOS) && !os(visionOS)
         func testUnknownTokenOmitsSentinelAndItsByteLevelPiece() throws {
             let text = "Patient \(Self.sentinel)"
@@ -459,10 +667,10 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     private static func samples(catalogue: [String: DeclaredError]) throws -> [String: [Error]] {
         var samples: [String: [Error]] = [:]
         func add<E: Error>(_ values: [E]) {
-            samples[String(describing: E.self), default: []] += values.map { $0 as Error }
+            samples[Self.typeName(E.self), default: []] += values.map { $0 as Error }
         }
         func addRawCases<E: Error & RawRepresentable>(_ type: E.Type) throws where E.RawValue == String {
-            let name = String(describing: type)
+            let name = Self.typeName(type)
             let declared = try XCTUnwrap(catalogue[name], "\(name) was not found in Sources")
             add(
                 try declared.cases.map { item in
@@ -473,22 +681,53 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
 
         try addRawCases(AgentGovernanceError.self)
         try addRawCases(AmbientAudioCaptureError.self)
+        try addRawCases(AmbientFHIRDocumentError.self)
+        try addRawCases(AmbientReviewConflict.self)
         try addRawCases(AmbientSessionError.self)
         try addRawCases(AudioSampleConversionError.self)
+        try addRawCases(BMFFPreflightError.self)
         try addRawCases(ClinicalBriefError.self)
         try addRawCases(ClinicalBriefFHIRDocumentError.self)
+        try addRawCases(DeviceCapabilityError.self)
+        try addRawCases(DocumentIntakeReason.self)
+        try addRawCases(DocumentRedactionExportError.self)
         try addRawCases(MultimodalContractRefusal.self)
         try addRawCases(MultimodalReviewError.self)
+        try addRawCases(OpenMedDecisionEncoderError.self)
+        try addRawCases(OpenMedSecretProviderError.self)
+        try addRawCases(PHISentinelSweepError.self)
+        try addRawCases(PhysiologicalWaveformError.self)
         try addRawCases(PreprocessingConformanceError.self)
         try addRawCases(ReviewAdmissionRefusal.self)
         try addRawCases(StreamingSpeechError.self)
+        try addRawCases(TranscriptHoldError.self)
         try addRawCases(TranscriptLanguageError.self)
+        try addRawCases(VoiceEmbeddingError.self)
 
         add([
             SpeechEndpointError.invalidLimits, .detectorNotLocal, .invalidFrame, .overlappingFrame,
             .cancelled, .detectorFailure, .detectorResetFailure,
         ])
         add([MultimodalThermalError.invalidBudget])
+        add([MultimodalNoticeError.invalidNotice, .invalidResult, .reviewerConfirmationRequired])
+        add(OpenMedRuntimeError.allCases)
+        add([
+            OpenMedDecisionError.invalidRequest(reason: "request_json_invalid"),
+            .unsupportedContract(reason: "schema_major_unsupported"),
+            .invalidConfiguration(reason: "access_policy_invalid"),
+        ])
+        add([DecisionRefusal.unsupported, .conflict])
+        add(
+            [
+                OpenMedTokenizerError.missingLocalAssets, .pinnedRevisionRequired, .identityMismatch,
+                .downloadFailed(statusCode: 404), .downloadFailed(statusCode: nil), .sizeMismatch,
+                .digestMismatch, .cacheUnavailable, .invalidAssets,
+            ]
+                + [
+                    OpenMedTokenizerPinIssue.repositoryID, .revision, .digest, .fileName, .duplicateFile,
+                    .missingRequiredFile, .byteCount,
+                ].map { OpenMedTokenizerError.invalidPin($0) }
+        )
         add(
             OpenMedApplePlatform.allCases.map { PlatformModelError.noCompatibleModel($0) }
                 + [.invalidInputShape, .sequenceTooLong(actual: 4_097, maximum: 512)]
@@ -502,6 +741,27 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
             PolicyError("profile_invalid", "$.actions"),
             PolicyError("manifest_version_unsupported", "$.schema_version"),
         ])
+        add([
+            KitParityError("json_invalid"),
+            KitParityError("field_unknown", "$"),
+            KitParityError("offset_out_of_bounds", "$.spans[0].end"),
+        ])
+        add(PortableBundleReason.allCases.map(PortableBundleError.init))
+        add(PortableBundleReason.allCases.map(PortableBundle.Refusal.init))
+        add(DecisionCalibrationReason.allCases.map(DecisionCalibrationError.init))
+        add(
+            OpenMedBundleCacheReason.allCases.map { OpenMedBundleCacheError($0) }
+                + [OpenMedBundleCacheError(.bundleRejected, bundleReason: .signatureInvalid)]
+        )
+        add(
+            OpenMedManagedImportReason.allCases.map { OpenMedManagedImportError($0) }
+                + [OpenMedManagedImportError(.verificationFailed, bundleReason: .contentIDMismatch)]
+        )
+        add(OpenMedManagedImportReason.allCases.map(OpenMedBundleArchive.Failure.init(reason:)))
+        // The checkpoint never renders, so even a sentinel one stays out.
+        add([OpenMedBundleCacheCrash(checkpoint: "checkpoint-\(Self.sentinel)")])
+        add([PortableBundleCalibration.Malformed()])
+        add([PortableBundleJSON.Invalid()])
         add([NERPipelineError.missingOutput("logits"), .uncompiledModelUnsupported])
         add(
             [
@@ -593,7 +853,8 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         return names
     }
 
-    /// Struct errors only expose file-private initializers, so drive them.
+    /// Struct errors driven from sentinel inputs; most expose only file-private
+    /// initializers, so driving them is the only way to build them.
     private func drivenStructErrors() throws -> [String: [Error]] {
         let payload = Data(String(repeating: "\(Self.sentinel) ", count: 32).utf8)
         var errors: [String: [Error]] = [:]
@@ -602,7 +863,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
                 try body()
                 XCTFail("\(name) accepted sentinel input")
             } catch {
-                errors[String(describing: type(of: error)), default: []].append(error)
+                errors[Self.typeName(type(of: error)), default: []].append(error)
             }
         }
         capture("EDFReader") { _ = try EDFReader.read(payload) }
@@ -610,6 +871,17 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         capture("OpenMedAECG XML") { _ = try OpenMedAECG.read(Data("<\(Self.sentinel)".utf8)) }
         capture("BigTiffPreflight") { _ = try BigTiffPreflight.read(payload, profile: .ifdChain) }
         capture("BigTiffPreflight size") { _ = try BigTiffPreflight.read(Data("\(Self.sentinel)".utf8), profile: .subIFDs) }
+        capture("WFDBReader") { _ = try WFDBReader.read(header: payload, signals: []) }
+        capture("WFDBReader stream") { _ = try WFDBReader.read(header: WFDBDataSource(payload), signals: []) }
+        capture("SlideDeidentification") { _ = try SlideDeidentification.deidentifyTIFF(payload) }
+        capture("SlideDeidentification DICOM") {
+            _ = try SlideDeidentification.validateDICOMInstance(
+                sopClassUID: "1.2.840.10008.5.1.4.1.1.77.1.6",
+                imageType: ["ORIGINAL", "PRIMARY", Self.sentinel]
+            )
+        }
+        capture("KitParity") { _ = try KitParity.parse(payload) }
+        capture("KitParity profile") { _ = try KitParity.parse(#"{"profile":"\#(Self.sentinel)"}"#) }
         return errors
     }
 
@@ -674,6 +946,35 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         return String(describing: value)
     }
 
+    /// The declared case a sample stands for. Types that customize
+    /// `description` map back through their raw value or `CaseIterable` order.
+    private static func caseLabel(of value: Any, in item: DeclaredError) -> String {
+        let label = caseLabel(of: value)
+        if item.cases.contains(where: { $0.name == label }) {
+            return label
+        }
+        if let raw = (value as? any RawRepresentable)?.rawValue as? String,
+            let declared = item.cases.first(where: { ($0.rawValue ?? $0.name) == raw })
+        {
+            return declared.name
+        }
+        if let value = value as? any CaseIterable & Equatable, let index = caseIndex(of: value),
+            item.cases.indices.contains(index)
+        {
+            return item.cases[index].name
+        }
+        return label
+    }
+
+    private static func caseIndex<E: CaseIterable & Equatable>(of value: E) -> Int? {
+        E.allCases.firstIndex(of: value).map { E.allCases.distance(from: E.allCases.startIndex, to: $0) }
+    }
+
+    /// A type's name below its module, qualified the way the source scan is.
+    private static func typeName(_ type: Any.Type) -> String {
+        String(String(reflecting: type).drop { $0 != "." }.dropFirst())
+    }
+
     // MARK: - Source scan
 
     private struct DeclaredCase {
@@ -683,7 +984,11 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
 
     private struct DeclaredError {
         let name: String
+        /// `name` prefixed by its enclosing types, e.g. `PortableBundle.Refusal`.
+        let qualifiedName: String
         let kind: String
+        let isPrivate: Bool
+        let conformances: [String]
         let body: String
         let fileContents: String
         let cases: [DeclaredCase]
@@ -701,27 +1006,43 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     /// `Error` or `LocalizedError`, with its directly declared cases.
     private static func declaredErrors() throws -> [DeclaredError] {
         let declaration = try NSRegularExpression(
-            pattern: #"(?m)^[ \t]*(?:(?:public|package|internal|fileprivate|private|final)[ \t]+)*(enum|struct|class)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*:([^{]*)\{"#
+            pattern: #"(?m)^[ \t]*((?:(?:public|package|internal|fileprivate|private|final)[ \t]+)*)(enum|struct|class)[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*:([^{]*)\{"#
         )
-        let files = try XCTUnwrap(
-            FileManager.default.enumerator(at: sourcesRoot, includingPropertiesForKeys: nil)
+        // Any type or extension scope, so nested errors get qualified names.
+        let scope = try NSRegularExpression(
+            pattern: #"(?m)^[ \t]*(?:(?:public|package|internal|fileprivate|private|final|indirect)[ \t]+)*(?:enum|struct|class|actor|extension)[ \t]+(?!(?:func|var|let|subscript|init)\b)([A-Za-z_][A-Za-z0-9_.]*)[^{]*\{"#
         )
         var result: [DeclaredError] = []
-        for case let url as URL in files where url.pathExtension == "swift" {
-            let contents = try String(contentsOf: url, encoding: .utf8)
+        for (_, contents) in try sourceFiles() {
             let text = contents as NSString
-            for match in declaration.matches(in: contents, range: NSRange(location: 0, length: text.length)) {
-                let conformances = text.substring(with: match.range(at: 3))
+            let whole = NSRange(location: 0, length: text.length)
+            let scopes = scope.matches(in: contents, range: whole).map { match in
+                (
+                    name: text.substring(with: match.range(at: 1)),
+                    body: Self.bodyRange(in: text, openingBrace: match.range.location + match.range.length - 1)
+                )
+            }
+            for match in declaration.matches(in: contents, range: whole) {
+                let conformances = text.substring(with: match.range(at: 4))
                     .split { !$0.isLetter && !$0.isNumber && $0 != "_" }
                 guard conformances.contains("Error") || conformances.contains("LocalizedError") else {
                     continue
                 }
+                let name = text.substring(with: match.range(at: 3))
+                let enclosing =
+                    scopes
+                    .filter { NSLocationInRange(match.range.location, $0.body) }
+                    .sorted { $0.body.location < $1.body.location }
+                    .map { $0.name }
                 let openingBrace = match.range.location + match.range.length - 1
-                let body = Self.body(in: text, openingBrace: openingBrace)
+                let body = text.substring(with: Self.bodyRange(in: text, openingBrace: openingBrace))
                 result.append(
                     DeclaredError(
-                        name: text.substring(with: match.range(at: 2)),
-                        kind: text.substring(with: match.range(at: 1)),
+                        name: name,
+                        qualifiedName: (enclosing + [name]).joined(separator: "."),
+                        kind: text.substring(with: match.range(at: 2)),
+                        isPrivate: text.substring(with: match.range(at: 1)).contains("private"),
+                        conformances: conformances.map(String.init),
                         body: body,
                         fileContents: contents,
                         cases: Self.cases(in: body)
@@ -732,8 +1053,48 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         return result
     }
 
-    /// Text between a declaration's braces, skipping braces in string literals.
-    private static func body(in text: NSString, openingBrace: Int) -> String {
+    /// Every Swift file under `Sources`, by file name.
+    private static func sourceFiles() throws -> [(name: String, contents: String)] {
+        let files = try XCTUnwrap(
+            FileManager.default.enumerator(at: sourcesRoot, includingPropertiesForKeys: nil)
+        )
+        var result: [(name: String, contents: String)] = []
+        for case let url as URL in files where url.pathExtension == "swift" {
+            result.append((url.lastPathComponent, try String(contentsOf: url, encoding: .utf8)))
+        }
+        return result
+    }
+
+    /// A structural JSON path argument: `path` or `fieldPath`, or a string
+    /// rooted at `$` or a path variable that adds only literal segments,
+    /// `[\(index)]` offsets and the given reviewed `.\(segment)` keys.
+    private static func structuralPath(reviewed: [String]) -> String {
+        let segments = [#"[A-Za-z0-9_.\[\]]"#, #"\[\\\(index\)\]"#] + reviewed.map { #"\.\\\(\#($0)\)"# }
+        return #"(?:path|fieldPath|"(?:\$|\\\((?:path|fieldPath)\))(?:\#(segments.joined(separator: "|")))*")"#
+    }
+
+    /// Whether every `[\(index)]` follows an `enumerated()` binding of `index`
+    /// as its nearest binding, so the interpolated value is an integer offset.
+    private static func indexInterpolationsAreOffsets(in text: String) -> Bool {
+        guard
+            let binding = try? NSRegularExpression(
+                pattern:
+                    #"(for\s*\(\s*index\s*,\s*\w+\s*\)\s+in\s[^\n{]*\.enumerated\(\))|\b(?:let|var)\s+index\b|\bfor\s+index\b|\bindex\s*:|\(\s*index\s*,"#
+            ),
+            let use = try? NSRegularExpression(pattern: #"\[\\\(index\)\]"#)
+        else { return false }
+        let range = NSRange(text.startIndex..., in: text)
+        let bindings = binding.matches(in: text, range: range)
+        return use.matches(in: text, range: range).allSatisfy { use in
+            guard let nearest = bindings.last(where: { $0.range.location < use.range.location }) else {
+                return false
+            }
+            return nearest.range(at: 1).location != NSNotFound
+        }
+    }
+
+    /// Range between a declaration's braces, skipping braces in string literals.
+    private static func bodyRange(in text: NSString, openingBrace: Int) -> NSRange {
         var depth = 0
         var inString = false
         var escaped = false
@@ -760,12 +1121,12 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
             } else if character == 0x7D {
                 depth -= 1
                 if depth == 0 {
-                    return text.substring(with: NSRange(location: openingBrace + 1, length: index - openingBrace - 1))
+                    return NSRange(location: openingBrace + 1, length: index - openingBrace - 1)
                 }
             }
             index += 1
         }
-        return ""
+        return NSRange(location: openingBrace + 1, length: 0)
     }
 
     /// `case` declarations at the type's own nesting level.
