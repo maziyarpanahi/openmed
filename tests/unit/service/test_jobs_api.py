@@ -309,6 +309,7 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
         callbacks.append(
             {
@@ -317,6 +318,7 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
                 "secret": secret,
                 "max_attempts": max_attempts,
                 "backoff_seconds": backoff_seconds,
+                "delivery_id": delivery_id,
             }
         )
         return WebhookDeliveryResult(success=True, attempts=1, status_code=204)
@@ -369,6 +371,10 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     assert done["webhook"]["url_hash"].startswith("sha256:")
     delivery = dict(done["webhook_delivery"])
     assert str(delivery.pop("payload_ref")).startswith("jp_")
+    assert delivery.pop("delivery_id") == callbacks[0]["delivery_id"]
+    assert callbacks[0]["delivery_id"].startswith("dlv_")
+    delivery.pop("signature_version", None)
+    delivery.pop("attempt_receipts", None)
     assert delivery == {
         "status": "delivered",
         "success": True,
@@ -410,8 +416,9 @@ def test_failed_job_surfaces_error_and_records_webhook_delivery(
         secret: str,
         max_attempts: int,
         backoff_seconds: float,
+        delivery_id: str,
     ) -> WebhookDeliveryResult:
-        del url, secret, max_attempts, backoff_seconds
+        del url, secret, max_attempts, backoff_seconds, delivery_id
         callbacks.append(payload)
         return WebhookDeliveryResult(success=True, attempts=2, status_code=200)
 
