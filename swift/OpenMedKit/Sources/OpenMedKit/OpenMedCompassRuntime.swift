@@ -179,7 +179,7 @@
                 temperature: temperature,
                 topP: temperature == 0 ? 1 : 0.8,
                 topK: temperature == 0 ? 0 : 20,
-                prefillStepSize: 2_048
+                prefill: PrefillParameters(stepSize: 2_048, chunking: .remainder)
             )
             let stream = try await container.perform(nonSendable: prepared) {
                 context,
@@ -606,7 +606,7 @@
             try compassConfiguration.validate()
 
             let model = OpenMedCompassModel(compassConfiguration)
-            try loadWeights(
+            try await loadWeights(
                 modelDirectory: directory,
                 model: model,
                 perLayerQuantization: baseConfiguration.perLayerQuantization
