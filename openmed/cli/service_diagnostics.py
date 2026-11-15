@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, emit, wants_json
+from ._service_group import service_commands
 
 _LIMIT_OPTIONS = (
     ("max_elapsed_ms", "Total collection time budget in milliseconds."),
@@ -28,15 +29,11 @@ _LIMIT_OPTIONS = (
 
 
 def add_service_command(subparsers: argparse._SubParsersAction) -> None:
-    """Register the ``openmed service`` command group."""
+    """Register ``openmed service diagnose`` and ``openmed service verify-bundle``."""
 
     from ..service.diagnostics import CATEGORIES
 
-    parser = subparsers.add_parser(
-        "service",
-        help="Diagnose a local OpenMed service without collecting PHI.",
-    )
-    commands = parser.add_subparsers(dest="service_command")
+    commands = service_commands(subparsers)
 
     diagnose = commands.add_parser(
         "diagnose",

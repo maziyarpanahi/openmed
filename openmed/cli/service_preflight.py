@@ -6,6 +6,7 @@ import argparse
 from typing import TextIO
 
 from ._output import EXIT_USAGE, CliError, emit
+from ._service_group import service_commands
 
 
 def add_service_preflight_command(subparsers: argparse._SubParsersAction) -> None:
@@ -14,10 +15,7 @@ def add_service_preflight_command(subparsers: argparse._SubParsersAction) -> Non
     Args:
         subparsers: The root subparser collection.
     """
-    service = subparsers.add_parser(
-        "service", help="REST service security and deployment checks."
-    )
-    commands = service.add_subparsers(dest="service_command", required=True)
+    commands = service_commands(subparsers)
     preflight = commands.add_parser(
         "preflight",
         help="Check the service security profile without starting the server.",
