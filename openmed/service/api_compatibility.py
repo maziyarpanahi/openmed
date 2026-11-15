@@ -76,7 +76,10 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "egress_denied",
     "forbidden",
     "grounding_invalid_request",
+    "idempotency_capacity_exhausted",
     "idempotency_key_conflict",
+    "idempotency_key_in_progress",
+    "idempotency_key_invalid",
     "inbound_duplicate_mapping",
     "inbound_duplicate_placeholder",
     "inbound_duplicate_response_key",
@@ -1605,7 +1608,9 @@ def _error_categories_from_ast(tree: ast.AST) -> set[str]:
             if code is not None:
                 categories.add(code)
 
-        if function_name == "BulkPathError" and node.args:
+        # Bulk path and idempotency refusals carry their public code as the
+        # first argument; the shared handlers answer with ``exc.code``.
+        if function_name in {"BulkPathError", "IdempotencyError"} and node.args:
             value = node.args[0]
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 categories.add(value.value)
