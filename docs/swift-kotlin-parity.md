@@ -23,6 +23,9 @@ so API drift is caught in tests instead of downstream apps.
 | `OpenMedMLXModelCacheState.missing` | `ArtifactCacheState.MISSING` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.partial` | `ArtifactCacheState.PARTIAL` | Present; MLX-named enum deprecated |
 | `OpenMedMLXModelCacheState.ready` | `ArtifactCacheState.READY` | Present; MLX-named enum deprecated |
+| `OpenMedModelCatalog.bundled()` | `ModelCatalog.load(context)` | Present; same row format and filter semantics, platform-runnable formats only (MLX/Core ML on Swift, ONNX/TFLite on Android) |
+| `OpenMedModelCatalog.filter(format:tier:maxParamCount:language:license:)` | `ModelCatalog.filter(format, tier, maxParamCount, language, license)` | Present; Swift covered by the shared vectors in `tests/fixtures/model_catalog/` |
+| `OpenMedModelCatalog.entry(repoID:)` | `ModelCatalog.byRepoId(repoId)` | Present |
 
 Android never runs MLX artifacts. See
 [Migrating from the MLX-named store](android-integration.md#migrating-from-the-mlx-named-store)

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bundle an `OpenMedModelCatalog` in OpenMedKit Swift, generated from `models.jsonl` by `scripts/swift/build_swift_catalog.py` with the Android row format, filter semantics and license allowlist but Apple MLX/Core ML formats only, so apps discover models offline by format, tier, size, language and license; a `--check` mode fails CI when the resource is stale (#5375).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is

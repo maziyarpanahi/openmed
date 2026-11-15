@@ -469,6 +469,49 @@ let openmed = try OpenMed(
 Core ML backends have no default tokenizer. Ship the tokenizer that matches
 the model; see [Offline Tokenizer Assets](#offline-tokenizer-assets).
 
+## Discovering Models With the Bundled Catalog
+
+OpenMedKit bundles `openmed_model_catalog.jsonl`, a read-only list of the
+Apple-runnable (MLX and Core ML) OpenMed models, so apps can choose a model by
+format, size, language or license instead of hard-coding repository names:
+
+```swift
+let catalog = try OpenMedModelCatalog.bundled()
+let candidates = catalog.filter(format: "mlx-fp", maxParamCount: 50_000_000, language: "de")
+if let entry = candidates.first {
+    let modelDirectory = try await OpenMedModelStore.downloadMLXModel(repoID: entry.repoID)
+}
+```
+
+- `OpenMedModelCatalog.bundled()` reads the package resource and never makes a
+  network request. The parsed catalog is cached for the process.
+- Each `OpenMedModelCatalogEntry` carries `repoID`, `formats`, `tier`,
+  `paramCount`, `languages`, `license` and `reproducibilityHash`, the same
+  fields as the Android `ModelCatalogEntry`. `formats` lists only MLX and Core
+  ML formats.
+- `filter(format:tier:maxParamCount:language:license:)` follows the Android
+  `ModelCatalog.filter` semantics: a `nil` argument matches every row, strings
+  compare case-insensitively, `format` and `language` match any listed value,
+  and `maxParamCount` is inclusive and skips rows without a parameter count.
+  Results keep catalog order (repository ids sorted case-insensitively).
+- `entry(repoID:)` is an exact-match lookup, like Android `byRepoId`.
+- Malformed resources throw `OpenMedModelCatalogError` with a reason code and
+  a line number, never row content.
+
+The resource is generated from the canonical `models.jsonl` manifest by
+`scripts/swift/build_swift_catalog.py`, which reuses the Android builder's row
+format and permissive-license allowlist and keeps only Apple-runnable formats.
+After changing `models.jsonl`, regenerate and commit it:
+
+```bash
+python3 scripts/swift/build_swift_catalog.py
+python3 scripts/swift/build_swift_catalog.py --check   # CI: fails when stale
+```
+
+`tests/fixtures/model_catalog/` holds a synthetic manifest subset, its
+generated catalog and shared filter vectors. The Python generator test and the
+Swift `OpenMedModelCatalogTests` both run those vectors.
+
 ## Downloading MLX Models From Hugging Face
 
 OpenMedKit includes a built-in downloader and local cache for Hub-hosted MLX artifacts:
