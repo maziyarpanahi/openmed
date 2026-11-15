@@ -76,6 +76,29 @@ test("empty hash keys are rejected before reaching native inference", async () =
   }
 });
 
+test("missing native linkage rejects with the not-installed error", async () => {
+  setOpenMedKitNativeModuleForTests(null);
+  const calls = [
+    () => loadModel({ modelPath: "/app/models/openmed-ios" }),
+    () => analyzeText(fixtureText),
+    () => extractPii(fixtureText),
+    () => deidentify(fixtureText),
+  ];
+  for (const call of calls) {
+    await assert.rejects(call(), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(
+        error.message,
+        "OpenMedKitRN is not installed in the React Native runtime",
+      );
+      for (const fragment of piiFragments) {
+        assert.equal(error.message.includes(fragment), false);
+      }
+      return true;
+    });
+  }
+});
+
 for (const platform of ["ios", "android"] as const) {
   test(`${platform} bridge returns spans matching the shared native fixture`, async () => {
     const native = createNativeFixture(platform);

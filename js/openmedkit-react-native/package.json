@@ -3,14 +3,21 @@
   "version": "0.1.0",
   "description": "React Native bridge for OpenMedKit on-device de-identification.",
   "private": true,
-  "type": "module",
   "main": "./src/index.ts",
   "react-native": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
-    "android",
+    "android/build.gradle",
+    "android/src/main",
     "ios",
-    "src"
+    "src",
+    "openmedkit-react-native.podspec",
+    "react-native.config.js",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/*.test.*",
+    "!**/*.spec.*",
+    "!ios/build"
   ],
   "sideEffects": false,
   "scripts": {
@@ -20,7 +27,7 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-native": ">=0.74"
+    "react-native": ">=0.77"
   },
   "peerDependenciesMeta": {
     "react": {
