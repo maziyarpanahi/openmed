@@ -349,35 +349,22 @@ __all__ = [
 ]
 
 
-def main() -> None:
-    """Launch structured access logging without raw request targets."""
-    import argparse
+def _launcher_log_config() -> dict[str, Any]:
+    """Return the reference launcher's logging configuration.
 
-    import uvicorn
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("app", nargs="?", default="openmed.service.app:app")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=8080, type=int)
-    parser.add_argument("--workers", default=1, type=int)
-    parser.add_argument("--ssl-keyfile")
-    parser.add_argument("--ssl-certfile")
-    parser.add_argument("--ssl-ca-certs")
-    parser.add_argument("--ssl-cert-reqs", type=int, default=0)
-    parser.add_argument(
-        "--no-proxy-headers", dest="proxy_headers", action="store_false"
-    )
-    parser.add_argument("--forwarded-allow-ips")
-    options = vars(parser.parse_args())
-    from .security_profile import LISTEN_HOST_ENV_VAR, LISTEN_TLS_ENV_VAR
-
-    # The security-profile self-check reads the real bind address and
-    # transport from here; worker processes inherit the environment.
-    os.environ[LISTEN_HOST_ENV_VAR] = str(options["host"])
-    os.environ[LISTEN_TLS_ENV_VAR] = "true" if options["ssl_certfile"] else "false"
-    log_config = {
+    Access records go through :class:`StructuredJsonLogFormatter`; raw
+    ``uvicorn.access`` lines are dropped. ``uvicorn.error`` keeps its records and
+    gains :class:`~openmed.service.request_limits.ConnectionLimitLogFilter`, which
+    counts connection-limit rejections for ``/metrics``.
+    """
+    return {
         "version": 1,
         "disable_existing_loggers": False,
+        "filters": {
+            "connection_limit": {
+                "()": "openmed.service.request_limits.ConnectionLimitLogFilter"
+            }
+        },
         "formatters": {
             "access": {"()": "openmed.service.logging.StructuredJsonLogFormatter"}
         },
@@ -395,13 +382,90 @@ def main() -> None:
                 "propagate": False,
             },
             "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+            "uvicorn.error": {"filters": ["connection_limit"]},
         },
     }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    """Launch the REST service with structured access logs and transport bounds.
+
+    The launcher never logs raw request targets. It also bounds concurrent
+    connections, idle keep-alive time and graceful shutdown. Those bounds
+    default to ``OPENMED_SERVICE_LIMIT_CONCURRENCY``,
+    ``OPENMED_SERVICE_TIMEOUT_KEEP_ALIVE`` and
+    ``OPENMED_SERVICE_TIMEOUT_GRACEFUL_SHUTDOWN`` (or the built-in defaults of
+    128 connections, 5 seconds and 30 seconds), and the matching command-line
+    flags override them.
+
+    Args:
+        argv: Command-line arguments; defaults to ``sys.argv[1:]``.
+    """
+    import argparse
+
+    import uvicorn
+
+    from .request_limits import (
+        ServerConnectionLimits,
+        server_connection_limits_from_env,
+    )
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    try:
+        defaults = server_connection_limits_from_env()
+    except ValueError as exc:
+        parser.error(str(exc))
+    parser.add_argument("app", nargs="?", default="openmed.service.app:app")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--workers", default=1, type=int)
+    parser.add_argument("--ssl-keyfile")
+    parser.add_argument("--ssl-certfile")
+    parser.add_argument("--ssl-ca-certs")
+    parser.add_argument("--ssl-cert-reqs", type=int, default=0)
+    parser.add_argument(
+        "--no-proxy-headers", dest="proxy_headers", action="store_false"
+    )
+    parser.add_argument("--forwarded-allow-ips")
+    parser.add_argument(
+        "--limit-concurrency",
+        type=int,
+        default=defaults.limit_concurrency,
+        help="Connections or tasks per worker before answering 503.",
+    )
+    parser.add_argument(
+        "--timeout-keep-alive",
+        type=int,
+        default=defaults.timeout_keep_alive,
+        help="Seconds an idle HTTP keep-alive connection stays open.",
+    )
+    parser.add_argument(
+        "--timeout-graceful-shutdown",
+        type=int,
+        default=defaults.timeout_graceful_shutdown,
+        help="Seconds shutdown waits for open connections before cancelling.",
+    )
+    options = vars(parser.parse_args(argv))
+    try:
+        connection_limits = ServerConnectionLimits(
+            limit_concurrency=options.pop("limit_concurrency"),
+            timeout_keep_alive=options.pop("timeout_keep_alive"),
+            timeout_graceful_shutdown=options.pop("timeout_graceful_shutdown"),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    from .security_profile import LISTEN_HOST_ENV_VAR, LISTEN_TLS_ENV_VAR
+
+    # The security-profile self-check reads the real bind address and
+    # transport from here; worker processes inherit the environment.
+    os.environ[LISTEN_HOST_ENV_VAR] = str(options["host"])
+    os.environ[LISTEN_TLS_ENV_VAR] = "true" if options["ssl_certfile"] else "false"
     # ``server_header=False`` keeps uvicorn from announcing itself.
     uvicorn.run(
         **options,
+        **connection_limits.uvicorn_options(),
         access_log=False,
-        log_config=log_config,
+        log_config=_launcher_log_config(),
         server_header=False,
     )
 

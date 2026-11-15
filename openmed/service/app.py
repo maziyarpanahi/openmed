@@ -16,10 +16,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
-from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import openmed
 from openmed.core.errors import (
@@ -153,8 +151,15 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
-from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
 from .request_signing import install_request_signing
+from .request_limits import (
+    REQUEST_BODY_TIMEOUT,
+    REQUEST_SIZE_INVALID,
+    BoundedRequestBodyMiddleware,
+    connection_rejection_count,
+    request_body_read_limits_from_env,
+    request_limits_from_env,
+)
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .response_headers import install_response_headers
 from .runtime import ServiceRuntime
@@ -391,89 +396,6 @@ async def _openai_compatible_decision(
     )
 
 
-class _BoundedRequestBodyMiddleware:
-    """Reject oversized model-backed request bodies before JSON parsing."""
-
-    def __init__(
-        self,
-        app: ASGIApp,
-        *,
-        max_bytes: int,
-        limited_paths: Sequence[str],
-    ) -> None:
-        if max_bytes < 1:
-            raise ValueError("max request body bytes must be positive")
-        self.app = app
-        self.max_bytes = int(max_bytes)
-        self.limited_paths = frozenset(limited_paths)
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if (
-            scope["type"] != "http"
-            or scope.get("method") not in {"POST", "PUT", "PATCH"}
-            or request_scope_path(scope).rstrip("/") not in self.limited_paths
-        ):
-            await self.app(scope, receive, send)
-            return
-
-        content_length = Headers(scope=scope).get("content-length")
-        if content_length is not None:
-            try:
-                declared_length = int(content_length)
-            except ValueError:
-                scope["openmed.preflight_reason_codes"] = ("bad_request",)
-                await _error_response(
-                    400,
-                    "bad_request",
-                    "Request metadata is invalid",
-                )(scope, receive, send)
-                return
-            if declared_length < 0:
-                scope["openmed.preflight_reason_codes"] = ("bad_request",)
-                await _error_response(
-                    400,
-                    "bad_request",
-                    "Request metadata is invalid",
-                )(scope, receive, send)
-                return
-            if declared_length > self.max_bytes:
-                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
-                await _error_response(
-                    413,
-                    "payload_too_large",
-                    "Request body exceeds the configured limit",
-                )(scope, receive, send)
-                return
-
-        messages: list[Message] = []
-        received_bytes = 0
-        while True:
-            message = await receive()
-            messages.append(message)
-            if message["type"] == "http.disconnect":
-                return
-            if message["type"] != "http.request":
-                continue
-            received_bytes += len(message.get("body", b""))
-            if received_bytes > self.max_bytes:
-                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
-                await _error_response(
-                    413,
-                    "payload_too_large",
-                    "Request body exceeds the configured limit",
-                )(scope, receive, send)
-                return
-            if not message.get("more_body", False):
-                break
-
-        async def replay() -> Message:
-            if messages:
-                return messages.pop(0)
-            return await receive()
-
-        await self.app(scope, replay, send)
-
-
 def _result_to_dict(result: Any) -> Dict[str, Any]:
     """Convert an OpenMed result object to a JSON-serializable mapping."""
     if hasattr(result, "to_dict") and callable(result.to_dict):
@@ -673,6 +595,24 @@ def _error_response(
         status_code=status_code,
         headers=headers,
         content={"error": error},
+    )
+
+
+def _model_route_body_rejection(code: str) -> JSONResponse:
+    """Return the model-route envelope for a request-body bound rejection."""
+
+    if code == REQUEST_SIZE_INVALID:
+        return _error_response(400, "bad_request", "Request metadata is invalid")
+    if code == REQUEST_BODY_TIMEOUT:
+        return _error_response(
+            408,
+            "request_body_timeout",
+            "Request body was not received within the configured time limit",
+        )
+    return _error_response(
+        413,
+        "payload_too_large",
+        "Request body exceeds the configured limit",
     )
 
 
@@ -1300,6 +1240,7 @@ def create_app(
         provider=journey_access_context_provider
     )
     app.state.operational_limits = request_limits_from_env()
+    app.state.request_body_read_limits = request_body_read_limits_from_env()
     app.state.system_one_enabled = os.getenv(
         "OPENMED_SERVICE_SYSTEM_ONE", ""
     ).strip().lower() in {"true", "1", "yes"}
@@ -1448,6 +1389,7 @@ def create_app(
             registry.set_circuit_breaker_state_counts(
                 runtime.circuit_breaker_state_counts()
             )
+            registry.set_connection_rejected_total(connection_rejection_count())
             return Response(
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
@@ -2644,15 +2586,22 @@ def create_app(
     )
     app.state.model_body_limit_bytes = body_limit
     app.add_middleware(
-        _BoundedRequestBodyMiddleware,
+        BoundedRequestBodyMiddleware,
         max_bytes=body_limit,
         limited_paths=_MODEL_BACKED_PATHS
         | (
             {_MULTIMODAL_PREFLIGHT_PATH} if experimental_multimodal_preflight else set()
         ),
+        read_limits=app.state.request_body_read_limits,
+        rejection_response=_model_route_body_rejection,
+        metrics=app.state.metrics,
+        # The global limiter below already checked the JSON structure.
+        scan_json=False,
     )
     app.add_middleware(
         BoundedRequestBodyMiddleware,
+        read_limits=app.state.request_body_read_limits,
+        metrics=app.state.metrics,
         limits=app.state.operational_limits,
     )
     app.add_middleware(
@@ -2660,7 +2609,11 @@ def create_app(
         log_config=service_log_config_from_env(),
         minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
-    app.add_middleware(WorkflowBoundaryMiddleware)
+    app.add_middleware(
+        WorkflowBoundaryMiddleware,
+        read_limits=app.state.request_body_read_limits,
+        metrics=app.state.metrics,
+    )
     # Starlette runs the last-added middleware first. Host, CORS and
     # header-only credential checks must finish before the body-limit and
     # throttle layers registered earlier read a body or spend a token.

@@ -111,6 +111,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "replacement_state_not_found",
     "request_size_exceeded",
     "request_size_invalid",
+    "request_body_timeout",
     "restricted_terminology_unconfigured",
     "service_busy",
     "signature_invalid",
