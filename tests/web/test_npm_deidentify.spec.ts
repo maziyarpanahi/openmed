@@ -226,23 +226,25 @@ test("default path requests only the pinned model revision", async () => {
   assert.match(api.DEFAULT_MODEL_REVISION, /^[0-9a-f]{40}$/);
 
   const requests: Array<{ model: string; revision: unknown }> = [];
-  const runtime: RawTransformersRuntime = {
+  // Package-owned pipelines are shared per model, loader, runtime and loader
+  // options, so each call gets its own runtime to make every call path load.
+  const runtime = (): RawTransformersRuntime => ({
     pipeline: async (_task, model, options) => {
       requests.push({ model, revision: options?.revision });
       return transformersJsFixturePipeline;
     },
-  };
-  await api.deidentify(goldenText, { loaderOptions: { runtime } });
+  });
+  await api.deidentify(goldenText, { loaderOptions: { runtime: runtime() } });
   await api.extractPii(goldenText, {
     model: api.DEFAULT_MODEL_ID,
-    loaderOptions: { runtime },
+    loaderOptions: { runtime: runtime() },
   });
   await api.extractPii(goldenText, {
-    loaderOptions: { runtime, revision: "a".repeat(40) },
+    loaderOptions: { runtime: runtime(), revision: "a".repeat(40) },
   });
   await api.extractPii(goldenText, {
     model: "OpenMed/example-v1-onnx-android",
-    loaderOptions: { runtime },
+    loaderOptions: { runtime: runtime() },
   });
   assert.deepEqual(requests, [
     { model: api.DEFAULT_MODEL_ID, revision: api.DEFAULT_MODEL_REVISION },
