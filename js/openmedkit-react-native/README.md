@@ -86,6 +86,15 @@ These `rootProject.ext` properties override the module defaults:
 | `openmedkitAndroidDependency` | `com.github.maziyarpanahi:openmed:v3.2.0` |
 | `kotlinxCoroutinesVersion` | `1.8.1` |
 
+Newer OpenMedKit Android AARs package the NDK's `libc++_shared.so`, which the
+DJL tokenizer library needs; the `v3.2.0` default predates that. React Native
+ships its own copy, so the app must keep one with
+`packaging.jniLibs.pickFirsts += "**/libc++_shared.so"`. The React Native
+Gradle plugin (`com.facebook.react`, 0.77) already adds that rule to the app
+module, so apps that apply it need no change; other hosts add it to the app's
+`android` block. The kept copy should come from the newest NDK in the app. See
+[Shared C++ runtime](../../docs/android-integration.md#shared-c-runtime-libc_sharedso).
+
 ## New Architecture
 
 `OpenMedKitRN` is a legacy bridge module. The package does not provide a

@@ -83,10 +83,33 @@ android {
 }
 ```
 
-With those excludes, OpenMedKit adds about 49 MB to an arm64-v8a APK, 34 MB to
-armeabi-v7a and 56 MB to x86 or x86_64, almost all of it native libraries (ONNX
-Runtime, the DJL tokenizer and ML Kit text recognition). Ship ABI splits or an
-Android App Bundle so each device downloads one ABI.
+With those excludes, OpenMedKit adds about 37 MB to an arm64-v8a APK, 26 MB to
+armeabi-v7a and 44 MB to x86 or x86_64, almost all of it native libraries (ONNX
+Runtime, the DJL tokenizer and the C++ runtime it links against). Ship ABI
+splits or an Android App Bundle so each device downloads one ABI.
+
+### Apps that already ship libc++_shared.so
+
+The AAR packages the NDK r28c `libc++_shared.so` for every ABI, because the DJL
+tokenizer library links against it and no other dependency ships it. If
+another dependency also ships `libc++_shared.so` (React Native does), the
+build fails in `mergeNativeLibs` with
+`2 files found with path 'lib/<abi>/libc++_shared.so'`. Keep one copy:
+
+```kotlin
+android {
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
+}
+```
+
+Keep the copy from the newest NDK that built any native library in the app;
+the DJL tokenizer needs one from NDK r27c or newer. See
+[Shared C++ runtime](android-integration.md#shared-c-runtime-libc_sharedso)
+for which copy AGP keeps and the license notice your app needs.
 
 The core artifact has no OCR engine and requests no network permission. Add
 the optional ML Kit OCR adapter only if you need it; see

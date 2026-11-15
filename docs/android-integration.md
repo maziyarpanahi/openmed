@@ -537,6 +537,51 @@ never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
 
+## Shared C++ runtime (libc++_shared.so)
+
+`libdjl_tokenizer.so` from `ai.djl.android:tokenizer-native` 0.33.0 links
+against the NDK's shared C++ runtime, `libc++_shared.so`, which that artifact
+does not ship. The OpenMedKit AAR therefore packages `libc++_shared.so` from
+NDK r28c (28.2.13676358) for `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`.
+It adds 850,380 to 1,253,544 bytes per ABI to an app. Without it the
+tokenizer fails to load with
+`dlopen failed: library "libc++_shared.so" not found`.
+
+An app can package only one `libc++_shared.so` per ABI. If another dependency
+also ships one (React Native does, and so does any dependency whose native
+code is built with `ANDROID_STL=c++_shared`), the build fails in
+`mergeNativeLibs` with `2 files found with path 'lib/<abi>/libc++_shared.so'`.
+Keep one copy in the app module's `build.gradle.kts`:
+
+```kotlin
+android {
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
+}
+```
+
+React Native apps that apply the React Native Gradle plugin
+(`com.facebook.react`, 0.77) already get this rule for the app module.
+
+The NDK caveat: libc++ ABI compatibility across NDK releases is maintained
+where possible but not guaranteed, and a library built with a newer NDK can
+need symbols that an older runtime lacks. The copy you keep should come from
+the newest NDK that built any native library in the app. OpenMedKit's copy is
+from r28c, and `libdjl_tokenizer.so` 0.33.0 was built with r27c, so a kept copy
+older than r27c can break the tokenizer. Between dependencies, AGP keeps the
+copy from the dependency it merges first; a copy from the app module itself
+(its `jniLibs` or its own `c++_shared` CMake or ndk-build output) takes
+precedence, with a warning in AGP 8.7. After changing the NDK or the
+dependency set, load the tokenizer on a device.
+
+libc++ is licensed `Apache-2.0 WITH LLVM-exception`. The OpenMedKit POM
+declares only OpenMed's Apache-2.0 license, so a license tool that reads POMs
+will not list libc++: add it to your app's open-source notices yourself. See
+[Android NDK runtime libraries](security/kit-license-inventory.md#android-ndk-runtime-libraries).
+
 ## 16 KB page-size devices
 
 Some Android 15 and later devices use 16 KB memory pages. On those devices the
@@ -557,6 +602,7 @@ The native libraries that OpenMedKit pulls in have this status:
 | Library | Dependency | 64-bit ELF alignment |
 | --- | --- | --- |
 | `libonnxruntime.so`, `libonnxruntime4j_jni.so` | `com.microsoft.onnxruntime:onnxruntime-android:1.25.1` | 16 KB |
+| `libc++_shared.so` | NDK r28c, packaged in the OpenMedKit AAR | 16 KB |
 | `libmlkit_google_ocr_pipeline.so` | `com.google.mlkit:text-recognition:16.0.1` | 16 KB |
 | `libdjl_tokenizer.so` | `ai.djl.android:tokenizer-native:0.33.0` | **4 KB** |
 
@@ -599,7 +645,7 @@ emulator with the real native libraries and a tiny synthetic model:
 
 | Test | What it checks |
 | --- | --- |
-| `NativeRuntimePackagingTest` | The device has the lane's page size, and `libonnxruntime.so`, `libonnxruntime4j_jni.so` and `libdjl_tokenizer.so` load from the APK |
+| `NativeRuntimePackagingTest` | The device has the lane's page size, and `libonnxruntime.so`, `libonnxruntime4j_jni.so`, `libc++_shared.so` and `libdjl_tokenizer.so` load from the APK |
 | `OnnxRuntimeParityTest` | A CPU session over the fixture's token IDs gives the same per-token labels as Python ONNX Runtime, with scores within `1e-4` |
 | `TokenizerParityTest` | The DJL JNI tokenizer gives the same token IDs and Unicode scalar offsets as Python `tokenizers` |
 | `OpenMedKitFromDirectoryTest` | `OpenMedKit.fromDirectory(dir, "fp32")`, with its default execution-provider selection, returns the expected `analyzeText` and `extractPii` spans: the same labels and offsets, confidences within `1e-3` |
@@ -640,9 +686,10 @@ scripts/android/run_emulator_lane.sh --lane local --page-size-kb 4 --negative-co
 
 The negative control rebuilds the test APK with
 `-PopenmedNativePackagingFault=missing-native-libraries`, which strips the ONNX
-Runtime and tokenizer libraries from every ABI, and requires
-`NativeRuntimePackagingTest` to fail with `native_library_unloadable`. The
-property only changes the instrumented test APK.
+Runtime, C++ runtime and tokenizer libraries from every ABI, and requires
+`NativeRuntimePackagingTest` to fail with `native_library_unloadable` for
+`onnxruntime`, `c++_shared` and `djl_tokenizer`. The property only changes the
+instrumented test APK.
 
 Each check writes one JSON record to logcat under the `OpenMedEmulatorLane` tag
 (`adb logcat -s OpenMedEmulatorLane:I`). Records contain only the lane name,
@@ -659,10 +706,10 @@ KVM-accelerated `ubuntu-latest` runners:
   `tokenizer-native` 0.33.0 ships `libdjl_tokenizer.so` with 4 KB LOAD-segment
   alignment, which a 16 KB kernel refuses to load. This lane passes
   `--known-unloadable djl_tokenizer`: the packaging test requires the load to
-  fail, and the tokenizer-dependent tests are skipped. ONNX Runtime, which is
-  16 KB aligned, is still checked. When a 16 KB aligned tokenizer build is
-  adopted, the packaging test fails with `known_blocker_resolved` and the
-  argument must be removed.
+  fail, and the tokenizer-dependent tests are skipped. ONNX Runtime and
+  `libc++_shared.so`, which are 16 KB aligned, are still checked. When a
+  16 KB aligned tokenizer build is adopted, the packaging test fails with
+  `known_blocker_resolved` and the argument must be removed.
 
 ## Runnable demos and related guides
 
