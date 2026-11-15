@@ -34,6 +34,12 @@ from .job_bounds import (
     prune_job_records,
 )
 from .jobs import _parse_positive_int
+from .idempotency import (
+    IdempotencyReservation,
+    IdempotentStartRequest,
+    StartIdempotencyStore,
+    StartOutcome,
+)
 from .smart_backend import (
     SMARTBackendBulkIngestor,
     SMARTBackendConfig,
@@ -366,12 +372,54 @@ class FHIRBulkJobManager:
         client_assertion_builder: Any = None,
         bounds: BulkJobBounds | None = None,
         clock: Callable[[], float] = time.time,
+        idempotency: StartIdempotencyStore | None = None,
     ) -> None:
+        """Create an empty manager.
+
+        Args:
+            transport: Optional HTTP transport for SMART-backed jobs.
+            client_assertion_builder: Optional SMART client assertion builder.
+            idempotency: Store for ``Idempotency-Key`` starts; defaults to a
+                store with the default retention and capacity.
+        """
         self._transport = transport
         self._client_assertion_builder = client_assertion_builder
         self._bounds = bounds if bounds is not None else BulkJobBounds()
         self._clock = clock
         self._jobs: dict[str, _JobRecord] = {}
+        self._idempotency = (
+            idempotency if idempotency is not None else StartIdempotencyStore()
+        )
+
+    def reserve_idempotent_start(self, request: IdempotentStartRequest) -> StartOutcome:
+        """Return the job a keyed start already created, or claim its key.
+
+        Args:
+            request: Digest-only identity of the keyed start.
+
+        Returns:
+            The remembered first response, or a reservation to pass to
+            :meth:`complete_idempotent_start` or :meth:`release_idempotent_start`.
+
+        Raises:
+            IdempotencyError: If the key was used for a different request, is
+                still being processed, or cannot be remembered.
+        """
+        return self._idempotency.reserve(request, job_exists=self._jobs.__contains__)
+
+    def complete_idempotent_start(
+        self,
+        reservation: IdempotencyReservation,
+        status: FHIRBulkJobStatus,
+    ) -> None:
+        """Remember the job and initial status created for a reserved key."""
+        self._idempotency.complete(
+            reservation, job_id=status.job_id, response=status.to_dict()
+        )
+
+    def release_idempotent_start(self, reservation: IdempotencyReservation) -> None:
+        """Forget a reserved key whose start was rejected; no-op once completed."""
+        self._idempotency.release(reservation)
 
     @property
     def bounds(self) -> BulkJobBounds:

@@ -90,6 +90,17 @@ from .journey_access import (
     JourneyAccessGate,
     JourneyAccessRequest,
 )
+from .idempotency import (
+    IDEMPOTENCY_KEY_HEADER,
+    IDEMPOTENCY_KEY_MAX_LENGTH,
+    IDEMPOTENCY_REPLAYED_HEADER,
+    IdempotencyError,
+    IdempotencyReservation,
+    IdempotentReplay,
+    IdempotentStartRequest,
+    StartIdempotencyStore,
+    parse_idempotency_key,
+)
 from .job_ownership import BULK_ADMIN_SCOPE, JOBS_ADMIN_SCOPE, JobOwnershipPolicy
 from .jobs import (
     OWNER_DIGEST_FIELD,
@@ -207,6 +218,53 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
+# Fixed route labels bound into Idempotency-Key scopes.
+_SMART_BACKEND_START_ROUTE = "smart-backend-ingestion"
+_FHIR_BULK_EXPORT_ROUTE = "fhir-bulk-export"
+_FHIR_BULK_IMPORT_ROUTE = "fhir-bulk-import"
+_IDEMPOTENCY_OPENAPI_EXTRA: Dict[str, Any] = {
+    "parameters": [
+        {
+            "name": IDEMPOTENCY_KEY_HEADER,
+            "in": "header",
+            "required": False,
+            "description": (
+                "Optional client key that makes retries of this start return the "
+                "original job instead of starting another one. Scoped to the "
+                "authenticated principal; reusing it with a different request "
+                "body returns 409 idempotency_key_conflict."
+            ),
+            "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": IDEMPOTENCY_KEY_MAX_LENGTH,
+                "pattern": "^[A-Za-z0-9._:~+/=-]+$",
+            },
+        }
+    ]
+}
+_IDEMPOTENT_START_RESPONSES: Dict[int | str, Dict[str, Any]] = {
+    200: {
+        "description": "Ingestion job started, or the replayed original start.",
+        "headers": {
+            IDEMPOTENCY_REPLAYED_HEADER: {
+                "description": (
+                    "`true` when the response replays the start that first used "
+                    "this Idempotency-Key."
+                ),
+                "schema": {"type": "string", "enum": ["true"]},
+            }
+        },
+    },
+    400: {"description": "Malformed Idempotency-Key (`idempotency_key_invalid`)."},
+    409: {
+        "description": (
+            "Idempotency-Key reused for a different request "
+            "(`idempotency_key_conflict`) or still being processed "
+            "(`idempotency_key_in_progress`)."
+        )
+    },
+}
 _DECISION_PATH = "/v1/decisions"
 _MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
 _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
@@ -855,7 +913,8 @@ def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
     manager = getattr(request.app.state, "smart_backend_jobs", None)
     if manager is None:
         manager = SMARTBackendJobManager(
-            bounds=getattr(request.app.state, "bulk_job_bounds", None)
+            bounds=getattr(request.app.state, "bulk_job_bounds", None),
+            idempotency=StartIdempotencyStore.from_env(),
         )
         request.app.state.smart_backend_jobs = manager
     return manager
@@ -865,7 +924,8 @@ def _get_fhir_bulk_manager(request: Request) -> FHIRBulkJobManager:
     manager = getattr(request.app.state, "fhir_bulk_jobs", None)
     if manager is None:
         manager = FHIRBulkJobManager(
-            bounds=getattr(request.app.state, "bulk_job_bounds", None)
+            bounds=getattr(request.app.state, "bulk_job_bounds", None),
+            idempotency=StartIdempotencyStore.from_env(),
         )
         request.app.state.fhir_bulk_jobs = manager
     return manager
@@ -897,6 +957,36 @@ def _get_job_ownership(request: Request) -> JobOwnershipPolicy:
 def _submitting_owner_digest(request: Request) -> Optional[dict[str, str]]:
     """Return the keyed digest of the authenticated submitter, if any."""
     return _get_job_ownership(request).owner_digest(request.scope.get("openmed.auth"))
+
+
+def _keyed_start_request(
+    request: Request,
+    payload: Any,
+    *,
+    route: str,
+    owner_digest: Optional[dict[str, str]],
+) -> Optional[IdempotentStartRequest]:
+    """Return the digest-only identity of a keyed start, if a key was sent.
+
+    The scope binds the route label, the submitter's owner digest and the key;
+    the request digest covers every validated field except credentials. Both
+    are keyed HMAC digests, so neither the key nor any field is retained.
+    """
+    key = parse_idempotency_key(request.headers.getlist(IDEMPOTENCY_KEY_HEADER))
+    if key is None:
+        return None
+    fields = (
+        payload.model_dump(mode="json")
+        if hasattr(payload, "model_dump")
+        else payload.dict()
+    )
+    return IdempotentStartRequest.derive(
+        _get_job_ownership(request).key,
+        route=route,
+        owner_digest=owner_digest,
+        idempotency_key=key,
+        request_fields=fields,
+    )
 
 
 def _job_visible(
@@ -1101,11 +1191,13 @@ def create_app(
         bulk_job_bounds = getattr(fastapi_app.state, "bulk_job_bounds", None)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
             fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager(
-                bounds=bulk_job_bounds
+                bounds=bulk_job_bounds,
+                idempotency=StartIdempotencyStore.from_env(),
             )
         if getattr(fastapi_app.state, "fhir_bulk_jobs", None) is None:
             fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager(
-                bounds=bulk_job_bounds
+                bounds=bulk_job_bounds,
+                idempotency=StartIdempotencyStore.from_env(),
             )
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
@@ -1537,6 +1629,18 @@ def create_app(
         exc: OpenMedError,
     ) -> JSONResponse:
         return _openmed_error_response(exc)
+
+    @app.exception_handler(IdempotencyError)
+    async def _idempotency_error_handler(
+        _: Request,
+        exc: IdempotencyError,
+    ) -> JSONResponse:
+        headers = (
+            None if exc.retry_after is None else {"Retry-After": str(exc.retry_after)}
+        )
+        return _error_response(
+            exc.status_code, exc.code, str(exc), details=None, headers=headers
+        )
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
@@ -2246,12 +2350,9 @@ def create_app(
         request: Request,
         response: Response,
     ) -> Dict[str, Any]:
-        status = _start_fhir_bulk_job(payload, request)
-        status_url = f"{request.url.path}/{status.job_id}"
-        response.headers["Content-Location"] = status_url
-        payload = status.to_dict()
-        payload["status_url"] = status_url
-        return payload
+        return _start_fhir_bulk_route(
+            payload, request, response, route=_FHIR_BULK_EXPORT_ROUTE
+        )
 
     @app.post(_FHIR_BULK_IMPORT_PATH, status_code=202, include_in_schema=False)
     async def start_fhir_bulk_import(
@@ -2259,12 +2360,9 @@ def create_app(
         request: Request,
         response: Response,
     ) -> Dict[str, Any]:
-        status = _start_fhir_bulk_job(payload, request)
-        status_url = f"{request.url.path}/{status.job_id}"
-        response.headers["Content-Location"] = status_url
-        payload = status.to_dict()
-        payload["status_url"] = status_url
-        return payload
+        return _start_fhir_bulk_route(
+            payload, request, response, route=_FHIR_BULK_IMPORT_ROUTE
+        )
 
     @app.get(f"{_FHIR_BULK_EXPORT_PATH}/{{job_id}}", include_in_schema=False)
     @app.get(f"{_FHIR_BULK_IMPORT_PATH}/{{job_id}}", include_in_schema=False)
@@ -2380,33 +2478,59 @@ def create_app(
                     },
                 )
 
-    @app.post(_SMART_BACKEND_START_PATH)
+    @app.post(
+        _SMART_BACKEND_START_PATH,
+        responses=_IDEMPOTENT_START_RESPONSES,
+        openapi_extra=_IDEMPOTENCY_OPENAPI_EXTRA,
+    )
     async def start_smart_backend_ingestion(
         payload: SMARTBackendIngestionRequest,
         request: Request,
+        response: Response,
     ) -> Dict[str, Any]:
-        runtime = _get_service_runtime(request)
-        runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
-        config = _smart_backend_config_from_payload(payload)
-        # Admission precedes path reservation so a rejected start leaves no
-        # output directory behind.
-        manager.ensure_capacity()
-        job_id = uuid.uuid4().hex
-        _, output, checkpoint = request.app.state.bulk_storage.prepare(
-            input_dir=None,
-            output_dir=payload.output_dir,
-            checkpoint_path=payload.checkpoint_path,
-            job_id=job_id,
+        owner_digest = _submitting_owner_digest(request)
+        keyed = _keyed_start_request(
+            request,
+            payload,
+            route=_SMART_BACKEND_START_ROUTE,
+            owner_digest=owner_digest,
         )
-        config = replace(config, output_dir=output, checkpoint_path=checkpoint)
-        deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(
-            config,
-            deidentifier=deidentifier,
-            job_id=job_id,
-            owner_digest=_submitting_owner_digest(request),
-        ).to_dict()
+        reservation: Optional[IdempotencyReservation] = None
+        if keyed is not None:
+            outcome = manager.reserve_idempotent_start(keyed)
+            if isinstance(outcome, IdempotentReplay):
+                response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
+                return outcome.response
+            reservation = outcome
+        try:
+            runtime = _get_service_runtime(request)
+            runtime.validate_served_model(payload.model_name)
+            config = _smart_backend_config_from_payload(payload)
+            # Admission precedes path reservation so a rejected start leaves no
+            # output directory behind.
+            manager.ensure_capacity()
+            job_id = uuid.uuid4().hex
+            _, output, checkpoint = request.app.state.bulk_storage.prepare(
+                input_dir=None,
+                output_dir=payload.output_dir,
+                checkpoint_path=payload.checkpoint_path,
+                job_id=job_id,
+            )
+            config = replace(config, output_dir=output, checkpoint_path=checkpoint)
+            deidentifier = _smart_backend_deidentifier(payload, runtime)
+            status = manager.start(
+                config,
+                deidentifier=deidentifier,
+                job_id=job_id,
+                owner_digest=owner_digest,
+            )
+            if reservation is not None:
+                manager.complete_idempotent_start(reservation, status)
+        finally:
+            if reservation is not None:
+                manager.release_idempotent_start(reservation)
+        return status.to_dict()
 
     @app.get("/fhir/smart-backend/ingestions/{job_id}")
     async def smart_backend_ingestion_status(
@@ -3141,13 +3265,66 @@ def _fhir_bulk_config_from_payload(
     )
 
 
+def _start_fhir_bulk_route(
+    payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
+    request: Request,
+    response: Response,
+    *,
+    route: str,
+) -> Dict[str, Any]:
+    """Start, or replay the keyed start of, one bulk export/import job.
+
+    A repeated ``Idempotency-Key`` is resolved before any validation, storage
+    reservation or task scheduling, so a replay or conflict has no side effect.
+    """
+    manager = _get_fhir_bulk_manager(request)
+    owner_digest = _submitting_owner_digest(request)
+    keyed = _keyed_start_request(
+        request, payload, route=route, owner_digest=owner_digest
+    )
+    reservation: Optional[IdempotencyReservation] = None
+    if keyed is not None:
+        outcome = manager.reserve_idempotent_start(keyed)
+        if isinstance(outcome, IdempotentReplay):
+            response.headers[IDEMPOTENCY_REPLAYED_HEADER] = "true"
+            return _fhir_bulk_start_payload(
+                request, response, outcome.job_id, outcome.response
+            )
+        reservation = outcome
+    try:
+        status = _start_fhir_bulk_job(
+            payload, request, manager=manager, owner_digest=owner_digest
+        )
+        if reservation is not None:
+            manager.complete_idempotent_start(reservation, status)
+    finally:
+        if reservation is not None:
+            manager.release_idempotent_start(reservation)
+    return _fhir_bulk_start_payload(request, response, status.job_id, status.to_dict())
+
+
+def _fhir_bulk_start_payload(
+    request: Request,
+    response: Response,
+    job_id: str,
+    status_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    status_url = f"{request.url.path}/{job_id}"
+    response.headers["Content-Location"] = status_url
+    payload = dict(status_payload)
+    payload["status_url"] = status_url
+    return payload
+
+
 def _start_fhir_bulk_job(
     payload: FHIRBulkExportRequest | FHIRBulkImportRequest,
     request: Request,
+    *,
+    manager: FHIRBulkJobManager,
+    owner_digest: Optional[dict[str, str]],
 ):
     runtime = _get_service_runtime(request)
     runtime.validate_served_model(payload.model_name)
-    manager = _get_fhir_bulk_manager(request)
     config = _fhir_bulk_config_from_payload(payload)
     if payload.input_dir is not None and payload.source_dir is not None:
         raise BulkPathError("path_invalid")
@@ -3174,7 +3351,7 @@ def _start_fhir_bulk_job(
         config,
         deidentifier=deidentifier,
         job_id=job_id,
-        owner_digest=_submitting_owner_digest(request),
+        owner_digest=owner_digest,
     )
 
 
