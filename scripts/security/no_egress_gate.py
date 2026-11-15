@@ -907,6 +907,28 @@ def serve_main(args: argparse.Namespace) -> int:
     return 0 if server.started else 1
 
 
+# The workflow runs the service under the production profile, which refuses
+# requests unless authentication is on. The key and digest key below are
+# synthetic, valid only for this loopback gate run, and never leave it.
+_GATE_API_KEY = "synthetic-no-egress-gate-api-key"
+_GATE_DIGEST_KEY = "synthetic-no-egress-gate-digest-key-" + "0" * 32
+_GRPC_AUTH_METADATA = (("x-api-key", _GATE_API_KEY),)
+
+
+def _gate_api_keys() -> str:
+    return json.dumps(
+        [
+            {
+                "id": "no-egress-gate",
+                "key_hash": "sha256:"
+                + hashlib.sha256(_GATE_API_KEY.encode("utf-8")).hexdigest(),
+                "principal": "no-egress-gate",
+                "scopes": ["*"],
+            }
+        ]
+    )
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -928,6 +950,9 @@ def _service_env(fixture: WorkflowFixture) -> dict[str, str]:
             "TRANSFORMERS_OFFLINE": "1",
             "HF_DATASETS_OFFLINE": "1",
             "OPENMED_SERVICE_SERVED_MODELS": fixture.model_name,
+            "OPENMED_SERVICE_AUTH_ENABLED": "true",
+            "OPENMED_SERVICE_AUTH_API_KEYS": _gate_api_keys(),
+            "OPENMED_SERVICE_DIGEST_KEY": _GATE_DIGEST_KEY,
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONUNBUFFERED": "1",
         }
@@ -1086,8 +1111,14 @@ class Workflow:
         import grpc
         import httpx
 
+        from openmed.core.key_provider import InMemoryKeyProvider, KeyState
         from openmed.service.proto.generated import openmed_pb2, openmed_pb2_grpc
-        from openmed.structured.store import JobMetadata, SQLiteJourneyStore
+        from openmed.structured.store import (
+            JOURNEY_KEY_PURPOSE,
+            JobMetadata,
+            JourneyStoreEncryption,
+            SQLiteJourneyStore,
+        )
 
         self.grpc = grpc
         self.httpx = httpx
@@ -1095,6 +1126,17 @@ class Workflow:
         self.pb2_grpc = openmed_pb2_grpc
         self.job_metadata = JobMetadata
         self.store_type = SQLiteJourneyStore
+        # Local Journey stores are sealed outside dev and test. The key is a
+        # throw-away in-process key, kept for the whole run so the store can be
+        # reopened after the service restart.
+        provider = InMemoryKeyProvider()
+        provider.add_key(
+            "no-egress-gate",
+            os.urandom(32),
+            purpose=JOURNEY_KEY_PURPOSE,
+            state=KeyState.ACTIVE,
+        )
+        self.store_encryption = JourneyStoreEncryption.encrypted(provider)
         self.fixture = fixture
         self.store_path = state_dir / "journey.sqlite3"
         self.service = ServiceProcess(fixture, fixture_path, verbose=verbose)
@@ -1160,6 +1202,7 @@ class Workflow:
             base_url=self.service.base_url,
             timeout=REQUEST_TIMEOUT_SECONDS,
             trust_env=False,
+            headers={"X-API-Key": _GATE_API_KEY},
         )
 
     def stub(self, channel: Any) -> Any:
@@ -1387,6 +1430,7 @@ class Workflow:
                     text=self.fixture.document, model_name=self.fixture.model_name
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
+                metadata=_GRPC_AUTH_METADATA,
             )
         finally:
             channel.close()
@@ -1402,6 +1446,7 @@ class Workflow:
                     text=self.fixture.document, model_name=self.fixture.model_name
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
+                metadata=_GRPC_AUTH_METADATA,
             )
         finally:
             channel.close()
@@ -1419,6 +1464,7 @@ class Workflow:
                     method="mask",
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
+                metadata=_GRPC_AUTH_METADATA,
             )
         finally:
             channel.close()
@@ -1443,6 +1489,7 @@ class Workflow:
                     max_buffer=self.fixture.stream_chunk_size,
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS,
+                metadata=_GRPC_AUTH_METADATA,
             )
             first = next(call)
             if first.final:
@@ -1467,7 +1514,7 @@ class Workflow:
     def journey_persist(self) -> str:
         """Append PHI-free job metadata to a local Journey store."""
 
-        store = self.store_type(self.store_path)
+        store = self.store_type(self.store_path, encryption=self.store_encryption)
         try:
             result = store.put_job(
                 self.job_metadata(
@@ -1493,7 +1540,7 @@ class Workflow:
     def journey_reopen(self) -> str:
         """Reopen the store after the restart and verify the committed record."""
 
-        opened = self.store_type.open(self.store_path)
+        opened = self.store_type.open(self.store_path, encryption=self.store_encryption)
         if not opened.ok or opened.value is None:
             raise CaseFailure("persistence_mismatch")
         store = opened.value
