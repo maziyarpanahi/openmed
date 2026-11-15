@@ -3,8 +3,9 @@
 Every value in ``tests/fixtures/parity/identifier_validators_v1.json`` is
 synthetic: it comes from a documented test range or from one of the
 repository's seeded ``generate_*`` helpers. Each case names the Python
-validator that is the reference implementation, so the Android and Swift
-ports (#5419-#5421) can consume the same vectors.
+validator that is the reference implementation and records how its values were
+produced, so the Android and Swift ports (#5419-#5421) can consume the same
+vectors and rebuild them if needed.
 """
 
 from __future__ import annotations
@@ -80,8 +81,10 @@ def test_fixture_declares_synthetic_reference_vectors() -> None:
     assert FIXTURE["fixture"] == "identifier_validators_v1"
     assert FIXTURE["synthetic"] is True
     assert "synthetic" in FIXTURE["description"].lower()
+    assert FIXTURE["invalid_vector_rule"].strip()
     for case in FIXTURE["cases"]:
         assert case["reference"] in REFERENCES, case["validator"]
+        assert case["provenance"].strip(), case["validator"]
         assert len(case["valid"]) >= 3, case["validator"]
         assert len(case["invalid"]) >= 3, case["validator"]
 

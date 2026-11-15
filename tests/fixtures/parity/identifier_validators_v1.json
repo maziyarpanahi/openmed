@@ -8,6 +8,7 @@
     {
       "validator": "Luhn",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_luhn",
+      "provenance": "seeded clinical_ids.generate_luhn_identifier(length=16, prefix=\"499273\") with random.Random(11), random.Random(12) and random.Random(13)",
       "valid": [
         "4992737877893288",
         "4992737485260573",
@@ -24,6 +25,7 @@
     {
       "validator": "SSN",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_ssn",
+      "provenance": "seeded clinical_ids.generate_ssn with random.Random(21), random.Random(22) and random.Random(23)",
       "valid": [
         "169-54-6850",
         "144-32-0387",
@@ -41,6 +43,7 @@
     {
       "validator": "NPI",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_npi",
+      "provenance": "seeded clinical_ids.generate_npi with random.Random(31), random.Random(32) and random.Random(33)",
       "valid": [
         "0716202185",
         "1324370018",
@@ -55,6 +58,7 @@
     {
       "validator": "IBAN",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_iban",
+      "provenance": "seeded clinical_ids.generate_iban(country_code=\"DE\") with random.Random(41), random.Random(42) and random.Random(43)",
       "valid": [
         "DE46YVOKYS9RYAPB2JJUKQ",
         "DE66HBRPOIG8F1CBFNO6B9",
@@ -69,6 +73,7 @@
     {
       "validator": "Aadhaar",
       "reference": "openmed.core.pii_i18n.validate_aadhaar",
+      "provenance": "seeded clinical_ids.generate_aadhaar with random.Random(51), random.Random(52) and random.Random(53)",
       "valid": [
         "588233846871",
         "608756022628",
@@ -83,6 +88,7 @@
     {
       "validator": "UK NHS number",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_uk_nhs_number",
+      "provenance": "seeded clinical_ids.generate_uk_nhs_number with random.Random(61), random.Random(62) and random.Random(63), plus one documented test-range value: numbers starting 999 are reserved for testing",
       "valid": [
         "9990000018",
         "7283545077",
@@ -99,6 +105,7 @@
     {
       "validator": "Dutch BSN",
       "reference": "openmed.core.pii_i18n.validate_dutch_bsn",
+      "provenance": "constructed from the elfproef rule (weights 9 down to 2, check digit is the weighted total mod 11) over the bodies 71234567, 82345678 and 93456789; no generator",
       "valid": [
         "712345681",
         "823456791",
@@ -113,6 +120,7 @@
     {
       "validator": "Spanish DNI",
       "reference": "openmed.core.pii_i18n.validate_spanish_dni",
+      "provenance": "constructed from the mod-23 letter table over the numbers 12345678, 23456789 and 34567890; no generator",
       "valid": [
         "12345678Z",
         "23456789D",
@@ -127,6 +135,7 @@
     {
       "validator": "French NIR",
       "reference": "openmed.core.pii_i18n.validate_french_nir",
+      "provenance": "constructed from key = 97 - (body mod 97) over the bodies 1850575001234, 2900123456789 and 1751199123456; no generator",
       "valid": [
         "185057500123475",
         "290012345678910",
@@ -141,6 +150,7 @@
     {
       "validator": "Chinese resident ID",
       "reference": "openmed.core.pii_i18n.validate_chinese_resident_id",
+      "provenance": "seeded clinical_ids.generate_chinese_resident_id with random.Random(71), random.Random(72) and random.Random(73)",
       "valid": [
         "336680194105058423",
         "13244520091012315X",
@@ -155,6 +165,7 @@
     {
       "validator": "Canadian SIN",
       "reference": "openmed.core.anonymizer.providers.clinical_ids.validate_canadian_sin",
+      "provenance": "seeded clinical_ids.generate_canadian_sin with random.Random(81), random.Random(82) and random.Random(83)",
       "valid": [
         "975886706",
         "378422422",
@@ -167,5 +178,6 @@
         "97588670A"
       ]
     }
-  ]
+  ],
+  "invalid_vector_rule": "Each case starts with one single-digit mutation of a valid value that the validator rejects, then adds documented never-issued or malformed shapes: SSN area 000, 666 and 900 to 999, group 00 and serial 0000; Aadhaar first digit 0 or 1; French NIR first digit 0 or 3; Canadian SIN first digit 0; IBAN check digits 00 or 06; plus truncated, extended and non-digit forms."
 }
