@@ -46,7 +46,17 @@ from typing import Any
 
 from openmed.__about__ import __version__
 from openmed.core.audit_chain import CHAIN_VERSION
+from openmed.core.audit_continuity import (
+    CONTINUITY_FORMAT,
+    CONTINUITY_VERSION,
+    MAX_CONTINUITY_JSON_BYTES,
+)
 from openmed.core.registry_slots import REGISTRY_STATE_SCHEMA_VERSION
+from openmed.service.job_payloads import (
+    JOB_PAYLOAD_FILE_FORMAT,
+    JOB_PAYLOAD_SCHEMA_VERSION,
+)
+from openmed.service.model_activation import STATE_SCHEMA_VERSION
 from openmed.service.recovery import (
     JOB_STORE_LAYOUT_VERSION,
     RECOVERY_FORMAT,
@@ -89,9 +99,12 @@ __all__ = [
     "get_schema",
     "observe_artifact_marker",
     "observe_audit_chains",
+    "observe_audit_continuity",
+    "observe_job_payloads",
     "observe_job_store",
     "observe_journey_postgres",
     "observe_journey_sqlite",
+    "observe_model_activation",
     "observe_model_registry",
     "observe_recovery_point",
     "observe_service_state",
@@ -150,6 +163,44 @@ _ARTIFACTS = "artifacts"
 _MAX_DOCUMENT_BYTES = 256 * 1024 * 1024
 _MAX_DESCRIPTOR_BYTES = 64 * 1024
 _SCHEMA_RE = re.compile(r"[a-z][a-z0-9_]{0,62}\Z")
+_PAYLOAD_FILE_RE = re.compile(r"jp_[0-9a-f]{32}\.payload\.json\Z")
+_PAYLOAD_TEMP_RE = re.compile(r"\.jp_[0-9a-f]{32}\.[A-Za-z0-9_]+\.tmp\Z")
+_PAYLOAD_FIELDS = frozenset(
+    {
+        "created_at",
+        "digest",
+        "envelope",
+        "expires_at",
+        "format",
+        "job_id",
+        "kind",
+        "ref",
+        "schema_version",
+    }
+)
+_ACTIVATION_STATE = "state.json"
+_ACTIVATION_JOURNALS = "journal"
+_ACTIVATION_JOURNAL_RE = re.compile(r"txn-[0-9a-f]{32}\.json\Z")
+_MAX_ACTIVATION_STATE_BYTES = 4 * 1024 * 1024
+_ACTIVATION_SCHEMA_RE = re.compile(
+    r"openmed\.model_activation\.(state|journal)\.v([1-9][0-9]{0,5})\Z"
+)
+_CONTINUITY_SUFFIX = ".continuity.json"
+
+
+def _activation_version(identifier: Any, kind: str) -> int | None:
+    """Return the version of a model-activation ``state`` or ``journal`` id."""
+
+    if not isinstance(identifier, str):
+        return None
+    match = _ACTIVATION_SCHEMA_RE.fullmatch(identifier)
+    if match is None or match.group(1) != kind:
+        return None
+    return int(match.group(2))
+
+
+# The activation state and journal identifiers share one version.
+_ACTIVATION_VERSION = _activation_version(STATE_SCHEMA_VERSION, "state") or 0
 
 
 class Presence(str, Enum):
@@ -1326,14 +1377,280 @@ def observe_recovery_point(point: Path | None) -> ComponentObservation:
     )
 
 
+def observe_job_payloads(directory: Path | None) -> ComponentObservation:
+    """Observe the encrypted job payload directory without a key.
+
+    Only the cleartext lifecycle metadata of each payload file is read; the
+    sealed envelope is never opened.  A memory-only payload store has no
+    durable state and is not observed.
+
+    Args:
+        directory: Encrypted payload directory, or ``None`` when encrypted
+            retention is not configured.
+
+    Returns:
+        The observation.  Crash remnants are counted, never versioned.
+    """
+
+    if directory is None:
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.NOT_INSPECTED,
+            None,
+            "payload_directory_not_supplied",
+        )
+    if not directory.exists():
+        return ComponentObservation(PROTECTED_PAYLOADS, ObservedState.ABSENT, 0)
+    if directory.is_symlink() or not directory.is_dir():
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.INVALID,
+            None,
+            "payload_directory_invalid",
+        )
+    try:
+        names = sorted(item.name for item in directory.iterdir())
+    except OSError:
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.UNAVAILABLE,
+            None,
+            "payload_read_failed",
+        )
+    remnants = sum(1 for name in names if _PAYLOAD_TEMP_RE.fullmatch(name))
+    payloads = [name for name in names if _PAYLOAD_FILE_RE.fullmatch(name)]
+    counts = {"payloads": len(payloads), "temporary_files": remnants}
+    if not payloads:
+        return ComponentObservation(
+            PROTECTED_PAYLOADS, ObservedState.ABSENT, 0, counts=counts
+        )
+    documents = [_read_json(directory / name, _MAX_DOCUMENT_BYTES) for name in payloads]
+    versions = [
+        item.get("schema_version")
+        for item in documents
+        if isinstance(item, dict) and type(item.get("schema_version")) is int
+    ]
+    fields = sorted(
+        {key for item in documents if isinstance(item, dict) for key in item}
+    )
+    digest = _digest(
+        _canonical_json({"fields": fields, "versions": sorted(set(versions))})
+    )
+    # The store refuses every file it cannot index as ``payload_damaged``.
+    newest = max(versions, default=0)
+    if newest > JOB_PAYLOAD_SCHEMA_VERSION:
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.NEWER_THAN_BINARY,
+            newest,
+            "payload_damaged",
+            digest,
+            counts,
+        )
+    if any(
+        not isinstance(item, dict)
+        or item.get("format") != JOB_PAYLOAD_FILE_FORMAT
+        or type(item.get("schema_version")) is not int
+        for item in documents
+    ):
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.INVALID,
+            None,
+            "payload_damaged",
+            counts=counts,
+        )
+    if any(
+        item.get("schema_version") != JOB_PAYLOAD_SCHEMA_VERSION
+        or set(item) != _PAYLOAD_FIELDS
+        for item in documents
+        if isinstance(item, dict)
+    ):
+        return ComponentObservation(
+            PROTECTED_PAYLOADS,
+            ObservedState.DRIFTED,
+            newest,
+            "payload_damaged",
+            digest,
+            counts,
+        )
+    return ComponentObservation(
+        PROTECTED_PAYLOADS,
+        ObservedState.CURRENT,
+        JOB_PAYLOAD_SCHEMA_VERSION,
+        None,
+        digest,
+        counts,
+    )
+
+
+def observe_model_activation(root: Path | None) -> ComponentObservation:
+    """Observe a model activation root read-only, without taking ownership.
+
+    Args:
+        root: Activation root holding ``state.json`` and ``journal/``, or
+            ``None`` when not configured.
+
+    Returns:
+        The observation of the pointer-state schema.  Journals are counted;
+        the manager resolves unfinished ones when it starts.
+    """
+
+    from openmed.service.model_activation import _validate_state
+
+    if root is None:
+        return ComponentObservation(
+            MODEL_ACTIVATION,
+            ObservedState.NOT_INSPECTED,
+            None,
+            "activation_root_not_supplied",
+        )
+    if not root.exists():
+        return ComponentObservation(MODEL_ACTIVATION, ObservedState.ABSENT, 0)
+    if root.is_symlink() or not root.is_dir():
+        return ComponentObservation(
+            MODEL_ACTIVATION, ObservedState.INVALID, None, "activation_root_invalid"
+        )
+    journal_dir = root / _ACTIVATION_JOURNALS
+    journals = 0
+    if journal_dir.is_dir() and not journal_dir.is_symlink():
+        journals = sum(
+            1
+            for item in journal_dir.iterdir()
+            if _ACTIVATION_JOURNAL_RE.fullmatch(item.name)
+        )
+    state = root / _ACTIVATION_STATE
+    if not state.exists() and not state.is_symlink():
+        return ComponentObservation(
+            MODEL_ACTIVATION, ObservedState.ABSENT, 0, counts={"journals": journals}
+        )
+    document = _read_json(state, _MAX_ACTIVATION_STATE_BYTES)
+    version = _activation_version(
+        document.get("schema_version") if isinstance(document, dict) else None,
+        "state",
+    )
+    if version is None:
+        return ComponentObservation(
+            MODEL_ACTIVATION, ObservedState.INVALID, None, "state_unreadable"
+        )
+    assert isinstance(document, dict)
+    slots = document.get("slots")
+    counts = {
+        "journals": journals,
+        "slots": len(slots) if isinstance(slots, dict) else 0,
+    }
+    digest = _digest(_canonical_json({"fields": sorted(document), "version": version}))
+    if version > _ACTIVATION_VERSION:
+        return ComponentObservation(
+            MODEL_ACTIVATION,
+            ObservedState.NEWER_THAN_BINARY,
+            version,
+            "state_unreadable",
+            digest,
+            counts,
+        )
+    try:
+        # The manager's own validation, so the observer refuses exactly what
+        # ``ModelActivationManager.start`` refuses.
+        _validate_state(document)
+    except ValueError:
+        return ComponentObservation(
+            MODEL_ACTIVATION,
+            ObservedState.DRIFTED,
+            version,
+            "state_unreadable",
+            digest,
+            counts,
+        )
+    return ComponentObservation(
+        MODEL_ACTIVATION, ObservedState.CURRENT, version, None, digest, counts
+    )
+
+
+def observe_audit_continuity(manifests: Sequence[Path]) -> ComponentObservation:
+    """Observe audit continuity manifests read-only, without signing keys.
+
+    Structure and versions are checked; signatures need the caller's keys
+    and are verified by :func:`openmed.core.audit_continuity.verify_continuity`.
+
+    Args:
+        manifests: Continuity manifest files.
+
+    Returns:
+        The aggregate observation across every manifest.
+    """
+
+    from openmed.core.audit_continuity import AuditContinuityError, ContinuityManifest
+
+    if not manifests:
+        return ComponentObservation(AUDIT_CONTINUITY, ObservedState.ABSENT, 0)
+    events = 0
+    fields: set[str] = set()
+    versions: list[Any] = []
+    for path in manifests:
+        document = _read_json(path, MAX_CONTINUITY_JSON_BYTES)
+        if not isinstance(document, dict):
+            return ComponentObservation(
+                AUDIT_CONTINUITY, ObservedState.INVALID, None, "malformed_manifest"
+            )
+        version = document.get("version")
+        versions.append(version)
+        if document.get("format") != CONTINUITY_FORMAT or type(version) is not int:
+            return ComponentObservation(
+                AUDIT_CONTINUITY, ObservedState.INVALID, None, "unsupported_version"
+            )
+        if version > CONTINUITY_VERSION:
+            return ComponentObservation(
+                AUDIT_CONTINUITY,
+                ObservedState.NEWER_THAN_BINARY,
+                version,
+                "unsupported_version",
+                counts={"manifests": len(manifests)},
+            )
+        if version != CONTINUITY_VERSION:
+            return ComponentObservation(
+                AUDIT_CONTINUITY, ObservedState.INVALID, version, "unsupported_version"
+            )
+        try:
+            manifest = ContinuityManifest.from_dict(document)
+        except AuditContinuityError as error:
+            return ComponentObservation(
+                AUDIT_CONTINUITY,
+                ObservedState.DRIFTED,
+                version,
+                error.code,
+                counts={"manifests": len(manifests)},
+            )
+        events += manifest.event_count
+        fields.update(document)
+    return ComponentObservation(
+        AUDIT_CONTINUITY,
+        ObservedState.CURRENT,
+        CONTINUITY_VERSION,
+        None,
+        _digest(_canonical_json({"fields": sorted(fields), "versions": versions})),
+        {"events": events, "manifests": len(manifests)},
+    )
+
+
+def _continuity_manifests(chains: Sequence[Path]) -> tuple[Path, ...]:
+    # AuditContinuityStore's default manifest sits beside its chain.
+    candidates = (chain.with_name(chain.stem + _CONTINUITY_SUFFIX) for chain in chains)
+    return tuple(path for path in candidates if path.exists() or path.is_symlink())
+
+
 def observe_service_state(
     sources: ServiceStateSources,
     *,
     recovery_point: Path | None = None,
     postgres_connection: Any | None = None,
     postgres_schema: str = "openmed_journey",
+    job_payload_directory: Path | None = None,
+    model_activation_root: Path | None = None,
 ) -> tuple[ComponentObservation, ...]:
     """Observe every registered component read-only.
+
+    Continuity manifests are found beside the audit chains in ``sources``.
 
     Args:
         sources: Locations of the service's durable state.
@@ -1341,6 +1658,8 @@ def observe_service_state(
         postgres_connection: Optional dedicated DB-API connection for the
             PostgreSQL Journey schema; only SELECT statements run.
         postgres_schema: PostgreSQL schema identifier.
+        job_payload_directory: Optional encrypted job payload directory.
+        model_activation_root: Optional model activation root.
 
     Returns:
         One observation per registered component, in registry order.
@@ -1361,6 +1680,11 @@ def observe_service_state(
         MODEL_REGISTRY: lambda: observe_model_registry(sources.registry_state),
         AUDIT_CHAIN: lambda: observe_audit_chains(sources.audit_chains),
         RECOVERY_MANIFEST: lambda: observe_recovery_point(recovery_point),
+        PROTECTED_PAYLOADS: lambda: observe_job_payloads(job_payload_directory),
+        MODEL_ACTIVATION: lambda: observe_model_activation(model_activation_root),
+        AUDIT_CONTINUITY: lambda: observe_audit_continuity(
+            _continuity_manifests(sources.audit_chains)
+        ),
     }
     observations = []
     for schema in durable_schemas():
@@ -1794,6 +2118,8 @@ def plan_service_migrations(
     journey_key_provider: Any | None = None,
     postgres_connection: Any | None = None,
     postgres_schema: str = "openmed_journey",
+    job_payload_directory: Path | None = None,
+    model_activation_root: Path | None = None,
     disk_usage: Callable[[Path], Any] = shutil.disk_usage,
 ) -> MigrationPlan:
     """Build a dry-run migration plan and run every preflight check.
@@ -1815,6 +2141,8 @@ def plan_service_migrations(
         postgres_connection: Optional dedicated DB-API connection for a
             PostgreSQL Journey schema; only SELECT statements run.
         postgres_schema: PostgreSQL schema identifier.
+        job_payload_directory: Optional encrypted job payload directory.
+        model_activation_root: Optional model activation root.
         disk_usage: Free-space probe; defaults to :func:`shutil.disk_usage`.
 
     Returns:
@@ -1826,6 +2154,8 @@ def plan_service_migrations(
         recovery_point=recovery_point,
         postgres_connection=postgres_connection,
         postgres_schema=postgres_schema,
+        job_payload_directory=job_payload_directory,
+        model_activation_root=model_activation_root,
     )
     by_component = {item.component: item for item in observations}
     actions = _actions(observations)

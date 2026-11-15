@@ -39,9 +39,12 @@ from openmed.service.schema_registry import (
     get_schema,
     observe_artifact_marker,
     observe_audit_chains,
+    observe_audit_continuity,
+    observe_job_payloads,
     observe_job_store,
     observe_journey_postgres,
     observe_journey_sqlite,
+    observe_model_activation,
     observe_model_registry,
     observe_recovery_point,
     plan_service_migrations,
@@ -353,6 +356,111 @@ def test_postgres_observer_reports_failure_without_details() -> None:
     assert observation.state is ObservedState.UNAVAILABLE
     assert observation.code == "postgres_inspection_failed"
     assert "secret" not in json.dumps(observation.to_dict())
+
+
+def _rewrite(path: Path, **changes: Any) -> None:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document.update(changes)
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+
+def test_payload_observer_reads_metadata_without_a_key(tmp_path: Path) -> None:
+    pytest.importorskip("cryptography")
+    from openmed.core.key_provider import InMemoryKeyProvider
+    from openmed.service.job_payloads import (
+        JOB_PAYLOAD_KEY_PURPOSE,
+        EncryptedJobPayloadStore,
+    )
+
+    directory = tmp_path / "payloads"
+    assert observe_job_payloads(None).state is ObservedState.NOT_INSPECTED
+    assert observe_job_payloads(directory).state is ObservedState.ABSENT
+    store = EncryptedJobPayloadStore(
+        directory,
+        key_provider=InMemoryKeyProvider.generate(JOB_PAYLOAD_KEY_PURPOSE),
+    )
+    ref = store.create("input", "job-1", {"text": "SECRET"}, retention_seconds=60)
+    (directory / f".{ref.ref}.crash.tmp").write_bytes(b"sealed remnant")
+
+    current = observe_job_payloads(directory)
+
+    assert (current.state, current.version) == (ObservedState.CURRENT, 1)
+    assert current.counts == {"payloads": 1, "temporary_files": 1}
+    text = json.dumps(current.to_dict())
+    assert "SECRET" not in text and ref.ref not in text and "job-1" not in text
+    payload = directory / f"{ref.ref}.payload.json"
+    _rewrite(payload, schema_version=2)
+    newer = observe_job_payloads(directory)
+    assert (newer.state, newer.code) == (
+        ObservedState.NEWER_THAN_BINARY,
+        "payload_damaged",
+    )
+    _rewrite(payload, schema_version=1, shadow={})
+    assert observe_job_payloads(directory).state is ObservedState.DRIFTED
+    payload.write_text("{not json", encoding="utf-8")
+    assert observe_job_payloads(directory).state is ObservedState.INVALID
+
+
+def test_activation_observer_mirrors_the_manager_state_checks(
+    tmp_path: Path,
+) -> None:
+    from openmed.service.model_activation import STATE_SCHEMA_VERSION
+
+    root = tmp_path / "activation"
+    assert observe_model_activation(None).state is ObservedState.NOT_INSPECTED
+    assert observe_model_activation(root).state is ObservedState.ABSENT
+    (root / "journal").mkdir(parents=True)
+    (root / "journal" / ("txn-" + "a" * 32 + ".json")).write_text("{}")
+    pending = observe_model_activation(root)
+    assert (pending.state, pending.counts) == (ObservedState.ABSENT, {"journals": 1})
+
+    state = root / "state.json"
+    state.write_text(json.dumps({"schema_version": STATE_SCHEMA_VERSION, "slots": {}}))
+    current = observe_model_activation(root)
+    assert (current.state, current.version) == (ObservedState.CURRENT, 1)
+    assert current.counts == {"journals": 1, "slots": 0}
+    _rewrite(state, schema_version="openmed.model_activation.state.v2")
+    newer = observe_model_activation(root)
+    assert (newer.state, newer.version, newer.code) == (
+        ObservedState.NEWER_THAN_BINARY,
+        2,
+        "state_unreadable",
+    )
+    _rewrite(state, schema_version=STATE_SCHEMA_VERSION, slots={"Bad Slot": {}})
+    drifted = observe_model_activation(root)
+    assert (drifted.state, drifted.code) == (ObservedState.DRIFTED, "state_unreadable")
+    assert "Bad Slot" not in json.dumps(drifted.to_dict())
+    _rewrite(state, schema_version="unknown")
+    assert observe_model_activation(root).state is ObservedState.INVALID
+
+
+def test_continuity_observer_checks_structure_without_keys(tmp_path: Path) -> None:
+    from openmed.core.audit_continuity import AuditContinuityStore
+
+    chain = tmp_path / "audit" / "chain-0000.json"
+    manifest = chain.with_name("chain-0000.continuity.json")
+    assert observe_audit_continuity(()).state is ObservedState.ABSENT
+    AuditContinuityStore(
+        chain, key_provider={"synthetic-epoch-0": bytes(range(32))}
+    ).initialize(key_id="synthetic-epoch-0", chain_id="chain-synthetic")
+
+    current = observe_audit_continuity((manifest,))
+
+    assert (current.state, current.version) == (ObservedState.CURRENT, 1)
+    assert current.counts == {"events": 1, "manifests": 1}
+    assert "chain-synthetic" not in json.dumps(current.to_dict())
+    _rewrite(manifest, version=2)
+    newer = observe_audit_continuity((manifest,))
+    assert (newer.state, newer.code) == (
+        ObservedState.NEWER_THAN_BINARY,
+        "unsupported_version",
+    )
+    _rewrite(manifest, version=1, shadow={})
+    drifted = observe_audit_continuity((manifest,))
+    assert (drifted.state, drifted.code) == (
+        ObservedState.DRIFTED,
+        "malformed_manifest",
+    )
 
 
 def _journey_root(root: Path, version: int) -> Path:
