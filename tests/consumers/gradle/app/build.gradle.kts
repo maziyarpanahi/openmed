@@ -14,13 +14,15 @@ val debugApk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk")
 
 // Entries the built APK must receive from the installed AAR and its declared
 // runtime dependencies: packaged assets, classloader policy resources and the
-// native libraries the ONNX and tokenizer runtimes load on device.
+// native libraries the ONNX and tokenizer runtimes load on device, including
+// the NDK C++ runtime that only the OpenMedKit AAR supplies.
 val requiredApkEntries = listOf(
     "assets/openmed_model_catalog.jsonl",
     "assets/policies/hipaa_safe_harbor.json",
     "policies/hipaa_safe_harbor.json",
     "lib/arm64-v8a/libonnxruntime.so",
     "lib/arm64-v8a/libonnxruntime4j_jni.so",
+    "lib/arm64-v8a/libc++_shared.so",
     "lib/arm64-v8a/libdjl_tokenizer.so",
 )
 

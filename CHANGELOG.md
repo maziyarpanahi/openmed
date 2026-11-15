@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Package the Android NDK r28c `libc++_shared.so` in the OpenMedKit AAR for
+  `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. DJL's `libdjl_tokenizer.so`
+  links against it and no dependency ships it, so the tokenizer failed to load
+  on devices unless the host app happened to ship the runtime. The NDK is
+  pinned through `android.ndkVersion`; apps that already ship
+  `libc++_shared.so` need `packaging.jniLibs.pickFirsts += "**/libc++_shared.so"`.
 - Keep exact container runtime packages available through a signed Debian
   snapshot, and recover release image SBOMs by verifying and scanning the
   published image's immutable digest.

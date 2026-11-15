@@ -7,9 +7,12 @@ import org.junit.Assume.assumeTrue
 internal object NativeLibraries {
     const val ONNX_RUNTIME = "onnxruntime"
     const val ONNX_RUNTIME_JNI = "onnxruntime4j_jni"
+
+    /** NDK C++ runtime packaged by the OpenMedKit AAR; the tokenizer links it. */
+    const val CXX_RUNTIME = "c++_shared"
     const val TOKENIZER = "djl_tokenizer"
 
-    val required: List<String> = listOf(ONNX_RUNTIME, ONNX_RUNTIME_JNI, TOKENIZER)
+    val required: List<String> = listOf(ONNX_RUNTIME, ONNX_RUNTIME_JNI, CXX_RUNTIME, TOKENIZER)
 }
 
 /**

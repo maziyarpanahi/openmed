@@ -64,6 +64,93 @@ fun isSnapshotVersion(): Boolean {
     return version.toString().contains("SNAPSHOT", ignoreCase = true)
 }
 
+// ai.djl.android:tokenizer-native ships libdjl_tokenizer.so without the C++
+// runtime it links against (DT_NEEDED libc++_shared.so), so OpenMedKit packages
+// the NDK's copy for every ABI. The NDK revision is pinned through
+// android.ndkVersion, and AGP strips the copy with that NDK, so local and CI
+// builds package the same bytes; nothing binary is committed. The kit license
+// gate (scripts/licenses/kit_inventory.py) reads this list: every entry needs an
+// `ndk` row in docs/security/kit-license-inventory.md.
+val bundledNdkLibraries = listOf("libc++_shared.so")
+val ndkSysrootTriples = mapOf(
+    "arm64-v8a" to "aarch64-linux-android",
+    "armeabi-v7a" to "arm-linux-androideabi",
+    "x86" to "i686-linux-android",
+    "x86_64" to "x86_64-linux-android",
+)
+
+/** Copies the pinned NDK's runtime libraries into a generated `jniLibs` directory. */
+abstract class CopyNdkRuntimeLibrariesTask : DefaultTask() {
+    /** NDK revision that `android.ndkVersion` pins; the installed NDK must match. */
+    @get:Input
+    abstract val ndkVersion: Property<String>
+
+    /** Library file names copied for every ABI. */
+    @get:Input
+    abstract val libraries: ListProperty<String>
+
+    /** ABI directory name mapped to its NDK sysroot target triple. */
+    @get:Input
+    abstract val sysrootTriples: MapProperty<String, String>
+
+    /** `<sdk>/ndk/<ndkVersion>`, where AGP also finds the strip tool. */
+    @get:Internal
+    abstract val ndkDirectory: DirectoryProperty
+
+    /** The copied libraries only, so the rest of the NDK is never snapshotted. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceLibraries: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val ndk = ndkDirectory.get().asFile
+        val pinned = ndkVersion.get()
+        val installed = ndk.resolve("source.properties").takeIf { it.isFile }?.let { file ->
+            Properties().apply { file.inputStream().use(::load) }
+                .getProperty("Pkg.Revision")
+                ?.trim()
+        }
+        if (installed == null) {
+            throw GradleException(
+                "OpenMedKit packages ${libraries.get().joinToString()} from Android NDK " +
+                    "$pinned (android.ndkVersion), which is not installed in the Android " +
+                    "SDK's ndk/$pinned directory. Install it with " +
+                    "`sdkmanager --install \"ndk;$pinned\"`.",
+            )
+        }
+        if (installed != pinned) {
+            throw GradleException(
+                "The NDK in the Android SDK's ndk/$pinned directory reports revision " +
+                    "$installed; OpenMedKit pins $pinned.",
+            )
+        }
+        val hosts = ndk.resolve("toolchains/llvm/prebuilt")
+            .listFiles { file -> file.isDirectory }
+            .orEmpty()
+        val host = hosts.singleOrNull()
+            ?: throw GradleException(
+                "NDK $pinned must contain exactly one prebuilt host toolchain, " +
+                    "found ${hosts.size}.",
+            )
+
+        val output = outputDirectory.get().asFile
+        output.deleteRecursively()
+        for ((abi, triple) in sysrootTriples.get().toSortedMap()) {
+            for (library in libraries.get()) {
+                val source = host.resolve("sysroot/usr/lib/$triple/$library")
+                if (!source.isFile) {
+                    throw GradleException("NDK $pinned has no $library for $abi ($triple).")
+                }
+                source.copyTo(output.resolve("$abi/$library"), overwrite = true)
+            }
+        }
+    }
+}
+
 val generateAndroidModelCatalog by tasks.registering(Exec::class) {
     val manifestFile = repoRoot.resolve("models.jsonl")
     val scriptFile = repoRoot.resolve("scripts/android/build_android_catalog.py")
@@ -89,6 +176,8 @@ val generateAndroidModelCatalog by tasks.registering(Exec::class) {
 android {
     namespace = "org.openmed.openmedkit"
     compileSdk = 35
+    // Source of the packaged libc++_shared.so and the tool that strips it.
+    ndkVersion = libs.versions.android.ndk.get()
 
     defaultConfig {
         // Android 8.0+ keeps on-device inference support aligned with current
@@ -151,9 +240,10 @@ kotlin {
 
 // Deliberate packaging fault for the emulator lane's negative control
 // (scripts/android/run_emulator_lane.sh). `missing-native-libraries` strips the
-// ONNX Runtime and tokenizer shared libraries from every ABI of the instrumented
-// test APK, so no ABI the device supports can load them and the lane must fail
-// with `native_library_unloadable`. It never changes the library or its AAR.
+// ONNX Runtime, tokenizer and bundled NDK runtime shared libraries from every
+// ABI of the instrumented test APK, so no ABI the device supports can load them
+// and the lane must fail with `native_library_unloadable`. It never changes the
+// library or its AAR.
 val nativePackagingFault = providers.gradleProperty("openmedNativePackagingFault")
     .orElse("none")
     .get()
@@ -163,7 +253,7 @@ val faultyNativeLibraries = when (nativePackagingFault) {
         "**/libonnxruntime.so",
         "**/libonnxruntime4j_jni.so",
         "**/libdjl_tokenizer.so",
-    )
+    ) + bundledNdkLibraries.map { "**/$it" }
     else -> throw GradleException(
         "Unknown openmedNativePackagingFault '$nativePackagingFault'; " +
             "expected none or missing-native-libraries.",
@@ -172,6 +262,34 @@ val faultyNativeLibraries = when (nativePackagingFault) {
 
 androidComponents {
     onVariants { variant ->
+        // Plain values, so the providers below capture no script or project state.
+        val ndkRevision = android.ndkVersion
+        val ndkLibraryPatterns = ndkSysrootTriples.values.flatMap { triple ->
+            bundledNdkLibraries.map { library ->
+                "toolchains/llvm/prebuilt/*/sysroot/usr/lib/$triple/$library"
+            }
+        }
+        val copyNdkRuntimeLibraries = tasks.register<CopyNdkRuntimeLibrariesTask>(
+            "copy${variant.name.replaceFirstChar(Char::uppercaseChar)}NdkRuntimeLibraries",
+        ) {
+            ndkVersion.set(ndkRevision)
+            libraries.set(bundledNdkLibraries)
+            sysrootTriples.set(ndkSysrootTriples)
+            // The side-by-side NDK that ndkVersion selects. sdkComponents.ndkDirectory
+            // has no value in AGP 8.7 unless android.ndkPath is also set.
+            ndkDirectory.set(
+                androidComponents.sdkComponents.sdkDirectory.map { sdk ->
+                    sdk.dir("ndk/$ndkRevision")
+                },
+            )
+            sourceLibraries.from(
+                ndkDirectory.map { ndk -> ndk.asFileTree.matching { include(ndkLibraryPatterns) } },
+            )
+        }
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(
+            copyNdkRuntimeLibraries,
+            CopyNdkRuntimeLibrariesTask::outputDirectory,
+        )
         variant.androidTest?.packaging?.jniLibs?.excludes?.addAll(faultyNativeLibraries)
     }
 }

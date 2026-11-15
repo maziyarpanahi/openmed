@@ -72,6 +72,11 @@ REQUIRED_AAR_ENTRIES = (
     "proguard.txt",
     "assets/openmed_model_catalog.jsonl",
     "assets/policies/hipaa_safe_harbor.json",
+    # The NDK C++ runtime that the DJL tokenizer library links against.
+    *(
+        f"jni/{abi}/libc++_shared.so"
+        for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+    ),
 )
 REQUIRED_AAR_CLASSES_ENTRIES = ("policies/hipaa_safe_harbor.json",)
 

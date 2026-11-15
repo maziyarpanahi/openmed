@@ -45,8 +45,15 @@ val desktopNativeResourceExcludes = listOf(
     "com/sun/jna/*/*jnidispatch*",
 )
 
-// JNI libraries every ABI split must carry for OpenMedKit inference.
-val requiredNativeLibraries = listOf("onnxruntime", "onnxruntime4j_jni", "djl_tokenizer")
+// Native libraries every ABI split must carry for OpenMedKit inference: the
+// ONNX Runtime and DJL tokenizer JNI libraries, and the NDK C++ runtime that
+// libdjl_tokenizer.so links against, which only the OpenMedKit AAR supplies.
+val requiredNativeLibraries = listOf(
+    "onnxruntime",
+    "onnxruntime4j_jni",
+    "c++_shared",
+    "djl_tokenizer",
+)
 // Packages whose classes bundled JNI libraries look up by name.
 val jniPackages = listOf("ai/onnxruntime", "ai/djl", "com/openmed")
 

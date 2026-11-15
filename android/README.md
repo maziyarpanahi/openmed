@@ -70,6 +70,7 @@ unreleased build.
 | Android Gradle Plugin | 8.7.3 (8.5.1 or newer is required for 16 KB zip alignment) |
 | Kotlin | 2.0.21, with the Compose compiler Gradle plugin for the demos |
 | Android SDK | Platform 35 (`compileSdk 35`); Build-Tools 35 or newer only for the optional `zipalign` cross-check |
+| Android NDK | 28.2.13676358 (r28c), pinned as `android-ndk` in `gradle/libs.versions.toml`; `:openmedkit` packages its `libc++_shared.so` (see [C++ runtime](#c-runtime-libc_sharedso)) |
 | Library `minSdk` | 26 |
 | Demo `targetSdk` | 35, the Google Play target level for new apps and updates |
 | Library bytecode | Java 11 |
@@ -88,7 +89,8 @@ enums gain the Kotlin 2 `getEntries()` accessor.
 
 ## Build Locally
 
-Install JDK 17 and Android SDK Platform 35, then run:
+Install JDK 17, Android SDK Platform 35 and NDK 28.2.13676358
+(`sdkmanager --install "ndk;28.2.13676358"`), then run:
 
 ```bash
 cd android
@@ -202,8 +204,72 @@ upstream fix is tracked in
 [deepjavalibrary/djl#3815](https://github.com/deepjavalibrary/djl/issues/3815).
 Until a 16 KB-aligned release exists, the DJL tokenizer cannot load on 16 KB
 page-size devices. The other libraries in the dependency graph are 16 KB
-aligned: ONNX Runtime 1.25.1, the ML Kit OCR pipeline, and the CameraX 1.4
-libraries in the scan demo.
+aligned: ONNX Runtime 1.25.1, the NDK r28c `libc++_shared.so` that OpenMedKit
+packages, the ML Kit OCR pipeline, and the CameraX 1.4 libraries in the scan
+demo.
+
+## C++ Runtime (libc++_shared.so)
+
+`ai.djl.android:tokenizer-native` 0.33.0 ships `libdjl_tokenizer.so` linked
+against the NDK's shared C++ runtime (`DT_NEEDED libc++_shared.so`), but no
+dependency ships that runtime. Without it the tokenizer cannot load on a device
+(`dlopen failed: library "libc++_shared.so" not found`), so OpenMedKit packages
+it:
+
+- `android.ndkVersion` pins the NDK (`android-ndk` in `gradle/libs.versions.toml`,
+  currently 28.2.13676358, r28c). The Android CI, publish and installed-consumer
+  workflows and `jitpack.yml` install it with `sdkmanager` before building; AGP
+  does not download an NDK for this.
+- For every variant, `copy<Variant>NdkRuntimeLibraries` copies `libc++_shared.so`
+  for `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64` from
+  `toolchains/llvm/prebuilt/<host>/sysroot/usr/lib/<triple>/` of
+  `<sdk>/ndk/<revision>` into a generated `jniLibs` directory of the `main`
+  sources. It fails when that NDK is missing or reports another revision. AGP
+  then strips the copies with the same NDK, so the release AAR is
+  byte-for-byte reproducible. No binary is committed. The demos consume
+  `project(":openmedkit")` and pin no NDK, so their debug APKs carry the
+  unstripped copy.
+- The stripped runtime adds 850,380 (`armeabi-v7a`) to 1,253,544 (`arm64-v8a`)
+  bytes per ABI to an app and about 1.5 MB to the release AAR. Its 64-bit
+  builds are 16 KB aligned.
+- The R8 consumer gate requires `libc++_shared.so` in every ABI split, the
+  emulator lane's `NativeRuntimePackagingTest` loads it, and the lane's
+  negative control strips it.
+- libc++ is licensed `Apache-2.0 WITH LLVM-exception`. The kit license gate
+  reviews it as an `ndk` package; see
+  [Android NDK runtime libraries](../docs/security/kit-license-inventory.md#android-ndk-runtime-libraries).
+
+### Apps that already ship libc++_shared.so
+
+An APK holds one `libc++_shared.so` per ABI. When another dependency also ships
+it, `mergeNativeLibs` fails with
+`2 files found with path 'lib/arm64-v8a/libc++_shared.so'`. Keep one copy in the
+app module:
+
+```kotlin
+android {
+    packaging {
+        jniLibs {
+            pickFirsts += "**/libc++_shared.so"
+        }
+    }
+}
+```
+
+Which copy is kept matters. The NDK keeps libc++ ABI-compatible across releases
+where it can, but does not guarantee it, and a library built with a newer NDK
+can need symbols that an older `libc++_shared.so` lacks. Keep the copy from the
+newest NDK that built any native library in the app: OpenMedKit's is from r28c,
+and `libdjl_tokenizer.so` 0.33.0 was built with r27c. Between dependencies, AGP
+keeps the copy from the one it merges first. A copy from the app module
+itself (its `jniLibs`, or the output of its own `c++_shared` CMake or
+ndk-build build) takes precedence over dependency copies; AGP 8.7 logs a
+warning for that case. Load the tokenizer on a device after changing the NDK
+or the dependency set.
+
+React Native apps that apply the React Native Gradle plugin
+(`com.facebook.react`, 0.77) already get this `pickFirsts` rule for the app
+module.
 
 ## R8 And ProGuard
 
@@ -255,7 +321,8 @@ cd android
   fails the build on any missing class that no rule silences);
 - an OpenMedKit consumer rule did not reach R8;
 - desktop JNI binaries are packaged as Java resources, or an ABI split lacks
-  `libonnxruntime.so`, `libonnxruntime4j_jni.so` or `libdjl_tokenizer.so`;
+  `libonnxruntime.so`, `libonnxruntime4j_jni.so`, `libc++_shared.so` or
+  `libdjl_tokenizer.so`;
 - the merged manifest requests `android.permission.INTERNET`.
 
 The `missingKeepRule` variant must fail that gate with `jni_class_not_kept` for

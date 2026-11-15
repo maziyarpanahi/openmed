@@ -304,6 +304,9 @@ def test_library_build_wires_the_instrumentation_runner_and_fault_switch() -> No
         "libdjl_tokenizer.so",
     ):
         assert f'"**/{library}"' in build
+    # The fault also strips the NDK C++ runtime that the AAR bundles.
+    assert 'bundledNdkLibraries = listOf("libc++_shared.so")' in build
+    assert ') + bundledNdkLibraries.map { "**/$it" }' in build
     assert "variant.androidTest?.packaging?.jniLibs?.excludes" in build
 
 
@@ -341,9 +344,12 @@ def test_lane_script_negative_control_matches_the_packaging_test() -> None:
     assert "com.openmed.openmedkit.emulator.NativeRuntimePackagingTest" in script
     assert '"native_library_unloadable:$library"' in packaging
     assert "native_library_unloadable:$library" in script
-    for library in ("onnxruntime", "djl_tokenizer"):
+    for library in ("onnxruntime", "c++_shared", "djl_tokenizer"):
         assert f'"{library}"' in environment
-    assert "for library in onnxruntime djl_tokenizer; do" in script
+    assert "fun cxxRuntimeLibraryLoads()" in packaging
+    assert "for library in onnxruntime c++_shared djl_tokenizer; do" in script
+    # `+` must match literally in the negative-control check.
+    assert 'grep -R -q -F -- "native_library_unloadable:$library"' in script
 
 
 def test_android_ci_runs_x86_64_and_16_kb_emulator_lanes() -> None:

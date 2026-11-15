@@ -17,8 +17,10 @@ import org.junit.Test
  *
  * On a 16 KB page-size device the dynamic linker refuses libraries whose
  * LOAD segments are aligned to less than 16 KB, so this test also catches a
- * misaligned library. The emulator lane's negative control strips the
- * libraries from the APK and expects `native_library_unloadable:<name>`.
+ * misaligned library. `libdjl_tokenizer.so` links against
+ * `libc++_shared.so`, which only the OpenMedKit AAR packages, so the C++
+ * runtime is checked on its own. The emulator lane's negative control strips
+ * the libraries from the APK and expects `native_library_unloadable:<name>`.
  */
 class NativeRuntimePackagingTest {
     @get:Rule
@@ -44,6 +46,11 @@ class NativeRuntimePackagingTest {
 
         val providers = OrtEnvironment.getAvailableProviders()
         assertTrue("onnxruntime_cpu_provider_missing", OrtProvider.CPU in providers)
+    }
+
+    @Test
+    fun cxxRuntimeLibraryLoads() {
+        assertLoadsUnlessKnownBlocked(NativeLibraries.CXX_RUNTIME)
     }
 
     @Test

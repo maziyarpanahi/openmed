@@ -9,9 +9,10 @@
 #    the lane's instrumentation arguments, then collects the value-free
 #    OpenMedEmulatorLane records (case IDs, labels, offsets, timings) from
 #    logcat.
-# 2. With --negative-control, rebuilds the test APK without its ONNX Runtime
-#    and tokenizer native libraries and requires NativeRuntimePackagingTest to
-#    fail with native_library_unloadable for both of them.
+# 2. With --negative-control, rebuilds the test APK without its ONNX Runtime,
+#    C++ runtime and tokenizer native libraries and requires
+#    NativeRuntimePackagingTest to fail with native_library_unloadable for each
+#    of them.
 #
 # Reports land in android/openmedkit/build/reports/emulator-lane/<lane>/.
 set -euo pipefail
@@ -113,12 +114,12 @@ if [[ "$negative_control" == true ]]; then
     echo "::error title=Negative control passed::The lane accepted an APK without native libraries."
     exit 1
   fi
-  for library in onnxruntime djl_tokenizer; do
-    if ! grep -R -q -- "native_library_unloadable:$library" "$results_dir"; then
+  for library in onnxruntime c++_shared djl_tokenizer; do
+    if ! grep -R -q -F -- "native_library_unloadable:$library" "$results_dir"; then
       echo "::error title=Negative control failed for another reason::Expected native_library_unloadable:$library."
       exit 1
     fi
   done
   echo "- Negative control (APK without native libraries): failed as expected with \`native_library_unloadable\`" >> "$summary"
-  echo "Negative control failed as expected: native_library_unloadable for onnxruntime and djl_tokenizer."
+  echo "Negative control failed as expected: native_library_unloadable for onnxruntime, c++_shared and djl_tokenizer."
 fi

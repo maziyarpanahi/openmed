@@ -143,8 +143,16 @@ def test_gate_requires_openmedkit_jni_libraries_and_packages() -> None:
     assert _string_list(build, "requiredNativeLibraries") == [
         "onnxruntime",
         "onnxruntime4j_jni",
+        "c++_shared",
         "djl_tokenizer",
     ]
+    # Every NDK runtime library the AAR bundles must reach every ABI split.
+    library = LIBRARY_BUILD.read_text(encoding="utf-8")
+    bundled = _string_list(library, "bundledNdkLibraries")
+    assert bundled == ["libc++_shared.so"]
+    assert {name.removeprefix("lib").removesuffix(".so") for name in bundled} <= set(
+        _string_list(build, "requiredNativeLibraries")
+    )
     assert _string_list(build, "jniPackages") == [
         "ai/onnxruntime",
         "ai/djl",

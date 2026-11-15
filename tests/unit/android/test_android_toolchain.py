@@ -21,6 +21,7 @@ DEMO_BUILDS = {
 }
 ANDROID_CI = ROOT / ".github" / "workflows" / "android-ci.yml"
 ANDROID_PUBLISH = ROOT / ".github" / "workflows" / "android-publish.yml"
+INSTALLED_CONSUMERS = ROOT / ".github" / "workflows" / "installed-consumers.yml"
 JITPACK = ROOT / "jitpack.yml"
 ANDROID_README = ANDROID / "README.md"
 ALIGNMENT_SCRIPT = "scripts/android/check_apk_zip_alignment.py"
@@ -29,6 +30,9 @@ MIN_AGP_FOR_16_KB_ZIP_ALIGNMENT = (8, 5, 1)
 MIN_COMPILE_SDK = 35
 PLAY_TARGET_SDK = 35
 LIBRARY_MIN_SDK = 26
+# NDK r28 links 64-bit libraries, libc++_shared.so included, with 16 KB pages.
+MIN_NDK_MAJOR = 28
+NDK_INSTALL_STEP = "Install the pinned Android NDK"
 
 
 def _version(value: str) -> tuple[int, ...]:
@@ -193,6 +197,57 @@ def test_publish_and_jitpack_builds_use_jdk_17() -> None:
     assert yaml.safe_load(JITPACK.read_text(encoding="utf-8"))["jdk"] == ["openjdk17"]
 
 
+def test_library_pins_the_ndk_it_packages_libcxx_from() -> None:
+    revision = _catalog_versions()["android-ndk"]
+    build = LIBRARY_BUILD.read_text(encoding="utf-8")
+
+    assert re.fullmatch(r"\d+\.\d+\.\d+", revision)
+    assert _version(revision)[0] >= MIN_NDK_MAJOR
+    assert "ndkVersion = libs.versions.android.ndk.get()" in build
+    assert 'val bundledNdkLibraries = listOf("libc++_shared.so")' in build
+    for abi, triple in {
+        "arm64-v8a": "aarch64-linux-android",
+        "armeabi-v7a": "arm-linux-androideabi",
+        "x86": "i686-linux-android",
+        "x86_64": "x86_64-linux-android",
+    }.items():
+        assert f'"{abi}" to "{triple}"' in build
+    # A generated jniLibs directory: no NDK binary is committed.
+    assert "variant.sources.jniLibs?.addGeneratedSourceDirectory(" in build
+    assert not list((ANDROID / "openmedkit" / "src").rglob("*.so"))
+
+
+def test_every_build_of_the_library_installs_the_pinned_ndk_first() -> None:
+    jobs = [
+        (ANDROID_CI, "build-and-test"),
+        (ANDROID_CI, "emulator-lane"),
+        (ANDROID_PUBLISH, "build"),
+        (INSTALLED_CONSUMERS, "gradle"),
+    ]
+    for workflow_path, job in jobs:
+        steps = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))["jobs"][job][
+            "steps"
+        ]
+        names = [step.get("name") for step in steps]
+        install = names.index(NDK_INSTALL_STEP)
+        first_build = next(
+            index
+            for index, step in enumerate(steps)
+            if "gradlew" in step.get("run", "")
+            or "verify_installed_consumers.py" in step.get("run", "")
+        )
+        assert install < first_build, (workflow_path.name, job)
+        run = steps[install]["run"]
+        assert "android/gradle/libs.versions.toml" in run
+        assert 'sdkmanager" --install "ndk;$ndk"' in run
+
+    jitpack = "\n".join(
+        yaml.safe_load(JITPACK.read_text(encoding="utf-8"))["before_install"]
+    )
+    assert "android/gradle/libs.versions.toml" in jitpack
+    assert '--install "ndk;$NDK"' in jitpack
+
+
 def test_readme_documents_the_checked_in_toolchain() -> None:
     readme = ANDROID_README.read_text(encoding="utf-8")
     section = readme[readme.index("## Toolchain Requirements") :]
@@ -205,6 +260,10 @@ def test_readme_documents_the_checked_in_toolchain() -> None:
     assert f"| Kotlin | {versions['kotlin']}," in section
     assert f"Platform {MIN_COMPILE_SDK} (`compileSdk {MIN_COMPILE_SDK}`)" in section
     assert f"| Library `minSdk` | {LIBRARY_MIN_SDK} |" in section
+    assert f"| Android NDK | {versions['android-ndk']} " in section
     assert f"| Demo `targetSdk` | {PLAY_TARGET_SDK}," in section
     assert "./gradlew verifyApkZipAlignment" in readme
-    assert "Install JDK 17 and Android SDK Platform 35" in readme
+    assert (
+        "Install JDK 17, Android SDK Platform 35 and NDK "
+        f"{versions['android-ndk']}" in readme
+    )

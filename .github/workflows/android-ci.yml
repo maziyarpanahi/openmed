@@ -109,6 +109,19 @@ jobs:
           android/**/build.gradle*
           android/**/gradle.lockfile
 
+    # :openmedkit packages the pinned NDK's libc++_shared.so and strips it
+    # with that NDK; AGP never downloads it for this (android/README.md).
+    - name: Install the pinned Android NDK
+      shell: bash
+      run: |
+        ndk="$(sed -n 's/^android-ndk = "\([0-9.]*\)"$/\1/p' android/gradle/libs.versions.toml)"
+        if [[ -z "$ndk" ]]; then
+          echo "::error title=NDK pin missing::android-ndk is not pinned in libs.versions.toml."
+          exit 1
+        fi
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" < /dev/null
+        test -f "$ANDROID_HOME/ndk/$ndk/source.properties"
+
     - name: Verify Gradle dependency locks
       working-directory: android
       run: ./gradlew verifyDependencyLocks --stacktrace
@@ -358,6 +371,19 @@ jobs:
           android/gradle/libs.versions.toml
           android/gradle/wrapper/gradle-wrapper.properties
           android/**/build.gradle*
+
+    # :openmedkit packages the pinned NDK's libc++_shared.so and strips it
+    # with that NDK; AGP never downloads it for this (android/README.md).
+    - name: Install the pinned Android NDK
+      shell: bash
+      run: |
+        ndk="$(sed -n 's/^android-ndk = "\([0-9.]*\)"$/\1/p' android/gradle/libs.versions.toml)"
+        if [[ -z "$ndk" ]]; then
+          echo "::error title=NDK pin missing::android-ndk is not pinned in libs.versions.toml."
+          exit 1
+        fi
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" < /dev/null
+        test -f "$ANDROID_HOME/ndk/$ndk/source.properties"
 
     - name: Enable KVM
       run: |
