@@ -310,6 +310,13 @@ class HealthRuntime:
         self.fail = fail
         self.calls = 0
         self.private_model = "synthetic-private-model-and-configuration"
+        # The gRPC security policy reads throttle settings and the RPC timeout.
+        from types import SimpleNamespace
+
+        from openmed.service.runtime import parse_service_throttle_config
+
+        self.throttle = parse_service_throttle_config()
+        self.config = SimpleNamespace(timeout=0)
 
     def preload(self):
         self.calls += 1

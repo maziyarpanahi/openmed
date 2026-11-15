@@ -352,6 +352,12 @@ preload and changes them to `SERVING` only after success. `serve()` performs thi
 preload after starting the listener. Failed preload exposes only
 `grpc_preload_failed` and `serve()` stops its listener.
 
+Like the REST `/health`, `/livez` and `/readyz` probes, the two health RPCs
+never need credentials, even when service authentication is enabled with
+deny-by-default, so orchestrator probes keep working. They bypass admission
+control as well. Every `OpenMedService` RPC on the same listener still goes
+through `GrpcSecurityInterceptor`.
+
 For a custom listener, use `create_grpc_server()`, configure the listener,
 call `start()`, then `preload_runtime()`. The wrapper forwards `add_secure_port`
 credentials unchanged, so health and OpenMed RPCs share the same TLS listener.

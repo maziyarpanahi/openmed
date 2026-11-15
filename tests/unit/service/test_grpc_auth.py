@@ -579,6 +579,38 @@ def test_unknown_methods_follow_deny_by_default() -> None:
     assert relaxed.requires_authentication is False
 
 
+def test_standard_health_rpcs_need_no_credentials() -> None:
+    interceptor = GrpcSecurityInterceptor(auth_policy())
+
+    for method in ("/grpc.health.v1.Health/Check", "/grpc.health.v1.Health/Watch"):
+        policy = interceptor.rpc_policy(method)
+        assert policy.requires_authentication is False
+        assert policy.admission is False
+    lookalike = interceptor.rpc_policy("/grpc.health.v1.HealthX/Check")
+    assert lookalike.requires_authentication is True
+
+
+def test_health_probe_answers_without_credentials_while_rpcs_stay_protected(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: service_runtime.ServiceRuntime,
+    spy: ModelSpy,
+) -> None:
+    from grpc_health.v1 import health_pb2, health_pb2_grpc
+
+    with serving(monkeypatch, runtime, auth_policy()) as served:
+        with grpc.insecure_channel(f"127.0.0.1:{served.port}") as channel:
+            response = health_pb2_grpc.HealthStub(channel).Check(
+                health_pb2.HealthCheckRequest(service=""), timeout=RPC_TIMEOUT
+            )
+        # The runtime was never preloaded, so the probe reports not serving.
+        assert response.status == health_pb2.HealthCheckResponse.NOT_SERVING
+        assert outcome(served.stub(), "Analyze") == failure_of(
+            REASON_AUTHENTICATION_REQUIRED
+        )
+
+    assert spy.calls == []
+
+
 # --- Authentication over the wire -------------------------------------------
 
 

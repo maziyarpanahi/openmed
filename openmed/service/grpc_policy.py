@@ -81,6 +81,9 @@ CATEGORY_RESOURCE_EXHAUSTED = "resource_exhausted"
 CATEGORY_DEADLINE_EXCEEDED = "deadline_exceeded"
 CATEGORY_INTERNAL = "internal"
 
+GRPC_HEALTH_METHOD_PREFIX = "/grpc.health.v1.Health/"
+"""Method prefix of the standard gRPC health service, served without credentials."""
+
 REASON_AUTHENTICATION_REQUIRED = "authentication_required"
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
 REASON_CREDENTIALS_MALFORMED = "credentials_malformed"
@@ -673,11 +676,20 @@ class GrpcSecurityInterceptor(grpc.ServerInterceptor):
 
         Methods outside :data:`GRPC_RPC_ROUTES` follow ``deny_by_default``:
         they need an authenticated principal (with no particular scope) unless
-        deny-by-default is switched off.
+        deny-by-default is switched off. The standard ``grpc.health.v1.Health``
+        RPCs report serving status only, so, like the REST ``/health``,
+        ``/livez`` and ``/readyz`` probes, they never need credentials.
         """
         policy = self._rpc_policies.get(method)
         if policy is not None:
             return policy
+        if method.startswith(GRPC_HEALTH_METHOD_PREFIX):
+            return GrpcRpcPolicy(
+                method=method,
+                scopes=(),
+                requires_authentication=False,
+                admission=False,
+            )
         return GrpcRpcPolicy(
             method=method,
             scopes=(),
