@@ -54,6 +54,8 @@ EXPECTED_PACKED_FILES = frozenset(
         "package.json",
         "react-native.config.js",
         "src/index.ts",
+        "src/kit-parity.ts",
+        "src/portable-taxonomy-labels.ts",
     }
 )
 
