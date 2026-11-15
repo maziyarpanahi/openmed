@@ -222,6 +222,7 @@ classification:
     - serving/request-signing.md
     - serving/grpc.md
     - serving/graphql.md
+    - serving/response-headers.md
     - serving/authentication.md
     - serving/load-testing.md
     - evaluation/resource-soak.md
