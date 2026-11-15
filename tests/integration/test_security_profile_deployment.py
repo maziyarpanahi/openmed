@@ -73,6 +73,8 @@ def _production_env() -> dict[str, str]:
     return _base_env(
         OPENMED_SERVICE_AUTH_ENABLED="true",
         OPENMED_SERVICE_AUTH_API_KEYS=json.dumps(keys),
+        # Production with auth needs a durable digest key; this one is synthetic.
+        OPENMED_SERVICE_DIGEST_KEY="synthetic-deployment-digest-key-" + "0" * 32,
     )
 
 
