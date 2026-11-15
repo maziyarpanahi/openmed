@@ -136,6 +136,7 @@ class RedactedChatRequest:
     model: str
     stream: bool
     placeholder_map: Mapping[str, str] = field(repr=False)
+    api: str = "chat.completions"
 
 
 class _IncrementalRestorer:
@@ -281,12 +282,8 @@ class PrivacyProxy:
         except Exception:
             raise PrivacyProxyTransportError() from None
 
-    def restore_completion(
-        self,
-        response: Any,
-        prepared: RedactedChatRequest,
-    ) -> dict[str, Any]:
-        """Restore a non-streaming transport response into OpenAI shape."""
+    def restore_value(self, response: Any, prepared: RedactedChatRequest) -> Any:
+        """Restore placeholders in a non-streaming transport response tree."""
         try:
             value = (
                 response.text
@@ -298,7 +295,7 @@ class PrivacyProxy:
                 prepared.placeholder_map,
             )
             with InboundPlaceholderRestorer(state) as restorer:
-                restored = restorer.restore(value)
+                return restorer.restore(value)
         except InboundRestorationError as exc:
             raise PrivacyProxyResponseError(
                 reason_code=getattr(exc, "reason_code", "response_rejected")
@@ -308,6 +305,13 @@ class PrivacyProxy:
         except Exception:
             raise PrivacyProxyResponseError() from None
 
+    def restore_completion(
+        self,
+        response: Any,
+        prepared: RedactedChatRequest,
+    ) -> dict[str, Any]:
+        """Restore a non-streaming transport response into OpenAI shape."""
+        restored = self.restore_value(response, prepared)
         if isinstance(restored, Mapping) and _has_choices(restored):
             result = dict(restored)
             result.setdefault("id", prepared.completion_id)
@@ -468,19 +472,7 @@ def create_app(
 
     async def chat_completions(request: Request) -> Any:
         try:
-            content_types = request.headers.getlist("content-type")
-            if len(content_types) != 1:
-                raise _UnsupportedRequestMediaTypeError()
-            try:
-                _normalize_content_type(content_types[0])
-            except UnsupportedContentTypeError:
-                raise _UnsupportedRequestMediaTypeError() from None
-            try:
-                payload = await request.json()
-            except (TypeError, ValueError):
-                raise PrivacyProxyRequestError(reason_code="invalid_json") from None
-            if not isinstance(payload, Mapping):
-                raise PrivacyProxyRequestError()
+            payload = await _read_json_payload(request)
             active_proxy: PrivacyProxy = request.app.state.privacy_proxy
             active_transport = getattr(
                 request.app.state,
@@ -533,7 +525,75 @@ def create_app(
         name="chat_completions_compatibility",
         include_in_schema=False,
     )
+
+    from .messages import (
+        MESSAGES_COMPATIBILITY_PATH,
+        MESSAGES_PATH,
+        messages_response,
+        prepare_messages_request,
+    )
+
+    async def messages(request: Request) -> Any:
+        try:
+            payload = await _read_json_payload(request)
+            active_proxy: PrivacyProxy = request.app.state.privacy_proxy
+            active_transport = getattr(
+                request.app.state,
+                "privacy_proxy_transport",
+                active_proxy.transport,
+            )
+            if active_transport is None:
+                raise PrivacyProxyConfigurationError()
+            prepared = prepare_messages_request(
+                active_proxy,
+                payload,
+                request_id=_stable_request_id(
+                    payload, request.headers.get(_REQUEST_ID_HEADER)
+                ),
+            )
+            result = await active_proxy.call(prepared, transport=active_transport)
+            restored = active_proxy.restore_value(result, prepared)
+            return JSONResponse(
+                messages_response(restored, prepared),
+                headers={
+                    "x-privacy-proxy": "local",
+                    "x-request-id": prepared.request_id,
+                },
+            )
+        except PrivacyProxyError as exc:
+            return _error_response(exc)
+        except Exception:
+            return _error_response(PrivacyProxyError())
+
+    fastapi_app.add_api_route(
+        MESSAGES_PATH, messages, methods=["POST"], name="messages_v1"
+    )
+    fastapi_app.add_api_route(
+        MESSAGES_COMPATIBILITY_PATH,
+        messages,
+        methods=["POST"],
+        name="messages_compatibility",
+        include_in_schema=False,
+    )
     return fastapi_app
+
+
+async def _read_json_payload(request: Request) -> Mapping[str, Any]:
+    """Return the JSON object body or raise a coded media-type/JSON error."""
+    content_types = request.headers.getlist("content-type")
+    if len(content_types) != 1:
+        raise _UnsupportedRequestMediaTypeError()
+    try:
+        _normalize_content_type(content_types[0])
+    except UnsupportedContentTypeError:
+        raise _UnsupportedRequestMediaTypeError() from None
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError):
+        raise PrivacyProxyRequestError(reason_code="invalid_json") from None
+    if not isinstance(payload, Mapping):
+        raise PrivacyProxyRequestError()
+    return payload
 
 
 async def _stream_body(
@@ -657,6 +717,7 @@ def _invoke_transport(transport: ChatTransport, prepared: RedactedChatRequest) -
         "model": prepared.model,
         "stream": prepared.stream,
         "placeholder_count": len(prepared.placeholder_map),
+        "api": prepared.api,
     }
     kwargs = {
         "request_id": prepared.request_id,
