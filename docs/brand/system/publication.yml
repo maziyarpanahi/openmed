@@ -231,6 +231,7 @@ classification:
     - serving/load-testing.md
     - evaluation/resource-soak.md
     - serving/mtls.md
+    - security/policy-generations.md
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md

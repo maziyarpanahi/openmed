@@ -157,6 +157,7 @@ nav:
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Resource Recovery Soak: evaluation/resource-soak.md
       - Mutual TLS Authentication: serving/mtls.md
+      - Service Security-policy Generations: security/policy-generations.md
       - Helm Deployment: deploy/helm.md
       - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md
