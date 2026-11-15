@@ -43,6 +43,17 @@ def _lock_entries(module: Path) -> dict[tuple[str, str], tuple[str, set[str]]]:
     return entries
 
 
+def _is_release(configuration: str, suffix: str) -> bool:
+    """Return whether a configuration is a release one, with or without a flavor.
+
+    Modules with product flavors name it ``<flavor>Release<suffix>``, such as
+    ``openmedkitReleaseRuntimeClasspath`` in the R8 consumer app.
+    """
+    return configuration == f"release{suffix}" or configuration.endswith(
+        f"Release{suffix}"
+    )
+
+
 def _verified_components() -> dict[tuple[str, str, str], set[str]]:
     root = ET.parse(VERIFICATION).getroot()
     return {
@@ -81,10 +92,16 @@ def test_every_module_commits_a_lockfile_with_shipped_entries() -> None:
     }
     for module in modules:
         entries = _lock_entries(module)
-        shipped = [name for name, (_, confs) in entries.items() if SHIPPED in confs]
+        shipped = [
+            name
+            for name, (_, confs) in entries.items()
+            if any(_is_release(conf, "RuntimeClasspath") for conf in confs)
+        ]
         assert shipped, module.relative_to(ANDROID)
         assert any(
-            "releaseUnitTestRuntimeClasspath" in confs for _, confs in entries.values()
+            _is_release(conf, "UnitTestRuntimeClasspath")
+            for _, confs in entries.values()
+            for conf in confs
         ), module.relative_to(ANDROID)
 
 
@@ -154,7 +171,8 @@ def test_lock_and_verification_files_hold_coordinates_only() -> None:
         text = path.read_text(encoding="utf-8")
         assert "/Users/" not in text
         assert "/home/" not in text
-        assert "file:" not in text
+        # A file: URL, not a coordinate such as device-provider-profile:31.7.3.
+        assert re.search(r"(?<![\w-])file:", text) is None
 
 
 def test_android_ci_verifies_locks_and_rejects_an_unlocked_dependency() -> None:
