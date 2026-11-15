@@ -319,6 +319,46 @@ def test_retry_records_conform_to_the_ingestion_schema(
     assert retry["retry_after"] == "2026-04-01T00:00:05Z"
 
 
+def test_retry_release_commits_progress_since_the_last_coalesced_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clock = Clock()
+    # A long interval coalesces every checkpoint away before the failure.
+    queue = _queue(monkeypatch, tmp_path, clock, progress_interval_seconds=3600)
+    calls: list[str] = []
+    failures = {"synthetic-2": 1}
+
+    def model(_request: Any, document: DeidentifyJobDocument) -> SimpleNamespace:
+        calls.append(document.id or "")
+        if failures.get(document.id or "", 0):
+            failures[document.id or ""] -= 1
+            raise TimeoutError("synthetic model timeout")
+        return SimpleNamespace(pii_entities=[])
+
+    queue._deidentify_document = model  # type: ignore[method-assign]
+    documents = [
+        DeidentifyJobDocument(id=f"synthetic-{index}", text=f"synthetic {index}")
+        for index in range(3)
+    ]
+    job_id = queue.submit(_request(documents=documents))["id"]
+    queue._executor.run_next()
+
+    released = queue.get(job_id)
+    assert released["status"] == "queued"
+    # The retry release committed the two finished documents with itself.
+    assert released["recovery"]["completed_documents"] == 2
+    assert released["recovery"]["checkpoint"]["sequence"] == 2
+    assert released["processed_count"] == 2
+    assert released["recovery"]["retry"]["reason_code"] == "operation_timeout"
+
+    clock.advance(5)
+    assert queue.reconcile() == {"dispatched": 1}
+    queue._executor.run_next()
+    done = queue.get(job_id)
+    assert done["status"] == "done" and done["processed_count"] == 3
+    assert calls == ["synthetic-0", "synthetic-1", "synthetic-2", "synthetic-2"]
+
+
 @pytest.mark.parametrize(
     "corrupt",
     [

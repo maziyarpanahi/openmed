@@ -2159,7 +2159,14 @@ class DeidentifyJobQueue:
             except Exception as exc:
                 decision = classify_document_failure(exc)
                 if decision.action == "retry":
-                    return self._release_for_retry(lease, decision)
+                    return self._release_for_retry(
+                        lease,
+                        decision,
+                        summary=summary,
+                        sequence=index,
+                        error=error,
+                        output_digest=output_digest,
+                    )
                 summary.failed_count += 1
                 error = _safe_error(exc)
                 outcome = {"document_id": document_id, "failed": True, "error": error}
@@ -2282,14 +2289,44 @@ class DeidentifyJobQueue:
         )
 
     def _release_for_retry(
-        self, lease: _JobLease, decision: FailureDecision
+        self,
+        lease: _JobLease,
+        decision: FailureDecision,
+        *,
+        summary: Optional["_JobSummary"] = None,
+        sequence: int = 0,
+        error: Optional[dict[str, str]] = None,
+        output_digest: Optional[str] = None,
     ) -> Optional[str]:
+        """Release a failed attempt for a backed-off retry, or quarantine it.
+
+        Documents finished since the last coalesced checkpoint are committed
+        in the same fenced write, so the retry resumes after them.
+        """
         now = self.clock()
+        progress = (
+            {}
+            if summary is None or output_digest is None
+            else summary.to_progress_record()
+        )
+
+        def checkpoint(record: dict[str, Any], recovery: dict[str, Any]) -> None:
+            self._record_checkpoint(
+                record,
+                recovery,
+                lease,
+                now,
+                sequence=sequence,
+                error=error,
+                output_digest=output_digest,
+            )
+
         if lease.attempt >= lease.max_attempts:
 
             def exhaust(
                 record: dict[str, Any], recovery: dict[str, Any]
             ) -> list[dict[str, Any]]:
+                checkpoint(record, recovery)
                 return self._quarantine_recovery(
                     record,
                     recovery,
@@ -2303,6 +2340,7 @@ class DeidentifyJobQueue:
                 lease,
                 exhaust,
                 now,
+                **progress,
                 **self._quarantine_changes("attempts_exhausted", now),
             )
             self._settle_local(lease.job_id, stored)
@@ -2312,6 +2350,7 @@ class DeidentifyJobQueue:
         def requeue(
             record: dict[str, Any], recovery: dict[str, Any]
         ) -> list[dict[str, Any]]:
+            checkpoint(record, recovery)
             recovery["retry"] = build_retry(
                 lease.job_id,
                 execution=recovery["execution"],
@@ -2327,7 +2366,7 @@ class DeidentifyJobQueue:
             )
             return []
 
-        self._fenced(lease, requeue, now, status="queued")
+        self._fenced(lease, requeue, now, status="queued", **progress)
         return _PHASE_QUEUED
 
     def _handle_input_failure(self, lease: _JobLease, code: str) -> Optional[str]:

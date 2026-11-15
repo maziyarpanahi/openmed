@@ -628,7 +628,8 @@ checkpoint.
 
 Checkpoints are also the resume points: after a crash or a lease reclaim the
 job continues after the last committed checkpoint, and documents after it are
-processed again. Set `progress_interval_seconds=0` on `DeidentifyJobQueue` to
+processed again. A retry release and a drain stop are writes of their own, so
+they also commit the documents finished since the last checkpoint. Set `progress_interval_seconds=0` on `DeidentifyJobQueue` to
 checkpoint after every document, up to `max_progress_writes`.
 
 `GET /jobs/{job_id}` returns the most recently saved record, so polled
