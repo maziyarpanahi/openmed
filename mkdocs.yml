@@ -842,6 +842,7 @@ nav:
       - iOS Share and Action Extensions: runtimes/ios-share-extension.md
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
       - Tokenizer Conformance: tokenizer-conformance.md
+      - Device Capability Resolution: runtimes/device-capabilities.md
   - Project:
       - FAQ: faq.md
       - Troubleshooting & Common Errors: troubleshooting.md

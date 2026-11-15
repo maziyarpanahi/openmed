@@ -1,0 +1,113 @@
+{
+  "$id": "https://openmed.dev/schemas/v4/runtimes/execution-extension.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed portable-bundle execution extension (org.openmed.execution)",
+  "description": "Signed per-runtime execution metadata: ordered providers, required features, operator-set floor, sequence limit, model tier, and the bundle evidence kinds that qualify the runtime. Resolvers also require every runtime key to name a declared runtime, every provider to suit the runtime format, and every evidence kind to appear in the manifest evidence list.",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runtimes",
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "runtimes": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence",
+          "features",
+          "max_sequence_length",
+          "min_operator_set",
+          "providers",
+          "tier"
+        ],
+        "properties": {
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "coreml",
+                "cpu",
+                "metal",
+                "nnapi",
+                "qnn",
+                "wasm",
+                "webgpu"
+              ]
+            }
+          },
+          "features": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          },
+          "max_sequence_length": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1048576
+              }
+            ]
+          },
+          "min_operator_set": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            ]
+          },
+          "tier": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "enum": [
+                  "nano",
+                  "tiny",
+                  "base"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

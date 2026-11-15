@@ -893,6 +893,7 @@ classification:
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
     - tokenizer-conformance.md
+    - runtimes/device-capabilities.md
     - faq.md
     - troubleshooting.md
     - onboarding.md

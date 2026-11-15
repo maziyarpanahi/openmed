@@ -27,6 +27,7 @@ on:
       - 'tests/fixtures/parity/tokenizer/**'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/device_capabilities/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -54,6 +55,7 @@ on:
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   workflow_dispatch:
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/device_capabilities/**'
 
 permissions:
   contents: read
