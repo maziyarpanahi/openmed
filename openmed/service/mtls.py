@@ -1,4 +1,12 @@
-"""Mutual-TLS client certificate authentication for the REST service."""
+"""Mutual-TLS client certificate authentication for the REST service.
+
+The trusted client CA bundle is held as a
+:class:`~openmed.service.tls_reload.TLSCredentialProvider` generation, so it can
+be reloaded without a restart: each request is verified against the generation
+active when it arrives (plus the outgoing client CA during a bounded trust
+overlap), and requests already admitted keep the identity they were verified
+with.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +15,7 @@ import ipaddress
 import json
 import logging
 import math
+import threading
 import os
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -31,6 +40,17 @@ from openmed.core.config import PROFILE_ENV_VAR
 
 from .auth import AuthPrincipal, parse_bool, parse_non_negative_float
 from .logging import set_access_log_identity
+from .tls_reload import (
+    DEFAULT_TRUST_OVERLAP_SECONDS,
+    MAX_TRUST_OVERLAP_SECONDS,
+    MAX_WATCH_INTERVAL_SECONDS,
+    TLS_MODE_TLS,
+    TLSCredentialProvider,
+    TLSCredentialSource,
+    TLSCredentialWatcher,
+    TLSReadiness,
+    TLSReloadResult,
+)
 
 SERVICE_MTLS_ENABLED_ENV_VAR = "OPENMED_SERVICE_MTLS_ENABLED"
 SERVICE_MTLS_CA_BUNDLE_ENV_VAR = "OPENMED_SERVICE_MTLS_CA_BUNDLE"
@@ -40,6 +60,9 @@ SERVICE_MTLS_PRINCIPALS_ENV_VAR = "OPENMED_SERVICE_MTLS_PRINCIPALS"
 SERVICE_MTLS_CRL_FILES_ENV_VAR = "OPENMED_SERVICE_MTLS_CRL_FILES"
 SERVICE_MTLS_CRL_GRACE_SECONDS_ENV_VAR = "OPENMED_SERVICE_MTLS_CRL_GRACE_SECONDS"
 SERVICE_MTLS_CRL_FAIL_CLOSED_ENV_VAR = "OPENMED_SERVICE_MTLS_CRL_FAIL_CLOSED"
+SERVICE_MTLS_RELOAD_INTERVAL_ENV_VAR = "OPENMED_SERVICE_MTLS_RELOAD_INTERVAL_SECONDS"
+SERVICE_MTLS_TRUST_OVERLAP_ENV_VAR = "OPENMED_SERVICE_MTLS_TRUST_OVERLAP_SECONDS"
+MIN_MTLS_RELOAD_INTERVAL_SECONDS = 1.0
 
 MAX_CLIENT_CERT_CHAIN_BYTES = 256 * 1024
 MAX_CRL_FILE_BYTES = 64 * 1024 * 1024
@@ -81,7 +104,19 @@ class MTLSClientIdentity:
 
 @dataclass(frozen=True)
 class ServiceMTLSConfig:
-    """Mutual-TLS settings for the REST service."""
+    """Mutual-TLS settings for the REST service.
+
+    Attributes:
+        enabled: Whether every request needs a verified client certificate.
+        ca_bundle: PEM bundle of trusted client CAs.
+        client_cert_header: Header a trusted proxy forwards the chain in.
+        trusted_proxies: Peers allowed to supply ``client_cert_header``.
+        principals: Exact certificate identity to principal mappings.
+        reload_interval_seconds: Poll interval for reloading the CA bundle
+            when its file metadata changes; ``None`` disables polling.
+        trust_overlap_seconds: How long the outgoing client CA stays trusted
+            after a reload changes the bundle.
+    """
 
     enabled: bool = False
     ca_bundle: Optional[Path] = None
@@ -91,6 +126,8 @@ class ServiceMTLSConfig:
     crl_files: tuple[Path, ...] = ()
     crl_grace_seconds: float = 0.0
     crl_fail_closed: bool = True
+    reload_interval_seconds: Optional[float] = None
+    trust_overlap_seconds: float = DEFAULT_TRUST_OVERLAP_SECONDS
 
 
 class MTLSAuthenticationError(ValueError):
@@ -153,6 +190,20 @@ def parse_service_mtls_config() -> ServiceMTLSConfig:
         crl_fail_closed=parse_crl_fail_closed(
             os.getenv(SERVICE_MTLS_CRL_FAIL_CLOSED_ENV_VAR),
             profile=os.getenv(PROFILE_ENV_VAR),
+        ),
+        reload_interval_seconds=_parse_seconds(
+            os.getenv(SERVICE_MTLS_RELOAD_INTERVAL_ENV_VAR),
+            env_var=SERVICE_MTLS_RELOAD_INTERVAL_ENV_VAR,
+            minimum=MIN_MTLS_RELOAD_INTERVAL_SECONDS,
+            maximum=MAX_WATCH_INTERVAL_SECONDS,
+            default=None,
+        ),
+        trust_overlap_seconds=_parse_seconds(
+            os.getenv(SERVICE_MTLS_TRUST_OVERLAP_ENV_VAR),
+            env_var=SERVICE_MTLS_TRUST_OVERLAP_ENV_VAR,
+            minimum=0.0,
+            maximum=MAX_TRUST_OVERLAP_SECONDS,
+            default=DEFAULT_TRUST_OVERLAP_SECONDS,
         ),
     )
 
@@ -494,7 +545,20 @@ def principal_for_mtls_identity(
 
 
 class ServiceMTLS:
-    """Verify and attach an mTLS client principal to each HTTP request."""
+    """Verify and attach an mTLS client principal to each HTTP request.
+
+    Args:
+        config: mTLS settings.
+        error_response: Factory for the API error envelope.
+        credentials: Client-trust provider to verify against. Defaults to one
+            built from ``config.ca_bundle``; supplying one lets embedders share
+            it or drive reloads directly.
+
+    Raises:
+        ValueError: If mTLS is enabled and the CA bundle is missing, or it is
+            refused as a credential generation (for example because it is
+            unreadable, malformed, or holds a non-CA or expired certificate).
+    """
 
     def __init__(
         self,
@@ -502,53 +566,88 @@ class ServiceMTLS:
         *,
         error_response: ErrorResponseFactory,
         clock: Optional[Callable[[], datetime]] = None,
+        credentials: Optional[TLSCredentialProvider] = None,
     ) -> None:
         self.config = config
         self._error_response = error_response
-        self._store: Optional[Store] = None
+        self._clock = clock
+        self.credentials: Optional[TLSCredentialProvider] = None
+        self._watcher: Optional[TLSCredentialWatcher] = None
+        self._crl_lock = threading.Lock()
+        self._crl_generations: Optional[tuple[str, ...]] = None
         self._crl_checker: Optional[LocalCRLChecker] = None
         if config.enabled:
-            if config.ca_bundle is None:
-                raise ValueError("mTLS CA bundle is required")
-            try:
-                ca_certificates = x509.load_pem_x509_certificates(
-                    config.ca_bundle.read_bytes()
+            if credentials is None:
+                if config.ca_bundle is None:
+                    raise ValueError("mTLS CA bundle is required")
+                credentials = TLSCredentialProvider(
+                    TLSCredentialSource(client_ca_file=config.ca_bundle),
+                    trust_overlap_seconds=config.trust_overlap_seconds,
                 )
-            except (OSError, ValueError) as exc:
-                raise ValueError("mTLS CA bundle is invalid") from exc
-            if not ca_certificates:
-                raise ValueError("mTLS CA bundle does not contain a certificate")
-            self._store = Store(ca_certificates)
+            elif credentials.mode == TLS_MODE_TLS:
+                raise ValueError("mTLS credentials must include a client CA bundle")
+            self.credentials = credentials
             if config.crl_files:
-                self._crl_checker = LocalCRLChecker(
-                    config.crl_files,
-                    ca_certificates,
-                    fail_closed=config.crl_fail_closed,
-                    grace_seconds=config.crl_grace_seconds,
-                    clock=clock,
-                )
+                # Verify the CRL files now, so an invalid CRL fails at startup
+                # in fail-closed mode instead of on the first request.
+                self._crl_checker_for(credentials.snapshot())
 
     @property
     def enabled(self) -> bool:
         """Return whether mTLS authentication is active."""
         return self.config.enabled
 
+    def reload(self) -> Optional[TLSReloadResult]:
+        """Reload the client CA bundle for requests that arrive afterwards.
+
+        Returns:
+            The typed reload outcome, or ``None`` when mTLS is disabled.
+        """
+        if self.credentials is None:
+            return None
+        return self.credentials.reload()
+
+    def readiness(self) -> Optional[TLSReadiness]:
+        """Return client-trust readiness, or ``None`` when mTLS is disabled."""
+        if self.credentials is None:
+            return None
+        return self.credentials.readiness()
+
+    def start_reload_watcher(self) -> None:
+        """Start polling the CA bundle when a reload interval is configured."""
+        interval = self.config.reload_interval_seconds
+        if self.credentials is None or interval is None:
+            return
+        if self._watcher is None:
+            self._watcher = TLSCredentialWatcher(
+                self.credentials, interval_seconds=interval
+            )
+        self._watcher.start()
+
+    def stop_reload_watcher(self) -> None:
+        """Stop the CA bundle poller, if it is running."""
+        watcher = self._watcher
+        if watcher is not None:
+            watcher.stop()
+
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         """Require a trusted client certificate and attach its principal."""
         if not self.enabled:
             return await call_next(request)
 
+        readiness = self.readiness()
+        if readiness is not None and not readiness.serving:
+            # No trusted client CA is valid: refuse as not ready rather than
+            # as an authentication failure, and never fall back to no mTLS.
+            return self._error_response(
+                503,
+                "not_ready",
+                "Client certificate trust is not serving",
+                details={"reason": readiness.reason},
+            )
         try:
             chain = self._certificate_chain(request)
-            if self._store is None:
-                raise invalid_client_certificate()
-            # Revocation is checked inside verification, before any principal
-            # mapping below can run.
-            identity = _verify_client_certificate_chain(
-                chain,
-                self._store,
-                crl_checker=self._crl_checker,
-            )
+            identity, generation_id = self._verify(chain)
         except MTLSAuthenticationError as exc:
             return self._authentication_failure(exc)
         except ValueError:
@@ -556,8 +655,10 @@ class ServiceMTLS:
 
         principal = self._principal_for(identity)
         request.state.mtls_identity = identity
+        request.state.mtls_generation_id = generation_id
         request.state.auth_principal = principal
         request.scope["openmed.mtls"] = identity
+        request.scope["openmed.mtls_generation"] = generation_id
         request.scope["openmed.auth"] = principal
         set_access_log_identity(
             request,
@@ -565,6 +666,60 @@ class ServiceMTLS:
             credential_type=principal.credential_type,
         )
         return await call_next(request)
+
+    def _verify(self, chain: Sequence[str]) -> tuple[MTLSClientIdentity, str]:
+        if self.credentials is None:
+            raise invalid_client_certificate()
+        snapshot = self.credentials.snapshot()
+        crl_checker = self._crl_checker_for(snapshot)
+        for generation in snapshot.trusted_generations:
+            store = generation.client_trust_store
+            if store is None:
+                continue
+            try:
+                # Revocation is checked inside verification, before any
+                # principal mapping can run.
+                identity = _verify_client_certificate_chain(
+                    chain, store, crl_checker=crl_checker
+                )
+            except MTLSAuthenticationError:
+                # A chain that verifies but is revoked, or whose CRL is stale,
+                # must not be retried against another trusted generation.
+                raise
+            except ValueError:
+                continue
+            return identity, generation.generation_id
+        raise invalid_client_certificate()
+
+    def _crl_checker_for(self, snapshot: Any) -> Optional[LocalCRLChecker]:
+        """Return the CRL checker for the snapshot's trusted client CAs.
+
+        CRLs may be signed by any currently trusted CA, so during a trust
+        overlap both the outgoing and the incoming CA can sign them. The
+        checker is rebuilt, re-reading the CRL files, whenever the set of
+        trusted generations changes.
+        """
+        if not self.config.crl_files:
+            return None
+        generations = tuple(
+            generation.generation_id for generation in snapshot.trusted_generations
+        )
+        with self._crl_lock:
+            if self._crl_generations != generations:
+                ca_certificates = [
+                    certificate
+                    for generation in snapshot.trusted_generations
+                    for certificate in generation.client_ca_certificates
+                ]
+                self._crl_checker = LocalCRLChecker(
+                    self.config.crl_files,
+                    ca_certificates,
+                    fail_closed=self.config.crl_fail_closed,
+                    grace_seconds=self.config.crl_grace_seconds,
+                    clock=self._clock,
+                )
+                self._crl_generations = generations
+            return self._crl_checker
 
     def _certificate_chain(self, request: Request) -> tuple[str, ...]:
         extensions = request.scope.get("extensions")
@@ -837,6 +992,27 @@ def _certificate_sans(certificate: x509.Certificate) -> tuple[str, ...]:
     return tuple(sans)
 
 
+def _parse_seconds(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    minimum: float,
+    maximum: float,
+    default: Optional[float],
+) -> Optional[float]:
+    if raw_value is None or not raw_value.strip():
+        return default
+    try:
+        seconds = float(raw_value.strip())
+    except ValueError:
+        raise ValueError(f"{env_var} must be a number of seconds") from None
+    if not math.isfinite(seconds) or not minimum <= seconds <= maximum:
+        raise ValueError(
+            f"{env_var} must be between {minimum:g} and {maximum:g} seconds"
+        )
+    return seconds
+
+
 def _parse_client_cert_header(raw_value: Optional[str]) -> Optional[str]:
     if raw_value is None or not raw_value.strip():
         return None
@@ -897,6 +1073,7 @@ __all__ = [
     "MAX_CLIENT_CERT_CHAIN_BYTES",
     "MAX_CRL_FILE_BYTES",
     "LocalCRLChecker",
+    "MIN_MTLS_RELOAD_INTERVAL_SECONDS",
     "MTLSAuthenticationError",
     "MTLSClientIdentity",
     "MTLSPrincipalMapping",
@@ -907,7 +1084,9 @@ __all__ = [
     "SERVICE_MTLS_CRL_GRACE_SECONDS_ENV_VAR",
     "SERVICE_MTLS_ENABLED_ENV_VAR",
     "SERVICE_MTLS_PRINCIPALS_ENV_VAR",
+    "SERVICE_MTLS_RELOAD_INTERVAL_ENV_VAR",
     "SERVICE_MTLS_TRUSTED_PROXIES_ENV_VAR",
+    "SERVICE_MTLS_TRUST_OVERLAP_ENV_VAR",
     "ServiceMTLS",
     "ServiceMTLSConfig",
     "client_certificate_revoked",

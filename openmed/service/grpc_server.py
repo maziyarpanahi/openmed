@@ -34,6 +34,7 @@ from .grpc_policy import (
 )
 from .grpc_security import (
     GrpcListener,
+    GrpcCredentialReloader,
     GrpcServerCredentials,
     GrpcStartupError,
     GrpcTLSConfig,
@@ -192,6 +193,7 @@ def create_grpc_server(
     interceptors: Sequence[grpc.ServerInterceptor] = (),
     policy: GrpcServicePolicy | None = None,
     listener: GrpcListener | None = None,
+    options: Sequence[tuple[str, Any]] = (),
 ) -> ReadinessGrpcServer:
     """Create an unbound grpcio server with OpenMed and not-serving health.
 
@@ -214,6 +216,9 @@ def create_grpc_server(
             listener that other hosts can reach is refused unless the policy
             authenticates callers, and a mutual-TLS listener's client CAs
             enable certificate principals.
+        options: Extra grpcio channel arguments, such as the connection-age
+            options from :meth:`GrpcCredentialReloader.server_options`. They
+            are applied after the policy's message-size limits.
 
     Returns:
         A server with no listener whose standard health service reports not
@@ -237,7 +242,7 @@ def create_grpc_server(
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         interceptors=(security, *interceptors),
-        options=policy.limits.server_options(),
+        options=(*policy.limits.server_options(), *options),
     )
     servicer = OpenMedGrpcServicer(runtime, limits=policy.limits)
     openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(servicer, server)
@@ -253,10 +258,11 @@ def serve(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
-    tls: GrpcTLSConfig | GrpcServerCredentials | None = None,
+    tls: GrpcTLSConfig | GrpcServerCredentials | GrpcCredentialReloader | None = None,
     allow_insecure_remote_dev: bool = False,
     interceptors: Sequence[grpc.ServerInterceptor] = (),
     policy: GrpcServicePolicy | None = None,
+    options: Sequence[tuple[str, Any]] = (),
 ) -> ReadinessGrpcServer:
     """Validate the listener, bind it, start, preload, and publish serving health.
 
@@ -270,14 +276,18 @@ def serve(
         address: The gRPC bind address. Defaults to ``127.0.0.1:50051``.
         runtime: Shared service runtime; defaults to ``ServiceRuntime.from_env``.
         max_workers: Worker threads for the synchronous server.
-        tls: Server TLS files (or pre-validated credentials). Supplying a
-            client CA enables mutual TLS.
+        tls: Server TLS files, pre-validated credentials, or a
+            :class:`GrpcCredentialReloader` whose credentials can be reloaded
+            for new connections without a restart. Supplying a client CA
+            enables mutual TLS.
         allow_insecure_remote_dev: Development-only override for plaintext on
             a non-loopback address; refused outside ``dev``/``test``.
         interceptors: Extra server interceptors applied to every RPC, in order,
             after authentication and admission.
         policy: Authentication, throttle and budget policy; defaults to
             :meth:`GrpcServicePolicy.from_env`.
+        options: Extra grpcio channel arguments. A reloader's
+            connection-age options are appended automatically.
 
     Returns:
         A started server that is listening on the requested address.
@@ -294,12 +304,16 @@ def serve(
         allow_insecure_remote_dev=allow_insecure_remote_dev,
         profile=runtime.profile if runtime is not None else None,
     )
+    server_options = tuple(options)
+    if isinstance(tls, GrpcCredentialReloader):
+        server_options += tls.server_options()
     server = create_grpc_server(
         runtime=runtime,
         max_workers=max_workers,
         interceptors=interceptors,
         policy=policy,
         listener=listener,
+        options=server_options,
     )
     try:
         bind_grpc_listener(server, listener)
