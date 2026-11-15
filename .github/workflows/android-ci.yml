@@ -23,6 +23,7 @@ on:
       - 'openmed/core/labels.py'
       - 'openmed/core/thresholds.json'
       - 'openmed/core/portable_policy.py'
+      - 'tests/fixtures/parity/document_intake_v1.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
@@ -46,6 +47,7 @@ on:
       - 'openmed/core/labels.py'
       - 'openmed/core/thresholds.json'
       - 'openmed/core/portable_policy.py'
+      - 'tests/fixtures/parity/document_intake_v1.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   workflow_dispatch:
 
@@ -123,6 +125,7 @@ jobs:
         --tests '*SpanEquivalenceTest'
         --tests '*KitParityVectorTest'
         --tests '*PortablePolicyVectorTest'
+        --tests '*DocumentEvidenceParityTest'
         --stacktrace
 
     - name: Verify Android library budgets

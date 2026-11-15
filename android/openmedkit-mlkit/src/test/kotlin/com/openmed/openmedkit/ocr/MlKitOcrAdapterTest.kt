@@ -7,6 +7,7 @@ import android.net.Uri
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
+import com.openmed.openmedkit.intake.DocumentBox
 import com.openmed.openmedkit.intake.DocumentInputKind
 import com.openmed.openmedkit.intake.DocumentIntake
 import java.io.File
@@ -178,8 +179,9 @@ class MlKitOcrAdapterTest {
     @Test
     fun plugsIntoCoreDocumentIntakeForImageDocuments() = runBlocking {
         val context = RuntimeEnvironment.getApplication()
+        // Sized to hold the synthetic layout: intake now validates every box.
         val document = File(context.cacheDir, "synthetic_intake.png").apply {
-            writeBytes(syntheticPng(30, 10))
+            writeBytes(syntheticPng(200, 40))
         }
         val captured = mutableListOf<InputImage>()
         val adapter = MlKitOcrAdapter(
@@ -196,10 +198,12 @@ class MlKitOcrAdapterTest {
 
             assertEquals(DocumentInputKind.IMAGE, result.inputKind)
             assertEquals("Patient Jordan\nMRN-123", result.text)
-            assertEquals(30, result.pages.single().width)
-            assertEquals(10, result.pages.single().height)
+            assertEquals(200, result.pages.single().width)
+            assertEquals(40, result.pages.single().height)
             assertEquals(0, captured.single().rotationDegrees)
             assertEquals(result.text.length, result.offsetMap.size)
+            val jordan = requireNotNull(result.evidence).regionsForUtf16Span(8, 14).single()
+            assertEquals(DocumentBox(70.0, 0.0, 130.0, 20.0), jordan.sourceBox)
         } finally {
             document.delete()
         }

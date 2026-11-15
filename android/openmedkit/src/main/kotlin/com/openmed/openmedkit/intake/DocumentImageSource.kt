@@ -8,6 +8,30 @@ import com.openmed.openmedkit.ocr.OcrImage
 import java.io.InputStream
 
 /**
+ * An image handed to OCR plus the original geometry its evidence maps back to.
+ *
+ * @param image Stored bitmap plus the clockwise rotation that makes it upright.
+ * @param geometry Original image geometry. The default declares the whole
+ *   stored bitmap; a source that crops a larger original declares the original
+ *   size and the crop instead.
+ */
+data class DocumentImagePage(
+    val image: OcrImage.BitmapImage,
+    val geometry: DocumentPageGeometry = image.documentGeometry(),
+)
+
+/**
+ * Geometry for an uncropped stored bitmap: pixels, with the image rotation.
+ */
+fun OcrImage.BitmapImage.documentGeometry(): DocumentPageGeometry =
+    DocumentPageGeometry(
+        width = width.toDouble(),
+        height = height.toDouble(),
+        unit = DocumentSpatialUnit.PIXEL,
+        rotationDegrees = rotationDegrees,
+    )
+
+/**
  * Source of decoded image documents for [DocumentIntake].
  *
  * [DocumentIntake] owns the returned bitmap and recycles it after OCR.
@@ -17,6 +41,15 @@ fun interface DocumentImageSource {
      * Decodes [uri] into a bitmap plus the clockwise rotation that makes it upright.
      */
     suspend fun load(context: Context, uri: Uri): OcrImage.BitmapImage
+
+    /**
+     * Decodes [uri] with the original geometry used for evidence coordinates.
+     *
+     * The default wraps [load] and declares the whole stored bitmap. Throw
+     * [DocumentIntakeException] for value-free document-level failures.
+     */
+    suspend fun loadPage(context: Context, uri: Uri): DocumentImagePage =
+        DocumentImagePage(load(context, uri))
 }
 
 /**
