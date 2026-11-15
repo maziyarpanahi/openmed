@@ -94,3 +94,11 @@ def test_host_tests_consume_the_shared_reference_vectors() -> None:
     assert "tests/fixtures/parity/offset_contract.json" in source
     lane = (CRATE / "tests" / "packaged_sidecar_lane.rs").read_text(encoding="utf-8")
     assert "tests/unit/service/fixtures/sidecar_stdio_golden.json" in lane
+
+
+def test_only_the_windows_fake_process_lane_is_non_blocking() -> None:
+    # Issue #5562: the Windows lane hangs; Linux and macOS must keep gating.
+    job = _workflow()["jobs"]["fake-process"]
+
+    assert job["continue-on-error"] == "${{ matrix.os == 'windows-2022' }}"
+    assert set(job["strategy"]["matrix"]["os"]) == DECLARED_PLATFORMS

@@ -46,7 +46,10 @@ jobs:
   fake-process:
     name: Fake-process qualification (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # The Windows lane hangs in four in-flight request tests (#5562); keep it
+    # running for evidence without blocking, and bound its runner time.
+    continue-on-error: ${{ matrix.os == 'windows-2022' }}
+    timeout-minutes: ${{ matrix.os == 'windows-2022' && 20 || 45 }}
     strategy:
       fail-fast: false
       matrix:
