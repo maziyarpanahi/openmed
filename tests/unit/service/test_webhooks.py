@@ -55,11 +55,19 @@ def _v1_summary(result: WebhookDeliveryResult) -> dict[str, Any]:
 
 @pytest.fixture(autouse=True)
 def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    # Webhook egress is deny-by-default; allow only the synthetic test origins.
     monkeypatch.setenv(
         EGRESS_RULES_ENV_VAR,
         json.dumps(
-            [{"purposes": ["webhook"], "destination": "https://callbacks.example.test"}]
+            [
+                {"purposes": ["webhook"], "destination": origin}
+                for origin in (
+                    "https://callbacks.example.test",
+                    "https://receiver.invalid",
+                    "https://zqcallbacksentinel.example.test",
+                    "https://zqtransportsentinel.example.test",
+                )
+            ]
         ),
     )
 

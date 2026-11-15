@@ -349,7 +349,10 @@ def test_jobs_api_rejects_unapproved_webhook_urls_with_a_stable_code(
             return {}
 
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
-    monkeypatch.delenv("OPENMED_PROFILE", raising=False)
+    # The test profile passes the security-profile gate without auth; the
+    # explicit mode keeps the production enforce posture under test.
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv(EGRESS_MODE_ENV_VAR, "enforce")
     monkeypatch.setenv(
         EGRESS_RULES_ENV_VAR,
         json.dumps(

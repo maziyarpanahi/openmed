@@ -117,6 +117,9 @@ REVIEWED_CALL_SITES: dict[tuple[str, str], str] = {
 EXEMPT_NETWORK_MODULES: dict[str, str] = {
     "openmed.service.client": "caller-side REST SDK",
     "openmed.service.workflow_client": "caller-side workflow SDK over the REST SDK",
+    "openmed.service.grpc_health": "inbound gRPC health service",
+    "openmed.service.grpc_policy": "inbound gRPC authorization interceptor",
+    "openmed.service.grpc_security": "inbound gRPC listener credentials",
     "openmed.service.grpc_server": "inbound gRPC server",
     "openmed.service.proto.generated.openmed_pb2_grpc": "generated inbound stubs",
     "openmed.service.egress": "the egress guard implementation",

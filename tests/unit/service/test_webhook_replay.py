@@ -12,6 +12,7 @@ from typing import Any, Optional
 import httpx
 import pytest
 
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import (
     NONCE_HEADER,
     SIGNATURE_HEADER,
@@ -58,6 +59,22 @@ SENTINELS = (
     DELIVERY.encode(),
     b"zqreceiversentinel",
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["webhook"],
+                    "destination": "https://zqreceiversentinel.example.test",
+                },
+            ]
+        ),
+    )
 
 
 def _assert_value_free(blob: Any, *, allow_delivery_id: bool = False) -> None:

@@ -25,6 +25,7 @@ from openmed.core.key_provider import (
     KeyState,
 )
 from openmed.service import job_payloads, jobs
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.job_payloads import (
     JOB_PAYLOAD_KEY_PURPOSE,
     PAYLOAD_KIND_INPUT,
@@ -42,6 +43,22 @@ SECRET_SENTINEL = "ZQQUEUESECRETSENTINEL19"
 URL_SENTINEL = "https://zqqueuecallback.example.test/hook"
 SENTINELS = (TEXT_SENTINEL, SECRET_SENTINEL, URL_SENTINEL)
 START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["webhook"],
+                    "destination": "https://zqqueuecallback.example.test",
+                },
+            ]
+        ),
+    )
 
 
 class Clock:

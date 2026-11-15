@@ -19,8 +19,9 @@ from openmed.core.audit import hash_text
 from openmed.service import jobs
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
-from openmed.service.job_ownership import JOB_OWNER_DIGEST_DOMAIN
 from openmed.service.auth import hash_api_key
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
+from openmed.service.job_ownership import JOB_OWNER_DIGEST_DOMAIN
 from openmed.service.keyed_digest import (
     KEYED_DIGEST_ALGORITHM,
     SERVICE_DIGEST_KEY_ENV_VAR,
@@ -71,6 +72,22 @@ _SERVICE_ENV_VARS = (
     SERVICE_DIGEST_KEY_ENV_VAR,
     SERVICE_DIGEST_KEY_ID_ENV_VAR,
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["webhook"],
+                    "destination": "https://callbacks.example.test",
+                },
+            ]
+        ),
+    )
 
 
 class FakeLoader:
@@ -280,12 +297,14 @@ def _run_api_job(
         assert created.status_code == 202, created.text
         path = f"/jobs/{created.json()['id']}"
         _wait(
-            lambda: client.get(path, headers=headers).json()["webhook_delivery"]
-            not in (None, {})
-            and client.get(path, headers=headers).json()["webhook_delivery"].get(
-                "status"
+            lambda: (
+                client.get(path, headers=headers).json()["webhook_delivery"]
+                not in (None, {})
+                and client.get(path, headers=headers)
+                .json()["webhook_delivery"]
+                .get("status")
+                != "pending"
             )
-            != "pending"
         )
         done = client.get(path, headers=headers).json()
     assert len(callbacks) == 1

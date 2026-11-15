@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import json
 import os
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import httpx
 import pytest
 
 from openmed.service import jobs
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.signing import NonceCache, verify_request_signature
 from openmed.service.webhooks import (
     EVENT_HEADER,
@@ -36,6 +38,19 @@ SCHEMA_MAX_WEBHOOK = {
     "backoff_seconds": 60.0,
 }
 WAIT_SECONDS = 5.0
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_callback_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Webhook egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {"purposes": ["webhook"], "destination": "https://receiver.invalid"},
+            ]
+        ),
+    )
 
 
 def _wait_until(predicate: Callable[[], bool], timeout: float = WAIT_SECONDS) -> bool:

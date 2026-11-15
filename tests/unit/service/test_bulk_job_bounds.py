@@ -18,6 +18,7 @@ from openmed.service.bulk_data import (
     FHIRBulkJobManager,
     FHIRBulkJobStatus,
 )
+from openmed.service.egress import EGRESS_RULES_ENV_VAR
 from openmed.service.smart_backend import (
     SMARTBackendConfig,
     SMARTBackendJobManager,
@@ -33,6 +34,28 @@ SENTINELS = (SECRET_KEY, SECRET_CLIENT, SECRET_HOST, SECRET_PATH, SECRET_ASSERTI
 KINDS = ("bulk", "smart")
 BULK_ROUTE = "/fhir/bulk/exports"
 SMART_ROUTE = "/fhir/smart-backend/ingestions"
+
+
+@pytest.fixture(autouse=True)
+def _allow_synthetic_smart_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SMART egress is deny-by-default; allow only the synthetic test origin.
+    monkeypatch.setenv(
+        EGRESS_RULES_ENV_VAR,
+        json.dumps(
+            [
+                {
+                    "purposes": ["smart_token"],
+                    "destination": f"https://{SECRET_HOST}",
+                    "allow_credentials": True,
+                },
+                {
+                    "purposes": ["fhir_bulk"],
+                    "destination": f"https://{SECRET_HOST}",
+                    "allow_credentials": True,
+                },
+            ]
+        ),
+    )
 
 
 def _bounds(**kwargs: Any) -> Any:
