@@ -172,6 +172,64 @@ test("local model loading is offline-only by default", async () => {
   assert.equal(runtime.env?.allowLocalModels, false);
 });
 
+test("overlapping model loads serialize shared environment settings", async () => {
+  const api = await loadApi();
+  let releaseLocal!: () => void;
+  let signalLocalEntered!: () => void;
+  let signalRemoteEntered!: () => void;
+  const localGate = new Promise<void>((resolve) => {
+    releaseLocal = resolve;
+  });
+  const localEntered = new Promise<void>((resolve) => {
+    signalLocalEntered = resolve;
+  });
+  const remoteEntered = new Promise<void>((resolve) => {
+    signalRemoteEntered = resolve;
+  });
+  const env = { allowRemoteModels: undefined as boolean | undefined };
+  const observed: Array<[string, boolean | undefined, boolean | undefined]> = [];
+  const runtime: RawTransformersRuntime = {
+    env,
+    pipeline: async (_task, model) => {
+      observed.push([
+        model,
+        env.allowRemoteModels,
+        env.allowLocalModels,
+      ]);
+      if (model === "/models/local") {
+        signalLocalEntered();
+        await localGate;
+      } else {
+        signalRemoteEntered();
+      }
+      return fixturePipeline;
+    },
+  };
+
+  const localLoad = api.loadTokenClassificationPipeline("/models/local", {
+    runtime,
+  });
+  await localEntered;
+  const remoteLoad = api.loadTokenClassificationPipeline("remote/model", {
+    runtime,
+    allowRemoteModels: true,
+  });
+
+  assert.deepEqual(observed, [["/models/local", false, true]]);
+  releaseLocal();
+  await localLoad;
+  await remoteEntered;
+  await remoteLoad;
+
+  assert.deepEqual(observed, [
+    ["/models/local", false, true],
+    ["remote/model", true, true],
+  ]);
+  assert.equal(Object.prototype.hasOwnProperty.call(env, "allowRemoteModels"), true);
+  assert.equal(env.allowRemoteModels, undefined);
+  assert.equal(Object.prototype.hasOwnProperty.call(env, "allowLocalModels"), false);
+});
+
 test("OpenMed ONNX loading selects the root INT8 artifact", async () => {
   const api = await loadApi();
   const runtime: TransformersRuntime = {
