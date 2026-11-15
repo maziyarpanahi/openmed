@@ -19,6 +19,7 @@ from openmed.risk import risk_report
 
 from .auth import AuthPrincipal, scopes_satisfy
 from .journey_access import JourneyAccessGate, JourneyAccessRequest
+from .graphql_limits import GraphQLLimitsExtension
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
@@ -659,7 +660,12 @@ class PrivacySafeSchema(strawberry.Schema):
         """Suppress Strawberry's default exception logger to protect PHI."""
 
 
-schema = PrivacySafeSchema(query=Query, extensions=[FieldScopeExtension])
+# Budgets run first so oversized documents never reach the scope rule or the
+# standard graphql-core validation rules.
+schema = PrivacySafeSchema(
+    query=Query,
+    extensions=[GraphQLLimitsExtension, FieldScopeExtension],
+)
 
 
 async def _run_analyze(
