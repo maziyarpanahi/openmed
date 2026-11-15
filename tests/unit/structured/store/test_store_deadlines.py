@@ -32,6 +32,7 @@ from openmed.structured.store import (
     STORE_TIMEOUT_ENV_VAR,
     STORE_TIMEOUTS_INVALID_CODE,
     ComposedJourneyStore,
+    JourneyStoreEncryption,
     LocalArtifactStore,
     LocalJourneyStore,
     PostgresJourneyStore,
@@ -53,6 +54,8 @@ T2 = "2026-03-04T06:06:07Z"
 SYNTHETIC_VALUE = "synthetic-parameter-value-7f3a"
 # Bounds a broken implementation's wait so the suite cannot hang.
 SAFETY_SECONDS = 5.0
+# Explicit development opt-in: these tests exercise plaintext storage.
+PLAINTEXT_DEV = JourneyStoreEncryption.development_plaintext()
 LONG_SQLITE_QUERY = (
     "WITH RECURSIVE counter(x) AS ("
     "SELECT 1 UNION ALL SELECT x + 1 FROM counter WHERE x < {limit}"
@@ -704,7 +707,7 @@ def test_composed_ingestion_discards_new_bytes_when_metadata_is_busy(
     tmp_path: Path,
 ) -> None:
     clock = FakeClock()
-    artifacts = LocalArtifactStore(tmp_path / "objects")
+    artifacts = LocalArtifactStore(tmp_path / "objects", encryption=PLAINTEXT_DEV)
     store = ComposedJourneyStore(artifacts, _postgres(fake, clock=clock))
     artifact, content = _artifact()
 
@@ -726,6 +729,7 @@ def test_sqlite_stalled_checkout_returns_store_busy_and_discards_new_bytes(
     clock = FakeClock()
     store = LocalJourneyStore(
         tmp_path / "journey",
+        encryption=PLAINTEXT_DEV,
         timeouts=StoreTimeouts(clock=clock),
     )
     artifact, content = _artifact()
@@ -751,7 +755,11 @@ def test_sqlite_write_lock_wait_is_bounded_and_busy_timeout_restored(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "journey.sqlite3"
-    store = SQLiteJourneyStore(path, timeouts=StoreTimeouts(lock_wait_seconds=0.05))
+    store = SQLiteJourneyStore(
+        path,
+        encryption=PLAINTEXT_DEV,
+        timeouts=StoreTimeouts(lock_wait_seconds=0.05),
+    )
     blocker = sqlite3.connect(path, isolation_level=None)
     artifact, _ = _artifact()
     try:
@@ -773,6 +781,7 @@ def test_sqlite_statement_past_the_deadline_is_interrupted_and_rolled_back(
     clock = FakeClock()
     store = SQLiteJourneyStore(
         tmp_path / "journey.sqlite3",
+        encryption=PLAINTEXT_DEV,
         timeouts=StoreTimeouts(operation_seconds=10, clock=clock),
     )
     artifact, _ = _artifact()
@@ -796,7 +805,7 @@ def test_sqlite_statement_past_the_deadline_is_interrupted_and_rolled_back(
 
 
 def test_sqlite_explicit_deadline_and_budget_bound_transactions(tmp_path: Path) -> None:
-    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3")
+    store = SQLiteJourneyStore(tmp_path / "journey.sqlite3", encryption=PLAINTEXT_DEV)
     artifact, _ = _artifact()
 
     with pytest.raises(StoreDeadlineExceededError):
@@ -841,7 +850,7 @@ class _CommitFailingConnection:
 def test_sqlite_ambiguous_commit_is_unknown_and_provable_failure_rolls_back(
     tmp_path: Path,
 ) -> None:
-    store = LocalJourneyStore(tmp_path / "journey")
+    store = LocalJourneyStore(tmp_path / "journey", encryption=PLAINTEXT_DEV)
     metadata = store.metadata
     inner = metadata._connection
     landed, landed_bytes = _artifact(1)
@@ -872,14 +881,14 @@ def test_sqlite_invalid_timeout_environment_fails_before_creating_files(
     monkeypatch.setenv(STORE_LOCK_WAIT_ENV_VAR, "synthetic-invalid")
     path = tmp_path / "journey" / "journey.sqlite3"
 
-    opened = SQLiteJourneyStore.open(path)
+    opened = SQLiteJourneyStore.open(path, encryption=PLAINTEXT_DEV)
 
     assert opened.state is StoreState.FAILURE
     assert opened.code == STORE_TIMEOUTS_INVALID_CODE
     assert "synthetic-invalid" not in repr(opened)
     assert not path.parent.exists()
     monkeypatch.setenv(STORE_LOCK_WAIT_ENV_VAR, "0.5")
-    configured = SQLiteJourneyStore(path)
+    configured = SQLiteJourneyStore(path, encryption=PLAINTEXT_DEV)
     assert configured.timeouts.lock_wait_seconds == 0.5
     assert configured._connection.execute("PRAGMA busy_timeout").fetchone()[0] == 500
     configured.close()
