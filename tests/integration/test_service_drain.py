@@ -881,6 +881,8 @@ def _job_harness(tmp_path: Path, name: str):
         store=store,
         max_workers=1,
         webhook_sender=webhook_sender,
+        # Every document is a checkpoint, so each boundary is observable.
+        progress_interval_seconds=0,
     )
     coordinator = DrainCoordinator(DrainBudget(drain_seconds=0.2, release_seconds=0.2))
     coordinator.register(JobQueueDrainParticipant(lambda: queue))
@@ -967,11 +969,19 @@ def test_drain_at_every_job_boundary_never_loses_or_duplicates_work(tmp_path, su
         queue._deidentify_document = (  # type: ignore[method-assign]
             lambda _payload, _document: SimpleNamespace(pii_entities=[])
         )
-        store.pause = lambda changes: (
-            hold if changes.get("status") in {"done", "failed"} else None
-        )
+        reached = threading.Event()
+
+        def pause_terminal(changes):
+            if changes.get("status") in {"done", "failed"}:
+                reached.set()
+                return hold
+            return None
+
+        store.pause = pause_terminal
         job = queue.submit(_job_payload(1, webhook=True))
-        _wait_sync(lambda: store.get(job["id"])["processed_count"] == 1)
+        # The terminal update records the last document, so wait for the
+        # worker to reach that commit.
+        _wait_sync(reached.is_set)
         asyncio.run(coordinator.drain())
         hold.set()  # a stale terminal commit arrives after the fence
         _wait_sync(lambda: queue.outstanding_count() == 0)

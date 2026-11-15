@@ -326,14 +326,15 @@ def test_shutdown_surfaces_persistence_failures_without_values(
     queue = _queue(monkeypatch, tmp_path, clock=Clock())
     broken_id = queue.submit(_request())["id"]
     other_id = queue.submit(_request())["id"]
-    original_update = queue.store.update
+    original_update_if = queue.store.update_if
 
-    def update(job_id: str, **changes: Any) -> dict[str, Any]:
+    # Cancellation commits through the fenced lifecycle write.
+    def update_if(job_id: str, **changes: Any) -> Optional[dict[str, Any]]:
         if job_id == broken_id and changes.get("status") == "cancelled":
             raise OSError(f"synthetic failure writing {tmp_path}")
-        return original_update(job_id, **changes)
+        return original_update_if(job_id, **changes)
 
-    monkeypatch.setattr(queue.store, "update", update)
+    monkeypatch.setattr(queue.store, "update_if", update_if)
     with pytest.raises(RuntimeError) as caught:
         queue.shutdown()
 
