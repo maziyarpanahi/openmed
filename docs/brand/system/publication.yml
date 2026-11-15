@@ -219,6 +219,7 @@ classification:
     - serving/resilience.md
     - serving/backpressure.md
     - serving/fair-admission.md
+    - recovery/diagnostic-bundle.md
     - serving/kserve-triton.md
     - deploy/hardened-image.md
     - deploy/self-hosted-compose.md

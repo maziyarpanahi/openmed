@@ -144,6 +144,7 @@ nav:
       - Serving Resilience: serving/resilience.md
       - Serving Backpressure: serving/backpressure.md
       - Fair Request Admission: serving/fair-admission.md
+      - Diagnostic and Recovery Bundle: recovery/diagnostic-bundle.md
       - KServe & Triton Model Repositories: serving/kserve-triton.md
       - Hardened Service Image: deploy/hardened-image.md
       - Self-hosted Compose Deployment: deploy/self-hosted-compose.md
