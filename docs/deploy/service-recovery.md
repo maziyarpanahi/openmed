@@ -158,10 +158,10 @@ inactive restored directory and never the live target.
 Durable schemas only migrate forward, and rolling an image back does not undo
 a migration. `openmed migrations registry` lists every durable schema (Journey
 SQLite and PostgreSQL, the artifact encryption marker, job metadata, model
-registry state, audit chains, recovery manifests, and placeholders for
-components that are not in this release yet) with its current version, the
-versions it upgrades from, what the previous release's binary does with it,
-and a rollback class:
+registry state, audit chains, recovery manifests, encrypted job payload files,
+the model activation journal and pointer state, and audit continuity
+manifests) with its current version, the versions it upgrades from, what the
+previous release's binary does with it, and a rollback class:
 
 | Class | Rollback |
 | --- | --- |
@@ -184,6 +184,10 @@ openmed migrations preflight --state-root /var/lib/openmed/state \
 
 The plan also reports free space, encryption-key availability, cross-component
 consistency, an unfinished recovery activation, and whether writers must stop.
+Continuity manifests beside the audit chains are observed automatically. The
+encrypted job payload directory and the model activation root live outside
+the state root, so the plan reports them as `not_inspected` unless the Python
+API (`plan_service_migrations`) is given their locations.
 To roll back, restore and activate the pre-upgrade point as above and start
 the previous release.
 
