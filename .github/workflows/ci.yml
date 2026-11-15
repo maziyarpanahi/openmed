@@ -166,10 +166,14 @@ jobs:
         uv sync --frozen --extra dev --extra grounding-validate --python 3.11
 
     - name: Fetch pinned HL7 FHIR validator
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        # HL7 FHIR validator CLI 6.8.1.
+        # HL7 FHIR validator CLI 6.8.1. Authenticated so the shared-runner
+        # anonymous rate limit cannot refuse the download.
         curl --fail --silent --show-error --location \
           --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+          --header "Authorization: Bearer $GH_TOKEN" \
           --header 'Accept: application/octet-stream' \
           --header 'X-GitHub-Api-Version: 2022-11-28' \
           https://api.github.com/repos/hapifhir/org.hl7.fhir.core/releases/assets/358670016 \
