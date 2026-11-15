@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from openmed.core.export_provenance import SourceContext
 from openmed.eval import export_qualification as eq
 from openmed.eval.export_qualification import ExportQualificationError, ExportReason
 from openmed.ner.families import zero_shot_export as zs
@@ -146,6 +147,12 @@ def test_token_classification_onnx_converter_refuses_gliner(
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(module, "export_webgpu", forbidden)
     monkeypatch.setattr(module, "publish_artifact", forbidden)
+    # Resolve the stub repository offline, as the other converter tests do.
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     with pytest.raises(ExportQualificationError) as error:
         module.convert(
             "OpenMed/stub",
