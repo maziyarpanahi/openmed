@@ -146,7 +146,7 @@ class DocumentIntake(
         currentCoroutineContext().ensureActive()
         val kind = detectInputKind(uri) ?: return refused(DocumentIntakeReason.UNSUPPORTED_DOCUMENT)
         val digest = try {
-            sourceDigest(uri)
+            documentSourceDigest(context, uri, limits.maxDocumentBytes)
         } catch (error: DocumentIntakeException) {
             return refused(DocumentEvidenceMapper.documentReason(error.reason))
         } catch (_: SecurityException) {
@@ -309,28 +309,6 @@ class DocumentIntake(
     private fun refused(reason: DocumentIntakeReason): DocumentIntakeReport =
         DocumentIntakeReport(evidence = DocumentEvidenceMapper.refused(reason), result = null)
 
-    private fun sourceDigest(uri: Uri): String {
-        val stream = context.contentResolver.openInputStream(uri)
-            ?: throw DocumentIntakeException(DocumentIntakeReason.PERMISSION_DENIED)
-        val digest = MessageDigest.getInstance("SHA-256")
-        stream.use { input ->
-            val buffer = ByteArray(DIGEST_BUFFER_BYTES)
-            var total = 0L
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) {
-                    break
-                }
-                total += read
-                if (total > limits.maxDocumentBytes) {
-                    throw DocumentIntakeException(DocumentIntakeReason.SIZE_LIMIT)
-                }
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-    }
-
     private fun detectInputKind(uri: Uri): DocumentInputKind? {
         val mimeType = context.contentResolver.getType(uri)?.lowercase(Locale.US)
         val extension = uri.path
@@ -347,6 +325,35 @@ class DocumentIntake(
 }
 
 private const val DIGEST_BUFFER_BYTES = 64 * 1024
+
+/**
+ * Lowercase SHA-256 of the document bytes, read once and bounded by [maxBytes].
+ *
+ * @throws DocumentIntakeException with [DocumentIntakeReason.PERMISSION_DENIED]
+ *   when the URI cannot be opened or [DocumentIntakeReason.SIZE_LIMIT] when it
+ *   is larger than [maxBytes].
+ */
+internal fun documentSourceDigest(context: Context, uri: Uri, maxBytes: Long): String {
+    val stream = context.contentResolver.openInputStream(uri)
+        ?: throw DocumentIntakeException(DocumentIntakeReason.PERMISSION_DENIED)
+    val digest = MessageDigest.getInstance("SHA-256")
+    stream.use { input ->
+        val buffer = ByteArray(DIGEST_BUFFER_BYTES)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) {
+                break
+            }
+            total += read
+            if (total > maxBytes) {
+                throw DocumentIntakeException(DocumentIntakeReason.SIZE_LIMIT)
+            }
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+}
 
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "heic", "heif")
 
