@@ -6,6 +6,10 @@ and every optional integration except the `dev` extra. Version constraints stay
 in `pyproject.toml`; this file records the locally reviewed SPDX-like license
 expression and the extras that use each distribution.
 
+Export toolchains, the Swift, Android and JavaScript kit runtime libraries,
+model-license propagation and the never-bundle list are covered in
+[Export Toolchains, Artifact Licenses and Redistribution](export-redistribution.md).
+
 The inventory gate is intentionally offline. Run it from the repository root:
 
 ```bash

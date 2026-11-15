@@ -478,3 +478,7 @@ KVM-accelerated `ubuntu-latest` runners:
 - [OpenMedKit portable-kit threat model](security/openmedkit-threat-model.md)
   maps download, cache, logging and key-handling threats to controls and
   owning issues.
+
+- [Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md)
+  lists the runtime libraries the AAR brings into an app, their licenses, and
+  the ML Kit posture.

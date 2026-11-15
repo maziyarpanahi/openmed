@@ -144,3 +144,5 @@ Identical source bytes, options, toolchain and generated payload bytes yield
 identical canonical manifests; numerical backends/serializers need not be
 deterministic. Tiny synthetic/mock conversions exercise real writers, not
 real-model parity or clinical performance.
+
+- [Export Toolchains, Artifact Licenses and Redistribution](security/export-redistribution.md)
