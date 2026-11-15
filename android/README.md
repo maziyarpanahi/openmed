@@ -271,9 +271,9 @@ the install footprint. Reports land in
 The release APKs are debug-signed and launch `SmokeActivity`, which runs the
 smoke once and logs value-free lines under the `OpenMedR8Smoke` tag (check IDs,
 statuses, counts, labels and offsets, ending with `result=PASS` or
-`result=FAIL`). The app removes the `INTERNET` permission that ML Kit merges in.
-Running that smoke on a device belongs in the Android emulator lane; this build
-gate does not start an emulator.
+`result=FAIL`). The app removes any `INTERNET` permission that a dependency
+merges in. Running that smoke on a device belongs in the Android emulator lane;
+this build gate does not start an emulator.
 
 ### Packaging desktop JNI resources
 

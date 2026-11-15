@@ -107,7 +107,7 @@ def test_runtime_dependencies_match_the_openmedkit_pom() -> None:
     )
     assert consumer is not None
     assert re.findall(r"(libs\.[\w.]+)", consumer.group(1)) == expected
-    assert len(expected) == 6
+    assert len(expected) == 5
 
 
 def test_desktop_jni_resources_are_excluded_and_documented() -> None:

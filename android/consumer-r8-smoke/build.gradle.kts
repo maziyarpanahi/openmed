@@ -204,12 +204,11 @@ kotlin {
 }
 
 // OpenMedKit's POM runtime dependencies. A file dependency carries no POM, so
-// they are repeated here; tests/unit/android/test_r8_consumer_gate.py keeps the
+// they are repeated here; tests/unit/android/test_r8_consumer_module.py keeps the
 // list identical to the implementation dependencies in openmedkit/build.gradle.kts.
 val openmedkitRuntimeDependencies = listOf(
     libs.kotlinx.coroutines.core,
     libs.kotlinx.serialization.json,
-    libs.mlkit.text.recognition,
     libs.onnxruntime.android,
     libs.djl.tokenizers,
     libs.djl.tokenizer.native.android,
