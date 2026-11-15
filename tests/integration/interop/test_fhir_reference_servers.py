@@ -26,7 +26,7 @@ from openmed.interop.fhir.conformance import (
 )
 from openmed.interop.fhir.smart_custody import SmartCustodyError, SmartTokenCustody
 from openmed.interop.fhir.subscription_checkpoint import SubscriptionCheckpoint
-from openmed.interop.smart_scope_audit import audit_smart_scopes
+from openmed.interop.smart_scope_audit import audit_smart_scope_preflight
 from tests.fixtures.fhir.reference_servers import MATRIX
 from tests.fixtures.fhir_capabilities import build_capability_statement
 
@@ -223,7 +223,7 @@ def test_failure_cases_cover_scope_refresh_revocation_duplicate_and_partial_fail
     assert custody.dispatch(
         handle, audience=audience, required_scopes=["patient/Patient.r"]
     ).scopes == ("patient/Patient.r",)
-    assert not audit_smart_scopes(
+    assert not audit_smart_scope_preflight(
         required_scopes=["patient/Patient.r"],
         requested_scopes=["patient/Patient.rs"],
     ).is_least_privilege
