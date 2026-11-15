@@ -22,7 +22,7 @@
     "@tauri-apps/api": "^2.8.0",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=20"
