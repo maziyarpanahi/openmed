@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("service:", health.Service, "version:", health.Version)
+	fmt.Println("service:", health.Service, "status:", health.Status)
 
 	// Analyze clinical text.
 	strategy := openmed.AggregationSimple

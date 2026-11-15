@@ -58,7 +58,8 @@ curl -s localhost:8000/pii/deidentify -H 'content-type: application/json' -d '{
 
 | Method & path | Purpose | Request schema |
 | --- | --- | --- |
-| `GET /health` | liveness + version + active profile | — |
+| `GET /health` | liveness; version + profile only in the `dev` profile | — |
+| `GET /service/metadata` | version + active profile (authenticated) | — |
 | `GET /models/loaded` | cache/keep-alive status of resident models | — |
 | `POST /models/unload` | unload one model or all inactive models | `ModelUnloadRequest` (`model_name` or `all=true`) |
 | `POST /analyze` | clinical NER | `AnalyzeRequest` |

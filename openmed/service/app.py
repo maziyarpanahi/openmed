@@ -46,8 +46,12 @@ from openmed.structured.decision import (
 from openmed.utils.validation import validate_model_name
 
 from .auth import (
+    DEVELOPMENT_DOCS_EXEMPT_PATHS,
     ROUTE_POLICIES,
+    SERVICE_METADATA_PATH,
     ServiceAuth,
+    is_development_profile,
+    parse_api_docs_config,
     parse_service_auth_config,
     request_needs_admission,
     validate_route_policies,
@@ -919,19 +923,26 @@ def create_app(
             if job_queue is not None:
                 job_queue.shutdown()
 
+    api_docs = parse_api_docs_config()
     app = FastAPI(
         title="OpenMed REST API",
         version=openmed.__version__,
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
+        openapi_url=api_docs.openapi_url,
+        docs_url=api_docs.docs_url,
+        redoc_url=api_docs.redoc_url,
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
     app.state.bulk_storage = BulkStoragePolicy.from_env()
-    app.state.auth = ServiceAuth(
-        parse_service_auth_config(),
-        error_response=_error_response,
-    )
+    auth_config = parse_service_auth_config()
+    if api_docs.public:
+        auth_config = replace(
+            auth_config,
+            exempt_paths=auth_config.exempt_paths | DEVELOPMENT_DOCS_EXEMPT_PATHS,
+        )
+    app.state.auth = ServiceAuth(auth_config, error_response=_error_response)
     app.state.mtls = ServiceMTLS(
         parse_service_mtls_config(),
         error_response=_error_response,
@@ -1284,8 +1295,18 @@ def create_app(
     @app.get("/health")
     async def health(request: Request) -> Dict[str, str]:
         runtime = _get_service_runtime(request)
+        payload = {"status": "ok", "service": SERVICE_NAME}
+        if is_development_profile(runtime.profile):
+            # Outside development, version and profile need an authenticated
+            # call to the metadata route.
+            payload["version"] = openmed.__version__
+            payload["profile"] = runtime.profile
+        return payload
+
+    @app.get(SERVICE_METADATA_PATH, include_in_schema=False)
+    async def service_metadata(request: Request) -> Dict[str, str]:
+        runtime = _get_service_runtime(request)
         return {
-            "status": "ok",
             "service": SERVICE_NAME,
             "version": openmed.__version__,
             "profile": runtime.profile,
