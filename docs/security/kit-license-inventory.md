@@ -29,6 +29,8 @@ in the `repo-policy` job next to the Python dependency license policy.
 | Swift demo apps | the committed `Package.resolved` of `OpenMedDemo` and `OpenMedScanDemo` |
 | Android | `android/settings.gradle.kts`, the root and every included module's build file, `android/gradle/libs.versions.toml` |
 | Web, Electron, React Native, Tauri | `js/*/package-lock.json` with the sibling `package.json` |
+| Electron packaging harness | `js/openmedkit-electron/harness/package-lock.json` with its `package.json` |
+| React Native native modules | the bridge's podspec and `android/build.gradle`, and those of the parity probe in `example/probe` |
 | Tauri sidecar | `js/openmedkit-tauri/src-tauri/Cargo.lock` with its `Cargo.toml` |
 | Flutter | `js/openmedkit-flutter/pubspec.yaml`, the iOS and macOS podspecs, `android/build.gradle` |
 
@@ -185,12 +187,15 @@ the tables. Rows that no manifest uses any more are counted as
 | gradle | `androidx.compose.ui:ui-tooling-preview` | `Apache-2.0` | demo apps |
 | gradle | `androidx.compose:compose-bom` | `Apache-2.0` | demo apps |
 | gradle | `androidx.core:core-ktx` | `Apache-2.0` | demo apps |
+| gradle | `androidx.test:runner` | `Apache-2.0` | instrumented tests only |
 | gradle | `com.android.tools.build:gradle` | `Apache-2.0` | Android Gradle Plugin; build tooling |
-| gradle | `com.google.errorprone:error_prone_annotations` | `Apache-2.0` | catalog version pin for the Maple demo |
+| gradle | `com.facebook.react:react-android` | `MIT` | React Native for Android; peer of the React Native bridge |
+| gradle | `com.github.maziyarpanahi:openmed` | `Apache-2.0` | first-party OpenMedKit Android (JitPack) for the React Native bridge |
 | gradle | `com.google.mlkit:text-recognition` | `LicenseRef-Proprietary-Google-ML-Kit-Terms` | restricted; scoped exception `mlkit-optional-ocr` |
 | gradle | `com.ibm.icu:icu4j` | `Unicode-3.0` | test parity fixtures |
 | gradle | `com.microsoft.onnxruntime:onnxruntime-android` | `MIT` | |
 | gradle | `junit:junit` | `EPL-1.0` | unit tests only; never shipped |
+| gradle | `org.jetbrains.kotlin:compose-compiler-gradle-plugin` | `Apache-2.0` | Compose compiler Gradle plugin; build tooling |
 | gradle | `org.jetbrains.kotlin:kotlin-gradle-plugin` | `Apache-2.0` | build tooling |
 | gradle | `org.jetbrains.kotlin:kotlin-stdlib` | `Apache-2.0` | |
 | gradle | `org.jetbrains.kotlin:kotlin-test-junit` | `Apache-2.0` | unit tests |
@@ -200,7 +205,6 @@ the tables. Rows that no manifest uses any more are counted as
 | gradle | `org.jetbrains.kotlinx:kotlinx-serialization-json` | `Apache-2.0` | |
 | gradle | `org.json:json` | `LicenseRef-Public-Domain` | unit tests; public domain since 20231013 |
 | gradle | `org.robolectric:robolectric` | `MIT` | unit tests |
-| gradle | `org.slf4j:slf4j-api` | `MIT` | catalog version pin for the Maple demo |
 
 ### Gradle plugins
 
@@ -209,15 +213,21 @@ the tables. Rows that no manifest uses any more are counted as
 | gradle-plugin | `com.android.application` | `Apache-2.0` | Android Gradle Plugin |
 | gradle-plugin | `com.android.library` | `Apache-2.0` | Android Gradle Plugin |
 | gradle-plugin | `org.jetbrains.kotlin.android` | `Apache-2.0` | Kotlin Gradle Plugin |
+| gradle-plugin | `org.jetbrains.kotlin.plugin.compose` | `Apache-2.0` | Kotlin Compose compiler plugin for the demo apps |
+| gradle-plugin | `org.jetbrains.kotlinx.binary-compatibility-validator` | `Apache-2.0` | public API dump and check; build tooling |
 
 ### npm
 
 | Ecosystem | Package | License expression | Review note |
 | --- | --- | --- | --- |
+| npm | `@electron/fuses` | `MIT` | Electron packaging harness; build tooling |
+| npm | `@huggingface/tokenizers` | `Apache-2.0` | web kit tokenizer conformance tests |
 | npm | `@huggingface/transformers` | `Apache-2.0` | optional peer of the web kit |
 | npm | `@tauri-apps/api` | `Apache-2.0 OR MIT` | peer of the Tauri kit |
 | npm | `@types/node` | `MIT` | type definitions; build tooling |
 | npm | `electron` | `MIT` | optional peer of the Electron kit |
+| npm | `electron-builder` | `MIT` | Electron packaging harness; build tooling |
+| npm | `esbuild` | `MIT` | Electron packaging harness; build tooling |
 | npm | `onnxruntime-web` | `MIT` | optional peer of the web kit |
 | npm | `openmed` | `Apache-2.0` | first-party web kit (`js/openmedkit-web`) |
 | npm | `react` | `MIT` | optional peer of the React Native kit |
@@ -241,6 +251,7 @@ the tables. Rows that no manifest uses any more are counted as
 | cocoapods | `flutter` | `BSD-3-Clause` | Flutter engine pod |
 | cocoapods | `fluttermacos` | `BSD-3-Clause` | Flutter macOS engine pod |
 | cocoapods | `onnxruntime-c` | `MIT` | ONNX Runtime C pod |
+| cocoapods | `react-core` | `MIT` | React Native core pod for the React Native bridge |
 
 ### Cargo (Tauri sidecar)
 
@@ -319,7 +330,6 @@ the tables. Rows that no manifest uses any more are counted as
 | cargo | `dyn-clone` | `MIT OR Apache-2.0` | |
 | cargo | `embed-resource` | `MIT` | |
 | cargo | `embed_plist` | `MIT OR Apache-2.0` | |
-| cargo | `encoding_rs` | `(Apache-2.0 OR MIT) AND BSD-3-Clause` | |
 | cargo | `equivalent` | `Apache-2.0 OR MIT` | |
 | cargo | `erased-serde` | `MIT OR Apache-2.0` | |
 | cargo | `errno` | `MIT OR Apache-2.0` | |
@@ -387,8 +397,6 @@ the tables. Rows that no manifest uses any more are counted as
 | cargo | `indexmap` | `Apache-2.0 OR MIT` | |
 | cargo | `infer` | `MIT` | |
 | cargo | `ipnet` | `MIT OR Apache-2.0` | |
-| cargo | `is-docker` | `MIT` | |
-| cargo | `is-wsl` | `MIT` | |
 | cargo | `itoa` | `MIT OR Apache-2.0` | |
 | cargo | `javascriptcore-rs` | `MIT` | |
 | cargo | `javascriptcore-rs-sys` | `MIT` | |
@@ -440,9 +448,7 @@ the tables. Rows that no manifest uses any more are counted as
 | cargo | `objc2-user-notifications` | `Zlib OR Apache-2.0 OR MIT` | |
 | cargo | `objc2-web-kit` | `Zlib OR Apache-2.0 OR MIT` | |
 | cargo | `once_cell` | `MIT OR Apache-2.0` | |
-| cargo | `open` | `MIT` | |
 | cargo | `option-ext` | `MPL-2.0` | |
-| cargo | `os_pipe` | `MIT` | |
 | cargo | `pango` | `MIT` | |
 | cargo | `pango-sys` | `MIT` | |
 | cargo | `parking_lot` | `MIT OR Apache-2.0` | |
@@ -499,10 +505,7 @@ the tables. Rows that no manifest uses any more are counted as
 | cargo | `serialize-to-javascript-impl` | `MIT OR Apache-2.0` | |
 | cargo | `servo_arc` | `MIT OR Apache-2.0` | |
 | cargo | `sha2` | `MIT OR Apache-2.0` | |
-| cargo | `shared_child` | `MIT` | |
 | cargo | `shlex` | `MIT OR Apache-2.0` | |
-| cargo | `sigchld` | `MIT` | |
-| cargo | `signal-hook` | `Apache-2.0 OR MIT` | |
 | cargo | `signal-hook-registry` | `MIT OR Apache-2.0` | |
 | cargo | `simd-adler32` | `MIT` | |
 | cargo | `siphasher` | `MIT OR Apache-2.0` | |
@@ -528,8 +531,6 @@ the tables. Rows that no manifest uses any more are counted as
 | cargo | `tauri-build` | `Apache-2.0 OR MIT` | |
 | cargo | `tauri-codegen` | `Apache-2.0 OR MIT` | |
 | cargo | `tauri-macros` | `Apache-2.0 OR MIT` | |
-| cargo | `tauri-plugin` | `Apache-2.0 OR MIT` | |
-| cargo | `tauri-plugin-shell` | `Apache-2.0 OR MIT` | |
 | cargo | `tauri-runtime` | `Apache-2.0 OR MIT` | |
 | cargo | `tauri-runtime-wry` | `Apache-2.0 OR MIT` | |
 | cargo | `tauri-utils` | `Apache-2.0 OR MIT` | |
