@@ -39,6 +39,14 @@ import openmed
 from openmed.core.config import PROFILE_ENV_VAR
 from openmed.core.key_provider import EncryptionError, KeyProvider
 
+from .job_admission import (
+    DEFAULT_MAX_DOCUMENTS_PER_JOB,
+    DEFAULT_MAX_PENDING_JOBS,
+    DEFAULT_MAX_QUEUED_TEXT_BYTES,
+    JobAdmission,
+    JobAdmissionLimits,
+    JobCost,
+)
 from .job_payloads import (
     DEFAULT_PAYLOAD_RETENTION_SECONDS,
     JOB_PAYLOAD_SCHEMA_VERSION,
@@ -86,6 +94,9 @@ SERVICE_JOBS_PAYLOAD_DIR_ENV_VAR = "OPENMED_SERVICE_JOBS_PAYLOAD_DIR"
 SERVICE_JOBS_PAYLOAD_RETENTION_ENV_VAR = (
     "OPENMED_SERVICE_JOBS_PAYLOAD_RETENTION_SECONDS"
 )
+SERVICE_JOBS_MAX_PENDING_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_PENDING"
+SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES"
+SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR = "OPENMED_SERVICE_JOBS_MAX_DOCUMENTS"
 DEFAULT_JOBS_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_JOBS_WORKERS = 2
 DEFAULT_PROGRESS_INTERVAL_SECONDS = 1.0
@@ -275,6 +286,53 @@ def job_payload_store_from_env(
         parse_jobs_payload_dir(os.getenv(SERVICE_JOBS_PAYLOAD_DIR_ENV_VAR)),
         key_provider=key_provider,
         max_retention_seconds=retention,
+    )
+
+
+def parse_job_admission_limits(
+    *,
+    max_pending: Optional[str] = None,
+    max_queued_bytes: Optional[str] = None,
+    max_documents: Optional[str] = None,
+) -> JobAdmissionLimits:
+    """Parse async job submission ceilings from raw environment values.
+
+    Args:
+        max_pending: Raw ``OPENMED_SERVICE_JOBS_MAX_PENDING`` value.
+        max_queued_bytes: Raw ``OPENMED_SERVICE_JOBS_MAX_QUEUED_BYTES`` value.
+        max_documents: Raw ``OPENMED_SERVICE_JOBS_MAX_DOCUMENTS`` value.
+
+    Returns:
+        Admission limits, using safe defaults for unset or blank values.
+
+    Raises:
+        ValueError: If a set value is not a positive integer.
+    """
+    return JobAdmissionLimits(
+        max_pending_jobs=_parse_positive_int(
+            max_pending,
+            env_var=SERVICE_JOBS_MAX_PENDING_ENV_VAR,
+            default=DEFAULT_MAX_PENDING_JOBS,
+        ),
+        max_queued_text_bytes=_parse_positive_int(
+            max_queued_bytes,
+            env_var=SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR,
+            default=DEFAULT_MAX_QUEUED_TEXT_BYTES,
+        ),
+        max_documents_per_job=_parse_positive_int(
+            max_documents,
+            env_var=SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR,
+            default=DEFAULT_MAX_DOCUMENTS_PER_JOB,
+        ),
+    )
+
+
+def job_admission_limits_from_env() -> JobAdmissionLimits:
+    """Return async job submission ceilings from the environment."""
+    return parse_job_admission_limits(
+        max_pending=os.getenv(SERVICE_JOBS_MAX_PENDING_ENV_VAR),
+        max_queued_bytes=os.getenv(SERVICE_JOBS_MAX_QUEUED_BYTES_ENV_VAR),
+        max_documents=os.getenv(SERVICE_JOBS_MAX_DOCUMENTS_ENV_VAR),
     )
 
 
@@ -626,6 +684,10 @@ class DeidentifyJobQueue:
     terminal-event payload, and delivery reads that payload instead of
     rebuilding the body from mutable job state.
 
+    Submissions pass :class:`~openmed.service.job_admission.JobAdmission`
+    before any metadata is persisted, so pending jobs, their queued text bytes
+    and documents per job stay within configured ceilings.
+
     Args:
         runtime: Service runtime that executes model requests.
         store: Local metadata store for job records.
@@ -645,6 +707,10 @@ class DeidentifyJobQueue:
         webhook_drain_seconds: Time :meth:`shutdown` waits for in-flight
             deliveries before recording them as abandoned.
         payload_store: Payload store; defaults to a memory-only store.
+        digests: Digest policy for job metadata; defaults to the environment
+            policy.
+        admission: Submission admission control; defaults to the built-in
+            ceilings.
 
     Raises:
         ValueError: If ``progress_interval_seconds`` is negative or
@@ -667,6 +733,7 @@ class DeidentifyJobQueue:
         webhook_drain_seconds: float = DEFAULT_WEBHOOK_DRAIN_SECONDS,
         payload_store: Optional[JobPayloadStore] = None,
         digests: Optional[JobDigestPolicy] = None,
+        admission: Optional[JobAdmission] = None,
     ) -> None:
         if not progress_interval_seconds >= 0:
             raise ValueError("progress_interval_seconds must be non-negative")
@@ -690,6 +757,11 @@ class DeidentifyJobQueue:
             else payload_store
         )
         self.digests = JobDigestPolicy.from_env() if digests is None else digests
+        self.admission = (
+            JobAdmission(metrics=getattr(runtime, "metrics", None))
+            if admission is None
+            else admission
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
             thread_name_prefix="openmed-job",
@@ -731,6 +803,10 @@ class DeidentifyJobQueue:
             max_workers=parse_jobs_workers(os.getenv(SERVICE_JOBS_WORKERS_ENV_VAR)),
             payload_store=job_payload_store_from_env(key_provider=key_provider),
             digests=digests,
+            admission=JobAdmission(
+                job_admission_limits_from_env(),
+                metrics=getattr(runtime, "metrics", None),
+            ),
         )
 
     def submit(
@@ -740,6 +816,10 @@ class DeidentifyJobQueue:
         owner_digest: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         """Submit one de-identification job and return its initial metadata.
+
+        Capacity is reserved before the record is created. A rejected
+        submission persists no record and queues no work. The reservation is
+        released when the job's work finishes, fails or is cancelled.
 
         A webhook URL is checked against the egress policy before the job is
         accepted, so a refused callback is rejected at submission.
@@ -756,6 +836,8 @@ class DeidentifyJobQueue:
         Raises:
             ValueError: If the requested payload retention exceeds the
                 configured maximum or the model is not served.
+            JobLimitExceededError: If the job exceeds a per-job ceiling.
+            JobQueueFullError: If the pending-job queue is at capacity.
             RuntimeError: If the queue is shutting down.
             EncryptionError: If the input payload cannot be retained.
             EgressDenied: When the egress policy refuses the webhook URL.
@@ -765,22 +847,30 @@ class DeidentifyJobQueue:
         if snapshot.webhook is not None:
             authorize_webhook_destination(snapshot.webhook.url)
         self._payload_retention_seconds(snapshot)
+        cost = JobCost.for_texts(document.text for document in snapshot.documents)
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
             self._sweep_payloads()
-            record, item = self._stage(snapshot, owner_digest=owner_digest)
+            reservation = self.admission.reserve(cost)
             try:
-                self.store.create(record)
+                record, item = self._stage(snapshot, owner_digest=owner_digest)
+                try:
+                    self.store.create(record)
+                except BaseException:
+                    self.payloads.delete(item.input_ref, reason="submission_failed")
+                    raise
+                future = self._executor.submit(self._run_job, item)
             except BaseException:
-                self.payloads.delete(item.input_ref, reason="submission_failed")
+                reservation.release()
                 raise
-            future = self._executor.submit(self._run_job, item)
             with self._futures_lock:
                 self._futures[item.job_id] = future
             future.add_done_callback(
                 functools.partial(self._forget_future, item.job_id)
             )
+            # Runs on completion, failure or cancellation, including shutdown.
+            future.add_done_callback(reservation.release)
             return _copy_record(record)
 
     def _stage(
