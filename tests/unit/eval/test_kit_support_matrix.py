@@ -569,12 +569,25 @@ def test_skew_entry_for_aligned_pins_is_stale(
     repo: Path, matrix: dict[str, Any]
 ) -> None:
     pins = {pin["id"]: pin for pin in matrix["runtime_pins"]}
-    _edit(
-        repo / "swift" / "OpenMedKit" / "Package.swift",
-        f'exact: "{pins["mlx-swift-nested"]["version"]}"',
-        f'exact: "{pins["mlx-swift"]["version"]}"',
-    )
-    pins["mlx-swift-nested"]["version"] = pins["mlx-swift"]["version"]
+    root_version = pins["mlx-swift"]["version"]
+    nested_version = pins["mlx-swift-nested"]["version"]
+    if nested_version != root_version:
+        _edit(
+            repo / "swift" / "OpenMedKit" / "Package.swift",
+            f'exact: "{nested_version}"',
+            f'exact: "{root_version}"',
+        )
+        pins["mlx-swift-nested"]["version"] = root_version
+    if not any(skew["runtime"] == "mlx-swift" for skew in matrix["runtime_skew"]):
+        matrix["runtime_skew"].append(
+            {
+                "id": "mlx-swift-manifests",
+                "runtime": "mlx-swift",
+                "pins": ["mlx-swift", "mlx-swift-nested"],
+                "related": ["#3929"],
+                "note": "Synthetic entry left behind after the pins aligned.",
+            }
+        )
 
     problems = _problems(matrix, repo)
 

@@ -54,11 +54,12 @@ adds the first such evidence.
 The same runtime is pinned differently across kits. The matrix lists the
 difference explicitly and does not change any pin:
 
-- **ONNX Runtime:** Android kit `1.25.1`, Flutter Android and Apple `1.20.0`,
-  Flutter Linux and Windows app-supplied with no pin, `onnxruntime-web >=1.20.0`
-  and the Python extras `onnxruntime>=1.16`.
-- **mlx-swift:** the root `Package.swift` pins `0.31.3`; the nested
-  `swift/OpenMedKit/Package.swift` pins `0.31.6` (#3929).
+- **ONNX Runtime:** Android kit and Flutter Android `1.25.1`, Flutter Apple
+  `1.20.0`, Flutter Linux and Windows app-supplied with no pin,
+  `onnxruntime-web >=1.20.0` and the Python extras `onnxruntime>=1.16`.
+
+The root and nested `Package.swift` manifests both pin mlx-swift `0.32.3`, so
+mlx-swift no longer has a skew entry (#3929).
 
 A measured cell must record the runtime version it actually ran.
 
@@ -142,16 +143,16 @@ Matrix `openmedkit-support-matrix` schema 1, release v4.0, state **frozen** on 2
 
 | Floor | Surface | Bound | Platform | Version | Sources |
 |---|---|---|---|---|---|
-| `python-requires` | `python` | min | python | 3.11 | `pyproject.toml` |
+| `python-requires` | `python` | min | python | 3.11.5 | `pyproject.toml` |
 | `swift-tools` | `swift` | min | swift-tools | 5.10 | `Package.swift`<br>`swift/OpenMedKit/Package.swift` |
 | `swift-ios` | `swift` | min | ios | 17 | `Package.swift`<br>`swift/OpenMedKit/Package.swift` |
 | `swift-macos` | `swift` | min | macos | 14 | `Package.swift`<br>`swift/OpenMedKit/Package.swift` |
 | `swift-watchos` | `swift` | min | watchos | 10 | `Package.swift`<br>`swift/OpenMedKit/Package.swift` |
 | `swift-visionos` | `swift` | min | visionos | 1 | `Package.swift`<br>`swift/OpenMedKit/Package.swift` |
 | `android-min-sdk` | `android` | min | android | 26 | `android/openmedkit/build.gradle.kts` |
-| `android-compile-sdk` | `android` | compile | android | 33 | `android/openmedkit/build.gradle.kts` |
-| `android-target-sdk` | `android` | target | android | 33 | `android/openmedkit/build.gradle.kts` |
-| `react-native-host` | `react-native` | min | react-native | 0.74 | `js/openmedkit-react-native/package.json` |
+| `android-compile-sdk` | `android` | compile | android | 35 | `android/openmedkit/build.gradle.kts` |
+| `android-target-sdk` | `android` | target | android | 35 | `android/openmedkit/build.gradle.kts` |
+| `react-native-host` | `react-native` | min | react-native | 0.77 | `js/openmedkit-react-native/package.json` |
 | `web-node` | `web` | min | node | 20 | `js/openmedkit-web/package.json` |
 | `flutter-android-min-sdk` | `flutter` | min | android | 26 | `js/openmedkit-flutter/android/build.gradle` |
 | `flutter-android-compile-sdk` | `flutter` | compile | android | 35 | `js/openmedkit-flutter/android/build.gradle` |
@@ -167,14 +168,14 @@ Matrix `openmedkit-support-matrix` schema 1, release v4.0, state **frozen** on 2
 | `torch-python` | torch | inference | `python` | >=2.13.0 | minimum | `pyproject.toml` |
 | `onnxruntime-python` | onnxruntime | inference | `python` | >=1.16 | minimum | `pyproject.toml` |
 | `mlx-python` | mlx | inference | `python` | >=0.22 | minimum | `pyproject.toml` |
-| `mlx-swift` | mlx-swift | inference | `swift` | 0.31.3 | exact | `Package.swift` |
-| `mlx-swift-nested` | mlx-swift | inference | `swift` | 0.31.6 | exact | `swift/OpenMedKit/Package.swift` |
+| `mlx-swift` | mlx-swift | inference | `swift` | 0.32.3 | exact | `Package.swift` |
+| `mlx-swift-nested` | mlx-swift | inference | `swift` | 0.32.3 | exact | `swift/OpenMedKit/Package.swift` |
 | `coreml-system` | coreml | inference | `swift` | system | system | operating system |
 | `onnxruntime-android` | onnxruntime | inference | `android` | 1.25.1 | exact | `android/gradle/libs.versions.toml` |
 | `mlkit-text-recognition` | mlkit-text-recognition | ocr | `android` | 16.0.1 | exact | `android/gradle/libs.versions.toml` |
 | `onnxruntime-web` | onnxruntime | inference | `web` | >=1.20.0 | minimum | `js/openmedkit-web/package.json` |
 | `transformers-js` | transformers-js | inference | `web` | >=3.0.0 | minimum | `js/openmedkit-web/package.json` |
-| `onnxruntime-flutter-android` | onnxruntime | inference | `flutter` | 1.20.0 | exact | `js/openmedkit-flutter/android/build.gradle` |
+| `onnxruntime-flutter-android` | onnxruntime | inference | `flutter` | 1.25.1 | exact | `js/openmedkit-flutter/android/build.gradle` |
 | `onnxruntime-flutter-ios` | onnxruntime | inference | `flutter` | 1.20.0 | exact | `js/openmedkit-flutter/ios/openmedkit_flutter.podspec` |
 | `onnxruntime-flutter-macos` | onnxruntime | inference | `flutter` | 1.20.0 | exact | `js/openmedkit-flutter/macos/openmedkit_flutter.podspec` |
 | `onnxruntime-flutter-desktop` | onnxruntime | inference | `flutter` | unpinned | unpinned | `js/openmedkit-flutter/native/CMakeLists.txt` |
@@ -187,8 +188,7 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 
 | Skew | Runtime | Pins | Related | Note |
 |---|---|---|---|---|
-| `onnxruntime-cross-kit` | onnxruntime | `onnxruntime-android` 1.25.1; `onnxruntime-flutter-android` 1.20.0; `onnxruntime-flutter-ios` 1.20.0; `onnxruntime-flutter-macos` 1.20.0; `onnxruntime-flutter-desktop` unpinned; `onnxruntime-web` >=1.20.0; `onnxruntime-python` >=1.16 | #3709, #3716 | Kits resolve different ONNX Runtime builds; measured cells must record the version they ran. This matrix flags the skew and changes no pin. |
-| `mlx-swift-manifests` | mlx-swift | `mlx-swift` 0.31.3; `mlx-swift-nested` 0.31.6 | #3929 | The root package, which is the documented install path, and the nested package pin different mlx-swift releases. |
+| `onnxruntime-cross-kit` | onnxruntime | `onnxruntime-android` 1.25.1; `onnxruntime-flutter-android` 1.25.1; `onnxruntime-flutter-ios` 1.20.0; `onnxruntime-flutter-macos` 1.20.0; `onnxruntime-flutter-desktop` unpinned; `onnxruntime-web` >=1.20.0; `onnxruntime-python` >=1.16 | #3709, #3716 | Kits resolve different ONNX Runtime builds; measured cells must record the version they ran. This matrix flags the skew and changes no pin. |
 
 ## Python reference contract
 
@@ -223,15 +223,15 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 
 | Cell | Platform | Device class | ABI | Runtime | Provider | Artifact | Families | Precision | Tier (RAM ceiling) | Condition | Evidence | Related | Note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `swift-macos-mlx` | macos 14+ | apple-silicon-mac | arm64 | mlx-swift 0.31.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Base (≤ 900 MB) | — | `ci-swift-macos` | #3716 | Real-device recall, latency and memory evidence is pending. |
+| `swift-macos-mlx` | macos 14+ | apple-silicon-mac | arm64 | mlx-swift 0.32.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Base (≤ 900 MB) | — | `ci-swift-macos` | #3716 | Real-device recall, latency and memory evidence is pending. |
 
 ### Experimental
 
 | Cell | Platform | Device class | ABI | Runtime | Provider | Artifact | Families | Precision | Tier (RAM ceiling) | Condition | Evidence | Related | Note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `swift-macos-mlx-int4` | macos 14+ | apple-silicon-mac | arm64 | mlx-swift 0.31.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | int4 | Base (≤ 900 MB) | — | pending | — | INT4 artifacts are certified only when per-label recall holds. |
+| `swift-macos-mlx-int4` | macos 14+ | apple-silicon-mac | arm64 | mlx-swift 0.32.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | int4 | Base (≤ 900 MB) | — | pending | — | INT4 artifacts are certified only when per-label recall holds. |
 | `swift-macos-coreml` | macos 14+ | apple-silicon-mac | arm64 | coreml system | coreml | coreml | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp16/int8 | Base (≤ 900 MB) | — | `ci-swift-macos` | — | CI compares recorded spans only; no Core ML model is evaluated. |
-| `swift-ios-mlx` | ios 17+ | iphone-ipad | arm64 | mlx-swift 0.31.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Tiny (≤ 350 MB) | — | `ci-swift-ios-build` | #3716 |  |
+| `swift-ios-mlx` | ios 17+ | iphone-ipad | arm64 | mlx-swift 0.32.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Tiny (≤ 350 MB) | — | `ci-swift-ios-build` | #3716 |  |
 | `swift-ios-coreml` | ios 17+ | iphone-ipad | arm64 | coreml system | coreml | coreml | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp16/int8 | Tiny (≤ 350 MB) | — | pending | #3716 |  |
 | `swift-ios-simulator-coreml` | ios 17+ | ios-simulator | arm64 | coreml system | coreml | coreml | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp16/int8 | Tiny (≤ 350 MB) | — | `ci-swift-ios-build` | #3949 |  |
 | `swift-watchos-coreml-nano` | watchos 10+ | apple-watch | arm64 | coreml system | coreml | coreml | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | int8 | Nano (≤ 150 MB) | — | pending | #3716 |  |
@@ -245,13 +245,13 @@ Pins of the same runtime that differ between kits are listed here explicitly. Th
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `swift-below-ios-17` | ios ≤ 16 | iphone-ipad | any | any | any | any | any | — | below-platform-floor | — |  |
 | `swift-below-macos-14` | macos ≤ 13 | any | any | any | any | any | any | — | below-platform-floor | — |  |
-| `swift-ios-simulator-mlx` | ios 17+ | ios-simulator | any | mlx-swift 0.31.3 | metal | any | any | — | runtime-unavailable | #3949 | mlx-swift cannot run on the iOS Simulator; use Core ML there. |
-| `swift-intel-mac-mlx` | macos 14+ | intel-mac | x86_64 | mlx-swift 0.31.3 | metal | any | any | — | hardware-unavailable | — | MLX requires Apple Silicon. |
-| `swift-watchos-mlx` | watchos 10+ | apple-watch | any | mlx-swift 0.31.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
-| `swift-visionos-mlx` | visionos 1+ | apple-vision | any | mlx-swift 0.31.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
+| `swift-ios-simulator-mlx` | ios 17+ | ios-simulator | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-unavailable | #3949 | mlx-swift cannot run on the iOS Simulator; use Core ML there. |
+| `swift-intel-mac-mlx` | macos 14+ | intel-mac | x86_64 | mlx-swift 0.32.3 | metal | any | any | — | hardware-unavailable | — | MLX requires Apple Silicon. |
+| `swift-watchos-mlx` | watchos 10+ | apple-watch | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
+| `swift-visionos-mlx` | visionos 1+ | apple-vision | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-not-linked | — | Package.swift links MLX for iOS and macOS only. |
 | `swift-watchos-coreml-non-nano` | watchos 10+ | apple-watch | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
 | `swift-visionos-coreml-non-nano` | visionos 1+ | apple-vision | any | coreml system | coreml | any | any | artifact:non-nano-int8 | budget-exceeded | — | PlatformModel fails closed on anything but an INT8 Nano-tier model. |
-| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | modernbert, longformer, openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family and DeBERTa-v2 only. |
+| `swift-coreml-unexported-families` | any | any | any | coreml system | coreml | longformer, openai-privacy-filter, gliner-span, gliclass, gliner-token-relex | any | — | family-not-exported | — | The Core ML converter allowlists BERT-family, DeBERTa-v2 and ModernBERT only. |
 | `swift-mac-catalyst` | mac-catalyst | mac-catalyst | any | any | any | any | any | — | not-qualified | — | Package.swift declares no Mac Catalyst platform and no lane builds it. |
 
 ## Kotlin and Android OpenMedKit
@@ -292,7 +292,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 
 | Cell | Platform | Device class | ABI | Runtime | Provider | Artifact | Families | Precision | Tier (RAM ceiling) | Condition | Evidence | Related | Note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `react-native-ios-mlx` | ios 17+ | iphone-ipad | arm64 | mlx-swift 0.31.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Tiny (≤ 350 MB) | — | pending | #3936, #3716 | The bridge forwards to Swift OpenMedKit; autolinking is not packaged. |
+| `react-native-ios-mlx` | ios 17+ | iphone-ipad | arm64 | mlx-swift 0.32.3 | metal | mlx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2, openai-privacy-filter | fp32/int8 | Tiny (≤ 350 MB) | — | pending | #3936, #3716 | The bridge forwards to Swift OpenMedKit; autolinking is not packaged. |
 | `react-native-ios-coreml` | ios 17+ | iphone-ipad | arm64 | coreml system | coreml | coreml | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp16/int8 | Tiny (≤ 350 MB) | — | pending | #3936 |  |
 | `react-native-android-onnx-cpu` | android 26+ | android-device | arm64-v8a | onnxruntime 1.25.1 | cpu | onnx-android | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32/int8 | Tiny (≤ 350 MB) | — | pending | #3936, #3938 | The bridge forwards to Android OpenMedKit. |
 
@@ -300,7 +300,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 
 | Entry | Platform | Device class | ABI | Runtime | Provider | Families | Precision | Condition | Reason | Related | Note |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `react-native-ios-simulator-mlx` | ios 17+ | ios-simulator | any | mlx-swift 0.31.3 | metal | any | any | — | runtime-unavailable | #3949 |  |
+| `react-native-ios-simulator-mlx` | ios 17+ | ios-simulator | any | mlx-swift 0.32.3 | metal | any | any | — | runtime-unavailable | #3949 |  |
 | `react-native-web` | any | desktop-browser | any | any | any | any | any | — | not-implemented | — | The bridge has no react-native-web implementation. |
 
 ## Browser inference
@@ -386,7 +386,7 @@ None. No cell on this surface has evidence and an in-scope declaration at freeze
 
 | Cell | Platform | Device class | ABI | Runtime | Provider | Artifact | Families | Precision | Tier (RAM ceiling) | Condition | Evidence | Related | Note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `flutter-android-onnx-cpu` | android 26+ | android-device | arm64-v8a | onnxruntime 1.20.0 | cpu | onnx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32 | Tiny (≤ 350 MB) | — | `ci-flutter` | #3709 |  |
+| `flutter-android-onnx-cpu` | android 26+ | android-device | arm64-v8a | onnxruntime 1.25.1 | cpu | onnx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32 | Tiny (≤ 350 MB) | — | `ci-flutter` | #3709 |  |
 | `flutter-ios-onnx-cpu` | ios 13.0+ | iphone-ipad | arm64 | onnxruntime 1.20.0 | cpu | onnx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32 | Tiny (≤ 350 MB) | — | pending | #3709 |  |
 | `flutter-macos-onnx-cpu` | macos 11.0+ | apple-silicon-mac | arm64 | onnxruntime 1.20.0 | cpu | onnx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32 | Base (≤ 900 MB) | — | pending | #3709 |  |
 | `flutter-linux-onnx-cpu` | linux | desktop-app | x86_64 | onnxruntime unpinned | cpu | onnx | bert, distilbert, electra, roberta, xlm-roberta, deberta-v2 | fp32 | Base (≤ 900 MB) | runtime:app-supplied-onnxruntime | `ci-flutter` | #3709 | Linux and Windows link an app-supplied ONNX Runtime with no pin. |
