@@ -28,6 +28,7 @@ nav:
       - CLI Result Envelope: cli/result-envelope.md
       - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
+      - Service Recovery CLI: cli/service-recovery.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Governed Agents:
