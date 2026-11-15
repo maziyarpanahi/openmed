@@ -101,7 +101,7 @@ path, location, or file content.
 
 A synthetic WebAssembly fixture exercises a strict CSP (`script-src 'self'
 'wasm-unsafe-eval'`, `connect-src 'self' blob:`, `worker-src 'self' blob:`) plus
-COOP/COEP. See [Content-Security-Policy profile](../../js/openmedkit-web/README.md#content-security-policy-profile)
+COOP/COEP. See [Content-Security-Policy profile](https://github.com/maziyarpanahi/openmed/blob/master/js/openmedkit-web/README.md#content-security-policy-profile)
 for the full header set and what each directive is for. Removing
 `'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
 rather than falling back silently.
