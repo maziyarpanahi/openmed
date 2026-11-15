@@ -412,6 +412,9 @@ _NEW_STEP_CLASSES: Mapping[tuple[str, int], RollbackClass] = {
     (RECOVERY_MANIFEST, 1): RollbackClass.BACKWARD_COMPATIBLE,
     # The previous binary ignores schema_version and the owner digest field.
     (JOB_STORE, 2): RollbackClass.BACKWARD_COMPATIBLE,
+    # The previous binary reads keyed digests as opaque metadata; the removed
+    # unkeyed hashes are not needed to roll back.
+    (JOB_STORE, 3): RollbackClass.BACKWARD_COMPATIBLE,
 }
 
 
@@ -554,7 +557,7 @@ def durable_schemas() -> tuple[DurableSchema, ...]:
             owner="openmed.service.jobs.LocalJobStore",
             recovery_category="job_metadata",
             current_version=JOB_STORE_LAYOUT_VERSION,
-            source_versions=(0, 1, JOB_STORE_LAYOUT_VERSION),
+            source_versions=(0, 1, 2, JOB_STORE_LAYOUT_VERSION),
             readable_versions=(JOB_STORE_LAYOUT_VERSION,),
             restorable_versions=(JOB_STORE_LAYOUT_VERSION,),
             previous_release_version=1,
@@ -568,7 +571,9 @@ def durable_schemas() -> tuple[DurableSchema, ...]:
                 "unknown_version": "job_store_schema_unsupported",
             },
             steps=_document_steps(
-                JOB_STORE, ((1, "jobs_object"), (2, "owner_digest")), 1
+                JOB_STORE,
+                ((1, "jobs_object"), (2, "owner_digest"), (3, "keyed_digests")),
+                1,
             ),
         ),
         DurableSchema(

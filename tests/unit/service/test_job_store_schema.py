@@ -39,7 +39,7 @@ def test_previous_release_layout_is_read_and_rewritten_explicitly(
 @pytest.mark.parametrize(
     ("document", "code"),
     [
-        ({"jobs": {}, "schema_version": 3}, "job_store_schema_unsupported"),
+        ({"jobs": {}, "schema_version": 4}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": 0}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": True}, "job_store_schema_unsupported"),
         ({"jobs": {}, "schema_version": "1"}, "job_store_schema_unsupported"),

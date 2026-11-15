@@ -20,6 +20,7 @@ from openmed.service import jobs
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.job_ownership import JOB_OWNER_DIGEST_DOMAIN
+from openmed.service.auth import hash_api_key
 from openmed.service.keyed_digest import (
     KEYED_DIGEST_ALGORITHM,
     SERVICE_DIGEST_KEY_ENV_VAR,
@@ -53,6 +54,7 @@ SYNTHETIC_IDENTIFIERS = {
 }
 SYNTHETIC_WEBHOOK_URL = "https://callbacks.example.test/openmed/jobs"
 SYNTHETIC_WEBHOOK_SECRET = "synthetic-webhook-secret"
+SYNTHETIC_API_KEY = "synthetic-jobs-api-key"
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _SERVICE_ENV_VARS = (
     "OPENMED_PROFILE",
@@ -192,7 +194,7 @@ def _run_queue_job(
         digests=digests,
     )
     payload = _payload()
-    record = queue._new_record(payload)
+    record, item = queue._stage(payload)
     store.create(record)
 
     def process(_payload: Any, document: DeidentifyJobDocument) -> SimpleNamespace:
@@ -200,7 +202,8 @@ def _run_queue_job(
 
     queue._deidentify_document = process  # type: ignore[method-assign]
     try:
-        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+        queue._run_job(item)
+        assert queue._webhooks.wait_idle(5.0)
     finally:
         queue.shutdown()
     final = store.get(record["id"])
@@ -231,6 +234,27 @@ def _run_api_job(
     if digest_key is not None:
         monkeypatch.setenv(SERVICE_DIGEST_KEY_ENV_VAR, digest_key)
         monkeypatch.setenv(SERVICE_DIGEST_KEY_ID_ENV_VAR, SYNTHETIC_KEY_ID)
+    else:
+        monkeypatch.delenv(SERVICE_DIGEST_KEY_ENV_VAR, raising=False)
+        monkeypatch.delenv(SERVICE_DIGEST_KEY_ID_ENV_VAR, raising=False)
+    headers: dict[str, str] = {}
+    if profile == "prod":
+        # A production service refuses requests until authentication is on.
+        monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+        monkeypatch.setenv(
+            "OPENMED_SERVICE_AUTH_API_KEYS",
+            json.dumps(
+                [
+                    {
+                        "id": "synthetic-jobs",
+                        "key_hash": hash_api_key(SYNTHETIC_API_KEY),
+                        "principal": "synthetic-jobs",
+                        "scopes": ["jobs:write", "jobs:read"],
+                    }
+                ]
+            ),
+        )
+        headers = {"X-API-Key": SYNTHETIC_API_KEY}
     callbacks: list[dict[str, Any]] = []
 
     def sender(_url: str, payload: dict[str, Any], **_: Any) -> WebhookDeliveryResult:
@@ -242,6 +266,7 @@ def _run_api_job(
         app.state.job_queue.webhook_sender = sender
         created = client.post(
             "/jobs",
+            headers=headers,
             json={
                 "documents": [{"id": "synthetic-doc", "text": SYNTHETIC_TEXT}],
                 "webhook": {
@@ -254,8 +279,15 @@ def _run_api_job(
         )
         assert created.status_code == 202, created.text
         path = f"/jobs/{created.json()['id']}"
-        _wait(lambda: client.get(path).json()["webhook_delivery"] is not None)
-        done = client.get(path).json()
+        _wait(
+            lambda: client.get(path, headers=headers).json()["webhook_delivery"]
+            not in (None, {})
+            and client.get(path, headers=headers).json()["webhook_delivery"].get(
+                "status"
+            )
+            != "pending"
+        )
+        done = client.get(path, headers=headers).json()
     assert len(callbacks) == 1
     return done, callbacks[0], store_path.read_text(encoding="utf-8")
 
@@ -369,8 +401,9 @@ def test_plain_sha256_enumeration_matches_no_job_digest(
         assert _sentinel_leaks(text) == [], surface
 
     key = _key()
-    assert done["schema_version"] == jobs.JOB_STORE_SCHEMA_VERSION
-    assert webhook["schema_version"] == jobs.WEBHOOK_PAYLOAD_SCHEMA_VERSION
+    # Published payloads are versioned by their registered schemas.
+    assert "schema_version" not in done
+    assert "schema_version" not in webhook
     assert (
         done["digests"]
         == webhook["digests"]
@@ -398,12 +431,15 @@ def test_plain_sha256_enumeration_matches_no_job_digest(
     assert record["spans"] == done["spans"]
 
 
-def test_prod_without_digest_key_omits_digests_with_marker(
+def test_non_development_profile_without_digest_key_omits_digests_with_marker(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    # Production refuses to serve without authentication, and authentication
+    # requires a digest key, so the omitted path runs under ``fast``: a
+    # non-development profile that serves without authentication.
     done, webhook, store_text = _run_api_job(
-        monkeypatch, tmp_path, profile="prod", digest_key=None
+        monkeypatch, tmp_path, profile="fast", digest_key=None
     )
 
     marker = {
@@ -636,7 +672,7 @@ def test_payload_builders_never_echo_legacy_hashes() -> None:
         assert _enumerated(rendered) == set()
         assert _sentinel_leaks(rendered) == []
         assert payload["digests"]["reason"] == jobs.LEGACY_DIGESTS_REMOVED
-    assert jobs.webhook_payload(legacy)["schema_version"] == 2
+    assert "schema_version" not in jobs.webhook_payload(legacy)
     # The caller's record is not mutated by building a payload.
     assert "text_hash" in legacy["spans"][0]
 

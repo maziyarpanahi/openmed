@@ -28,6 +28,7 @@ from openmed.core.registry_slots import registry_slot_key
 from openmed.service.recovery import (
     AUDIT_CHAIN_DIRECTORY,
     BACKUP_KEY_PURPOSE,
+    JOB_STORE_LAYOUT_VERSION,
     JOB_STORE_PATH,
     REGISTRY_STATE_FILE,
     ServiceStateSources,
@@ -197,7 +198,12 @@ class SyntheticServiceState:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(path.name + ".tmp")
         temporary.write_text(
-            json.dumps({"jobs": self.jobs}, indent=2, sort_keys=True) + "\n",
+            json.dumps(
+                {"jobs": self.jobs, "schema_version": JOB_STORE_LAYOUT_VERSION},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
             encoding="utf-8",
         )
         temporary.replace(path)

@@ -101,8 +101,6 @@ WEBHOOK_EVENT_UNAVAILABLE = "terminal_event_unavailable"
 JOB_STORE_SCHEMA_VERSION = 3
 """Version of the job metadata document; files without the field are version 1."""
 _JOB_STORE_FIELDS = frozenset({"jobs", "schema_version"})
-# Terminal webhook bodies were unversioned (version 1) before keyed digests.
-WEBHOOK_PAYLOAD_SCHEMA_VERSION = 2
 OWNER_DIGEST_FIELD = "owner_digest"
 DIGESTS_FIELD: Final = "digests"
 TEXT_DIGEST_FIELD: Final = "text_digest"
@@ -1443,15 +1441,15 @@ def webhook_payload(record: dict[str, Any]) -> dict[str, Any]:
         record: Persisted job record.
 
     Returns:
-        Version 2 payload: ``schema_version`` identifies it, ``digests``
-        describes how span and document digests were made, and each span and
-        document carries a keyed ``text_digest`` (or ``None`` when omitted)
-        instead of an unkeyed hash.
+        The payload: ``digests`` describes how span and document digests were
+        made, and each span and document carries a keyed ``text_digest`` (or
+        ``None`` when omitted) instead of an unkeyed hash. Like the other
+        published contracts it carries no ``schema_version`` field; the
+        contract version is the registered ``service_webhook_payload`` schema.
     """
     current = _copy_record(record)
     _migrate_record(current)
     return {
-        "schema_version": WEBHOOK_PAYLOAD_SCHEMA_VERSION,
         "event": f"job.{current['status']}",
         "job_id": current["id"],
         "status": current["status"],
@@ -1482,6 +1480,9 @@ def job_response_payload(
     payload = _copy_record(record)
     _migrate_record(payload)
     payload.pop(OWNER_DIGEST_FIELD, None)
+    # The storage schema version drives migration only; the published
+    # service_job_record contract is versioned by its registered schema.
+    payload.pop("schema_version", None)
     if status_url is not None:
         payload["status_url"] = status_url
     return payload

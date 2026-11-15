@@ -1331,6 +1331,12 @@ class _JobStore(_Adapter):
                 job_id: {**record, "owner_digest": None}
                 for job_id, record in _synthetic_jobs().items()
             }
+            if version >= 3:
+                # Version 3 drops unkeyed hashes in favour of keyed digests.
+                from openmed.service.jobs import _migrate_record
+
+                for record in jobs.values():
+                    _migrate_record(record)
             document = {"jobs": jobs, "schema_version": version}
         _write_private(
             self._path(root),

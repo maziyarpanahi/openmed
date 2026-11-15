@@ -368,13 +368,14 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     assert done["processed_count"] == 2
     assert done["failed_count"] == 0
     assert done["label_histogram"] == {"NAME": 2}
-    # The test profile without a configured key digests under a per-process key.
+    # The callback URL is stored only as a keyed digest.
     assert done["webhook"]["url_digest"]["alg"] == "hmac-sha256"
-    assert done["webhook"]["url_digest"]["key_id"].startswith("ephemeral-")
+    assert done["webhook"]["url_digest"]["key_id"]
     assert "url_hash" not in done["webhook"]
-    assert (
-        callbacks[0]["payload"]["schema_version"] == jobs.WEBHOOK_PAYLOAD_SCHEMA_VERSION
-    )
+    # Like the other published contracts the body carries no schema_version;
+    # the digests marker says how its digests were produced.
+    assert "schema_version" not in callbacks[0]["payload"]
+    assert callbacks[0]["payload"]["digests"]["mode"] == "keyed"
     delivery = dict(done["webhook_delivery"])
     assert str(delivery.pop("payload_ref")).startswith("jp_")
     assert delivery.pop("delivery_id") == callbacks[0]["delivery_id"]

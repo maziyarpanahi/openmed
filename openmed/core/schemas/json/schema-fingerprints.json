@@ -174,7 +174,7 @@
   },
   "service_job_record": {
     "schema_version": 1,
-    "fingerprint": "sha256:ba830da14cc08f50bf4d0b435e3d3e8c2647d1b6904573546c717312d6b82121",
+    "fingerprint": "sha256:36915629a2104d7d75ba1c4d1cc68b518a4eab5ddc1e82e216e6af07e05f3ca8",
     "required": [
       "completed_at",
       "created_at",
@@ -197,6 +197,7 @@
     "properties": [
       "completed_at",
       "created_at",
+      "digests",
       "document_count",
       "documents",
       "error",
@@ -219,7 +220,7 @@
   },
   "service_webhook_payload": {
     "schema_version": 1,
-    "fingerprint": "sha256:d165a2820040566cce89933df5ccb9221daa85cb4537ed5b959157dfdfb73a17",
+    "fingerprint": "sha256:acf23a9676dd1ca9803af9adf82e72f57f4f418e1d5eb253355377444cc3ac6e",
     "required": [
       "completed_at",
       "document_count",
@@ -236,6 +237,7 @@
     ],
     "properties": [
       "completed_at",
+      "digests",
       "document_count",
       "documents",
       "error",

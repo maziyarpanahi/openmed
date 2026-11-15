@@ -214,12 +214,14 @@ def test_submission_snapshot_ignores_later_request_mutation(
     )
     assert metadata["document_count"] == 1
     assert len(queued.documents) == 1
-    assert metadata["documents"][0]["text_hash"] == jobs.hash_text(
-        queued.documents[0].text
+    assert metadata["documents"][0]["text_digest"] == queue.digests.digest(
+        jobs.DOCUMENT_TEXT_DIGEST_DOMAIN, queued.documents[0].text
     )
     assert queued.method == "mask"
     assert queued.webhook is not None and queued.webhook.url == URL_SENTINEL
-    assert metadata["webhook"]["url_hash"] == jobs.hash_text(URL_SENTINEL)
+    assert metadata["webhook"]["url_digest"] == queue.digests.digest(
+        jobs.WEBHOOK_URL_DIGEST_DOMAIN, URL_SENTINEL
+    )
     assert metadata["payloads"]["input"]["ref"] == item.input_ref
     queue.shutdown()
 

@@ -132,8 +132,10 @@ INVENTORY_SCHEMA = "openmed.service.recovery-inventory.v1"
 STAGING_FORMAT = "openmed.service.recovery-staging"
 STAGING_SCHEMA = "openmed.service.recovery-staging.v1"
 BACKUP_KEY_PURPOSE = "service-backup"
-# Version 2 adds the keyed submitting-principal digest to every job record.
-JOB_STORE_LAYOUT_VERSION = 2
+# Version 2 adds the keyed submitting-principal digest to every job record;
+# version 3 replaces unkeyed span, document and webhook URL hashes with keyed
+# digests.
+JOB_STORE_LAYOUT_VERSION = 3
 JOURNEY_MARKER_SCHEMA_VERSION = 1
 DEFAULT_CHUNK_BYTES = 1024 * 1024
 MAX_CHUNK_BYTES = 8 * 1024 * 1024

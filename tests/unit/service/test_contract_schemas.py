@@ -322,8 +322,11 @@ def test_contract_samples_carry_hashes_only(
             assert text not in rendered
         assert re.search(r"\b\d{3}-\d{2}-\d{4}\b", rendered) is None
 
-    hashes = [document["text_hash"] for document in final["documents"]]
-    assert hashes
+    # Documents carry keyed digests, never unkeyed hashes of the text.
+    digests = [document["text_digest"] for document in final["documents"]]
+    assert digests
     assert all(
-        re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None for value in hashes
+        digest["alg"] == "hmac-sha256"
+        and re.fullmatch(r"[0-9a-f]{64}", digest["value"]) is not None
+        for digest in digests
     )
