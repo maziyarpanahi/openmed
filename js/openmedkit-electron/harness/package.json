@@ -1,0 +1,28 @@
+{
+  "name": "openmedkit-electron-harness",
+  "productName": "OpenMedKit Electron Harness",
+  "version": "0.1.0",
+  "description": "Local packaged-app qualification harness for the OpenMedKit Electron integration.",
+  "private": true,
+  "author": "OpenMed",
+  "license": "Apache-2.0",
+  "scripts": {
+    "install-electron": "node node_modules/electron/install.js",
+    "stage": "node scripts/stage.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "npm run typecheck && npm run stage && npm run install-electron && electron-builder --dir --publish never --config electron-builder.json",
+    "test": "node --test ../../../tests/web/test_electron_packaged_harness.mjs",
+    "test:unpackaged": "npm run typecheck && npm run stage && npm run install-electron && OPENMED_ELECTRON_HARNESS_MODE=unpackaged node --test ../../../tests/web/test_electron_packaged_harness.mjs"
+  },
+  "devDependencies": {
+    "@electron/fuses": "1.8.0",
+    "@types/node": "22.20.1",
+    "electron": "44.9.3",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
