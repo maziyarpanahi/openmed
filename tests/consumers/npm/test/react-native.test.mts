@@ -41,11 +41,17 @@ const packageRoot = new URL("node_modules/@openmed/openmedkit-react-native/", co
 test("resolves the bridge from the consumer install with native sources", () => {
   const resolved = fileURLToPath(import.meta.resolve("@openmed/openmedkit-react-native"));
   assert.ok(resolved.startsWith(fileURLToPath(packageRoot)), "resolved_outside_install");
+  // The autolinking layout: Gradle module, ReactPackage, podspec and exports.
   for (const file of [
     "package.json",
     "src/index.ts",
-    "android/OpenMedKitRnModule.kt",
+    "react-native.config.js",
+    "openmedkit-react-native.podspec",
+    "android/build.gradle",
+    "android/src/main/java/com/openmed/openmedkit/reactnative/OpenMedKitRnModule.kt",
+    "android/src/main/java/com/openmed/openmedkit/reactnative/OpenMedKitRnPackage.kt",
     "ios/OpenMedKitRN.swift",
+    "ios/OpenMedKitRN.m",
   ]) {
     assert.ok(existsSync(new URL(file, packageRoot)), `missing:${file}`);
   }
