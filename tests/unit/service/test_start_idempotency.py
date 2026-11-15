@@ -159,7 +159,8 @@ class _FakeSMARTServer:
             "client_id": "synthetic-client",
             "private_key_pem": SYNTHETIC_PRIVATE_KEY,
             "output_dir": output_dir,
-            "poll_interval_seconds": 0,
+            # The smallest interval the bulk-job request bounds accept.
+            "poll_interval_seconds": 1,
         }
 
 
