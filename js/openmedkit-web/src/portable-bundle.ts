@@ -148,7 +148,6 @@ export const PORTABLE_BUNDLE_DEFAULT_LIMITS = {
   maxFiles: 4096,
 } as const;
 
-const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 const MAX_SIGNATURES = 16;
 const MAX_DEPTH = 32;
 
