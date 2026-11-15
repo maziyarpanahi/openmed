@@ -414,18 +414,63 @@ def render_baseline(document: Mapping[str, Any]) -> str:
     return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
 
 
-def _clang_search_flags(checkouts: Path) -> list[str]:
-    """Return ``-I`` flags for the C modules of resolved package checkouts."""
+_SKIPPED_CHECKOUT_PARTS = frozenset({"Tests", "Benchmarks", "Examples"})
+
+
+def _clang_search_flags(checkouts: Path, generated: Path | None = None) -> list[str]:
+    """Return ``-I`` flags for the C modules of resolved package checkouts.
+
+    A C target that ships ``include/`` headers without a ``module.modulemap``,
+    such as mlx-swift's ``cLogSupport``, gets one from SwiftPM at build time,
+    in a location that differs between ``swift build`` and ``xcodebuild``.
+    When ``generated`` is given, the same module map is written there so the
+    digester can import the target: the ``include/<Target>.h`` umbrella header
+    when it exists, otherwise the ``include/`` directory.
+
+    Args:
+        checkouts: SwiftPM checkouts directory.
+        generated: Directory for module maps written on behalf of SwiftPM.
+
+    Returns:
+        Clang ``-I`` flags, one pair per module map directory.
+    """
 
     flags: list[str] = []
-    if checkouts.is_dir():
-        for module_map in sorted(checkouts.glob("*/Source*/**/module.modulemap")):
-            relative_parts = module_map.relative_to(checkouts).parts
-            if any(
-                part in {"Tests", "Benchmarks", "Examples"} for part in relative_parts
-            ):
-                continue
-            flags.extend(["-I", str(module_map.parent)])
+    if not checkouts.is_dir():
+        return flags
+    for module_map in sorted(checkouts.glob("*/Source*/**/module.modulemap")):
+        relative_parts = module_map.relative_to(checkouts).parts
+        if _SKIPPED_CHECKOUT_PARTS.intersection(relative_parts):
+            continue
+        flags.extend(["-I", str(module_map.parent)])
+    if generated is None:
+        return flags
+    written: set[str] = set()
+    for include in sorted(checkouts.glob("*/Source*/*/include")):
+        target = include.parent.name
+        relative_parts = include.relative_to(checkouts).parts
+        if (
+            not include.is_dir()
+            or not target.isidentifier()
+            or target in written
+            or _SKIPPED_CHECKOUT_PARTS.intersection(relative_parts)
+            or next(include.rglob("module.modulemap"), None) is not None
+        ):
+            continue
+        umbrella = include / f"{target}.h"
+        declaration = (
+            f'umbrella header "{umbrella}"'
+            if umbrella.is_file()
+            else f'umbrella "{include}"'
+        )
+        directory = generated / target
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "module.modulemap").write_text(
+            f"module {target} {{\n    {declaration}\n    export *\n}}\n",
+            encoding="utf-8",
+        )
+        written.add(target)
+        flags.extend(["-I", str(directory)])
     return flags
 
 
@@ -482,7 +527,7 @@ def run_digester(
         spec.triple.format(arch=_host_arch()),
         "-I",
         str(modules_dir),
-        *_clang_search_flags(checkouts),
+        *_clang_search_flags(checkouts, output.parent / "module-maps"),
         "-abort-on-module-fail",
         "-avoid-location",
     ]

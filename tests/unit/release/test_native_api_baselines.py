@@ -411,6 +411,45 @@ def test_default_modules_dir_falls_back_to_swiftpm_5_layout(tmp_path):
     )
 
 
+def test_clang_flags_write_swiftpm_module_maps_for_header_only_c_targets(tmp_path):
+    checkouts = tmp_path / "checkouts"
+    # A C target with a module map of its own is used in place.
+    mapped = checkouts / "pkg" / "Sources" / "CMapped" / "include"
+    mapped.mkdir(parents=True)
+    (mapped / "module.modulemap").write_text("module CMapped {}\n")
+    # SwiftPM generates a module map at build time for these two targets.
+    header = checkouts / "pkg" / "Source" / "cLogSupport" / "include"
+    header.mkdir(parents=True)
+    (header / "cLogSupport.h").write_text("void log_support(void);\n")
+    directory = checkouts / "pkg" / "Sources" / "CDirectory" / "include"
+    directory.mkdir(parents=True)
+    (directory / "other.h").write_text("int other(void);\n")
+    skipped = checkouts / "pkg" / "Tests" / "CFixture" / "include"
+    skipped.mkdir(parents=True)
+    (skipped / "CFixture.h").write_text("int fixture(void);\n")
+    generated = tmp_path / "module-maps"
+
+    flags = swift_api._clang_search_flags(checkouts, generated)
+
+    assert flags == [
+        "-I",
+        str(mapped),
+        "-I",
+        str(generated / "cLogSupport"),
+        "-I",
+        str(generated / "CDirectory"),
+    ]
+    assert (generated / "cLogSupport" / "module.modulemap").read_text() == (
+        f'module cLogSupport {{\n    umbrella header "{header / "cLogSupport.h"}"\n'
+        "    export *\n}\n"
+    )
+    assert (
+        f'umbrella "{directory}"'
+        in (generated / "CDirectory" / "module.modulemap").read_text()
+    )
+    assert swift_api._clang_search_flags(checkouts) == ["-I", str(mapped)]
+
+
 KOTLIN_BEFORE = """\
 public final class com/example/kit/Client : java/io/Closeable {
 \tpublic fun <init> (Ljava/lang/String;)V
