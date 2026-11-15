@@ -13,10 +13,13 @@
     #endif
 
     private final class ManifestPathURLProtocol: URLProtocol {
+        // URLProtocol instances are created by the URL loading system, so the stub
+        // state has to be static. Every read and write holds `lock`, which is what
+        // makes the unchecked opt-out sound.
         private static let lock = NSLock()
-        private static var files: [String: Data] = [:]
-        private static var paths: [String] = []
-        private static var beforeResponse: ((String) throws -> Void)?
+        nonisolated(unsafe) private static var files: [String: Data] = [:]
+        nonisolated(unsafe) private static var paths: [String] = []
+        nonisolated(unsafe) private static var beforeResponse: ((String) throws -> Void)?
 
         static var requestedPaths: [String] {
             lock.lock()
