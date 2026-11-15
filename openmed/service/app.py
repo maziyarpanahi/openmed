@@ -52,6 +52,7 @@ from openmed.structured.decision_interop import (
 )
 from openmed.utils.validation import validate_model_name
 
+from .admission import HttpAdmission
 from .auth import (
     DEVELOPMENT_DOCS_EXEMPT_PATHS,
     ROUTE_POLICIES,
@@ -758,6 +759,10 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             _batch_backpressure_check if runtime.batching.enabled else None
         ),
         limited_paths=_MODEL_BACKED_PATHS,
+    )
+    app.state.admission = HttpAdmission(
+        runtime.admission_controller,
+        error_response=_error_response,
     )
 
 
@@ -1489,6 +1494,15 @@ def create_app(
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
             )
+
+    # Declared before the throttle so it runs inside it: rate limits shed first,
+    # and the request's tracked work is visible when the permit is released.
+    @app.middleware("http")
+    async def _admission_middleware(request: Request, call_next):
+        admission = getattr(request.app.state, "admission", None)
+        if admission is None:
+            return await call_next(request)
+        return await admission.dispatch(request, call_next)
 
     @app.middleware("http")
     async def _throttle_middleware(request: Request, call_next):

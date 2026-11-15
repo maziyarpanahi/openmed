@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import os
 import asyncio
+import os
 from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, Request
 from starlette.datastructures import MutableHeaders
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from strawberry.fastapi import GraphQLRouter
 from strawberry.http import GraphQLHTTPResponse
 from strawberry.http.ides import GraphQL_IDE
@@ -19,6 +19,7 @@ from strawberry.types.unset import UNSET
 
 from openmed.core.config import PROFILE_ENV_VAR
 
+from .admission import REASON_GLOBAL_LIMIT
 from .graphql_limits import (
     GraphQLLimitCategory,
     GraphQLLimitError,
@@ -30,7 +31,13 @@ from .graphql_limits import (
     record_graphql_rejection,
     variable_depth_violation,
 )
-from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
+from .graphql_schema import (
+    ADMISSION_REJECTED_CODE,
+    ADMISSION_REJECTED_MESSAGE,
+    SAFE_RESOLVER_ERROR,
+    OpenMedGraphQLContext,
+    schema,
+)
 from .journey_access import JourneyAccessGate
 from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
@@ -95,6 +102,30 @@ class PrivacySafeGraphQLRouter(GraphQLRouter):
                     {
                         "message": "Operation is not permitted.",
                         "extensions": {"code": "OPENMED_FORBIDDEN"},
+                    }
+                ],
+            }
+        admission_reasons = [
+            error.extensions.get("reason")
+            for error in result.errors or ()
+            if error.extensions.get("code") == ADMISSION_REJECTED_CODE
+        ]
+        if admission_reasons:
+            # Drop partial results so a rejected document is retried whole.
+            reason = (
+                REASON_GLOBAL_LIMIT
+                if REASON_GLOBAL_LIMIT in admission_reasons
+                else admission_reasons[0]
+            )
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": ADMISSION_REJECTED_MESSAGE,
+                        "extensions": {
+                            "code": ADMISSION_REJECTED_CODE,
+                            "reason": reason,
+                        },
                     }
                 ],
             }

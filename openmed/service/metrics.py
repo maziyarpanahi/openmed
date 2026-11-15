@@ -57,6 +57,16 @@ GRAPHQL_REJECTION_REASONS = frozenset(
     }
 )
 UNKNOWN_GRAPHQL_REJECTION_REASON = "other"
+PRINCIPAL_ADMISSION_INFLIGHT_NAME = "openmed_service_principal_admission_inflight"
+PRINCIPAL_ADMISSION_QUEUED_NAME = "openmed_service_principal_admission_queued"
+PRINCIPAL_ADMISSION_ACTIVE_NAME = (
+    "openmed_service_principal_admission_active_principals"
+)
+PRINCIPAL_ADMISSION_REJECTED_NAME = "openmed_service_principal_admission_rejected_total"
+PRINCIPAL_ADMISSION_REASON_LABELS = frozenset(
+    {"global_limit", "namespace_limit", "principal_limit"}
+)
+PRINCIPAL_ADMISSION_TRANSPORT_LABELS = frozenset({"graphql", "grpc", "rest"})
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -160,6 +170,10 @@ class PrometheusMetricsRegistry:
         self._admission_queue_wait: dict[str, float] = {}
         self._admission_shed_total: dict[str, int] = {}
         self._graphql_rejection_total: dict[str, int] = {}
+        self._principal_admission_inflight = 0
+        self._principal_admission_queued = 0
+        self._principal_admission_active = 0
+        self._principal_admission_rejected: dict[tuple[str, str], int] = {}
         self._circuit_breaker_state_counts = {
             "closed": 0,
             "open": 0,
@@ -376,6 +390,38 @@ class PrometheusMetricsRegistry:
                 self._graphql_rejection_total.get(reason_label, 0) + int(count)
             )
 
+    def record_principal_admission_state(
+        self,
+        *,
+        in_flight: int,
+        queued: int,
+        active_principals: int,
+    ) -> None:
+        """Set aggregate fair-admission gauges without principal identifiers."""
+        with self._lock:
+            self._principal_admission_inflight = _non_negative_int(in_flight)
+            self._principal_admission_queued = _non_negative_int(queued)
+            self._principal_admission_active = _non_negative_int(active_principals)
+
+    def record_principal_admission_rejection(
+        self,
+        *,
+        reason: str,
+        transport: str,
+        count: int = 1,
+    ) -> None:
+        """Count fair-admission rejections by static reason and transport."""
+        if count <= 0:
+            return
+        key = (
+            _closed_label(reason, PRINCIPAL_ADMISSION_REASON_LABELS),
+            _closed_label(transport, PRINCIPAL_ADMISSION_TRANSPORT_LABELS),
+        )
+        with self._lock:
+            self._principal_admission_rejected[key] = (
+                self._principal_admission_rejected.get(key, 0) + int(count)
+            )
+
     def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
         """Replace aggregate circuit-breaker state gauges."""
         with self._lock:
@@ -508,6 +554,10 @@ class PrometheusMetricsRegistry:
             admission_queue_wait = dict(self._admission_queue_wait)
             admission_shed_total = dict(self._admission_shed_total)
             graphql_rejection_total = dict(self._graphql_rejection_total)
+            principal_admission_inflight = self._principal_admission_inflight
+            principal_admission_queued = self._principal_admission_queued
+            principal_admission_active = self._principal_admission_active
+            principal_admission_rejected = dict(self._principal_admission_rejected)
             circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
             model_resident_total = self._model_resident_total
             model_resident_bytes = self._model_resident_bytes
@@ -714,6 +764,42 @@ class PrometheusMetricsRegistry:
         for reason, value in sorted(graphql_rejection_total.items()):
             labels = _label_suffix({"reason": reason})
             lines.append(f"{GRAPHQL_REJECTION_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_INFLIGHT_NAME,
+            "Requests holding a fair-admission permit across all principals.",
+            "gauge",
+        )
+        lines.append(
+            f"{PRINCIPAL_ADMISSION_INFLIGHT_NAME} {principal_admission_inflight}"
+        )
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_QUEUED_NAME,
+            "Requests waiting for a fair-admission permit across all principals.",
+            "gauge",
+        )
+        lines.append(f"{PRINCIPAL_ADMISSION_QUEUED_NAME} {principal_admission_queued}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_ACTIVE_NAME,
+            "Principals with admitted or waiting requests.",
+            "gauge",
+        )
+        lines.append(f"{PRINCIPAL_ADMISSION_ACTIVE_NAME} {principal_admission_active}")
+
+        _append_family_header(
+            lines,
+            PRINCIPAL_ADMISSION_REJECTED_NAME,
+            "Requests rejected by fair admission, by static reason and transport.",
+            "counter",
+        )
+        for (reason, transport), value in sorted(principal_admission_rejected.items()):
+            labels = _label_suffix({"reason": reason, "transport": transport})
+            lines.append(f"{PRINCIPAL_ADMISSION_REJECTED_NAME}{labels} {value}")
 
         _append_family_header(
             lines,
@@ -1000,6 +1086,13 @@ def _graphql_rejection_label(value: object) -> str:
     if normalized in GRAPHQL_REJECTION_REASONS:
         return normalized
     return UNKNOWN_GRAPHQL_REJECTION_REASON
+
+
+def _closed_label(value: object, allowed: frozenset[str]) -> str:
+    normalized = str(value).strip().casefold()
+    if normalized in allowed:
+        return normalized
+    return UNKNOWN_ADMISSION_QUEUE_LABEL
 
 
 def _non_negative_int(value: object) -> int:
