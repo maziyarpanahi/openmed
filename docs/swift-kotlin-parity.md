@@ -135,3 +135,157 @@ Review rules:
   and matching loader updates in every consumer.
 - Adding a consumer means adding it to `CONSUMERS` in the update script, to the
   table above, and to its workflow's path filters.
+
+## Kit-Parity Result Profile
+
+`tests/fixtures/parity/kit_parity_vectors.json` (schema
+`openmed.kit_parity_vectors`, version 1) freezes the kit-parity result profile
+`openmed.kit_parity_result`, version 1. Every OpenMedKit surface projects its
+native de-identification result into the same small record and serializes it
+to the same canonical JSON bytes. The record carries no source text, span
+surface text, source hashes, or reversible mappings. The profile is scoped to
+OpenMedKit result parity; it does not replace the broader v4 contract registry.
+
+The vectors are registered in `fixtures/parity/span_parity_manifest.json` under
+`kit_parity`, which pins their SHA-256 digest and names every consumer. The
+same `python scripts/parity/update_native_span_fixture.py --check` and
+`--write` commands validate and refresh them alongside the span fixture. The
+Python reference implementation is `openmed.core.kit_parity`.
+
+### Record
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `profile` | string | Always `openmed.kit_parity_result`. |
+| `profile_version` | integer | Always `1`. Any other version is rejected before the record is read further. |
+| `offset_unit` | string | Always `unicode_scalar`. |
+| `deidentified_text` | string | The exact de-identified output, compared as UTF-8 bytes. |
+| `spans` | array | Applied spans ordered by `(start, end)`, non-empty, non-overlapping. May be empty. |
+| `spans[].label` | string | Detector label, preserved byte for byte; ASCII `^[A-Za-z][A-Za-z0-9_:-]{0,79}$`. |
+| `spans[].canonical_label` | string | One of the 62 profile labels (the OpenMedKit policy taxonomy). |
+| `spans[].action` | string | One of `hash`, `keep`, `mask`, `redact`, `remove`, `replace`. |
+| `spans[].start`, `spans[].end` | integer | Half-open Unicode scalar offsets into the source text. |
+| `spans[].confidence_ppm` | integer, optional | `floor(confidence * 1_000_000 + 0.5)` in double precision, in `[0, 1000000]`. Omitted when the surface has no score. |
+| `spans[].replacement` | string, optional | Required for every action except `keep`, where it is omitted. `remove` uses the empty string. |
+
+Absent optional fields are omitted; `null` is never canonical. Canonical JSON
+has lexicographically sorted keys, no insignificant whitespace, integers only,
+and RFC 8785 string escaping: `"` and `\`, the short escapes `\b`, `\f`, `\n`,
+`\r`, `\t`, `\u00xx` (lowercase hex) for the remaining C0 controls, and raw
+UTF-8 for everything else, including `/`, DEL, and U+2028. Swift `String`
+equality treats canonically equivalent text as equal, so every surface compares
+canonical output and de-identified text as UTF-8 bytes.
+
+### Offsets and Conversions
+
+Unicode scalar offsets are the only stored coordinates. Each vector span also
+carries derived `utf8_*` and `utf16_*` offsets so every surface tests its
+native conversions in both directions. An offset that splits a surrogate pair
+or a UTF-8 sequence fails with `offset_not_scalar_boundary`; an offset past the
+text fails with `offset_out_of_bounds`.
+
+| Surface | Native index | Conversions |
+| --- | --- | --- |
+| Python | `str` index (scalar) | `scalar_to_utf8_offset`, `scalar_to_utf16_offset`, `utf8_to_scalar_offset`, `utf16_to_scalar_offset` in `openmed.core.kit_parity` |
+| Swift | `String.Index` | `KitParity.utf8Offset(in:scalarOffset:)`, `KitParity.utf16Offset(in:scalarOffset:)`, `KitParity.scalarOffset(in:utf8Offset:)`, `KitParity.scalarOffset(in:utf16Offset:)` |
+| Kotlin | UTF-16 index | `KitParity.scalarToUtf16Offset`, `KitParity.utf16ToScalarOffset`, `KitParity.scalarToUtf8Offset`, `KitParity.utf8ToScalarOffset`, backed by `UnicodeOffsetContract` |
+| Web | UTF-16 index | `scalarToUtf16Offset`, `utf16ToScalarOffset`, `scalarToUtf8Offset`, `utf8ToScalarOffset` exported by `openmed` |
+
+The web package keeps JavaScript UTF-16 indices on `OpenMedSpan`;
+`toKitParityResult` converts them against the result's source text. The React
+Native bridge receives scalar offsets from the native modules and projects them
+unchanged. Electron renderer spans carry UTF-16 indices, which
+`toRendererKitParityResult` converts.
+
+### Validation Order and Reason Codes
+
+Parsers check, in this order: JSON syntax (`json_invalid`), object shape
+(`result_not_object`), `profile` (`profile_unknown`), `profile_version`
+(`profile_version_unsupported`), unknown top-level keys (`field_unknown`),
+`offset_unit` (`offset_unit_unsupported`), `deidentified_text`, `spans`, then
+each span's `label` (`label_invalid`), `canonical_label` (`label_unknown`),
+`action` (`action_unknown`), `start` and `end` (`offset_invalid`),
+`confidence_ppm` (`confidence_invalid`), and `replacement`
+(`replacement_unexpected`), then ordering (`span_order_invalid`,
+`span_overlap`), and finally that the input bytes are the canonical bytes
+(`result_not_canonical`). A missing field is `field_missing`, an explicit
+`null` is `field_null`, and a wrong JSON type is `field_type_invalid`.
+Verifying a parsed record against its source text adds `offset_out_of_bounds`
+and `deidentified_text_mismatch`.
+
+Each failure carries the reason code and a JSON field path such as
+`$.spans[2].end`, and its message is exactly `<code> at <path>`. Unknown keys
+are reported at the enclosing object path, so a key name is never echoed. The
+vectors embed a privacy sentinel in rejected values, and every surface asserts
+that no failure message contains it.
+
+### Bundle Compatibility
+
+The profile accepts offset contract version `1` (the version of
+`tests/fixtures/parity/offset_contract.json`) and decoder contract version `1`
+(the BIO span decoder emitting span schema version 1). The compatibility gate
+(`check_compatibility` / `accept_result` in Python, `KitParity.accept` in Swift
+and Kotlin, `acceptKitParityResult` on the web) rejects any other version with
+`offset_contract_version_unsupported` or `decoder_contract_version_unsupported`
+before a result produced under that bundle is parsed. The signed bundle
+manifest that will supply these versions is tracked separately; until then
+callers pass the versions their bundle declares.
+
+### Vectors
+
+The 13 positive vectors cover ASCII text with spans at both text edges,
+emoji ZWJ sequences with skin-tone modifiers and flags, decomposed and stacked
+combining marks, CJK text after a supplementary-plane ideograph, Indic conjunct
+clusters, CRLF, tab, and C0 control escapes, empty input, Unicode text without
+identifiers, overlapping detections resolved to the longer span with a kept
+span, adjacent spans, every profile action, confidence extremes with an absent
+score, and renderer-safe redaction. Ten vectors also carry the raw `engine`
+detections and the bundled policy, so Swift and Kotlin run their real policy
+de-identification engines and compare the result bytes.
+
+Negative controls cover malformed JSON, unknown profiles and versions, unknown
+fields, labels, and actions, missing, `null`, and mistyped fields, fractional
+and out-of-range confidence, replacements on `keep`, out-of-order,
+duplicate, and overlapping spans, non-canonical whitespace, key order, and
+ASCII escaping, offsets past the source, changed bytes, UTF-16 offsets passed
+off as scalar offsets, and NFC output for NFD input. Every consumer also alters
+an offset, a label, an action, the span order, and a de-identified byte and
+asserts that the gate fails with a value-free report.
+
+### Kit-Parity Consumers and CI Gates
+
+| Surface | Test | CI gate |
+| --- | --- | --- |
+| Python | `tests/unit/parity/test_kit_parity_vectors.py` | the `pytest` run in `.github/workflows/ci.yml` |
+| Swift | `swift/OpenMedKit/Tests/OpenMedKitTests/KitParityVectorTests.swift` | `swift test --filter KitParityVectorTests` in `.github/workflows/swift-test.yml` |
+| Kotlin | `android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/KitParityVectorTest.kt` | `--tests '*KitParityVectorTest'` in `.github/workflows/android-ci.yml` |
+| Web | `tests/web/test_kit_parity.spec.ts` | `npm --prefix js/openmedkit-web test` in the `openmedkit-kit-parity` job of `.github/workflows/ci.yml` |
+| React Native | `tests/mobile/test_rn_kit_parity.ts` | `npm --prefix js/openmedkit-react-native test` in the same job |
+| Electron | `tests/web/test_electron_kit_parity.spec.ts` | `npm --prefix js/openmedkit-electron test` in the same job |
+
+Projection notes:
+
+- Python projects `DeidentificationResult` through
+  `from_deidentification_result`. Methods outside the profile, such as
+  `shift_dates` and `format_preserve`, are rejected rather than mapped.
+  Python's own mask placeholders use the raw entity type, so the Python engine
+  output is not yet compared against these vectors; that is part of policy and
+  surrogate equivalence.
+- Swift and Kotlin project `PolicyDeidentificationResult` through
+  `kitParityResult()` and `toKitParityResult()`. Swift's policy taxonomy
+  currently omits `DIET_TYPE`, `FEEDING_ROUTE`, `NUTRITIONAL_STATUS`, and
+  `NUTRITION_TARGET` and maps them to `OTHER`; both kits stay inside the profile
+  vocabulary.
+- React Native rejects native spans with missing or non-integer offsets or an
+  unknown action name with `OpenMedKitParityError` instead of coercing them.
+- Electron renderer spans carry no action or replacement and always redact to
+  `[canonical_label]`, so the Electron projection claims the vectors whose every
+  span is a `redact` to that token.
+- A vector a surface cannot represent natively (an absent score on Swift,
+  Kotlin, and Python) still passes that surface's strict parse and canonical
+  round trip.
+
+To change the vectors, edit the inputs (`text`, the span inputs, `engine`, and
+the negative controls), run
+`python scripts/parity/update_native_span_fixture.py --write`, and run every
+consumer gate above.

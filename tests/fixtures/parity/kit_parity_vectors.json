@@ -1,0 +1,1282 @@
+{
+  "schema": "openmed.kit_parity_vectors",
+  "version": 1,
+  "description": "Synthetic OpenMedKit kit-parity golden vectors (V35-11). All values are invented and non-PHI. Span offsets are half-open Unicode scalar offsets; utf8_* and utf16_* offsets, deidentified_text, result_json, and the digests are derived. Refresh them with scripts/parity/update_native_span_fixture.py --write.",
+  "profile": {
+    "name": "openmed.kit_parity_result",
+    "version": 1,
+    "offset_unit": "unicode_scalar",
+    "offset_interval": "half_open",
+    "derived_offset_units": [
+      "utf8",
+      "utf16"
+    ],
+    "span_order": "start_then_end_non_overlapping",
+    "confidence_encoding": "ppm_floor_plus_half",
+    "absent_optional_fields": "omit",
+    "canonical_json": "sorted_keys_compact_rfc8785_strings",
+    "label_pattern": "^[A-Za-z][A-Za-z0-9_:-]{0,79}$",
+    "actions": [
+      "hash",
+      "keep",
+      "mask",
+      "redact",
+      "remove",
+      "replace"
+    ],
+    "canonical_labels": [
+      "ACCOUNT_NUMBER",
+      "AGE",
+      "AMOUNT",
+      "ANTIBIOTIC",
+      "API_KEY",
+      "BIC",
+      "BITCOIN_ADDRESS",
+      "BODY_SITE",
+      "BUILDING_NUMBER",
+      "CONDITION",
+      "CREDIT_CARD",
+      "CREDIT_CARD_ISSUER",
+      "CURRENCY",
+      "CVV",
+      "DATE",
+      "DATE_OF_BIRTH",
+      "DIET_TYPE",
+      "EMAIL",
+      "ETHEREUM_ADDRESS",
+      "EYE_COLOR",
+      "FEEDING_ROUTE",
+      "FIRST_NAME",
+      "GENDER",
+      "GPS_COORDINATES",
+      "HEIGHT",
+      "IBAN",
+      "ID_NUM",
+      "IMEI",
+      "IP_ADDRESS",
+      "JOB_DEPARTMENT",
+      "JOB_TITLE",
+      "LAB_TEST",
+      "LAST_NAME",
+      "LITECOIN_ADDRESS",
+      "LOCATION",
+      "MAC_ADDRESS",
+      "MASKED_NUMBER",
+      "MEDICATION",
+      "MICROORGANISM",
+      "MIDDLE_NAME",
+      "NUTRITIONAL_STATUS",
+      "NUTRITION_TARGET",
+      "OCCUPATION",
+      "ORDINAL_DIRECTION",
+      "ORGANIZATION",
+      "OTHER",
+      "PASSWORD",
+      "PERSON",
+      "PHONE",
+      "PIN",
+      "PREFIX",
+      "PROCEDURE",
+      "SSN",
+      "STREET_ADDRESS",
+      "SUSCEPTIBILITY",
+      "TIME",
+      "URL",
+      "USERNAME",
+      "USER_AGENT",
+      "VEHICLE_REGISTRATION",
+      "VIN",
+      "ZIPCODE"
+    ],
+    "offset_contract_versions": [
+      1
+    ],
+    "decoder_contract_versions": [
+      1
+    ],
+    "privacy_sentinel": "kitparity-sentinel-7f3a"
+  },
+  "vectors": [
+    {
+      "id": "ascii_text_boundaries",
+      "categories": [
+        "ascii",
+        "boundary",
+        "newline"
+      ],
+      "text": "Ada Quill seen on 2026-03-02 by phone 555-014-7721.\nMRN-300417",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "patient_name",
+            "start": 0,
+            "end": 9,
+            "confidence_ppm": 1000000
+          },
+          {
+            "label": "date",
+            "start": 18,
+            "end": 28,
+            "confidence_ppm": 968750
+          },
+          {
+            "label": "phone_number",
+            "start": 38,
+            "end": 50,
+            "confidence_ppm": 937500
+          },
+          {
+            "label": "medical_record_number",
+            "start": 52,
+            "end": 62,
+            "confidence_ppm": 875000
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "patient_name",
+          "canonical_label": "OTHER",
+          "action": "mask",
+          "start": 0,
+          "end": 9,
+          "confidence_ppm": 1000000,
+          "replacement": "[OTHER]",
+          "utf8_start": 0,
+          "utf8_end": 9,
+          "utf16_start": 0,
+          "utf16_end": 9
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 18,
+          "end": 28,
+          "confidence_ppm": 968750,
+          "replacement": "[DATE]",
+          "utf8_start": 18,
+          "utf8_end": 28,
+          "utf16_start": 18,
+          "utf16_end": 28
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 38,
+          "end": 50,
+          "confidence_ppm": 937500,
+          "replacement": "[PHONE]",
+          "utf8_start": 38,
+          "utf8_end": 50,
+          "utf16_start": 38,
+          "utf16_end": 50
+        },
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "mask",
+          "start": 52,
+          "end": 62,
+          "confidence_ppm": 875000,
+          "replacement": "[ID_NUM]",
+          "utf8_start": 52,
+          "utf8_end": 62,
+          "utf16_start": 52,
+          "utf16_end": 62
+        }
+      ],
+      "deidentified_text": "[OTHER] seen on [DATE] by phone [PHONE].\n[ID_NUM]",
+      "deidentified_sha256": "687f3cd967b96ba863a6442d3aa0f6dc155684a33d7b840c8458e45df9622433",
+      "result_json": "{\"deidentified_text\":\"[OTHER] seen on [DATE] by phone [PHONE].\\n[ID_NUM]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":1000000,\"end\":9,\"label\":\"patient_name\",\"replacement\":\"[OTHER]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":968750,\"end\":28,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":18},{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":937500,\"end\":50,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":38},{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":875000,\"end\":62,\"label\":\"medical_record_number\",\"replacement\":\"[ID_NUM]\",\"start\":52}]}",
+      "result_sha256": "801ce919e06079067fd4b27e4dd8373cd4f443b6d80283c54381380a4140270a"
+    },
+    {
+      "id": "emoji_sequences",
+      "categories": [
+        "emoji",
+        "utf16_shift",
+        "utf8_shift",
+        "boundary"
+      ],
+      "text": "Clinician \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f paged about Patient: Bo Reyes \ud83c\udde8\ud83c\udde6 at 555-019-4410 \u2705 email bo.reyes@example.test\ud83d\udc4d",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "patient_name",
+            "start": 37,
+            "end": 45,
+            "confidence_ppm": 970000
+          },
+          {
+            "label": "phone_number",
+            "start": 52,
+            "end": 64,
+            "confidence_ppm": 999999
+          },
+          {
+            "label": "email",
+            "start": 73,
+            "end": 94,
+            "confidence_ppm": 500000
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "patient_name",
+          "canonical_label": "OTHER",
+          "action": "mask",
+          "start": 37,
+          "end": 45,
+          "confidence_ppm": 970000,
+          "replacement": "[OTHER]",
+          "utf8_start": 49,
+          "utf8_end": 57,
+          "utf16_start": 39,
+          "utf16_end": 47
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 52,
+          "end": 64,
+          "confidence_ppm": 999999,
+          "replacement": "[PHONE]",
+          "utf8_start": 70,
+          "utf8_end": 82,
+          "utf16_start": 56,
+          "utf16_end": 68
+        },
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 73,
+          "end": 94,
+          "confidence_ppm": 500000,
+          "replacement": "[EMAIL]",
+          "utf8_start": 93,
+          "utf8_end": 114,
+          "utf16_start": 77,
+          "utf16_end": 98
+        }
+      ],
+      "deidentified_text": "Clinician \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f paged about Patient: [OTHER] \ud83c\udde8\ud83c\udde6 at [PHONE] \u2705 email [EMAIL]\ud83d\udc4d",
+      "deidentified_sha256": "1eacadc8bc4837a9d4a75afcaf9dfe28920d51222b76f822539200364ace8dc1",
+      "result_json": "{\"deidentified_text\":\"Clinician \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f paged about Patient: [OTHER] \ud83c\udde8\ud83c\udde6 at [PHONE] \u2705 email [EMAIL]\ud83d\udc4d\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":970000,\"end\":45,\"label\":\"patient_name\",\"replacement\":\"[OTHER]\",\"start\":37},{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":999999,\"end\":64,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":52},{\"action\":\"mask\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":500000,\"end\":94,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":73}]}",
+      "result_sha256": "3ba23ee18fcc7f4690a807e7d8216c0312247f095ac8968d16f20d13b0aecdab"
+    },
+    {
+      "id": "combining_marks",
+      "categories": [
+        "combining_mark",
+        "utf8_shift"
+      ],
+      "text": "Re\u0301sume\u0301 for Patient: Zoe\u0308 Lam\u0303, DOB: 1988-11-23; cafe\u0301 n\u0303\u0301 visit on 2025-12-01.",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "patient_name",
+            "start": 22,
+            "end": 31,
+            "confidence_ppm": 812500
+          },
+          {
+            "label": "date_of_birth",
+            "start": 38,
+            "end": 48,
+            "confidence_ppm": 750000
+          },
+          {
+            "label": "date",
+            "start": 69,
+            "end": 79,
+            "confidence_ppm": 1000000
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "patient_name",
+          "canonical_label": "OTHER",
+          "action": "mask",
+          "start": 22,
+          "end": 31,
+          "confidence_ppm": 812500,
+          "replacement": "[OTHER]",
+          "utf8_start": 24,
+          "utf8_end": 35,
+          "utf16_start": 22,
+          "utf16_end": 31
+        },
+        {
+          "label": "date_of_birth",
+          "canonical_label": "DATE_OF_BIRTH",
+          "action": "mask",
+          "start": 38,
+          "end": 48,
+          "confidence_ppm": 750000,
+          "replacement": "[DATE_OF_BIRTH]",
+          "utf8_start": 42,
+          "utf8_end": 52,
+          "utf16_start": 38,
+          "utf16_end": 48
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 69,
+          "end": 79,
+          "confidence_ppm": 1000000,
+          "replacement": "[DATE]",
+          "utf8_start": 76,
+          "utf8_end": 86,
+          "utf16_start": 69,
+          "utf16_end": 79
+        }
+      ],
+      "deidentified_text": "Re\u0301sume\u0301 for Patient: [OTHER], DOB: [DATE_OF_BIRTH]; cafe\u0301 n\u0303\u0301 visit on [DATE].",
+      "deidentified_sha256": "4b9329276f064bb7b7d3b25989174d94fe7a195f44c4517076d431ae90802f9a",
+      "result_json": "{\"deidentified_text\":\"Re\u0301sume\u0301 for Patient: [OTHER], DOB: [DATE_OF_BIRTH]; cafe\u0301 n\u0303\u0301 visit on [DATE].\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":812500,\"end\":31,\"label\":\"patient_name\",\"replacement\":\"[OTHER]\",\"start\":22},{\"action\":\"mask\",\"canonical_label\":\"DATE_OF_BIRTH\",\"confidence_ppm\":750000,\"end\":48,\"label\":\"date_of_birth\",\"replacement\":\"[DATE_OF_BIRTH]\",\"start\":38},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":79,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":69}]}",
+      "result_sha256": "2a42105986bc5c5dad59e31b511636eb1d1d66c7834da52d881ff9abb4a53e73"
+    },
+    {
+      "id": "cjk_supplementary",
+      "categories": [
+        "cjk",
+        "utf16_shift",
+        "utf8_shift"
+      ],
+      "text": "\ud840\udc00\u60a3\u8005\u5f20\u4f1f\uff0c\u7535\u8bdd 555-018-3301\uff0c\u90ae\u7bb1 zhang.wei@example.test\u3002\u6771\u4eac on 2026-01-09",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "name",
+            "start": 3,
+            "end": 5,
+            "confidence_ppm": 906250
+          },
+          {
+            "label": "phone_number",
+            "start": 9,
+            "end": 21,
+            "confidence_ppm": 953125
+          },
+          {
+            "label": "email",
+            "start": 25,
+            "end": 47,
+            "confidence_ppm": 984375
+          },
+          {
+            "label": "date",
+            "start": 54,
+            "end": 64,
+            "confidence_ppm": 1000000
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "name",
+          "canonical_label": "PERSON",
+          "action": "mask",
+          "start": 3,
+          "end": 5,
+          "confidence_ppm": 906250,
+          "replacement": "[PERSON]",
+          "utf8_start": 10,
+          "utf8_end": 16,
+          "utf16_start": 4,
+          "utf16_end": 6
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 9,
+          "end": 21,
+          "confidence_ppm": 953125,
+          "replacement": "[PHONE]",
+          "utf8_start": 26,
+          "utf8_end": 38,
+          "utf16_start": 10,
+          "utf16_end": 22
+        },
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 25,
+          "end": 47,
+          "confidence_ppm": 984375,
+          "replacement": "[EMAIL]",
+          "utf8_start": 48,
+          "utf8_end": 70,
+          "utf16_start": 26,
+          "utf16_end": 48
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 54,
+          "end": 64,
+          "confidence_ppm": 1000000,
+          "replacement": "[DATE]",
+          "utf8_start": 83,
+          "utf8_end": 93,
+          "utf16_start": 55,
+          "utf16_end": 65
+        }
+      ],
+      "deidentified_text": "\ud840\udc00\u60a3\u8005[PERSON]\uff0c\u7535\u8bdd [PHONE]\uff0c\u90ae\u7bb1 [EMAIL]\u3002\u6771\u4eac on [DATE]",
+      "deidentified_sha256": "64098fb7273308a1af7f36cf0ec55c808983c48ae62d24fecda081f7ad1d0e99",
+      "result_json": "{\"deidentified_text\":\"\ud840\udc00\u60a3\u8005[PERSON]\uff0c\u7535\u8bdd [PHONE]\uff0c\u90ae\u7bb1 [EMAIL]\u3002\u6771\u4eac on [DATE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":906250,\"end\":5,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":3},{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":953125,\"end\":21,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":9},{\"action\":\"mask\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":984375,\"end\":47,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":25},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":64,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":54}]}",
+      "result_sha256": "73453d97df0897c3faa33348df864adaf7caf55d30cfc7d8575feab00d747c59"
+    },
+    {
+      "id": "indic_conjuncts",
+      "categories": [
+        "indic",
+        "utf8_shift"
+      ],
+      "text": "\u0930\u094b\u0917\u0940 \u0915\u094d\u0937\u093f\u0924\u093f\u091c \u0936\u0930\u094d\u092e\u093e \u0915\u094d\u0937\u0947\u0924\u094d\u0930 DOB: 1979-05-30 \u0b95\u0bcd\u0bb7 MRN-77120",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "name",
+            "start": 5,
+            "end": 18,
+            "confidence_ppm": 890625
+          },
+          {
+            "label": "date_of_birth",
+            "start": 32,
+            "end": 42,
+            "confidence_ppm": 765625
+          },
+          {
+            "label": "medical_record_number",
+            "start": 47,
+            "end": 56,
+            "confidence_ppm": 937500
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "name",
+          "canonical_label": "PERSON",
+          "action": "mask",
+          "start": 5,
+          "end": 18,
+          "confidence_ppm": 890625,
+          "replacement": "[PERSON]",
+          "utf8_start": 13,
+          "utf8_end": 50,
+          "utf16_start": 5,
+          "utf16_end": 18
+        },
+        {
+          "label": "date_of_birth",
+          "canonical_label": "DATE_OF_BIRTH",
+          "action": "mask",
+          "start": 32,
+          "end": 42,
+          "confidence_ppm": 765625,
+          "replacement": "[DATE_OF_BIRTH]",
+          "utf8_start": 78,
+          "utf8_end": 88,
+          "utf16_start": 32,
+          "utf16_end": 42
+        },
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "mask",
+          "start": 47,
+          "end": 56,
+          "confidence_ppm": 937500,
+          "replacement": "[ID_NUM]",
+          "utf8_start": 99,
+          "utf8_end": 108,
+          "utf16_start": 47,
+          "utf16_end": 56
+        }
+      ],
+      "deidentified_text": "\u0930\u094b\u0917\u0940 [PERSON] \u0915\u094d\u0937\u0947\u0924\u094d\u0930 DOB: [DATE_OF_BIRTH] \u0b95\u0bcd\u0bb7 [ID_NUM]",
+      "deidentified_sha256": "a88cb7329a8ee2bf0c1fe48b4dc89ca5901196430e954b2e746c223de4148fc6",
+      "result_json": "{\"deidentified_text\":\"\u0930\u094b\u0917\u0940 [PERSON] \u0915\u094d\u0937\u0947\u0924\u094d\u0930 DOB: [DATE_OF_BIRTH] \u0b95\u0bcd\u0bb7 [ID_NUM]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":890625,\"end\":18,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":5},{\"action\":\"mask\",\"canonical_label\":\"DATE_OF_BIRTH\",\"confidence_ppm\":765625,\"end\":42,\"label\":\"date_of_birth\",\"replacement\":\"[DATE_OF_BIRTH]\",\"start\":32},{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":937500,\"end\":56,\"label\":\"medical_record_number\",\"replacement\":\"[ID_NUM]\",\"start\":47}]}",
+      "result_sha256": "940da4b7e04c7f05e0cab90088634c8af765f3012b49335ed9a5895cdf40ee10"
+    },
+    {
+      "id": "newlines_and_escapes",
+      "categories": [
+        "newline",
+        "json_escape",
+        "control_character"
+      ],
+      "text": "Note:\r\n\t\"Quote\" back\\slash /path \u000b\u001f\u007f\u2028\nEmail kit@example.test\r\nDate 2026-04-05\n",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "email",
+            "start": 44,
+            "end": 60,
+            "confidence_ppm": 968750
+          },
+          {
+            "label": "date",
+            "start": 67,
+            "end": 77,
+            "confidence_ppm": 937500
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 44,
+          "end": 60,
+          "confidence_ppm": 968750,
+          "replacement": "[EMAIL]",
+          "utf8_start": 46,
+          "utf8_end": 62,
+          "utf16_start": 44,
+          "utf16_end": 60
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 67,
+          "end": 77,
+          "confidence_ppm": 937500,
+          "replacement": "[DATE]",
+          "utf8_start": 69,
+          "utf8_end": 79,
+          "utf16_start": 67,
+          "utf16_end": 77
+        }
+      ],
+      "deidentified_text": "Note:\r\n\t\"Quote\" back\\slash /path \u000b\u001f\u007f\u2028\nEmail [EMAIL]\r\nDate [DATE]\n",
+      "deidentified_sha256": "c8fc7a2f7f12142f8294a68dba45bcd6815b96af89a2ae45a9241de4a319934a",
+      "result_json": "{\"deidentified_text\":\"Note:\\r\\n\\t\\\"Quote\\\" back\\\\slash /path \\u000b\\u001f\u007f\u2028\\nEmail [EMAIL]\\r\\nDate [DATE]\\n\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":968750,\"end\":60,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":44},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":937500,\"end\":77,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":67}]}",
+      "result_sha256": "cd41771463d3e7cb2c75567a66010dba78389aa942d6ec6f2a0897abe638caba"
+    },
+    {
+      "id": "empty_input",
+      "categories": [
+        "empty"
+      ],
+      "text": "",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": []
+      },
+      "spans": [],
+      "deidentified_text": "",
+      "deidentified_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result_json": "{\"deidentified_text\":\"\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[]}",
+      "result_sha256": "a10eb1d4f87a27d090e78fbebdddeac92a67fa9a36232d5caabfd2fdafb20f39"
+    },
+    {
+      "id": "unicode_without_identifiers",
+      "categories": [
+        "emoji",
+        "combining_mark",
+        "no_spans"
+      ],
+      "text": "Caf\u00e9 \u2615 re\u0301union \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f on call \ud83c\udde8\ud83c\udde6\n",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": []
+      },
+      "spans": [],
+      "deidentified_text": "Caf\u00e9 \u2615 re\u0301union \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f on call \ud83c\udde8\ud83c\udde6\n",
+      "deidentified_sha256": "acddee6880c6b1cbdc0aa5edca3d9b710ffe73216a069d1d17f7d9142f40673d",
+      "result_json": "{\"deidentified_text\":\"Caf\u00e9 \u2615 re\u0301union \ud83d\udc69\ud83c\udffd\u200d\u2695\ufe0f on call \ud83c\udde8\ud83c\udde6\\n\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[]}",
+      "result_sha256": "5b00fc1f1e32ae4308aa86188606bbd6846b92145bf6f2dd62a381e87c63651b"
+    },
+    {
+      "id": "overlap_resolved",
+      "categories": [
+        "overlap",
+        "keep",
+        "utf16_shift"
+      ],
+      "text": "Contact: MRN-204812@example.test \ud83d\udce7 confirmed on 2025-02-14.\n",
+      "engine": {
+        "policy": "clinical_minimal_redaction",
+        "detections": [
+          {
+            "label": "medical_record_number",
+            "start": 9,
+            "end": 19,
+            "confidence_ppm": 984375
+          },
+          {
+            "label": "email",
+            "start": 9,
+            "end": 32,
+            "confidence_ppm": 921875
+          },
+          {
+            "label": "date",
+            "start": 48,
+            "end": 58,
+            "confidence_ppm": 859375
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "mask",
+          "start": 9,
+          "end": 32,
+          "confidence_ppm": 921875,
+          "replacement": "[EMAIL]",
+          "utf8_start": 9,
+          "utf8_end": 32,
+          "utf16_start": 9,
+          "utf16_end": 32
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "keep",
+          "start": 48,
+          "end": 58,
+          "confidence_ppm": 859375,
+          "utf8_start": 51,
+          "utf8_end": 61,
+          "utf16_start": 49,
+          "utf16_end": 59
+        }
+      ],
+      "deidentified_text": "Contact: [EMAIL] \ud83d\udce7 confirmed on 2025-02-14.\n",
+      "deidentified_sha256": "404aaae14730fbaa34a5ec1965f5f46961dde95260541277666689a4d5dd1809",
+      "result_json": "{\"deidentified_text\":\"Contact: [EMAIL] \ud83d\udce7 confirmed on 2025-02-14.\\n\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":921875,\"end\":32,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":9},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":859375,\"end\":58,\"label\":\"date\",\"start\":48}]}",
+      "result_sha256": "b2d98687b4328677ff9927a5613307137326e98120d14a54fbb00e761dfa3770"
+    },
+    {
+      "id": "adjacent_spans",
+      "categories": [
+        "boundary",
+        "adjacent"
+      ],
+      "text": "2026-01-02555-014-2290",
+      "engine": {
+        "policy": "hipaa_safe_harbor",
+        "detections": [
+          {
+            "label": "date",
+            "start": 0,
+            "end": 10,
+            "confidence_ppm": 1000000
+          },
+          {
+            "label": "phone_number",
+            "start": 10,
+            "end": 22,
+            "confidence_ppm": 1000000
+          }
+        ]
+      },
+      "spans": [
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 0,
+          "end": 10,
+          "confidence_ppm": 1000000,
+          "replacement": "[DATE]",
+          "utf8_start": 0,
+          "utf8_end": 10,
+          "utf16_start": 0,
+          "utf16_end": 10
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "mask",
+          "start": 10,
+          "end": 22,
+          "confidence_ppm": 1000000,
+          "replacement": "[PHONE]",
+          "utf8_start": 10,
+          "utf8_end": 22,
+          "utf16_start": 10,
+          "utf16_end": 22
+        }
+      ],
+      "deidentified_text": "[DATE][PHONE]",
+      "deidentified_sha256": "fa2fb277cdf583d65395a92d7ce084e28827231038f065b506a45793a0142d4e",
+      "result_json": "{\"deidentified_text\":\"[DATE][PHONE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":10,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":1000000,\"end\":22,\"label\":\"phone_number\",\"replacement\":\"[PHONE]\",\"start\":10}]}",
+      "result_sha256": "e2b23749a14fed8cc35f5ebe1d8653536333691823cf56a2cf7c9f7b79fa0ae4"
+    },
+    {
+      "id": "action_vocabulary",
+      "categories": [
+        "actions",
+        "keep",
+        "empty_replacement"
+      ],
+      "text": "Ana Ruiz | ana@example.test | 2026-02-03 | MRN-1 | 555-010-1000 | \u00e9t\u00e9 ok",
+      "spans": [
+        {
+          "label": "name",
+          "canonical_label": "PERSON",
+          "action": "mask",
+          "start": 0,
+          "end": 8,
+          "confidence_ppm": 999000,
+          "replacement": "[PERSON]",
+          "utf8_start": 0,
+          "utf8_end": 8,
+          "utf16_start": 0,
+          "utf16_end": 8
+        },
+        {
+          "label": "email",
+          "canonical_label": "EMAIL",
+          "action": "redact",
+          "start": 11,
+          "end": 27,
+          "confidence_ppm": 990000,
+          "replacement": "[EMAIL]",
+          "utf8_start": 11,
+          "utf8_end": 27,
+          "utf16_start": 11,
+          "utf16_end": 27
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "replace",
+          "start": 30,
+          "end": 40,
+          "confidence_ppm": 980000,
+          "replacement": "[DATE_REPLACED]",
+          "utf8_start": 30,
+          "utf8_end": 40,
+          "utf16_start": 30,
+          "utf16_end": 40
+        },
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "hash",
+          "start": 43,
+          "end": 48,
+          "confidence_ppm": 970000,
+          "replacement": "ID_NUM_51e38f2271877b9fa93893df",
+          "utf8_start": 43,
+          "utf8_end": 48,
+          "utf16_start": 43,
+          "utf16_end": 48
+        },
+        {
+          "label": "phone_number",
+          "canonical_label": "PHONE",
+          "action": "remove",
+          "start": 51,
+          "end": 63,
+          "confidence_ppm": 960000,
+          "replacement": "",
+          "utf8_start": 51,
+          "utf8_end": 63,
+          "utf16_start": 51,
+          "utf16_end": 63
+        },
+        {
+          "label": "season",
+          "canonical_label": "OTHER",
+          "action": "keep",
+          "start": 66,
+          "end": 69,
+          "confidence_ppm": 10000,
+          "utf8_start": 66,
+          "utf8_end": 71,
+          "utf16_start": 66,
+          "utf16_end": 69
+        }
+      ],
+      "deidentified_text": "[PERSON] | [EMAIL] | [DATE_REPLACED] | ID_NUM_51e38f2271877b9fa93893df |  | \u00e9t\u00e9 ok",
+      "deidentified_sha256": "c5d79457de2a4daba8a1e38c77786b1ce2f600ecd6159e5b3fa6c246b163d5e1",
+      "result_json": "{\"deidentified_text\":\"[PERSON] | [EMAIL] | [DATE_REPLACED] | ID_NUM_51e38f2271877b9fa93893df |  | \u00e9t\u00e9 ok\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":999000,\"end\":8,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"redact\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":990000,\"end\":27,\"label\":\"email\",\"replacement\":\"[EMAIL]\",\"start\":11},{\"action\":\"replace\",\"canonical_label\":\"DATE\",\"confidence_ppm\":980000,\"end\":40,\"label\":\"date\",\"replacement\":\"[DATE_REPLACED]\",\"start\":30},{\"action\":\"hash\",\"canonical_label\":\"ID_NUM\",\"confidence_ppm\":970000,\"end\":48,\"label\":\"medical_record_number\",\"replacement\":\"ID_NUM_51e38f2271877b9fa93893df\",\"start\":43},{\"action\":\"remove\",\"canonical_label\":\"PHONE\",\"confidence_ppm\":960000,\"end\":63,\"label\":\"phone_number\",\"replacement\":\"\",\"start\":51},{\"action\":\"keep\",\"canonical_label\":\"OTHER\",\"confidence_ppm\":10000,\"end\":69,\"label\":\"season\",\"start\":66}]}",
+      "result_sha256": "9ac4ebc806e839f3f314f60ae10d6fd0df54813cdf8e108b16f4b48dba070caf"
+    },
+    {
+      "id": "confidence_encoding",
+      "categories": [
+        "confidence",
+        "absent_score"
+      ],
+      "text": "Rule hit MRN-55 then name Lee Park then site lab-7 then 2026-06-07",
+      "spans": [
+        {
+          "label": "medical_record_number",
+          "canonical_label": "ID_NUM",
+          "action": "mask",
+          "start": 9,
+          "end": 15,
+          "replacement": "[ID_NUM]",
+          "utf8_start": 9,
+          "utf8_end": 15,
+          "utf16_start": 9,
+          "utf16_end": 15
+        },
+        {
+          "label": "name",
+          "canonical_label": "PERSON",
+          "action": "mask",
+          "start": 26,
+          "end": 34,
+          "confidence_ppm": 0,
+          "replacement": "[PERSON]",
+          "utf8_start": 26,
+          "utf8_end": 34,
+          "utf16_start": 26,
+          "utf16_end": 34
+        },
+        {
+          "label": "location",
+          "canonical_label": "LOCATION",
+          "action": "mask",
+          "start": 45,
+          "end": 50,
+          "confidence_ppm": 1,
+          "replacement": "[LOCATION]",
+          "utf8_start": 45,
+          "utf8_end": 50,
+          "utf16_start": 45,
+          "utf16_end": 50
+        },
+        {
+          "label": "date",
+          "canonical_label": "DATE",
+          "action": "mask",
+          "start": 56,
+          "end": 66,
+          "confidence_ppm": 1000000,
+          "replacement": "[DATE]",
+          "utf8_start": 56,
+          "utf8_end": 66,
+          "utf16_start": 56,
+          "utf16_end": 66
+        }
+      ],
+      "deidentified_text": "Rule hit [ID_NUM] then name [PERSON] then site [LOCATION] then [DATE]",
+      "deidentified_sha256": "0b697818b0df7f6a55dfa6f27437eee86b4012a4ea86436176a53ec70e6d3350",
+      "result_json": "{\"deidentified_text\":\"Rule hit [ID_NUM] then name [PERSON] then site [LOCATION] then [DATE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"ID_NUM\",\"end\":15,\"label\":\"medical_record_number\",\"replacement\":\"[ID_NUM]\",\"start\":9},{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":0,\"end\":34,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":26},{\"action\":\"mask\",\"canonical_label\":\"LOCATION\",\"confidence_ppm\":1,\"end\":50,\"label\":\"location\",\"replacement\":\"[LOCATION]\",\"start\":45},{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":66,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":56}]}",
+      "result_sha256": "1cc730710fb755ea74360f4744e1fb6d7a6ff4432fb4f5503c395e1e92374b86"
+    },
+    {
+      "id": "renderer_redaction",
+      "categories": [
+        "emoji",
+        "renderer",
+        "utf16_shift"
+      ],
+      "text": "\ud83e\uddd1\u200d\u2695\ufe0f Dr Mo Ito \u2192 mo.ito@example.test \ud83d\udcc5 2026-07-08",
+      "spans": [
+        {
+          "label": "PERSON",
+          "canonical_label": "PERSON",
+          "action": "redact",
+          "start": 8,
+          "end": 14,
+          "confidence_ppm": 937500,
+          "replacement": "[PERSON]",
+          "utf8_start": 17,
+          "utf8_end": 23,
+          "utf16_start": 9,
+          "utf16_end": 15
+        },
+        {
+          "label": "EMAIL",
+          "canonical_label": "EMAIL",
+          "action": "redact",
+          "start": 17,
+          "end": 36,
+          "confidence_ppm": 968750,
+          "replacement": "[EMAIL]",
+          "utf8_start": 28,
+          "utf8_end": 47,
+          "utf16_start": 18,
+          "utf16_end": 37
+        },
+        {
+          "label": "DATE",
+          "canonical_label": "DATE",
+          "action": "redact",
+          "start": 39,
+          "end": 49,
+          "confidence_ppm": 1000000,
+          "replacement": "[DATE]",
+          "utf8_start": 53,
+          "utf8_end": 63,
+          "utf16_start": 41,
+          "utf16_end": 51
+        }
+      ],
+      "deidentified_text": "\ud83e\uddd1\u200d\u2695\ufe0f Dr [PERSON] \u2192 [EMAIL] \ud83d\udcc5 [DATE]",
+      "deidentified_sha256": "653872bb01cfbf6e71b2497d2a6adefdb6aa5dc9a3ee2c81bc20133ade609f42",
+      "result_json": "{\"deidentified_text\":\"\ud83e\uddd1\u200d\u2695\ufe0f Dr [PERSON] \u2192 [EMAIL] \ud83d\udcc5 [DATE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"redact\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":937500,\"end\":14,\"label\":\"PERSON\",\"replacement\":\"[PERSON]\",\"start\":8},{\"action\":\"redact\",\"canonical_label\":\"EMAIL\",\"confidence_ppm\":968750,\"end\":36,\"label\":\"EMAIL\",\"replacement\":\"[EMAIL]\",\"start\":17},{\"action\":\"redact\",\"canonical_label\":\"DATE\",\"confidence_ppm\":1000000,\"end\":49,\"label\":\"DATE\",\"replacement\":\"[DATE]\",\"start\":39}]}",
+      "result_sha256": "ffc38ed90ad4f0186de66656678cd5304dccf70636b2963b194ab6a9a2bc1fc1"
+    }
+  ],
+  "rejections": [
+    {
+      "id": "json_syntax",
+      "input": "{\"profile\":",
+      "reason": "json_invalid",
+      "field_path": "$"
+    },
+    {
+      "id": "result_not_object",
+      "input": "[{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}]",
+      "reason": "result_not_object",
+      "field_path": "$"
+    },
+    {
+      "id": "profile_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_missing",
+      "field_path": "$.profile"
+    },
+    {
+      "id": "profile_unknown",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.other_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "profile_unknown",
+      "field_path": "$.profile"
+    },
+    {
+      "id": "profile_version_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_missing",
+      "field_path": "$.profile_version"
+    },
+    {
+      "id": "profile_version_string",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":\"1\",\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_type_invalid",
+      "field_path": "$.profile_version"
+    },
+    {
+      "id": "profile_version_unsupported",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":2,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "profile_version_unsupported",
+      "field_path": "$.profile_version"
+    },
+    {
+      "id": "profile_version_checked_first",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":99,\"spans\":[{\"action\":\"kitparity-sentinel-7f3a\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "profile_version_unsupported",
+      "field_path": "$.profile_version"
+    },
+    {
+      "id": "unknown_top_level_field",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"sentinel_note\":\"kitparity-sentinel-7f3a\",\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_unknown",
+      "field_path": "$"
+    },
+    {
+      "id": "offset_unit_utf16",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"utf16\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "offset_unit_unsupported",
+      "field_path": "$.offset_unit"
+    },
+    {
+      "id": "deidentified_text_null",
+      "input": "{\"deidentified_text\":null,\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_null",
+      "field_path": "$.deidentified_text"
+    },
+    {
+      "id": "spans_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1}",
+      "reason": "field_missing",
+      "field_path": "$.spans"
+    },
+    {
+      "id": "span_not_object",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[\"kitparity-sentinel-7f3a\",{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_type_invalid",
+      "field_path": "$.spans[0]"
+    },
+    {
+      "id": "unknown_span_field",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"source_text\":\"kitparity-sentinel-7f3a\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_unknown",
+      "field_path": "$.spans[0]"
+    },
+    {
+      "id": "label_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_missing",
+      "field_path": "$.spans[0].label"
+    },
+    {
+      "id": "label_invalid",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"kitparity-sentinel-7f3a x\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "label_invalid",
+      "field_path": "$.spans[0].label"
+    },
+    {
+      "id": "label_non_ascii",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"nam\u00e9\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "label_invalid",
+      "field_path": "$.spans[0].label"
+    },
+    {
+      "id": "canonical_label_unknown",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"SENTINEL_7F3A\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "label_unknown",
+      "field_path": "$.spans[0].canonical_label"
+    },
+    {
+      "id": "canonical_label_lowercase",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"person\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "label_unknown",
+      "field_path": "$.spans[0].canonical_label"
+    },
+    {
+      "id": "action_unknown",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"format_preserve\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "action_unknown",
+      "field_path": "$.spans[0].action"
+    },
+    {
+      "id": "action_null",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":null,\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_null",
+      "field_path": "$.spans[0].action"
+    },
+    {
+      "id": "start_string",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":\"0\"},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_type_invalid",
+      "field_path": "$.spans[0].start"
+    },
+    {
+      "id": "start_boolean",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":true},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_type_invalid",
+      "field_path": "$.spans[0].start"
+    },
+    {
+      "id": "start_negative",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":-1},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "offset_invalid",
+      "field_path": "$.spans[0].start"
+    },
+    {
+      "id": "end_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_missing",
+      "field_path": "$.spans[0].end"
+    },
+    {
+      "id": "empty_span",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":0,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "offset_invalid",
+      "field_path": "$.spans[0].end"
+    },
+    {
+      "id": "confidence_fraction",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":0.5,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_type_invalid",
+      "field_path": "$.spans[0].confidence_ppm"
+    },
+    {
+      "id": "confidence_out_of_range",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":1000001,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "confidence_invalid",
+      "field_path": "$.spans[0].confidence_ppm"
+    },
+    {
+      "id": "confidence_null",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":null,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_null",
+      "field_path": "$.spans[0].confidence_ppm"
+    },
+    {
+      "id": "replacement_missing",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "field_missing",
+      "field_path": "$.spans[0].replacement"
+    },
+    {
+      "id": "replacement_null_on_keep",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"replacement\":null,\"start\":13}]}",
+      "reason": "field_null",
+      "field_path": "$.spans[1].replacement"
+    },
+    {
+      "id": "replacement_on_keep",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"replacement\":\"kitparity-sentinel-7f3a\",\"start\":13}]}",
+      "reason": "replacement_unexpected",
+      "field_path": "$.spans[1].replacement"
+    },
+    {
+      "id": "spans_out_of_order",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13},{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0}]}",
+      "reason": "span_order_invalid",
+      "field_path": "$.spans[1]"
+    },
+    {
+      "id": "spans_duplicate",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0}]}",
+      "reason": "span_order_invalid",
+      "field_path": "$.spans[1]"
+    },
+    {
+      "id": "spans_overlap",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":5}]}",
+      "reason": "span_overlap",
+      "field_path": "$.spans[1]"
+    },
+    {
+      "id": "non_canonical_whitespace",
+      "input": "{\n \"deidentified_text\": \"[PERSON] \ud83d\ude00 on 2026-01-02\",\n \"offset_unit\": \"unicode_scalar\",\n \"profile\": \"openmed.kit_parity_result\",\n \"profile_version\": 1,\n \"spans\": [\n  {\n   \"action\": \"mask\",\n   \"canonical_label\": \"PERSON\",\n   \"confidence_ppm\": 950000,\n   \"end\": 7,\n   \"label\": \"name\",\n   \"replacement\": \"[PERSON]\",\n   \"start\": 0\n  },\n  {\n   \"action\": \"keep\",\n   \"canonical_label\": \"DATE\",\n   \"confidence_ppm\": 900000,\n   \"end\": 23,\n   \"label\": \"date\",\n   \"start\": 13\n  }\n ]\n}",
+      "reason": "result_not_canonical",
+      "field_path": "$"
+    },
+    {
+      "id": "non_canonical_key_order",
+      "input": "{\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}],\"profile_version\":1,\"profile\":\"openmed.kit_parity_result\",\"offset_unit\":\"unicode_scalar\",\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\"}",
+      "reason": "result_not_canonical",
+      "field_path": "$"
+    },
+    {
+      "id": "non_canonical_ascii_escape",
+      "input": "{\"deidentified_text\":\"[PERSON] \\ud83d\\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "result_not_canonical",
+      "field_path": "$"
+    }
+  ],
+  "source_rejections": [
+    {
+      "id": "offset_past_end",
+      "text": "Pat Lee \ud83d\ude00 on 2026-01-02",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":24,\"label\":\"date\",\"start\":13}]}",
+      "reason": "offset_out_of_bounds",
+      "field_path": "$.spans[1].end"
+    },
+    {
+      "id": "deidentified_bytes_changed",
+      "text": "Pat Lee \ud83d\ude00 on 2026-01-02",
+      "input": "{\"deidentified_text\":\"[PERSON] \ud83d\ude00 on 2026-01-02 \",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":7,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":0},{\"action\":\"keep\",\"canonical_label\":\"DATE\",\"confidence_ppm\":900000,\"end\":23,\"label\":\"date\",\"start\":13}]}",
+      "reason": "deidentified_text_mismatch",
+      "field_path": "$.deidentified_text"
+    },
+    {
+      "id": "utf16_offsets_as_scalar",
+      "text": "\ud83d\ude00 Pat Lee",
+      "input": "{\"deidentified_text\":\"\ud83d\ude00 [PERSON]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"PERSON\",\"confidence_ppm\":950000,\"end\":10,\"label\":\"name\",\"replacement\":\"[PERSON]\",\"start\":3}]}",
+      "reason": "offset_out_of_bounds",
+      "field_path": "$.spans[0].end"
+    },
+    {
+      "id": "nfc_normalized_output",
+      "text": "Jose\u0301 seen 2026-01-02",
+      "input": "{\"deidentified_text\":\"Jos\u00e9 seen [DATE]\",\"offset_unit\":\"unicode_scalar\",\"profile\":\"openmed.kit_parity_result\",\"profile_version\":1,\"spans\":[{\"action\":\"mask\",\"canonical_label\":\"DATE\",\"confidence_ppm\":950000,\"end\":21,\"label\":\"date\",\"replacement\":\"[DATE]\",\"start\":11}]}",
+      "reason": "deidentified_text_mismatch",
+      "field_path": "$.deidentified_text"
+    }
+  ],
+  "offset_rejections": [
+    {
+      "id": "utf16_inside_surrogate_pair",
+      "text": "A\ud83d\ude00B",
+      "unit": "utf16",
+      "offset": 2,
+      "reason": "offset_not_scalar_boundary"
+    },
+    {
+      "id": "utf8_inside_sequence",
+      "text": "A\u00e9B",
+      "unit": "utf8",
+      "offset": 2,
+      "reason": "offset_not_scalar_boundary"
+    },
+    {
+      "id": "utf8_inside_four_byte_sequence",
+      "text": "A\ud83d\ude00B",
+      "unit": "utf8",
+      "offset": 3,
+      "reason": "offset_not_scalar_boundary"
+    },
+    {
+      "id": "scalar_past_end",
+      "text": "A\ud83d\ude00B",
+      "unit": "scalar",
+      "offset": 4,
+      "reason": "offset_out_of_bounds"
+    },
+    {
+      "id": "utf16_past_end",
+      "text": "A\ud83d\ude00B",
+      "unit": "utf16",
+      "offset": 5,
+      "reason": "offset_out_of_bounds"
+    },
+    {
+      "id": "utf8_past_end",
+      "text": "A\ud83d\ude00B",
+      "unit": "utf8",
+      "offset": 7,
+      "reason": "offset_out_of_bounds"
+    }
+  ],
+  "compatibility": [
+    {
+      "id": "current_bundle",
+      "offset_contract_version": 1,
+      "decoder_contract_version": 1,
+      "outcome": "accepted"
+    },
+    {
+      "id": "future_offset_contract",
+      "offset_contract_version": 2,
+      "decoder_contract_version": 1,
+      "outcome": "offset_contract_version_unsupported"
+    },
+    {
+      "id": "legacy_offset_contract",
+      "offset_contract_version": 0,
+      "decoder_contract_version": 1,
+      "outcome": "offset_contract_version_unsupported"
+    },
+    {
+      "id": "future_decoder_contract",
+      "offset_contract_version": 1,
+      "decoder_contract_version": 2,
+      "outcome": "decoder_contract_version_unsupported"
+    },
+    {
+      "id": "both_unsupported",
+      "offset_contract_version": 3,
+      "decoder_contract_version": 3,
+      "outcome": "offset_contract_version_unsupported"
+    }
+  ]
+}

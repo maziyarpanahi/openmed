@@ -12,6 +12,7 @@ export {
   createElectronDeidentifyClient,
   redactTextWithSpans,
   registerElectronDeidentifyIpc,
+  toRendererKitParityResult,
   type ElectronDeidentifyIpcOptions,
   type ElectronDeidentifyRequest,
   type ElectronDeidentifyResponse,

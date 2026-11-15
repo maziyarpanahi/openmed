@@ -8,6 +8,9 @@ The canonical native-kit golden lives in ``fixtures/parity/``:
   the expected de-identified text.
 * ``span_parity_manifest.json`` pins a SHA-256 digest of every fixture file and
   names each consumer that must pass when the fixture changes.
+* ``tests/fixtures/parity/kit_parity_vectors.json`` holds the kit-parity result
+  profile golden vectors. The manifest's ``kit_parity`` entry pins its digest
+  and names its consumers on every OpenMedKit surface.
 
 ``--check`` (the default) validates the schema, recomputes every derived field
 and digest, and fails with a value-free reason code when anything is stale.
@@ -71,6 +74,100 @@ CONSUMERS: tuple[Mapping[str, str], ...] = (
         "gate": "--tests '*SpanEquivalenceTest'",
     },
 )
+
+KIT_VECTORS_PATH = "tests/fixtures/parity/kit_parity_vectors.json"
+KIT_VECTORS_FILE = ROOT / KIT_VECTORS_PATH
+KIT_VECTORS_SCHEMA = "openmed.kit_parity_vectors"
+KIT_VECTORS_VERSION = 1
+
+KIT_CONSUMERS: tuple[Mapping[str, str], ...] = (
+    {
+        "surface": "python",
+        "test": "tests/unit/parity/test_kit_parity_vectors.py",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "pytest",
+    },
+    {
+        "surface": "swift",
+        "test": "swift/OpenMedKit/Tests/OpenMedKitTests/KitParityVectorTests.swift",
+        "workflow": ".github/workflows/swift-test.yml",
+        "gate": "swift test --filter KitParityVectorTests",
+    },
+    {
+        "surface": "kotlin",
+        "test": (
+            "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/"
+            "KitParityVectorTest.kt"
+        ),
+        "workflow": ".github/workflows/android-ci.yml",
+        "gate": "--tests '*KitParityVectorTest'",
+    },
+    {
+        "surface": "web",
+        "test": "tests/web/test_kit_parity.spec.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-web test",
+    },
+    {
+        "surface": "react-native",
+        "test": "tests/mobile/test_rn_kit_parity.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-react-native test",
+    },
+    {
+        "surface": "electron",
+        "test": "tests/web/test_electron_kit_parity.spec.ts",
+        "workflow": ".github/workflows/ci.yml",
+        "gate": "npm --prefix js/openmedkit-electron test",
+    },
+)
+
+#: Categories the kit-parity vectors must cover between them.
+KIT_REQUIRED_CATEGORIES = frozenset(
+    {
+        "ascii",
+        "boundary",
+        "cjk",
+        "combining_mark",
+        "emoji",
+        "empty",
+        "indic",
+        "keep",
+        "newline",
+        "overlap",
+        "utf16_shift",
+        "utf8_shift",
+    }
+)
+_KIT_TOP_LEVEL_KEYS = frozenset(
+    {
+        "schema",
+        "version",
+        "description",
+        "profile",
+        "vectors",
+        "rejections",
+        "source_rejections",
+        "offset_rejections",
+        "compatibility",
+    }
+)
+_KIT_VECTOR_KEYS = frozenset(
+    {
+        "id",
+        "categories",
+        "text",
+        "spans",
+        "deidentified_text",
+        "deidentified_sha256",
+        "result_json",
+        "result_sha256",
+    }
+)
+_KIT_SPAN_INPUT_KEYS = ("label", "canonical_label", "action", "start", "end")
+_KIT_SPAN_OPTIONAL_KEYS = ("confidence_ppm", "replacement")
+_KIT_SPAN_DERIVED_KEYS = ("utf8_start", "utf8_end", "utf16_start", "utf16_end")
+_KIT_DETECTION_KEYS = frozenset({"label", "start", "end", "confidence_ppm"})
 
 _TOP_LEVEL_KEYS = frozenset(
     {"schema", "version", "description", "offset_unit", "cases"}
@@ -428,15 +525,314 @@ def _first_utf8_difference(expected: str, actual: str) -> str:
     )
 
 
-def build_manifest(payload: Mapping[str, Any], fixture_dir: Path) -> dict[str, Any]:
+def _kit() -> Any:
+    """Import the kit-parity reference implementation from this checkout."""
+    root = str(ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from openmed.core import kit_parity
+
+    return kit_parity
+
+
+def expected_kit_profile() -> dict[str, Any]:
+    """Return the profile block the kit-parity vectors must carry.
+
+    Returns:
+        The profile description derived from ``openmed.core.kit_parity``.
+    """
+    kit = _kit()
+    return {
+        "name": kit.PROFILE_NAME,
+        "version": kit.PROFILE_VERSION,
+        "offset_unit": kit.OFFSET_UNIT,
+        "offset_interval": "half_open",
+        "derived_offset_units": ["utf8", "utf16"],
+        "span_order": "start_then_end_non_overlapping",
+        "confidence_encoding": "ppm_floor_plus_half",
+        "absent_optional_fields": "omit",
+        "canonical_json": "sorted_keys_compact_rfc8785_strings",
+        "label_pattern": "^[A-Za-z][A-Za-z0-9_:-]{0,79}$",
+        "actions": list(kit.KIT_ACTIONS),
+        "canonical_labels": list(kit.KIT_CANONICAL_LABELS),
+        "offset_contract_versions": sorted(kit.OFFSET_CONTRACT_VERSIONS),
+        "decoder_contract_versions": sorted(kit.DECODER_CONTRACT_VERSIONS),
+        "privacy_sentinel": "kitparity-sentinel-7f3a",
+    }
+
+
+def load_kit_vectors(vectors_file: Path = KIT_VECTORS_FILE) -> dict[str, Any]:
+    """Load the kit-parity vectors file.
+
+    Args:
+        vectors_file: Path of ``kit_parity_vectors.json``.
+
+    Returns:
+        The decoded vectors payload.
+
+    Raises:
+        FixtureError: If the file is missing or is not a JSON object.
+    """
+    if not vectors_file.is_file():
+        raise FixtureError("kit_vectors_missing", detail=KIT_VECTORS_PATH)
+    try:
+        payload = json.loads(vectors_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise FixtureError("kit_vectors_not_json", detail=KIT_VECTORS_PATH) from error
+    if not isinstance(payload, dict):
+        raise FixtureError("kit_vectors_schema_invalid", detail="top level")
+    return payload
+
+
+def _kit_span(record: Mapping[str, Any]) -> Any:
+    return _kit().KitParitySpan(
+        label=record["label"],
+        canonical_label=record["canonical_label"],
+        action=record["action"],
+        start=record["start"],
+        end=record["end"],
+        confidence_ppm=record.get("confidence_ppm"),
+        replacement=record.get("replacement"),
+    )
+
+
+def _kit_vector_result(vector: Mapping[str, Any]) -> Any:
+    kit = _kit()
+    spans = tuple(_kit_span(record) for record in vector["spans"])
+    return kit.KitParityResult(
+        deidentified_text=kit.apply_spans(vector["text"], spans), spans=spans
+    )
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def derive_kit_vectors(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return a copy of the vectors with every derived field recomputed.
+
+    Args:
+        payload: Decoded vectors payload.
+
+    Returns:
+        A new payload whose UTF-8 and UTF-16 offsets, de-identified text,
+        canonical result JSON, and digests are refreshed.
+    """
+    kit = _kit()
+    derived = json.loads(json.dumps(payload))
+    for vector in derived.get("vectors", []):
+        text = vector["text"]
+        spans = []
+        for record in vector["spans"]:
+            refreshed = {key: record[key] for key in _KIT_SPAN_INPUT_KEYS}
+            refreshed.update(
+                {key: record[key] for key in _KIT_SPAN_OPTIONAL_KEYS if key in record}
+            )
+            start, end = record["start"], record["end"]
+            refreshed["utf8_start"] = kit.scalar_to_utf8_offset(text, start)
+            refreshed["utf8_end"] = kit.scalar_to_utf8_offset(text, end)
+            refreshed["utf16_start"] = kit.scalar_to_utf16_offset(text, start)
+            refreshed["utf16_end"] = kit.scalar_to_utf16_offset(text, end)
+            spans.append(refreshed)
+        vector["spans"] = spans
+        result = _kit_vector_result(vector)
+        result_json = kit.serialize_result(result)
+        vector["deidentified_text"] = result.deidentified_text
+        vector["deidentified_sha256"] = _sha256_text(result.deidentified_text)
+        vector["result_json"] = result_json
+        vector["result_sha256"] = _sha256_text(result_json)
+    return derived
+
+
+def validate_kit_vectors(payload: Mapping[str, Any]) -> list[str]:
+    """Validate the kit-parity vectors against the Python reference.
+
+    Every derived field must match, every rejection must produce its declared
+    reason code and field path, and no failure message may echo the privacy
+    sentinel.
+
+    Args:
+        payload: Decoded vectors payload.
+
+    Returns:
+        The vector identifiers in fixture order.
+
+    Raises:
+        FixtureError: On the first problem, with a value-free reason code.
+    """
+    kit = _kit()
+    if set(payload) != _KIT_TOP_LEVEL_KEYS:
+        raise FixtureError("kit_vectors_schema_invalid", detail="top-level keys")
+    if payload["schema"] != KIT_VECTORS_SCHEMA:
+        raise FixtureError("kit_vectors_schema_invalid", detail="schema")
+    if payload["version"] != KIT_VECTORS_VERSION:
+        raise FixtureError("kit_vectors_version_unsupported")
+    if payload["profile"] != expected_kit_profile():
+        raise FixtureError("kit_profile_drift")
+    sentinel = payload["profile"]["privacy_sentinel"]
+
+    ids: list[str] = []
+    categories: set[str] = set()
+    for vector in payload["vectors"]:
+        vector_id = vector.get("id")
+        if not isinstance(vector_id, str) or not CASE_ID.match(vector_id):
+            raise FixtureError("kit_vector_invalid", detail=f"index={len(ids)}")
+        if vector_id in ids:
+            raise FixtureError("kit_vector_duplicate", case_id=vector_id)
+        ids.append(vector_id)
+        _validate_kit_vector(vector, vector_id)
+        categories.update(vector["categories"])
+    missing = KIT_REQUIRED_CATEGORIES - categories
+    if missing:
+        raise FixtureError("kit_coverage_incomplete", detail=",".join(sorted(missing)))
+
+    for record in payload["rejections"]:
+        try:
+            kit.parse_result(record["input"])
+        except kit.KitParityError as error:
+            _check_kit_rejection(record, error, sentinel)
+        else:
+            raise FixtureError("kit_rejection_accepted", case_id=record["id"])
+    for record in payload["source_rejections"]:
+        parsed = kit.parse_result(record["input"])
+        try:
+            kit.verify_result(parsed, record["text"])
+        except kit.KitParityError as error:
+            _check_kit_rejection(record, error, sentinel)
+        else:
+            raise FixtureError("kit_rejection_accepted", case_id=record["id"])
+    converters = {
+        "scalar": kit.scalar_to_utf16_offset,
+        "utf8": kit.utf8_to_scalar_offset,
+        "utf16": kit.utf16_to_scalar_offset,
+    }
+    for record in payload["offset_rejections"]:
+        try:
+            converters[record["unit"]](record["text"], record["offset"])
+        except kit.KitParityError as error:
+            if error.code != record["reason"]:
+                raise FixtureError(
+                    "kit_rejection_mismatch", case_id=record["id"]
+                ) from error
+        else:
+            raise FixtureError("kit_rejection_accepted", case_id=record["id"])
+    for record in payload["compatibility"]:
+        try:
+            kit.check_compatibility(
+                offset_contract_version=record["offset_contract_version"],
+                decoder_contract_version=record["decoder_contract_version"],
+            )
+        except kit.KitParityError as error:
+            outcome = error.code
+        else:
+            outcome = "accepted"
+        if outcome != record["outcome"]:
+            raise FixtureError("kit_compatibility_mismatch", case_id=record["id"])
+    return ids
+
+
+def _validate_kit_vector(vector: Mapping[str, Any], vector_id: str) -> None:
+    kit = _kit()
+    keys = set(vector)
+    if not _KIT_VECTOR_KEYS <= keys or keys - _KIT_VECTOR_KEYS - {"engine"}:
+        raise FixtureError("kit_vector_invalid", case_id=vector_id, detail="keys")
+    text = vector["text"]
+    if not isinstance(text, str) or not isinstance(vector["categories"], list):
+        raise FixtureError("kit_vector_invalid", case_id=vector_id)
+    required = set(_KIT_SPAN_INPUT_KEYS + _KIT_SPAN_DERIVED_KEYS)
+    allowed = required | set(_KIT_SPAN_OPTIONAL_KEYS)
+    for index, record in enumerate(vector["spans"]):
+        if required - set(record) or set(record) - allowed:
+            raise FixtureError(
+                "kit_vector_invalid", case_id=vector_id, detail=f"span={index}"
+            )
+        start, end = record["start"], record["end"]
+        for field, expected in (
+            ("utf8_start", kit.scalar_to_utf8_offset(text, start)),
+            ("utf8_end", kit.scalar_to_utf8_offset(text, end)),
+            ("utf16_start", kit.scalar_to_utf16_offset(text, start)),
+            ("utf16_end", kit.scalar_to_utf16_offset(text, end)),
+        ):
+            if record[field] != expected:
+                raise FixtureError(
+                    "kit_vector_offset_mismatch",
+                    case_id=vector_id,
+                    detail=f"span={index} field={field}",
+                )
+    engine = vector.get("engine")
+    if engine is not None and (
+        set(engine) != {"policy", "detections"}
+        or not all(
+            isinstance(item, dict) and set(item) == _KIT_DETECTION_KEYS
+            for item in engine["detections"]
+        )
+    ):
+        raise FixtureError("kit_vector_invalid", case_id=vector_id, detail="engine")
+    try:
+        result = _kit_vector_result(vector)
+        result_json = kit.serialize_result(result)
+        kit.verify_result(kit.parse_result(result_json), text)
+    except kit.KitParityError as error:
+        raise FixtureError(
+            "kit_vector_invalid", case_id=vector_id, detail=error.code
+        ) from error
+    for field, expected in (
+        ("deidentified_text", result.deidentified_text),
+        ("deidentified_sha256", _sha256_text(result.deidentified_text)),
+        ("result_json", result_json),
+        ("result_sha256", _sha256_text(result_json)),
+    ):
+        if vector[field] != expected:
+            raise FixtureError(
+                "kit_vector_output_mismatch", case_id=vector_id, detail=field
+            )
+
+
+def _check_kit_rejection(
+    record: Mapping[str, Any], error: Exception, sentinel: str
+) -> None:
+    code = getattr(error, "code", None)
+    path = getattr(error, "field_path", None)
+    if (code, path) != (record["reason"], record["field_path"]):
+        raise FixtureError("kit_rejection_mismatch", case_id=record["id"])
+    if sentinel in str(error) or str(error) != f"{code} at {path}":
+        raise FixtureError("kit_rejection_not_value_free", case_id=record["id"])
+
+
+def check_kit_vectors(vectors_file: Path = KIT_VECTORS_FILE) -> list[str]:
+    """Validate the committed kit-parity vectors and their serialization.
+
+    Args:
+        vectors_file: Path of ``kit_parity_vectors.json``.
+
+    Returns:
+        The vector identifiers in fixture order.
+
+    Raises:
+        FixtureError: When the vectors are invalid or not canonically written.
+    """
+    payload = load_kit_vectors(vectors_file)
+    ids = validate_kit_vectors(payload)
+    if vectors_file.read_text(encoding="utf-8") != canonical_json(payload):
+        raise FixtureError("kit_vectors_not_canonical", detail=KIT_VECTORS_PATH)
+    return ids
+
+
+def build_manifest(
+    payload: Mapping[str, Any],
+    fixture_dir: Path,
+    vectors_file: Path = KIT_VECTORS_FILE,
+) -> dict[str, Any]:
     """Return the digest manifest for the fixture files on disk.
 
     Args:
         payload: Decoded fixture payload, used to find referenced text files.
         fixture_dir: Directory holding the parity fixture files.
+        vectors_file: The kit-parity vectors file to digest.
 
     Returns:
-        Manifest mapping each fixture file to its SHA-256 digest.
+        Manifest mapping each fixture file to its SHA-256 digest, plus the
+        kit-parity vectors entry.
     """
     names = {SPANS_FILE}
     names.update(case["text_file"] for case in payload["cases"] if "text_file" in case)
@@ -453,14 +849,29 @@ def build_manifest(payload: Mapping[str, Any], fixture_dir: Path) -> dict[str, A
         "update_command": UPDATE_COMMAND,
         "check_command": CHECK_COMMAND,
         "consumers": [dict(consumer) for consumer in CONSUMERS],
+        "kit_parity": {
+            "path": KIT_VECTORS_PATH,
+            "schema": KIT_VECTORS_SCHEMA,
+            "version": KIT_VECTORS_VERSION,
+            "profile": _kit().PROFILE_NAME,
+            "profile_version": _kit().PROFILE_VERSION,
+            "sha256": sha256_file(vectors_file),
+            "consumers": [dict(consumer) for consumer in KIT_CONSUMERS],
+        },
     }
 
 
-def check_fixture(fixture_dir: Path = FIXTURE_DIR) -> list[FixtureCase]:
+def check_fixture(
+    fixture_dir: Path = FIXTURE_DIR, vectors_file: Path = KIT_VECTORS_FILE
+) -> list[FixtureCase]:
     """Validate the committed fixture, its serialization, and its digests.
+
+    The kit-parity vectors are validated too, and their digest must match the
+    manifest's ``kit_parity`` entry.
 
     Args:
         fixture_dir: Directory holding the parity fixture files.
+        vectors_file: The kit-parity vectors file.
 
     Returns:
         The resolved cases.
@@ -482,7 +893,8 @@ def check_fixture(fixture_dir: Path = FIXTURE_DIR) -> list[FixtureCase]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         raise FixtureError("manifest_not_json", detail=MANIFEST_FILE) from error
-    expected = build_manifest(payload, fixture_dir)
+    check_kit_vectors(vectors_file)
+    expected = build_manifest(payload, fixture_dir, vectors_file)
     if not isinstance(manifest, dict):
         raise FixtureError("manifest_schema_invalid")
     actual_files = {
@@ -493,16 +905,24 @@ def check_fixture(fixture_dir: Path = FIXTURE_DIR) -> list[FixtureCase]:
     for entry in expected["files"]:
         if actual_files.get(entry["path"]) != entry["sha256"]:
             raise FixtureError("digest_mismatch", detail=entry["path"])
+    kit_entry = manifest.get("kit_parity")
+    if not isinstance(kit_entry, dict) or (
+        kit_entry.get("sha256") != expected["kit_parity"]["sha256"]
+    ):
+        raise FixtureError("digest_mismatch", detail=KIT_VECTORS_PATH)
     if manifest != expected:
         raise FixtureError("manifest_stale", detail=MANIFEST_FILE)
     return cases
 
 
-def write_fixture(fixture_dir: Path = FIXTURE_DIR) -> None:
+def write_fixture(
+    fixture_dir: Path = FIXTURE_DIR, vectors_file: Path = KIT_VECTORS_FILE
+) -> None:
     """Recompute derived fields and digests, then rewrite the fixture files.
 
     Args:
         fixture_dir: Directory holding the parity fixture files.
+        vectors_file: The kit-parity vectors file.
 
     Raises:
         FixtureError: When the refreshed fixture is still invalid.
@@ -510,7 +930,10 @@ def write_fixture(fixture_dir: Path = FIXTURE_DIR) -> None:
     payload = derive_payload(load_spans_payload(fixture_dir), fixture_dir)
     validate_payload(payload, fixture_dir)
     (fixture_dir / SPANS_FILE).write_text(canonical_json(payload), encoding="utf-8")
-    manifest = build_manifest(payload, fixture_dir)
+    vectors = derive_kit_vectors(load_kit_vectors(vectors_file))
+    validate_kit_vectors(vectors)
+    vectors_file.write_text(canonical_json(vectors), encoding="utf-8")
+    manifest = build_manifest(payload, fixture_dir, vectors_file)
     (fixture_dir / MANIFEST_FILE).write_text(canonical_json(manifest), encoding="utf-8")
 
 
@@ -534,15 +957,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--fixture-dir", type=Path, default=FIXTURE_DIR, help=argparse.SUPPRESS
     )
+    parser.add_argument(
+        "--vectors-file", type=Path, default=KIT_VECTORS_FILE, help=argparse.SUPPRESS
+    )
     args = parser.parse_args(argv)
     try:
         if args.write:
-            write_fixture(args.fixture_dir)
-        cases = check_fixture(args.fixture_dir)
+            write_fixture(args.fixture_dir, args.vectors_file)
+        cases = check_fixture(args.fixture_dir, args.vectors_file)
+        vectors = check_kit_vectors(args.vectors_file)
     except FixtureError as error:
         print(f"native span fixture invalid: {error}", file=sys.stderr)
         return 1
     print(f"native span fixture ok: {len(cases)} cases")
+    print(f"kit parity vectors ok: {len(vectors)} vectors")
     return 0
 
 
