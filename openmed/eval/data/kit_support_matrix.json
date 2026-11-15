@@ -1,0 +1,2980 @@
+{
+  "schema_version": 1,
+  "matrix": "openmedkit-support-matrix",
+  "release": "v4.0",
+  "state": "frozen",
+  "frozen_on": "2026-11-07",
+  "sources": {
+    "families": "docs/export-matrix.md",
+    "tiers": "openmed.eval.tiers.TIERS"
+  },
+  "surfaces": [
+    {
+      "id": "python",
+      "name": "Python reference contract",
+      "epic_scope": "reference",
+      "support_claim": "supported"
+    },
+    {
+      "id": "swift",
+      "name": "Swift OpenMedKit",
+      "epic_scope": "P0",
+      "support_claim": "supported"
+    },
+    {
+      "id": "android",
+      "name": "Kotlin and Android OpenMedKit",
+      "epic_scope": "P0",
+      "support_claim": "experimental-only"
+    },
+    {
+      "id": "react-native",
+      "name": "React Native bridge",
+      "epic_scope": "P1",
+      "support_claim": "experimental-only",
+      "builds_on": [
+        "swift",
+        "android"
+      ]
+    },
+    {
+      "id": "web",
+      "name": "Browser inference",
+      "epic_scope": "P1",
+      "support_claim": "experimental-only"
+    },
+    {
+      "id": "document-intake",
+      "name": "Shared document intake",
+      "epic_scope": "P1",
+      "support_claim": "experimental-only",
+      "builds_on": [
+        "swift",
+        "android"
+      ]
+    },
+    {
+      "id": "key-store",
+      "name": "Platform key-store integration",
+      "epic_scope": "P1",
+      "support_claim": "experimental-only",
+      "builds_on": [
+        "swift",
+        "android"
+      ]
+    },
+    {
+      "id": "flutter",
+      "name": "Flutter plugin",
+      "epic_scope": "P2",
+      "support_claim": "experimental-only"
+    },
+    {
+      "id": "electron",
+      "name": "Electron integration",
+      "epic_scope": "P2",
+      "support_claim": "experimental-only",
+      "builds_on": [
+        "web"
+      ]
+    },
+    {
+      "id": "tauri",
+      "name": "Tauri sidecar",
+      "epic_scope": "P2",
+      "support_claim": "experimental-only",
+      "builds_on": [
+        "python"
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "bert",
+      "export_matrix_row": "BERT"
+    },
+    {
+      "id": "distilbert",
+      "export_matrix_row": "DistilBERT"
+    },
+    {
+      "id": "electra",
+      "export_matrix_row": "Electra"
+    },
+    {
+      "id": "roberta",
+      "export_matrix_row": "RoBERTa"
+    },
+    {
+      "id": "xlm-roberta",
+      "export_matrix_row": "XLM-RoBERTa"
+    },
+    {
+      "id": "deberta-v2",
+      "export_matrix_row": "DeBERTa-v2"
+    },
+    {
+      "id": "modernbert",
+      "export_matrix_row": "ModernBERT"
+    },
+    {
+      "id": "longformer",
+      "export_matrix_row": "Longformer"
+    },
+    {
+      "id": "openai-privacy-filter",
+      "export_matrix_row": "OpenAI Privacy Filter"
+    },
+    {
+      "id": "gliner-span",
+      "export_matrix_row": "GLiNER (span)"
+    },
+    {
+      "id": "gliclass",
+      "export_matrix_row": "GLiClass"
+    },
+    {
+      "id": "gliner-token-relex",
+      "export_matrix_row": "GLiNER (token-relex)"
+    }
+  ],
+  "platform_floors": [
+    {
+      "id": "python-requires",
+      "surface": "python",
+      "bound": "min",
+      "platform": "python",
+      "version": "3.11",
+      "sources": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "id": "swift-tools",
+      "surface": "swift",
+      "bound": "min",
+      "platform": "swift-tools",
+      "version": "5.10",
+      "sources": [
+        "Package.swift",
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "swift-ios",
+      "surface": "swift",
+      "bound": "min",
+      "platform": "ios",
+      "version": "17",
+      "sources": [
+        "Package.swift",
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "swift-macos",
+      "surface": "swift",
+      "bound": "min",
+      "platform": "macos",
+      "version": "14",
+      "sources": [
+        "Package.swift",
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "swift-watchos",
+      "surface": "swift",
+      "bound": "min",
+      "platform": "watchos",
+      "version": "10",
+      "sources": [
+        "Package.swift",
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "swift-visionos",
+      "surface": "swift",
+      "bound": "min",
+      "platform": "visionos",
+      "version": "1",
+      "sources": [
+        "Package.swift",
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "android-min-sdk",
+      "surface": "android",
+      "bound": "min",
+      "platform": "android",
+      "version": "26",
+      "sources": [
+        "android/openmedkit/build.gradle.kts"
+      ]
+    },
+    {
+      "id": "android-compile-sdk",
+      "surface": "android",
+      "bound": "compile",
+      "platform": "android",
+      "version": "33",
+      "sources": [
+        "android/openmedkit/build.gradle.kts"
+      ]
+    },
+    {
+      "id": "android-target-sdk",
+      "surface": "android",
+      "bound": "target",
+      "platform": "android",
+      "version": "33",
+      "sources": [
+        "android/openmedkit/build.gradle.kts"
+      ]
+    },
+    {
+      "id": "react-native-host",
+      "surface": "react-native",
+      "bound": "min",
+      "platform": "react-native",
+      "version": "0.74",
+      "sources": [
+        "js/openmedkit-react-native/package.json"
+      ]
+    },
+    {
+      "id": "web-node",
+      "surface": "web",
+      "bound": "min",
+      "platform": "node",
+      "version": "20",
+      "sources": [
+        "js/openmedkit-web/package.json"
+      ]
+    },
+    {
+      "id": "flutter-android-min-sdk",
+      "surface": "flutter",
+      "bound": "min",
+      "platform": "android",
+      "version": "26",
+      "sources": [
+        "js/openmedkit-flutter/android/build.gradle"
+      ]
+    },
+    {
+      "id": "flutter-android-compile-sdk",
+      "surface": "flutter",
+      "bound": "compile",
+      "platform": "android",
+      "version": "35",
+      "sources": [
+        "js/openmedkit-flutter/android/build.gradle"
+      ]
+    },
+    {
+      "id": "flutter-ios",
+      "surface": "flutter",
+      "bound": "min",
+      "platform": "ios",
+      "version": "13.0",
+      "sources": [
+        "js/openmedkit-flutter/ios/openmedkit_flutter.podspec"
+      ]
+    },
+    {
+      "id": "flutter-macos",
+      "surface": "flutter",
+      "bound": "min",
+      "platform": "macos",
+      "version": "11.0",
+      "sources": [
+        "js/openmedkit-flutter/macos/openmedkit_flutter.podspec"
+      ]
+    },
+    {
+      "id": "electron-host",
+      "surface": "electron",
+      "bound": "min",
+      "platform": "electron",
+      "version": "30",
+      "sources": [
+        "js/openmedkit-electron/package.json"
+      ]
+    },
+    {
+      "id": "tauri-host",
+      "surface": "tauri",
+      "bound": "min",
+      "platform": "tauri",
+      "version": "2.0.0",
+      "sources": [
+        "js/openmedkit-tauri/package.json",
+        "js/openmedkit-tauri/src-tauri/Cargo.toml"
+      ]
+    }
+  ],
+  "runtime_pins": [
+    {
+      "id": "torch-python",
+      "runtime": "torch",
+      "kind": "inference",
+      "surface": "python",
+      "version": ">=2.13.0",
+      "pinning": "minimum",
+      "sources": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "id": "onnxruntime-python",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "python",
+      "version": ">=1.16",
+      "pinning": "minimum",
+      "sources": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "id": "mlx-python",
+      "runtime": "mlx",
+      "kind": "inference",
+      "surface": "python",
+      "version": ">=0.22",
+      "pinning": "minimum",
+      "sources": [
+        "pyproject.toml"
+      ]
+    },
+    {
+      "id": "mlx-swift",
+      "runtime": "mlx-swift",
+      "kind": "inference",
+      "surface": "swift",
+      "version": "0.31.3",
+      "pinning": "exact",
+      "sources": [
+        "Package.swift"
+      ]
+    },
+    {
+      "id": "mlx-swift-nested",
+      "runtime": "mlx-swift",
+      "kind": "inference",
+      "surface": "swift",
+      "version": "0.31.6",
+      "pinning": "exact",
+      "sources": [
+        "swift/OpenMedKit/Package.swift"
+      ]
+    },
+    {
+      "id": "coreml-system",
+      "runtime": "coreml",
+      "kind": "inference",
+      "surface": "swift",
+      "version": "system",
+      "pinning": "system",
+      "sources": []
+    },
+    {
+      "id": "onnxruntime-android",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "android",
+      "version": "1.25.1",
+      "pinning": "exact",
+      "sources": [
+        "android/gradle/libs.versions.toml"
+      ]
+    },
+    {
+      "id": "mlkit-text-recognition",
+      "runtime": "mlkit-text-recognition",
+      "kind": "ocr",
+      "surface": "android",
+      "version": "16.0.1",
+      "pinning": "exact",
+      "sources": [
+        "android/gradle/libs.versions.toml"
+      ]
+    },
+    {
+      "id": "onnxruntime-web",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "web",
+      "version": ">=1.20.0",
+      "pinning": "minimum",
+      "sources": [
+        "js/openmedkit-web/package.json"
+      ]
+    },
+    {
+      "id": "transformers-js",
+      "runtime": "transformers-js",
+      "kind": "inference",
+      "surface": "web",
+      "version": ">=3.0.0",
+      "pinning": "minimum",
+      "sources": [
+        "js/openmedkit-web/package.json"
+      ]
+    },
+    {
+      "id": "onnxruntime-flutter-android",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "flutter",
+      "version": "1.20.0",
+      "pinning": "exact",
+      "sources": [
+        "js/openmedkit-flutter/android/build.gradle"
+      ]
+    },
+    {
+      "id": "onnxruntime-flutter-ios",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "flutter",
+      "version": "1.20.0",
+      "pinning": "exact",
+      "sources": [
+        "js/openmedkit-flutter/ios/openmedkit_flutter.podspec"
+      ]
+    },
+    {
+      "id": "onnxruntime-flutter-macos",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "flutter",
+      "version": "1.20.0",
+      "pinning": "exact",
+      "sources": [
+        "js/openmedkit-flutter/macos/openmedkit_flutter.podspec"
+      ]
+    },
+    {
+      "id": "onnxruntime-flutter-desktop",
+      "runtime": "onnxruntime",
+      "kind": "inference",
+      "surface": "flutter",
+      "version": "unpinned",
+      "pinning": "unpinned",
+      "sources": [
+        "js/openmedkit-flutter/native/CMakeLists.txt"
+      ]
+    },
+    {
+      "id": "apple-keychain",
+      "runtime": "keychain-services",
+      "kind": "keystore",
+      "surface": "key-store",
+      "version": "system",
+      "pinning": "system",
+      "sources": []
+    },
+    {
+      "id": "android-keystore",
+      "runtime": "android-keystore",
+      "kind": "keystore",
+      "surface": "key-store",
+      "version": "system",
+      "pinning": "system",
+      "sources": []
+    }
+  ],
+  "runtime_skew": [
+    {
+      "id": "onnxruntime-cross-kit",
+      "runtime": "onnxruntime",
+      "pins": [
+        "onnxruntime-android",
+        "onnxruntime-flutter-android",
+        "onnxruntime-flutter-ios",
+        "onnxruntime-flutter-macos",
+        "onnxruntime-flutter-desktop",
+        "onnxruntime-web",
+        "onnxruntime-python"
+      ],
+      "related": [
+        "#3709",
+        "#3716"
+      ],
+      "note": "Kits resolve different ONNX Runtime builds; measured cells must record the version they ran. This matrix flags the skew and changes no pin."
+    },
+    {
+      "id": "mlx-swift-manifests",
+      "runtime": "mlx-swift",
+      "pins": [
+        "mlx-swift",
+        "mlx-swift-nested"
+      ],
+      "related": [
+        "#3929"
+      ],
+      "note": "The root package, which is the documented install path, and the nested package pin different mlx-swift releases."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ci-python-contract",
+      "kind": "ci-lane",
+      "covers": [
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/ci.yml",
+        "tests/fixtures/parity"
+      ],
+      "note": "The sdk-compatibility job runs core privacy and offset contracts on Linux, macOS and Windows; model pipelines are mocked."
+    },
+    {
+      "id": "ci-python-low-resource",
+      "kind": "ci-lane",
+      "covers": [
+        "runtime-model",
+        "memory-budget"
+      ],
+      "refs": [
+        ".github/workflows/low-resource.yml",
+        "scripts/benchmarks/low_resource_deid.py"
+      ],
+      "note": "Runs a published DeBERTa-v2 INT8 Android-profile ONNX artifact on CPU over synthetic notes inside a 4 GiB cgroup."
+    },
+    {
+      "id": "ci-python-edge-sbc",
+      "kind": "ci-lane",
+      "covers": [
+        "runtime-synthetic",
+        "memory-budget"
+      ],
+      "refs": [
+        ".github/workflows/edge-benchmark.yml",
+        "openmed/eval/edge_benchmark.py"
+      ],
+      "note": "Native aarch64 runner with a synthetic identity ONNX graph and footprint budgets; no model family runs."
+    },
+    {
+      "id": "ci-swift-macos",
+      "kind": "ci-lane",
+      "covers": [
+        "build",
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/swift-test.yml",
+        "swift/OpenMedKit/Tests/OpenMedKitTests/OffsetContractParityTests.swift",
+        "swift/OpenMedKit/Tests/OpenMedKitTests/OpenMedMLXTests.swift"
+      ],
+      "note": "Root package build and tests on a macOS arm64 runner; MLX compute tests skip when the runner exposes no usable Metal device."
+    },
+    {
+      "id": "ci-swift-ios-build",
+      "kind": "ci-lane",
+      "covers": [
+        "build"
+      ],
+      "refs": [
+        ".github/workflows/swift-test.yml"
+      ],
+      "note": "Builds the package for the iOS Simulator SDK; no tests run on iOS."
+    },
+    {
+      "id": "ci-swift-watchos-simulator",
+      "kind": "ci-lane",
+      "covers": [
+        "build",
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/swift-test.yml",
+        "swift/OpenMedKit/Tests/OpenMedKitTests/WatchVisionParityTests.swift"
+      ],
+      "note": "Nano budget, selection and redaction-offset parity tests on a watchOS Simulator; no Core ML model is evaluated."
+    },
+    {
+      "id": "ci-swift-visionos-simulator",
+      "kind": "ci-lane",
+      "covers": [
+        "build",
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/swift-test.yml",
+        "swift/OpenMedKit/Tests/OpenMedKitTests/WatchVisionParityTests.swift"
+      ],
+      "note": "Nano budget, selection and redaction-offset parity tests on a visionOS Simulator; no Core ML model is evaluated."
+    },
+    {
+      "id": "ci-android-jvm",
+      "kind": "ci-lane",
+      "covers": [
+        "build",
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/android-ci.yml",
+        "android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/OffsetContractParityTest.kt"
+      ],
+      "note": "Assembles the AAR and runs offset-contract parity on the JVM; ONNX Runtime does not execute."
+    },
+    {
+      "id": "ci-web-pages",
+      "kind": "ci-lane",
+      "covers": [
+        "contract-parity",
+        "runtime-synthetic"
+      ],
+      "refs": [
+        ".github/workflows/pages.yml",
+        "tests/web/test_webgpu_session.spec.ts",
+        "tests/browser/brand/webgpu-token-classification.spec.ts"
+      ],
+      "note": "Node tests with an injected ONNX Runtime plus a headless Chromium WebGPU dispatch of the WGSL classification head."
+    },
+    {
+      "id": "ci-flutter",
+      "kind": "ci-lane",
+      "covers": [
+        "build",
+        "contract-parity"
+      ],
+      "refs": [
+        ".github/workflows/flutter-ci.yml",
+        "js/openmedkit-flutter/test/openmedkit_ffi_test.dart"
+      ],
+      "note": "Dart FFI tests against the synthetic fixture session plus Android and Linux consumer builds; ONNX Runtime does not execute."
+    }
+  ],
+  "cells": [
+    {
+      "id": "python-linux-torch-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "x86_64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "supported",
+      "evidence": [
+        "ci-python-contract"
+      ],
+      "note": "Reference semantics for offsets, labels, merging and policy."
+    },
+    {
+      "id": "python-macos-torch-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "macos"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "supported",
+      "evidence": [
+        "ci-python-contract"
+      ]
+    },
+    {
+      "id": "python-windows-torch-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "windows"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "x86_64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "supported",
+      "evidence": [
+        "ci-python-contract"
+      ]
+    },
+    {
+      "id": "python-linux-onnx-int8-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "x86_64",
+      "runtime": "onnxruntime-python",
+      "provider": "cpu",
+      "artifact": "onnx-android",
+      "families": [
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "supported",
+      "evidence": [
+        "ci-python-low-resource"
+      ]
+    },
+    {
+      "id": "python-linux-arm64-onnx-int8-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "arm64",
+      "runtime": "onnxruntime-python",
+      "provider": "cpu",
+      "artifact": "onnx-android",
+      "families": [
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": [
+        "ci-python-edge-sbc"
+      ],
+      "related": [
+        "#3716"
+      ],
+      "note": "The aarch64 lane measures footprint with a synthetic graph only."
+    },
+    {
+      "id": "python-linux-onnx-fp32-cpu",
+      "surface": "python",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "x86_64",
+      "runtime": "onnxruntime-python",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending"
+    },
+    {
+      "id": "python-macos-mlx",
+      "surface": "python",
+      "platform": {
+        "name": "macos"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "mlx-python",
+      "provider": "metal",
+      "artifact": "mlx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+        "modernbert",
+        "longformer",
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "note": "The MLX unit lane mocks MLX; no Apple Silicon lane runs it."
+    },
+    {
+      "id": "swift-macos-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "macos",
+        "min": "14"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "artifact": "mlx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+        "openai-privacy-filter"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "supported",
+      "evidence": [
+        "ci-swift-macos"
+      ],
+      "related": [
+        "#3716"
+      ],
+      "note": "Real-device recall, latency and memory evidence is pending."
+    },
+    {
+      "id": "swift-macos-mlx-int4",
+      "surface": "swift",
+      "platform": {
+        "name": "macos",
+        "min": "14"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "artifact": "mlx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+        "openai-privacy-filter"
+      ],
+      "precisions": [
+        "int4"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "note": "INT4 artifacts are certified only when per-label recall holds."
+    },
+    {
+      "id": "swift-macos-coreml",
+      "surface": "swift",
+      "platform": {
+        "name": "macos",
+        "min": "14"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16",
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": [
+        "ci-swift-macos"
+      ],
+      "note": "CI compares recorded spans only; no Core ML model is evaluated."
+    },
+    {
+      "id": "swift-ios-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "artifact": "mlx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+        "openai-privacy-filter"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": [
+        "ci-swift-ios-build"
+      ],
+      "related": [
+        "#3716"
+      ]
+    },
+    {
+      "id": "swift-ios-coreml",
+      "surface": "swift",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3716"
+      ]
+    },
+    {
+      "id": "swift-ios-simulator-coreml",
+      "surface": "swift",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "ios-simulator",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": [
+        "ci-swift-ios-build"
+      ],
+      "related": [
+        "#3949"
+      ]
+    },
+    {
+      "id": "swift-watchos-coreml-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "watchos",
+        "min": "10"
+      },
+      "device_class": "apple-watch",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Nano",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3716"
+      ]
+    },
+    {
+      "id": "swift-watchos-simulator-coreml-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "watchos",
+        "min": "10"
+      },
+      "device_class": "watchos-simulator",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Nano",
+      "status": "experimental",
+      "evidence": [
+        "ci-swift-watchos-simulator"
+      ]
+    },
+    {
+      "id": "swift-visionos-coreml-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "visionos",
+        "min": "1"
+      },
+      "device_class": "apple-vision",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Nano",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3716"
+      ]
+    },
+    {
+      "id": "swift-visionos-simulator-coreml-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "visionos",
+        "min": "1"
+      },
+      "device_class": "visionos-simulator",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Nano",
+      "status": "experimental",
+      "evidence": [
+        "ci-swift-visionos-simulator"
+      ]
+    },
+    {
+      "id": "android-arm64-onnx-cpu",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "cpu",
+      "artifact": "onnx-android",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": [
+        "ci-android-jvm"
+      ],
+      "related": [
+        "#3938",
+        "#3716"
+      ],
+      "note": "No lane executes ONNX Runtime on Android yet."
+    },
+    {
+      "id": "android-emulator-onnx-cpu",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-emulator",
+      "abi": "x86_64",
+      "runtime": "onnxruntime-android",
+      "provider": "cpu",
+      "artifact": "onnx-android",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3938"
+      ]
+    },
+    {
+      "id": "android-arm64-onnx-nnapi",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "27",
+        "max": "34"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "nnapi",
+      "artifact": "onnx-android",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3716"
+      ],
+      "note": "CPU stays the deterministic fallback; FP16 relaxation is off by default."
+    },
+    {
+      "id": "android-arm64-onnx-qnn",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "qnn",
+      "artifact": "onnx-android",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "condition": "runtime:app-supplied-qnn",
+      "note": "Needs an app-supplied QNN-enabled ONNX Runtime and Qualcomm libraries."
+    },
+    {
+      "id": "react-native-ios-mlx",
+      "surface": "react-native",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "artifact": "mlx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2",
+        "openai-privacy-filter"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3936",
+        "#3716"
+      ],
+      "note": "The bridge forwards to Swift OpenMedKit; autolinking is not packaged."
+    },
+    {
+      "id": "react-native-ios-coreml",
+      "surface": "react-native",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3936"
+      ]
+    },
+    {
+      "id": "react-native-android-onnx-cpu",
+      "surface": "react-native",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "cpu",
+      "artifact": "onnx-android",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32",
+        "int8"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3936",
+        "#3938"
+      ],
+      "note": "The bridge forwards to Android OpenMedKit."
+    },
+    {
+      "id": "web-chromium-webgpu",
+      "surface": "web",
+      "platform": {
+        "name": "chromium"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "webgpu",
+      "artifact": "onnx-webgpu",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": [
+        "ci-web-pages"
+      ],
+      "related": [
+        "#3939",
+        "#3940"
+      ],
+      "note": "fp16 WebGPU graphs are not yet gated on logit and span parity."
+    },
+    {
+      "id": "web-webkit-webgpu",
+      "surface": "web",
+      "platform": {
+        "name": "webkit"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "webgpu",
+      "artifact": "onnx-webgpu",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3940"
+      ],
+      "note": "Not exercised; the loader falls back to WASM when no adapter is returned."
+    },
+    {
+      "id": "web-gecko-webgpu",
+      "surface": "web",
+      "platform": {
+        "name": "gecko"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "webgpu",
+      "artifact": "onnx-webgpu",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp16"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3940"
+      ],
+      "note": "Not exercised; the loader falls back to WASM when no adapter is returned."
+    },
+    {
+      "id": "web-chromium-wasm-threads",
+      "surface": "web",
+      "platform": {
+        "name": "chromium"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "onnxruntime-web",
+      "provider": "wasm-simd-threads",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": [
+        "ci-web-pages"
+      ],
+      "condition": "cross-origin-isolation:required",
+      "related": [
+        "#3940"
+      ]
+    },
+    {
+      "id": "web-chromium-wasm-basic",
+      "surface": "web",
+      "platform": {
+        "name": "chromium"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "onnxruntime-web",
+      "provider": "wasm-basic",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": [
+        "ci-web-pages"
+      ],
+      "related": [
+        "#3940"
+      ]
+    },
+    {
+      "id": "web-webkit-wasm-basic",
+      "surface": "web",
+      "platform": {
+        "name": "webkit"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "onnxruntime-web",
+      "provider": "wasm-basic",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3940"
+      ]
+    },
+    {
+      "id": "web-gecko-wasm-basic",
+      "surface": "web",
+      "platform": {
+        "name": "gecko"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "onnxruntime-web",
+      "provider": "wasm-basic",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3940"
+      ]
+    },
+    {
+      "id": "web-chromium-transformersjs",
+      "surface": "web",
+      "platform": {
+        "name": "chromium"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "transformers-js",
+      "provider": "wasm-basic",
+      "artifact": "transformersjs",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending"
+    },
+    {
+      "id": "document-intake-android-mlkit-latin",
+      "surface": "document-intake",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "mlkit-text-recognition",
+      "provider": "on-device",
+      "artifact": null,
+      "families": [],
+      "precisions": [],
+      "tier": null,
+      "status": "experimental",
+      "evidence": "pending",
+      "condition": "script:latin",
+      "related": [
+        "#3713",
+        "#3928"
+      ],
+      "note": "ML Kit OCR ships inside the core Android artifact today."
+    },
+    {
+      "id": "document-intake-ios-share-extension",
+      "surface": "document-intake",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "artifact": "coreml",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Nano",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3713"
+      ],
+      "note": "Share and Action extensions redact selected text with a bundled model."
+    },
+    {
+      "id": "key-store-ios-keychain",
+      "surface": "key-store",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "apple-keychain",
+      "provider": "secure-enclave",
+      "artifact": null,
+      "families": [],
+      "precisions": [],
+      "tier": null,
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3714"
+      ]
+    },
+    {
+      "id": "key-store-macos-keychain",
+      "surface": "key-store",
+      "platform": {
+        "name": "macos",
+        "min": "14"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "apple-keychain",
+      "provider": "keychain",
+      "artifact": null,
+      "families": [],
+      "precisions": [],
+      "tier": null,
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3714"
+      ]
+    },
+    {
+      "id": "key-store-android-tee",
+      "surface": "key-store",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "android-keystore",
+      "provider": "tee",
+      "artifact": null,
+      "families": [],
+      "precisions": [],
+      "tier": null,
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3715"
+      ]
+    },
+    {
+      "id": "key-store-android-strongbox",
+      "surface": "key-store",
+      "platform": {
+        "name": "android",
+        "min": "28"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "android-keystore",
+      "provider": "strongbox",
+      "artifact": null,
+      "families": [],
+      "precisions": [],
+      "tier": null,
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3715"
+      ],
+      "note": "StrongBox needs API 28 or newer and device hardware support."
+    },
+    {
+      "id": "flutter-android-onnx-cpu",
+      "surface": "flutter",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-flutter-android",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": [
+        "ci-flutter"
+      ],
+      "related": [
+        "#3709"
+      ]
+    },
+    {
+      "id": "flutter-ios-onnx-cpu",
+      "surface": "flutter",
+      "platform": {
+        "name": "ios",
+        "min": "13.0"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "arm64",
+      "runtime": "onnxruntime-flutter-ios",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Tiny",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3709"
+      ]
+    },
+    {
+      "id": "flutter-macos-onnx-cpu",
+      "surface": "flutter",
+      "platform": {
+        "name": "macos",
+        "min": "11.0"
+      },
+      "device_class": "apple-silicon-mac",
+      "abi": "arm64",
+      "runtime": "onnxruntime-flutter-macos",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3709"
+      ]
+    },
+    {
+      "id": "flutter-linux-onnx-cpu",
+      "surface": "flutter",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "onnxruntime-flutter-desktop",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": [
+        "ci-flutter"
+      ],
+      "condition": "runtime:app-supplied-onnxruntime",
+      "related": [
+        "#3709"
+      ],
+      "note": "Linux and Windows link an app-supplied ONNX Runtime with no pin."
+    },
+    {
+      "id": "flutter-windows-onnx-cpu",
+      "surface": "flutter",
+      "platform": {
+        "name": "windows"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "onnxruntime-flutter-desktop",
+      "provider": "cpu",
+      "artifact": "onnx",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "condition": "runtime:app-supplied-onnxruntime",
+      "related": [
+        "#3709"
+      ]
+    },
+    {
+      "id": "electron-macos-transformersjs",
+      "surface": "electron",
+      "platform": {
+        "name": "macos"
+      },
+      "device_class": "desktop-app",
+      "abi": "arm64",
+      "runtime": "transformers-js",
+      "provider": "cpu",
+      "artifact": "transformersjs",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3711"
+      ],
+      "note": "Inference runs in one utility process with network entry points blocked."
+    },
+    {
+      "id": "electron-windows-transformersjs",
+      "surface": "electron",
+      "platform": {
+        "name": "windows"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "transformers-js",
+      "provider": "cpu",
+      "artifact": "transformersjs",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3711"
+      ]
+    },
+    {
+      "id": "electron-linux-transformersjs",
+      "surface": "electron",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "transformers-js",
+      "provider": "cpu",
+      "artifact": "transformersjs",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "int8"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3711"
+      ]
+    },
+    {
+      "id": "tauri-macos-sidecar",
+      "surface": "tauri",
+      "platform": {
+        "name": "macos"
+      },
+      "device_class": "desktop-app",
+      "abi": "arm64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3712"
+      ],
+      "note": "A self-contained Python sidecar binary is built per desktop target."
+    },
+    {
+      "id": "tauri-windows-sidecar",
+      "surface": "tauri",
+      "platform": {
+        "name": "windows"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3712"
+      ]
+    },
+    {
+      "id": "tauri-linux-sidecar",
+      "surface": "tauri",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "desktop-app",
+      "abi": "x86_64",
+      "runtime": "torch-python",
+      "provider": "cpu",
+      "artifact": "pytorch",
+      "families": [
+        "bert",
+        "distilbert",
+        "electra",
+        "roberta",
+        "xlm-roberta",
+        "deberta-v2"
+      ],
+      "precisions": [
+        "fp32"
+      ],
+      "tier": "Base",
+      "status": "experimental",
+      "evidence": "pending",
+      "related": [
+        "#3712"
+      ]
+    }
+  ],
+  "unsupported": [
+    {
+      "id": "python-mlx-off-apple-silicon",
+      "surface": "python",
+      "platform": {
+        "name": "linux"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "any",
+      "runtime": "mlx-python",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "note": "OpenMed's MLX backends require Apple Silicon macOS."
+    },
+    {
+      "id": "python-gguf-token-classification",
+      "surface": "python",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "server-or-desktop",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "cpu",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "artifact": "gguf",
+      "note": "GGUF export is embedding-only; token-classification heads are rejected."
+    },
+    {
+      "id": "python-onnx-unexported-families",
+      "surface": "python",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "*",
+      "abi": "*",
+      "runtime": "onnxruntime-python",
+      "provider": "*",
+      "families": [
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "family-not-exported",
+      "artifact": "onnx"
+    },
+    {
+      "id": "swift-below-ios-17",
+      "surface": "swift",
+      "platform": {
+        "name": "ios",
+        "max": "16"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "below-platform-floor"
+    },
+    {
+      "id": "swift-below-macos-14",
+      "surface": "swift",
+      "platform": {
+        "name": "macos",
+        "max": "13"
+      },
+      "device_class": "*",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "below-platform-floor"
+    },
+    {
+      "id": "swift-ios-simulator-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "ios-simulator",
+      "abi": "any",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "related": [
+        "#3949"
+      ],
+      "note": "mlx-swift cannot run on the iOS Simulator; use Core ML there."
+    },
+    {
+      "id": "swift-intel-mac-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "macos",
+        "min": "14"
+      },
+      "device_class": "intel-mac",
+      "abi": "x86_64",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "hardware-unavailable",
+      "note": "MLX requires Apple Silicon."
+    },
+    {
+      "id": "swift-watchos-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "watchos",
+        "min": "10"
+      },
+      "device_class": "apple-watch",
+      "abi": "any",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-not-linked",
+      "note": "Package.swift links MLX for iOS and macOS only."
+    },
+    {
+      "id": "swift-visionos-mlx",
+      "surface": "swift",
+      "platform": {
+        "name": "visionos",
+        "min": "1"
+      },
+      "device_class": "apple-vision",
+      "abi": "any",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-not-linked",
+      "note": "Package.swift links MLX for iOS and macOS only."
+    },
+    {
+      "id": "swift-watchos-coreml-non-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "watchos",
+        "min": "10"
+      },
+      "device_class": "apple-watch",
+      "abi": "any",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "budget-exceeded",
+      "condition": "artifact:non-nano-int8",
+      "note": "PlatformModel fails closed on anything but an INT8 Nano-tier model."
+    },
+    {
+      "id": "swift-visionos-coreml-non-nano",
+      "surface": "swift",
+      "platform": {
+        "name": "visionos",
+        "min": "1"
+      },
+      "device_class": "apple-vision",
+      "abi": "any",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "budget-exceeded",
+      "condition": "artifact:non-nano-int8",
+      "note": "PlatformModel fails closed on anything but an INT8 Nano-tier model."
+    },
+    {
+      "id": "swift-coreml-unexported-families",
+      "surface": "swift",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "*",
+      "abi": "*",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "families": [
+        "modernbert",
+        "longformer",
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "family-not-exported",
+      "artifact": "coreml",
+      "note": "The Core ML converter allowlists BERT-family and DeBERTa-v2 only."
+    },
+    {
+      "id": "swift-mac-catalyst",
+      "surface": "swift",
+      "platform": {
+        "name": "mac-catalyst"
+      },
+      "device_class": "mac-catalyst",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "note": "Package.swift declares no Mac Catalyst platform and no lane builds it."
+    },
+    {
+      "id": "android-below-min-sdk",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "max": "25"
+      },
+      "device_class": "*",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "below-platform-floor"
+    },
+    {
+      "id": "android-nnapi-android-15",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "35"
+      },
+      "device_class": "android-device",
+      "abi": "any",
+      "runtime": "onnxruntime-android",
+      "provider": "nnapi",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "platform-deprecated",
+      "note": "NNAPI is deprecated from Android 15 (API 35); use the CPU provider."
+    },
+    {
+      "id": "android-nnapi-api-26",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26",
+        "max": "26"
+      },
+      "device_class": "android-device",
+      "abi": "any",
+      "runtime": "onnxruntime-android",
+      "provider": "nnapi",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "note": "OpenMedKit excludes NNAPI below API 27."
+    },
+    {
+      "id": "android-qnn-standard-aar",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "qnn",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-not-bundled",
+      "condition": "runtime:standard-aar",
+      "note": "The standard ONNX Runtime AAR has no QNN provider; no Qualcomm SDK ships."
+    },
+    {
+      "id": "android-16kb-page-size",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "arm64-v8a",
+      "runtime": "onnxruntime-android",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "condition": "page-size:16kb",
+      "related": [
+        "#3927"
+      ],
+      "note": "Native libraries are not yet verified to load with 16 KB pages."
+    },
+    {
+      "id": "android-armeabi-v7a",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "armeabi-v7a",
+      "runtime": "onnxruntime-android",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified"
+    },
+    {
+      "id": "android-x86",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-emulator",
+      "abi": "x86",
+      "runtime": "onnxruntime-android",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified"
+    },
+    {
+      "id": "android-onnx-unexported-families",
+      "surface": "android",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "*",
+      "abi": "*",
+      "runtime": "onnxruntime-android",
+      "provider": "*",
+      "families": [
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "family-not-exported",
+      "artifact": "onnx-android"
+    },
+    {
+      "id": "react-native-ios-simulator-mlx",
+      "surface": "react-native",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "ios-simulator",
+      "abi": "any",
+      "runtime": "mlx-swift",
+      "provider": "metal",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "related": [
+        "#3949"
+      ]
+    },
+    {
+      "id": "react-native-web",
+      "surface": "react-native",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-implemented",
+      "note": "The bridge has no react-native-web implementation."
+    },
+    {
+      "id": "web-remote-model-assets",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "policy-forbidden",
+      "condition": "asset-origin:remote",
+      "note": "HTTP(S), protocol-relative, data: and blob: model paths are rejected."
+    },
+    {
+      "id": "web-webgpu-insecure-context",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "webgpu",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "condition": "secure-context:absent",
+      "note": "WebGPU requires HTTPS or localhost."
+    },
+    {
+      "id": "web-threads-without-isolation",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "wasm32",
+      "runtime": "onnxruntime-web",
+      "provider": "wasm-simd-threads",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-unavailable",
+      "condition": "cross-origin-isolation:absent",
+      "note": "Without COOP and COEP headers the loader uses single-threaded WASM."
+    },
+    {
+      "id": "web-mobile-browser",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "mobile-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified"
+    },
+    {
+      "id": "web-unexported-families",
+      "surface": "web",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "onnxruntime-web",
+      "provider": "*",
+      "families": [
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "family-not-exported",
+      "artifact": "onnx"
+    },
+    {
+      "id": "document-intake-android-mlkit-non-latin",
+      "surface": "document-intake",
+      "platform": {
+        "name": "android",
+        "min": "26"
+      },
+      "device_class": "android-device",
+      "abi": "any",
+      "runtime": "mlkit-text-recognition",
+      "provider": "on-device",
+      "families": [],
+      "precisions": [],
+      "status": "unsupported",
+      "reason": "script-unsupported",
+      "condition": "script:non-latin",
+      "note": "MlKitOcrAdapter uses the bundled Latin recognizer only."
+    },
+    {
+      "id": "document-intake-apple-ocr",
+      "surface": "document-intake",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [],
+      "precisions": [],
+      "status": "unsupported",
+      "reason": "not-implemented",
+      "condition": "input:scanned-image",
+      "related": [
+        "#3713"
+      ],
+      "note": "Swift OpenMedKit has no OCR adapter; hosts must extract text first."
+    },
+    {
+      "id": "document-intake-extension-download",
+      "surface": "document-intake",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "any",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "policy-forbidden",
+      "condition": "asset-origin:remote",
+      "note": "Extensions must not download model or tokenizer files."
+    },
+    {
+      "id": "key-store-ios-simulator-secure-enclave",
+      "surface": "key-store",
+      "platform": {
+        "name": "ios",
+        "min": "17"
+      },
+      "device_class": "ios-simulator",
+      "abi": "any",
+      "runtime": "apple-keychain",
+      "provider": "secure-enclave",
+      "families": [],
+      "precisions": [],
+      "status": "unsupported",
+      "reason": "hardware-unavailable"
+    },
+    {
+      "id": "key-store-android-emulator-strongbox",
+      "surface": "key-store",
+      "platform": {
+        "name": "android",
+        "min": "28"
+      },
+      "device_class": "android-emulator",
+      "abi": "any",
+      "runtime": "android-keystore",
+      "provider": "strongbox",
+      "families": [],
+      "precisions": [],
+      "status": "unsupported",
+      "reason": "hardware-unavailable"
+    },
+    {
+      "id": "key-store-browser",
+      "surface": "key-store",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [],
+      "precisions": [],
+      "status": "unsupported",
+      "reason": "not-implemented",
+      "note": "No platform key-store adapter exists for browser inference."
+    },
+    {
+      "id": "flutter-web",
+      "surface": "flutter",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-browser",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-not-linked",
+      "note": "pubspec.yaml declares no web platform for the plugin."
+    },
+    {
+      "id": "flutter-apple-coreml",
+      "surface": "flutter",
+      "platform": {
+        "name": "ios",
+        "min": "13.0"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "any",
+      "runtime": "coreml-system",
+      "provider": "coreml",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "runtime-not-linked",
+      "note": "The plugin links ONNX Runtime only; use Swift OpenMedKit for Core ML."
+    },
+    {
+      "id": "flutter-onnx-unexported-families",
+      "surface": "flutter",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "*",
+      "abi": "*",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "openai-privacy-filter",
+        "gliner-span",
+        "gliclass",
+        "gliner-token-relex"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "family-not-exported",
+      "artifact": "onnx"
+    },
+    {
+      "id": "electron-renderer-inference",
+      "surface": "electron",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-app",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "policy-forbidden",
+      "condition": "process:renderer",
+      "note": "Renderers receive span projections only; they never load models."
+    },
+    {
+      "id": "electron-remote-models",
+      "surface": "electron",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-app",
+      "abi": "any",
+      "runtime": "transformers-js",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "policy-forbidden",
+      "condition": "asset-origin:remote",
+      "note": "The utility process loads local files only and blocks network calls."
+    },
+    {
+      "id": "tauri-mobile-ios",
+      "surface": "tauri",
+      "platform": {
+        "name": "ios"
+      },
+      "device_class": "iphone-ipad",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "note": "Mobile targets cannot run the Python sidecar binary."
+    },
+    {
+      "id": "tauri-mobile-android",
+      "surface": "tauri",
+      "platform": {
+        "name": "android"
+      },
+      "device_class": "android-device",
+      "abi": "any",
+      "runtime": "*",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "not-qualified",
+      "note": "Mobile targets cannot run the Python sidecar binary."
+    },
+    {
+      "id": "tauri-renderer-paths",
+      "surface": "tauri",
+      "platform": {
+        "name": "*"
+      },
+      "device_class": "desktop-app",
+      "abi": "any",
+      "runtime": "torch-python",
+      "provider": "*",
+      "families": [
+        "*"
+      ],
+      "precisions": [
+        "*"
+      ],
+      "status": "unsupported",
+      "reason": "policy-forbidden",
+      "condition": "process:renderer",
+      "note": "The renderer cannot choose model or filesystem paths."
+    }
+  ]
+}
