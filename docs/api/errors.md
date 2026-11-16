@@ -200,9 +200,9 @@ typed enum per kit:
 `android/openmedkit/src/main/kotlin/com/openmed/openmedkit/OpenMedErrorCode.kt`
 (`OpenMedErrorCode`, `code` plus `retryable`) and
 `js/openmedkit-web/src/error-codes.ts` (`OPENMED_ERROR_CODES`,
-`OPENMED_ERROR_CODE_RETRYABLE` and the `OpenMedErrorCode` type). The enums are
-public API but no kit behaviour uses them yet. Run the script with `--check`
-to verify the committed files; the unit tests do this.
+`OPENMED_ERROR_CODE_RETRYABLE` and the `OpenMedErrorCode` type). The web
+package's `OpenMedError` uses the TypeScript enum (see below). Run the script
+with `--check` to verify the committed files; the unit tests do this.
 
 ### Shared error-code vectors
 
@@ -236,6 +236,45 @@ keeps its builtin base and its message, so existing handlers still catch it:
 - A model that is not cached while offline mode is on raises
   `openmed.core.offline.OfflineModelUnavailableError`, an `OfflineModeError`
   (a `RuntimeError`) that is also a `ModelLoadError`.
+
+### Web package errors
+
+The `openmed` web package throws `OpenMedError`, which extends `Error`, for
+every failure that used to be a plain `Error`. `error.errorCode` is the
+portable registry code. `error.code` is the most specific stable code: the
+registry code itself, or the reason code an older coded error already
+exposed. `PortablePolicyError` and `OpenMedOfflineError` now extend
+`OpenMedError`, and their `code` values (`profile_unknown`,
+`local_assets_unavailable` and so on) do not change. `error.retryable` comes
+from the registry. Messages are the same text as before and value-free, and
+the `name` of a former plain `Error` stays `"Error"`, so `instanceof Error`,
+message checks and `String(error)` keep working.
+
+| Web failure | `errorCode` |
+| --- | --- |
+| Empty `hashSecret` (`extractPii`, `deidentify`, `hmacTextHash`) | `configuration_error` |
+| Symbol keys or values in loader options | `configuration_error` |
+| Remote, empty, query-string or malformed ONNX Runtime asset path; untyped external data | `configuration_error` (`code` `remote_asset_refused` for a remote path) |
+| External data over its per-shard or total byte limit | `budget_exceeded` |
+| Missing Transformers.js or ONNX Runtime Web module, no WebAssembly, WebGPU shader compilation failure | `capability_error` |
+| Token offsets that cannot be aligned, a model output that is not a tensor | `inference_error` |
+| A disposed pipeline, session or WebGPU head is used | `input_error` |
+| Pipeline or session disposal failed, uninitialized WebGPU head | `internal_error` |
+| `PortablePolicyError` `detection_*` and `override_*` | `input_error` |
+| `PortablePolicyError` `surrogate_key_invalid` | `configuration_error` |
+| `PortablePolicyError` `capability_missing` | `capability_error` |
+| Any other `PortablePolicyError` (unknown or invalid profiles, resources, digests) | `policy_error` |
+| `OpenMedOfflineError` `remote_model_refused` and `local_assets_unavailable` | `model_load_error` |
+| `OpenMedOfflineError` `remote_asset_refused` | `configuration_error` |
+
+Offline-only mode refuses a Hub id before any lookup, and Python reports the
+same request (offline, model not cached) as a model load failure, so both web
+offline codes for a model map to `model_load_error`.
+`tests/web/test_error_codes.spec.ts` runs every scenario whose `web` cell is
+`required` and checks the converted sites and their messages. Existing typed
+errors with their own reason codes (`KitParityError`, `PortableBundleError`,
+`DecisionRuntimeError` and the like), and argument checks that throw
+`TypeError` or `RangeError`, are unchanged.
 
 ### Recorded divergences
 

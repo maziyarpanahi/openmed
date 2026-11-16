@@ -8,6 +8,8 @@ import {
   type KitParityResult,
   type KitParitySpan,
 } from "./kit-parity";
+import { OpenMedError } from "./errors";
+import type { OpenMedErrorCode } from "./error-codes";
 import { PORTABLE_POLICY_RESOURCES } from "./portable-policy-resources";
 
 /**
@@ -61,15 +63,36 @@ const ACTION_STRENGTH: Readonly<Record<string, number>> = {
   remove: 5,
 };
 
-/** Value-free policy failure: a reason code and a JSON field path only. */
-export class PortablePolicyError extends Error {
-  readonly code: string;
+/**
+ * Portable registry code for a policy reason code: rejected detections and
+ * overrides are caller input, a bad surrogate key is configuration, a missing
+ * capability is a capability gap, and everything else (unknown or invalid
+ * profiles, resources and digests) is a policy error.
+ */
+export function portablePolicyErrorCode(code: string): OpenMedErrorCode {
+  if (code.startsWith("detection_") || code.startsWith("override_")) {
+    return "input_error";
+  }
+  if (code === "surrogate_key_invalid") {
+    return "configuration_error";
+  }
+  if (code === "capability_missing") {
+    return "capability_error";
+  }
+  return "policy_error";
+}
+
+/**
+ * Value-free policy failure: a reason code and a JSON field path only.
+ * `code` keeps the shared portable-policy reason code; `errorCode` is the
+ * portable registry code from {@link portablePolicyErrorCode}.
+ */
+export class PortablePolicyError extends OpenMedError {
   readonly fieldPath: string;
 
   constructor(code: string, fieldPath = "$") {
-    super(`${code} at ${fieldPath}`);
+    super(portablePolicyErrorCode(code), `${code} at ${fieldPath}`, { code });
     this.name = "PortablePolicyError";
-    this.code = code;
     this.fieldPath = fieldPath;
   }
 }

@@ -1,3 +1,4 @@
+import { OpenMedError } from "./errors";
 import type { RawTokenClassificationEntity, TokenClassificationEntity } from "./types";
 
 const CONTINUATION_PREFIX = "##";
@@ -92,7 +93,10 @@ export function alignTokenOffsets(
 }
 
 function alignmentError(): Error {
-  return new Error("Token offset alignment failed; provide source offsets.");
+  return new OpenMedError(
+    "inference_error",
+    "Token offset alignment failed; provide source offsets.",
+  );
 }
 
 function hasFiniteOffsets(
