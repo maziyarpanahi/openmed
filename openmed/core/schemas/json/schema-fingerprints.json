@@ -295,5 +295,15 @@
       "text_hash"
     ],
     "schema_version": 1
+  },
+  "settings": {
+    "fingerprint": "sha256:0a07fe08874671b70253227560879edd6ba0e57d5507312169b92b73af34c0d8",
+    "properties": [
+      "core",
+      "schema_version",
+      "service"
+    ],
+    "required": [],
+    "schema_version": 1
   }
 }
