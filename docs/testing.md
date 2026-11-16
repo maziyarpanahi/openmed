@@ -5,7 +5,7 @@ summarizes what already exists so you can extend it confidently.
 
 ## Actively tested Python and desktop matrix
 
-The core SDK supports **CPython 3.11, 3.12, 3.13 and 3.14** on Linux,
+The core SDK supports **CPython 3.11, 3.12, 3.13, 3.14 and 3.15** on Linux,
 Windows and macOS. These versions and OS families are declared in
 `pyproject.toml`'s classifiers. CI selects current hosted-runner patch releases within each minor.
 `requires-python >=3.11.5` is an installation floor, not a promise
@@ -17,7 +17,7 @@ TOML backport dependency.
 
 | Lane | Required combinations | What it proves |
 | --- | --- | --- |
-| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all four versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (12 jobs). Other pull requests: Linux 3.11 and 3.14, Windows 3.14 and macOS 3.14 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
+| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all five versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (15 jobs). Other pull requests: Linux 3.11 and 3.15, Windows 3.15 and macOS 3.15 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
 | `sdk-compatibility` installed artifacts | The same jobs; both wheel and sdist; core and `[cli,service,mcp]` installs separately | Installed CLI and brief API/adapters, packaged resources, missing-resource rejection and source-tree isolation |
 | Optional-runtime absence | Both install profiles in every compatibility job | Typed missing-MLX error and fail-closed brief; no cloud fallback, weights or model downloads |
 | `test` full regression | Pushes and `full-ci` pull requests: Linux, Windows and macOS 3.11–3.12 | The complete Python regression suite, including the `slow` and `fuzz` tiers |
@@ -32,30 +32,39 @@ only as a pure-Python source distribution for every interpreter. So
 Other optional extras, such as model runtimes, OCR engines, MLX and Core ML,
 are not exercised on 3.14 by this lane and are not claimed as qualified on it.
 
-### Python 3.15: experimental, not supported yet
+### Python 3.15
 
-CPython 3.15.0 is released, but OpenMed does not declare or claim support for
-it yet. It has no classifier and is not part of `sdk-compatibility`, because
-the dependencies pinned in `uv.lock` cannot install on 3.15 without source
-builds, and some cannot install at all:
+Python 3.15 support covers the same installs as 3.14: the core package and the
+`dev`, `cli`, `service` and `mcp` extras, which the `sdk-compatibility` lane
+installs and tests on Linux, Windows and macOS. The versions `uv.lock` pins for
+3.11 to 3.14 mostly publish no CPython 3.15 wheels, so `pyproject.toml` adds
+3.15-only lower bounds (`[tool.uv] constraint-dependencies` entries marked
+`python_version >= '3.15'`). Only the 3.15 resolution fork moves; the 3.11 to
+3.14 resolutions are unchanged. On 3.15 that fork brings newer major versions
+of some dependencies, notably `pandas` 3, `pyarrow` 26 and, in `dev` and the
+`duckdb` extra, `duckdb` 2.
 
-| Install | Blocked dependencies (no CPython 3.15 wheel at the locked version) | Upstream status |
+`pyyaml`, a core dependency, publishes no 3.15 wheel yet
+([yaml/pyyaml#981](https://github.com/yaml/pyyaml/issues/981)). Installers build
+it from its source distribution: with a C compiler and libyaml they build the C
+extension, and otherwise they install PyYAML's pure-Python implementation.
+`jieba` is a pure-Python source distribution on every interpreter.
+
+These requirements are excluded on 3.15 with a `python_version < '3.15'`
+marker, because no release installs there:
+
+| Extra | Excluded on 3.15 | Why |
 | --- | --- | --- |
-| Core package | `pyyaml`, and `rpds-py` (through `jsonschema`) | `pyyaml` publishes no 3.15 wheel yet ([yaml/pyyaml#981](https://github.com/yaml/pyyaml/issues/981)). Newer `rpds-py` releases publish 3.15 wheels |
-| `cli` | The core blockers | As above |
-| `mcp` | The core blockers and `pydantic-core` | Newer `pydantic-core` releases publish 3.15 wheels |
-| `service` | The core blockers, `pydantic-core`, `cffi` and `grpcio` | Newer releases of all three publish 3.15 wheels |
-| `dev` (test tooling) | `hypothesis`, which ships no source distribution, so `uv sync --frozen --extra dev --python 3.15` cannot install. Also `numpy`, `pandas`, `duckdb`, `markupsafe`, `librt` and `opencc` | Newer releases publish 3.15 (or stable-ABI) wheels, some across a major version (`pandas` 3, `duckdb` 2). `opencc` publishes no 3.15 wheel yet and has no upstream tracking issue ([OpenCC on PyPI](https://pypi.org/project/OpenCC/)) |
+| `dev`, `zh` | `opencc` | No 3.15 wheel and no upstream tracking issue ([OpenCC on PyPI](https://pypi.org/project/OpenCC/)). Chinese script conversion then returns text unchanged with `OpenCCUnavailableWarning` |
+| `dev` | `grpcio-tools` | Its first release with 3.15 wheels (1.84) requires protobuf 7, and the `service` extra pins protobuf below 7. gRPC at runtime is unaffected; regenerate stubs (`make grpc-proto`) on 3.14 or older |
+| `beam` | `apache-beam` | Every release caps numpy below 2.5, and numpy first ships 3.15 wheels in 2.5.2 ([apache/beam#40249](https://github.com/apache/beam/issues/40249)) |
+| `openvino` | `nncf` | Every release caps numpy below 2.5 ([NNCF on PyPI](https://pypi.org/project/nncf/)) |
+| `scispacy` | `scispacy` | scispacy 0.6 requires numpy below 2 ([allenai/scispacy#536](https://github.com/allenai/scispacy/issues/536)) |
 
-Most blockers therefore clear with a reviewed `uv.lock` refresh; `pyyaml` and
-`opencc` need upstream wheels or a source build.
-
-The non-blocking `sdk-compatibility-next` job (pushes and `full-ci` pull
-requests, Linux, Windows and macOS) installs the core package from the frozen
-lock on 3.15 and runs core-only contracts. It is allowed to fail and gates
-nothing. It can only turn green once the frozen lock installs on 3.15, and
-that is the signal to promote 3.15 into `sdk-compatibility` with its
-classifier. Until then, nothing here should be read as 3.15 support.
+Every other optional extra resolves on 3.15 but, as on 3.14, is not exercised
+by this lane and is not claimed as qualified on it. Several, including the
+PyTorch-based model runtimes, still have no 3.15 wheels at their locked
+versions. The full regression suite (`test`) runs on 3.11 and 3.12 only.
 
 Adding the `full-ci` label starts a new full CI run. Other label additions do
 not start CI jobs or cancel the active PR run. Those skipped label events use

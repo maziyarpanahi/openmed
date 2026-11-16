@@ -436,8 +436,8 @@ jobs:
       fail-fast: false
       # Pull requests cover both ends of the supported Python range on Linux
       # and the newest interpreter on Windows and macOS. Pushes to the default
-      # branches, and pull requests labelled `full-ci`, run all 12 combinations.
-      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"ubuntu-latest","python-version":"3.14"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.14"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.14"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.14"},{"os":"windows-latest","python-version":"3.14"},{"os":"macos-latest","python-version":"3.14"}]}') }}
+      # branches, and pull requests labelled `full-ci`, run all 15 combinations.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"ubuntu-latest","python-version":"3.14"},{"os":"ubuntu-latest","python-version":"3.15"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.14"},{"os":"windows-latest","python-version":"3.15"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.14"},{"os":"macos-latest","python-version":"3.15"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.15"},{"os":"windows-latest","python-version":"3.15"},{"os":"macos-latest","python-version":"3.15"}]}') }}
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -499,50 +499,6 @@ jobs:
       env:
         MATRIX_RESULT: ${{ needs.sdk-compatibility.result }}
       run: test "$MATRIX_RESULT" = success
-
-  sdk-compatibility-next:
-    # CPython 3.15 is not supported yet: uv.lock pins core and dev
-    # dependencies that publish no cp315 wheels (see docs/testing.md). This
-    # probe is allowed to fail and gates nothing; it installs the core package
-    # only and runs core-only contracts, so it turns green once the frozen
-    # lock can install on 3.15. Promote 3.15 into sdk-compatibility then.
-    needs: repo-policy
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')
-    continue-on-error: true
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.15"]
-    env:
-      OPENMED_OFFLINE: "1"
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
-      HF_DATASETS_OFFLINE: "1"
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-      with:
-        python-version: ${{ matrix.python-version }}
-    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-      with:
-        version: "0.11.28"
-        enable-cache: true
-        cache-dependency-glob: |
-          pyproject.toml
-          uv.lock
-    - name: Install the core package from the frozen lock
-      shell: bash
-      run: uv sync --frozen --python "${{ matrix.python-version }}"
-    - name: Core-only contracts
-      run: >-
-        uv run --frozen --with pytest --with pytest-timeout
-        pytest -q --timeout=120 --timeout-method=thread
-        tests/unit/clinical/test_temporal_normalizer.py
-        tests/unit/processing/test_sentences.py
-        tests/unit/core/test_safety_sweep.py
 
   security:
     needs: repo-policy
