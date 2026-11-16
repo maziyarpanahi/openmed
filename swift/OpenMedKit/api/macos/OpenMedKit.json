@@ -8560,6 +8560,73 @@
     "OpenMedKit.OpenMedSegmenterError.unreadableResource": [
       "case OpenMedKit.OpenMedSegmenterError.unreadableResource: (Swift.Int) -> OpenMedKit.OpenMedSegmenterError"
     ],
+    "OpenMedKit.OpenMedSessionLifecycleError": [
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: CaseIterable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Equatable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Error",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Hashable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: LocalizedError",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleError: Sendable",
+      "enum OpenMedKit.OpenMedSessionLifecycleError raw(String)"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.errorDescription": [
+      "var OpenMedKit.OpenMedSessionLifecycleError.errorDescription: Swift.String? { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionCancelled": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionCancelled"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionClosed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionClosed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.sessionFailed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.sessionFailed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.transitionNotAllowed": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.transitionNotAllowed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleError.unknownState": [
+      "case OpenMedKit.OpenMedSessionLifecycleError.unknownState"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState": [
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: CaseIterable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Equatable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Hashable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: RawRepresentable",
+      "conformance OpenMedKit.OpenMedSessionLifecycleState: Sendable",
+      "enum OpenMedKit.OpenMedSessionLifecycleState raw(String)"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.allowedTargets": [
+      "var OpenMedKit.OpenMedSessionLifecycleState.allowedTargets: [OpenMedKit.OpenMedSessionLifecycleState] { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.cancelled": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.cancelled"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.cancelling": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.cancelling"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.closed": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.closed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.failed": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.failed"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.finalized": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.finalized"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.isTerminal": [
+      "var OpenMedKit.OpenMedSessionLifecycleState.isTerminal: Swift.Bool { get }"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.open": [
+      "case OpenMedKit.OpenMedSessionLifecycleState.open"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.transitionReason": [
+      "func OpenMedKit.OpenMedSessionLifecycleState.transitionReason(to: OpenMedKit.OpenMedSessionLifecycleState) -> OpenMedKit.OpenMedSessionLifecycleError?",
+      "static func OpenMedKit.OpenMedSessionLifecycleState.transitionReason(from: Swift.String, to: Swift.String) -> OpenMedKit.OpenMedSessionLifecycleError?"
+    ],
+    "OpenMedKit.OpenMedSessionLifecycleState.version": [
+      "static var OpenMedKit.OpenMedSessionLifecycleState.version: Swift.String { get }"
+    ],
     "OpenMedKit.OpenMedSystemClock": [
       "conformance OpenMedKit.OpenMedSystemClock: OpenMedRuntimeClock",
       "conformance OpenMedKit.OpenMedSystemClock: Sendable",
@@ -10674,6 +10741,9 @@
     "OpenMedKit.SpeechSessionSnapshot.finalizedSegments": [
       "var OpenMedKit.SpeechSessionSnapshot.finalizedSegments: Swift.Int { get }"
     ],
+    "OpenMedKit.SpeechSessionSnapshot.lifecycleState": [
+      "var OpenMedKit.SpeechSessionSnapshot.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
+    ],
     "OpenMedKit.SpeechSessionSnapshot.partialHypotheses": [
       "var OpenMedKit.SpeechSessionSnapshot.partialHypotheses: Swift.Int { get }"
     ],
@@ -10701,6 +10771,9 @@
     ],
     "OpenMedKit.SpeechSessionState.finished": [
       "case OpenMedKit.SpeechSessionState.finished"
+    ],
+    "OpenMedKit.SpeechSessionState.lifecycleState": [
+      "var OpenMedKit.SpeechSessionState.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
     ],
     "OpenMedKit.SpeechSessionState.open": [
       "case OpenMedKit.SpeechSessionState.open"
@@ -10804,6 +10877,9 @@
     "OpenMedKit.StreamingSpeechSession.cancel": [
       "func OpenMedKit.StreamingSpeechSession.cancel() async -> ()"
     ],
+    "OpenMedKit.StreamingSpeechSession.checkLifecycleTransition": [
+      "func OpenMedKit.StreamingSpeechSession.checkLifecycleTransition(to: OpenMedKit.OpenMedSessionLifecycleState) throws -> ()"
+    ],
     "OpenMedKit.StreamingSpeechSession.description": [
       "var OpenMedKit.StreamingSpeechSession.description: Swift.String { get }"
     ],
@@ -10812,6 +10888,9 @@
     ],
     "OpenMedKit.StreamingSpeechSession.init": [
       "OpenMedKit.StreamingSpeechSession.init(engine: any OpenMedKit.LocalSpeechEngine, limits: OpenMedKit.SpeechSessionLimits = default, onEvent: (OpenMedKit.SpeechStreamEvent) -> Swift.Void) throws -> OpenMedKit.StreamingSpeechSession"
+    ],
+    "OpenMedKit.StreamingSpeechSession.lifecycleState": [
+      "var OpenMedKit.StreamingSpeechSession.lifecycleState: OpenMedKit.OpenMedSessionLifecycleState { get }"
     ],
     "OpenMedKit.StreamingSpeechSession.provenance": [
       "var OpenMedKit.StreamingSpeechSession.provenance: OpenMedKit.SpeechEngineProvenance { get }"
