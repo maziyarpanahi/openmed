@@ -53,6 +53,50 @@ const result = await deidentify(
 `{ variant: "fp32" }` or `{ variant: "fp16" }` when a different published
 variant is appropriate.
 
+## Model Catalog
+
+The `openmed/catalog` subpath lists the OpenMed ONNX models this release
+knows about, so an application can pick a model by language, size or license
+without querying the Hub. The rows are bundled in the package and listing them
+makes no network request; the default `openmed` entry does not include them.
+
+```ts
+import { getModel, listModels } from "openmed/catalog";
+
+const spanish = listModels({ language: "es", maxParamCount: 100_000_000 });
+const entry = getModel("OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android");
+```
+
+Each row has the same fields as the Android catalog: `repo_id`, `formats`
+(ONNX format tokens only), `tier`, `param_count`, `languages`, `license` and
+`reproducibility_hash`. Only permissively licensed models with at least one
+ONNX format are included. `listModels()` filters work like the Android
+`ModelCatalog.filter()`:
+
+| Filter | Matches |
+| --- | --- |
+| `format` | any of the row's formats, case-insensitive |
+| `tier` | the row's tier, case-insensitive; rows without a tier never match |
+| `maxParamCount` | `param_count <= maxParamCount`; rows without a count never match |
+| `language` | any of the row's languages, case-insensitive |
+| `license` | the row's license, case-insensitive |
+
+Every given filter must match, and results stay sorted by repo id. An unknown
+filter field, an empty token or a negative `maxParamCount` throws
+`ModelCatalogError` with code `invalid_filter`. `getModel()` matches the repo
+id exactly and returns `undefined` for ids outside the catalog.
+`createModelCatalog(rows)` and `parseModelCatalogJsonl(text)` build the same
+queryable catalog over your own rows, for example an Android catalog JSONL
+asset.
+
+The rows are generated from the repository's `models.jsonl` into
+`src/catalog.generated.ts`; never edit that file by hand. After a manifest
+change, regenerate it from the repository root with
+`python scripts/web/build_web_catalog.py`; CI runs the same command with
+`--check` and fails when the committed file is stale. `MODEL_CATALOG_DIGEST`
+is the SHA-256 of the rows as compact JSONL in Android field order, so it
+equals the digest of an Android catalog asset that holds the same rows.
+
 ## Node.js Example
 
 A runnable end-to-end script lives at

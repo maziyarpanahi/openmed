@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Declare portable PII, clinical-entity and medication task packs in one generated manifest (`openmed/core/data/task_packs.json`) with a JSON Schema, an offline `scripts/manifest/build_task_packs.py --check` generator and a download-free `openmed.core.task_packs.resolve(pack_id, runtime)`; the medication pack carries an extraction-only notice (#5379).
+- Ship a typed ONNX model catalog in the `openmed` web package under the `openmed/catalog` subpath: `listModels()` filters the bundled permissive ONNX rows by format, tier, parameter count, language and license with the Android catalog semantics, `getModel()` looks one up by repo id, and `scripts/web/build_web_catalog.py --check` keeps the generated rows in step with `models.jsonl` (#5384).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
