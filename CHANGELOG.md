@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Throw coded errors from the openmed web package: `OpenMedError` (an `Error`) carries the portable registry code in `errorCode` at every former plain `Error` site, `PortablePolicyError` and `OpenMedOfflineError` extend it and keep their reason codes in `code`, messages are unchanged and value-free, and the web runs every required scenario in `error_codes_v1.json` (#5368).
 - Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 
