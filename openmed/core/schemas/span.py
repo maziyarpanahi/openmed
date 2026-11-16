@@ -12,6 +12,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from openmed.core.errors import ConfigurationError, InputError
 from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 
 CURRENT_SCHEMA_VERSION = 1
@@ -76,7 +77,11 @@ class OpenMedSpan:
         if not isinstance(self.start, int) or not isinstance(self.end, int):
             raise TypeError("start and end must be integers")
         if self.start < 0 or self.end < self.start:
-            raise ValueError("start/end must be non-negative offsets with end >= start")
+            # InputError is still a ValueError with the same message.
+            raise InputError(
+                "start/end must be non-negative offsets with end >= start",
+                details={"start": self.start, "end": self.end},
+            )
         if not _TEXT_HASH_RE.fullmatch(self.text_hash):
             raise ValueError("text_hash must be hmac-sha256:<64 lowercase hex chars>")
         if self.canonical_label not in CANONICAL_LABELS:
@@ -188,7 +193,11 @@ def _resolve_hmac_secret(secret: str | bytes | None) -> bytes:
     else:
         raise TypeError("hmac_secret must be a string or bytes")
     if not key:
-        raise ValueError("hmac_secret must be non-empty")
+        # ConfigurationError is still a ValueError with the same message.
+        raise ConfigurationError(
+            "hmac_secret must be non-empty",
+            details={"argument": "hmac_secret"},
+        )
     return key
 
 

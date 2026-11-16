@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Publish cross-runtime error-code vectors (`tests/fixtures/parity/error_codes_v1.json`): every portable code with its HTTP status, CLI exit code and retryable flag, plus offline scenarios marked per runtime, with a Python test that runs the Python scenarios (#5331).
 - Add the shared error-code registry (`openmed/core/error_codes.json`, loader `openmed.core.error_registry`): every stable code with its Python classes, REST, gRPC, GraphQL, MCP and CLI mappings, retryable flag and recorded cross-surface divergences, checked against each surface's real tables, plus generated Swift, Kotlin and TypeScript enums for the portable codes (#5331).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Three Python failures now carry a stable error code. They keep their builtin base and message: an empty `hmac_secret` raises `ConfigurationError` (a `ValueError`), invalid `OpenMedSpan` offsets raise `InputError` (a `ValueError`), and a model missing from the cache in offline mode raises `OfflineModelUnavailableError`, an `OfflineModeError` that is also a `ModelLoadError` (#5331).
 - Async jobs can now be `quarantined` (non-terminal, waiting for an operator replay), including jobs whose input fails authentication or is damaged, which used to end `failed`; transient document errors retry the job with backoff instead of failing the document; with encrypted payloads, a drain or shutdown leaves unfinished jobs checkpointed and `queued` for the next start instead of `cancelled`; and in-flight job records written before durable recovery fail closed at startup with `legacy_job_not_resumable`. Treat `quarantined` as pending operator action and call `replay()` or `cancel()` (#3574).
 - The GraphQL endpoint now executes operations over `POST` only, keeps the
   GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
