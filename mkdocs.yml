@@ -600,6 +600,7 @@ nav:
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
       - Service Protocol Parity: api/protocol-parity.md
+      - Capability Descriptor: api/capabilities.md
       - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md

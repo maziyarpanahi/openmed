@@ -43,6 +43,7 @@ CLIENT_METHOD_BY_OPERATION = {
     ("get", "/jobs/{job_id}"): "GetJob",
     ("get", "/livez"): "Livez",
     ("get", "/models/loaded"): "LoadedModels",
+    ("get", "/v1/capabilities"): "Capabilities",
     ("post", "/models/unload"): "UnloadModels",
     ("post", "/omop/load"): "LoadOMOP",
     ("post", "/pii/deidentify"): "Deidentify",

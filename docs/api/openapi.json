@@ -4636,6 +4636,175 @@
         "summary": "Readyz"
       }
     },
+    "/v1/capabilities": {
+      "get": {
+        "description": "Return the capability descriptor without paths or settings.",
+        "operationId": "capabilities_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$id": "https://openmed.dev/schemas/v4/capabilities/capability-descriptor.schema.json",
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "additionalProperties": false,
+                  "description": "Value-free description of what one OpenMed runtime supports: installed optional backends and transport surfaces, served public model ids, canonical record schema versions and bundled policy profiles, sealed by a digest of its canonical JSON form. It never carries hostnames, filesystem paths, cache locations, environment values or credentials.",
+                  "properties": {
+                    "backends": {
+                      "description": "Every registered optional backend, sorted by name, with whether all of its modules are importable.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "available": {
+                            "type": "boolean"
+                          },
+                          "extra": {
+                            "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+                            "type": "string"
+                          },
+                          "name": {
+                            "enum": [
+                              "coreml",
+                              "gliformer",
+                              "gliner",
+                              "gliner2",
+                              "hf",
+                              "langchain",
+                              "llamaindex",
+                              "mcp",
+                              "medspacy",
+                              "mlx",
+                              "multimodal",
+                              "onnx",
+                              "openvino",
+                              "philter",
+                              "presidio",
+                              "pydeid",
+                              "service",
+                              "spacy",
+                              "triton"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "available",
+                          "extra",
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 64,
+                      "type": "array"
+                    },
+                    "digest": {
+                      "description": "sha256 of the canonical JSON form (sorted keys, compact separators, ASCII escapes) of every other field.",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "policy_profiles": {
+                      "description": "Sorted canonical names of the bundled de-identification policy profiles.",
+                      "items": {
+                        "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                        "type": "string"
+                      },
+                      "maxItems": 256,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "schema": {
+                      "const": "openmed.capabilities"
+                    },
+                    "schema_version": {
+                      "const": 1
+                    },
+                    "schema_versions": {
+                      "description": "Version of every canonical record schema, sorted by name.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                            "type": "string"
+                          },
+                          "version": {
+                            "minimum": 1.0,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "version"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 256,
+                      "type": "array"
+                    },
+                    "served_models": {
+                      "description": "Sorted public model ids the reporting runtime serves; empty for the Python API and the CLI. Local paths are never listed.",
+                      "items": {
+                        "maxLength": 257,
+                        "pattern": "^(?!.*\\.\\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:/[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$",
+                        "type": "string"
+                      },
+                      "maxItems": 1024,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "surfaces": {
+                      "description": "Every OpenMed surface, sorted by name, with whether the packages it needs are installed.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "available": {
+                            "type": "boolean"
+                          },
+                          "name": {
+                            "enum": [
+                              "cli",
+                              "graphql",
+                              "grpc",
+                              "mcp",
+                              "python",
+                              "rest"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "available",
+                          "name"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 16,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "backends",
+                    "digest",
+                    "policy_profiles",
+                    "schema",
+                    "schema_version",
+                    "schema_versions",
+                    "served_models",
+                    "surfaces"
+                  ],
+                  "schema_version": 1,
+                  "title": "OpenMed capability descriptor",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The canonical, value-free capability descriptor of this server: installed backends and surfaces, served public model ids, canonical schema versions, policy profiles and a digest of the descriptor."
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "capabilities"
+        ]
+      }
+    },
     "/v1/decisions": {
       "post": {
         "description": "Evaluate a bounded local decision and return a typed review result.\n\nThe body is either an OpenMed decision request or an OpenAI-compatible\nDecisions body; the response uses the same shape as the request.",
