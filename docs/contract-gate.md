@@ -60,8 +60,8 @@ the `command` that writes them, or `pending` with a `tracking` issue while its
 reporter is being built. A `required` cell of an `active` runtime must name at
 least one consumer. A `required` cell of a `pending` runtime may have an empty
 `consumers` list: the cell is still part of the contract and the runtime's
-reporter has to cover it when it becomes active. Today only Python is active;
-the Swift, Kotlin and web reporters are tracked in #5327, #5328 and #5329.
+reporter has to cover it when it becomes active. Python and Kotlin are active;
+the Swift and web reporters are tracked in #5327 and #5329.
 
 ## Case ids
 
@@ -201,7 +201,9 @@ manifest's own reasons only.
 `.github/workflows/contract-gate.yml` runs on every push and pull request to
 `master`, `main` and `release/v*` with no path filter, so the check always
 reports. The `python-results` job runs `run-python` and uploads
-`contract-gate-result-python`. The `contract-gate` job runs even when a runtime
+`contract-gate-result-python`. The `kotlin-results` job runs every Kotlin
+consumer the manifest declares and uploads `contract-gate-result-kotlin` (see
+[Kotlin reporter](#kotlin-reporter)). The `contract-gate` job runs even when a runtime
 job failed, downloads every `contract-gate-result-*` artifact, runs
 `aggregate`, appends the summary to the job summary and uploads it as the
 `contract-gate-summary` artifact. A runtime job that fails to produce its file
@@ -233,3 +235,49 @@ lands, add a job to `.github/workflows/contract-gate.yml` that uploads
 `contract-gate-result-<runtime>` and add it to the `contract-gate` job's
 `needs`; in the same change set the runtime's `reporter` to `active` with its
 `command` and fill in the consumers of every required cell.
+
+## Kotlin reporter
+
+The Android OpenMedKit unit tests write `kotlin.json`. Each Kotlin consumer
+declares a JUnit rule for the fixture it reads, from
+`android/openmedkit/src/test/kotlin/com/openmed/openmedkit/parity/ContractGate.kt`:
+
+```kotlin
+@get:Rule
+val contractGate = ContractGateRule("offset_contract")
+```
+
+The rule fails the test with a value-free code when the class is not a declared
+Kotlin consumer of a `required` fixture (`consumer_undeclared`,
+`runtime_not_required`, `unknown_fixture`). The test loads the fixture through
+`contractGate.fixtureBytes()` or `fixtureText()`, so `fixture_sha256` is the
+digest of the bytes it read from the test classpath. As in the Python runner,
+every test method of a consumer class covers all of the fixture's cases. A
+method that records per-case outcomes with
+`contractGate.cases(items, { "cases/${it.id}" }) { ... }` covers only the cases
+it records: every item runs even after a failure, and the first failure is
+rethrown at the end so the test still fails with its own assertion. A failure
+outside those records fails every case. Case outcomes use the Python reason
+codes: `consumer_failed` for an assertion failure, `consumer_error` for any
+other exception, `consumer_skipped` for a failed assumption,
+`case_not_exercised` for a case no covering test recorded, and
+`consumer_not_collected` when no consumer of the fixture ran.
+
+Reporting is off unless a results directory is set, so ordinary test runs write
+nothing:
+
+```bash
+cd android
+./gradlew :openmedkit:testDebugUnitTest -PopenmedContractGateResultsDir=/tmp/results
+```
+
+`OPENMED_CONTRACT_GATE_RESULTS_DIR` works as well, and a relative directory
+resolves against the directory Gradle was started from. Only
+`testDebugUnitTest` reports. Gradle deletes a `kotlin.json` left by an earlier
+run, then each test method merges its outcome into the file under a lock and
+replaces it atomically, so Robolectric and plain JVM test classes in the same
+run share one file. Every write is a complete, schema-valid document; fixtures
+whose consumers did not run are reported as failed with
+`consumer_not_collected`. The `kotlin-results` CI job passes once the file is
+written, whatever the case outcomes, and fails when no file was produced;
+`ContractGateReporterTest` covers the reporter with synthetic manifests.
