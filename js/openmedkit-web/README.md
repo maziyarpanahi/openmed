@@ -159,6 +159,13 @@ unalignable tokens produce a content-free error instead of incomplete
 redaction. Custom tokenizers and filtered output should supply exact source
 offsets; treat an alignment error as a failed scan, not a PII-free document.
 
+The cross-runtime offset contract uses Unicode scalar offsets snapped to
+grapheme-cluster boundaries. The web package does not snap spans and reports
+UTF-16 offsets, so the repository's contract gate records the shared offset
+cases that need either as failed (see `docs/contract-gate.md`). Convert with
+`utf16ToScalarOffset()` and `scalarToUtf16Offset()` when you exchange offsets
+with the Python, Swift or Kotlin runtimes.
+
 Existing `TokenClassificationEntity` and `TokenClassificationPipeline` outputs
 retain required numeric offsets. Use the additive `RawTokenClassificationEntity`,
 `RawTokenClassificationPipeline`, and `RawTransformersRuntime` input types for
