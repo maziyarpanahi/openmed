@@ -25,6 +25,7 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
     sha256_digest,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.key_provider import EncryptionError
 
 from .deadlines import (
@@ -103,7 +104,7 @@ _SQLITE_PROGRESS_STEPS = 1000
 T = TypeVar("T")
 
 
-class LocalStoreError(RuntimeError):
+class LocalStoreError(RuntimeError, LegacyRootedError):
     """Base value-safe exception for local-store lifecycle failures."""
 
 

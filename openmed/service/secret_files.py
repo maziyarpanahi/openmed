@@ -21,6 +21,8 @@ import stat
 from collections.abc import Mapping
 from typing import Optional
 
+from openmed.core.errors import LegacyRootedError
+
 SECRET_FILE_SUFFIX = "_FILE"
 DEFAULT_MAX_SECRET_FILE_BYTES = 64 * 1024
 PROFILE_ENV_VAR = "OPENMED_PROFILE"
@@ -69,7 +71,7 @@ _OPEN_FLAGS = (
 )
 
 
-class SecretSourceError(ValueError):
+class SecretSourceError(ValueError, LegacyRootedError):
     """Credential source failure that names only the setting and a fixed code.
 
     Attributes:

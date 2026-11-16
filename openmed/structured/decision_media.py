@@ -17,6 +17,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
+from openmed.core.errors import LegacyRootedError
 from openmed.multimodal.asset_limits import MOBILE_V1
 from openmed.multimodal.asset_manifest import AssetManifest
 from openmed.multimodal.media_type import detect_media_type
@@ -35,7 +36,7 @@ _LIMITS = MOBILE_V1.with_limits(
 SUPPORTED_TYPES = frozenset({"image/png", "image/jpeg", "video/mp4", "audio/wav"})
 
 
-class DecisionMediaError(ValueError):
+class DecisionMediaError(ValueError, LegacyRootedError):
     """Fixed-code refusal containing no media bytes, URLs or local paths."""
 
 

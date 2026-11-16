@@ -1,0 +1,3614 @@
+{
+  "classes": {
+    "openmed.service.admission:AdmissionCancelled": {
+      "code": "admission_cancelled",
+      "mro": [
+        "openmed.service.admission:AdmissionCancelled",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.admission:AdmissionCancelled",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.admission:AdmissionCancelled",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.admission:AdmissionCancelled",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.admission:AdmissionRejected": {
+      "code": "admission_rejected",
+      "mro": [
+        "openmed.service.admission:AdmissionRejected",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.admission:AdmissionSaturated": {
+      "code": "admission_saturated",
+      "mro": [
+        "openmed.service.admission:AdmissionSaturated",
+        "openmed.service.admission:AdmissionRejected",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.admission:PrincipalAdmissionLimited": {
+      "code": "principal_admission_limited",
+      "mro": [
+        "openmed.service.admission:PrincipalAdmissionLimited",
+        "openmed.service.admission:AdmissionRejected",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.api_compatibility:APICompatibilityError": {
+      "code": "api_compatibility_error",
+      "mro": [
+        "openmed.service.api_compatibility:APICompatibilityError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.api_compatibility:APIContractError": {
+      "code": "api_contract_error",
+      "mro": [
+        "openmed.service.api_compatibility:APIContractError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.api_compatibility:APIContractError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.api_compatibility:APIContractError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.api_compatibility:APIContractError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.api_compatibility:APISurfaceUnavailable": {
+      "code": "api_surface_unavailable",
+      "mro": [
+        "openmed.service.api_compatibility:APISurfaceUnavailable",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('API compatibility surface unavailable: synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('API compatibility surface unavailable: API compatibility surface unavailable: synthetic_reason',)",
+          "pickle_str": "API compatibility surface unavailable: API compatibility surface unavailable: synthetic_reason",
+          "pickle_type": "openmed.service.api_compatibility:APISurfaceUnavailable",
+          "str": "API compatibility surface unavailable: synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.app:ServiceTimeoutError": {
+      "code": "service_timeout_error",
+      "mro": [
+        "openmed.service.app:ServiceTimeoutError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.auth:AuthError": {
+      "code": "auth_error",
+      "mro": [
+        "openmed.service.auth:AuthError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.auth_generations:GenerationValidationError": {
+      "code": "generation_validation_error",
+      "mro": [
+        "openmed.service.auth_generations:GenerationValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.auth_generations:GenerationValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.backpressure:BackpressureError": {
+      "code": "backpressure_error",
+      "mro": [
+        "openmed.service.backpressure:BackpressureError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.batcher:BatcherClosedError": {
+      "code": "batcher_closed_error",
+      "mro": [
+        "openmed.service.batcher:BatcherClosedError",
+        "openmed.service.drain:ServiceShuttingDownError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('batcher is closed',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "batcher is closed"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.bulk_data:BulkPathError": {
+      "code": "bulk_path_error",
+      "mro": [
+        "openmed.service.bulk_data:BulkPathError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('path_invalid',)",
+          "call": 1,
+          "pickle_args": "('path_invalid',)",
+          "pickle_str": "path_invalid",
+          "pickle_type": "openmed.service.bulk_data:BulkPathError",
+          "str": "path_invalid"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.client:OpenMedAPIError": {
+      "code": "open_med_api_error",
+      "mro": [
+        "openmed.service.client:OpenMedAPIError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.compatibility:CompatibilityError": {
+      "code": "compatibility_error",
+      "mro": [
+        "openmed.service.compatibility:CompatibilityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Compatibility contract input is invalid',)",
+          "call": 1,
+          "pickle_args": "('Compatibility contract input is invalid',)",
+          "pickle_str": "Compatibility contract input is invalid",
+          "pickle_type": "openmed.service.compatibility:CompatibilityError",
+          "str": "Compatibility contract input is invalid"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.compatibility:IncompatibleStateError": {
+      "code": "incompatible_state_error",
+      "mro": [
+        "openmed.service.compatibility:IncompatibleStateError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Persisted state is outside the compatibility window',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "Persisted state is outside the compatibility window"
+        }
+      ]
+    },
+    "openmed.service.continuation_auth:ContinuationError": {
+      "code": "continuation_error",
+      "mro": [
+        "openmed.service.continuation_auth:ContinuationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_continuation_outcome',)",
+          "call": 1,
+          "pickle_args": "('invalid_continuation_outcome',)",
+          "pickle_str": "invalid_continuation_outcome",
+          "pickle_type": "openmed.service.continuation_auth:ContinuationError",
+          "str": "invalid_continuation_outcome"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.continuation_auth:ContinuationInterrupted": {
+      "code": "continuation_interrupted",
+      "mro": [
+        "openmed.service.continuation_auth:ContinuationInterrupted",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ContinuationError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.diagnostics:DiagnosticRequestError": {
+      "code": "diagnostic_request_error",
+      "mro": [
+        "openmed.service.diagnostics:DiagnosticRequestError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('request_invalid',)",
+          "call": 1,
+          "pickle_args": "('request_invalid',)",
+          "pickle_str": "request_invalid",
+          "pickle_type": "openmed.service.diagnostics:DiagnosticRequestError",
+          "str": "request_invalid"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.drain:DrainRegistrationError": {
+      "code": "drain_registration_error",
+      "mro": [
+        "openmed.service.drain:DrainRegistrationError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.drain:DrainRegistrationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.drain:DrainRegistrationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.drain:DrainRegistrationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.drain:ServiceShuttingDownError": {
+      "code": "service_shutting_down_error",
+      "mro": [
+        "openmed.service.drain:ServiceShuttingDownError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Service is shutting down; retry the request',)",
+          "call": 0,
+          "pickle_args": "('Service is shutting down; retry the request',)",
+          "pickle_str": "Service is shutting down; retry the request",
+          "pickle_type": "openmed.service.drain:ServiceShuttingDownError",
+          "str": "Service is shutting down; retry the request"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.drain:ServiceShuttingDownError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.egress:EgressConfigurationError": {
+      "code": "egress_configuration_error",
+      "mro": [
+        "openmed.service.egress:EgressConfigurationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Egress policy configuration is invalid: invalid_rules',)",
+          "call": 1,
+          "pickle_args": "('Egress policy configuration is invalid: invalid_rules',)",
+          "pickle_str": "Egress policy configuration is invalid: invalid_rules",
+          "pickle_type": "openmed.service.egress:EgressConfigurationError",
+          "str": "Egress policy configuration is invalid: invalid_rules"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.egress:EgressDenied": {
+      "code": "egress_denied",
+      "mro": [
+        "openmed.service.egress:EgressDenied",
+        "builtins:PermissionError",
+        "builtins:OSError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Outbound connection denied by egress policy: no_decision',)",
+          "call": 1,
+          "pickle_args": "('Outbound connection denied by egress policy: no_decision',)",
+          "pickle_str": "Outbound connection denied by egress policy: no_decision",
+          "pickle_type": "openmed.service.egress:EgressDenied",
+          "str": "Outbound connection denied by egress policy: no_decision"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.egress:EgressDestinationError": {
+      "code": "egress_destination_error",
+      "mro": [
+        "openmed.service.egress:EgressDestinationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Outbound destination is invalid: invalid_destination',)",
+          "call": 1,
+          "pickle_args": "('Outbound destination is invalid: invalid_destination',)",
+          "pickle_str": "Outbound destination is invalid: invalid_destination",
+          "pickle_type": "openmed.service.egress:EgressDestinationError",
+          "str": "Outbound destination is invalid: invalid_destination"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.governed_workflows:WorkflowServiceError": {
+      "code": "workflow_service_error",
+      "mro": [
+        "openmed.service.governed_workflows:WorkflowServiceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Governed workflow request refused.',)",
+          "call": 1,
+          "pickle_args": "('Governed workflow request refused.',)",
+          "pickle_str": "Governed workflow request refused.",
+          "pickle_type": "openmed.service.governed_workflows:WorkflowServiceError",
+          "str": "Governed workflow request refused."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.graphql_limits:GraphQLLimitError": {
+      "code": "graph_ql_limit_error",
+      "mro": [
+        "openmed.service.graphql_limits:GraphQLLimitError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.grpc_policy:GrpcPolicyError": {
+      "code": "grpc_policy_error",
+      "mro": [
+        "openmed.service.grpc_policy:GrpcPolicyError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('internal_error',)",
+          "call": 1,
+          "pickle_args": "('internal_error',)",
+          "pickle_str": "internal_error",
+          "pickle_type": "openmed.service.grpc_policy:GrpcPolicyError",
+          "str": "internal_error"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.grpc_security:GrpcStartupError": {
+      "code": "grpc_startup_error",
+      "mro": [
+        "openmed.service.grpc_security:GrpcStartupError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('gRPC startup refused: grpc_failed',)",
+          "call": 1,
+          "pickle_args": "('gRPC startup refused: grpc_failed',)",
+          "pickle_str": "gRPC startup refused: grpc_failed",
+          "pickle_type": "openmed.service.grpc_security:GrpcStartupError",
+          "str": "gRPC startup refused: grpc_failed"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.idempotency:IdempotencyError": {
+      "code": "idempotency_error",
+      "mro": [
+        "openmed.service.idempotency:IdempotencyError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('The Idempotency-Key header must be a single value of 1-255 letters, digits or ._:~+/=- characters.',)",
+          "call": 1,
+          "pickle_args": "('The Idempotency-Key header must be a single value of 1-255 letters, digits or ._:~+/=- characters.',)",
+          "pickle_str": "The Idempotency-Key header must be a single value of 1-255 letters, digits or ._:~+/=- characters.",
+          "pickle_type": "openmed.service.idempotency:IdempotencyError",
+          "str": "The Idempotency-Key header must be a single value of 1-255 letters, digits or ._:~+/=- characters."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_admission:JobAdmissionError": {
+      "code": "job_admission_error",
+      "mro": [
+        "openmed.service.job_admission:JobAdmissionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_admission:JobLimitExceededError": {
+      "code": "job_limit_exceeded_error",
+      "mro": [
+        "openmed.service.job_admission:JobLimitExceededError",
+        "openmed.service.job_admission:JobAdmissionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_admission:JobQueueFullError": {
+      "code": "job_queue_full_error",
+      "mro": [
+        "openmed.service.job_admission:JobQueueFullError",
+        "openmed.service.job_admission:JobAdmissionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_admission:JobTooLargeError": {
+      "code": "job_too_large_error",
+      "mro": [
+        "openmed.service.job_admission:JobTooLargeError",
+        "openmed.service.job_admission:JobLimitExceededError",
+        "openmed.service.job_admission:JobAdmissionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_admission:JobTooManyDocumentsError": {
+      "code": "job_too_many_documents_error",
+      "mro": [
+        "openmed.service.job_admission:JobTooManyDocumentsError",
+        "openmed.service.job_admission:JobLimitExceededError",
+        "openmed.service.job_admission:JobAdmissionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_bounds:BulkJobsSaturatedError": {
+      "code": "bulk_jobs_saturated_error",
+      "mro": [
+        "openmed.service.job_bounds:BulkJobsSaturatedError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_payloads:JobPayloadError": {
+      "code": "job_payload_error",
+      "mro": [
+        "openmed.service.job_payloads:JobPayloadError",
+        "openmed.core.key_provider:EncryptionError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('job payload operation failed (job_payload_failed)',)",
+          "call": 0,
+          "pickle_args": "('job payload operation failed (job_payload_failed)',)",
+          "pickle_str": "job payload operation failed (job_payload_failed)",
+          "pickle_type": "openmed.service.job_payloads:JobPayloadError",
+          "str": "job payload operation failed (job_payload_failed)"
+        },
+        {
+          "args": "('encryption operation failed (synthetic_reason)',)",
+          "call": 1,
+          "pickle_args": "('job payload operation failed (job_payload_failed)',)",
+          "pickle_str": "job payload operation failed (job_payload_failed)",
+          "pickle_type": "openmed.service.job_payloads:JobPayloadError",
+          "str": "encryption operation failed (synthetic_reason)"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_recovery:JobRecoveryError": {
+      "code": "job_recovery_error",
+      "mro": [
+        "openmed.service.job_recovery:JobRecoveryError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('job recovery operation failed',)",
+          "call": 0,
+          "pickle_args": "('job recovery operation failed',)",
+          "pickle_str": "job recovery operation failed",
+          "pickle_type": "openmed.service.job_recovery:JobRecoveryError",
+          "str": "job recovery operation failed"
+        },
+        {
+          "args": "('job recovery operation failed',)",
+          "call": 1,
+          "pickle_args": "('job recovery operation failed',)",
+          "pickle_str": "job recovery operation failed",
+          "pickle_type": "openmed.service.job_recovery:JobRecoveryError",
+          "str": "job recovery operation failed"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_recovery:ReplayRefusedError": {
+      "code": "replay_refused_error",
+      "mro": [
+        "openmed.service.job_recovery:ReplayRefusedError",
+        "openmed.service.job_recovery:JobRecoveryError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('job recovery operation failed',)",
+          "call": 0,
+          "pickle_args": "('job recovery operation failed',)",
+          "pickle_str": "job recovery operation failed",
+          "pickle_type": "openmed.service.job_recovery:ReplayRefusedError",
+          "str": "job recovery operation failed"
+        },
+        {
+          "args": "('job recovery operation failed',)",
+          "call": 1,
+          "pickle_args": "('job recovery operation failed',)",
+          "pickle_str": "job recovery operation failed",
+          "pickle_type": "openmed.service.job_recovery:ReplayRefusedError",
+          "str": "job recovery operation failed"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.job_recovery:StaleLeaseError": {
+      "code": "stale_lease_error",
+      "mro": [
+        "openmed.service.job_recovery:StaleLeaseError",
+        "openmed.service.job_recovery:JobRecoveryError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('job lease is no longer held by this worker',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "job lease is no longer held by this worker"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.jobs:JobQueueClosedError": {
+      "code": "job_queue_closed_error",
+      "mro": [
+        "openmed.service.jobs:JobQueueClosedError",
+        "openmed.service.drain:ServiceShuttingDownError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Job queue is shutting down',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "Job queue is shutting down"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.jobs:JobStoreSchemaError": {
+      "code": "job_store_schema_error",
+      "mro": [
+        "openmed.service.jobs:JobStoreSchemaError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Job metadata store cannot be read (synthetic_reason)',)",
+          "call": 1,
+          "pickle_args": "('Job metadata store cannot be read (Job metadata store cannot be read (synthetic_reason))',)",
+          "pickle_str": "Job metadata store cannot be read (Job metadata store cannot be read (synthetic_reason))",
+          "pickle_type": "openmed.service.jobs:JobStoreSchemaError",
+          "str": "Job metadata store cannot be read (synthetic_reason)"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.keyed_digest:DigestKeyError": {
+      "code": "digest_key_error",
+      "mro": [
+        "openmed.service.keyed_digest:DigestKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail"
+        }
+      ]
+    },
+    "openmed.service.model_activation:ModelActivationError": {
+      "code": "model_activation_error",
+      "mro": [
+        "openmed.service.model_activation:ModelActivationError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.mtls:MTLSAuthenticationError": {
+      "code": "mtls_authentication_error",
+      "mro": [
+        "openmed.service.mtls:MTLSAuthenticationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.openhim_mediator:OpenHIMMediatorConfigurationError": {
+      "code": "open_him_mediator_configuration_error",
+      "mro": [
+        "openmed.service.openhim_mediator:OpenHIMMediatorConfigurationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorConfigurationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorConfigurationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorConfigurationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.openhim_mediator:OpenHIMMediatorProtocolError": {
+      "code": "open_him_mediator_protocol_error",
+      "mro": [
+        "openmed.service.openhim_mediator:OpenHIMMediatorProtocolError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorProtocolError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorProtocolError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.openhim_mediator:OpenHIMMediatorProtocolError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.policy_generations:PolicyGenerationError": {
+      "code": "policy_generation_error",
+      "mro": [
+        "openmed.service.policy_generations:PolicyGenerationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('manager_config_invalid',)",
+          "call": 1,
+          "pickle_args": "('manager_config_invalid',)",
+          "pickle_str": "manager_config_invalid",
+          "pickle_type": "openmed.service.policy_generations:PolicyGenerationError",
+          "str": "manager_config_invalid"
+        },
+        {
+          "args": "('manager_config_invalid',)",
+          "call": 2,
+          "pickle_args": "('manager_config_invalid',)",
+          "pickle_str": "manager_config_invalid",
+          "pickle_type": "openmed.service.policy_generations:PolicyGenerationError",
+          "str": "manager_config_invalid"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyGatewayConfigurationError": {
+      "code": "privacy_gateway_configuration_error",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyGatewayConfigurationError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyGatewayConfigurationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyGatewayConfigurationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyGatewayConfigurationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyGatewayError": {
+      "code": "privacy_gateway_error",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyGatewayError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyGatewayError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyPolicyViolation": {
+      "code": "privacy_policy_violation",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyPolicyViolation",
+        "openmed.service.privacy_gateway:PrivacyGatewayError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyPolicyViolation",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyReidentificationError": {
+      "code": "privacy_reidentification_error",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyReidentificationError",
+        "openmed.service.privacy_gateway:PrivacyGatewayError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyReidentificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyTransportError": {
+      "code": "privacy_transport_error",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyTransportError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyTransportError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_gateway:PrivacyTripwireViolation": {
+      "code": "privacy_tripwire_violation",
+      "mro": [
+        "openmed.service.privacy_gateway:PrivacyTripwireViolation",
+        "openmed.service.privacy_gateway:PrivacyPolicyViolation",
+        "openmed.service.privacy_gateway:PrivacyGatewayError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_gateway:PrivacyTripwireViolation",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyConfigurationError": {
+      "code": "privacy_proxy_configuration_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyConfigurationError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyConfigurationError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyConfigurationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyError": {
+      "code": "privacy_proxy_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyLimitError": {
+      "code": "privacy_proxy_limit_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyLimitError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyLimitError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyLimitError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyRedactionError": {
+      "code": "privacy_proxy_redaction_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyRedactionError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyRedactionError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyRedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyRequestError": {
+      "code": "privacy_proxy_request_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyRequestError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyRequestError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyRequestError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyResponseError": {
+      "code": "privacy_proxy_response_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyResponseError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyResponseError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyResponseError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyTimeoutError": {
+      "code": "privacy_proxy_timeout_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyTimeoutError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyTimeoutError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyTimeoutError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.app:PrivacyProxyTransportError": {
+      "code": "privacy_proxy_transport_error",
+      "mro": [
+        "openmed.service.privacy_proxy.app:PrivacyProxyTransportError",
+        "openmed.service.privacy_proxy.app:PrivacyProxyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Privacy proxy request failed',)",
+          "call": 0,
+          "pickle_args": "('Privacy proxy request failed',)",
+          "pickle_str": "Privacy proxy request failed",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyTransportError",
+          "str": "Privacy proxy request failed"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.app:PrivacyProxyTransportError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:DuplicateMappingError": {
+      "code": "duplicate_mapping_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:DuplicateMappingError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound mapping contained a duplicated placeholder',)",
+          "call": 0,
+          "pickle_args": "('Inbound mapping contained a duplicated placeholder',)",
+          "pickle_str": "Inbound mapping contained a duplicated placeholder",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicateMappingError",
+          "str": "Inbound mapping contained a duplicated placeholder"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicateMappingError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:DuplicatePlaceholderError": {
+      "code": "duplicate_placeholder_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:DuplicatePlaceholderError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound response contained a duplicated placeholder',)",
+          "call": 0,
+          "pickle_args": "('Inbound response contained a duplicated placeholder',)",
+          "pickle_str": "Inbound response contained a duplicated placeholder",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicatePlaceholderError",
+          "str": "Inbound response contained a duplicated placeholder"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicatePlaceholderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:DuplicateResponseKeyError": {
+      "code": "duplicate_response_key_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:DuplicateResponseKeyError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound restoration would create a duplicate response key',)",
+          "call": 0,
+          "pickle_args": "('Inbound restoration would create a duplicate response key',)",
+          "pickle_str": "Inbound restoration would create a duplicate response key",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicateResponseKeyError",
+          "str": "Inbound restoration would create a duplicate response key"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:DuplicateResponseKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:InboundRestorationError": {
+      "code": "inbound_restoration_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound placeholder restoration was rejected',)",
+          "call": 0,
+          "pickle_args": "('Inbound placeholder restoration was rejected',)",
+          "pickle_str": "Inbound placeholder restoration was rejected",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+          "str": "Inbound placeholder restoration was rejected"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:MalformedPlaceholderError": {
+      "code": "malformed_placeholder_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:MalformedPlaceholderError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound response contained a malformed placeholder',)",
+          "call": 0,
+          "pickle_args": "('Inbound response contained a malformed placeholder',)",
+          "pickle_str": "Inbound response contained a malformed placeholder",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:MalformedPlaceholderError",
+          "str": "Inbound response contained a malformed placeholder"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:MalformedPlaceholderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:RequestScopeError": {
+      "code": "request_scope_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:RequestScopeError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound restoration state is not valid for this request',)",
+          "call": 0,
+          "pickle_args": "('Inbound restoration state is not valid for this request',)",
+          "pickle_str": "Inbound restoration state is not valid for this request",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:RequestScopeError",
+          "str": "Inbound restoration state is not valid for this request"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:RequestScopeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:RestorationLimitError": {
+      "code": "restoration_limit_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:RestorationLimitError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound placeholder restoration exceeded its limit',)",
+          "call": 0,
+          "pickle_args": "('Inbound placeholder restoration exceeded its limit',)",
+          "pickle_str": "Inbound placeholder restoration exceeded its limit",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:RestorationLimitError",
+          "str": "Inbound placeholder restoration exceeded its limit"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:RestorationLimitError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:UnknownPlaceholderError": {
+      "code": "unknown_placeholder_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:UnknownPlaceholderError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound response contained an unknown placeholder',)",
+          "call": 0,
+          "pickle_args": "('Inbound response contained an unknown placeholder',)",
+          "pickle_str": "Inbound response contained an unknown placeholder",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnknownPlaceholderError",
+          "str": "Inbound response contained an unknown placeholder"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnknownPlaceholderError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:UnknownRequestStateError": {
+      "code": "unknown_request_state_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:UnknownRequestStateError",
+        "openmed.service.privacy_proxy.inbound:RequestScopeError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('No inbound restoration state exists for this request',)",
+          "call": 0,
+          "pickle_args": "('No inbound restoration state exists for this request',)",
+          "pickle_str": "No inbound restoration state exists for this request",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnknownRequestStateError",
+          "str": "No inbound restoration state exists for this request"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnknownRequestStateError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.inbound:UnsupportedResponseError": {
+      "code": "unsupported_response_error",
+      "mro": [
+        "openmed.service.privacy_proxy.inbound:UnsupportedResponseError",
+        "openmed.service.privacy_proxy.inbound:InboundRestorationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound response content is unsupported',)",
+          "call": 0,
+          "pickle_args": "('Inbound response content is unsupported',)",
+          "pickle_str": "Inbound response content is unsupported",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnsupportedResponseError",
+          "str": "Inbound response content is unsupported"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.inbound:UnsupportedResponseError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:OutboundPrivacyError": {
+      "code": "outbound_privacy_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:RedactionError": {
+      "code": "redaction_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:RedactionError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:RedactionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:RedactionOutputError": {
+      "code": "redaction_output_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:RedactionOutputError",
+        "openmed.service.privacy_proxy.outbound:RedactionError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:RedactionOutputError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:RedactorRequiredError": {
+      "code": "redactor_required_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:RedactorRequiredError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:RedactorRequiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:ReplacementStateError": {
+      "code": "replacement_state_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:ReplacementStateError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:ReplacementStateError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:ReplacementStateLimitError": {
+      "code": "replacement_state_limit_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:ReplacementStateLimitError",
+        "openmed.service.privacy_proxy.outbound:ReplacementStateError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:ReplacementStateLimitError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:RequestStateNotFoundError": {
+      "code": "request_state_not_found_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:RequestStateNotFoundError",
+        "openmed.service.privacy_proxy.outbound:ReplacementStateError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:RequestStateNotFoundError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:UnsupportedContentTypeError": {
+      "code": "unsupported_content_type_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:UnsupportedContentTypeError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:UnsupportedContentTypeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.privacy_proxy.outbound:UnsupportedRequestBodyError": {
+      "code": "unsupported_request_body_error",
+      "mro": [
+        "openmed.service.privacy_proxy.outbound:UnsupportedRequestBodyError",
+        "openmed.service.privacy_proxy.outbound:OutboundPrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.privacy_proxy.outbound:UnsupportedRequestBodyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.protocol_map:ProtocolDriftError": {
+      "code": "protocol_drift_error",
+      "mro": [
+        "openmed.service.protocol_map:ProtocolDriftError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.protocol_map:ProtocolMapError": {
+      "code": "protocol_map_error",
+      "mro": [
+        "openmed.service.protocol_map:ProtocolMapError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.protocol_map:ProtocolMapError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.protocol_map:ProtocolMapError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.protocol_map:ProtocolMapError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.recovery:RecoveryError": {
+      "code": "recovery_error",
+      "mro": [
+        "openmed.service.recovery:RecoveryError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('recovery operation did not complete (recovery_failed)',)",
+          "call": 1,
+          "pickle_args": "('recovery operation did not complete (recovery_failed)',)",
+          "pickle_str": "recovery operation did not complete (recovery_failed)",
+          "pickle_type": "openmed.service.recovery:RecoveryError",
+          "str": "recovery operation did not complete (recovery_failed)"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.redaction_app:RedactionServiceError": {
+      "code": "redaction_service_error",
+      "mro": [
+        "openmed.service.redaction_app:RedactionServiceError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.redaction_app:RedactionServiceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.replica_state:ReplicaComponentUnavailableError": {
+      "code": "replica_component_unavailable_error",
+      "mro": [
+        "openmed.service.replica_state:ReplicaComponentUnavailableError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('A replica-local service component is unavailable',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "A replica-local service component is unavailable"
+        }
+      ]
+    },
+    "openmed.service.request_limits:RequestBodyTimeout": {
+      "code": "request_body_timeout",
+      "mro": [
+        "openmed.service.request_limits:RequestBodyTimeout",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('request_body_timeout',)",
+          "call": 1,
+          "pickle_args": "('request_body_timeout',)",
+          "pickle_str": "request_body_timeout",
+          "pickle_type": "openmed.service.request_limits:RequestBodyTimeout",
+          "str": "request_body_timeout"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.required_audit:RequiredAuditError": {
+      "code": "required_audit_error",
+      "mro": [
+        "openmed.service.required_audit:RequiredAuditError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.required_audit:RequiredAuditError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.required_audit:RequiredAuditStoreError": {
+      "code": "required_audit_store_error",
+      "mro": [
+        "openmed.service.required_audit:RequiredAuditStoreError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('audit_unavailable',)",
+          "call": 1,
+          "pickle_args": "('audit_unavailable',)",
+          "pickle_str": "audit_unavailable",
+          "pickle_type": "openmed.service.required_audit:RequiredAuditStoreError",
+          "str": "audit_unavailable"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.resilience:CircuitBreakerOpenError": {
+      "code": "circuit_breaker_open_error",
+      "mro": [
+        "openmed.service.resilience:CircuitBreakerOpenError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.runtime:ModelNotServedError": {
+      "code": "model_not_served_error",
+      "mro": [
+        "openmed.service.runtime:ModelNotServedError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('model_not_served',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "model_not_served"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.runtime:StreamDeadlineExceeded": {
+      "code": "stream_deadline_exceeded",
+      "mro": [
+        "openmed.service.runtime:StreamDeadlineExceeded",
+        "builtins:TimeoutError",
+        "builtins:OSError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.secret_files:SecretSourceError": {
+      "code": "secret_source_error",
+      "mro": [
+        "openmed.service.secret_files:SecretSourceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason could not be read (secret_file_unreadable)',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_reason could not be read (secret_file_unreadable)"
+        }
+      ]
+    },
+    "openmed.service.security:InsecureRemoteURLError": {
+      "code": "insecure_remote_url",
+      "mro": [
+        "openmed.service.security:InsecureRemoteURLError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Remote MCP authorization URLs must use HTTPS.',)",
+          "call": 0,
+          "pickle_args": "('Remote MCP authorization URLs must use HTTPS.',)",
+          "pickle_str": "Remote MCP authorization URLs must use HTTPS.",
+          "pickle_type": "openmed.service.security:InsecureRemoteURLError",
+          "str": "Remote MCP authorization URLs must use HTTPS."
+        },
+        {
+          "args": "('Remote MCP authorization URLs must use HTTPS.',)",
+          "call": 1,
+          "pickle_args": "('Remote MCP authorization URLs must use HTTPS.',)",
+          "pickle_str": "Remote MCP authorization URLs must use HTTPS.",
+          "pickle_type": "openmed.service.security:InsecureRemoteURLError",
+          "str": "Remote MCP authorization URLs must use HTTPS."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:InvalidRedirectURIError": {
+      "code": "invalid_redirect_uri",
+      "mro": [
+        "openmed.service.security:InvalidRedirectURIError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The OAuth redirect URI is not registered for this client.',)",
+          "call": 0,
+          "pickle_args": "('The OAuth redirect URI is not registered for this client.',)",
+          "pickle_str": "The OAuth redirect URI is not registered for this client.",
+          "pickle_type": "openmed.service.security:InvalidRedirectURIError",
+          "str": "The OAuth redirect URI is not registered for this client."
+        },
+        {
+          "args": "('The OAuth redirect URI is not registered for this client.',)",
+          "call": 1,
+          "pickle_args": "('The OAuth redirect URI is not registered for this client.',)",
+          "pickle_str": "The OAuth redirect URI is not registered for this client.",
+          "pickle_type": "openmed.service.security:InvalidRedirectURIError",
+          "str": "The OAuth redirect URI is not registered for this client."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:MCPAuthorizationError": {
+      "code": "invalid_token",
+      "mro": [
+        "openmed.service.security:MCPAuthorizationError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP access token is invalid for this resource.',)",
+          "call": 0,
+          "pickle_args": "('The MCP access token is invalid for this resource.',)",
+          "pickle_str": "The MCP access token is invalid for this resource.",
+          "pickle_type": "openmed.service.security:MCPAuthorizationError",
+          "str": "The MCP access token is invalid for this resource."
+        },
+        {
+          "args": "('The MCP access token is invalid for this resource.',)",
+          "call": 1,
+          "pickle_args": "('The MCP access token is invalid for this resource.',)",
+          "pickle_str": "The MCP access token is invalid for this resource.",
+          "pickle_type": "openmed.service.security:MCPAuthorizationError",
+          "str": "The MCP access token is invalid for this resource."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:MCPConfigurationError": {
+      "code": "invalid_security_configuration",
+      "mro": [
+        "openmed.service.security:MCPConfigurationError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP security configuration is invalid.',)",
+          "call": 0,
+          "pickle_args": "('The MCP security configuration is invalid.',)",
+          "pickle_str": "The MCP security configuration is invalid.",
+          "pickle_type": "openmed.service.security:MCPConfigurationError",
+          "str": "The MCP security configuration is invalid."
+        },
+        {
+          "args": "('The MCP security configuration is invalid.',)",
+          "call": 1,
+          "pickle_args": "('The MCP security configuration is invalid.',)",
+          "pickle_str": "The MCP security configuration is invalid.",
+          "pickle_type": "openmed.service.security:MCPConfigurationError",
+          "str": "The MCP security configuration is invalid."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:MCPGatewaySecurityError": {
+      "code": "security_error",
+      "mro": [
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP security policy rejected the request.',)",
+          "call": 0,
+          "pickle_args": "('The MCP security policy rejected the request.',)",
+          "pickle_str": "The MCP security policy rejected the request.",
+          "pickle_type": "openmed.service.security:MCPGatewaySecurityError",
+          "str": "The MCP security policy rejected the request."
+        },
+        {
+          "args": "('The MCP security policy rejected the request.',)",
+          "call": 1,
+          "pickle_args": "('The MCP security policy rejected the request.',)",
+          "pickle_str": "The MCP security policy rejected the request.",
+          "pickle_type": "openmed.service.security:MCPGatewaySecurityError",
+          "str": "The MCP security policy rejected the request."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:MetadataDiscoveryError": {
+      "code": "metadata_discovery_failed",
+      "mro": [
+        "openmed.service.security:MetadataDiscoveryError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('MCP authorization metadata is unavailable or invalid.',)",
+          "call": 0,
+          "pickle_args": "('MCP authorization metadata is unavailable or invalid.',)",
+          "pickle_str": "MCP authorization metadata is unavailable or invalid.",
+          "pickle_type": "openmed.service.security:MetadataDiscoveryError",
+          "str": "MCP authorization metadata is unavailable or invalid."
+        },
+        {
+          "args": "('MCP authorization metadata is unavailable or invalid.',)",
+          "call": 1,
+          "pickle_args": "('MCP authorization metadata is unavailable or invalid.',)",
+          "pickle_str": "MCP authorization metadata is unavailable or invalid.",
+          "pickle_type": "openmed.service.security:MetadataDiscoveryError",
+          "str": "MCP authorization metadata is unavailable or invalid."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:MissingScopeError": {
+      "code": "insufficient_scope",
+      "mro": [
+        "openmed.service.security:MissingScopeError",
+        "openmed.service.security:MCPAuthorizationError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP access token lacks the required tool scope.',)",
+          "call": 0,
+          "pickle_args": "('The MCP access token lacks the required tool scope.',)",
+          "pickle_str": "The MCP access token lacks the required tool scope.",
+          "pickle_type": "openmed.service.security:MissingScopeError",
+          "str": "The MCP access token lacks the required tool scope."
+        },
+        {
+          "args": "('The MCP access token lacks the required tool scope.',)",
+          "call": 1,
+          "pickle_args": "('The MCP access token lacks the required tool scope.',)",
+          "pickle_str": "The MCP access token lacks the required tool scope.",
+          "pickle_type": "openmed.service.security:MissingScopeError",
+          "str": "The MCP access token lacks the required tool scope."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:PKCEError": {
+      "code": "invalid_pkce",
+      "mro": [
+        "openmed.service.security:PKCEError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Authorization-code clients must use S256 PKCE.',)",
+          "call": 0,
+          "pickle_args": "('Authorization-code clients must use S256 PKCE.',)",
+          "pickle_str": "Authorization-code clients must use S256 PKCE.",
+          "pickle_type": "openmed.service.security:PKCEError",
+          "str": "Authorization-code clients must use S256 PKCE."
+        },
+        {
+          "args": "('Authorization-code clients must use S256 PKCE.',)",
+          "call": 1,
+          "pickle_args": "('Authorization-code clients must use S256 PKCE.',)",
+          "pickle_str": "Authorization-code clients must use S256 PKCE.",
+          "pickle_type": "openmed.service.security:PKCEError",
+          "str": "Authorization-code clients must use S256 PKCE."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:PayloadBoundsError": {
+      "code": "payload_too_large",
+      "mro": [
+        "openmed.service.security:PayloadBoundsError",
+        "openmed.service.security:ToolPolicyError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP tool payload exceeds the configured safety bounds.',)",
+          "call": 0,
+          "pickle_args": "('The MCP tool payload exceeds the configured safety bounds.',)",
+          "pickle_str": "The MCP tool payload exceeds the configured safety bounds.",
+          "pickle_type": "openmed.service.security:PayloadBoundsError",
+          "str": "The MCP tool payload exceeds the configured safety bounds."
+        },
+        {
+          "args": "('The MCP tool payload exceeds the configured safety bounds.',)",
+          "call": 1,
+          "pickle_args": "('The MCP tool payload exceeds the configured safety bounds.',)",
+          "pickle_str": "The MCP tool payload exceeds the configured safety bounds.",
+          "pickle_type": "openmed.service.security:PayloadBoundsError",
+          "str": "The MCP tool payload exceeds the configured safety bounds."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:PromptInjectionError": {
+      "code": "prompt_injection_detected",
+      "mro": [
+        "openmed.service.security:PromptInjectionError",
+        "openmed.service.security:ToolPolicyError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Untrusted document content cannot issue tool instructions.',)",
+          "call": 0,
+          "pickle_args": "('Untrusted document content cannot issue tool instructions.',)",
+          "pickle_str": "Untrusted document content cannot issue tool instructions.",
+          "pickle_type": "openmed.service.security:PromptInjectionError",
+          "str": "Untrusted document content cannot issue tool instructions."
+        },
+        {
+          "args": "('Untrusted document content cannot issue tool instructions.',)",
+          "call": 1,
+          "pickle_args": "('Untrusted document content cannot issue tool instructions.',)",
+          "pickle_str": "Untrusted document content cannot issue tool instructions.",
+          "pickle_type": "openmed.service.security:PromptInjectionError",
+          "str": "Untrusted document content cannot issue tool instructions."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:StateChangePermissionError": {
+      "code": "state_change_not_permitted",
+      "mro": [
+        "openmed.service.security:StateChangePermissionError",
+        "openmed.service.security:ToolPolicyError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('This state-changing MCP tool requires explicit permission.',)",
+          "call": 0,
+          "pickle_args": "('This state-changing MCP tool requires explicit permission.',)",
+          "pickle_str": "This state-changing MCP tool requires explicit permission.",
+          "pickle_type": "openmed.service.security:StateChangePermissionError",
+          "str": "This state-changing MCP tool requires explicit permission."
+        },
+        {
+          "args": "('This state-changing MCP tool requires explicit permission.',)",
+          "call": 1,
+          "pickle_args": "('This state-changing MCP tool requires explicit permission.',)",
+          "pickle_str": "This state-changing MCP tool requires explicit permission.",
+          "pickle_type": "openmed.service.security:StateChangePermissionError",
+          "str": "This state-changing MCP tool requires explicit permission."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:TokenPassthroughError": {
+      "code": "token_passthrough_rejected",
+      "mro": [
+        "openmed.service.security:TokenPassthroughError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Inbound MCP credentials cannot be passed to an upstream service.',)",
+          "call": 0,
+          "pickle_args": "('Inbound MCP credentials cannot be passed to an upstream service.',)",
+          "pickle_str": "Inbound MCP credentials cannot be passed to an upstream service.",
+          "pickle_type": "openmed.service.security:TokenPassthroughError",
+          "str": "Inbound MCP credentials cannot be passed to an upstream service."
+        },
+        {
+          "args": "('Inbound MCP credentials cannot be passed to an upstream service.',)",
+          "call": 1,
+          "pickle_args": "('Inbound MCP credentials cannot be passed to an upstream service.',)",
+          "pickle_str": "Inbound MCP credentials cannot be passed to an upstream service.",
+          "pickle_type": "openmed.service.security:TokenPassthroughError",
+          "str": "Inbound MCP credentials cannot be passed to an upstream service."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.security:ToolPolicyError": {
+      "code": "tool_policy_rejected",
+      "mro": [
+        "openmed.service.security:ToolPolicyError",
+        "openmed.service.security:MCPGatewaySecurityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('The MCP tool call was rejected by policy.',)",
+          "call": 0,
+          "pickle_args": "('The MCP tool call was rejected by policy.',)",
+          "pickle_str": "The MCP tool call was rejected by policy.",
+          "pickle_type": "openmed.service.security:ToolPolicyError",
+          "str": "The MCP tool call was rejected by policy."
+        },
+        {
+          "args": "('The MCP tool call was rejected by policy.',)",
+          "call": 1,
+          "pickle_args": "('The MCP tool call was rejected by policy.',)",
+          "pickle_str": "The MCP tool call was rejected by policy.",
+          "pickle_type": "openmed.service.security:ToolPolicyError",
+          "str": "The MCP tool call was rejected by policy."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.sidecar:SidecarRequestError": {
+      "code": "sidecar_request_error",
+      "mro": [
+        "openmed.service.sidecar:SidecarRequestError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.sidecar:SidecarRequestError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.sidecar:SidecarRequestError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.sidecar:SidecarRequestError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing:InvalidSignatureError": {
+      "code": "invalid_signature_error",
+      "mro": [
+        "openmed.service.signing:InvalidSignatureError",
+        "openmed.service.signing:SignatureVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.signing:InvalidSignatureError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing:InvalidSignatureError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.signing:InvalidSignatureError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing:NonceCacheFullError": {
+      "code": "nonce_cache_full_error",
+      "mro": [
+        "openmed.service.signing:NonceCacheFullError",
+        "openmed.service.signing:SignatureVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.signing:NonceCacheFullError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing:NonceCacheFullError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.signing:NonceCacheFullError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing:ReplayDetectedError": {
+      "code": "replay_detected_error",
+      "mro": [
+        "openmed.service.signing:ReplayDetectedError",
+        "openmed.service.signing:SignatureVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.signing:ReplayDetectedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing:ReplayDetectedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.signing:ReplayDetectedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing:SignatureVerificationError": {
+      "code": "signature_verification_error",
+      "mro": [
+        "openmed.service.signing:SignatureVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.signing:SignatureVerificationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing:SignatureVerificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.signing:SignatureVerificationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing:StaleTimestampError": {
+      "code": "stale_timestamp_error",
+      "mro": [
+        "openmed.service.signing:StaleTimestampError",
+        "openmed.service.signing:SignatureVerificationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.signing:StaleTimestampError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing:StaleTimestampError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.signing:StaleTimestampError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.signing_keys:KeyringIntegrityError": {
+      "code": "keyring_integrity_error",
+      "mro": [
+        "openmed.service.signing_keys:KeyringIntegrityError",
+        "openmed.service.signing_keys:SigningKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing_keys:KeyringIntegrityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.signing_keys:KeyringRollbackError": {
+      "code": "keyring_rollback_error",
+      "mro": [
+        "openmed.service.signing_keys:KeyringRollbackError",
+        "openmed.service.signing_keys:SigningKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing_keys:KeyringRollbackError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.signing_keys:RetiredSigningKeyError": {
+      "code": "retired_signing_key_error",
+      "mro": [
+        "openmed.service.signing_keys:RetiredSigningKeyError",
+        "openmed.service.signing_keys:SigningKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing_keys:RetiredSigningKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.signing_keys:SigningKeyError": {
+      "code": "signing_key_error",
+      "mro": [
+        "openmed.service.signing_keys:SigningKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing_keys:SigningKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.signing_keys:UnknownSigningKeyError": {
+      "code": "unknown_signing_key_error",
+      "mro": [
+        "openmed.service.signing_keys:UnknownSigningKeyError",
+        "openmed.service.signing_keys:SigningKeyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.signing_keys:UnknownSigningKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.smart_backend:SMARTBackendError": {
+      "code": "smart_backend_error",
+      "mro": [
+        "openmed.service.smart_backend:SMARTBackendError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.smart_backend:SMARTBackendError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.smart_backend:SMARTBackendError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.smart_backend:SMARTBackendError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.system_one:SystemOneInputError": {
+      "code": "system_one_input_error",
+      "mro": [
+        "openmed.service.system_one:SystemOneInputError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.system_one:SystemOneInputError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.system_one:SystemOneInputError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.system_one:SystemOneInputError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.system_one:SystemOnePrivacyError": {
+      "code": "system_one_privacy_error",
+      "mro": [
+        "openmed.service.system_one:SystemOnePrivacyError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.service.system_one:SystemOnePrivacyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.system_one:SystemOnePrivacyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.service.system_one:SystemOnePrivacyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.service.throttle:ServiceBusyError": {
+      "code": "service_busy_error",
+      "mro": [
+        "openmed.service.throttle:ServiceBusyError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "AttributeError"
+        }
+      ]
+    },
+    "openmed.service.tls_reload:TLSCredentialError": {
+      "code": "tls_credential_error",
+      "mro": [
+        "openmed.service.tls_reload:TLSCredentialError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('TLS credentials refused: tls_failed',)",
+          "call": 1,
+          "pickle_args": "('TLS credentials refused: tls_failed',)",
+          "pickle_str": "TLS credentials refused: tls_failed",
+          "pickle_type": "openmed.service.tls_reload:TLSCredentialError",
+          "str": "TLS credentials refused: tls_failed"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.warm_pool:WarmPoolBackpressureError": {
+      "code": "warm_pool_backpressure_error",
+      "mro": [
+        "openmed.service.warm_pool:WarmPoolBackpressureError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.warm_pool:WarmPoolClosedError": {
+      "code": "warm_pool_closed_error",
+      "mro": [
+        "openmed.service.warm_pool:WarmPoolClosedError",
+        "openmed.service.drain:ServiceShuttingDownError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "('Model warm pool is closed for shutdown',)",
+          "call": 0,
+          "pickle_raises": "TypeError",
+          "str": "Model warm pool is closed for shutdown"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.webhook_replay:ReplayLedgerError": {
+      "code": "replay_ledger_error",
+      "mro": [
+        "openmed.service.webhook_replay:ReplayLedgerError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.service.webhook_replay:ReplayLedgerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.service.workflow_client:WorkflowClientError": {
+      "code": "workflow_client_error",
+      "mro": [
+        "openmed.service.workflow_client:WorkflowClientError",
+        "builtins:RuntimeError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('workflow_server_refused: governed workflow request did not complete.',)",
+          "call": 1,
+          "pickle_args": "('workflow_server_refused: governed workflow request did not complete.',)",
+          "pickle_str": "workflow_server_refused: governed workflow request did not complete.",
+          "pickle_type": "openmed.service.workflow_client:WorkflowClientError",
+          "str": "workflow_server_refused: governed workflow request did not complete."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

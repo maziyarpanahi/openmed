@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 from openmed.core.budget import BudgetClock
+from openmed.core.errors import LegacyRootedError
 
 from .protocols import StoreResult, StoreState
 
@@ -48,7 +49,7 @@ Clock = Callable[[], float]
 StoreDeadlineInput = Union["StoreDeadline", BudgetClock, float, int, None]
 
 
-class StoreWaitError(RuntimeError):
+class StoreWaitError(RuntimeError, LegacyRootedError):
     """Base class for value-free bounded-wait failures.
 
     Attributes:
@@ -81,7 +82,7 @@ class StoreDeadlineExceededError(StoreWaitError):
     _message = "journey store deadline exceeded"
 
 
-class StoreTimeoutsError(ValueError):
+class StoreTimeoutsError(ValueError, LegacyRootedError):
     """Store timeout configuration is invalid; values are never echoed."""
 
     code = STORE_TIMEOUTS_INVALID_CODE

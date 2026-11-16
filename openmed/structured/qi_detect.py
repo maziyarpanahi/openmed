@@ -23,6 +23,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import (
     AGE,
     API_KEY,
@@ -187,7 +188,7 @@ _QI_VALUE_PATTERNS = (
 )
 
 
-class DiscoveryConfigurationError(ValueError):
+class DiscoveryConfigurationError(ValueError, LegacyRootedError):
     """Raised when explicit discovery roles do not match the input schema."""
 
 

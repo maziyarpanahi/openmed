@@ -12,6 +12,8 @@ import re
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .run_summary import RunSummary
 
 RUN_COMMITMENT_VERSION: Final = "openmed.agent.run_commitment.v1"
@@ -21,7 +23,7 @@ _COMMITMENT_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DUMMY_COMMITMENT: Final = "sha256:" + "0" * 64
 
 
-class RunCommitmentError(ValueError):
+class RunCommitmentError(ValueError, LegacyRootedError):
     """Raised when commitment computation receives an invalid summary.
 
     Messages contain only stable field names and error codes, never submitted

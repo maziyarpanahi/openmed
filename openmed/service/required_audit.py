@@ -41,6 +41,7 @@ from openmed.agent.audit.action_ledger import (
 from openmed.agent.correlation import ActionId, RunId
 from openmed.agent.workflows.recovery import ObservationState
 from openmed.compliance.audit_chain import AuditSink
+from openmed.core.errors import LegacyRootedError
 
 __all__ = [
     "ActionLedgerAuditStore",
@@ -89,7 +90,7 @@ _STORE_ERROR_CODES: Final = frozenset(
 _NOT_WRITTEN_CODES: Final = frozenset({"audit_storage_full", "audit_append_rejected"})
 
 
-class RequiredAuditError(ValueError):
+class RequiredAuditError(ValueError, LegacyRootedError):
     """Configuration or argument failure carrying only a fixed code.
 
     Args:
@@ -102,7 +103,7 @@ class RequiredAuditError(ValueError):
         super().__init__(code)
 
 
-class RequiredAuditStoreError(RuntimeError):
+class RequiredAuditStoreError(RuntimeError, LegacyRootedError):
     """Required audit store failure carrying only a closed code.
 
     Stores raise ``audit_storage_full`` or ``audit_append_rejected`` only when

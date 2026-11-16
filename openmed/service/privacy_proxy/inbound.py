@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Optional
 
+from openmed.core.errors import LegacyRootedError
+
 from ..request_id import is_valid_request_id
 
 DEFAULT_MAX_PLACEHOLDERS = 256
@@ -34,7 +36,7 @@ _PLACEHOLDER_CANDIDATE_PATTERN = re.compile(r"<<OPENMED_PHI_[^<>\s]*>>")
 _PLACEHOLDER_FRAGMENT_PATTERN = re.compile(r"OPENMED[_-]PHI", re.IGNORECASE)
 
 
-class InboundRestorationError(ValueError):
+class InboundRestorationError(ValueError, LegacyRootedError):
     """Base class for fail-closed inbound restoration errors."""
 
     error_code = "inbound_restoration_error"

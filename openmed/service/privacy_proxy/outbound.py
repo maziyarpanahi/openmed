@@ -25,6 +25,8 @@ from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from ..request_id import is_valid_request_id
 from .inbound import InboundRestorationError, InboundRestorationState
 
@@ -39,7 +41,7 @@ TextRedactor = Callable[[str], Any]
 RequestBody = Mapping[str, Any] | str | bytes
 
 
-class OutboundPrivacyError(ValueError):
+class OutboundPrivacyError(ValueError, LegacyRootedError):
     """Base class for fail-closed outbound privacy errors."""
 
     error_code = "outbound_privacy_error"

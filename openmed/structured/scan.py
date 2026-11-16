@@ -35,6 +35,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import (
     CLINICAL_CONCEPT,
     DATE,
@@ -86,15 +87,15 @@ class ColumnRole(str, Enum):
         return self.value
 
 
-class RoleOverrideError(ValueError):
+class RoleOverrideError(ValueError, LegacyRootedError):
     """Raised when a caller override names an unknown column or role."""
 
 
-class ProfilerNotAvailableError(ImportError):
+class ProfilerNotAvailableError(ImportError, LegacyRootedError):
     """Raised when the explicitly requested DataProfiler backend is absent."""
 
 
-class ProfilerReportError(ValueError):
+class ProfilerReportError(ValueError, LegacyRootedError):
     """Raised when DataProfiler cannot produce a usable structured report."""
 
 

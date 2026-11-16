@@ -29,6 +29,7 @@ from openmed.clinical.journey_contracts import (
     derived_opaque_id,
     sha256_digest,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.cohort import CohortExecution
 from openmed.structured.store import StoreResult, StoreState
 
@@ -76,7 +77,7 @@ _DIRECT_IDENTIFIER_KEYS = frozenset(
 )
 
 
-class GovernedDatasetError(ValueError):
+class GovernedDatasetError(ValueError, LegacyRootedError):
     """Base error for malformed governed-dataset contracts."""
 
 

@@ -17,6 +17,8 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Final, ParamSpec, TypeVar, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .approvals.tokens import (
     ApprovalAuthorization,
     ApprovalNonceStore,
@@ -58,7 +60,7 @@ class ApprovalEvidenceReason(str, Enum):
     CLOCK_UNAVAILABLE = "clock_unavailable"
 
 
-class ApprovalEvidenceError(ValueError):
+class ApprovalEvidenceError(ValueError, LegacyRootedError):
     """Value-free error with one controlled code.
 
     Args:

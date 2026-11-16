@@ -34,6 +34,8 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Any, Final, Protocol, runtime_checkable
 
+from openmed.core.errors import LegacyRootedError
+
 from .decision_media import (
     MAX_MEDIA_BYTES,
     MAX_MEDIA_ITEMS,
@@ -147,7 +149,7 @@ class DecisionBackendKind(str, Enum):
     SPECIALIST = "specialist"
 
 
-class DecisionError(ValueError):
+class DecisionError(ValueError, LegacyRootedError):
     """Base error for invalid decision contracts."""
 
 

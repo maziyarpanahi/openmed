@@ -64,6 +64,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 from openmed.core.hf_hub import DEFAULT_RETRIES, DownloadIntegrityError
 from openmed.core.model_integrity import (
     ARTIFACT_MANIFEST_FILENAME,
@@ -293,7 +294,7 @@ _INTEGRITY_REASONS = {
 }
 
 
-class ModelActivationError(RuntimeError):
+class ModelActivationError(RuntimeError, LegacyRootedError):
     """Raised when an activation operation cannot run at all.
 
     The message is the controlled reason code only; it never names models,

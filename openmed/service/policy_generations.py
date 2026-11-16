@@ -37,6 +37,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from openmed.core.config import PROFILE_ENV_VAR
+from openmed.core.errors import LegacyRootedError
 from openmed.core.offline import OFFLINE_ENV_VAR, env_flag_enabled
 from openmed.guard.operational_limits import OperationalLimits
 from openmed.service.auth import (
@@ -137,7 +138,7 @@ _ERROR_CODES: Final = frozenset(
 _HISTORY_LIMIT: Final = 32
 
 
-class PolicyGenerationError(ValueError):
+class PolicyGenerationError(ValueError, LegacyRootedError):
     """Fixed-code refusal that never echoes candidate or environment values.
 
     Attributes:

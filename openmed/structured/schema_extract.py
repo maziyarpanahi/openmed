@@ -29,6 +29,8 @@ from itertools import islice
 from math import isfinite
 from typing import Any, Literal, TypedDict
 
+from openmed.core.errors import LegacyRootedError
+
 SCHEMA_EXTRACT_ADVISORY = (
     "Schema-guided extraction binds already-detected entities, key-value pairs "
     "and table cells to declared JSON slots deterministically, coercing to the "
@@ -72,7 +74,7 @@ _TRUE_TOKENS = frozenset({"true", "yes", "y", "positive", "present", "1"})
 _FALSE_TOKENS = frozenset({"false", "no", "n", "negative", "absent", "0"})
 
 
-class SchemaDefinitionError(ValueError):
+class SchemaDefinitionError(ValueError, LegacyRootedError):
     """Raised when the supplied target schema is itself malformed."""
 
 

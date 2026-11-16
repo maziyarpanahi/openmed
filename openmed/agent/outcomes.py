@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 OUTCOME_SCHEMA_VERSION = "openmed.agent.outcome.v1"
 
 _ALLOWED_FIELDS = frozenset({"schema_version", "outcome_class", "reason_code"})
@@ -136,7 +138,7 @@ class OutcomeClass(str, Enum):
     FAILED = "failed"
 
 
-class OutcomeError(ValueError):
+class OutcomeError(ValueError, LegacyRootedError):
     """Raised when an outcome payload fails closed validation."""
 
     def __init__(self, code: str, field_name: str | None = None) -> None:

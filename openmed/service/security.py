@@ -22,6 +22,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import Request as URLRequest
 
+from openmed.core.errors import LegacyRootedError
+
 from .egress import (
     EgressAdapter,
     EgressOperation,
@@ -115,7 +117,7 @@ _JWT_PATTERN = re.compile(
 )
 
 
-class MCPGatewaySecurityError(ValueError):
+class MCPGatewaySecurityError(ValueError, LegacyRootedError):
     """Base error with a stable, safe message for a gateway boundary."""
 
     code = "security_error"

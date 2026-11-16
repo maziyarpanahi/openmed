@@ -31,6 +31,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.fhir.bulk import (
     BULK_DATA_VERSION,
     DEFAULT_MAX_BUFFERED_RESOURCES,
@@ -113,7 +114,7 @@ def _token_http_log_guard():
         _TOKEN_HTTP_ACTIVE.reset(marker)
 
 
-class SMARTBackendError(RuntimeError):
+class SMARTBackendError(RuntimeError, LegacyRootedError):
     """Raised when backend-services ingestion cannot proceed safely."""
 
 

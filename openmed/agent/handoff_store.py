@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Protocol
 
 from openmed.clinical.review_state_machine import ReviewState
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store.protocols import StoreResult, StoreState
 
 from .reviewer_handoff import ReviewerHandoffError, ReviewerHandoffPacket
@@ -30,7 +31,7 @@ HANDOFF_STORE_SCHEMA_VERSION = 1
 _MAX_SQLITE_INTEGER = (1 << 63) - 1
 
 
-class HandoffStoreError(ValueError):
+class HandoffStoreError(ValueError, LegacyRootedError):
     """Value-safe validation or storage failure with a controlled code."""
 
 

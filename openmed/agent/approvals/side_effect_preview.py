@@ -18,6 +18,8 @@ from types import MappingProxyType
 from typing import Any
 from uuid import UUID
 
+from openmed.core.errors import LegacyRootedError
+
 _RESOURCE_TYPE = re.compile(r"[A-Z][A-Za-z0-9]{0,63}\Z")
 _RESOURCE_HANDLE = re.compile(r"res_[0-9a-f]{32}\Z")
 _FIELD_PATH = re.compile(r"[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*\Z")
@@ -26,7 +28,7 @@ _DOMAIN = b"openmed.agent.side-effect-preview.v1\x00"
 _MISSING = object()
 
 
-class PreviewError(ValueError):
+class PreviewError(ValueError, LegacyRootedError):
     """A value-free validation or stale-preview failure."""
 
 

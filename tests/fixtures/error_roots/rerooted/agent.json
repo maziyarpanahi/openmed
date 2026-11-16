@@ -1,0 +1,2864 @@
+{
+  "classes": {
+    "openmed.agent.action_graph:ActionGraphError": {
+      "code": "action_graph_error",
+      "mro": [
+        "openmed.agent.action_graph:ActionGraphError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.action_graph:ActionGraphError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.action_graph:ActionGraphError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.action_phases:ActionPhaseError": {
+      "code": "action_phase_error",
+      "mro": [
+        "openmed.agent.action_phases:ActionPhaseError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.action_phases:ActionPhaseError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.action_phases:ActionPhaseError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.admission:AdmissionError": {
+      "code": "admission_error",
+      "mro": [
+        "openmed.agent.admission:AdmissionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.admission:AdmissionError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.admission:AdmissionError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.admission:AdmissionError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.approval_evidence:ApprovalEvidenceError": {
+      "code": "approval_evidence_error",
+      "mro": [
+        "openmed.agent.approval_evidence:ApprovalEvidenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_metadata',)",
+          "call": 1,
+          "pickle_args": "('invalid_metadata',)",
+          "pickle_str": "invalid_metadata",
+          "pickle_type": "openmed.agent.approval_evidence:ApprovalEvidenceError",
+          "str": "invalid_metadata"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.approvals.quorum:ApprovalQuorumError": {
+      "code": "approval_quorum_error",
+      "mro": [
+        "openmed.agent.approvals.quorum:ApprovalQuorumError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.approvals.quorum:ApprovalQuorumError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.quorum:ApprovalQuorumError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.approvals.quorum:ApprovalQuorumError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.approvals.restore_reconciliation:RestoreReconciliationError": {
+      "code": "restore_reconciliation_error",
+      "mro": [
+        "openmed.agent.approvals.restore_reconciliation:RestoreReconciliationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.restore_reconciliation:RestoreReconciliationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.restore_reconciliation:RestoreReconciliationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.side_effect_preview:PreviewError": {
+      "code": "preview_error",
+      "mro": [
+        "openmed.agent.approvals.side_effect_preview:PreviewError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.approvals.side_effect_preview:PreviewError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.side_effect_preview:PreviewError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.approvals.side_effect_preview:PreviewError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalActionMismatchError": {
+      "code": "approval_action_mismatch_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalActionMismatchError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalActionMismatchError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalActionMismatchError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalExpiredError": {
+      "code": "approval_expired_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalExpiredError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalExpiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalExpiredError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalKeyError": {
+      "code": "approval_key_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalKeyError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalKeyError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalLifetimeError": {
+      "code": "approval_lifetime_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalLifetimeError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalLifetimeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalLifetimeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalNonceStoreError": {
+      "code": "approval_nonce_store_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalNonceStoreError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalNonceStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalNonceStoreError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalNotYetValidError": {
+      "code": "approval_not_yet_valid_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalNotYetValidError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalNotYetValidError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalNotYetValidError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalReplayError": {
+      "code": "approval_replay_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalReplayError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalReplayError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalReplayError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalReviewerRoleMismatchError": {
+      "code": "approval_reviewer_role_mismatch_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalReviewerRoleMismatchError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalReviewerRoleMismatchError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalReviewerRoleMismatchError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalSignatureError": {
+      "code": "approval_signature_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalSignatureError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalSignatureError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalSignatureError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalTokenError": {
+      "code": "approval_token_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalTokenError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalTokenError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.approvals.tokens:ApprovalTokenValidationError": {
+      "code": "approval_token_validation_error",
+      "mro": [
+        "openmed.agent.approvals.tokens:ApprovalTokenValidationError",
+        "openmed.agent.approvals.tokens:ApprovalTokenError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalTokenValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.approvals.tokens:ApprovalTokenValidationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.artifact_reference:ArtifactReferenceError": {
+      "code": "artifact_reference_error",
+      "mro": [
+        "openmed.agent.artifact_reference:ArtifactReferenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.artifact_reference:ArtifactReferenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.artifact_reference:ArtifactReferenceError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.audit.action_ledger:ActionLedgerError": {
+      "code": "action_ledger_error",
+      "mro": [
+        "openmed.agent.audit.action_ledger:ActionLedgerError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.audit.action_ledger:ActionLedgerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.audit.replay_verifier:ReplayError": {
+      "code": "replay_error",
+      "mro": [
+        "openmed.agent.audit.replay_verifier:ReplayError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.audit.replay_verifier:ReplayError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.capability_validity:CapabilityValidityError": {
+      "code": "capability_validity_error",
+      "mro": [
+        "openmed.agent.capability_validity:CapabilityValidityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.capability_validity:CapabilityValidityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.capability_validity:CapabilityValidityError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.correlation:CorrelationIdError": {
+      "code": "correlation_id_error",
+      "mro": [
+        "openmed.agent.correlation:CorrelationIdError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.correlation:CorrelationIdError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.correlation:CorrelationIdError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.errors:ErrorEnvelopeError": {
+      "code": "error_envelope_error",
+      "mro": [
+        "openmed.agent.errors:ErrorEnvelopeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.errors:ErrorEnvelopeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.errors:ErrorEnvelopeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.event_attributes:EventAttributeError": {
+      "code": "event_attribute_error",
+      "mro": [
+        "openmed.agent.event_attributes:EventAttributeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.event_attributes:EventAttributeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.event_attributes:EventAttributeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.event_sequence:EventSequenceError": {
+      "code": "event_sequence_error",
+      "mro": [
+        "openmed.agent.event_sequence:EventSequenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.event_sequence:EventSequenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.event_sequence:EventSequenceError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.exchange_record_schemas:ExchangeRecordSchemaError": {
+      "code": "exchange_record_schema_error",
+      "mro": [
+        "openmed.agent.exchange_record_schemas:ExchangeRecordSchemaError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.exchange_record_schemas:ExchangeRecordSchemaError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.handoff_store:HandoffStoreError": {
+      "code": "handoff_store_error",
+      "mro": [
+        "openmed.agent.handoff_store:HandoffStoreError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.handoff_store:HandoffStoreError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.handoff_store:HandoffStoreError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.handoff_store:HandoffStoreError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.identifiers:GovernanceIdError": {
+      "code": "governance_id_error",
+      "mro": [
+        "openmed.agent.identifiers:GovernanceIdError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.identifiers:GovernanceIdError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.identifiers:GovernanceIdError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.outcomes:OutcomeError": {
+      "code": "outcome_error",
+      "mro": [
+        "openmed.agent.outcomes:OutcomeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.outcomes:OutcomeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.outcomes:OutcomeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_events:AccessEventError": {
+      "code": "access_event_error",
+      "mro": [
+        "openmed.agent.permissions.access_events:AccessEventError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.access_events:AccessEventError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketDeniedError": {
+      "code": "access_ticket_denied_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketError": {
+      "code": "access_ticket_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketExpiredError": {
+      "code": "access_ticket_expired_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketExpiredError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketProjectionError": {
+      "code": "access_ticket_projection_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketProjectionError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketPurposeMismatchError": {
+      "code": "access_ticket_purpose_mismatch_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketPurposeMismatchError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketRequiredError": {
+      "code": "access_ticket_required_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketRequiredError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketRunMismatchError": {
+      "code": "access_ticket_run_mismatch_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketRunMismatchError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketSelectorError": {
+      "code": "access_ticket_selector_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketSelectorError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketToolActionError": {
+      "code": "access_ticket_tool_action_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketToolActionError",
+        "openmed.agent.permissions.access_tickets:AccessTicketDeniedError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.access_tickets:AccessTicketValidationError": {
+      "code": "access_ticket_validation_error",
+      "mro": [
+        "openmed.agent.permissions.access_tickets:AccessTicketValidationError",
+        "openmed.agent.permissions.access_tickets:AccessTicketError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "call": 2,
+          "raises": "ValueError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationChainError": {
+      "code": "delegation_chain_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationChainError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationChainError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationCycleError": {
+      "code": "delegation_cycle_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationCycleError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationCycleError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationDepthError": {
+      "code": "delegation_depth_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationDepthError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationDepthError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationError": {
+      "code": "delegation_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationExpiredError": {
+      "code": "delegation_expired_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationExpiredError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationExpiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationScopeError": {
+      "code": "delegation_scope_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationScopeError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationScopeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationSignatureError": {
+      "code": "delegation_signature_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationSignatureError",
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationSignatureError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationValidationError": {
+      "code": "delegation_validation_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationValidationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.delegation:DelegationVerificationError": {
+      "code": "delegation_verification_error",
+      "mro": [
+        "openmed.agent.permissions.delegation:DelegationVerificationError",
+        "openmed.agent.permissions.delegation:DelegationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.delegation:DelegationVerificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.fhir_write_scope:FHIRWriteScopeError": {
+      "code": "fhir_write_scope_error",
+      "mro": [
+        "openmed.agent.permissions.fhir_write_scope:FHIRWriteScopeError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantError": {
+      "code": "capability_grant_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantExpiredError": {
+      "code": "capability_grant_expired_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantExpiredError",
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantExpiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantExpiredError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantKeyError": {
+      "code": "capability_grant_key_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantKeyError",
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantKeyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantKeyError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantRequiredError": {
+      "code": "capability_grant_required_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantRequiredError",
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantRequiredError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantRequiredError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantScopeError": {
+      "code": "capability_grant_scope_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantScopeError",
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantScopeError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantScopeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantSignatureError": {
+      "code": "capability_grant_signature_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantSignatureError",
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantSignatureError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantSignatureError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantValidationError": {
+      "code": "capability_grant_validation_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantValidationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantValidationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.grants:CapabilityGrantVerificationError": {
+      "code": "capability_grant_verification_error",
+      "mro": [
+        "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+        "openmed.agent.permissions.grants:CapabilityGrantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.permissions.grants:CapabilityGrantVerificationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.permissions.result_scope:ResultQuarantinedError": {
+      "code": "result_quarantined_error",
+      "mro": [
+        "openmed.agent.permissions.result_scope:ResultQuarantinedError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "ValueError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.permissions.revocation:AuthorityDeniedError": {
+      "code": "authority_denied_error",
+      "mro": [
+        "openmed.agent.permissions.revocation:AuthorityDeniedError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "AttributeError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.policy_matrix:PolicyMatrixError": {
+      "code": "policy_matrix_error",
+      "mro": [
+        "openmed.agent.policy_matrix:PolicyMatrixError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.policy_matrix:PolicyMatrixError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.policy_matrix:PolicyMatrixError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.reviewer_handoff:ReviewerHandoffError": {
+      "code": "reviewer_handoff_error",
+      "mro": [
+        "openmed.agent.reviewer_handoff:ReviewerHandoffError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.reviewer_handoff:ReviewerHandoffError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.reviewer_handoff:ReviewerHandoffError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.run_commitment:RunCommitmentError": {
+      "code": "run_commitment_error",
+      "mro": [
+        "openmed.agent.run_commitment:RunCommitmentError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.run_commitment:RunCommitmentError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.run_commitment:RunCommitmentError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.run_commitment:RunCommitmentError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.run_diff:RunDiffError": {
+      "code": "run_diff_error",
+      "mro": [
+        "openmed.agent.run_diff:RunDiffError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.run_diff:RunDiffError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.run_diff:RunDiffError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.run_diff:RunDiffError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.run_invariants:RunInvariantError": {
+      "code": "run_invariant_error",
+      "mro": [
+        "openmed.agent.run_invariants:RunInvariantError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.run_invariants:RunInvariantError",
+          "str": "synthetic_reason"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.run_summary:RunSummaryError": {
+      "code": "run_summary_error",
+      "mro": [
+        "openmed.agent.run_summary:RunSummaryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.run_summary:RunSummaryPrivacyError": {
+      "code": "run_summary_privacy_error",
+      "mro": [
+        "openmed.agent.run_summary:RunSummaryPrivacyError",
+        "openmed.agent.run_summary:RunSummaryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryPrivacyError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryPrivacyError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.run_summary:RunSummaryPrivacyError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.schema_compatibility:SchemaCompatibilityError": {
+      "code": "schema_compatibility_error",
+      "mro": [
+        "openmed.agent.schema_compatibility:SchemaCompatibilityError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.schema_compatibility:SchemaCompatibilityError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.schema_compatibility:SchemaCompatibilityError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.security.adversarial:AdversarialSuiteFailure": {
+      "code": "adversarial_suite_failure",
+      "mro": [
+        "openmed.agent.security.adversarial:AdversarialSuiteFailure",
+        "builtins:AssertionError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('adversarial agent-boundary suite failed',)",
+          "call": 1,
+          "pickle_args": "('adversarial agent-boundary suite failed',)",
+          "pickle_str": "adversarial agent-boundary suite failed",
+          "pickle_type": "openmed.agent.security.adversarial:AdversarialSuiteFailure",
+          "str": "adversarial agent-boundary suite failed"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.security.adversarial:AdversarialSuiteValidationError": {
+      "code": "adversarial_suite_validation_error",
+      "mro": [
+        "openmed.agent.security.adversarial:AdversarialSuiteValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.security.injection_guard:PromptInjectionDetected": {
+      "code": "prompt_injection_detected",
+      "mro": [
+        "openmed.agent.security.injection_guard:PromptInjectionDetected",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('Prompt-injection patterns were detected in tool input.',)",
+          "call": 1,
+          "pickle_args": "('Prompt-injection patterns were detected in tool input.',)",
+          "pickle_str": "Prompt-injection patterns were detected in tool input.",
+          "pickle_type": "openmed.agent.security.injection_guard:PromptInjectionDetected",
+          "str": "Prompt-injection patterns were detected in tool input."
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.timing:TimingValidationError": {
+      "code": "timing_validation_error",
+      "mro": [
+        "openmed.agent.timing:TimingValidationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.timing:TimingValidationError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.timing:TimingValidationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.timing:TimingValidationError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.tool_catalog_binding:ToolCatalogBindingError": {
+      "code": "tool_catalog_binding_error",
+      "mro": [
+        "openmed.agent.tool_catalog_binding:ToolCatalogBindingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_bindings',)",
+          "call": 1,
+          "pickle_args": "('invalid_bindings',)",
+          "pickle_str": "invalid_bindings",
+          "pickle_type": "openmed.agent.tool_catalog_binding:ToolCatalogBindingError",
+          "str": "invalid_bindings"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.tool_catalog_binding:ToolCatalogReviewRequired": {
+      "code": "tool_catalog_review_required",
+      "mro": [
+        "openmed.agent.tool_catalog_binding:ToolCatalogReviewRequired",
+        "openmed.agent.tool_catalog_binding:ToolCatalogBindingError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('invalid_bindings',)",
+          "call": 1,
+          "pickle_args": "('invalid_bindings',)",
+          "pickle_str": "invalid_bindings",
+          "pickle_type": "openmed.agent.tool_catalog_binding:ToolCatalogReviewRequired",
+          "str": "invalid_bindings"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.tool_catalog_diff:ToolCatalogDiffError": {
+      "code": "tool_catalog_diff_error",
+      "mro": [
+        "openmed.agent.tool_catalog_diff:ToolCatalogDiffError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tool_inventory:ToolInventoryError": {
+      "code": "tool_inventory_error",
+      "mro": [
+        "openmed.agent.tool_inventory:ToolInventoryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tools.argument_classifier:ArgumentClassificationCoverageError": {
+      "code": "argument_classification_coverage_error",
+      "mro": [
+        "openmed.agent.tools.argument_classifier:ArgumentClassificationCoverageError",
+        "openmed.agent.tools.argument_classifier:ArgumentClassifierError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tools.argument_classifier:ArgumentClassifierError": {
+      "code": "argument_classifier_error",
+      "mro": [
+        "openmed.agent.tools.argument_classifier:ArgumentClassifierError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tools.argument_classifier:ArgumentClassifierValidationError": {
+      "code": "argument_classifier_validation_error",
+      "mro": [
+        "openmed.agent.tools.argument_classifier:ArgumentClassifierValidationError",
+        "openmed.agent.tools.argument_classifier:ArgumentClassifierError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tools.argument_classifier:ArgumentDispatchBlockedError": {
+      "code": "argument_dispatch_blocked_error",
+      "mro": [
+        "openmed.agent.tools.argument_classifier:ArgumentDispatchBlockedError",
+        "openmed.agent.tools.argument_classifier:ArgumentClassifierError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('arguments: blocked_by_policy',)",
+          "call": 1,
+          "pickle_args": "('arguments: blocked_by_policy',)",
+          "pickle_str": "arguments: blocked_by_policy",
+          "pickle_type": "openmed.agent.tools.argument_classifier:ArgumentDispatchBlockedError",
+          "str": "arguments: blocked_by_policy"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.tools.data_projection:DataProjectionDeniedError": {
+      "code": "data_projection_denied_error",
+      "mro": [
+        "openmed.agent.tools.data_projection:DataProjectionDeniedError",
+        "openmed.agent.tools.data_projection:DataProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "DataProjectionValidationError"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.tools.data_projection:DataProjectionError": {
+      "code": "data_projection_error",
+      "mro": [
+        "openmed.agent.tools.data_projection:DataProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.tools.data_projection:DataProjectionValidationError": {
+      "code": "data_projection_validation_error",
+      "mro": [
+        "openmed.agent.tools.data_projection:DataProjectionValidationError",
+        "openmed.agent.tools.data_projection:DataProjectionError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "call": 1,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_raises": "TypeError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflow_rollup:WorkflowRollupError": {
+      "code": "workflow_rollup_error",
+      "mro": [
+        "openmed.agent.workflow_rollup:WorkflowRollupError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.workflow_rollup:WorkflowRollupError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflow_rollup:WorkflowRollupError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.workflow_rollup:WorkflowRollupError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.workflows.abstraction_evidence:AbstractionEvidenceError": {
+      "code": "abstraction_evidence_error",
+      "mro": [
+        "openmed.agent.workflows.abstraction_evidence:AbstractionEvidenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.abstraction_evidence:AbstractionEvidenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.abstraction_evidence:AbstractionEvidenceError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflows.cohort_criterion_evidence:CohortExplanationError": {
+      "code": "cohort_explanation_error",
+      "mro": [
+        "openmed.agent.workflows.cohort_criterion_evidence:CohortExplanationError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.cohort_criterion_evidence:CohortExplanationError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.cohort_criterion_evidence:CohortExplanationError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflows.dispatch:GuardedDispatchError": {
+      "code": "guarded_dispatch_error",
+      "mro": [
+        "openmed.agent.workflows.dispatch:GuardedDispatchError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('guarded_dispatch_stopped',)",
+          "call": 1,
+          "pickle_args": "('guarded_dispatch_stopped',)",
+          "pickle_str": "guarded_dispatch_stopped",
+          "pickle_type": "openmed.agent.workflows.dispatch:GuardedDispatchError",
+          "str": "guarded_dispatch_stopped"
+        },
+        {
+          "call": 2,
+          "raises": "TypeError"
+        }
+      ]
+    },
+    "openmed.agent.workflows.evidence_query:EvidenceQueryConflictError": {
+      "code": "evidence_query_conflict_error",
+      "mro": [
+        "openmed.agent.workflows.evidence_query:EvidenceQueryConflictError",
+        "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryConflictError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryConflictError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryConflictError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.workflows.evidence_query:EvidenceQueryError": {
+      "code": "evidence_query_error",
+      "mro": [
+        "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.workflows.evidence_query:EvidenceQueryUnsupportedError": {
+      "code": "evidence_query_unsupported_error",
+      "mro": [
+        "openmed.agent.workflows.evidence_query:EvidenceQueryUnsupportedError",
+        "openmed.agent.workflows.evidence_query:EvidenceQueryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryUnsupportedError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryUnsupportedError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.workflows.evidence_query:EvidenceQueryUnsupportedError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.workflows.prior_auth_completeness:PriorAuthCompletenessError": {
+      "code": "prior_auth_completeness_error",
+      "mro": [
+        "openmed.agent.workflows.prior_auth_completeness:PriorAuthCompletenessError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.prior_auth_completeness:PriorAuthCompletenessError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.prior_auth_completeness:PriorAuthCompletenessError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflows.quality_measure_evidence:QualityMeasureEvidenceError": {
+      "code": "quality_measure_evidence_error",
+      "mro": [
+        "openmed.agent.workflows.quality_measure_evidence:QualityMeasureEvidenceError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.quality_measure_evidence:QualityMeasureEvidenceError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.quality_measure_evidence:QualityMeasureEvidenceError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflows.recovery:RecoveryError": {
+      "code": "recovery_error",
+      "mro": [
+        "openmed.agent.workflows.recovery:RecoveryError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.recovery:RecoveryError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.recovery:RecoveryError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    },
+    "openmed.agent.workflows.scheduler:SchedulerError": {
+      "code": "scheduler_error",
+      "mro": [
+        "openmed.agent.workflows.scheduler:SchedulerError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "args": "()",
+          "call": 0,
+          "pickle_args": "()",
+          "pickle_str": "",
+          "pickle_type": "openmed.agent.workflows.scheduler:SchedulerError",
+          "str": ""
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.scheduler:SchedulerError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_reason', 'synthetic_detail')",
+          "call": 2,
+          "pickle_args": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_str": "('synthetic_reason', 'synthetic_detail')",
+          "pickle_type": "openmed.agent.workflows.scheduler:SchedulerError",
+          "str": "('synthetic_reason', 'synthetic_detail')"
+        }
+      ]
+    },
+    "openmed.agent.workflows.trial_eligibility_review:TrialEligibilityReviewError": {
+      "code": "trial_eligibility_review_error",
+      "mro": [
+        "openmed.agent.workflows.trial_eligibility_review:TrialEligibilityReviewError",
+        "builtins:ValueError",
+        "builtins:Exception",
+        "builtins:BaseException"
+      ],
+      "samples": [
+        {
+          "call": 0,
+          "raises": "TypeError"
+        },
+        {
+          "args": "('synthetic_reason',)",
+          "call": 1,
+          "pickle_args": "('synthetic_reason',)",
+          "pickle_str": "synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.trial_eligibility_review:TrialEligibilityReviewError",
+          "str": "synthetic_reason"
+        },
+        {
+          "args": "('synthetic_detail: synthetic_reason',)",
+          "call": 2,
+          "pickle_args": "('synthetic_detail: synthetic_reason',)",
+          "pickle_str": "synthetic_detail: synthetic_reason",
+          "pickle_type": "openmed.agent.workflows.trial_eligibility_review:TrialEligibilityReviewError",
+          "str": "synthetic_detail: synthetic_reason"
+        }
+      ]
+    }
+  },
+  "sample_calls": [
+    [],
+    [
+      "synthetic_reason"
+    ],
+    [
+      "synthetic_reason",
+      "synthetic_detail"
+    ]
+  ],
+  "schema_version": 1
+}

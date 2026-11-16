@@ -32,6 +32,7 @@ from typing import Any, Optional, Union
 from fastapi import Request
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 
 from .auth import (
     APIKeyCredential,
@@ -108,7 +109,7 @@ Clock = Callable[[], float]
 GenerationInput = Union["VerifierGenerationSpec", Mapping[str, Any]]
 
 
-class GenerationValidationError(ValueError):
+class GenerationValidationError(ValueError, LegacyRootedError):
     """Verifier generation rejected with one fixed, value-free reason code."""
 
     def __init__(self, reason: str) -> None:

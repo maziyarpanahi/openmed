@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 from .cohort_criterion_evidence import (
     CohortMembershipExplanation,
     CriterionEvaluation,
@@ -47,7 +49,7 @@ class DisagreementCause(str, Enum):
     OUTCOME_CONFLICT = "outcome_conflict"
 
 
-class TrialEligibilityReviewError(ValueError):
+class TrialEligibilityReviewError(ValueError, LegacyRootedError):
     """A PHI-safe trial-eligibility comparison error.
 
     Args:

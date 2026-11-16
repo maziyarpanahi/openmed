@@ -23,6 +23,7 @@ from openmed.core.errors import (
     InferenceError,
     InputError,
     InternalError,
+    LegacyRootedError,
     MissingExtraError,
     ModelLoadError,
     OpenMedError,
@@ -190,7 +191,7 @@ _EXCEPTION_CODES: Final[tuple[tuple[type[BaseException], str], ...]] = (
 )
 
 
-class ErrorEnvelopeError(ValueError):
+class ErrorEnvelopeError(ValueError, LegacyRootedError):
     """Raised when envelope metadata fails closed validation.
 
     Args:

@@ -29,6 +29,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Optional, Union
 
+from openmed.core.errors import LegacyRootedError
+
 from .keyed_digest import ServiceDigestKey, encode_digest_fields
 
 IDEMPOTENCY_KEY_HEADER: Final = "Idempotency-Key"
@@ -74,7 +76,7 @@ _ERROR_MESSAGES: Final = {
 }
 
 
-class IdempotencyError(Exception):
+class IdempotencyError(LegacyRootedError):
     """Value-free refusal of a keyed start request.
 
     Attributes:

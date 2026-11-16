@@ -22,6 +22,7 @@ from openmed.clinical.journey_contracts import (
     ResolutionEvent,
     canonical_json,
 )
+from openmed.core.errors import LegacyRootedError
 
 LOCAL_STORE_SCHEMA_VERSION = "1.0.0"
 
@@ -46,7 +47,7 @@ _SENSITIVE_METADATA_KEYS = frozenset(
 T = TypeVar("T")
 
 
-class CommitStatusUnknown(RuntimeError):
+class CommitStatusUnknown(RuntimeError, LegacyRootedError):
     """Raised when a backend cannot prove whether a commit completed."""
 
 
