@@ -132,6 +132,14 @@ export {
   loadTokenClassificationPipeline,
 } from "./model-loader";
 export { OpenMedOfflineError, isOfflineOnly, setOfflineOnly } from "./offline";
+export {
+  DEFAULT_DATE_SHIFT_MAX_DAYS,
+  DateShiftError,
+  shiftIsoDate,
+  stableDateShiftOffset,
+  stableDateShiftOffsetFromSeed,
+} from "./date-shift";
+export type { DateShiftErrorCode, StableDateShiftOffsetOptions } from "./date-shift";
 export type { OpenMedOfflineErrorCode } from "./offline";
 export {
   DECISION_ADVISORY,
