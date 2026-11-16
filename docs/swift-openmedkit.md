@@ -1123,3 +1123,34 @@ trip. An unsigned `swift test` runner on macOS lacks the data-protection
 Keychain entitlement, so that test skips with `secret_missing_entitlement`
 there. Locked-device, biometry-enrollment and Secure Enclave behavior needs a
 physical device and is not covered by the package tests.
+
+## Patient-keyed date shifting
+
+`OpenMedDateShift` computes the same date-shift offsets as Python's
+`openmed.core.date_shift`, so an iOS app and a Python pipeline shift the same
+patient's dates by the same number of days:
+
+```swift
+let days = try OpenMedDateShift.stableOffset(
+    patientKey: patientKey,  // String (UTF-8) or Data
+    secret: secret,          // Data or String; the caller keeps custody of it
+    maxDays: OpenMedDateShift.defaultMaxDays  // 365
+)
+let shifted = try OpenMedDateShift.shift(isoDate: "2024-03-01", byDays: days)
+```
+
+`stableOffset(patientKey:secret:maxDays:)` is `stable_offset_for()`: HMAC-SHA256
+of the patient key under the secret. `stableOffset(seed:maxDays:)` and
+`stableOffset(seedDecimal:maxDays:)` are `stable_offset_from_seed()`: SHA-256 of
+`openmed-date-shift-seed-v1\0` plus the seed's decimal text. Use the decimal form
+for seeds outside the `Int` range. The offset is never zero and lies in
+`-maxDays...maxDays`. The digest is reduced modulo `2 * maxDays` byte by byte,
+which equals Python's big-integer arithmetic. `shift(isoDate:byDays:)` takes and
+returns `YYYY-MM-DD` and counts days in the proleptic Gregorian calendar, as
+Python's `date + timedelta` does, for years 0001 to 9999.
+
+Invalid input throws `OpenMedDateShiftError`, whose description is the reason
+code only (`patient_key_empty`, `secret_empty`, `max_days_invalid`,
+`seed_invalid`, `date_invalid`, `date_out_of_range`). Patient keys, secrets,
+seeds and dates never appear in errors or descriptions, and nothing is stored.
+`DateShiftParityTests` replays `tests/fixtures/parity/date_shift_v1.json`.
