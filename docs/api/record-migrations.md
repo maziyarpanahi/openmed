@@ -115,3 +115,29 @@ The module-level functions act on `default_registry()`, a process-wide
 registry that loads the built-in registrations on first use. Pass
 `registry=MigratorRegistry()` to any function to work with an isolated
 registry, for example in tests.
+
+## Built-in migrators
+
+`openmed.core.record_migration_catalog` registers the existing migration
+functions in the default registry. It adds no migration logic of its own, and
+the owning packages are imported only when one of their migrators runs.
+
+| Schema id | Edge | Lossless | Existing function | Identified by shape |
+|---|---|---|---|---|
+| `clinical_review_packet` | `1.0.0` to `1.1.0` | yes | `openmed.clinical.review_packet_migrations.migrate_review_packet` | yes |
+| `clinical_review_packet_mapping` | `1` to `2` | yes | `openmed.clinical.review_packet_mapping_migrations.migrate_review_packet` | no, pass `schema_id` |
+| `decision_result` | `1.0.0` to `1.1.0`, `1.1.0` to `1.2.0` | yes | `openmed.structured.decision.migrate_decision_result` | yes |
+| `dp_budget_ledger` | `unversioned` to `openmed.dp_budget_ledger.v1` | no | `openmed.risk.budget_migration.BudgetLedgerSnapshot`, checked with `enforce_budget_migration` | yes |
+
+The budget step turns an accountant payload (`compositions`, `policies` and the
+per-spend `ledger`) into the canonical aggregate snapshot. It drops the
+per-spend ledger and policy details, so it is registered as lossy and its
+report lists `/compositions`, `/ledger` and `/policies` as dropped. The budget
+verifier still rejects the step if the aggregate budget would weaken.
+
+Integer-versioned review packet mappings carry no distinctive fields, so they
+are not identified automatically; pass `schema_id="clinical_review_packet_mapping"`.
+
+Each edge has a synthetic `before.json` and `after.json` under
+`tests/fixtures/migrations/<schema id>/<edge>/`, and the tests require every
+registered edge to turn its `before` fixture into exactly its `after` fixture.

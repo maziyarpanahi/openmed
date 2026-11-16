@@ -1,0 +1,17 @@
+{
+  "packet_id_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "review": {
+    "items": [
+      {
+        "end": 9,
+        "label": "NAME",
+        "start": 4
+      }
+    ]
+  },
+  "safety": {
+    "citation_check_required": true,
+    "privacy_scan_required": true
+  },
+  "schema_version": 2
+}
