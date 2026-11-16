@@ -52,6 +52,12 @@
             }
         }
 
+        /// Whether this task runs on, or simulates, the iOS Simulator, so a
+        /// refusal can say why MLX is unavailable.
+        static var isSimulator: Bool {
+            isSimulatorBuild || simulatesSimulator
+        }
+
         private static var isSimulatorBuild: Bool {
             #if targetEnvironment(simulator)
                 true
