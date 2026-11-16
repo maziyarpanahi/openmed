@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report byte progress and support cancellation for OpenMedKit Swift model downloads: `OpenMedModelStore.startMLXModelDownload` returns an `OpenMedModelDownloadTask` with a value-free `progress` stream and `cancel()`, files stream through a delegate-based `URLSessionDownloadTask`, and cancelling removes the files the download wrote without writing the ready marker (#5377).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
