@@ -730,6 +730,38 @@ type LoadedModelsResponse struct {
 	Raw                     JSONObject            `json:"-"`
 }
 
+// CapabilityBackend reports whether one optional backend is installed.
+type CapabilityBackend struct {
+	Name      string `json:"name"`
+	Extra     string `json:"extra"`
+	Available bool   `json:"available"`
+}
+
+// CapabilitySurface reports whether one OpenMed surface is installed.
+type CapabilitySurface struct {
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+}
+
+// CapabilitySchemaVersion is the version of one canonical record schema.
+type CapabilitySchemaVersion struct {
+	Name    string `json:"name"`
+	Version int    `json:"version"`
+}
+
+// CapabilityDescriptor is the value-free descriptor returned by
+// /v1/capabilities. Digest covers every other field.
+type CapabilityDescriptor struct {
+	Schema         string                    `json:"schema"`
+	SchemaVersion  int                       `json:"schema_version"`
+	Backends       []CapabilityBackend       `json:"backends"`
+	Surfaces       []CapabilitySurface       `json:"surfaces"`
+	ServedModels   []string                  `json:"served_models"`
+	SchemaVersions []CapabilitySchemaVersion `json:"schema_versions"`
+	PolicyProfiles []string                  `json:"policy_profiles"`
+	Digest         string                    `json:"digest"`
+}
+
 // ModelUnloadResponse is returned by /models/unload.
 type ModelUnloadResponse struct {
 	Unloaded       *bool              `json:"unloaded"`
@@ -1590,6 +1622,15 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 		return nil, err
 	}
 	if err := decodeInto("/models/loaded", body, &out.Raw); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Capabilities calls GET /v1/capabilities.
+func (c *Client) Capabilities(ctx context.Context) (*CapabilityDescriptor, error) {
+	var out CapabilityDescriptor
+	if err := c.get(ctx, "/v1/capabilities", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
