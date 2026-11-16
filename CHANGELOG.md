@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `scripts/release/schema_release_diff.py`, which compares every packaged JSON Schema with the last `v*` release tag straight from Git, classifies it as added, removed, compatible, version bump or breaking, and fails the release gates on breaks or removals that lack a reviewed allowlist entry with a reason and target version (#5333).
+
 ## [4.0.0] - 2026-11-25
 
 OpenMed 4.0 adds recoverable service jobs and a common way to verify model bundles across OpenMedKit runtimes. This is a major upgrade for service operators and native app developers. Review the deployment, key management, and API changes below before moving from 3.3.
