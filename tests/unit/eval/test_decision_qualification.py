@@ -611,3 +611,40 @@ def test_qualification_opens_no_network_connections(monkeypatch):
 
     assert run(DeterministicDecisionBackend()).qualified
     assert run(synthetic_encoder_backend()).qualified
+
+
+MARKDOWN_GOLDEN = FIXTURES / "report.golden.md"
+
+
+def _markdown_report():
+    return qualify_decision_backend(
+        synthetic_encoder_backend(),
+        development=DEVELOPMENT,
+        evaluation=EVALUATION,
+        calibration_id="synthetic.cal",
+        policy=LENIENT,
+    )
+
+
+def test_markdown_rendering_matches_golden_file() -> None:
+    rendered = qualification.render_decision_qualification_markdown(_markdown_report())
+
+    assert rendered == MARKDOWN_GOLDEN.read_text(encoding="utf-8")
+
+
+def test_markdown_rendering_has_digest_and_no_example_text() -> None:
+    report = _markdown_report()
+    rendered = qualification.render_decision_qualification_markdown(report)
+
+    assert report.digest in rendered
+    for path in (DEVELOPMENT, EVALUATION):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            record = json.loads(line)
+            assert record["input_text"] not in rendered
+            for option in record["options"]:
+                assert f"| {option} " not in rendered
+
+
+def test_markdown_rendering_rejects_non_reports() -> None:
+    with pytest.raises(DecisionQualificationError):
+        qualification.render_decision_qualification_markdown({})  # type: ignore[arg-type]

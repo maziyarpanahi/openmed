@@ -72,6 +72,11 @@ def add_decision_qualification_command(
         type=Path,
         help="New file for the emitted profiles; written only when qualified.",
     )
+    parser.add_argument(
+        "--markdown-output",
+        type=Path,
+        help="New file for a value-free Markdown summary of the report.",
+    )
     add_json_flag(parser)
     parser.set_defaults(handler=handle_decision_qualification)
 
@@ -82,6 +87,7 @@ def handle_decision_qualification(args: argparse.Namespace) -> int:
         DecisionQualificationError,
         DecisionQualificationPolicy,
         qualify_decision_backend,
+        render_decision_qualification_markdown,
     )
 
     code = None
@@ -90,6 +96,9 @@ def handle_decision_qualification(args: argparse.Namespace) -> int:
         output = args.profile_output
         if output is not None and os.path.lexists(output):
             raise DecisionQualificationError("profile_output_exists")
+        markdown_output = args.markdown_output
+        if markdown_output is not None and os.path.lexists(markdown_output):
+            raise DecisionQualificationError("markdown_output_exists")
         report = qualify_decision_backend(
             _backend(args, DecisionQualificationError),
             development=args.development,
@@ -111,6 +120,15 @@ def handle_decision_qualification(args: argparse.Namespace) -> int:
             except OSError:
                 raise DecisionQualificationError("profile_output_unavailable") from None
             written = True
+        if markdown_output is not None:
+            try:
+                _write_new(
+                    markdown_output, render_decision_qualification_markdown(report)
+                )
+            except OSError:
+                raise DecisionQualificationError(
+                    "markdown_output_unavailable"
+                ) from None
     except DecisionQualificationError as error:
         code = error.code
     except Exception:
