@@ -44,7 +44,7 @@ import json
 import re
 import threading
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -845,7 +845,21 @@ class MigratorRegistry:
         if schema_id is None:
             schema = self.schema(self.identify(record).schema_id)
         else:
-            schema = self.schema(schema_id)
+            try:
+                schema = self.schema(schema_id)
+            except RecordMigrationRefused as exc:
+                declared = (
+                    record.get(DEFAULT_VERSION_FIELD)
+                    if isinstance(record, Mapping)
+                    else None
+                )
+                raise RecordMigrationRefused(
+                    replace(
+                        exc.refusal,
+                        from_version=_version_text(declared),
+                        to_version=_version_text(to_version),
+                    )
+                ) from None
         payload = _json_copy(record)
         if payload is None:
             raise RecordMigrationRefused(
