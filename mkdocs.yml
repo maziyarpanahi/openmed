@@ -30,6 +30,7 @@ nav:
       - CLI Help-Surface Drift: cli/help-drift.md
       - Machine-readable CLI Contract: cli/machine-contract.md
       - Service Recovery CLI: cli/service-recovery.md
+      - Stored Record Migration CLI: cli/migrate.md
       - China Onboarding: onboarding-china.md
       - India Onboarding: onboarding-india.md
   - Governed Agents:
