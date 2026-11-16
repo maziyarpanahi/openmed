@@ -64,9 +64,42 @@ jobs:
           overwrite: true
           retention-days: 14
 
+  web-results:
+    name: Web contract results
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: js/openmedkit-web/package-lock.json
+
+      - name: Install web package dependencies
+        run: npm ci --prefix js/openmedkit-web
+
+      - name: Write the web result file
+        run: >-
+          npm --prefix js/openmedkit-web run contract-gate --
+          --results-dir contract-gate-results
+
+      - name: Upload the web result file
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: contract-gate-result-web
+          path: contract-gate-results/web.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14
+
   contract-gate:
     name: Contract gate
-    needs: [python-results]
+    needs: [python-results, web-results]
     # Aggregate even when a runtime job failed: its missing result then
     # fails the gate instead of skipping it.
     if: always()
