@@ -3615,7 +3615,226 @@ public final class com/openmed/openmedkit/multimodal/Modality : java/lang/Enum {
 	public static fun values ()[Lcom/openmed/openmedkit/multimodal/Modality;
 }
 
+public final class com/openmed/openmedkit/multimodal/MultimodalAsset : com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public final fun getAssetRef ()Ljava/lang/String;
+	public fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getManifest ()Lcom/openmed/openmedkit/multimodal/AssetManifest;
+	public final fun getManifestDigest ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalClockAlignment : com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public final fun getGuaranteedOverlap ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getPolicyDigest ()Ljava/lang/String;
+	public final fun getReasons ()Ljava/util/List;
+	public final fun getSourceClockDigest ()Ljava/lang/String;
+	public final fun getSourceReferenceDigest ()Ljava/lang/String;
+	public final fun getSourceResultDigest ()Ljava/lang/String;
+	public final fun getState ()Lcom/openmed/openmedkit/multimodal/MultimodalClockState;
+	public final fun getTargetClockDigest ()Ljava/lang/String;
+	public final fun getTargetEnd ()Lcom/openmed/openmedkit/multimodal/MultimodalNanosecondBound;
+	public final fun getTargetReferenceDigest ()Ljava/lang/String;
+	public final fun getTargetStart ()Lcom/openmed/openmedkit/multimodal/MultimodalNanosecondBound;
+	public final fun getUncertaintyNanoseconds ()Ljava/lang/Long;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalClockReason : java/lang/Enum {
+	public static final field ANCHORS Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field BINDING Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field CHANGED Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field COVERAGE Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field DECLARATION Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field DISCONTINUITY Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field EPOCH Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field EVIDENCE Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field INCONSISTENT Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field NO_OVERLAP Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field POSSIBLE_OVERLAP Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field REFERENCE Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field SPARSE Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field TIMING Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field UNCERTAINTY Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field UNFINALIZED Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static final field WALL_DOMAIN Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalClockReason;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalClockState : java/lang/Enum {
+	public static final field ALIGNED Lcom/openmed/openmedkit/multimodal/MultimodalClockState;
+	public static final field REVIEW Lcom/openmed/openmedkit/multimodal/MultimodalClockState;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalClockState;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalClockState;
+}
+
 public final class com/openmed/openmedkit/multimodal/MultimodalContractException : java/lang/IllegalArgumentException {
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalContractRefusal : java/lang/Enum {
+	public static final field CAPABILITY Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public static final field INVALID Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public static final field PROVENANCE Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public static final field SCHEMA Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public static final field TRANSFORM Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalInterval {
+	public fun <init> (JJ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun copy (JJ)Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/multimodal/MultimodalInterval;JJILjava/lang/Object;)Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnd ()J
+	public final fun getStart ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalNanosecondBound {
+	public fun <init> (JJ)V
+	public final fun component1 ()J
+	public final fun component2 ()J
+	public final fun copy (JJ)Lcom/openmed/openmedkit/multimodal/MultimodalNanosecondBound;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/multimodal/MultimodalNanosecondBound;JJILjava/lang/Object;)Lcom/openmed/openmedkit/multimodal/MultimodalNanosecondBound;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLower ()J
+	public final fun getUpper ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalPacket {
+	public static final field Companion Lcom/openmed/openmedkit/multimodal/MultimodalPacket$Companion;
+	public static final field MAX_WIRE_BYTES I
+	public static final field SCHEMA Ljava/lang/String;
+	public synthetic fun <init> ([BLcom/openmed/openmedkit/multimodal/MultimodalProjection;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEvidenceDigest ()Ljava/lang/String;
+	public final fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getProjection ()Lcom/openmed/openmedkit/multimodal/MultimodalProjection;
+	public fun hashCode ()I
+	public final fun toJson ()[B
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalPacket$Companion {
+	public final fun fromJson (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalPacket;
+	public final fun fromJson ([B)Lcom/openmed/openmedkit/multimodal/MultimodalPacket;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalPacketException : java/lang/IllegalArgumentException {
+	public final fun getRefusal ()Lcom/openmed/openmedkit/multimodal/MultimodalContractRefusal;
+}
+
+public abstract interface class com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public abstract fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalProjectionKind : java/lang/Enum {
+	public static final field ASSET Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public static final field CLOCK Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public static final field PROVIDER Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public static final field TRANSCRIPT Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public static final field VISUAL Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalProvider : com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getResult ()Lcom/openmed/openmedkit/multimodal/ProviderResultEnvelope;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalRectangle {
+	public fun <init> (DDDD)V
+	public final fun component1 ()D
+	public final fun component2 ()D
+	public final fun component3 ()D
+	public final fun component4 ()D
+	public final fun copy (DDDD)Lcom/openmed/openmedkit/multimodal/MultimodalRectangle;
+	public static synthetic fun copy$default (Lcom/openmed/openmedkit/multimodal/MultimodalRectangle;DDDDILjava/lang/Object;)Lcom/openmed/openmedkit/multimodal/MultimodalRectangle;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBottom ()D
+	public final fun getLeft ()D
+	public final fun getRight ()D
+	public final fun getTop ()D
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalSpanInvalidation : java/lang/Enum {
+	public static final field TEXT_CHANGED Lcom/openmed/openmedkit/multimodal/MultimodalSpanInvalidation;
+	public static final field TOKEN_CHANGED Lcom/openmed/openmedkit/multimodal/MultimodalSpanInvalidation;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalSpanInvalidation;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalSpanInvalidation;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalSpatialUnit : java/lang/Enum {
+	public static final field PIXEL Lcom/openmed/openmedkit/multimodal/MultimodalSpatialUnit;
+	public static final field POINT Lcom/openmed/openmedkit/multimodal/MultimodalSpatialUnit;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalSpatialUnit;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalSpatialUnit;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalTranscript : com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public final fun getCurrentScalarSpan ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public final fun getFinalized ()Z
+	public final fun getInvalidation ()Lcom/openmed/openmedkit/multimodal/MultimodalSpanInvalidation;
+	public fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getOriginalRevision ()I
+	public final fun getOriginalScalarSpan ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public final fun getRelativeMilliseconds ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public final fun getRevision ()I
+	public final fun getSampleBounds ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public final fun getSampleRateHz ()I
+	public final fun getScalarLength ()I
+	public final fun getSegmentRef ()Ljava/lang/String;
+	public final fun getSessionRef ()Ljava/lang/String;
+	public final fun getSnapshotDigest ()Ljava/lang/String;
+	public final fun getSpanRef ()Ljava/lang/String;
+	public final fun getTokenRefs ()Ljava/util/List;
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalVisual : com/openmed/openmedkit/multimodal/MultimodalProjection {
+	public final fun getDisplayBox ()Lcom/openmed/openmedkit/multimodal/MultimodalRectangle;
+	public final fun getDisplayHeight ()D
+	public final fun getDisplayWidth ()D
+	public final fun getHeight ()D
+	public fun getKind ()Lcom/openmed/openmedkit/multimodal/MultimodalProjectionKind;
+	public final fun getNodeRef ()Ljava/lang/String;
+	public final fun getPage ()I
+	public final fun getRotation ()I
+	public final fun getScalarSpan ()Lcom/openmed/openmedkit/multimodal/MultimodalInterval;
+	public final fun getSourceBox ()Lcom/openmed/openmedkit/multimodal/MultimodalRectangle;
+	public final fun getSourceDigest ()Ljava/lang/String;
+	public final fun getUnit ()Lcom/openmed/openmedkit/multimodal/MultimodalSpatialUnit;
+	public final fun getVisualKind ()Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
+	public final fun getWidth ()D
+}
+
+public final class com/openmed/openmedkit/multimodal/MultimodalVisualKind : java/lang/Enum {
+	public static final field OCR Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
+	public static final field PAGE Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
+	public static final field PIXELS Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
+	public static fun values ()[Lcom/openmed/openmedkit/multimodal/MultimodalVisualKind;
 }
 
 public final class com/openmed/openmedkit/multimodal/PreflightCheck : java/lang/Enum {
