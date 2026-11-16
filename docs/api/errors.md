@@ -201,8 +201,9 @@ typed enum per kit:
 (`OpenMedErrorCode`, `code` plus `retryable`) and
 `js/openmedkit-web/src/error-codes.ts` (`OPENMED_ERROR_CODES`,
 `OPENMED_ERROR_CODE_RETRYABLE` and the `OpenMedErrorCode` type). The enums are
-public API but no kit behaviour uses them yet. Run the script with `--check`
-to verify the committed files; the unit tests do this.
+public API. The Android kit reports them as described in
+[Android OpenMedKit](#android-openmedkit). Run the script with `--check` to
+verify the committed files; the unit tests do this.
 
 ### Shared error-code vectors
 
@@ -236,6 +237,30 @@ keeps its builtin base and its message, so existing handlers still catch it:
 - A model that is not cached while offline mode is on raises
   `openmed.core.offline.OfflineModelUnavailableError`, an `OfflineModeError`
   (a `RuntimeError`) that is also a `ModelLoadError`.
+
+### Android OpenMedKit
+
+Kotlin failures expose the portable code as `errorCode: OpenMedErrorCode`
+through the `OpenMedCodedError` interface. It sits next to each error's own
+reason code, which is unchanged, so the kit parity vectors keep matching:
+
+| Kotlin failure | `errorCode` |
+| --- | --- |
+| `OpenMedSpan` with invalid offsets, score or schema version | `input_error` (`OpenMedArgumentException`, an `IllegalArgumentException`) |
+| `deid.DeidentifyEngine(hashSalt = ByteArray(0))` | `configuration_error` (`OpenMedArgumentException`) |
+| `PolicyProfileException` `detection_*` | `input_error` |
+| `PolicyProfileException` `surrogate_key_invalid` | `configuration_error` |
+| `PolicyProfileException` `capability_missing` | `capability_error` |
+| any other `PolicyProfileException`, such as `profile_unknown` | `policy_error` |
+| `InferenceError.InvalidInput` / `SessionCreation` / other | `input_error` / `model_load_error` / `inference_error` |
+| `ModelDownloadException`, `ModelIntegrityException` | `model_load_error` |
+| `ArtifactAcquisitionResult.Unsupported` | `capability_error` |
+| `ArtifactAcquisitionResult.Failed`, including `network_consent_required` for an uncached model with network consent denied | `model_load_error` (`internal_error` for `unexpected`) |
+
+Ready and cancelled acquisition results have no `errorCode`. Messages are
+unchanged and carry codes, field paths and offsets, never input text.
+`ErrorCodeParityTest` runs every scenario whose Kotlin cell is `required`,
+offline and without a model.
 
 ### Recorded divergences
 
