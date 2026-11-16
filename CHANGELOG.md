@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Declare every `OPENMED_SERVICE_*` setting the service reads, plus the core `OpenMedConfig` environment variables, in a sectioned Draft 2020-12 `openmed/core/settings.schema.json` with type, default, bounds, secret flag and owning module, covered by the schema fingerprint snapshot and an AST scan of service environment reads; `openmed.core.settings_registry` returns the declarations without reading the environment (#5337).
+- Report value-free configuration provenance for every declared service setting with `resolve_service_configuration()`: each `OPENMED_SERVICE_*` setting gets a `default`, `environment` or `secret_file` source class and a conflict category, secrets report presence only, and the report is identical for reordered environment snapshots (#5341).
 
 ## [4.0.0] - 2026-11-25
 

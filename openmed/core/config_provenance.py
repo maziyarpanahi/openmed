@@ -6,11 +6,17 @@ environment snapshot, and command-line values in one documented order while
 keeping the selected values separate from the audit report.  The report never
 contains configuration values; it records only stable keys, source classes,
 and conflict categories.
+
+:func:`resolve_service_configuration` produces the same kind of value-free
+report for the service settings declared in ``settings.schema.json``.  Service
+settings come only from built-in defaults, the environment, and, for
+credentials, a mounted secret file named by a ``NAME_FILE`` companion.
 """
 
 from __future__ import annotations
 
 import copy
+import json
 import math
 import os
 from collections.abc import Iterable, Mapping
@@ -18,7 +24,7 @@ from dataclasses import MISSING, dataclass, fields
 from pathlib import Path
 from typing import Any, Literal
 
-SourceClass = Literal["default", "file", "environment", "cli"]
+SourceClass = Literal["default", "file", "environment", "cli", "secret_file"]
 
 SCHEMA_VERSION = 1
 
@@ -26,6 +32,8 @@ DEFAULT_SOURCE: SourceClass = "default"
 FILE_SOURCE: SourceClass = "file"
 ENVIRONMENT_SOURCE: SourceClass = "environment"
 CLI_SOURCE: SourceClass = "cli"
+#: A credential read from the file its ``NAME_FILE`` companion names.
+SECRET_FILE_SOURCE: SourceClass = "secret_file"
 
 # Later entries win.  Keep this tuple immutable and use it for every merge and
 # every report so input mapping order cannot affect the audit.
@@ -44,6 +52,21 @@ CONFLICT_CATEGORIES = (
     CONFLICT_SAME_VALUE,
     CONFLICT_OVERRIDDEN,
 )
+
+# Service settings are read from the environment only.  The ``secret_file``
+# source exists only for credentials: ``openmed.service.secret_files`` reads
+# ``NAME`` or the file named by ``NAME_FILE`` and refuses both at once.  A
+# setting opts in by declaring its companion with ``x-secret-file-for`` in
+# ``settings.schema.json``; this module needs no change for a new credential.
+SERVICE_PRECEDENCE: tuple[SourceClass, ...] = (
+    DEFAULT_SOURCE,
+    ENVIRONMENT_SOURCE,
+    SECRET_FILE_SOURCE,
+)
+#: Inline value and secret file are both set; the service refuses to start.
+CONFLICT_SECRET_SOURCES = "conflicting_secret_sources"
+SERVICE_CONFLICT_CATEGORIES = (*CONFLICT_CATEGORIES, CONFLICT_SECRET_SOURCES)
+SERVICE_SECTION = "service"
 
 ConfigInput = Mapping[str, Any] | str | Path | None
 
@@ -306,6 +329,257 @@ def resolve_configuration(
     return ConfigurationResolution(values=resolved, entries=tuple(entries))
 
 
+@dataclass(frozen=True, slots=True)
+class ServiceConfigurationProvenance:
+    """Value-free provenance for every declared service setting.
+
+    Each entry reuses :class:`ProvenanceEntry`.  Secret settings report only
+    whether they are present and which source supplies them; they are never
+    compared with anything.  The object holds no configured values, so its
+    report, ``repr`` and JSON form are safe to log or attach to an audit.
+
+    Attributes:
+        entries: One entry per declared setting, sorted by name.
+        secret_names: Names of the settings declared as secrets.
+        section: Settings schema section the report covers.
+    """
+
+    entries: tuple[ProvenanceEntry, ...]
+    secret_names: frozenset[str]
+    section: str = SERVICE_SECTION
+
+    @property
+    def provenance_report(self) -> dict[str, Any]:
+        """Return a stable, value-free report for the service settings."""
+
+        keys: dict[str, Any] = {}
+        for entry in self.entries:
+            keys[entry.key] = {
+                "source_class": entry.source_class,
+                "conflict_category": entry.conflict_category,
+                "sources": list(entry.sources),
+                "overridden_sources": list(entry.overridden_sources),
+                "secret": entry.key in self.secret_names,
+                "present": entry.source_class != DEFAULT_SOURCE,
+            }
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "section": self.section,
+            "precedence": list(SERVICE_PRECEDENCE),
+            "keys": keys,
+        }
+
+    @property
+    def report(self) -> dict[str, Any]:
+        """Alias for :attr:`provenance_report`."""
+
+        return self.provenance_report
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the value-free report as a fresh dictionary."""
+
+        return self.provenance_report
+
+    def to_json(self) -> str:
+        """Return the value-free report as deterministic JSON."""
+
+        return json.dumps(self.provenance_report, sort_keys=True)
+
+    def entry(self, name: str) -> ProvenanceEntry:
+        """Return the entry for one setting.
+
+        Args:
+            name: Declared environment variable name.
+
+        Returns:
+            The provenance entry.
+
+        Raises:
+            KeyError: If the setting is not declared in the section.
+        """
+
+        for entry in self.entries:
+            if entry.key == name:
+                return entry
+        raise KeyError(f"undeclared {self.section} setting: {name!r}")
+
+    def __repr__(self) -> str:
+        """Summarise counts only."""
+
+        present = sum(1 for item in self.entries if item.source_class != DEFAULT_SOURCE)
+        return (
+            f"ServiceConfigurationProvenance(section={self.section!r}, "
+            f"settings={len(self.entries)}, present={present})"
+        )
+
+
+def resolve_service_configuration(
+    environment: Mapping[str, str] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> ServiceConfigurationProvenance:
+    """Report where each declared service setting comes from, without values.
+
+    Every setting in the ``service`` section of ``settings.schema.json`` gets
+    one entry.  A variable that is unset or blank counts as unset, as the
+    service parsers treat it, and reports the ``default`` source.  A set
+    variable reports ``environment``; its parsed value is compared in memory
+    with the declared default to choose ``same_value`` or ``overridden``.
+
+    Secret settings report presence only.  A credential whose ``NAME_FILE``
+    companion is set reports the ``secret_file`` source; when the inline value
+    is set as well the entry reports ``conflicting_secret_sources``, which the
+    service refuses at startup.  Secret files are never opened.
+
+    Args:
+        environment: Environment snapshot.  ``None`` uses ``os.environ``.
+        env: Alias for ``environment``.
+
+    Returns:
+        The value-free provenance for the service section.
+
+    Raises:
+        ConfigurationResolutionError: If the snapshot is not a mapping of
+            strings.
+    """
+
+    from .settings_registry import setting_declarations
+
+    environment = _select_alias(environment, env, "environment")
+    if environment is None:
+        environment = os.environ
+    if not isinstance(environment, Mapping):
+        raise ConfigurationResolutionError(
+            "environment configuration must be a mapping"
+        )
+
+    declarations = setting_declarations(SERVICE_SECTION)
+    companions = {
+        item.secret_file_for: item.name
+        for item in declarations
+        if item.secret_file_for is not None
+    }
+    entries: list[ProvenanceEntry] = []
+    for declaration in declarations:
+        raw = _service_raw(environment, declaration.name)
+        if declaration.secret:
+            companion = companions.get(declaration.name)
+            from_file = (
+                companion is not None
+                and _service_raw(environment, companion) is not None
+            )
+            entries.append(_secret_entry(declaration.name, raw is not None, from_file))
+            continue
+        entries.append(_setting_entry(declaration, raw))
+
+    return ServiceConfigurationProvenance(
+        entries=tuple(entries),
+        secret_names=frozenset(item.name for item in declarations if item.secret),
+    )
+
+
+def _service_raw(environment: Mapping[str, Any], name: str) -> str | None:
+    raw = environment.get(name)
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ConfigurationResolutionError("environment values must be strings")
+    return raw if raw.strip() else None
+
+
+def _secret_entry(name: str, inline: bool, from_file: bool) -> ProvenanceEntry:
+    sources = tuple(
+        source
+        for source, present in (
+            (ENVIRONMENT_SOURCE, inline),
+            (SECRET_FILE_SOURCE, from_file),
+        )
+        if present
+    )
+    if not sources:
+        return ProvenanceEntry(
+            key=name,
+            source_class=DEFAULT_SOURCE,
+            conflict_category=CONFLICT_NONE,
+            sources=(DEFAULT_SOURCE,),
+        )
+    return ProvenanceEntry(
+        key=name,
+        source_class=sources[-1],
+        conflict_category=(
+            CONFLICT_SECRET_SOURCES if len(sources) > 1 else CONFLICT_NONE
+        ),
+        sources=sources,
+    )
+
+
+def _setting_entry(declaration: Any, raw: str | None) -> ProvenanceEntry:
+    name = declaration.name
+    if raw is None:
+        return ProvenanceEntry(
+            key=name,
+            source_class=DEFAULT_SOURCE,
+            conflict_category=CONFLICT_NONE,
+            sources=(DEFAULT_SOURCE,),
+        )
+    if not declaration.has_default:
+        return ProvenanceEntry(
+            key=name,
+            source_class=ENVIRONMENT_SOURCE,
+            conflict_category=CONFLICT_NONE,
+            sources=(ENVIRONMENT_SOURCE,),
+        )
+    default = declaration.to_dict()["default"]
+    same = _values_equal(_parse_declared(declaration, raw), default)
+    return ProvenanceEntry(
+        key=name,
+        source_class=ENVIRONMENT_SOURCE,
+        conflict_category=CONFLICT_SAME_VALUE if same else CONFLICT_OVERRIDDEN,
+        sources=(DEFAULT_SOURCE, ENVIRONMENT_SOURCE),
+        overridden_sources=() if same else (DEFAULT_SOURCE,),
+    )
+
+
+_SERVICE_TRUE = frozenset({"1", "true", "yes", "on", "enabled"})
+_SERVICE_FALSE = frozenset({"0", "false", "no", "off", "disabled"})
+
+
+def _parse_declared(declaration: Any, raw: str) -> Any:
+    """Parse ``raw`` by its declared type for an in-memory default comparison.
+
+    Anything that does not parse returns ``_UNSET``, which never equals a
+    default, so the entry reports ``overridden``.
+    """
+
+    text = raw.strip()
+    types = set(declaration.types) - {"null"}
+    try:
+        if declaration.env_format == "csv":
+            return [item.strip() for item in text.split(",") if item.strip()]
+        if declaration.env_format == "json":
+            return json.loads(text)
+        if "boolean" in types:
+            lowered = text.lower()
+            if lowered in _SERVICE_TRUE:
+                return True
+            if lowered in _SERVICE_FALSE:
+                return False
+            return _UNSET
+        if "integer" in types:
+            return int(text)
+        if "number" in types:
+            number = float(text)
+            return number if math.isfinite(number) else _UNSET
+    except ValueError:
+        return _UNSET
+    if "string" in types:
+        enum = declaration.bounds.get("enum")
+        if enum is not None and text.lower() in enum:
+            return text.lower()
+        return text
+    return _UNSET
+
+
 def audit_config_precedence(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Return only the value-free provenance report for a resolution."""
 
@@ -539,6 +813,7 @@ __all__ = [
     "CONFLICT_NONE",
     "CONFLICT_OVERRIDDEN",
     "CONFLICT_SAME_VALUE",
+    "CONFLICT_SECRET_SOURCES",
     "ConfigurationResolution",
     "ConfigurationResolutionError",
     "ConfigurationSourceError",
@@ -546,6 +821,11 @@ __all__ = [
     "ENVIRONMENT_SOURCE",
     "FILE_SOURCE",
     "ProvenanceEntry",
+    "SECRET_FILE_SOURCE",
+    "SERVICE_CONFLICT_CATEGORIES",
+    "SERVICE_PRECEDENCE",
+    "SERVICE_SECTION",
+    "ServiceConfigurationProvenance",
     "audit_config_precedence",
     "audit_configuration",
     "default_config_values",
@@ -553,4 +833,5 @@ __all__ = [
     "resolve_config",
     "resolve_config_precedence",
     "resolve_configuration",
+    "resolve_service_configuration",
 ]
