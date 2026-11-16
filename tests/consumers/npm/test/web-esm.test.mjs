@@ -58,6 +58,10 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/index.cjs",
     "dist/index.d.ts",
     "dist/index.d.cts",
+    "dist/multimodal/index.js",
+    "dist/multimodal/index.cjs",
+    "dist/multimodal/index.d.ts",
+    "dist/multimodal/index.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -193,6 +197,23 @@ test("local model references load with local files only", async () => {
   assert.equal(spans.length, hipaaCase.entities.length);
   assert.equal(openmed.isLocalModelReference("./models/installed-consumer"), true);
   assert.equal(openmed.isLocalModelReference(openmed.DEFAULT_MODEL_ID), false);
+});
+
+test("openmed/multimodal admits packets offline from the installed build", async () => {
+  const multimodal = await import("openmed/multimodal");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/multimodal"));
+  assert.match(resolved, /multimodal[\\/]index\.js$/, "esm_multimodal_entry");
+  assert.equal(multimodal.MULTIMODAL_PACKET_SCHEMA, "openmed.multimodal.apple.v1");
+  await assert.rejects(multimodal.admitMultimodalPacket("{}"), (error) => {
+    assert.ok(error instanceof multimodal.MultimodalContractError, "multimodal_error_type");
+    assert.equal(error.code, "invalid_multimodal_contract");
+    return true;
+  });
+  assert.equal(
+    Object.hasOwn(openmed, "admitMultimodalPacket"),
+    false,
+    "multimodal_in_main_entry",
+  );
 });
 
 test("installed package made no network requests", () => {
