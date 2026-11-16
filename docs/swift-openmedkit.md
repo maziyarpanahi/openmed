@@ -753,6 +753,12 @@ The intent follows these rules:
 `OpenMedIntents` ships its own `PrivacyInfo.xcprivacy`, declaring no tracking,
 no collected data and no required-reason APIs.
 
+`PIISummaryIntent` ("Summarize PII with OpenMed") uses the same boundary. It
+returns an `OpenMedPIISummary` that holds the redacted text, the identifier
+count and `label: count` entries, never values or offsets. See
+[OpenMedKit App Intents](runtimes/apple-app-intents.md) for the full
+contract and the shortcuts the demo app registers.
+
 ## Public API
 
 ### `OpenMedBackend`

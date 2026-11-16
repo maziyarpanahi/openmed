@@ -819,6 +819,7 @@ classification:
     - swift-openmedkit.md
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
+    - runtimes/apple-app-intents.md
     - swift-kotlin-parity.md
     - tokenizer-conformance.md
     - runtimes/device-capabilities.md
