@@ -218,11 +218,13 @@ Then add the product:
 The `OpenMedKit`, `OpenMedExtensionSupport`, `OpenMedShareExtension` and
 `OpenMedActionExtension` products each ship a `PrivacyInfo.xcprivacy` at the
 root of their resource bundle. The manifests declare no tracking, no tracking
-domains and no collected data types. `OpenMedKit` declares three required-reason
+domains and no collected data types. `OpenMedKit` declares four required-reason
 API categories: system boot time (`35F9.1`) for monotonic session and latency
 timers, disk space (`E174.1`) for the bundle cache's free-storage check before
-it stages or evicts generations, and user defaults (`AC6B.1`) for reading the
-managed app configuration that an MDM server installs. The extension targets
+it stages or evicts generations, file timestamps (`C617.1`) for the
+modification dates `OpenMedModelStore.listCachedModels` reports for model
+snapshots inside the app's cache directory, and user defaults (`AC6B.1`) for
+reading the managed app configuration that an MDM server installs. The extension targets
 use none, so their accessed API lists are empty. The test-support
 `OpenMedPrivacySweep` target, which no product exposes, declares system boot
 time (`35F9.1`) for its sweep time budget. The scan demo declares user defaults
