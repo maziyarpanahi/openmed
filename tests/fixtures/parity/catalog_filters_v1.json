@@ -1,0 +1,213 @@
+{
+  "schema": "openmed.model_catalog_filters",
+  "version": 1,
+  "synthetic_only": true,
+  "description": "Synthetic catalog rows in the Android catalog JSONL row format, filter queries and expected repo ids. Filters keep rows in catalog order. format, tier and license compare by case-insensitive equality (format against any of the row's formats, never by prefix); language is case-insensitive membership; max_param_count is inclusive and never matches a null param_count; a null tier or license never matches a filter on that field; every given filter must match. Lookups match repo_id exactly.",
+  "rows": [
+    {
+      "repo_id": "Synthetic/alpha-tiny-onnx",
+      "formats": ["onnx", "onnx-int8"],
+      "tier": "Tiny",
+      "param_count": 22000000,
+      "languages": ["en", "es"],
+      "license": "apache-2.0",
+      "reproducibility_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "repo_id": "Synthetic/bravo-small-onnx",
+      "formats": ["ONNX"],
+      "tier": "small",
+      "param_count": 44000000,
+      "languages": ["FR"],
+      "license": "MIT",
+      "reproducibility_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "repo_id": "Synthetic/charlie-base-tflite",
+      "formats": ["tflite-int8"],
+      "tier": "base",
+      "param_count": 125000000,
+      "languages": ["fr", "de"],
+      "license": "mit",
+      "reproducibility_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    {
+      "repo_id": "Synthetic/delta-untiered-onnx",
+      "formats": ["onnx-fp16"],
+      "tier": null,
+      "param_count": null,
+      "languages": [],
+      "license": "bsd-3-clause",
+      "reproducibility_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "repo_id": "Synthetic/echo-large-onnx",
+      "formats": ["onnx", "tflite"],
+      "tier": "LARGE",
+      "param_count": 434000000,
+      "languages": ["en"],
+      "license": null,
+      "reproducibility_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "repo_id": "Synthetic/foxtrot-zero-onnx",
+      "formats": [],
+      "tier": "tiny",
+      "param_count": 0,
+      "languages": ["en-US"],
+      "license": "Apache-2.0",
+      "reproducibility_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    }
+  ],
+  "cases": [
+    {
+      "id": "no-filter-returns-every-row-in-catalog-order",
+      "query": {},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/charlie-base-tflite",
+        "Synthetic/delta-untiered-onnx",
+        "Synthetic/echo-large-onnx",
+        "Synthetic/foxtrot-zero-onnx"
+      ]
+    },
+    {
+      "id": "format-is-case-insensitive-equality",
+      "query": {"format": "OnNx"},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/echo-large-onnx"
+      ]
+    },
+    {
+      "id": "format-does-not-match-by-prefix",
+      "query": {"format": "onnx-int"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "format-matches-any-listed-format",
+      "query": {"format": "TFLITE"},
+      "expected_repo_ids": ["Synthetic/echo-large-onnx"]
+    },
+    {
+      "id": "format-exact-variant",
+      "query": {"format": "onnx-fp16"},
+      "expected_repo_ids": ["Synthetic/delta-untiered-onnx"]
+    },
+    {
+      "id": "unknown-format-matches-nothing",
+      "query": {"format": "gguf"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "tier-mixed-case",
+      "query": {"tier": "TINY"},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/foxtrot-zero-onnx"
+      ]
+    },
+    {
+      "id": "tier-row-value-in-upper-case",
+      "query": {"tier": "large"},
+      "expected_repo_ids": ["Synthetic/echo-large-onnx"]
+    },
+    {
+      "id": "null-tier-never-matches-a-tier-filter",
+      "query": {"tier": "null"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "max-param-count-is-inclusive",
+      "query": {"max_param_count": 44000000},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/foxtrot-zero-onnx"
+      ]
+    },
+    {
+      "id": "max-param-count-zero-keeps-zero-and-skips-null",
+      "query": {"max_param_count": 0},
+      "expected_repo_ids": ["Synthetic/foxtrot-zero-onnx"]
+    },
+    {
+      "id": "null-param-count-never-matches-a-max",
+      "query": {"max_param_count": 1000000000000},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/charlie-base-tflite",
+        "Synthetic/echo-large-onnx",
+        "Synthetic/foxtrot-zero-onnx"
+      ]
+    },
+    {
+      "id": "language-is-case-insensitive-membership",
+      "query": {"language": "fr"},
+      "expected_repo_ids": [
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/charlie-base-tflite"
+      ]
+    },
+    {
+      "id": "language-does-not-match-a-region-subtag",
+      "query": {"language": "en"},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/echo-large-onnx"
+      ]
+    },
+    {
+      "id": "language-with-region-matches-exactly",
+      "query": {"language": "EN-us"},
+      "expected_repo_ids": ["Synthetic/foxtrot-zero-onnx"]
+    },
+    {
+      "id": "license-mixed-case",
+      "query": {"license": "MIT"},
+      "expected_repo_ids": [
+        "Synthetic/bravo-small-onnx",
+        "Synthetic/charlie-base-tflite"
+      ]
+    },
+    {
+      "id": "license-row-value-in-mixed-case",
+      "query": {"license": "apache-2.0"},
+      "expected_repo_ids": [
+        "Synthetic/alpha-tiny-onnx",
+        "Synthetic/foxtrot-zero-onnx"
+      ]
+    },
+    {
+      "id": "null-license-never-matches-a-license-filter",
+      "query": {"license": "unknown"},
+      "expected_repo_ids": []
+    },
+    {
+      "id": "combined-predicates",
+      "query": {
+        "format": "onnx",
+        "tier": "tiny",
+        "max_param_count": 50000000,
+        "language": "ES",
+        "license": "Apache-2.0"
+      },
+      "expected_repo_ids": ["Synthetic/alpha-tiny-onnx"]
+    },
+    {
+      "id": "combined-predicates-one-mismatch",
+      "query": {"format": "tflite-int8", "language": "en"},
+      "expected_repo_ids": []
+    }
+  ],
+  "lookups": [
+    {"repo_id": "Synthetic/alpha-tiny-onnx", "found": true},
+    {"repo_id": "Synthetic/delta-untiered-onnx", "found": true},
+    {"repo_id": "synthetic/alpha-tiny-onnx", "found": false},
+    {"repo_id": "Synthetic/alpha-tiny", "found": false},
+    {"repo_id": "Synthetic/unknown-onnx", "found": false}
+  ]
+}
