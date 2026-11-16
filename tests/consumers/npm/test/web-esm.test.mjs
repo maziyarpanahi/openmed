@@ -58,6 +58,10 @@ test("resolves openmed from the consumer install, not the source tree", () => {
     "dist/index.cjs",
     "dist/index.d.ts",
     "dist/index.d.cts",
+    "dist/speech/index.js",
+    "dist/speech/index.cjs",
+    "dist/speech/index.d.ts",
+    "dist/speech/index.d.cts",
   ]) {
     assert.ok(existsSync(new URL(file, installUrl)), `missing:${file}`);
   }
@@ -193,6 +197,34 @@ test("local model references load with local files only", async () => {
   assert.equal(spans.length, hipaaCase.entities.length);
   assert.equal(openmed.isLocalModelReference("./models/installed-consumer"), true);
   assert.equal(openmed.isLocalModelReference(openmed.DEFAULT_MODEL_ID), false);
+});
+
+test("openmed/speech validates token timings from the installed build", async () => {
+  const speech = await import("openmed/speech");
+  const resolved = fileURLToPath(import.meta.resolve("openmed/speech"));
+  assert.match(resolved, /speech[\\/]index\.js$/, "esm_speech_entry");
+  const token = new speech.SpeechTokenTiming({
+    tokenIndex: 0,
+    startMilliseconds: 500,
+    endMilliseconds: 650,
+    confidencePPM: 750000,
+    text: "synthetic",
+  });
+  const result = new speech.SpeechRecognition({ text: "synthetic", tokenTimes: [token] });
+  assert.equal(result.alignmentStatus, "aligned");
+  assert.equal(JSON.stringify(result).includes("synthetic"), false, "speech_text_serialized");
+  assert.throws(
+    () =>
+      new speech.SpeechTokenTiming({
+        tokenIndex: 0,
+        startMilliseconds: -1,
+        endMilliseconds: 650,
+        confidencePPM: 750000,
+        text: "synthetic",
+      }),
+    (error) => error instanceof speech.SpeechContractError && error.code === "speech_hypothesis_invalid",
+  );
+  assert.equal(Object.hasOwn(openmed, "SpeechTokenTiming"), false, "speech_in_main_entry");
 });
 
 test("installed package made no network requests", () => {
