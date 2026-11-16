@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Define one session lifecycle vocabulary (`openmed.session.lifecycle.v1`: `open`, `cancelling`, `finalized`, `cancelled`, `failed`, `closed`) with `session_lifecycle.schema.json`, a `lifecycle_state` projection and `check_lifecycle_transition()` on the Python runtime and streaming ASR sessions, a documented mapping from each existing enum and shared vectors in `tests/fixtures/parity/session_lifecycle_v1.json`; existing state values and reports are unchanged (#5354).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
