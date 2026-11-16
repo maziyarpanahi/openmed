@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Verify Python-signed audit reports in the openmed web package: `verifyAuditReport(json, key)` recomputes the `repro_hash` with a canonical encoder that matches Python (code-point key order, `\uXXXX` escaping, Python float formatting), checks the HMAC-SHA256 signature with `crypto.subtle.verify`, accepts the legacy span order, and returns `{ result, reason, spanOrder }` with the native verifiers' reason codes; every shared receipt vector passes byte for byte (#5352).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is

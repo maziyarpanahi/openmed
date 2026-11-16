@@ -1,5 +1,8 @@
 {
   "exports": [
+    "AUDIT_REPORT_SIGNATURE_ALGORITHM",
+    "AUDIT_REPORT_VERIFICATION_REASONS",
+    "AuditReceiptError",
     "BUDGET_LADDER",
     "BUNDLE_CACHE_CONTRACT_VERSION",
     "BUNDLE_CACHE_REASONS",
@@ -104,11 +107,13 @@
     "alignTokenOffsets",
     "applyKitParitySpans",
     "assertOfflineAssetPath",
+    "auditReportPayloads",
     "budgetBucket",
     "bundleCacheKey",
     "bundleCalibrationProfileJson",
     "bundleGenerationId",
     "bundleTrustDigest",
+    "canonicalAuditJson",
     "canonicalJson",
     "certifyWebGpuReference",
     "checkKitParityCompatibility",
@@ -191,6 +196,7 @@
     "validateDecisionCalibrationRequest",
     "validateKitParityResult",
     "verificationDigest",
+    "verifyAuditReport",
     "verifyKitParityResult",
     "verifyPortableBundle",
     "webDeviceCapabilityProfile"
