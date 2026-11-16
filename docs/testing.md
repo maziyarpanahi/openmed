@@ -32,6 +32,31 @@ only as a pure-Python source distribution for every interpreter. So
 Other optional extras, such as model runtimes, OCR engines, MLX and Core ML,
 are not exercised on 3.14 by this lane and are not claimed as qualified on it.
 
+### Python 3.15: experimental, not supported yet
+
+CPython 3.15.0 is released, but OpenMed does not declare or claim support for
+it yet. It has no classifier and is not part of `sdk-compatibility`, because
+the dependencies pinned in `uv.lock` cannot install on 3.15 without source
+builds, and some cannot install at all:
+
+| Install | Blocked dependencies (no CPython 3.15 wheel at the locked version) | Upstream status |
+| --- | --- | --- |
+| Core package | `pyyaml`, and `rpds-py` (through `jsonschema`) | `pyyaml` publishes no 3.15 wheel yet ([yaml/pyyaml#981](https://github.com/yaml/pyyaml/issues/981)). Newer `rpds-py` releases publish 3.15 wheels |
+| `cli` | The core blockers | As above |
+| `mcp` | The core blockers and `pydantic-core` | Newer `pydantic-core` releases publish 3.15 wheels |
+| `service` | The core blockers, `pydantic-core`, `cffi` and `grpcio` | Newer releases of all three publish 3.15 wheels |
+| `dev` (test tooling) | `hypothesis`, which ships no source distribution, so `uv sync --frozen --extra dev --python 3.15` cannot install. Also `numpy`, `pandas`, `duckdb`, `markupsafe`, `librt` and `opencc` | Newer releases publish 3.15 (or stable-ABI) wheels, some across a major version (`pandas` 3, `duckdb` 2). `opencc` publishes no 3.15 wheel yet and has no upstream tracking issue ([OpenCC on PyPI](https://pypi.org/project/OpenCC/)) |
+
+Most blockers therefore clear with a reviewed `uv.lock` refresh; `pyyaml` and
+`opencc` need upstream wheels or a source build.
+
+The non-blocking `sdk-compatibility-next` job (pushes and `full-ci` pull
+requests, Linux, Windows and macOS) installs the core package from the frozen
+lock on 3.15 and runs core-only contracts. It is allowed to fail and gates
+nothing. It can only turn green once the frozen lock installs on 3.15, and
+that is the signal to promote 3.15 into `sdk-compatibility` with its
+classifier. Until then, nothing here should be read as 3.15 support.
+
 Adding the `full-ci` label starts a new full CI run. Other label additions do
 not start CI jobs or cancel the active PR run. Those skipped label events use
 their own concurrency group; commits and `full-ci` requests still supersede

@@ -291,6 +291,58 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     assert f"all {combinations} combinations" in CI_WORKFLOW.read_text(encoding="utf-8")
 
 
+def test_unsupported_next_interpreter_is_probed_without_claiming_support():
+    """Python 3.15 stays unadvertised until its frozen dependencies install.
+
+    The probe is allowed to fail, gates nothing, installs the core package
+    only, and the docs list every blocked dependency with an upstream link.
+    """
+
+    next_version = "3.15"
+    workflow = _load_ci()
+    jobs = workflow["jobs"]
+    probe = jobs["sdk-compatibility-next"]
+    systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
+    assert probe["continue-on-error"] == "true"
+    assert probe["needs"] == "repo-policy"
+    assert "full-ci" in probe["if"] and "pull_request" in probe["if"]
+    assert probe["strategy"]["matrix"]["os"] == systems
+    assert probe["strategy"]["matrix"]["python-version"] == [next_version]
+    assert probe["strategy"]["fail-fast"] == "false"
+    assert int(probe["timeout-minutes"]) <= 30
+    assert all(value == "1" for value in probe["env"].values())
+    commands = [step.get("run", "") for step in probe["steps"]]
+    install = next(command for command in commands if "uv sync" in command)
+    assert "--frozen" in install and "--extra" not in install
+    contracts = next(command for command in commands if "pytest" in command)
+    assert "--frozen" in contracts
+    assert "tests/unit/clinical/test_temporal_normalizer.py" in contracts
+
+    # Nothing depends on the probe, so it can never block a merge or release.
+    for name, job in jobs.items():
+        needs = job.get("needs", [])
+        needs = [needs] if isinstance(needs, str) else needs
+        assert "sdk-compatibility-next" not in needs, name
+
+    # The advertised matrix and classifiers do not claim the probed version.
+    full, pull_request = _tiered_matrices(jobs["sdk-compatibility"])
+    assert next_version not in {row["python-version"] for row in full + pull_request}
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
+    assert (
+        f"Programming Language :: Python :: {next_version}"
+        not in (project["classifiers"])
+    )
+
+    docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
+    assert f"Python {next_version}: experimental, not supported yet" in docs
+    assert "sdk-compatibility-next" in docs
+    for blocked in ("`pyyaml`", "`rpds-py`", "`hypothesis`", "`opencc`"):
+        assert blocked in docs, blocked
+    assert "https://github.com/yaml/pyyaml/issues/981" in docs
+
+
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
     jobs = _load_ci()["jobs"]
     lane = jobs["sdk-compatibility"]
