@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/session_lifecycle.schema.json",
+  "title": "OpenMed session lifecycle transition",
+  "description": "Shared lifecycle vocabulary (openmed.session.lifecycle.v1) for the Python runtime session, the Python streaming ASR session and the OpenMedKit speech sessions. The root validates one allowed transition record; #/$defs/state, #/$defs/terminal_state and #/$defs/reason_code are the closed vocabularies. Terminal states have no outgoing transition. tests/fixtures/parity/session_lifecycle_v1.json pins allowed sequences, rejected transitions and reason codes for every runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "from", "to"],
+  "properties": {
+    "schema_version": {"const": "openmed.session.lifecycle.v1"},
+    "from": {"$ref": "#/$defs/state"},
+    "to": {"$ref": "#/$defs/state"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "from": {"const": "open"},
+        "to": {"enum": ["cancelling", "finalized", "cancelled", "failed", "closed"]}
+      }
+    },
+    {
+      "properties": {
+        "from": {"const": "cancelling"},
+        "to": {"enum": ["cancelled", "failed", "closed"]}
+      }
+    }
+  ],
+  "$defs": {
+    "state": {
+      "enum": ["open", "cancelling", "finalized", "cancelled", "failed", "closed"]
+    },
+    "terminal_state": {
+      "enum": ["finalized", "cancelled", "failed", "closed"]
+    },
+    "reason_code": {
+      "description": "Why a transition is rejected: unknown_state for a value outside the vocabulary, session_closed (finalized or closed source), session_cancelled, session_failed, and transition_not_allowed for any other pair, including staying in the same state.",
+      "enum": [
+        "session_cancelled",
+        "session_closed",
+        "session_failed",
+        "transition_not_allowed",
+        "unknown_state"
+      ]
+    }
+  }
+}
