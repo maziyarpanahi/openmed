@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Admit `openmed.multimodal.apple.v1` evidence packets in the Android OpenMedKit with the same canonical-form, digest, size, float-hex and refusal rules as Python and Swift, typed visual, transcript and clock projections, and the shared `AssetManifest` and `ProviderResultEnvelope` types, checked against every case in the shared fixture (#5369).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
