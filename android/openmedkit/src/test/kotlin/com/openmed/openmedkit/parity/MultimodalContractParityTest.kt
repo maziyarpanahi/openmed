@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -31,9 +32,10 @@ import kotlin.test.assertTrue
 
 /** Pure JVM tests: no Android framework, model, transport, or network. */
 class MultimodalContractParityTest {
-    private val fixture: JsonObject = javaClass.classLoader!!.getResourceAsStream(
-        "multimodal_contracts_v1.json",
-    )!!.bufferedReader(Charsets.UTF_8).use { Json.parseToJsonElement(it.readText()).jsonObject }
+    @get:Rule
+    val contractGate = ContractGateRule("multimodal_contracts_v1")
+
+    private val fixture: JsonObject = Json.parseToJsonElement(contractGate.fixtureText()).jsonObject
     private val vectors = fixture.getValue("cases").jsonArray.map { it.jsonObject }
     private fun parse(kind: String, payload: String): String = when (kind) {
         "asset_manifest" -> AssetManifest.fromJson(payload).toJson()

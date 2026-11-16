@@ -1178,28 +1178,46 @@ def test_real_python_run_aggregates_end_to_end(tmp_path: Path) -> None:
         assert _cell(report, "beta", "python").state == "passed"
 
 
-def test_committed_manifest_aggregates_python_and_lists_pending_reporters(
+def test_committed_manifest_aggregates_active_and_lists_pending_reporters(
     tmp_path: Path,
 ) -> None:
-    python = _passing_result(ROOT, "python", gate.DEFAULT_MANIFEST)
-    path = tmp_path / "python.json"
-    _write_json(path, python)
+    manifest = gate.load_manifest()
+    active = sorted(
+        runtime
+        for runtime, declaration in manifest.runtimes.items()
+        if declaration.reporter == gate.REPORTER_ACTIVE
+    )
+    assert {"python", "kotlin"} <= set(active)
+    paths = []
+    for runtime in active:
+        path = tmp_path / f"{runtime}.json"
+        _write_json(path, _passing_result(ROOT, runtime, gate.DEFAULT_MANIFEST))
+        paths.append(path)
 
-    report = gate.aggregate(results=[path])
+    report = gate.aggregate(results=paths)
     states = {(cell.runtime, cell.state) for cell in report.cells}
 
     assert report.passed
-    assert {state for runtime, state in states if runtime == "python"} == {"passed"}
-    for runtime in ("swift", "kotlin", "web"):
+    for runtime in active:
+        assert {state for name, state in states if name == runtime} <= {
+            "passed",
+            "not_applicable",
+        }
+    for runtime in set(manifest.runtimes) - set(active):
         assert {state for name, state in states if name == runtime} <= {
             "pending",
             "not_applicable",
         }
-    missing = gate.aggregate()
-    assert not missing.passed
-    assert {cell.codes for cell in missing.cells if cell.runtime == "python"} == {
-        ("missing_result",)
-    }
+    for runtime in active:
+        missing = gate.aggregate(
+            results=[path for path in paths if path.stem != runtime]
+        )
+        assert not missing.passed
+        assert {
+            cell.codes
+            for cell in missing.cells
+            if cell.runtime == runtime and cell.state != "not_applicable"
+        } == {("missing_result",)}
 
 
 def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
@@ -1235,3 +1253,28 @@ def test_contract_gate_workflow_aggregates_every_runtime_job() -> None:
     for runtime, declaration in manifest.runtimes.items():
         if declaration.reporter == gate.REPORTER_ACTIVE:
             assert f"{runtime}-results" in jobs, runtime
+
+
+def test_kotlin_job_runs_every_declared_consumer_and_uploads_its_result() -> None:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = {
+        step.get("name"): step for step in workflow["jobs"]["kotlin-results"]["steps"]
+    }
+    write = steps["Write the Kotlin result file"]
+    manifest = gate.load_manifest()
+
+    assert write["working-directory"] == "android"
+    assert ":openmedkit:testDebugUnitTest" in write["run"]
+    assert "-PopenmedContractGateResultsDir=" in write["run"]
+    assert "tests/fixtures/parity/contract_gate.json" in write["run"]
+    assert manifest.runtimes["kotlin"].reporter == gate.REPORTER_ACTIVE
+    assert "-PopenmedContractGateResultsDir=" in manifest.runtimes["kotlin"].command
+    upload = steps["Upload the Kotlin result file"]
+    assert upload["if"] == "always()"
+    assert upload["with"]["name"] == "contract-gate-result-kotlin"
+    assert upload["with"]["path"] == "contract-gate-results/kotlin.json"
+    for entry in manifest.fixtures:
+        cell = entry.cells["kotlin"]
+        for consumer in cell.consumers:
+            assert consumer.startswith("android/openmedkit/src/test/kotlin/"), consumer
+            assert "ContractGateRule(" in (ROOT / consumer).read_text("utf-8"), consumer

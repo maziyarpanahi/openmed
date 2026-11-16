@@ -1,8 +1,10 @@
 package com.openmed.openmedkit.policy
 
 import com.openmed.openmedkit.KitParity
+import com.openmed.openmedkit.parity.ContractGateRule
 import org.json.JSONArray
 import org.json.JSONObject
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -29,6 +31,9 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class PortablePolicyVectorTest {
+    @get:Rule
+    val contractGate = ContractGateRule("portable_policy_vectors")
+
     @Test
     fun bundledResourcesAreByteIdenticalAcrossKits() {
         val vectors = vectors()
@@ -252,12 +257,7 @@ class PortablePolicyVectorTest {
         }
     }
 
-    private fun vectors(): JSONObject {
-        val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream(VECTORS_FILE)) {
-            "shared portable policy vectors were not registered as a test resource"
-        }
-        return JSONObject(String(stream.use { it.readBytes() }, Charsets.UTF_8))
-    }
+    private fun vectors(): JSONObject = JSONObject(contractGate.fixtureText())
 
     private fun repositoryRoot(): File {
         var directory: File? = File(System.getProperty("user.dir")).absoluteFile
@@ -281,8 +281,4 @@ class PortablePolicyVectorTest {
     private fun JSONArray.strings(): List<String> = (0 until length()).map(::getString)
 
     private fun JSONArray.ints(): List<Int> = (0 until length()).map(::getInt)
-
-    private companion object {
-        const val VECTORS_FILE = "portable_policy_vectors.json"
-    }
 }

@@ -370,6 +370,25 @@ tasks.withType<Test>().configureEach {
     systemProperty("openmedkit.moduleDirectory", projectDir.absolutePath)
 }
 
+// Contract gate reporter (docs/contract-gate.md). When a results directory is
+// set, the shared parity consumers in testDebugUnitTest merge their value-free
+// case outcomes into <directory>/kotlin.json. A relative directory resolves
+// against the directory Gradle was started from.
+val invocationDirectory = gradle.startParameter.currentDir.toPath()
+val contractGateResultsDirectory = providers.gradleProperty("openmedContractGateResultsDir")
+    .orElse(providers.environmentVariable("OPENMED_CONTRACT_GATE_RESULTS_DIR"))
+    .map { invocationDirectory.resolve(it).normalize().toFile() }
+
+tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach {
+    if (contractGateResultsDirectory.isPresent) {
+        val resultFile = contractGateResultsDirectory.get().resolve("kotlin.json")
+        outputs.file(resultFile).withPropertyName("contractGateResult")
+        // Consumers merge into the file, so a result from an earlier run must go.
+        doFirst { resultFile.delete() }
+        systemProperty("openmed.contractGate.resultsDir", resultFile.parentFile.absolutePath)
+    }
+}
+
 val verifyReleaseAarSize by tasks.registering {
     group = "verification"
     description = "Fails when the release OpenMedKit AAR exceeds its committed size budget."

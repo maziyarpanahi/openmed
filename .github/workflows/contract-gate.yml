@@ -64,9 +64,96 @@ jobs:
           overwrite: true
           retention-days: 14
 
+  kotlin-results:
+    name: Kotlin contract results
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle*
+            android/gradle.properties
+            android/gradle/libs.versions.toml
+            android/gradle/verification-metadata.xml
+            android/gradle/wrapper/gradle-wrapper.properties
+            android/**/build.gradle*
+            android/**/gradle.lockfile
+
+      # :openmedkit packages the pinned NDK's libc++_shared.so, and its unit
+      # test task builds the release AAR first (android/README.md).
+      - name: Install the pinned Android NDK
+        shell: bash
+        run: |
+          ndk="$(sed -n 's/^android-ndk = "\([0-9.]*\)"$/\1/p' android/gradle/libs.versions.toml)"
+          if [[ -z "$ndk" ]]; then
+            echo "::error title=NDK pin missing::android-ndk is not pinned in libs.versions.toml."
+            exit 1
+          fi
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" < /dev/null
+          test -f "$ANDROID_HOME/ndk/$ndk/source.properties"
+
+      # Runs every Kotlin consumer the manifest declares. The gate judges the
+      # case outcomes, so the step passes once the result file is written and
+      # fails only when the consumers could not produce it.
+      - name: Write the Kotlin result file
+        working-directory: android
+        shell: bash
+        run: |
+          mapfile -t filters < <(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("../tests/fixtures/parity/contract_gate.json").read_text("utf-8")
+          )
+          prefix = "android/openmedkit/src/test/kotlin/"
+          names = sorted(
+              {
+                  consumer[len(prefix) : -len(".kt")].replace("/", ".")
+                  for fixture in manifest["fixtures"]
+                  for consumer in fixture["runtimes"]["kotlin"].get("consumers", [])
+                  if consumer.startswith(prefix)
+              }
+          )
+          for name in names:
+              print("--tests")
+              print(name)
+          PY
+          )
+          if [[ ${#filters[@]} -eq 0 ]]; then
+            echo "::error title=No Kotlin consumers::contract_gate.json declares no Kotlin consumer tests."
+            exit 1
+          fi
+          results="$GITHUB_WORKSPACE/contract-gate-results"
+          status=0
+          ./gradlew :openmedkit:testDebugUnitTest "${filters[@]}" \
+            -PopenmedContractGateResultsDir="$results" --stacktrace || status=$?
+          if [[ ! -f "$results/kotlin.json" ]]; then
+            echo "::error title=Kotlin result missing::The Kotlin consumers wrote no contract-gate result file."
+            exit $(( status == 0 ? 1 : status ))
+          fi
+
+      - name: Upload the Kotlin result file
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: contract-gate-result-kotlin
+          path: contract-gate-results/kotlin.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14
+
   contract-gate:
     name: Contract gate
-    needs: [python-results]
+    needs: [python-results, kotlin-results]
     # Aggregate even when a runtime job failed: its missing result then
     # fails the gate instead of skipping it.
     if: always()
