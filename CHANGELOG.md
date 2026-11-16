@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Port the streaming speech data contract to the Android OpenMedKit: `SpeechTokenTiming`, `SpeechRecognition` and `SpeechEngineProvenance` validate token order, millisecond bounds, `confidence_ppm` and provenance like Swift and Python, refuse with both the Swift code and the Python category, and are checked against the shared speech fixture (#5371).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
