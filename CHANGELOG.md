@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Port the streaming speech contract to the `openmed` web package under the `openmed/speech` subpath: token timings, recognition results, partial hypotheses, finalized segments and engine provenance with the Swift and Python bounds, code-point text lengths, coded `SpeechContractError`s that name the field but never the value, and text kept out of JSON, strings and inspection; checked against the shared `speech_contract_v1.json` fixture (#5372).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
