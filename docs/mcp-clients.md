@@ -311,6 +311,22 @@ a clinical action. Its request and result schemas are identical to the Python
 and REST contracts described in
 [Fixed-option decision API](api/fixed-option-decisions.md).
 
+## Capability descriptor
+
+Read the `openmed://capabilities` resource before choosing a tool. It returns
+the value-free [capability descriptor](api/capabilities.md) as
+`application/json`: which optional backends and surfaces are installed, the
+model ids the server's runtime serves, the canonical schema versions, the
+bundled policy profile names, and a `sha256:` digest. The server builds it with
+the same function as REST `GET /v1/capabilities` and `openmed capabilities`,
+so a client can compare the MCP server with the REST service or the CLI of the
+same install by digest alone. The CLI serves no models, so its digest matches
+only when the server's served model list is the same.
+
+The resource loads no model and makes no network call. It never contains
+hostnames, filesystem paths, cache locations, tokens or other environment
+values.
+
 ## Canonical clinical agent workflow
 
 MCP clients can discover the `openmed-clinical-workflow` prompt, the

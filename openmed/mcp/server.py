@@ -26,6 +26,7 @@ from openmed.clinical.grounding import (
     ground,
 )
 from openmed.clinical.grounding.provenance import GroundingProvenance
+from openmed.core.capabilities import capability_descriptor
 from openmed.core.errors import (
     ERROR_CODES,
     ConfigurationError,
@@ -1014,6 +1015,28 @@ def openmed_health(
         "version": openmed.__version__,
         "loaded_model_count": loaded_model_count,
     }
+
+
+def openmed_capabilities(
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Return the canonical, value-free capability descriptor of this server.
+
+    The descriptor is built by the same function as REST
+    ``GET /v1/capabilities`` and ``openmed capabilities``, with the served
+    model ids of the MCP server's runtime, so its digest matches theirs for the
+    same runtime. It never contains hostnames, paths or environment values.
+
+    Args:
+        runtime_provider: Optional provider of the shared service runtime.
+
+    Returns:
+        The capability descriptor, digest included.
+    """
+
+    served = getattr(_runtime(runtime_provider), "served_model_ids", None)
+    return capability_descriptor(served_models=served() if callable(served) else ())
 
 
 def openmed_unload_model(
@@ -2177,6 +2200,14 @@ def _register_resources(
     )
     def _health_resource() -> str:
         return _json_resource(openmed_health(runtime_provider=runtime_provider))
+
+    @server.resource(
+        "openmed://capabilities",
+        name="OpenMed capability descriptor",
+        mime_type="application/json",
+    )
+    def _capabilities_resource() -> str:
+        return _json_resource(openmed_capabilities(runtime_provider=runtime_provider))
 
 
 def _register_prompts(server: Any) -> None:
