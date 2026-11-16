@@ -4858,3 +4858,57 @@ public final class com/openmed/openmedkit/segmentation/TextSegmentationAdapter$D
 	public static synthetic fun graphemeBoundaries$default (Lcom/openmed/openmedkit/segmentation/TextSegmentationAdapter;Ljava/lang/String;Ljava/util/Locale;ILjava/lang/Object;)[I
 }
 
+public final class com/openmed/openmedkit/speech/SpeechAlignmentStatus : java/lang/Enum {
+	public static final field ALIGNED Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public static final field OUTSIDE_WINDOW Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public static final field UNAVAILABLE Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public static final field UNVERIFIED_TOKENIZATION Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public static fun values ()[Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+}
+
+public final class com/openmed/openmedkit/speech/SpeechContractError : java/lang/Enum {
+	public static final field INVALID_HYPOTHESIS Lcom/openmed/openmedkit/speech/SpeechContractError;
+	public static final field UNVERIFIED_ARTIFACT Lcom/openmed/openmedkit/speech/SpeechContractError;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/openmed/openmedkit/speech/SpeechContractError;
+	public static fun values ()[Lcom/openmed/openmedkit/speech/SpeechContractError;
+}
+
+public final class com/openmed/openmedkit/speech/SpeechContractException : java/lang/IllegalArgumentException {
+	public final fun getCategory ()Ljava/lang/String;
+	public final fun getError ()Lcom/openmed/openmedkit/speech/SpeechContractError;
+}
+
+public final class com/openmed/openmedkit/speech/SpeechEngineProvenance {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getLanguage ()Ljava/lang/String;
+	public final fun getModelFingerprint ()Ljava/lang/String;
+	public final fun getProviderId ()Ljava/lang/String;
+	public final fun getProviderRevision ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/speech/SpeechRecognition {
+	public fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/Integer;Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/List;Ljava/lang/Integer;Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAlignmentStatus ()Lcom/openmed/openmedkit/speech/SpeechAlignmentStatus;
+	public final fun getDecoderConfidencePpm ()Ljava/lang/Integer;
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTokenTimes ()Ljava/util/List;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/openmed/openmedkit/speech/SpeechTokenTiming {
+	public fun <init> (IJJILjava/lang/String;)V
+	public final fun getConfidencePpm ()I
+	public final fun getEndMilliseconds ()J
+	public final fun getStartMilliseconds ()J
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTokenIndex ()I
+	public fun toString ()Ljava/lang/String;
+}
+
