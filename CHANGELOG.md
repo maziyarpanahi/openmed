@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Add `family`, `task` and `canonical_labels` to the bundled Android model catalog, expose them as optional `ModelCatalogEntry.family`, `task` and `canonicalLabels` (older assets still load), and add a `family` predicate to `ModelCatalog.filter`, keeping the previous constructor, `copy` and `filter` signatures binary-compatible (#5422).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
