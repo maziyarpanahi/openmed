@@ -62,6 +62,11 @@ class ModelCache(
     fun isAvailable(entry: ModelCatalogEntry): Boolean =
         isAvailable(entry.repoId, entry.reproducibilityHash)
 
+    /** Commit hash recorded for the ready model of [repoId], or `null`. */
+    @Synchronized
+    internal fun readyRevisionSha(repoId: String): String? =
+        readyMetadata(modelDirectory(repoId), expectedIntegrityHash = null)?.revisionSha
+
     @Synchronized
     fun totalSizeBytes(): Long =
         readyModelDirectories().sumOf { payloadSizeBytes(it.directory) }
