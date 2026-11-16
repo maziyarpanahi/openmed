@@ -1473,7 +1473,7 @@
       "portable": true,
       "retryable": false,
       "retryable_basis": "configuration_must_change",
-      "python": ["openmed.core.errors.ModelLoadError"],
+      "python": ["openmed.core.errors.ModelLoadError", "openmed.core.offline.OfflineModelUnavailableError"],
       "http": [{"status": 503, "code": "model_load_error"}, {"delivery": "stream_event", "code": "bad_request"}],
       "grpc": [{"status": "INVALID_ARGUMENT", "reason": "invalid_request"}],
       "graphql": [{"code": "OPENMED_RESOLVER_ERROR"}],
