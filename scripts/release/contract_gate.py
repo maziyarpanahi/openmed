@@ -17,20 +17,26 @@ Usage::
     python scripts/release/contract_gate.py verify
     python scripts/release/contract_gate.py run-python --results-dir results
     python scripts/release/contract_gate.py validate-result results/python.json
+    python scripts/release/contract_gate.py aggregate --results-dir results \\
+        --summary summary.md --report summary.json
     python scripts/release/contract_gate.py refresh
 
 ``verify`` fails when a file under a parity root is not listed, a listed file
 is missing or its digest is stale, a fixture's version or case ids are
 inconsistent, or a runtime cell is malformed. ``run-python`` runs the declared
 Python consumer tests once through pytest and maps each test outcome onto the
-fixture's case ids. ``refresh`` rewrites the digests of files that are already
-listed; it never adds a file or decides which runtimes a fixture needs.
+fixture's case ids. ``aggregate`` reads every runtime's result file, applies
+the manifest's required-runtime matrix and fails on a missing, failed or
+digest-mismatched cell of a runtime whose reporter is active. ``refresh``
+rewrites the digests of files that are already listed; it never adds a file or
+decides which runtimes a fixture needs.
 
 Output carries reason codes, fixture ids, case ids, counts and repository
 relative paths only. The script makes no network call.
 
-Exit codes: 0 on success, 1 when verification fails or a ``--check`` run has a
-case that did not pass, 2 when the manifest or an input cannot be read.
+Exit codes: 0 on success, 1 when verification or aggregation fails or a
+``--check`` run has a case that did not pass, 2 when the manifest or an input
+cannot be read.
 """
 
 from __future__ import annotations
@@ -55,6 +61,8 @@ MANIFEST_SCHEMA = "openmed.contract_gate.manifest"
 MANIFEST_VERSION = 1
 RESULT_SCHEMA = "openmed.contract_gate.result"
 RESULT_SCHEMA_VERSION = 1
+SUMMARY_SCHEMA = "openmed.contract_gate.summary"
+SUMMARY_SCHEMA_VERSION = 1
 RESULTS_DIR_ENV = "OPENMED_CONTRACT_GATE_RESULTS_DIR"
 PYTHON_RUNTIME = "python"
 
@@ -74,6 +82,14 @@ REASON_CONSUMER_MISSING = "consumer_missing"
 REASON_CONSUMER_NOT_COLLECTED = "consumer_not_collected"
 REASON_CASE_NOT_EXERCISED = "case_not_exercised"
 REASON_FIXTURE_UNREADABLE = "fixture_unreadable"
+
+# Cell states the aggregation reports.
+CELL_PASSED = "passed"
+CELL_FAILED = "failed"
+CELL_MISSING = "missing"
+CELL_STALE = "stale_digest"
+CELL_NOT_APPLICABLE = "not_applicable"
+CELL_PENDING = "pending"
 
 ID_PATTERN = r"^[a-z][a-z0-9_]{0,63}$"
 RUNTIME_PATTERN = r"^[a-z][a-z0-9-]{0,31}$"
@@ -272,6 +288,163 @@ class ConsumerOutcome:
     name: str
     param: str | None
     outcome: str
+
+
+@dataclass(frozen=True)
+class CellReport:
+    """The aggregated state of one fixture-by-runtime cell.
+
+    Attributes:
+        fixture_id: Fixture id.
+        runtime: Runtime id.
+        state: ``passed``, ``failed``, ``missing``, ``stale_digest``,
+            ``not_applicable`` or ``pending``.
+        blocking: Whether the cell fails the gate. Only required cells of a
+            runtime whose reporter is active can block.
+        passed: Cases the runtime reported as passed.
+        failed: Cases the runtime reported as failed.
+        skipped: Cases the runtime reported as skipped.
+        missing: Expected cases the runtime did not report.
+        codes: Value-free codes explaining a non-passing state.
+        note: The ``not_applicable`` reason or the pending tracking reference.
+    """
+
+    fixture_id: str
+    runtime: str
+    state: str
+    blocking: bool = False
+    passed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    missing: int = 0
+    codes: tuple[str, ...] = ()
+    note: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the cell as a JSON-compatible mapping."""
+        document: dict[str, Any] = {
+            "fixture_id": self.fixture_id,
+            "runtime": self.runtime,
+            "state": self.state,
+            "blocking": self.blocking,
+            "passed": self.passed,
+            "failed": self.failed,
+            "skipped": self.skipped,
+            "missing": self.missing,
+            "codes": list(self.codes),
+        }
+        if self.note is not None:
+            document["note"] = self.note
+        return document
+
+
+@dataclass(frozen=True)
+class AggregateReport:
+    """The contract-gate decision over every runtime's result file.
+
+    Attributes:
+        manifest_sha256: Digest of the manifest the decision used.
+        cells: One report per fixture and runtime, in manifest order.
+        findings: Blocking findings that are not tied to one cell, such as a
+            stale manifest, an invalid result file or an unknown runtime.
+    """
+
+    manifest_sha256: str
+    cells: tuple[CellReport, ...]
+    findings: tuple[Finding, ...]
+
+    @property
+    def passed(self) -> bool:
+        """Whether no finding and no cell blocks the gate."""
+        return not self.findings and not any(cell.blocking for cell in self.cells)
+
+    @property
+    def blocking(self) -> int:
+        """Number of blocking cells plus blocking findings."""
+        return sum(cell.blocking for cell in self.cells) + len(self.findings)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the value-free JSON summary written as a CI artifact."""
+        return {
+            "schema": SUMMARY_SCHEMA,
+            "schema_version": SUMMARY_SCHEMA_VERSION,
+            "decision": "pass" if self.passed else "fail",
+            "manifest_sha256": self.manifest_sha256,
+            "blocking": self.blocking,
+            "cells": [cell.to_dict() for cell in self.cells],
+            "findings": [
+                {
+                    key: value
+                    for key, value in (
+                        ("code", finding.code),
+                        ("fixture", finding.fixture),
+                        ("path", finding.path),
+                    )
+                    if value is not None
+                }
+                for finding in self.findings
+            ],
+        }
+
+    def to_markdown(self) -> str:
+        """Return the value-free summary table for a CI job summary."""
+        decision = "PASS" if self.passed else "FAIL"
+        lines = [
+            "## Contract gate",
+            "",
+            f"Decision: **{decision}** ({self.blocking} blocking).",
+            "",
+            "| Fixture | Runtime | State | Blocking | Passed | Failed | Skipped "
+            "| Missing | Codes |",
+            "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
+        ]
+        for cell in self.cells:
+            if cell.state == CELL_NOT_APPLICABLE:
+                continue
+            codes = ", ".join(f"`{code}`" for code in cell.codes) or "-"
+            lines.append(
+                f"| `{cell.fixture_id}` | {cell.runtime} | {cell.state} | "
+                f"{'yes' if cell.blocking else 'no'} | {cell.passed} | "
+                f"{cell.failed} | {cell.skipped} | {cell.missing} | {codes} |"
+            )
+        excluded = [cell for cell in self.cells if cell.state == CELL_NOT_APPLICABLE]
+        if excluded:
+            lines += [
+                "",
+                "### Not applicable",
+                "",
+                "| Fixture | Runtime | Reason |",
+                "| --- | --- | --- |",
+            ]
+            lines += [
+                f"| `{cell.fixture_id}` | {cell.runtime} | {_table_text(cell.note)} |"
+                for cell in excluded
+            ]
+        pending = sorted(
+            {
+                (cell.runtime, cell.note or "")
+                for cell in self.cells
+                if cell.state == CELL_PENDING
+            }
+        )
+        if pending:
+            lines += [
+                "",
+                "### Pending reporters",
+                "",
+                "Required cells of these runtimes are listed but do not block "
+                "until the runtime's reporter is active.",
+                "",
+                "| Runtime | Tracking |",
+                "| --- | --- |",
+            ]
+            lines += [
+                f"| {runtime} | {_table_text(note)} |" for runtime, note in pending
+            ]
+        if self.findings:
+            lines += ["", "### Blocking findings", ""]
+            lines += [f"- `{finding.render()}`" for finding in self.findings]
+        return "\n".join(lines) + "\n"
 
 
 PytestRunner = Callable[[Path, Sequence[str], Path], int]
@@ -696,6 +869,77 @@ def load_result_schema(
         raise ContractGateError("result_schema_unreadable") from error
 
 
+def aggregate(
+    root: Path = ROOT,
+    manifest: str = DEFAULT_MANIFEST,
+    results: Sequence[Path] = (),
+) -> AggregateReport:
+    """Combine runtime result files into one contract-gate decision.
+
+    The manifest is verified first, and its findings block the gate. Every
+    result file must validate against the result schema, name a declared
+    runtime and appear once per runtime. For each required cell of a runtime
+    whose reporter is ``active`` the gate then needs a result for the fixture,
+    the manifest's fixture digest, the current manifest digest, and every
+    expected case id reported as passed. Cells of a ``pending`` runtime are
+    evaluated when a result exists but never block; ``not_applicable`` cells
+    are listed with their reason.
+
+    Args:
+        root: Repository root.
+        manifest: Repository-relative manifest path.
+        results: Result files, at most one per runtime.
+
+    Returns:
+        The aggregated report. ``report.passed`` is the gate decision.
+
+    Raises:
+        ContractGateError: ``manifest_unreadable`` or a structural manifest
+            code when the manifest cannot be parsed.
+    """
+    findings = list(verify(root, manifest))
+    parsed = load_manifest(root, manifest)
+    schema = load_result_schema(root, manifest)
+    by_runtime: dict[str, Mapping[str, Any]] = {}
+    for path in results:
+        try:
+            document = json.loads(path.read_text("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            findings.append(Finding("result_unreadable", path=path.name))
+            continue
+        if validate_result(document, schema):
+            findings.append(Finding("invalid_result", path=path.name))
+            continue
+        runtime = document["runtime"]
+        if runtime not in parsed.runtimes:
+            findings.append(Finding("unknown_runtime", path=path.name))
+        elif runtime in by_runtime:
+            findings.append(Finding("duplicate_result", path=path.name))
+        else:
+            by_runtime[runtime] = document
+    known = {entry.id for entry in parsed.fixtures}
+    for runtime, document in by_runtime.items():
+        for item in document["fixtures"]:
+            if item["fixture_id"] not in known:
+                findings.append(
+                    Finding("unknown_fixture", item["fixture_id"], f"runtime={runtime}")
+                )
+    cells = [
+        _cell_report(
+            parsed,
+            entry,
+            runtime,
+            by_runtime.get(runtime),
+            _expected_cases_or_none(root, entry),
+        )
+        for entry in parsed.fixtures
+        for runtime in parsed.runtimes
+    ]
+    return AggregateReport(
+        manifest_sha256=parsed.sha256, cells=tuple(cells), findings=tuple(findings)
+    )
+
+
 def refresh(root: Path = ROOT, manifest: str = DEFAULT_MANIFEST) -> list[str]:
     """Rewrite the digests of files the manifest already lists.
 
@@ -816,6 +1060,31 @@ def _cmd_validate_result(args: argparse.Namespace, root: Path) -> int:
     return status
 
 
+def _cmd_aggregate(args: argparse.Namespace, root: Path) -> int:
+    paths = [Path(name) for name in args.results]
+    if args.results_dir:
+        directory = Path(args.results_dir)
+        paths += sorted(path for path in directory.rglob("*.json") if path.is_file())
+    report = aggregate(root, args.manifest, paths)
+    if args.summary:
+        _write_text(Path(args.summary), report.to_markdown())
+    if args.report:
+        _write_text(Path(args.report), dump_json(report.to_dict()))
+    for finding in report.findings:
+        print(f"contract_gate aggregate: {finding.render()}")
+    for cell in report.cells:
+        if cell.blocking:
+            print(
+                f"contract_gate aggregate: {cell.state} fixture={cell.fixture_id} "
+                f"runtime={cell.runtime} codes={','.join(cell.codes) or '-'}"
+            )
+    print(
+        f"contract_gate aggregate: {'pass' if report.passed else 'fail'} "
+        f"cells={len(report.cells)} blocking={report.blocking} results={len(paths)}"
+    )
+    return 0 if report.passed else 1
+
+
 def _cmd_refresh(args: argparse.Namespace, root: Path) -> int:
     changed = refresh(root, args.manifest)
     for path in changed:
@@ -864,6 +1133,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     validate.add_argument("results", nargs="+", help="Result files.")
     validate.set_defaults(handler=_cmd_validate_result)
+    combine = commands.add_parser(
+        "aggregate", help="Combine runtime result files into one decision."
+    )
+    combine.add_argument("results", nargs="*", help="Result files.")
+    combine.add_argument(
+        "--results-dir", help="Read every *.json result file below this directory."
+    )
+    combine.add_argument("--summary", help="Write the Markdown summary table here.")
+    combine.add_argument("--report", help="Write the JSON summary here.")
+    combine.set_defaults(handler=_cmd_aggregate)
     commands.add_parser(
         "refresh", help="Rewrite digests of files the manifest already lists."
     ).set_defaults(handler=_cmd_refresh)
@@ -974,6 +1253,104 @@ def _case_outcomes(
         else:
             failed.append({"case_id": case_id, "reason": REASON_CASE_NOT_EXERCISED})
     return passed, failed, skipped
+
+
+def _expected_cases_or_none(root: Path, entry: FixtureEntry) -> tuple[str, ...] | None:
+    try:
+        document = json.loads((root / entry.path).read_text("utf-8"))
+        return expected_case_ids(entry, document)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ContractGateError):
+        return None
+
+
+def _cell_report(
+    manifest: Manifest,
+    entry: FixtureEntry,
+    runtime: str,
+    result: Mapping[str, Any] | None,
+    expected: tuple[str, ...] | None,
+) -> CellReport:
+    cell = entry.cells[runtime]
+    if cell.status == STATUS_NOT_APPLICABLE:
+        return CellReport(entry.id, runtime, CELL_NOT_APPLICABLE, note=cell.reason)
+    declaration = manifest.runtimes[runtime]
+    enforced = declaration.reporter == REPORTER_ACTIVE
+    note = None if enforced else declaration.tracking
+    expected_ids = expected or ()
+    if result is None:
+        if not enforced:
+            return CellReport(
+                entry.id, runtime, CELL_PENDING, missing=len(expected_ids), note=note
+            )
+        return CellReport(
+            entry.id,
+            runtime,
+            CELL_MISSING,
+            blocking=True,
+            missing=len(expected_ids),
+            codes=("missing_result",),
+        )
+    item = next(
+        (row for row in result["fixtures"] if row["fixture_id"] == entry.id), None
+    )
+    if item is None:
+        return CellReport(
+            entry.id,
+            runtime,
+            CELL_MISSING,
+            blocking=enforced,
+            missing=len(expected_ids),
+            codes=("missing_cell",),
+            note=note,
+        )
+    failed = [row["case_id"] for row in item["failed"]]
+    skipped = [row["case_id"] for row in item["skipped"]]
+    reported = {*item["passed"], *failed, *skipped}
+    missing = [case_id for case_id in expected_ids if case_id not in reported]
+    codes: list[str] = []
+    if item["fixture_sha256"] != entry.sha256:
+        codes.append("stale_digest")
+    if result["manifest_sha256"] != manifest.sha256:
+        codes.append("manifest_mismatch")
+    if expected is None:
+        codes.append(REASON_FIXTURE_UNREADABLE)
+    if item.get("errors"):
+        codes.append("fixture_error")
+    if failed:
+        codes.append("case_failed")
+    if skipped:
+        codes.append("case_skipped")
+    if missing:
+        codes.append("case_missing")
+    if expected is not None and reported - set(expected_ids):
+        codes.append("unknown_case")
+    if not codes:
+        state = CELL_PASSED
+    elif "stale_digest" in codes:
+        state = CELL_STALE
+    else:
+        state = CELL_FAILED
+    return CellReport(
+        entry.id,
+        runtime,
+        state,
+        blocking=enforced and state != CELL_PASSED,
+        passed=len(item["passed"]),
+        failed=len(failed),
+        skipped=len(skipped),
+        missing=len(missing),
+        codes=tuple(codes),
+        note=note,
+    )
+
+
+def _table_text(value: str | None) -> str:
+    return (value or "-").replace("|", "/").replace("\n", " ")
+
+
+def _write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def _verify_fixture(

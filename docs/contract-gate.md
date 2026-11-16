@@ -14,7 +14,8 @@ failing cell is visible instead of hidden inside a runtime's own test log.
 | --- | --- |
 | `tests/fixtures/parity/contract_gate.json` | The manifest: every parity file, its digest, version, case groups and runtime cells |
 | `tests/fixtures/parity/contract_gate_result.schema.json` | JSON Schema (Draft 2020-12) for one runtime's result file |
-| `scripts/release/contract_gate.py` | `verify`, `run-python`, `validate-result` and `refresh` |
+| `scripts/release/contract_gate.py` | `verify`, `run-python`, `validate-result`, `aggregate` and `refresh` |
+| `.github/workflows/contract-gate.yml` | The blocking `Contract gate` check: runtime result jobs plus the aggregation |
 | `tests/unit/release/test_contract_gate.py` | Gate tests with synthetic fixtures and negative controls |
 
 ## Manifest
@@ -136,6 +137,10 @@ python scripts/release/contract_gate.py run-python --results-dir results
 # Validate any runtime's result files against the schema.
 python scripts/release/contract_gate.py validate-result results/*.json
 
+# Combine every runtime's result file into one decision.
+python scripts/release/contract_gate.py aggregate --results-dir results \
+    --summary summary.md --report summary.json
+
 # Rewrite the digests of files the manifest already lists.
 python scripts/release/contract_gate.py refresh
 ```
@@ -158,8 +163,50 @@ exit 1 when any case did not pass. Pytest's console output is discarded so the
 gate never echoes fixture values; run the consumer file with pytest directly to
 see assertion details.
 
-Exit codes: `0` success, `1` verification failure or a failing `--check` run,
-`2` unreadable manifest or result, or a usage error.
+Exit codes: `0` success, `1` verification or aggregation failure or a failing
+`--check` run, `2` unreadable manifest or result, or a usage error.
+
+## Aggregation and the CI check
+
+`aggregate` reads every `*.json` result file below `--results-dir` (or the
+files named on the command line) and makes one decision:
+
+1. It runs `verify`; any finding blocks the gate.
+2. Each result file must validate against the result schema, name a runtime the
+   manifest declares, and be the only file for that runtime. Otherwise the gate
+   fails with `invalid_result`, `result_unreadable`, `unknown_runtime` or
+   `duplicate_result`; a result for a fixture the manifest does not list fails
+   with `unknown_fixture`.
+3. Every fixture-by-runtime cell gets a state:
+
+| State | Meaning |
+| --- | --- |
+| `passed` | Every expected case id was reported as passed, with the manifest's fixture digest and the current manifest digest. |
+| `failed` | A case failed (`case_failed`) or was skipped (`case_skipped`), an expected case is absent (`case_missing`), an unknown case was reported (`unknown_case`), the result came from another manifest (`manifest_mismatch`) or carries fixture-level errors (`fixture_error`). |
+| `stale_digest` | The runtime read fixture bytes whose digest differs from the manifest. |
+| `missing` | An active runtime wrote no result file (`missing_result`) or left the fixture out (`missing_cell`). |
+| `pending` | The runtime's reporter is still `pending` and wrote no result. |
+| `not_applicable` | The cell does not apply; the summary lists its reason. |
+
+Only required cells of a runtime whose reporter is `active` block. A `pending`
+runtime that does upload a result is evaluated and shown, but does not block,
+so a reporter can be brought up before the manifest marks it active.
+
+The decision is written as a Markdown table (`--summary`: fixture, runtime,
+state, blocking, passed, failed, skipped and missing counts, codes; then the
+`not_applicable` reasons and the pending reporters) and as JSON (`--report`,
+schema `openmed.contract_gate.summary`). Both carry ids, counts, codes and the
+manifest's own reasons only.
+
+`.github/workflows/contract-gate.yml` runs on every push and pull request to
+`master`, `main` and `release/v*` with no path filter, so the check always
+reports. The `python-results` job runs `run-python` and uploads
+`contract-gate-result-python`. The `contract-gate` job runs even when a runtime
+job failed, downloads every `contract-gate-result-*` artifact, runs
+`aggregate`, appends the summary to the job summary and uploads it as the
+`contract-gate-summary` artifact. A runtime job that fails to produce its file
+therefore fails the gate rather than skipping it. Make the `Contract gate`
+check required in the branch ruleset to block merges on it.
 
 ## Adding or changing a fixture
 
@@ -182,5 +229,7 @@ reason code, and writes `<runtime>.json` into the configured results directory.
 It should record known failures as failed cases rather than skip them, and it
 must not decide what blocks a release: the gate does. Validate its output with
 `python scripts/release/contract_gate.py validate-result`. When the reporter
-lands, set the runtime's `reporter` to `active` with its `command` in the same
-change, and fill in the consumers of every required cell.
+lands, add a job to `.github/workflows/contract-gate.yml` that uploads
+`contract-gate-result-<runtime>` and add it to the `contract-gate` job's
+`needs`; in the same change set the runtime's `reporter` to `active` with its
+`command` and fill in the consumers of every required cell.
