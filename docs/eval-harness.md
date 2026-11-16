@@ -59,6 +59,19 @@ The default inspection exit status is 0 even when a regression is reported.
 `--fail-on-regression` returns 1 for regression or missing evidence; invalid,
 empty, mismatched or over-8-MiB reports return 2. All commands support `--json`.
 
+## LINNAEUS biomedical NER
+
+The `biomedical-ner` suite includes `LINNAEUS` (`linnaeus`), also exported from
+`openmed.eval.datasets`. Its species mentions map to `MICROORGANISM`, matching
+Species-800. `load_biomedical_ner_corpus(LINNAEUS)` reads the commit-pinned
+Parquet conversion from `cambridgeltl/linnaeus` without running dataset code.
+Offsets refer to the space-joined token text, not the original full documents.
+Pass `path=` for local CoNLL/JSON exports or `rows_loader=` for offline tests.
+
+The [dataset card](https://huggingface.co/datasets/cambridgeltl/linnaeus)
+declares CC-BY-4.0 for this converted version. OpenMed records that license,
+caches rows only on demand, and redistributes no corpus rows.
+
 ## Chinese clinical NER
 
 The `chinese-clinical-ner` suite ships a tiny synthetic CMeEE-shaped fixture
