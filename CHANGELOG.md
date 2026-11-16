@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Publish the TypeScript REST client `@openmed/rest-client` from the tag-driven release workflow: a `rest-client-verify` job checks the version, lockfile install, npm audit, build, tests and tarball on every release, and a `rest-client-publish` job uploads with npm provenance through OIDC trusted publishing only from tags or recovery dispatches and only once the `REST_CLIENT_NPM_TRUSTED_PUBLISHER` repository variable is `configured`, skipping an already-published version only after a gitHead, SHA-1 and content-digest match; the PyPI and `openmed` npm jobs are unchanged (#5360).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is

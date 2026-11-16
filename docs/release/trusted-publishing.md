@@ -3,7 +3,9 @@
 OpenMed publishes the `openmed` wheel and source distribution from the
 tag-driven `.github/workflows/publish.yml` workflow. The same workflow validates
 and publishes the `openmed` npm package for browsers and Node.js. Both packages
-must match the release tag before either registry upload begins. A guarded
+must match the release tag before either registry upload begins. Once its npm
+trusted publisher is configured, the workflow also publishes the TypeScript
+REST client `@openmed/rest-client`, independently of both uploads. A guarded
 manual dispatch exists only to recover an existing immutable tag after a
 workflow-only failure.
 
@@ -109,6 +111,64 @@ after a successful OIDC publication. Do not move the existing tag.
 
 See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) for
 the provider setup and supported runner requirements.
+
+## TypeScript REST client workflow contract
+
+The hand-written REST client in `clients/typescript` is published as the scoped
+package `@openmed/rest-client` from the same tag workflow, by two jobs that are
+independent of the PyPI and `openmed` npm uploads.
+
+- `clients/typescript/package.json`, `openmed/__about__.py`, and the `v*` tag
+  must contain the same semantic version; the release preflight
+  (`scripts/release/check_release_version.py`) also checks the client manifest
+  and lockfile.
+- The `rest-client-verify` job runs on every tag and recovery dispatch with
+  `contents: read`. It uses Node.js 24, installs only from the committed
+  lockfile, rejects any npm audit finding, typechecks and builds the client,
+  runs its offline workflow, decision and example tests, and inspects the
+  package tarball, which may contain only `dist/`, `README.md` and `LICENSE`.
+- The `rest-client-publish` job needs the Python provenance job, the `openmed`
+  npm verification job and `rest-client-verify`. It attaches the `npm` GitHub
+  environment, grants `contents: read` and `id-token: write`, builds, and runs
+  `npm publish --ignore-scripts --access public --provenance` through the same
+  OIDC trusted publishing as the `openmed` package. It uses no stored npm token.
+- `rest-client-publish` runs only from a `v*` tag push or a guarded recovery
+  dispatch, never from a pull request, and only while the repository variable
+  `REST_CLIENT_NPM_TRUSTED_PUBLISHER` is `configured`. Without that variable
+  the job is skipped and nothing is uploaded.
+- Recovery and reruns are idempotent in the same way as for `openmed`: an
+  existing `@openmed/rest-client` version is skipped only when its registry
+  `gitHead` matches the immutable tag, the downloaded tarball matches its
+  registry SHA-1, and its contents match a fresh tag build. Any mismatch fails
+  closed.
+- The PyPI `publish` job, the `openmed` `npm-publish` job, the evidence job and
+  the release SBOM job do not depend on either REST client job, so a REST client
+  failure cannot block or alter them.
+
+### REST client trusted publisher setup
+
+Creating the npm scope and trusted publisher is a maintainer step outside the
+repository:
+
+1. Make sure the `@openmed` npm scope exists and the maintainer account can
+   publish to it. npm configures trusted publishers per package, so if
+   `@openmed/rest-client` does not exist on npm yet, create it first, for
+   example with one manual `npm publish --access public` of the tagged
+   `clients/typescript` build.
+2. In the `@openmed/rest-client` package settings, add a GitHub Actions trusted
+   publisher for user `maziyarpanahi`, repository `openmed`, workflow filename
+   `publish.yml` and environment `npm`, the same values as for `openmed`.
+3. Set the GitHub repository variable `REST_CLIENT_NPM_TRUSTED_PUBLISHER` to
+   `configured`.
+
+If the REST client job fails after PyPI has published, fix the cause and rerun
+only that job with `gh run rerun RUN_ID --repo maziyarpanahi/openmed --job
+JOB_ID`, as for the `openmed` npm job; the idempotent check skips an upload that
+already matches. Do not dispatch the whole workflow only to publish the client,
+because the PyPI upload is not idempotent. A tag released before the variable
+was set has no REST client upload; the next release tag publishes the client.
+To stop REST client publication, delete the variable or set it to any other
+value.
 
 ## v1.8.0 Incident Lessons
 
