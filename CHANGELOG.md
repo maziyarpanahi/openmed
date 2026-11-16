@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
   removed or an undeclared field appears (#3925).
+- Fail tests when code under `openmed/` reads an `OPENMED_*` environment variable, or carries an `OPENMED_*` identifier, that `settings.schema.json` does not declare; failures name the variable and its `path:line` only, runtime-built names need a reasoned allowlist entry, and the seeded allowlist for not-yet-declared sections only shrinks (#5340).
 - Run bounded ASGI resource-recovery soak profiles with independent residue and stuck-worker failure controls (#3705).
 - Standard gRPC health Check/Watch statuses tied to explicit runtime preload and terminal drain notification (#3917).
 - Reload REST API-key and JWT verifier generations atomically with validation, bounded overlap, revocation and generation-pinned decisions (#3699).
