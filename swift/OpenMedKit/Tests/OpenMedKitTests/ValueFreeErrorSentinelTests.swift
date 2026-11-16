@@ -68,7 +68,7 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
     private static let reasonStructErrors: Set<String> = [
         "DecisionCalibrationError", "DocumentRedactionPDF.Malformed", "ExecutionPlanResolver.MetadataInvalid",
         "OpenMedBundleArchive.Failure", "OpenMedBundleCacheError", "OpenMedManagedImportError",
-        "PortableBundle.Refusal", "PortableBundleCalibration.Malformed", "PortableBundleError",
+        "OpenMedSDKConfigError", "PortableBundle.Refusal", "PortableBundleCalibration.Malformed", "PortableBundleError",
         "PortableBundleJSON.Invalid",
     ]
 
@@ -754,6 +754,11 @@ final class ValueFreeErrorSentinelTests: XCTestCase {
         add(PortableBundleReason.allCases.map(PortableBundleError.init))
         add(PortableBundleReason.allCases.map(PortableBundle.Refusal.init))
         add(DecisionCalibrationReason.allCases.map(DecisionCalibrationError.init))
+        add([
+            OpenMedSDKConfigError(
+                issues: OpenMedSDKConfigIssue.Code.allCases.map { OpenMedSDKConfigIssue(code: $0, field: nil) }
+                    + OpenMedSDKConfig.Field.allCases.map { OpenMedSDKConfigIssue(code: .wrongType, field: $0) })
+        ])
         add(
             OpenMedBundleCacheReason.allCases.map { OpenMedBundleCacheError($0) }
                 + [OpenMedBundleCacheError(.bundleRejected, bundleReason: .signatureInvalid)]
