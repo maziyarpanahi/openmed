@@ -1,0 +1,72 @@
+{
+  "access": {
+    "allowed": true,
+    "code": null,
+    "namespace": "default",
+    "policy_version": "1.0.0",
+    "purpose": "care_review"
+  },
+  "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+  "autonomous_action": false,
+  "backend": {
+    "backend_id": "openmed.deterministic.fixed_option.v1",
+    "deterministic": true,
+    "kind": "deterministic",
+    "license_id": "Apache-2.0",
+    "local": true,
+    "model_id": "openmed/deterministic-fixed-option",
+    "revision": "1.0.0",
+    "runtime": "python"
+  },
+  "calibration": {
+    "calibration_id": "openmed.synthetic.fixed_option.v1",
+    "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+    "method": "deterministic_margin",
+    "minimum_confidence": 0.7,
+    "minimum_margin": 0.15,
+    "multi_label_threshold": 0.7,
+    "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289",
+    "version": "1.0.0"
+  },
+  "choice": null,
+  "choices": [],
+  "code": null,
+  "compatibility_policy": "same_major",
+  "confidence": 0.9090909090909091,
+  "expected_level": 1.8636363636363635,
+  "extensions": {},
+  "level_scores": [
+    {
+      "index": 0,
+      "level": "Low",
+      "score": 0.05
+    },
+    {
+      "index": 1,
+      "level": "Medium",
+      "score": 0.05
+    },
+    {
+      "index": 2,
+      "level": "High",
+      "score": 1.0
+    }
+  ],
+  "margin": null,
+  "mode": "scalar_score",
+  "option_scores": [],
+  "questions": [],
+  "ranking": [],
+  "review": {
+    "reasons": [
+      "clinical_use_requires_review"
+    ],
+    "required": true
+  },
+  "scalar_score": 0.9318181818181818,
+  "schema_version": "1.1.0",
+  "state": "success",
+  "warnings": [
+    "human_review_required"
+  ]
+}
