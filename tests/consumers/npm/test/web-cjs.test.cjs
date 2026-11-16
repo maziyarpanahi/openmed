@@ -50,3 +50,16 @@ test("CommonJS deidentify redacts the synthetic session", async () => {
   });
   assert.equal(result.deidentifiedText, divergence.expected_redacted, redactionCase.id);
 });
+
+test("CommonJS and ESM speech subpaths expose the same surface", async () => {
+  const speech = require("openmed/speech");
+  assert.ok(require.resolve("openmed/speech").endsWith("index.cjs"), "cjs_speech_entry");
+  const esm = await import("openmed/speech");
+  assert.deepEqual(
+    Object.keys(speech).sort(),
+    Object.keys(esm)
+      .filter((key) => key !== "default")
+      .sort(),
+  );
+  assert.deepEqual(speech.SPEECH_CONTRACT_ERROR_CODES, esm.SPEECH_CONTRACT_ERROR_CODES);
+});
