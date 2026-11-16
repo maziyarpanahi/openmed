@@ -49,6 +49,10 @@ _MAX_DEPTH = 8
 # A module that mentions none of these cannot read an ``OPENMED_*`` variable
 # by any of the recognised forms, so the scan skips parsing it.
 _MAY_READ_RE = re.compile(r"environ|getenv|OPENMED_|ENV")
+# Imported modules are parsed only when they can contribute: one that defines
+# an ``OPENMED_*`` constant, or one that holds an environment helper.
+_CONSTANT_SOURCE_RE = re.compile(r"OPENMED_")
+_HELPER_SOURCE_RE = re.compile(r"\benviron\b|\bgetenv\b")
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -133,6 +137,7 @@ class _WrapperParam:
     position: int
     default: ast.AST | None
     suffixes: frozenset[str]
+    line: int = 0
 
 
 @dataclass(slots=True)
@@ -155,6 +160,7 @@ class _Module:
     constants: dict[str, str] = field(default_factory=dict)
     tables: dict[str, frozenset[str]] = field(default_factory=dict)
     class_constants: dict[tuple[str, str], str] = field(default_factory=dict)
+    classes: set[str] = field(default_factory=set)
     transforms: dict[str, ast.AST] = field(default_factory=dict)
     imported_names: dict[str, tuple[str, str]] = field(default_factory=dict)
     imported_modules: dict[str, str] = field(default_factory=dict)
@@ -181,19 +187,27 @@ def _string_value(node: ast.AST | None) -> str | None:
     return None
 
 
-def _env_strings(nodes: Iterable[ast.AST]) -> set[str]:
+def _env_strings(nodes: Iterable[ast.AST], constants: dict[str, str]) -> set[str]:
     found: set[str] = set()
     for node in nodes:
         text = _string_value(node)
+        if text is None and isinstance(node, ast.Name):
+            text = constants.get(node.id)
         if text is not None and ENV_NAME_RE.match(text):
             found.add(text)
         elif isinstance(node, (ast.Tuple, ast.List)):
-            found.update(_env_strings(node.elts))
+            found.update(_env_strings(node.elts, constants))
     return found
 
 
-def _table_values(node: ast.AST | None) -> frozenset[str] | None:
-    """Return ``OPENMED_*`` values of a literal table, unwrapping proxies."""
+def _table_values(
+    node: ast.AST | None, constants: dict[str, str]
+) -> frozenset[str] | None:
+    """Return ``OPENMED_*`` values of a literal table, unwrapping proxies.
+
+    Values may be string literals or names of constants defined earlier in
+    the same module.
+    """
 
     if isinstance(node, ast.Call) and len(node.args) == 1 and not node.keywords:
         func = node.func
@@ -201,11 +215,12 @@ def _table_values(node: ast.AST | None) -> frozenset[str] | None:
         if isinstance(func, ast.Name):
             name = func.id
         if name in _TABLE_WRAPPERS:
-            return _table_values(node.args[0])
+            return _table_values(node.args[0], constants)
     if isinstance(node, ast.Dict):
-        found = _env_strings(value for value in node.values if value is not None)
+        values = (value for value in node.values if value is not None)
+        found = _env_strings(values, constants)
     elif isinstance(node, (ast.Tuple, ast.List, ast.Set)):
-        found = _env_strings(node.elts)
+        found = _env_strings(node.elts, constants)
     else:
         return None
     return frozenset(found) if found else None
@@ -229,13 +244,20 @@ def _bind(local: dict[str, object], name: str, value: frozenset[str]) -> None:
 
 
 def _parameters(func: ast.AST) -> dict[str, tuple[int, ast.AST | None]]:
-    """Return each parameter's position (``-1`` for keyword-only) and default."""
+    """Return each parameter's call position and default.
+
+    Keyword-only parameters get position ``-1``.  A leading ``self`` or
+    ``cls`` is bound by the call, so positions count the arguments after it.
+    """
 
     args = func.args  # type: ignore[attr-defined]
     ordered = [*args.posonlyargs, *args.args]
     defaults: list[ast.AST | None] = [None] * (len(ordered) - len(args.defaults))
     defaults.extend(args.defaults)
-    result = {arg.arg: (index, defaults[index]) for index, arg in enumerate(ordered)}
+    shift = 1 if ordered and ordered[0].arg in {"self", "cls"} else 0
+    result = {
+        arg.arg: (index - shift, defaults[index]) for index, arg in enumerate(ordered)
+    }
     for arg, default in zip(args.kwonlyargs, args.kw_defaults):
         result[arg.arg] = (-1, default)
     return result
@@ -385,11 +407,24 @@ class _Collector(ast.NodeVisitor):
 
     def visit_Compare(self, node: ast.Compare) -> None:
         if len(node.ops) == 1 and isinstance(node.ops[0], (ast.In, ast.NotIn)):
-            if self._is_environ(node.comparators[0]):
+            container = node.comparators[0]
+            if self._is_environ(container):
                 self._add(node, node.left, "in os.environ", True)
-            else:
+            elif _looks_like_environment(container):
+                # ``KEY in text`` is a substring test, not a read; only count
+                # membership in a mapping named like an environment.
                 self._add(node, node.left, "in mapping", False)
         self.generic_visit(node)
+
+
+def _looks_like_environment(node: ast.AST) -> bool:
+    if isinstance(node, ast.Name):
+        name = node.id
+    elif isinstance(node, ast.Attribute):
+        name = node.attr
+    else:
+        return False
+    return "env" in name.lower()
 
 
 def _load_module(path: Path, root: Path) -> _Module:
@@ -406,10 +441,11 @@ def _load_module(path: Path, root: Path) -> _Module:
             if text is not None:
                 module.constants[name] = text
                 continue
-            table = _table_values(value)
+            table = _table_values(value, module.constants)
             if table is not None:
                 module.tables[name] = table
         if isinstance(node, ast.ClassDef):
+            module.classes.add(node.name)
             for item in node.body:
                 for name, value in _assignment_pairs(item):
                     text = _string_value(value)
@@ -428,9 +464,18 @@ class _Scanner:
         self.root = root
         self.modules: dict[str, _Module] = {}
         self.missing: set[str] = set()
+        self.gates: dict[tuple[Path, str], bool] = {}
         self.wrappers: dict[tuple[str, str], dict[str, _WrapperParam]] = {}
         for path in paths:
             self._add(path.resolve())
+
+    def _matches(self, path: Path, need: re.Pattern[str]) -> bool:
+        key = (path, need.pattern)
+        matched = self.gates.get(key)
+        if matched is None:
+            matched = bool(need.search(path.read_text(encoding="utf-8")))
+            self.gates[key] = matched
+        return matched
 
     def _add(self, path: Path) -> _Module:
         dotted = _dotted_name(path, self.root)
@@ -440,12 +485,20 @@ class _Scanner:
             self.modules[dotted] = module
         return module
 
-    def module(self, dotted: str) -> _Module | None:
+    def module(
+        self,
+        dotted: str,
+        *,
+        need: re.Pattern[str] = _CONSTANT_SOURCE_RE,
+        force: bool = False,
+    ) -> _Module | None:
         """Return a loaded module, parsing an ``openmed`` module on demand.
 
-        Only package ``__init__`` modules, which re-export constants, and
-        modules that could hold a read or an ``OPENMED_*`` constant are
-        parsed; anything else cannot contribute a name.
+        Package ``__init__`` modules, which re-export names, always parse.
+        Any other module parses only when its source matches ``need``, so a
+        module that can contribute neither a constant nor a helper is never
+        parsed.  ``force`` follows a helper re-exported through a module that
+        matches neither.
         """
 
         found = self.modules.get(dotted)
@@ -458,21 +511,28 @@ class _Scanner:
         ):
             if not candidate.is_file():
                 continue
-            if candidate.name == "__init__.py" or _MAY_READ_RE.search(
-                candidate.read_text(encoding="utf-8")
+            if (
+                force
+                or candidate.name == "__init__.py"
+                or self._matches(candidate, need)
             ):
                 return self._add(candidate)
-            break
+            return None
         self.missing.add(dotted)
         return None
 
     # -- constant resolution -------------------------------------------------
 
-    def _imported(self, module: _Module, local: str) -> tuple[_Module, str] | None:
+    def _imported(
+        self,
+        module: _Module,
+        local: str,
+        need: re.Pattern[str] = _CONSTANT_SOURCE_RE,
+    ) -> tuple[_Module, str] | None:
         target = module.imported_names.get(local)
         if target is None:
             return None
-        other = self.module(target[0])
+        other = self.module(target[0], need=need)
         if other is None:
             return None
         return other, target[1]
@@ -505,7 +565,7 @@ class _Scanner:
             node = module.transforms.get(func.id)
             owner = module
             if node is None:
-                imported = self._imported(module, func.id)
+                imported = self._imported(module, func.id, _HELPER_SOURCE_RE)
                 if imported is not None:
                     owner, name = imported
                     node = owner.transforms.get(name)
@@ -520,7 +580,12 @@ class _Scanner:
             return self._constant(module, node.value.id)
         return None
 
-    def _attribute_module(self, module: _Module, node: ast.AST) -> _Module | None:
+    def _attribute_module(
+        self,
+        module: _Module,
+        node: ast.AST,
+        need: re.Pattern[str] = _CONSTANT_SOURCE_RE,
+    ) -> _Module | None:
         if not isinstance(node, ast.Name):
             return None
         dotted = module.imported_modules.get(node.id)
@@ -528,7 +593,7 @@ class _Scanner:
             imported = module.imported_names.get(node.id)
             if imported is not None:
                 dotted = f"{imported[0]}.{imported[1]}"
-        return self.module(dotted) if dotted is not None else None
+        return self.module(dotted, need=need) if dotted is not None else None
 
     def resolve(
         self, module: _Module, node: ast.AST, local: dict[str, object]
@@ -706,29 +771,57 @@ class _Scanner:
     # -- wrappers ------------------------------------------------------------
 
     def _call_targets(
-        self, module: _Module, call: ast.Call
+        self, module: _Module, call: ast.Call, func_scope: ast.AST | None
     ) -> Iterator[tuple[str, str]]:
         func = call.func
         if isinstance(func, ast.Name):
             yield module.dotted, func.id
             imported = module.imported_names.get(func.id)
-            if imported is not None:
-                self.module(imported[0])
+            force: bool | None = None
+            for _ in range(_MAX_DEPTH):
+                if imported is None:
+                    break
                 yield imported
+                owner = self.module(imported[0], need=_HELPER_SOURCE_RE)
+                if owner is None and imported[0] not in self.missing:
+                    # A helper re-exported through a module that mentions no
+                    # environment name; follow it only for calls that pass one.
+                    if force is None:
+                        force = self._passes_env_name(module, call, func_scope)
+                    if force:
+                        owner = self.module(imported[0], force=True)
+                if owner is None:
+                    break
+                imported = owner.imported_names.get(imported[1])
         elif isinstance(func, ast.Attribute):
-            other = self._attribute_module(module, func.value)
+            other = self._attribute_module(module, func.value, _HELPER_SOURCE_RE)
+            receiver = func.value.id if isinstance(func.value, ast.Name) else None
             if other is not None:
                 yield other.dotted, func.attr
-            elif isinstance(func.value, ast.Name) and func.value.id in {
-                "self",
-                "cls",
-            }:
+            elif receiver in {"self", "cls"} or receiver in module.classes:
                 yield module.dotted, func.attr
+            elif receiver in module.imported_names:
+                # ``ImportedClass.method(...)``: a classmethod helper.
+                source = module.imported_names[receiver][0]
+                if self.module(source, need=_HELPER_SOURCE_RE) is not None:
+                    yield source, func.attr
+
+    def _passes_env_name(
+        self, module: _Module, call: ast.Call, func: ast.AST | None
+    ) -> bool:
+        local = self._bindings(module, func)
+        for node in [*call.args, *(keyword.value for keyword in call.keywords)]:
+            value = self.resolve(module, node, local)
+            if isinstance(value, frozenset) and any(
+                ENV_NAME_RE.match(name) for name in value
+            ):
+                return True
+        return False
 
     def _wrapper_entries(
         self, module: _Module, call: ast.Call, func: ast.AST | None
     ) -> Iterator[_Entry]:
-        for target in self._call_targets(module, call):
+        for target in self._call_targets(module, call, func):
             params = self.wrappers.get(target)
             if not params:
                 continue
@@ -788,13 +881,42 @@ class _Scanner:
                         if suffix in spec.suffixes:
                             continue
                         suffixes |= spec.suffixes
-                    params[value.name] = _WrapperParam(position, default, suffixes)
+                    params[value.name] = _WrapperParam(
+                        position,
+                        default,
+                        suffixes,
+                        func.lineno,  # type: ignore[attr-defined]
+                    )
                     changed = True
             changed = changed or len(self.modules) != loaded
 
+    def _default_entries(self, module: _Module) -> Iterator[_Entry]:
+        """Treat a wrapper's default name as read by the wrapper itself.
+
+        A public helper such as ``from_env(env_var=DEFAULT_ENV)`` reads its
+        default whenever a caller omits the argument, wherever that caller is.
+        """
+
+        for (dotted, function), params in self.wrappers.items():
+            if dotted != module.dotted:
+                continue
+            for spec in params.values():
+                if spec.default is None:
+                    continue
+                for suffix in sorted(spec.suffixes):
+                    yield _Entry(
+                        spec.line,
+                        spec.default,
+                        f"default of {function}()",
+                        True,
+                        None,
+                        module,
+                        suffix,
+                    )
+
     def scan(self, module: _Module, result: EnvScan) -> None:
         seen: set[tuple[str, int]] = set()
-        for entry in self._entries(module):
+        for entry in [*self._entries(module), *self._default_entries(module)]:
             value = self.resolve(
                 entry.module, entry.key, self._bindings(entry.module, entry.func)
             )

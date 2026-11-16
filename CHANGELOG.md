@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generate the environment-variable reference page `docs/configuration/environment-variables.md` from the settings schema with `scripts/docs/render_settings_reference.py`, grouped by section with type, default, bounds, secret flag and owning module; secrets render as "secret, no default" and the docs publication tests run its `--check` drift mode (#5339).
 - Declare every `OPENMED_SERVICE_*` setting the service reads, plus the core `OpenMedConfig` environment variables, in a sectioned Draft 2020-12 `openmed/core/settings.schema.json` with type, default, bounds, secret flag and owning module, covered by the schema fingerprint snapshot and an AST scan of service environment reads; `openmed.core.settings_registry` returns the declarations without reading the environment (#5337).
+- Fail tests when code under `openmed/` reads an `OPENMED_*` environment variable, or carries an `OPENMED_*` identifier, that `settings.schema.json` does not declare; failures name the variable and its `path:line` only, runtime-built names need a reasoned allowlist entry, and the seeded allowlist for not-yet-declared sections only shrinks (#5340).
 
 ## [4.0.0] - 2026-11-25
 
