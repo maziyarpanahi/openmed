@@ -26,6 +26,8 @@ so API drift is caught in tests instead of downstream apps.
 | `OpenMedModelCatalog.bundled()` | `ModelCatalog.load(context)` | Present; same row format and filter semantics, platform-runnable formats only (MLX/Core ML on Swift, ONNX/TFLite on Android) |
 | `OpenMedModelCatalog.filter(format:tier:maxParamCount:language:license:)` | `ModelCatalog.filter(format, tier, maxParamCount, language, license)` | Present; Swift covered by the shared vectors in `tests/fixtures/model_catalog/` |
 | `OpenMedModelCatalog.entry(repoID:)` | `ModelCatalog.byRepoId(repoId)` | Present |
+| `OpenMedModelStore.downloadMLXModel(entry:revision:cacheDirectory:)` | `ModelDownloader.download(entry, revision)` | Present; both refuse a reproducibility-hash mismatch before writing files and record the resolved commit sha |
+| `OpenMedModelIntegrity.reproducibilityHash(repoID:revisionSHA:released:siblings:)` | `ModelIntegrity.reproducibilityHash(repoId, revisionSha, released, siblings)` | Present; Swift matches the Python generator byte for byte, including `\uXXXX` escapes for non-ASCII sibling names (shared Python/Kotlin vectors are #5398) |
 
 Android never runs MLX artifacts. See
 [Migrating from the MLX-named store](android-integration.md#migrating-from-the-mlx-named-store)

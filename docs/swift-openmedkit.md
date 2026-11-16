@@ -532,6 +532,50 @@ Behavior:
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
 
+### Pinned, hash-verified downloads from the catalog
+
+Downloading by repository name caches whatever the revision (`main` by
+default) resolves to under that name, so the same cache key can name different
+bytes after an upstream push. Download a catalog entry instead to pin the
+snapshot to one commit and verify it against the catalog:
+
+```swift
+let entry = try OpenMedModelCatalog.bundled().entry(repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx")!
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(entry: entry)
+let commit = try OpenMedModelStore.cachedMLXModelRevisionSHA(
+    repoID: entry.repoID,
+    revision: modelDirectory.lastPathComponent
+)
+```
+
+`downloadMLXModel(entry:revision:cacheDirectory:)`:
+
+1. Returns a ready snapshot already verified for `entry.reproducibilityHash`
+   without any network request (`cachedMLXModelDirectory(entry:cacheDirectory:)`
+   performs the same lookup on its own).
+2. Otherwise fetches `api/models/<repo>/revision/<revision>` and recomputes the
+   reproducibility hash from the repository id, commit sha, release date and
+   sibling list. A mismatch throws `OpenMedModelStoreError.reproducibilityHashMismatch`
+   before any directory or file is created. A response without a valid
+   40-character commit sha throws `invalidModelInfo`.
+3. Downloads every file from `resolve/<commit sha>/…`, never from the moving
+   revision name, into `<cache>/<repo>/<commit sha>`, so one cache directory
+   always holds one commit.
+4. Records `revision_sha`, `reproducibility_hash` and `requested_revision` in the
+   ready marker. `cachedMLXModelRevisionSHA(repoID:revision:cacheDirectory:)`
+   returns the recorded sha, or `nil` for snapshots downloaded by name.
+
+`OpenMedModelIntegrity.reproducibilityHash(repoID:revisionSHA:released:siblings:)`
+is the same canonical hash that `scripts/manifest/generate_manifest.py`,
+`openmed/core/model_integrity.py` and Android's `ModelIntegrity` compute:
+SHA-256 over compact sorted-key JSON of `released` (`YYYY-MM-DD` or `null`),
+`repo_id`, `sha` (or `null`) and the code-point-sorted `siblings`, with Python's
+default ASCII escaping. The synthetic vectors in
+`tests/fixtures/model_catalog/repro_hash_vectors.json` are checked by the Python
+production functions and by `OpenMedModelIntegrityTests`. The hash describes the
+snapshot's commit and file list. It does not hash file contents. Signed portable
+bundles (see [Bundle cache](models/bundle-cache.md)) cover those.
+
 The model store validates every manifest path before requesting artifact files,
 including all weight candidates and segmenter resources. Paths must be relative
 to the snapshot, with no empty, `.` or `..` components, backslashes or escaping
