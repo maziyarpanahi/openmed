@@ -19,6 +19,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 CHECKPOINT_MANIFEST_VERSION: Final[int] = 1
 BULK_CHECKPOINT_MANIFEST_VERSION: Final[int] = CHECKPOINT_MANIFEST_VERSION
 CHECKPOINT_SCHEMA_VERSION: Final[int] = CHECKPOINT_MANIFEST_VERSION
@@ -38,7 +40,7 @@ _SERIALIZED_FIELDS = frozenset(
 )
 
 
-class BulkCheckpointError(ValueError):
+class BulkCheckpointError(ValueError, LegacyRootedError):
     """Base error for malformed or unsafe Bulk Data checkpoint manifests."""
 
 

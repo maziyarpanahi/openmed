@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 MEASURE_SCHEMA_VERSION: Final = "1.0.0"
@@ -32,7 +33,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class MeasureContractError(ValueError):
+class MeasureContractError(ValueError, LegacyRootedError):
     """Raised when a measure artifact violates its public contract."""
 
 

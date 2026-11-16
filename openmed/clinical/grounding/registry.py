@@ -11,6 +11,8 @@ import re
 from collections.abc import Mapping
 from typing import Any, Callable, Protocol, cast, runtime_checkable
 
+from openmed.core.errors import LegacyRootedError
+
 from .matcher import AbbreviationMap, LexicalMatcher, VocabularyTerms
 
 __all__ = [
@@ -50,7 +52,7 @@ def available_linkers() -> list[str]:
     return sorted(_LINKERS)
 
 
-class VocabularyRegistryError(ValueError):
+class VocabularyRegistryError(ValueError, LegacyRootedError):
     """Base error raised by the free-vocabulary loader registry."""
 
 

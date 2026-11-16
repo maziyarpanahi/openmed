@@ -16,6 +16,7 @@ from openmed.clinical.journey_contracts import (
     EvidenceLocator,
     canonical_json,
 )
+from openmed.core.errors import LegacyRootedError
 
 EVIDENCE_ADAPTER_SCHEMA_VERSION = "1.0.0"
 EVIDENCE_ADAPTER_COMPATIBILITY_POLICY = "same_major"
@@ -84,7 +85,7 @@ _SENSITIVE_KEYS = frozenset(
 R = TypeVar("R", bound="EvidenceAdapterRecord")
 
 
-class EvidenceAdapterContractError(ValueError):
+class EvidenceAdapterContractError(ValueError, LegacyRootedError):
     """Value-safe validation error for evidence-adapter records."""
 
 

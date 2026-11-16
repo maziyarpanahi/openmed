@@ -17,6 +17,8 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from ..core.language_pack import LANGUAGE_PACK_REGISTRY, LanguagePackRegistry
 from ..core.language_pack_catalog import (
     DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
@@ -143,7 +145,7 @@ def _sanitize_route(route):
     return route
 
 
-class LanguageHealthError(RuntimeError):
+class LanguageHealthError(RuntimeError, LegacyRootedError):
     """Raised when a language health report contains one or more findings."""
 
     def __init__(self, issue_count: int) -> None:

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.schemas.span import ACTION_VALUES
 from openmed.multimodal.exceptions import MissingDependencyError
 
@@ -48,7 +49,7 @@ _BINARY_MIME_TYPES = frozenset(
 )
 
 
-class NotebookRedactionError(RuntimeError):
+class NotebookRedactionError(RuntimeError, LegacyRootedError):
     """Value-free failure raised while reading or writing a notebook."""
 
 

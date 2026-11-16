@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 VAULT_SCHEMA_VERSION = 1
 VAULT_ENCRYPTION_SCHEME = "hmac-sha256-stream-xor+hmac-sha256"
 DOCUMENT_KEY_SCHEME = "hmac-sha256"
@@ -50,7 +52,7 @@ class GatewayProxy(Protocol):
         ...
 
 
-class ReidentificationError(ValueError):
+class ReidentificationError(ValueError, LegacyRootedError):
     """Base class for fail-closed re-identification errors."""
 
     reason_code = "reidentification_failed"
@@ -80,13 +82,13 @@ class UnknownPlaceholderError(ReidentificationError):
     reason_code = "unknown_placeholder"
 
 
-class PrivacyGatewayProxyError(RuntimeError):
+class PrivacyGatewayProxyError(RuntimeError, LegacyRootedError):
     """Raised when the explicit privacy-gateway proxy fails safely."""
 
     reason_code = "privacy_gateway_proxy_failed"
 
 
-class MappingVaultIntegrityError(ValueError):
+class MappingVaultIntegrityError(ValueError, LegacyRootedError):
     """Raised when an encrypted mapping vault fails validation."""
 
 

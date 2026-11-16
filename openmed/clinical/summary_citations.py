@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_CITATION_CONSISTENCY = "summary_citation_consistency"
 SUMMARY_CITATION_SCHEMA_VERSION = 1
 
@@ -100,7 +102,7 @@ _DIRECT_SPAN_KEYS = frozenset({"start", "end", "start_char", "end_char"})
 Reference = tuple[object, ...]
 
 
-class SummaryCitationError(ValueError):
+class SummaryCitationError(ValueError, LegacyRootedError):
     """Raised when the citation-check input container is not usable."""
 
 

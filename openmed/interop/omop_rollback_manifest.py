@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from .omop.mutation_batch import MutationOperation, OmopMutationBatch
 from .omop.vocabulary_write_gate import VocabularySnapshot
 
@@ -41,7 +43,7 @@ _EXPECTED_STRATEGIES = {
 }
 
 
-class OmopRollbackManifestError(ValueError):
+class OmopRollbackManifestError(ValueError, LegacyRootedError):
     """A value-free rollback-manifest validation error."""
 
     def __init__(self, code: str, field_name: str | None = None) -> None:

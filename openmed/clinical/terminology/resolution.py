@@ -25,6 +25,7 @@ from openmed.clinical.grounding.vocab import (
     normalize_alias,
 )
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 TERMINOLOGY_RESOLUTION_SCHEMA_VERSION = "1.0.0"
@@ -50,7 +51,7 @@ _RULE_PRECEDENCE = {
 }
 
 
-class TerminologyResolutionError(ValueError):
+class TerminologyResolutionError(ValueError, LegacyRootedError):
     """Raised when terminology-resolution inputs violate the contract."""
 
 

@@ -7,10 +7,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 NLI_PREMISE_WINDOW_SCHEMA_VERSION: Final[int] = 1
 
 
-class PremiseWindowError(ValueError):
+class PremiseWindowError(ValueError, LegacyRootedError):
     """Raised when premise-window inputs violate the safe input contract."""
 
 

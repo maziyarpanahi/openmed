@@ -29,6 +29,8 @@ from pathlib import Path
 from types import BuiltinFunctionType, CodeType, FunctionType, MethodType, ModuleType
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 try:
     from airflow.exceptions import AirflowException as _AirflowException
     from airflow.models import BaseOperator as _AirflowBaseOperator
@@ -61,7 +63,7 @@ Deidentifier = Callable[..., Any]
 Record = Mapping[str, Any] | str
 
 
-class RedactionOperatorError(_AirflowException):
+class RedactionOperatorError(_AirflowException, LegacyRootedError):
     """Raised for a safe, deterministic Airflow redaction failure."""
 
 

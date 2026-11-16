@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.audit import hash_text
+from openmed.core.errors import LegacyRootedError
 
 SECTION_PROVENANCE_SCHEMA_VERSION = 1
 SECTION_PROVENANCE_ADVISORY = (
@@ -377,7 +378,7 @@ class SectionProvenanceReport:
         return self.to_dict()[key]
 
 
-class SectionProvenanceError(ValueError):
+class SectionProvenanceError(ValueError, LegacyRootedError):
     """Raised by explicit strict validation without including source text."""
 
 

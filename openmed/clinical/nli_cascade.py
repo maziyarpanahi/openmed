@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Final, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 NLI_CASCADE_SCHEMA_VERSION: Final[int] = 1
 _CANONICAL_LABELS: Final[frozenset[str]] = frozenset(
     {"entailment", "contradiction", "neutral", "abstention"}
@@ -17,7 +19,7 @@ _CANONICAL_LABELS: Final[frozenset[str]] = frozenset(
 _IDENTIFIER_RE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_.:/-]{1,128}$")
 
 
-class NliCascadeError(ValueError):
+class NliCascadeError(ValueError, LegacyRootedError):
     """Raised when cascade data violates the value-free execution contract."""
 
 

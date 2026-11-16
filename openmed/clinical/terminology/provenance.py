@@ -21,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 PROVENANCE_SCHEMA_VERSION = 1
@@ -57,7 +58,7 @@ _MANIFEST_KEYS = frozenset(
 )
 
 
-class SnapshotManifestError(ValueError):
+class SnapshotManifestError(ValueError, LegacyRootedError):
     """Raised when value-free terminology provenance is malformed."""
 
 

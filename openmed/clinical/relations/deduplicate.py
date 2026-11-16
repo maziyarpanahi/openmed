@@ -28,6 +28,8 @@ from itertools import islice
 from types import MappingProxyType
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 RELATION_DEDUPLICATION_SCHEMA_VERSION: Final[int] = 1
 RELATION_DEDUPLICATION_ADVISORY: Final[str] = (
     "Clinical relation duplicate collapse is deterministic assistive output; "
@@ -71,7 +73,7 @@ _EVIDENCE_FIELDS: tuple[str, ...] = (
 )
 
 
-class RelationDeduplicationError(ValueError):
+class RelationDeduplicationError(ValueError, LegacyRootedError):
     """Raised when relation candidates cannot be collapsed safely."""
 
 

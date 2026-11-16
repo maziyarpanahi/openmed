@@ -36,6 +36,7 @@ from openmed.clinical.review_state_machine import (
     validate_review_transition,
     validate_transition,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.structured.store import (
     JobMetadata,
@@ -69,7 +70,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class ClinicalReviewError(ValueError):
+class ClinicalReviewError(ValueError, LegacyRootedError):
     """Raised when a review packet violates its public contract."""
 
 

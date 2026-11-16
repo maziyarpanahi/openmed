@@ -21,6 +21,7 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Any, ClassVar, Final
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 JOURNEY_CONTRACT_SCHEMA_VERSION: Final = "1.0.0"
@@ -109,7 +110,7 @@ __all__ = [
 ]
 
 
-class JourneyContractError(ValueError):
+class JourneyContractError(ValueError, LegacyRootedError):
     """Base error for malformed Journey contract data."""
 
 

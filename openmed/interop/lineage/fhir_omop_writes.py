@@ -16,6 +16,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 from ..omop.mutation_batch import (
     OmopApprovalBinding,
     OmopBatchCommitter,
@@ -38,7 +40,7 @@ _RULE_RE = re.compile(r"[a-z][a-z0-9_.:-]{0,127}")
 _VOCABULARY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_.:-]{0,63}")
 
 
-class FhirOmopLineageError(ValueError):
+class FhirOmopLineageError(ValueError, LegacyRootedError):
     """A value-free lineage validation or approval error."""
 
     def __init__(

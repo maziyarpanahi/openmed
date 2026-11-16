@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from openmed.agent.approvals.tokens import ApprovalAuthorization
+from openmed.core.errors import LegacyRootedError
 
 __all__ = [
     "FHIRWriteLabelPolicy",
@@ -114,7 +115,7 @@ class WriteLabelFinding:
         }
 
 
-class WriteLabelError(ValueError):
+class WriteLabelError(ValueError, LegacyRootedError):
     """Fail-closed rejection containing only controlled findings."""
 
     def __init__(self, findings: tuple[WriteLabelFinding, ...]) -> None:

@@ -7,12 +7,14 @@ import re
 from dataclasses import dataclass
 from typing import Final, Iterable
 
+from openmed.core.errors import LegacyRootedError
+
 CITATION_ORDERING_SCHEMA_VERSION: Final[int] = 1
 
 _OPAQUE_METADATA_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-class CitationOrderingError(ValueError):
+class CitationOrderingError(ValueError, LegacyRootedError):
     """Raised when citation metadata cannot be ordered safely."""
 
 

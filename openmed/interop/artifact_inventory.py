@@ -20,6 +20,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 SCHEMA_VERSION: Final = "openmed.interop.artifact_inventory.v1"
 _CHUNK_SIZE: Final = 1024 * 1024
 _FINGERPRINT_PREFIX: Final = "sha256:"
@@ -59,7 +61,7 @@ _SUPPORTED_MEDIA_TYPES: Final = frozenset(
 )
 
 
-class ArtifactInventoryError(ValueError):
+class ArtifactInventoryError(ValueError, LegacyRootedError):
     """Base error for invalid or unreadable artifact inventory inputs."""
 
 

@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
+from openmed.core.errors import LegacyRootedError
+
 from .versions import FHIRVersion
 
 __all__ = [
@@ -105,7 +107,7 @@ class SubscriptionFindingCode(str, Enum):
     INACTIVE = "subscription_not_active"
 
 
-class SubscriptionNotificationError(ValueError):
+class SubscriptionNotificationError(ValueError, LegacyRootedError):
     """A closed refusal code and numeric position; never retain rejected values."""
 
     def __init__(self, code: str, position: int | None = None) -> None:

@@ -10,6 +10,7 @@ from importlib import resources
 from typing import Any, ClassVar, TypeVar
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.errors import LegacyRootedError
 
 IDENTITY_SCHEMA_VERSION = "1.0.0"
 IDENTITY_SCHEMA_PACKAGE = "openmed.core.schemas.json"
@@ -37,7 +38,7 @@ _TIMESTAMP_RE = re.compile(
 R = TypeVar("R", bound="IdentityRecord")
 
 
-class IdentityContractError(ValueError):
+class IdentityContractError(ValueError, LegacyRootedError):
     """Value-safe validation failure for identity-resolution records."""
 
 

@@ -21,6 +21,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "AmbiguousPolicyPathError",
     "FieldPolicyInput",
@@ -61,7 +63,7 @@ _POLICY_RESERVED_KEYS = frozenset(
 )
 
 
-class QuestionnaireResponsePrivacyError(ValueError):
+class QuestionnaireResponsePrivacyError(ValueError, LegacyRootedError):
     """Base error for invalid QuestionnaireResponse privacy operations."""
 
 

@@ -19,6 +19,8 @@ from enum import Enum
 from itertools import islice
 from typing import Any, Protocol
 
+from openmed.core.errors import LegacyRootedError
+
 MUTATION_BATCH_SCHEMA = "openmed.interop.omop.mutation_batch.v1"
 MAX_BATCH_MUTATIONS = 10_000
 
@@ -149,7 +151,7 @@ class CommitStatus(str, Enum):
     FAILED = "failed"
 
 
-class OmopMutationError(ValueError):
+class OmopMutationError(ValueError, LegacyRootedError):
     """A value-free validation error for staged mutations."""
 
     def __init__(self, code: str, field_name: str | None = None) -> None:

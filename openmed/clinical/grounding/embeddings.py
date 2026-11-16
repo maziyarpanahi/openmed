@@ -27,6 +27,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from openmed.core.errors import LegacyRootedError
+
 from .vocab import normalize_alias
 
 __all__ = [
@@ -42,7 +44,7 @@ DEFAULT_EMBEDDING_DIM = 64
 _DEFAULT_NGRAM_SIZE = 3
 
 
-class EncoderUnavailableError(RuntimeError):
+class EncoderUnavailableError(RuntimeError, LegacyRootedError):
     """Raised when a requested alias encoder backend or weights are absent."""
 
 

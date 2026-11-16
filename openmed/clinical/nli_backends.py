@@ -15,13 +15,14 @@ from openmed.clinical.nli_gate import (
     hash_text,
 )
 from openmed.clinical.nli_labels import normalize_nli_label
+from openmed.core.errors import LegacyRootedError
 from openmed.core.model_registry import get_default_nli_model, get_model_info
 
 _REMOTE_NAMES = frozenset({"remote", "openai", "anthropic", "azure", "bedrock"})
 _CANONICAL_SCORES = frozenset({"entailment", "contradiction", "neutral"})
 
 
-class LocalNLIError(RuntimeError):
+class LocalNLIError(RuntimeError, LegacyRootedError):
     """A value-free failure to resolve, load, or run local NLI."""
 
 

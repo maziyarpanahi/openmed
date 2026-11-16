@@ -21,6 +21,8 @@ from functools import wraps
 from itertools import islice
 from typing import Any, Final, NoReturn
 
+from openmed.core.errors import LegacyRootedError
+
 CITATION_BOUNDARY_SCHEMA_VERSION: Final[int] = 1
 CITATION_BOUNDARY_DISCLAIMER: Final[str] = (
     "Citation boundary validation is value-free assistive metadata for human "
@@ -60,7 +62,7 @@ _ERROR_MESSAGES = {
 }
 
 
-class CitationBoundaryError(ValueError):
+class CitationBoundaryError(ValueError, LegacyRootedError):
     """Raised when citation coordinates cannot be validated safely.
 
     The exception contains only a fixed reason code and a fixed message.  It

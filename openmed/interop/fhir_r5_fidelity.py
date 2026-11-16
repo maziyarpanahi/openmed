@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 FHIRBundleInput: TypeAlias = Mapping[str, Any] | str | bytes | bytearray | Path
 PathSpec: TypeAlias = str | Sequence[str]
 
@@ -43,7 +45,7 @@ _CHANGE_TYPES = frozenset(
 _JSON_TYPES = frozenset({"array", "boolean", "null", "number", "object", "string"})
 
 
-class FHIRR5FidelityError(ValueError):
+class FHIRR5FidelityError(ValueError, LegacyRootedError):
     """Raised when a supplied value is not a readable FHIR Bundle object."""
 
 

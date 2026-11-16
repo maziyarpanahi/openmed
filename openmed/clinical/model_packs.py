@@ -19,6 +19,7 @@ from types import MappingProxyType
 from typing import Any, Literal, cast
 
 from openmed.clinical.journey_contracts import canonical_json
+from openmed.core.errors import LegacyRootedError
 from openmed.structured.store import StoreResult, StoreState
 
 MODEL_PACK_SCHEMA_VERSION = "1.0.0"
@@ -65,7 +66,7 @@ _SCHEMA_VERSION_RE = re.compile(r"^[1-9][0-9]*\.[0-9]+\.[0-9]+$")
 _LANGUAGE_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$")
 
 
-class ModelPackError(ValueError):
+class ModelPackError(ValueError, LegacyRootedError):
     """Raised when a model pack cannot be represented safely."""
 
 

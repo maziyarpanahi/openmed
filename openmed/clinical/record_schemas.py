@@ -31,6 +31,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from openmed.core.capabilities import MissingOptionalDependencyError
+from openmed.core.errors import LegacyRootedError
 from openmed.core.schemas.span import (
     SCHEMA_PACKAGE,
     SchemaDriftResult,
@@ -73,7 +74,7 @@ _OFFSET_COLLECTIONS: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 
-class ClinicalRecordSchemaError(ValueError):
+class ClinicalRecordSchemaError(ValueError, LegacyRootedError):
     """Raised when a guarded clinical record violates its JSON Schema."""
 
 

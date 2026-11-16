@@ -27,6 +27,7 @@ from functools import wraps
 from itertools import islice
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.labels import normalize_label
 
 EVIDENCE_BINDING_SCHEMA_VERSION: Final[int] = 1
@@ -41,7 +42,7 @@ _HASH_RE = re.compile(r"^(?:sha256|hmac-sha256):[0-9a-f]{64}$")
 _RELATION_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 
 
-class EvidenceBindingError(ValueError):
+class EvidenceBindingError(ValueError, LegacyRootedError):
     """Raised when a guarded relation cannot be bound to source evidence."""
 
 

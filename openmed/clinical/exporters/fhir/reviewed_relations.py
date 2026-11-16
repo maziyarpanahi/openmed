@@ -20,6 +20,7 @@ from openmed.clinical.review_state_machine import (
     ReviewTransitionPolicy,
     validate_review_history,
 )
+from openmed.core.errors import LegacyRootedError
 
 from .bundle import to_bundle
 from .reference_types import find_reference_target_issues
@@ -110,7 +111,7 @@ _LOSS_CODES = frozenset(
 )
 
 
-class RelationFHIRExportError(ValueError):
+class RelationFHIRExportError(ValueError, LegacyRootedError):
     """Fixed, source-free failure at the relation-export boundary."""
 
 

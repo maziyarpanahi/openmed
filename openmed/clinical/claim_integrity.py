@@ -24,6 +24,7 @@ from decimal import Decimal
 from typing import Any, Final
 
 from openmed.core.audit import stable_hash
+from openmed.core.errors import LegacyRootedError
 
 __all__ = [
     "CLAIM_PACKET_DIGEST_ALGORITHM",
@@ -263,7 +264,7 @@ _REASON_ORDER: Final = {
 }
 
 
-class ClaimIntegrityError(ValueError):
+class ClaimIntegrityError(ValueError, LegacyRootedError):
     """Raised for malformed claim-packet input using only safe reason codes."""
 
     def __init__(self, code: str = INVALID_PACKET_REASON) -> None:

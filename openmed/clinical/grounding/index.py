@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from openmed.clinical.normalization.cache import IndexBoundCache, make_index_cache_key
+from openmed.core.errors import LegacyRootedError
 
 from .embeddings import AliasEncoder
 from .registry import register_linker
@@ -75,7 +76,7 @@ _HNSW_M = 16
 _NO_INDEX_KEY = "grounding-index:none"
 
 
-class IndexBackendUnavailableError(RuntimeError):
+class IndexBackendUnavailableError(RuntimeError, LegacyRootedError):
     """Raised when an ANN backend is required but not installed."""
 
 

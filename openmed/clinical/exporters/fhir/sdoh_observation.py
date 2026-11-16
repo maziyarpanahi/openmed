@@ -18,6 +18,7 @@ from itertools import islice
 from typing import Any
 from urllib.parse import urlsplit
 
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 from ...sdoh_evidence import (
@@ -66,7 +67,7 @@ _DATETIME = re.compile(
 )
 
 
-class SDOHFHIRExportError(ValueError):
+class SDOHFHIRExportError(ValueError, LegacyRootedError):
     """Controlled export configuration error with no input values.
 
     Args:

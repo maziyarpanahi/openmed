@@ -22,6 +22,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 REVIEW_TRANSITIONS_SCHEMA_VERSION = "openmed.clinical_review_transitions.v1"
 REVIEW_TRANSITION_ADVISORY = (
     "Clinical review-state transitions are deterministic assistive workflow "
@@ -73,7 +75,7 @@ _IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,63}$")
 _REASON_CODE_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,63}$")
 
 
-class ReviewTransitionValidationError(ValueError):
+class ReviewTransitionValidationError(ValueError, LegacyRootedError):
     """Raised when a review transition fails a safe workflow invariant.
 
     The exception message contains only a stable diagnostic code and known
