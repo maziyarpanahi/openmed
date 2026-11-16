@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Export synthetic clinical assertion vectors (`tests/fixtures/parity/clinical_assertion_v1.json`) and the English ConText cue table (`context_cues_en_v1.json`) from the Python `assert_context` pipeline, with recorded sentence offsets, `reference_gap` codes for the missing conditional axis and the `and`/`or` negation-scope breaks, and `scripts/parity/export_context_cues.py --check` (#5448).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is

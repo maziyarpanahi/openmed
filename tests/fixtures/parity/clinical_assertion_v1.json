@@ -1,0 +1,1260 @@
+{
+  "axes": {
+    "experiencer": [
+      "patient",
+      "family",
+      "other"
+    ],
+    "negation": [
+      "affirmed",
+      "negated"
+    ],
+    "temporality": [
+      "recent",
+      "historical",
+      "hypothetical"
+    ],
+    "uncertainty": [
+      "certain",
+      "uncertain"
+    ]
+  },
+  "call": "assert_context(text, [target], sentences=sentences) with language unset (English) and no sections",
+  "cases": [
+    {
+      "category": "affirmed",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "affirmed-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 27,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 26,
+        "start": 16,
+        "text": "chest pain"
+      },
+      "text": "Patient reports chest pain."
+    },
+    {
+      "category": "affirmed",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "affirmed-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 31,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 30,
+        "start": 14,
+        "text": "productive cough"
+      },
+      "text": "Patient has a productive cough."
+    },
+    {
+      "category": "affirmed",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "affirmed-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 29,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 20,
+        "start": 0,
+        "text": "Abdominal tenderness"
+      },
+      "text": "Abdominal tenderness on exam."
+    },
+    {
+      "category": "affirmed",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "affirmed-04",
+      "non_ascii": true,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 37,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 20,
+        "start": 0,
+        "text": "Café-au-lait macules"
+      },
+      "text": "Café-au-lait macules on the left arm."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 26,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 25,
+        "start": 15,
+        "text": "chest pain"
+      },
+      "text": "Patient denies chest pain."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 9,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 8,
+        "start": 3,
+        "text": "fever"
+      },
+      "text": "No fever."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 33,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 18,
+        "start": 0,
+        "text": "Pulmonary embolism"
+      },
+      "text": "Pulmonary embolism was ruled out."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-04",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 27,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 8,
+        "start": 0,
+        "text": "Fracture"
+      },
+      "text": "Fracture absent on imaging."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-05",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 19,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 18,
+        "start": 8,
+        "text": "chest pain"
+      },
+      "text": "Without chest pain."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-06",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 19,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 8,
+        "start": 3,
+        "text": "fever"
+      },
+      "text": "No fever or chills."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-07",
+      "non_ascii": true,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 36,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 35,
+        "start": 15,
+        "text": "café-au-lait macules"
+      },
+      "text": "Patient denies café-au-lait macules."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "negated",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-08",
+      "non_ascii": true,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 31,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 30,
+        "start": 23,
+        "text": "dysuria"
+      },
+      "text": "Note 𝟙: patient denies dysuria."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-09",
+      "non_ascii": false,
+      "reference_gap": "negation_scope_ends_at_or",
+      "sentences": [
+        {
+          "end": 18,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 17,
+        "start": 12,
+        "text": "cough"
+      },
+      "text": "No fever or cough."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-10",
+      "non_ascii": false,
+      "reference_gap": "negation_scope_ends_at_or",
+      "sentences": [
+        {
+          "end": 32,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 31,
+        "start": 23,
+        "text": "vomiting"
+      },
+      "text": "Negative for nausea or vomiting."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-11",
+      "non_ascii": false,
+      "reference_gap": "negation_scope_ends_at_and",
+      "sentences": [
+        {
+          "end": 23,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 22,
+        "start": 17,
+        "text": "cough"
+      },
+      "text": "Denies fever and cough."
+    },
+    {
+      "category": "negated",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "negated-12",
+      "non_ascii": false,
+      "reference_gap": "negation_scope_ends_at_and",
+      "sentences": [
+        {
+          "end": 32,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 31,
+        "start": 20,
+        "text": "photophobia"
+      },
+      "text": "Denies headache and photophobia."
+    },
+    {
+      "category": "pseudo_negation",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "pseudo_negation-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 29,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 9,
+        "start": 0,
+        "text": "Pneumonia"
+      },
+      "text": "Pneumonia cannot be excluded."
+    },
+    {
+      "category": "pseudo_negation",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "pseudo_negation-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 25,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 6,
+        "start": 0,
+        "text": "Sepsis"
+      },
+      "text": "Sepsis can't be excluded."
+    },
+    {
+      "category": "pseudo_negation",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "pseudo_negation-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 28,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 27,
+        "start": 15,
+        "text": "appendicitis"
+      },
+      "text": "Cannot exclude appendicitis."
+    },
+    {
+      "category": "pseudo_negation",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "pseudo_negation-04",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 25,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 10,
+        "start": 0,
+        "text": "Malignancy"
+      },
+      "text": "Malignancy not ruled out."
+    },
+    {
+      "category": "possible",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "possible-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 19,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 18,
+        "start": 9,
+        "text": "pneumonia"
+      },
+      "text": "Possible pneumonia."
+    },
+    {
+      "category": "possible",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "possible-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 35,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 34,
+        "start": 24,
+        "text": "cellulitis"
+      },
+      "text": "Findings suspicious for cellulitis."
+    },
+    {
+      "category": "possible",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "possible-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 29,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 28,
+        "start": 7,
+        "text": "viral gastroenteritis"
+      },
+      "text": "Likely viral gastroenteritis."
+    },
+    {
+      "category": "possible",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "uncertain"
+      },
+      "id": "possible-04",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 33,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 32,
+        "start": 12,
+        "text": "deep vein thrombosis"
+      },
+      "text": "Concern for deep vein thrombosis."
+    },
+    {
+      "category": "hypothetical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "hypothetical",
+        "uncertainty": "uncertain"
+      },
+      "id": "hypothetical-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 39,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 13,
+        "start": 3,
+        "text": "chest pain"
+      },
+      "text": "If chest pain recurs, return to clinic."
+    },
+    {
+      "category": "hypothetical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "hypothetical",
+        "uncertainty": "uncertain"
+      },
+      "id": "hypothetical-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 24,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 23,
+        "start": 18,
+        "text": "fever"
+      },
+      "text": "Return in case of fever."
+    },
+    {
+      "category": "hypothetical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "hypothetical",
+        "uncertainty": "uncertain"
+      },
+      "id": "hypothetical-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 40,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 15,
+        "start": 7,
+        "text": "headache"
+      },
+      "text": "Should headache worsen, call the clinic."
+    },
+    {
+      "category": "historical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "uncertainty": "certain"
+      },
+      "id": "historical-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 18,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 17,
+        "start": 11,
+        "text": "asthma"
+      },
+      "text": "History of asthma."
+    },
+    {
+      "category": "historical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "uncertainty": "certain"
+      },
+      "id": "historical-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 25,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 24,
+        "start": 12,
+        "text": "appendectomy"
+      },
+      "text": "Status post appendectomy."
+    },
+    {
+      "category": "historical",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "uncertainty": "certain"
+      },
+      "id": "historical-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 31,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 30,
+        "start": 9,
+        "text": "myocardial infarction"
+      },
+      "text": "Previous myocardial infarction."
+    },
+    {
+      "category": "family",
+      "expected": {
+        "experiencer": "family",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "family-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 20,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 19,
+        "start": 11,
+        "text": "diabetes"
+      },
+      "text": "Mother has diabetes."
+    },
+    {
+      "category": "family",
+      "expected": {
+        "experiencer": "family",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "uncertainty": "certain"
+      },
+      "id": "family-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 31,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 30,
+        "start": 18,
+        "text": "colon cancer"
+      },
+      "text": "Family history of colon cancer."
+    },
+    {
+      "category": "family",
+      "expected": {
+        "experiencer": "family",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "family-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 20,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 19,
+        "start": 13,
+        "text": "stroke"
+      },
+      "text": "Father had a stroke."
+    },
+    {
+      "category": "family",
+      "expected": {
+        "experiencer": "family",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "family-04",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 48,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 19,
+        "start": 11,
+        "text": "migraine"
+      },
+      "text": "Sister has migraine but patient denies headache."
+    },
+    {
+      "category": "other_experiencer",
+      "expected": {
+        "experiencer": "other",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "other_experiencer-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 22,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 21,
+        "start": 10,
+        "text": "hepatitis B"
+      },
+      "text": "Donor has hepatitis B."
+    },
+    {
+      "category": "other_experiencer",
+      "expected": {
+        "experiencer": "other",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "other_experiencer-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 23,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 22,
+        "start": 13,
+        "text": "influenza"
+      },
+      "text": "Roommate has influenza."
+    },
+    {
+      "category": "other_experiencer",
+      "expected": {
+        "experiencer": "other",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "other_experiencer-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 37,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 36,
+        "start": 24,
+        "text": "tuberculosis"
+      },
+      "text": "Coworker diagnosed with tuberculosis."
+    },
+    {
+      "category": "conditional",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "conditional-01",
+      "non_ascii": false,
+      "reference_gap": "no_conditional_axis",
+      "sentences": [
+        {
+          "end": 32,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 10,
+        "start": 0,
+        "text": "Chest pain"
+      },
+      "text": "Chest pain when climbing stairs."
+    },
+    {
+      "category": "conditional",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "conditional-02",
+      "non_ascii": false,
+      "reference_gap": "no_conditional_axis",
+      "sentences": [
+        {
+          "end": 23,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 8,
+        "start": 0,
+        "text": "Wheezing"
+      },
+      "text": "Wheezing with exertion."
+    },
+    {
+      "category": "conditional",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "conditional-03",
+      "non_ascii": false,
+      "reference_gap": "no_conditional_axis",
+      "sentences": [
+        {
+          "end": 35,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 9,
+        "start": 0,
+        "text": "Dizziness"
+      },
+      "text": "Dizziness when standing up quickly."
+    },
+    {
+      "category": "scope_break_but",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "scope_break_but-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 23,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 22,
+        "start": 17,
+        "text": "cough"
+      },
+      "text": "No fever but has cough."
+    },
+    {
+      "category": "scope_break_but",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "scope_break_but-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 35,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 34,
+        "start": 26,
+        "text": "vomiting"
+      },
+      "text": "Denies nausea but reports vomiting."
+    },
+    {
+      "category": "scope_break_but",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "scope_break_but-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 37,
+          "start": 0
+        }
+      ],
+      "target": {
+        "end": 25,
+        "start": 17,
+        "text": "pruritus"
+      },
+      "text": "No rash, however pruritus is present."
+    },
+    {
+      "category": "previous_sentence_cue",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "previous_sentence_cue-01",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 21,
+          "start": 0
+        },
+        {
+          "end": 39,
+          "start": 22
+        }
+      ],
+      "target": {
+        "end": 27,
+        "start": 22,
+        "text": "Cough"
+      },
+      "text": "Patient denies fever. Cough is present."
+    },
+    {
+      "category": "previous_sentence_cue",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "previous_sentence_cue-02",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 14,
+          "start": 0
+        },
+        {
+          "end": 35,
+          "start": 15
+        }
+      ],
+      "target": {
+        "end": 22,
+        "start": 15,
+        "text": "Dyspnea"
+      },
+      "text": "No chest pain. Dyspnea on exertion."
+    },
+    {
+      "category": "previous_sentence_cue",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "previous_sentence_cue-03",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 18,
+          "start": 0
+        },
+        {
+          "end": 34,
+          "start": 19
+        }
+      ],
+      "target": {
+        "end": 27,
+        "start": 19,
+        "text": "Wheezing"
+      },
+      "text": "History of asthma. Wheezing today."
+    },
+    {
+      "category": "previous_sentence_cue",
+      "expected": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      },
+      "id": "previous_sentence_cue-04",
+      "non_ascii": false,
+      "reference_gap": null,
+      "sentences": [
+        {
+          "end": 20,
+          "start": 0
+        },
+        {
+          "end": 40,
+          "start": 21
+        }
+      ],
+      "target": {
+        "end": 39,
+        "start": 33,
+        "text": "asthma"
+      },
+      "text": "Mother has diabetes. Patient has asthma."
+    }
+  ],
+  "categories": {
+    "affirmed": {
+      "description": "No cue governs the target; every axis keeps its default.",
+      "intended": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      }
+    },
+    "conditional": {
+      "description": "The finding occurs only under a condition (when climbing stairs). Python ConText has no conditional axis, so these cases cannot match the intended value and all carry reference_gap no_conditional_axis.",
+      "intended": {
+        "conditionality": "conditional"
+      }
+    },
+    "family": {
+      "description": "A family subject cue in the target's clause governs it.",
+      "intended": {
+        "experiencer": "family"
+      }
+    },
+    "historical": {
+      "description": "A historical cue (history of, status post, previous) governs the target.",
+      "intended": {
+        "temporality": "historical"
+      }
+    },
+    "hypothetical": {
+      "description": "A hypothetical cue (if, in case of, should) governs the target.",
+      "intended": {
+        "temporality": "hypothetical"
+      }
+    },
+    "negated": {
+      "description": "A negation cue governs the target: forward (denies, no, without) or backward (ruled out, absent).",
+      "intended": {
+        "negation": "negated"
+      }
+    },
+    "other_experiencer": {
+      "description": "A non-family, non-patient subject cue (donor, roommate) governs it.",
+      "intended": {
+        "experiencer": "other"
+      }
+    },
+    "possible": {
+      "description": "A possibility cue makes the affirmed target uncertain.",
+      "intended": {
+        "negation": "affirmed",
+        "uncertainty": "uncertain"
+      }
+    },
+    "previous_sentence_cue": {
+      "description": "A cue in the previous sentence does not reach the target.",
+      "intended": {
+        "experiencer": "patient",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "uncertainty": "certain"
+      }
+    },
+    "pseudo_negation": {
+      "description": "A pseudo-negation cue (cannot be excluded, not ruled out) leaves the target affirmed and makes it uncertain.",
+      "intended": {
+        "negation": "affirmed",
+        "uncertainty": "uncertain"
+      }
+    },
+    "scope_break_but": {
+      "description": "A negation cue before but or however does not reach a target after it.",
+      "intended": {
+        "negation": "affirmed"
+      }
+    }
+  },
+  "cue_table": "context_cues_en_v1.json",
+  "cue_table_sha256": "d89fba60716e6e57f28d04ed410401535fee1745193c5b68727a520fc43d0642",
+  "description": "Synthetic clinical assertion vectors. Every runtime must reproduce expected for each case from text, the explicit sentence offsets and the target span. expected records today's Python output; a case whose output contradicts the intended axes of its category carries a reference_gap code so the gap stays visible instead of being dropped.",
+  "language": "en",
+  "offset_interval": "half_open",
+  "offset_unit": "unicode_scalar",
+  "reference": "openmed.clinical.context.assert_context",
+  "reference_gap_codes": [
+    "negation_scope_ends_at_and",
+    "negation_scope_ends_at_or",
+    "no_conditional_axis"
+  ],
+  "schema": "openmed.tests.clinical_assertion_parity",
+  "synthetic": true,
+  "version": 1
+}
