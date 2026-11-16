@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Commit a normalized `.d.ts` API baseline for the TypeScript REST client at `clients/typescript/api/rest-client.api.d.ts`, covering every emitted declaration file including the generated Journey workflow types; `npm run api:check` fails when an exported name or a request or response field type changes without `npm run api:update`, and a new CI job runs it with the client's typecheck, build and offline tests (#5392).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
