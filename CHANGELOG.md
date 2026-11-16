@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a release gate that fails when a packaged JSON Schema version bump since the last release tag has neither a registered record migration chain nor a `no_record_migration` exemption with a reason, and when a registered migrator names a missing fixture pair (#5363).
 - Add `openmed.core.record_migrations`, a registry of stored-record migrators keyed by schema id and version that resolves unique chains, refuses duplicate, cyclic and ambiguous edges, and reports only the field paths a migration adds, moves, changes or drops (#5362).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema

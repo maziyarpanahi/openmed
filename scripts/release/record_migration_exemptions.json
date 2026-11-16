@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "no_record_migration": [
+    {
+      "schema": "decision_request",
+      "from_version": "1.1.0",
+      "to_version": "1.2.0",
+      "reason": "Decision requests are transient inputs, not stored records. The 1.2.0 schema accepts 1.0.0 and 1.1.0 requests as they are; only a request that declares 1.1.0 and carries media, a field 1.1.0 never defined, is refused (see the 3.3-to-4.0 migration guide)."
+    },
+    {
+      "schema": "decision_result",
+      "from_version": "1.1.0",
+      "to_version": "1.2.0",
+      "reason": "Results have the same fields at 1.1.0 and 1.2.0, and the 1.2.0 schema accepts stored 1.0.0 and 1.1.0 results unchanged. migrate_decision_result already relabels them on request."
+    }
+  ]
+}
