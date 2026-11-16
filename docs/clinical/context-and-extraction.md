@@ -312,6 +312,56 @@ assertion = ClinicalAssertion(
 print(assertion.to_dict())
 ```
 
+## Cross-runtime Assertion Vectors
+
+`tests/fixtures/parity/clinical_assertion_v1.json` pins what
+`assert_context` returns today so a Swift, Kotlin or web port can prove the
+same answers without re-deriving them. The file is synthetic, versioned and
+English-only. Each case carries `id`, `category`, `text`, explicit `sentences`
+offsets, the `target` span and the four `expected` axes. Offsets are
+half-open Unicode scalar offsets, so a non-BMP character counts once. Every
+case is computed as
+`assert_context(text, [target], sentences=sentences)`; because the sentence
+offsets are recorded, the result does not depend on the optional pySBD
+splitter.
+
+Categories cover affirmed controls, forward and backward negation,
+pseudo-negation, possibility, hypothetical, historical, family and other
+experiencers, conditional findings, a `but`/`however` scope break and a cue in
+the previous sentence, with at least three cases each. Each category declares
+its `intended` axes. When today's output contradicts them, the case keeps the
+actual output in `expected` and names the gap in `reference_gap`, so every
+runtime reproduces the current answer and the gap stays visible:
+
+| `reference_gap` | Current behavior |
+|---|---|
+| `no_conditional_axis` | ConText has no conditional value: `Chest pain when climbing stairs.` is affirmed, certain and recent. |
+| `negation_scope_ends_at_or` | `or` ends a negation scope: `cough` in `No fever or cough.` is affirmed. |
+| `negation_scope_ends_at_and` | `and` ends a negation scope too: `cough` in `Denies fever and cough.` is affirmed. |
+
+Cases without a gap have `reference_gap: null`.
+
+`tests/fixtures/parity/context_cues_en_v1.json` is the English cue table the
+ports copy: every `ClinicalCueLexicon` field plus the experiencer family and
+other subject cues, as sorted JSON. The vectors record its SHA-256 as
+`cue_table_sha256`. After changing an English cue, regenerate both with:
+
+```bash
+python scripts/parity/export_context_cues.py
+python scripts/parity/export_context_cues.py --check
+```
+
+`tests/unit/clinical/test_clinical_assertion_vectors.py` recomputes every case,
+checks the gap rule, compares the cue table with the live lexicon and checks
+the digest. A cue edit that is not regenerated fails it.
+
+OpenMedKit for Swift ships a byte-identical copy of the cue table as
+`swift/OpenMedKit/Sources/OpenMedKit/Resources/clinical/context_cues_en_v1.json`
+and replays every case, gaps included, in `ClinicalAssertionParityTests`. Copy
+the regenerated table there too;
+`tests/unit/clinical/test_swift_context_cue_resource.py` fails while the Swift
+copy is stale.
+
 ## Axis To FHIR Mapping
 
 The context layer emits axis values. A FHIR exporter decides whether and how to
