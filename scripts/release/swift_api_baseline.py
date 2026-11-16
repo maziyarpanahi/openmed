@@ -64,6 +64,7 @@ MODULES: tuple[str, ...] = (
     "OpenMedExtensionSupport",
     "OpenMedShareExtension",
     "OpenMedActionExtension",
+    "OpenMedIntents",
 )
 
 
