@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pin OpenMedKit Swift downloads of catalog entries to a commit: `OpenMedModelStore.downloadMLXModel(entry:)` recomputes the reproducibility hash from the Hub model info and refuses a mismatch before writing any file, fetches every file from the resolved commit sha, caches the snapshot under that sha, records it in the ready marker (`cachedMLXModelRevisionSHA`), and reuses a verified snapshot offline (#5378).
 - Bundle an `OpenMedModelCatalog` in OpenMedKit Swift, generated from `models.jsonl` by `scripts/swift/build_swift_catalog.py` with the Android row format, filter semantics and license allowlist but Apple MLX/Core ML formats only, so apps discover models offline by format, tier, size, language and license; a `--check` mode fails CI when the resource is stale (#5375).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
