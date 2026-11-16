@@ -414,11 +414,21 @@ class OpenMed(
     private val backend: OpenMedBackend? = null,
 ) {
     /**
+     * Facade that applies a portable [config]: its `confidenceThreshold` is the
+     * default threshold of every call.
+     */
+    constructor(backend: OpenMedBackend?, config: OpenMedSdkConfig) : this(backend) {
+        defaultThreshold = config.confidenceThreshold.toFloat()
+    }
+
+    private var defaultThreshold = 0.5f
+
+    /**
      * Run local PII analysis and return entity spans above the confidence threshold.
      */
     fun analyzeText(
         text: String,
-        confidenceThreshold: Float = 0.5f,
+        confidenceThreshold: Float = defaultThreshold,
     ): List<EntityPrediction> {
         val entities = when (backend) {
             null -> LocalPiiRecognizer.detect(text)
@@ -437,7 +447,7 @@ class OpenMed(
      */
     fun extractPII(
         text: String,
-        confidenceThreshold: Float = 0.5f,
+        confidenceThreshold: Float = defaultThreshold,
         useSmartMerging: Boolean = true,
     ): List<EntityPrediction> {
         val entities = analyzeText(text, confidenceThreshold)
@@ -457,7 +467,7 @@ class OpenMed(
      */
     fun extractPIIChunked(
         text: String,
-        confidenceThreshold: Float = 0.5f,
+        confidenceThreshold: Float = defaultThreshold,
         chunkTokenLimit: Int = 256,
         tokenOverlap: Int = 32,
         useSmartMerging: Boolean = true,
