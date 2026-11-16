@@ -1,0 +1,738 @@
+{
+  "schema": "openmed.tests.sdk_config_parity",
+  "version": 1,
+  "synthetic": true,
+  "description": "Synthetic portable SDK configuration vectors. Every runtime must accept each valid config and return its resolved form, and must reject each invalid config with exactly the listed issues in order. Issues carry a code and a known field name only; document-level issues have a null field. Model ids and revisions are invented.",
+  "sdk_config_schema": "https://openmed.life/schemas/sdk_config.schema.json",
+  "sdk_config_version": 1,
+  "reference": "openmed.core.sdk_config.validate_sdk_config",
+  "fields": [
+    "confidence_threshold",
+    "local_only",
+    "model_id",
+    "model_revision",
+    "onnx_variant",
+    "policy_profile"
+  ],
+  "defaults": {
+    "confidence_threshold": 0.5,
+    "local_only": true,
+    "model_id": null,
+    "model_revision": null,
+    "onnx_variant": "auto",
+    "policy_profile": "hipaa_safe_harbor"
+  },
+  "issue_codes": [
+    "config_not_object",
+    "invalid_format",
+    "missing_dependency",
+    "not_allowed_value",
+    "out_of_range",
+    "unknown_field",
+    "wrong_type"
+  ],
+  "issue_order": "config_not_object alone when the document is not an object; otherwise at most one unknown_field (field null), then at most one issue per field in fields order",
+  "valid": [
+    {
+      "id": "empty_document_uses_defaults",
+      "config": {},
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "every_field_set",
+      "config": {
+        "confidence_threshold": 0.75,
+        "local_only": true,
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": "0123456789abcdef0123456789abcdef01234567",
+        "onnx_variant": "int8",
+        "policy_profile": "strict_no_leak"
+      },
+      "resolved": {
+        "confidence_threshold": 0.75,
+        "local_only": true,
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": "0123456789abcdef0123456789abcdef01234567",
+        "onnx_variant": "int8",
+        "policy_profile": "strict_no_leak"
+      }
+    },
+    {
+      "id": "network_opt_in",
+      "config": {
+        "local_only": false
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": false,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "threshold_lower_bound_integer",
+      "config": {
+        "confidence_threshold": 0
+      },
+      "resolved": {
+        "confidence_threshold": 0.0,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "threshold_upper_bound_integer",
+      "config": {
+        "confidence_threshold": 1
+      },
+      "resolved": {
+        "confidence_threshold": 1.0,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "explicit_nulls_for_model",
+      "config": {
+        "model_id": null,
+        "model_revision": null
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "model_without_revision",
+      "config": {
+        "model_id": "synthetic-org/synthetic-pii-model-onnx"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "model_id_without_namespace",
+      "config": {
+        "model_id": "synthetic-model"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": "synthetic-model",
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "branch_name_revision",
+      "config": {
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": "main"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": "main",
+        "onnx_variant": "auto",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "onnx_fp16",
+      "config": {
+        "onnx_variant": "fp16"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "fp16",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "onnx_fp32",
+      "config": {
+        "onnx_variant": "fp32"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "fp32",
+        "policy_profile": "hipaa_safe_harbor"
+      }
+    },
+    {
+      "id": "gdpr_profile",
+      "config": {
+        "policy_profile": "gdpr_pseudonymization"
+      },
+      "resolved": {
+        "confidence_threshold": 0.5,
+        "local_only": true,
+        "model_id": null,
+        "model_revision": null,
+        "onnx_variant": "auto",
+        "policy_profile": "gdpr_pseudonymization"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "id": "not_object_array",
+      "config": [],
+      "errors": [
+        {
+          "code": "config_not_object",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "not_object_string",
+      "config": "local_only",
+      "errors": [
+        {
+          "code": "config_not_object",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "not_object_null",
+      "config": null,
+      "errors": [
+        {
+          "code": "config_not_object",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "not_object_number",
+      "config": 0.5,
+      "errors": [
+        {
+          "code": "config_not_object",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "unknown_key_swift_spelling",
+      "config": {
+        "allowNetworkAccess": true
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "unknown_key_web_spelling",
+      "config": {
+        "threshold": 0.4
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "unknown_key_python_only_field",
+      "config": {
+        "pii_model": "synthetic-org/synthetic-pii-model-onnx"
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "several_unknown_keys_report_once",
+      "config": {
+        "revision": "main",
+        "localFilesOnly": true,
+        "Local_Only": true
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        }
+      ]
+    },
+    {
+      "id": "unknown_key_then_field_issue",
+      "config": {
+        "extra": 1,
+        "local_only": "yes"
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        },
+        {
+          "code": "wrong_type",
+          "field": "local_only"
+        }
+      ]
+    },
+    {
+      "id": "local_only_string",
+      "config": {
+        "local_only": "true"
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "local_only"
+        }
+      ]
+    },
+    {
+      "id": "local_only_integer",
+      "config": {
+        "local_only": 1
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "local_only"
+        }
+      ]
+    },
+    {
+      "id": "local_only_null",
+      "config": {
+        "local_only": null
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "local_only"
+        }
+      ]
+    },
+    {
+      "id": "threshold_boolean",
+      "config": {
+        "confidence_threshold": true
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "threshold_string",
+      "config": {
+        "confidence_threshold": "0.5"
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "threshold_null",
+      "config": {
+        "confidence_threshold": null
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "threshold_below_zero",
+      "config": {
+        "confidence_threshold": -0.01
+      },
+      "errors": [
+        {
+          "code": "out_of_range",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "threshold_above_one",
+      "config": {
+        "confidence_threshold": 1.5
+      },
+      "errors": [
+        {
+          "code": "out_of_range",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "threshold_percentage",
+      "config": {
+        "confidence_threshold": 50
+      },
+      "errors": [
+        {
+          "code": "out_of_range",
+          "field": "confidence_threshold"
+        }
+      ]
+    },
+    {
+      "id": "model_id_number",
+      "config": {
+        "model_id": 7
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_empty",
+      "config": {
+        "model_id": ""
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_parent_traversal",
+      "config": {
+        "model_id": "../synthetic-model"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_double_dot",
+      "config": {
+        "model_id": "synthetic-org/model..onnx"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_url",
+      "config": {
+        "model_id": "https://models.example.invalid/synthetic"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_absolute_path",
+      "config": {
+        "model_id": "/synthetic/models/pii"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_trailing_newline",
+      "config": {
+        "model_id": "synthetic-org/synthetic-model\n"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "model_id_whitespace",
+      "config": {
+        "model_id": "synthetic org/model"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "revision_without_model",
+      "config": {
+        "model_revision": "0123456789abcdef0123456789abcdef01234567"
+      },
+      "errors": [
+        {
+          "code": "missing_dependency",
+          "field": "model_revision"
+        }
+      ]
+    },
+    {
+      "id": "revision_with_null_model",
+      "config": {
+        "model_id": null,
+        "model_revision": "main"
+      },
+      "errors": [
+        {
+          "code": "missing_dependency",
+          "field": "model_revision"
+        }
+      ]
+    },
+    {
+      "id": "revision_with_slash",
+      "config": {
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": "refs/heads/main"
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_revision"
+        }
+      ]
+    },
+    {
+      "id": "revision_empty",
+      "config": {
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": ""
+      },
+      "errors": [
+        {
+          "code": "invalid_format",
+          "field": "model_revision"
+        }
+      ]
+    },
+    {
+      "id": "revision_number",
+      "config": {
+        "model_id": "synthetic-org/synthetic-pii-model-onnx",
+        "model_revision": 123
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "model_revision"
+        }
+      ]
+    },
+    {
+      "id": "revision_with_invalid_model",
+      "config": {
+        "model_id": 5,
+        "model_revision": "main"
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "model_id"
+        }
+      ]
+    },
+    {
+      "id": "onnx_variant_unknown",
+      "config": {
+        "onnx_variant": "int4"
+      },
+      "errors": [
+        {
+          "code": "not_allowed_value",
+          "field": "onnx_variant"
+        }
+      ]
+    },
+    {
+      "id": "onnx_variant_case",
+      "config": {
+        "onnx_variant": "INT8"
+      },
+      "errors": [
+        {
+          "code": "not_allowed_value",
+          "field": "onnx_variant"
+        }
+      ]
+    },
+    {
+      "id": "onnx_variant_number",
+      "config": {
+        "onnx_variant": 8
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "onnx_variant"
+        }
+      ]
+    },
+    {
+      "id": "onnx_variant_null",
+      "config": {
+        "onnx_variant": null
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "onnx_variant"
+        }
+      ]
+    },
+    {
+      "id": "policy_unknown",
+      "config": {
+        "policy_profile": "synthetic_policy"
+      },
+      "errors": [
+        {
+          "code": "not_allowed_value",
+          "field": "policy_profile"
+        }
+      ]
+    },
+    {
+      "id": "policy_python_only",
+      "config": {
+        "policy_profile": "china_pipl"
+      },
+      "errors": [
+        {
+          "code": "not_allowed_value",
+          "field": "policy_profile"
+        }
+      ]
+    },
+    {
+      "id": "policy_alias_spelling",
+      "config": {
+        "policy_profile": "hipaa-safe-harbor"
+      },
+      "errors": [
+        {
+          "code": "not_allowed_value",
+          "field": "policy_profile"
+        }
+      ]
+    },
+    {
+      "id": "policy_null",
+      "config": {
+        "policy_profile": null
+      },
+      "errors": [
+        {
+          "code": "wrong_type",
+          "field": "policy_profile"
+        }
+      ]
+    },
+    {
+      "id": "every_field_invalid_in_field_order",
+      "config": {
+        "zz_unknown": true,
+        "policy_profile": "none",
+        "onnx_variant": "int4",
+        "model_revision": "bad/rev",
+        "model_id": "",
+        "local_only": "no",
+        "confidence_threshold": 2
+      },
+      "errors": [
+        {
+          "code": "unknown_field",
+          "field": null
+        },
+        {
+          "code": "out_of_range",
+          "field": "confidence_threshold"
+        },
+        {
+          "code": "wrong_type",
+          "field": "local_only"
+        },
+        {
+          "code": "invalid_format",
+          "field": "model_id"
+        },
+        {
+          "code": "invalid_format",
+          "field": "model_revision"
+        },
+        {
+          "code": "not_allowed_value",
+          "field": "onnx_variant"
+        },
+        {
+          "code": "not_allowed_value",
+          "field": "policy_profile"
+        }
+      ]
+    }
+  ]
+}
