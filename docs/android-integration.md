@@ -537,6 +537,21 @@ never put input text, document URIs or filenames, OCR tokens, span surface text,
 or output text in logs, analytics, crash reports, cache metadata, or temporary
 files.
 
+## Identifier validators
+
+`PiiValidators` checks the portable identifier subset with the same rules as
+the Python reference. That covers `validateSSN`, `validateLuhn`, `validateNPI`,
+`validateIBAN`, `validateAadhaar`, `validateUKNHSNumber`, `validateDutchBSN`,
+`validateSpanishDNI`, `validateFrenchNIR`, `validateChineseResidentID` and
+`validateCanadianSIN`, plus the Android-only `validatePhoneUS`. Each takes the
+candidate text and returns a `Boolean`. None of them logs, stores or echoes the
+input, so an app can reject a mistyped IBAN or Aadhaar number exactly where
+Python would. Separators, case and Unicode digits follow the Python function
+named for each validator in `tests/fixtures/parity/identifier_validators_v1.json`.
+For example, the Aadhaar check accepts Arabic-Indic and Gurmukhi digits, and
+the IBAN check ignores whitespace and hyphens. `IdentifierValidatorParityTest`
+replays that fixture.
+
 ## Shared C++ runtime (libc++_shared.so)
 
 `libdjl_tokenizer.so` from `ai.djl.android:tokenizer-native` 0.33.0 links

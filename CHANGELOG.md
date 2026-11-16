@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add the portable identifier validator subset to the Android OpenMedKit: `PiiValidators` gains IBAN, Aadhaar, UK NHS number, Dutch BSN, Spanish DNI, French NIR, Chinese resident ID and Canadian SIN checks that match the Python references on every vector in `identifier_validators_v1.json`, next to the unchanged SSN, Luhn, NPI and US phone validators (#5420).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
