@@ -178,9 +178,10 @@ final class OpenMedModelDownloadTaskTests: XCTestCase {
         ChunkedModelURLProtocol.install(files: Self.files, stalled: ["weights.safetensors"])
         let session = Self.session()
         let cacheRoot = self.cacheRoot!
-        let caller = Task {
+        let repoID = Self.repoID
+        let caller = Task.detached {
             try await OpenMedModelStore.downloadMLXModel(
-                repoID: Self.repoID, cacheDirectory: cacheRoot, session: session)
+                repoID: repoID, cacheDirectory: cacheRoot, session: session)
         }
         while !ChunkedModelURLProtocol.requestedPaths.contains("weights.safetensors") {
             await Task.yield()
