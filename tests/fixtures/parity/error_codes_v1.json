@@ -123,7 +123,7 @@
           "entry": [
             "DeidentifyEngine hashSalt"
           ],
-          "today": "IllegalArgumentException without a code"
+          "today": "OpenMedArgumentException configuration_error, an IllegalArgumentException"
         },
         "web": {
           "status": "required",
@@ -164,7 +164,7 @@
             "OpenMedSpan",
             "PolicyEngine detections"
           ],
-          "today": "IllegalArgumentException without a code, or PolicyProfileException detection_offset_invalid"
+          "today": "OpenMedArgumentException input_error, or PolicyProfileException detection_offset_invalid with errorCode input_error"
         },
         "web": {
           "status": "required",
@@ -202,7 +202,7 @@
           "entry": [
             "PolicyProfiles.load"
           ],
-          "today": "PolicyProfileException profile_unknown"
+          "today": "PolicyProfileException profile_unknown with errorCode policy_error"
         },
         "web": {
           "status": "required",
@@ -239,8 +239,9 @@
         "kotlin": {
           "status": "required",
           "entry": [
-            "model resolution from ModelCache with network disallowed"
-          ]
+            "ArtifactAcquisition.acquire with ArtifactNetworkConsent.DENIED and an empty cache"
+          ],
+          "today": "ArtifactAcquisitionResult.Failed network_consent_required with errorCode model_load_error"
         },
         "web": {
           "status": "required",
