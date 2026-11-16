@@ -104,7 +104,7 @@ private func page(_ width: Int = 100, _ height: Int = 50) -> (FakePage, FakeImag
     return (.page(DocumentPageGeometry(width: Double(width), height: Double(height)), image), image)
 }
 
-final class DocumentIntakeTests: XCTestCase {
+final class DocumentIntakeTests: ContractGateTestCase {
     func testDocumentRefusalsAreValueFree() async throws {
         let intake = DocumentIntake(recognizer: FakeRecognizer(behavior: .word))
         for (failure, reason) in [
@@ -201,7 +201,7 @@ final class DocumentIntakeTests: XCTestCase {
     func testVisualFactoryReproducesPythonVisualPackets() throws {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
-        let data = try Data(contentsOf: root.appending(path: "tests/fixtures/parity/multimodal_contract_v1.json"))
+        let data = try ContractGateReporter.read(root.appending(path: "tests/fixtures/parity/multimodal_contract_v1.json"))
         let corpus = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         var checked = 0
         for row in try XCTUnwrap(corpus["cases"] as? [[String: Any]]) {

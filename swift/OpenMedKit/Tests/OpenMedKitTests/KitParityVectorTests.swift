@@ -12,7 +12,7 @@ import XCTest
 ///
 /// Failure messages carry case identifiers, field paths, offsets, labels, and
 /// actions only.
-final class KitParityVectorTests: XCTestCase {
+final class KitParityVectorTests: ContractGateTestCase {
     func testVectorsDigestAndProfileMatchSwiftConstants() throws {
         let manifest = try Self.loadManifest()
         let bytes = try Self.repositoryBytes(Self.vectorsPath)
@@ -346,7 +346,7 @@ final class KitParityVectorTests: XCTestCase {
     private static func repositoryBytes(_ path: String) throws -> Data {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { url.deleteLastPathComponent() }
-        return try Data(contentsOf: url.appending(path: path))
+        return try ContractGateReporter.read(url.appending(path: path))
     }
 
     private static func decoder() -> JSONDecoder {
