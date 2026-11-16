@@ -28,7 +28,12 @@ SCHEMA_NAMES = (
     "service_job_record",
     "service_webhook_payload",
     "service_error_envelope",
+    "settings",
 )
+# Schemas published outside ``SCHEMA_PACKAGE`` keep their documented location:
+# logical name -> (package, file name).  The settings schema sits next to
+# ``config.schema.json`` because its ``core`` section references that file.
+_SCHEMA_RESOURCES = {"settings": ("openmed.core", "settings.schema.json")}
 ACTION_KEEP = "keep"
 ACTION_FORMAT_PRESERVE = "format_preserve"
 ACTION_VALUES = (
@@ -212,7 +217,10 @@ def load_schema(name: str) -> dict[str, Any]:
     """Load one bundled JSON Schema by logical name."""
 
     schema_name = _normalise_schema_name(name)
-    resource = resources.files(SCHEMA_PACKAGE).joinpath(f"{schema_name}.schema.json")
+    package, filename = _SCHEMA_RESOURCES.get(
+        schema_name, (SCHEMA_PACKAGE, f"{schema_name}.schema.json")
+    )
+    resource = resources.files(package).joinpath(filename)
     with resource.open("r", encoding="utf-8") as handle:
         schema = json.load(handle)
     if "schema_version" not in schema:
