@@ -10,9 +10,9 @@ see the [Quick Start](getting-started.md) and
 
 !!! tip "Run the built-in doctor first"
     Before digging in, run the offline environment check. It reports your Python version and architecture,
-    which selected runtime extras are importable, whether an `HF_TOKEN` is present, and whether offline mode
-    is active. Dependency, token, Python-version, and architecture checks that need action include a
-    remediation `Hint:`.
+    the runtime Unicode data version, which selected runtime extras are importable, whether an `HF_TOKEN`
+    is present, and whether offline mode is active. Dependency, token, Python-version, and architecture
+    checks that need action include a remediation `Hint:`.
 
     ```bash
     openmed doctor          # human-readable check list
@@ -24,10 +24,19 @@ see the [Quick Start](getting-started.md) and
     ```text
     PASS python_version: 3.11.9
     PASS python_arch: arm64
+    PASS unicode_data_version: 14.0.0
     WARN hf: transformers not installed
           Hint: Install with: pip install transformers
     PASS openmed_offline: 0
     ```
+
+The informational `unicode_data_version` check always reports `PASS`; its
+`details` is the running Python interpreter's `unicodedata.unidata_version`
+(the sample above is illustrative). In `openmed doctor --json`, the same record
+appears in `data.checks` with `name`, `status` and `details` fields. Compare this
+version across installations when investigating normalization or grapheme-offset
+differences. It does not change the command's exit status. The separate
+value-free health report used in diagnostic bundles continues to omit versions.
 
 ---
 
