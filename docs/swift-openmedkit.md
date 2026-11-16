@@ -507,6 +507,44 @@ The downloader repeats the check after each response and before writing. This
 does not provide synchronization against another process concurrently replacing
 filesystem entries; applications should keep their cache private to the app.
 
+### Listing, measuring and deleting cached models
+
+Manage the cache through the store rather than deleting directories yourself,
+so every path stays inside the same confinement boundary:
+
+```swift
+for model in try OpenMedModelStore.listCachedModels() {
+    print(model.repoID, model.revision, model.state, model.sizeBytes)
+}
+let bytes = try OpenMedModelStore.totalCacheSizeBytes()
+try OpenMedModelStore.deleteModel(repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx", revision: "main")
+```
+
+- `listCachedModels(cacheDirectory:)` returns one `OpenMedCachedModel` per
+  snapshot directory (`<org>__<name>/<revision>`): repository id, revision,
+  state (`missing`, `partial` or `ready`, as `mlxModelCacheState` reports it),
+  byte size and latest modification date. Empty stray snapshot directories are
+  listed as `missing`. A snapshot whose files fail confinement or decoding is
+  `partial`. Hidden entries, loose files, symlinks and top-level directories
+  that are not repository directories are skipped.
+- `totalCacheSizeBytes(cacheDirectory:)` sums every regular file under the
+  cache root, including partial snapshots and stray files.
+- `deleteModel(repoID:revision:cacheDirectory:)` removes the ready marker
+  first, renames the snapshot to a hidden tombstone and then removes it. An
+  interrupted delete therefore never leaves a ready marker over missing files.
+  Other snapshots are untouched, and an empty repository directory is removed.
+  Deleting a snapshot that is not cached is a no-op.
+- No call follows a symlink. A symlinked repository or snapshot directory is
+  refused with `OpenMedModelStoreError.invalidManifestPath("unsafe_symlink")`,
+  and its target is left unchanged. Symlinks inside a snapshot are deleted as
+  links, never through to their targets. Filesystem failures surface as the
+  path-free `OpenMedModelStoreError.cacheDeletionFailed`.
+- Sizes never follow symlinks, so a link to a large file outside the cache adds
+  nothing.
+
+Lease, pin and last-green protection during eviction are not part of this API
+yet: do not delete a model that a running `OpenMed` instance still uses.
+
 ## Offline Tokenizer Assets
 
 OpenMedKit loads tokenizers from local files only, and makes no network request
