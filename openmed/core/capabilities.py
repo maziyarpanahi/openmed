@@ -25,6 +25,12 @@ Two complementary contracts are provided:
   genuinely *requires* a missing extra and should fail with one consistent
   message naming the exact ``pip install`` command.
 
+It also builds the canonical **capability descriptor** -- see
+:func:`capability_descriptor` -- the value-free document every OpenMed surface
+(Python, CLI, REST, GraphQL, gRPC and MCP) serves so that a client can learn
+which backends, surfaces, served models, schema versions and policy profiles a
+runtime supports, and compare runtimes by one digest.
+
 Example:
     >>> from openmed import available_backends
     >>> report = available_backends()
@@ -36,10 +42,16 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
+import re
 import warnings
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Final, NoReturn
+from functools import lru_cache
+from importlib import resources
+from typing import Any, Final, NoReturn
 
 from .errors import MissingExtraError
 
@@ -325,8 +337,14 @@ def backend_spec(name: str) -> BackendSpec:
 def _missing_modules(spec: BackendSpec) -> tuple[str, ...]:
     """Return required module names that are not importable, without importing."""
 
+    return _unimportable(spec.modules)
+
+
+def _unimportable(modules: Iterable[str]) -> tuple[str, ...]:
+    """Return the module names that cannot be found, without importing them."""
+
     missing: list[str] = []
-    for module in spec.modules:
+    for module in modules:
         try:
             found = importlib.util.find_spec(module) is not None
         except (ImportError, ValueError):
@@ -490,6 +508,192 @@ def warn_backend_unavailable(
     return status
 
 
+#: Contract name carried in the ``schema`` field of every capability descriptor.
+CAPABILITY_DESCRIPTOR_SCHEMA: Final = "openmed.capabilities"
+#: Version of the capability descriptor document shape.
+CAPABILITY_DESCRIPTOR_SCHEMA_VERSION: Final = 1
+_CAPABILITY_DESCRIPTOR_SCHEMA_PACKAGE: Final = "openmed.core.schemas.json"
+_CAPABILITY_DESCRIPTOR_SCHEMA_FILE: Final = "capability_descriptor.schema.json"
+
+# Closed surface vocabulary. Each surface lists the modules that must be
+# importable for it to be served; ``python`` and ``cli`` ship with the core
+# package. Probing uses ``find_spec``, so no surface package is imported.
+_SURFACE_MODULES: Final[dict[str, tuple[str, ...]]] = {
+    "cli": (),
+    "graphql": ("fastapi", "strawberry"),
+    "grpc": ("grpc", "google.protobuf"),
+    "mcp": ("mcp",),
+    "python": (),
+    "rest": ("fastapi", "uvicorn"),
+}
+#: Every surface a capability descriptor can report, sorted.
+CAPABILITY_SURFACES: Final = tuple(sorted(_SURFACE_MODULES))
+
+# Public model ids only: one optional ``namespace/`` prefix, no traversal and
+# no absolute, home or drive-letter paths. Mirrors the service's served-model
+# rule so a local checkpoint path can never reach a descriptor.
+_PUBLIC_MODEL_ID_RE: Final = re.compile(
+    r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:/[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?"
+)
+
+
+def capability_descriptor(*, served_models: Iterable[str] = ()) -> dict[str, Any]:
+    """Return the canonical, value-free capability descriptor of this runtime.
+
+    The descriptor lists the optional backends and transport surfaces that are
+    installed (probed with :func:`importlib.util.find_spec`, so nothing is
+    imported), the public model ids the caller serves, the version of every
+    canonical record schema, and the bundled policy profile names. It carries a
+    ``digest`` over its canonical JSON form, so two runtimes, or two surfaces of
+    one runtime, report the same digest exactly when they describe the same
+    capabilities.
+
+    The document never contains hostnames, filesystem paths, cache locations,
+    environment values or credentials. Served model entries that are not
+    public model ids, such as local checkpoint paths, are omitted.
+
+    Args:
+        served_models: Public model ids the reporting runtime serves. The
+            service surfaces pass their runtime's served ids; the plain Python
+            API and the CLI serve no models and report none.
+
+    Returns:
+        A JSON-compatible mapping that validates against
+        :func:`load_capability_descriptor_schema`.
+
+    Example:
+        >>> from openmed.core.capabilities import capability_descriptor
+        >>> descriptor = capability_descriptor()
+        >>> descriptor["schema"]
+        'openmed.capabilities'
+        >>> descriptor["digest"].startswith("sha256:")
+        True
+    """
+
+    statuses = available_backends()
+    descriptor: dict[str, Any] = {
+        "schema": CAPABILITY_DESCRIPTOR_SCHEMA,
+        "schema_version": CAPABILITY_DESCRIPTOR_SCHEMA_VERSION,
+        "backends": [
+            {
+                "name": status.name,
+                "extra": status.extra,
+                "available": status.available,
+            }
+            for status in statuses.values()
+        ],
+        "surfaces": [
+            {"name": name, "available": not _unimportable(_SURFACE_MODULES[name])}
+            for name in CAPABILITY_SURFACES
+        ],
+        "served_models": _public_model_ids(served_models),
+        "schema_versions": [
+            {"name": name, "version": version}
+            for name, version in _record_schema_versions()
+        ],
+        "policy_profiles": list(_policy_profile_names()),
+    }
+    descriptor["digest"] = capability_descriptor_digest(descriptor)
+    return descriptor
+
+
+def capability_descriptor_digest(descriptor: Mapping[str, Any]) -> str:
+    """Return the ``sha256:`` digest of a capability descriptor.
+
+    The digest covers the canonical JSON form (sorted keys, compact
+    separators) of every field except ``digest`` itself, so it can be
+    recomputed to verify a descriptor received from another surface.
+
+    Args:
+        descriptor: A capability descriptor, with or without its digest.
+
+    Returns:
+        ``"sha256:"`` followed by 64 lowercase hex characters.
+    """
+
+    body = {key: value for key, value in descriptor.items() if key != "digest"}
+    payload = json.dumps(
+        body, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def load_capability_descriptor_schema() -> dict[str, Any]:
+    """Return the bundled JSON Schema of the capability descriptor.
+
+    Returns:
+        A fresh copy of the Draft 2020-12 schema, safe for the caller to
+        modify.
+    """
+
+    return json.loads(_capability_descriptor_schema_text())
+
+
+def validate_capability_descriptor(descriptor: Mapping[str, Any]) -> None:
+    """Validate a capability descriptor against its schema and its digest.
+
+    Args:
+        descriptor: The capability descriptor to check.
+
+    Raises:
+        ValueError: If the descriptor does not match the schema, or its digest
+            does not match its content. The message names no field values.
+    """
+
+    from jsonschema import Draft202012Validator
+
+    validator = Draft202012Validator(load_capability_descriptor_schema())
+    if next(iter(validator.iter_errors(dict(descriptor))), None) is not None:
+        raise ValueError("capability descriptor does not match its schema")
+    if descriptor["digest"] != capability_descriptor_digest(descriptor):
+        raise ValueError("capability descriptor digest does not match its content")
+
+
+def _public_model_ids(models: Iterable[str]) -> list[str]:
+    """Return the sorted, de-duplicated public model ids among ``models``."""
+
+    if isinstance(models, str):
+        models = (models,)
+    return sorted(
+        {
+            model
+            for model in models
+            if isinstance(model, str)
+            and ".." not in model
+            and _PUBLIC_MODEL_ID_RE.fullmatch(model) is not None
+        }
+    )
+
+
+@lru_cache(maxsize=1)
+def _capability_descriptor_schema_text() -> str:
+    resource = resources.files(_CAPABILITY_DESCRIPTOR_SCHEMA_PACKAGE).joinpath(
+        _CAPABILITY_DESCRIPTOR_SCHEMA_FILE
+    )
+    return resource.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _record_schema_versions() -> tuple[tuple[str, int], ...]:
+    """Return ``(name, schema_version)`` for every canonical record schema."""
+
+    from .schemas.span import SCHEMA_NAMES, load_schema
+
+    return tuple(
+        (name, int(load_schema(name)["schema_version"]))
+        for name in sorted(SCHEMA_NAMES)
+    )
+
+
+@lru_cache(maxsize=1)
+def _policy_profile_names() -> tuple[str, ...]:
+    """Return the sorted canonical names of the bundled policy profiles."""
+
+    from .policy import list_policies
+
+    return tuple(sorted(list_policies()))
+
+
 def _normalize(name: str) -> str:
     return str(name or "").strip().lower().replace("-", "_")
 
@@ -497,14 +701,21 @@ def _normalize(name: str) -> str:
 __all__ = [
     "BackendSpec",
     "BackendStatus",
+    "CAPABILITY_DESCRIPTOR_SCHEMA",
+    "CAPABILITY_DESCRIPTOR_SCHEMA_VERSION",
+    "CAPABILITY_SURFACES",
     "MissingOptionalDependencyError",
     "available_backends",
     "backend_spec",
     "backend_status",
+    "capability_descriptor",
+    "capability_descriptor_digest",
     "install_hint",
     "is_backend_available",
+    "load_capability_descriptor_schema",
     "raise_missing_backend",
     "registered_backends",
     "require_backend",
+    "validate_capability_descriptor",
     "warn_backend_unavailable",
 ]
