@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Port patient-keyed date-shift offsets to the openmed web package: `stableDateShiftOffset()`, `stableDateShiftOffsetFromSeed()` and `shiftIsoDate()` match `openmed.core.date_shift` on every shared vector, with WebCrypto hashing, `BigInt` reduction, UTC proleptic-Gregorian date arithmetic and value-free `DateShiftError` codes (#5417).
 - Added versioned JSON Schemas for the async job record, the terminal webhook
   payload, and the REST error envelope, registered in the bundled schema
   fingerprint snapshot, with drift tests that fail when a required field is
