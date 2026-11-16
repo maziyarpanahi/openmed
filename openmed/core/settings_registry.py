@@ -10,8 +10,11 @@ and bounds.
 This module only describes settings.  It never reads the process environment
 and never returns a configured value, so its output is safe to render in
 documentation, provenance reports and logs.  Secret settings declare no
-default.  Existing loaders keep parsing their own variables; this registry
-does not replace any of them.
+default, and neither do user-supplied settings such as evaluation dataset
+paths.  ``x-excluded-identifiers`` lists ``OPENMED_*`` identifiers that only
+look like settings, such as FHIR system names and error codes, each with its
+reason.  Existing loaders keep parsing their own variables; this registry does
+not replace any of them.
 
 Example:
     >>> from openmed.core.settings_registry import get_setting_declaration
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
@@ -57,6 +61,8 @@ _JSON_TYPES = frozenset(
 _CONFIG_SCHEMA_FILENAME = "config.schema.json"
 _CONFIG_REF_PREFIX = f"{_CONFIG_SCHEMA_FILENAME}#/properties/"
 _SCHEMA_VERSION_KEY = "schema_version"
+_EXCLUDED_KEY = "x-excluded-identifiers"
+_IDENTIFIER_RE = re.compile(r"OPENMED_[A-Z0-9_]*[A-Z0-9]")
 
 
 class SettingsSchemaError(ValueError):
@@ -91,6 +97,9 @@ class SettingDeclaration:
         config_key: ``OpenMedConfig`` field the setting maps onto, if any.
         secret_file_for: For a ``NAME_FILE`` companion, the secret setting
             whose value the file holds.
+        user_supplied: Whether the value points at data the user supplies,
+            such as an evaluation dataset path.  User-supplied settings never
+            declare a default, and OpenMed never bundles the data.
     """
 
     name: str
@@ -106,6 +115,7 @@ class SettingDeclaration:
     default_note: str | None = None
     config_key: str | None = None
     secret_file_for: str | None = None
+    user_supplied: bool = False
 
     @property
     def nullable(self) -> bool:
@@ -156,6 +166,8 @@ class SettingDeclaration:
         ):
             if value is not None:
                 result[key] = value
+        if self.user_supplied:
+            result["user_supplied"] = True
         return result
 
 
@@ -217,7 +229,8 @@ def parse_settings_schema(
 
     Raises:
         SettingsSchemaError: If a section or declaration is malformed, a name
-            is declared twice, a secret declares a default, or a secret-file
+            is declared twice or both declared and excluded, a secret or a
+            user-supplied setting declares a default, or a secret-file
             companion names an undeclared secret.
     """
 
@@ -268,7 +281,42 @@ def parse_settings_schema(
             raise SettingsSchemaError(
                 f"{declaration.name} holds a path and must not be secret"
             )
+    for name in _parse_excluded(document):
+        if name in by_name:
+            raise SettingsSchemaError(f"{name} is both declared and excluded")
     return tuple(sections)
+
+
+def parse_excluded_identifiers(document: Mapping[str, Any]) -> Mapping[str, str]:
+    """Return the ``x-excluded-identifiers`` list of a settings schema.
+
+    Args:
+        document: Parsed settings schema.
+
+    Returns:
+        Read-only mapping of each excluded ``OPENMED_*`` identifier to the
+        reason it is not a setting.
+
+    Raises:
+        SettingsSchemaError: If an entry is not an ``OPENMED_*`` name with a
+            non-empty reason.
+    """
+
+    return MappingProxyType(_parse_excluded(document))
+
+
+def excluded_identifiers() -> Mapping[str, str]:
+    """Return ``OPENMED_*`` identifiers that only look like settings.
+
+    These are constants such as FHIR system names or error codes, and names
+    OpenMed exports to a subprocess without reading them.  Each carries the
+    reason it is excluded.
+
+    Returns:
+        Read-only mapping of identifier to reason, sorted by identifier.
+    """
+
+    return _cached_excluded()
 
 
 def settings_sections() -> tuple[SettingsSection, ...]:
@@ -374,6 +422,13 @@ def _declaration(
     env_format = _optional_text(name, resolved, "x-env-format")
     if env_format is not None and env_format not in ENV_FORMATS:
         raise SettingsSchemaError(f"{name} has an unknown x-env-format")
+    user_supplied = resolved.get("x-user-supplied", False)
+    if not isinstance(user_supplied, bool):
+        raise SettingsSchemaError(f"{name} has an invalid x-user-supplied")
+    if user_supplied and has_default:
+        raise SettingsSchemaError(
+            f"{name} is user-supplied and must not declare a default"
+        )
 
     return SettingDeclaration(
         name=name,
@@ -395,7 +450,22 @@ def _declaration(
         default_note=_optional_text(name, resolved, "x-default-note"),
         config_key=_optional_text(name, resolved, "x-config-key"),
         secret_file_for=_optional_text(name, resolved, "x-secret-file-for"),
+        user_supplied=user_supplied,
     )
+
+
+def _parse_excluded(document: Mapping[str, Any]) -> dict[str, str]:
+    raw = document.get(_EXCLUDED_KEY, {})
+    if not isinstance(raw, Mapping):
+        raise SettingsSchemaError(f"{_EXCLUDED_KEY} must be an object")
+    result: dict[str, str] = {}
+    for name, reason in sorted(raw.items()):
+        if not isinstance(name, str) or not _IDENTIFIER_RE.fullmatch(name):
+            raise SettingsSchemaError(f"{_EXCLUDED_KEY} has a malformed identifier")
+        if not isinstance(reason, str) or not reason.strip():
+            raise SettingsSchemaError(f"{name} is excluded without a reason")
+        result[name] = reason.strip()
+    return result
 
 
 def _resolve_reference(
@@ -471,6 +541,12 @@ def _cached_sections() -> tuple[SettingsSection, ...]:
 
 
 @lru_cache(maxsize=1)
+def _cached_excluded() -> Mapping[str, str]:
+    _cached_sections()  # validates that no excluded name is also declared
+    return parse_excluded_identifiers(_cached_document())
+
+
+@lru_cache(maxsize=1)
 def _cached_index() -> Mapping[str, SettingDeclaration]:
     return MappingProxyType(
         {item.name: item for part in _cached_sections() for item in part.settings}
@@ -488,8 +564,10 @@ __all__ = [
     "SettingsSchemaError",
     "SettingsSection",
     "declared_setting_names",
+    "excluded_identifiers",
     "get_setting_declaration",
     "load_settings_schema",
+    "parse_excluded_identifiers",
     "parse_settings_schema",
     "secret_setting_names",
     "setting_declarations",

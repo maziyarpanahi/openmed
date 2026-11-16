@@ -297,9 +297,16 @@
     "schema_version": 1
   },
   "settings": {
-    "fingerprint": "sha256:503cb9b90c74df6e377b058e2abe751e49ebe0b9ce2e2ec16d6ee32e7d6a4837",
+    "fingerprint": "sha256:37c7151f56fbd97158d2179cfd3c7b34c66486594031d0419c0f188ad995fa0f",
     "properties": [
       "core",
+      "eval_datasets",
+      "integrations",
+      "journey",
+      "mcp",
+      "openhim",
+      "release",
+      "runtime",
       "schema_version",
       "service"
     ],
