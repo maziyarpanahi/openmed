@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 Deidentifier = Callable[..., Any]
 
 _DEFAULT_BATCH_SIZE = 500
@@ -25,7 +27,7 @@ _DEFAULT_POLICY = "hipaa_safe_harbor"
 _DEFAULT_KEY_COLUMN = "id"
 
 
-class PostgresRedactionError(RuntimeError):
+class PostgresRedactionError(RuntimeError, LegacyRootedError):
     """Raised when a PostgreSQL redaction run fails and is rolled back."""
 
 

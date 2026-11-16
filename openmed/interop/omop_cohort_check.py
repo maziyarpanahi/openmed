@@ -20,6 +20,8 @@ from numbers import Integral
 from types import MappingProxyType
 from typing import Any, Final, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 from .omop.cdm_loader import OmopCdmTables
 
 TableRows: TypeAlias = Mapping[str, Iterable[Mapping[str, Any]]]
@@ -305,7 +307,7 @@ class OmopCohortValidationReport:
         }
 
 
-class OmopCohortExportValidationError(ValueError):
+class OmopCohortExportValidationError(ValueError, LegacyRootedError):
     """Raised by the assertion helper with only aggregate diagnostics."""
 
     def __init__(self, report: OmopCohortValidationReport) -> None:

@@ -25,6 +25,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "GUARDED_PROVENANCE_DISCLAIMER",
     "GUARDED_PROVENANCE_RECORD_TYPE",
@@ -73,7 +75,7 @@ _HEX_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 _MISSING = object()
 
 
-class GuardedProvenanceError(ValueError):
+class GuardedProvenanceError(ValueError, LegacyRootedError):
     """Raised when guarded provenance metadata cannot be validated safely."""
 
 

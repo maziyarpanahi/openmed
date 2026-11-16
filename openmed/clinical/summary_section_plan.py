@@ -23,6 +23,8 @@ from enum import Enum
 from itertools import islice
 from typing import Any, Final, Literal, cast
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_SECTION_PLAN_SCHEMA_VERSION: Final[int] = 1
 SUMMARY_SECTION_PLAN_DISCLAIMER: Final = (
     "Section-preserving clinical summary plans are deterministic assistive "
@@ -61,7 +63,7 @@ class SummaryPlanRefusalReason(str, Enum):
     EVIDENCE_LIMIT = "evidence_limit"
 
 
-class SummarySectionPlanError(ValueError):
+class SummarySectionPlanError(ValueError, LegacyRootedError):
     """Safe exception for callers that require a ready plan.
 
     The exception message contains only a fixed refusal code and never echoes

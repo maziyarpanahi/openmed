@@ -7,12 +7,14 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 REVIEW_PACKET_SCHEMA_VERSION: Final = 2
 REVIEW_PACKET_MIGRATION_REPORT_SCHEMA_VERSION: Final = 1
 SUPPORTED_REVIEW_PACKET_SCHEMA_VERSIONS: Final = (1, 2)
 
 
-class ReviewPacketMigrationError(ValueError):
+class ReviewPacketMigrationError(ValueError, LegacyRootedError):
     """Base error for an unsupported or malformed packet migration."""
 
 

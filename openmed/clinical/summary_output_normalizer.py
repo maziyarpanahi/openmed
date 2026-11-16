@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Final
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION: Final[int] = 1
 SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES: Final[tuple[str, ...]] = (
     "whitespace",
@@ -38,7 +40,7 @@ _PREFIX_CITATION_RE = re.compile(
 )
 
 
-class SummaryOutputNormalizationError(ValueError):
+class SummaryOutputNormalizationError(ValueError, LegacyRootedError):
     """Raised when a summary output normalization request is invalid."""
 
 

@@ -7,9 +7,10 @@ from threading import Event
 from typing import Callable
 
 from openmed.core.budget import BudgetClock, BudgetExceededError
+from openmed.core.errors import LegacyRootedError
 
 
-class BriefInterrupted(RuntimeError):
+class BriefInterrupted(RuntimeError, LegacyRootedError):
     """Value-free terminal interruption with a controlled reason."""
 
     def __init__(self, *, expired: bool = False) -> None:

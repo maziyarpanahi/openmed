@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from openmed.core.errors import LegacyRootedError
+
 SUMMARY_INPUT_SCHEMA_VERSION = 1
 SUMMARY_INPUT_ADVISORY = (
     "Summary input accepts only typed, policy-bound, reviewed evidence; "
@@ -466,7 +468,7 @@ class SummaryInputValidationResult:
         return self
 
 
-class SummaryInputValidationError(ValueError):
+class SummaryInputValidationError(ValueError, LegacyRootedError):
     """Raised when a caller requires a fully valid summary input."""
 
     def __init__(self, result: SummaryInputValidationResult) -> None:

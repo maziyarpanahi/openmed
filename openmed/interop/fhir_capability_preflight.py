@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "MAX_CAPABILITY_INTERACTIONS",
     "MAX_CAPABILITY_RESOURCES",
@@ -88,7 +90,7 @@ class FHIRPreflightReason(str, Enum):
     TRANSACTION_NOT_SUPPORTED = "transaction_not_supported"
 
 
-class CapabilityStatementError(ValueError):
+class CapabilityStatementError(ValueError, LegacyRootedError):
     """Raised when capability metadata cannot be safely parsed."""
 
     def __init__(self, reason_code: FHIRPreflightReason, message: str) -> None:

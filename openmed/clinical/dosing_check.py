@@ -18,6 +18,8 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
 
+from openmed.core.errors import LegacyRootedError
+
 from .decision_support import GuardedSuggestion, SourceSpan, build_guarded_suggestion
 from .lexicons.clinical_norm import split_measurement_text
 from .medication_sig import DoseNormalization, normalize_dose
@@ -49,7 +51,7 @@ class DoseRange(TypedDict, total=False):
     unit: str
 
 
-class DoseRangeTableError(ValueError):
+class DoseRangeTableError(ValueError, LegacyRootedError):
     """Raised when a caller-supplied dose-range table is malformed."""
 
 

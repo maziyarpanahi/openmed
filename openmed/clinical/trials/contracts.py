@@ -11,6 +11,7 @@ from importlib import resources
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, derived_opaque_id
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 
 TRIAL_SCHEMA_VERSION: Final = "1.0.0"
@@ -27,7 +28,7 @@ _TIMESTAMP_RE = re.compile(
 _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}(?:-[0-9]{2})?$|^[0-9]{4}$")
 
 
-class TrialContractError(ValueError):
+class TrialContractError(ValueError, LegacyRootedError):
     """Raised when a public study record violates its contract."""
 
 

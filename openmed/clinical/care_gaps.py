@@ -20,6 +20,7 @@ from openmed.clinical.measures import (
     PopulationResult,
     PopulationState,
 )
+from openmed.core.errors import LegacyRootedError
 from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.structured.store import StoreResult, StoreState
 
@@ -40,7 +41,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class CareGapError(ValueError):
+class CareGapError(ValueError, LegacyRootedError):
     """Raised when care-gap inputs violate the public contract."""
 
 

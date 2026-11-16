@@ -31,6 +31,7 @@ from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 from openmed.clinical.exporters.valueset import ValueSetSource, load_valueset
+from openmed.core.errors import LegacyRootedError
 
 from .ecl import validate_ecl_syntax
 from .matcher import LexicalConcept
@@ -84,11 +85,13 @@ LocalVocabulary: TypeAlias = (
 )
 
 
-class ValueSetExpansionError(RuntimeError):
+class ValueSetExpansionError(RuntimeError, LegacyRootedError):
     """Base error for ValueSet or ECL expansion."""
 
 
-class ValueSetExpansionConfigurationError(ValueSetExpansionError, ValueError):
+class ValueSetExpansionConfigurationError(
+    ValueSetExpansionError, ValueError, LegacyRootedError
+):
     """Raised when remote expansion was requested without safe configuration."""
 
 

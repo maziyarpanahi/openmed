@@ -10,11 +10,13 @@ from __future__ import annotations
 from importlib import import_module as _import_module
 from typing import Any, Iterable, Mapping
 
+from openmed.core.errors import LegacyRootedError
+
 UMLS_SYSTEM = "UMLS"
 _MISSING = object()
 
 
-class ScispaCyLinkerResourceError(RuntimeError):
+class ScispaCyLinkerResourceError(RuntimeError, LegacyRootedError):
     """Raised when a configured, user-supplied UMLS linker is unavailable."""
 
 

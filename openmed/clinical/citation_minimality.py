@@ -23,6 +23,8 @@ from enum import Enum
 from itertools import islice
 from typing import Any, Final
 
+from openmed.core.errors import LegacyRootedError
+
 __all__ = [
     "CITATION_MINIMALITY_DISCLAIMER",
     "CITATION_MINIMALITY_SCHEMA_VERSION",
@@ -50,7 +52,7 @@ _TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 _MISSING = object()
 
 
-class CitationMinimalityError(ValueError):
+class CitationMinimalityError(ValueError, LegacyRootedError):
     """Raised when citation minimality inputs cannot be evaluated safely."""
 
 

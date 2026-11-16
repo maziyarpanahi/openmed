@@ -16,6 +16,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 from urllib.parse import urlsplit
 
+from openmed.core.errors import LegacyRootedError
 from openmed.interop.smart_scope_audit import (
     SmartGrantedScopeAudit,
     _granted_scope_tokens,
@@ -64,7 +65,7 @@ _CODES = frozenset(
 )
 
 
-class SMARTTokenValidationError(ValueError):
+class SMARTTokenValidationError(ValueError, LegacyRootedError):
     """A controlled token-response failure with no endpoint or secret values."""
 
     def __init__(self, code: str = "invalid_response") -> None:

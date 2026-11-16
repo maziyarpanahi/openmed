@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, TypeAlias
 
+from openmed.core.errors import LegacyRootedError
+
 Deidentifier = Callable[..., Any]
 PartitionDeidentifierFactory = Callable[[], Deidentifier]
 
@@ -61,7 +63,7 @@ _RESERVED_KWARGS: Final[frozenset[str]] = frozenset(
 )
 
 
-class SparkRedactionError(RuntimeError):
+class SparkRedactionError(RuntimeError, LegacyRootedError):
     """Raised when a Spark redaction contract cannot be completed."""
 
 

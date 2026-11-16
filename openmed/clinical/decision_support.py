@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Literal
 
+from openmed.core.errors import LegacyRootedError
+
 from .uncertainty_sources import UncertaintySources, coerce_uncertainty_sources
 
 CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION = 1
@@ -138,7 +140,7 @@ class SourceSpan:
         )
 
 
-class GuardrailValidationError(ValueError):
+class GuardrailValidationError(ValueError, LegacyRootedError):
     """Raised when a clinical suggestion fails a guardrail transparency check."""
 
 
